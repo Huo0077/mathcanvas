@@ -600,3 +600,46 @@ export function parabolaPlan(): PlanEnvelope {
     ] as unknown as DraftAction[]
   }
 }
+
+/**
+ * **Task 14：直线与圆锥曲线的交点**（`conicChord` 判据的浏览器证据）。
+ *
+ * 题面里那条直线与图上那条直线是**同一份事实的两个说法**：
+ * - `椭圆 x²/9+y²/4=1 与直线 y=0 相交于 A、B 两点` ⇒ 图上 `y = 0`、交点 `(±3, 0)` ⇒ **应该通过**；
+ * - `… 与直线 y=1 相交于 A、B 两点` ⇒ 代数上那两点是 `(±3√3/2, 1)`，而图还是 `y = 0` 与 `(±3, 0)`
+ *   ⇒ **应该判失败**。这一对正反例共用同一份计划，差别只在题面 —— 所以"通过"绝不可能是
+ *   因为计划恰好画对了，而是判据真的在比。
+ *
+ * `conicChordPlan` 里的交点用**带点名的点**表达（动作层没有"创建交点"这一条）：
+ * 判据要的正是"代数算出的每一个交点，图上都得有个点名落在那儿"。
+ */
+export const CONIC_CHORD_PROMPT = "椭圆 x²/9+y²/4=1 与直线 y=0 相交于 A、B 两点"
+export const CONIC_CHORD_MISMATCH_PROMPT = "椭圆 x²/9+y²/4=1 与直线 y=1 相交于 A、B 两点"
+
+export function conicChordPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作椭圆 x²/9+y²/4=1 与直线 y=0 的两个交点 A、B",
+    factIds: [],
+    assumptions: [
+      "半轴由题面方程唯一确定（√9 = 3、√4 = 2）；交点坐标由代数求解给出（判别式），不是画面采样。"
+    ],
+    actions: [
+      {
+        actionId: "planar.create_conic",
+        actionKey: "ellipse",
+        factIds: [],
+        inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, label: "椭圆 x²/9+y²/4=1" }
+      },
+      {
+        actionId: "planar.create_line",
+        actionKey: "chord",
+        factIds: [],
+        inputs: { alias: "chord", points: [{ x: -4, y: 0 }, { x: 4, y: 0 }], label: "直线 y=0" }
+      },
+      { actionId: "planar.create_point", actionKey: "pointA", factIds: [], inputs: { alias: "A", points: [{ x: -3, y: 0 }], label: "A" } },
+      { actionId: "planar.create_point", actionKey: "pointB", factIds: [], inputs: { alias: "B", points: [{ x: 3, y: 0 }], label: "B" } }
+    ] as unknown as DraftAction[]
+  }
+}

@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
+import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -416,6 +416,17 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 所以这里**没有"系统自选示例值"**这回事 —— 夹具的 `assumptions` 明说了这一点，
    * 免得用户以为自己看到的是一条随手挑的曲线。
    */
+  /**
+   * **Task 14：直线与圆锥曲线的交点**（`conicChord` 判据的产品路径）。
+   *
+   * 两条意图都带 `exact`，与椭圆那条互不相同，所以"谁先匹配"不成问题；放在这里只是让
+   * "椭圆这一族"读起来挨着。
+   *
+   * **反例那条故意共用同一份计划**：题面说要 `y = 1` 的交点，而图画的还是 `y = 0` 与 `(±3, 0)`。
+   * 于是浏览器里那条"应该失败"绝不可能来自"计划恰好画对了"—— 判据真的在比。
+   */
+  { all: ["椭圆", "x²/9+y²/4", "相交于"], exact: CONIC_CHORD_PROMPT, skillIds: ["conics-tangents"], build: () => conicChordPlan() },
+  { all: ["椭圆", "x²/9+y²/4", "相交于"], exact: CONIC_CHORD_MISMATCH_PROMPT, skillIds: ["conics-tangents"], build: () => conicChordPlan() },
   { all: ["椭圆", "x²/9+y²/4"], exact: CONIC_ELLIPSE_PROMPT, skillIds: ["conics-tangents"], build: () => ellipsePlan() },
   /** **代表题六、七**：双曲线与抛物线。与椭圆同一条纪律（精确匹配、不挂开关、参数由方程钉死）。 */
   { all: ["双曲线", "x²/9−y²/4"], exact: HYPERBOLA_PROMPT, skillIds: ["conics-tangents"], build: () => hyperbolaPlan() },
