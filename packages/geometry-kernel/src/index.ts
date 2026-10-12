@@ -18,6 +18,11 @@ export * from "./curve-intersections"
  * 而计划要求切触用代数重根或可验证切向条件。扁平导出，核验侧要直接从包根取。
  */
 export * from "./conic-line"
+/**
+ * **由条件反求圆锥曲线参数**（Task 14）：两焦点 + 曲线上一点、焦点 + 准线、焦点 + 准线 + 离心率。
+ * 与 `conic-line` 一起支撑"从题设反求曲线"，而不是只从方程读参数。
+ */
+export * from "./conic-parameters"
 export * from "./animation"
 export * from "./geometry3d"
 export * from "./solid-builders"

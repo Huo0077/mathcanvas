@@ -133,7 +133,7 @@ function evaluate(form: LocalForm, point: Coordinate): { value: number; gradient
 }
 
 /** 报告点上的两样残差（都在**局部**坐标里算，与旋转无关）。 */
-function evidenceAt(form: LocalForm, localPoint: Coordinate, direction: Coordinate, discriminant: number): { residual: number; tangency: number } {
+function evidenceAt(form: LocalForm, localPoint: Coordinate, direction: Coordinate): { residual: number; tangency: number } {
   const { value, gradient } = evaluate(form, localPoint)
   const gradientLength = Math.hypot(gradient.x, gradient.y)
   const directionLength = Math.hypot(direction.x, direction.y)
@@ -167,7 +167,7 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
     }
     const parameter = -gamma / beta
     const localPoint = at(parameter)
-    const { residual, tangency } = evidenceAt(form, localPoint, direction, discriminant)
+    const { residual, tangency } = evidenceAt(form, localPoint, direction)
     return { kind: "single", point: form.toWorld(localPoint), discriminant, residual, tangency }
   }
 
@@ -195,7 +195,7 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
   }
   if (isTangent) {
     const localPoint = at(rootCentre)
-    const { residual, tangency } = evidenceAt(form, localPoint, direction, discriminant)
+    const { residual, tangency } = evidenceAt(form, localPoint, direction)
     return { kind: "tangent", point: form.toWorld(localPoint), discriminant, residual, tangency }
   }
   // 数值稳的写法：先算量级大的那个根，另一个用 `γ/(α·t₁)` 回代（避免两个相近的大数相减）。
@@ -203,8 +203,8 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
   const second = Math.abs(first) > EPSILON ? gamma / (alpha * first) : rootCentre + Math.sign(rootCentre || 1) * spread
   const firstPoint = at(first)
   const secondPoint = at(second)
-  const firstEvidence = evidenceAt(form, firstPoint, direction, discriminant)
-  const secondEvidence = evidenceAt(form, secondPoint, direction, discriminant)
+  const firstEvidence = evidenceAt(form, firstPoint, direction)
+  const secondEvidence = evidenceAt(form, secondPoint, direction)
   return {
     kind: "secant",
     points: [form.toWorld(firstPoint), form.toWorld(secondPoint)],
