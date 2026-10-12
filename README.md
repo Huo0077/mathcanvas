@@ -63,7 +63,7 @@ npm run dev
 
 ## 下一步：按 Task 1→21 严格实施（Task 1–13 已完成，下一项 Task 14）
 
-[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–13 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，以及三角与立体两族的纵向交付和目标折角反求；**那道折面题已端到端通过**）；**下一项 Task 14：圆锥曲线真题纵向**；Task 15–16 交付函数与真实画布；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
+[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–14 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，三角与立体两族的纵向交付和目标折角反求，以及**圆锥曲线那一族**：代数交点与相切/无交/竖直线、条件反求曲线参数、交点判据；**那道折面题已端到端通过**）；**下一项 Task 15：函数与导数**；Task 16 交付四族真实画布；Task 17–19 独立收口已有的受限 Lean；Task 20 在批准费用后才测真实模型；Task 21 分别决定作图与自动 Lean 是否放行。
 
 **Task n 没有 RED、GREEN、受影响旧能力复跑及退出记录时，Task n+1 不开始；不设并行跳号。** Lean 默认关且已有实验入口，但原题完整前提和干净机发行仍未验收；证明不可用不能阻挡已核验的普通作图。Task 1–13 各轮只改产品/测试与文档，**没有增加模型预算、没有发起付费 provider 请求**；Lean 的读数只对当次运行有效。
 
