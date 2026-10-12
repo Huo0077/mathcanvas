@@ -186,6 +186,18 @@ describe("file exports", () => {
     expect(html).toContain("应用版本 unknown")
   })
 
+  /**
+   * **这条用例显式给 30 s 预算**（2026-10-12 实测后加的）。
+   *
+   * 它本身是纯内存计算（把工程视图拼成 SVG 字符串），单独跑约 0.1 s；但 `npm test` 的全量里
+   * 同时跑着 `scripts/proof-spike/lean4EndToEnd.test.ts` —— 那条 gated 的真实 Lean 集成每次
+   * `lake env lean` 都要做大量 elaboration，会把 CPU 吃满，于是这条在实测里**被挤到 vitest
+   * 默认的 5 s 上限**（`Error: Test timed out in 5000ms`；单独跑 9/9 全绿）。
+   *
+   * 30 s 不是"放宽判据"：断言一条没动，而这个规模的真退化（正常是几十毫秒的量级）照样会被抓住。
+   * **根因是"那条 16 分钟的机器相关集成跑在默认单测里"** —— 修它要动"默认全量跑什么"这个发布
+   * 门禁语义，登记为待裁决，不在本用例里偷偷处理。
+   */
   it("uses the engineering SVG and reports drawing diagnostics for the CAD workspace", async () => {
     const document = createEmptyDocument("cad")
     document.metadata.name = "工程图"
@@ -204,5 +216,5 @@ describe("file exports", () => {
     // 走的是工程那条路（视图属性来自 `exportEngineeringSvg`），且诊断进了损失清单。
     expect(html).toContain('data-drawing-view="front"')
     expect(html).toContain("front: 轮廓按采样折线写出")
-  })
+  }, 30_000)
 })

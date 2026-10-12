@@ -21,9 +21,11 @@ import { createLean4Runner } from "@draw/agent-core/lean4Runner"
  * 1. 本机装了 Lean（`resolveLean4Toolchain` 找得到）；
  * 2. 仓内那个小工程 `proof/lean4` 已经把 mathlib 取下来并展开过（`.lake` 有 7.5 GB）。
  *
- * 所以这里的用例**分两类**，而且分得清清楚楚：
+ * 所以这里的用例**分三类**，而且分得清清楚楚：
  * - **永远跑**：环境探针本身（"找不到就说找不到"，绝不能悄悄通过）；
- * - **gated**：真的去跑 Lean。条件不满足时**跳过并写明理由**（打印 `SKIP: …`），
+ * - **gated / 冷启动**：第一趟 `lake env lean` 单独量 —— 宽预算、只要求 `exit 0`，
+ *   量的是"把 olean 读进页缓存"的成本，**不是**判据（2026-10-12 加，理由见那条用例）；
+ * - **gated / 判据**：真的去跑 Lean。条件不满足时**跳过并写明理由**（打印 `SKIP: …`），
  *   **绝不静默通过** —— 一条"没跑却绿"的用例比一条红的用例危险得多。
  *
  * **CI 上真正跑的是判据层**（`packages/agent-core/src/proof/lean4Adapter.test.ts`，用假输出），
@@ -64,6 +66,15 @@ const skipReason =
         : null
 
 const REAL_AVAILABLE = skipReason === null
+
+/**
+ * **冷启动那一趟的预算**（它**不是**判据的预算）。
+ *
+ * 冷启动要付出的成本是"把 mathlib 展开出来的那批 olean 从磁盘读进页缓存"，
+ * 与"这条证明难不难"无关。所以它用一个宽预算、且只要求 `exit 0`；
+ * 下面四条真判据的 300 s 预算**一个字不动**。
+ */
+const COLD_START_TIMEOUT_MS = 900_000
 if (skipReason !== null) {
   // **把跳过的理由打印出来**：一条静默的 skip 与一条静默的通过一样坏。
   console.log(`SKIP: proof-spike 的真实 Lean 端到端用例没有跑 —— ${skipReason}`)
@@ -109,6 +120,39 @@ describe("真实 Lean 端到端（显式 gated）", () => {
     }
   })
 
+  /**
+   * **冷启动单独量：这一趟不参与判据**（2026-10-12 加）。
+   *
+   * 现场读数：**冷缓存的第一次 `lake env lean`** 撞上 300 s 进程墙钟被杀
+   * （`judgement=timeout`，实测 300017 ms），紧接着同一条命题**热跑只要 65 575 ms**
+   * 就 `verified`。mathlib 展开后每工程 7.5 GB，第一趟要把那批 olean 从磁盘读进页缓存，
+   * 成本全在这一趟 —— 它**不是**"这条证明很慢"的证据。
+   *
+   * 所以把两件事分开：**冷启动在这里量**（宽预算、只要求 `exit 0`），下面四条真判据
+   * 一律跑热缓存、预算照旧 **300 s 不动** —— "不要因冷跑就调预算或放宽判据"仍然成立，
+   * 只是不再需要**人**去判断"这次红是冷还是真的慢"。
+   *
+   * **必须排在最前面**：vitest 在同一个文件内按声明顺序串行执行。
+   */
+  it.skipIf(!REAL_AVAILABLE)("冷启动：第一次 `lake env lean` 的成本单独量（**不参与判据**）", async () => {
+    const runner = createLean4Runner()
+    const warm = buildPerpendicularStatement(GOAL, 400_000)
+    const run = await runner({
+      source: warm.source,
+      leanPath: toolchain!.leanPath,
+      lakePath: toolchain!.lakePath,
+      projectDir: LEAN4_PROJECT_DIR,
+      timeoutMs: COLD_START_TIMEOUT_MS
+    })
+    console.log(
+      `E2E 冷启动：${run.durationMs} ms exit=${String(run.exitCode)}（这一趟把 mathlib olean 读进页缓存；下面的判据跑热缓存、预算仍是 300 s）`
+    )
+    expect(
+      run.exitCode,
+      `冷启动这一趟没能把工程跑起来（预算 ${COLD_START_TIMEOUT_MS} ms）：${run.stderr.slice(-500)}`
+    ).toBe(0)
+  }, COLD_START_TIMEOUT_MS + 60_000)
+
   it.skipIf(!REAL_AVAILABLE)("**真证明 ⇒ `formally_proved`**（跑真的 `lake env lean`）", async () => {
     const runner = createLean4Runner()
     const outcome = await runLean4ClosedLoop("verified_instance", GOAL, "claim-lean4-e2e", {
@@ -129,14 +173,16 @@ describe("真实 Lean 端到端（显式 gated）", () => {
       outcome.judgement.status,
       `判定不是 verified：${outcome.judgement.detail}` +
         /**
-         * **超时这一支要自己解释"冷"与"真的慢"的区别**（2026-10-10 实测）：
-         * 同一棵树、同一条命题 —— **冷缓存的第一次跑**撞上 300 s 墙钟被杀（实测 300015 ms），
-         * 紧接着**热跑**只用 **69071 ms** 就 `verified`（与历史 68277 ms 吻合）。
+         * **超时这一支要自己解释「冷」与「真的慢」的区别**（2026-10-10 实测；
+         * 2026-10-12 起冷启动已由本文件第一条 gated 用例单独预热）：
+         * 同一棵树、同一条命题 —— **冷缓存的第一次跑**撞上 300 s 墙钟被杀（实测 300017 ms），
+         * 紧接着**热跑**只用 **65575 ms** 就 `verified`（与历史 68277 ms 吻合）。
          * mathlib 展开后每工程 7.5 GB，第一次要把那些 olean 从磁盘读进页缓存，成本全在这一趟。
-         * **所以红一次不要急着改预算或改判据**：再跑一次就能把两者分开 —— 这条提示就是为此写的。
+         * **所以「不要因一次超时就改预算或改判据」仍然成立**；区别只在于"这次是冷还是真的慢"
+         * 现在由预热那一趟回答，不再需要人来再跑一次。
          */
         (outcome.judgement.status === "timeout"
-          ? "（**本机实测**：冷缓存的第一次跑会超预算 —— 冷跑 300015 ms 被杀、随后热跑 69071 ms 通过。**再跑一次**即可区分「冷」与「真的慢」；不要因此调预算或放宽判据。）"
+          ? "（**本机实测**：冷缓存的第一次跑会超预算 —— 冷跑 300017 ms 被杀、随后热跑 65575 ms 通过。**本文件第一条 gated 用例已经把冷启动单独量掉**，所以走到这里还超时，就是「真的慢」而不是「冷」；**不要因此调预算或放宽判据**。）"
           : "")
     ).toBe("verified")
     expect(outcome.status).toBe("formally_proved")
