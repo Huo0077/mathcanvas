@@ -5,6 +5,8 @@ import { LEAN4_SUPPORTED_GOAL_KINDS, runLean4ClosedLoop, type Lean4ProofGoalInpu
 import type { ProofArtifact, ProofVerifyOptions } from "./proofArtifact"
 import { canonicalProofBody } from "./canonicalProof"
 import { bridgeProofPremises, type PremiseBridgeGoal, type PremiseBridgeResult } from "./proofPremiseBridge"
+import { buildProofScopeReport, type ProofScopeReport } from "./proofScope"
+import type { ReadProofGoalResult } from "./proofGoalReader"
 
 /**
  * **产品侧自动调用与产物通道**（V2 GREEN 缺口③）。
@@ -112,6 +114,16 @@ export interface AutomaticProofRequest {
   backendVersion?: string
   timeoutMs?: number
   verifyOptions?: ProofVerifyOptions
+  /**
+   * **目标句的读法**（Task 17）。
+   *
+   * 有它，范围报告才能带出"目标句在 IR 里的 id / 原文区间"与**系统替用户做的选择**；
+   * 没有它，这一层用 `claimSourceText` 造一份等价的最小读法 —— 范围照样建得出来，
+   * 只是 `choices` 为空（**不编**）。
+   */
+  reading?: ReadProofGoalResult
+  /** 图上**真的物化**了的点名（判前提桥那些"图上前提"有没有落到图上）。 */
+  materialisedNames?: readonly string[]
 }
 
 /** 正文的来源（**用户有权知道**：这条证明是模型想出来的，还是系统照抄的）。 */
@@ -131,6 +143,13 @@ export interface AutomaticProofResult {
   detail: string
   /** 前提桥的结论（跑没跑都留着：调用方要能显示"哪些前提是系统补的"）。 */
   bridge: PremiseBridgeResult | null
+  /**
+   * **这一次到底证了什么**（Task 17）：受限引理 / 整题 / 不支持，以及逐条原题条件在不在命题里。
+   *
+   * 为什么它**必填**：`verified: true` 只说明"模板定理成立"，而用户读到的往往是"已验证"。
+   * 把这个字段做成必填，就没有一条返回路径能省掉"证的是哪一档"这句话。
+   */
+  scope: ProofScopeReport
 }
 
 /** 浏览器里那条通道：**如实说这台机器上跑不了**，而不是假装。 */
@@ -210,6 +229,35 @@ function adapterInputFor(request: AutomaticProofRequest, proof: string): Lean4Pr
  * 前面四道门任何一道不过，通道**一次都不会被调用** —— 那样就没有"先花了三分钟再说不行"这件事。
  */
 export async function attemptAutomaticProof(request: AutomaticProofRequest): Promise<AutomaticProofResult> {
+  /**
+   * **范围报告**（Task 17）：无论走哪一条出口都要交出来。
+   *
+   * 建不起来时**不许编**：如实给一个 `unsupported` + 一句"范围报告没建起来"，
+   * 而不是悄悄退化成"看起来像通过了"。
+   */
+  const reading: ReadProofGoalResult = request.reading ?? { ok: true, reading: { goal: request.goal, sourceText: request.claimSourceText, choices: [] } }
+  const scopeFor = (bridge: PremiseBridgeResult | null, backendVerified: boolean): ProofScopeReport => {
+    try {
+      return buildProofScopeReport({
+        reading,
+        set: request.obligations,
+        bridge,
+        backendVerified,
+        ...(request.materialisedNames === undefined ? {} : { materialisedNames: request.materialisedNames })
+      })
+    } catch (error) {
+      return {
+        goalSourceId: null,
+        goalSourceText: reading.ok ? reading.reading.sourceText : "",
+        goalSpan: null,
+        conditions: [],
+        figureChoices: [],
+        outcome: "unsupported",
+        detail: `范围报告没能建起来（${error instanceof Error ? error.message : String(error)}）—— 这一轮不许据此说"题已证"。`
+      }
+    }
+  }
+
   const unchanged = (outcome: AutomaticProofOutcome, detail: string, bridge: PremiseBridgeResult | null = null): AutomaticProofResult => ({
     outcome,
     status: request.base,
@@ -217,7 +265,8 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
     verified: false,
     proofSource: null,
     detail,
-    bridge
+    bridge,
+    scope: scopeFor(bridge, false)
   })
 
   if (!request.flagEnabled) {
@@ -291,6 +340,11 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
 
     const verifiedArtifact = outcome.verification.status === "verified" ? outcome.verification.artifact : null
     if (verifiedArtifact !== null) {
+      /**
+       * **升到 `formally_proved` 的同时把"证的是哪一档"一起写出来**（Task 17）：
+       * `verified: true` 说的是"模板定理成立且产物过了校验器"，**不是**"这道题证完了"。
+       */
+      const scope = scopeFor(bridge, true)
       return {
         outcome: "verified",
         status: outcome.status,
@@ -299,14 +353,15 @@ export async function attemptAutomaticProof(request: AutomaticProofRequest): Pro
         proofSource,
         // **正文的来源要写进说明**：内核验的是正文本身（判据那层刻意不看正文），
         // 但"这条证明是模型想出来的还是系统照抄的"是用户有权知道的事。
-        detail: proofSource === "system-canonical" ? `${outcome.judgement.detail}（正文由**系统**按这一类给出：${canonical?.note ?? ""}）` : outcome.judgement.detail,
-        bridge
+        detail: `${proofSource === "system-canonical" ? `${outcome.judgement.detail}（正文由**系统**按这一类给出：${canonical?.note ?? ""}）` : outcome.judgement.detail}${scope.outcome === "limited_lemma" ? "这一次证的是**受限引理**，不是整道题（逐条依据见范围报告）。" : ""}`,
+        bridge,
+        scope
       }
     }
 
     const mapped: AutomaticProofOutcome =
       outcome.judgement.status === "unsupported" ? "toolchain_unavailable" : outcome.judgement.status === "timeout" ? "timeout" : "rejected"
-    return { outcome: mapped, status: outcome.status, artifact: null, verified: false, proofSource, detail: outcome.judgement.detail, bridge }
+    return { outcome: mapped, status: outcome.status, artifact: null, verified: false, proofSource, detail: outcome.judgement.detail, bridge, scope: scopeFor(bridge, false) }
   } catch (error) {
     // **最坏情况不许变成"证过了"**：如实报这一层出了岔子，状态原样交回。
     return unchanged("internal_error", `自动证明这条路自己出错了：${error instanceof Error ? error.message : String(error)}`, bridge)

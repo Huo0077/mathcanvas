@@ -51,6 +51,11 @@ export * from "./proof/proofPremiseBridge"
  */
 export * from "./proof/automaticProof"
 /**
+ * **这一次到底证了什么**（Task 17）：受限引理 / 整题 / 不支持，以及逐条原题条件在不在命题里。
+ * 与自动调用同一层导出 —— `AutomaticProofResult.scope` 是这个类型的字段，两半分不开。
+ */
+export * from "./proof/proofScope"
+/**
  * **题面的目标句 → 结构化的证明目标**（复用题设那张句型表，不新写解析器）。
  */
 export * from "./proof/proofGoalReader"

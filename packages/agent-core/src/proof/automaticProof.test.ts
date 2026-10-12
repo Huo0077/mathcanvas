@@ -143,6 +143,31 @@ describe("产品侧自动调用：先问该不该跑，再看跑出来什么", (
     expect(result.artifact?.result.status).toBe("verified")
     // 而且**产物确实过了校验器**（不是"刚生成的所以肯定行"）。
     expect(result.verified).toBe(true)
+    /**
+     * **升到 `formally_proved` 的同时必须说清"证的是哪一档"**（Task 17）。
+     *
+     * 这一句题面的两条前提确实进了命题（`formalized`），但**没有调用方交出"覆盖整道题"的
+     * 产物声明** ⇒ 结局只能是受限引理；而且说明文案里也写着这四个字 ——
+     * 只有字段没有文案时，用户读到的仍然是"已验证"。
+     */
+    expect(result.scope.outcome).toBe("limited_lemma")
+    expect(result.scope.conditions.filter((entry) => entry.scope === "formalized").length).toBeGreaterThan(0)
+    expect(result.detail).toContain("受限引理")
+  })
+
+  it("**题面多一条必要条件 ⇒ 产物照样出，但范围报告说它没进命题**（Task 17 的核心反例）", async () => {
+    const { channel } = fakeChannel([{ outcome: "exited", exitCode: 0, stdout: OK_STDOUT, stderr: "", durationMs: 68_000, detail: "" }])
+    // 与上一条同一道题，只是题面多给了一条长度 —— 它**不会**进那条命题。
+    const obligations = parseDiagramObligations("在三棱锥 P-ABC 中，PA ⊥ AB，PA ⊥ AC，AB=2，求证 PA ⊥ 平面 ABC")
+    const result = await attemptAutomaticProof(request({ channel, obligations }))
+
+    expect(result.outcome).toBe("verified")
+    expect(result.status).toBe("formally_proved")
+    // 后端真验过、模板定理成立 —— 但"这道题证完了"这句话**不许**从这里推出来。
+    const outside = result.scope.conditions.filter((entry) => entry.scope !== "formalized" && entry.scope !== "dischargedByNamedDerivation")
+    expect(outside.length, `没进命题的条件：${result.scope.conditions.map((entry) => `${entry.scope}:${entry.sourceText}`).join("｜")}`).toBeGreaterThan(0)
+    expect(result.scope.outcome).toBe("limited_lemma")
+    expect(result.scope.detail).toContain("受限引理")
   })
 
   it("**`sorry` 的报告 ⇒ 停在原地**（`exit=0` 不算数）", async () => {
