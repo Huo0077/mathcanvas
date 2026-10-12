@@ -13,6 +13,11 @@ export * from "./polyline"
 export * from "./conics"
 export * from "./calculus"
 export * from "./curve-intersections"
+/**
+ * **代数直线 ∩ 圆锥曲线**（Task 14）：与上面那条采样法并列 —— 采样法给不出"相切"，
+ * 而计划要求切触用代数重根或可验证切向条件。扁平导出，核验侧要直接从包根取。
+ */
+export * from "./conic-line"
 export * from "./animation"
 export * from "./geometry3d"
 export * from "./solid-builders"
