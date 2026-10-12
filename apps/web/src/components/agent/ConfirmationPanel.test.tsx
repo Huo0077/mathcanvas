@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import type { AgentDraftView } from "../../agentStore"
+import type { DiagramCheck } from "@draw/agent-core"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { countDeltas } from "./confirmationCounts"
 
@@ -224,5 +225,54 @@ describe("one-undo statement and actions", () => {
 
     expect(screen.queryByRole("button", { name: "确认并提交" })).toBeNull()
     expect(screen.queryByRole("button", { name: "丢弃草稿" })).toBeNull()
+  })
+})
+
+/**
+ * **题设核验那一条怎么念给用户**（2026-10-12 裁决 A）。
+ *
+ * 现场那句话是 `PA ⊥ 平面 ABCD：不满足。实测 0.24254，题设要求 0。` —— 末尾的 0
+ * **不是题面里的数字**，它是"这一类条件要求偏差归零"。改法只在**面板**这一层：
+ * 编译器输出与黄金样本一个字不动（那句 reason 被 `planCompiler4707b64.golden.json` 逐字钉着）。
+ */
+describe("题设核验的失败文案（裁决 A：面板侧改）", () => {
+  const verify = (checks: DiagramCheck[]): AgentDraftView =>
+    draft({ diagramVerification: { status: "failed", checks, sampleValues: [] } })
+
+  it("把「题设要求 0」换成读得懂的一句，并且旧句式不再出现", () => {
+    const { container } = render(
+      <ConfirmationPanel
+        draft={verify([
+          { kind: "perpendicular", sourceText: "PA ⊥ 平面 ABCD", status: "failed", reason: "实测 0.24254，题设要求 0。", expected: 0, actual: 0.24253562503633297 }
+        ])}
+      />
+    )
+
+    expect(container.textContent).toContain("实测偏差 0.24254（这一类条件要求偏差归零）。")
+    // 这条断言才是这次改动的目的：用户**读不到**那句机器味的文案了。
+    expect(container.textContent).not.toContain("题设要求 0")
+  })
+
+  it("带 detail 的那几族**原样透传** —— 那句里有别处没有的信息（哪根轴反了、切点画在哪）", () => {
+    const conicReason = "实测 椭圆 x²/4+y²/9=1；题设要求 椭圆 x²/9+y²/4=1。最大偏差 5.0000，容差 1.0000e-6。"
+    const { container } = render(
+      <ConfirmationPanel
+        draft={verify([
+          { kind: "perpendicular", sourceText: "椭圆 x²/9+y²/4=1", status: "failed", reason: conicReason, expected: 0, actual: 5 }
+        ])}
+      />
+    )
+
+    expect(container.textContent).toContain(conicReason)
+  })
+
+  it("通过那一档也照旧（它的 reason 本来就是人话）", () => {
+    const { container } = render(
+      <ConfirmationPanel
+        draft={verify([{ kind: "parallel", sourceText: "BC ∥ AD", status: "passed", reason: "已按候选图坐标核验。", expected: 0, actual: 0 }])}
+      />
+    )
+
+    expect(container.textContent).toContain("已按候选图坐标核验。")
   })
 })

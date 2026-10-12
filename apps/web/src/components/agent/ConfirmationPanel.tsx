@@ -1,6 +1,7 @@
 import type { AgentDraftView } from "../../agentStore"
 import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
+import { describeCheckReason } from "./confirmationWording"
 import { ProofLevelNotice } from "./ProofLevelNotice"
 
 /**
@@ -139,7 +140,7 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
       <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
       <ul>{draft.diagramVerification.checks.map((item, index) => <li key={`${index}:${item.sourceText}`}>
-        <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{item.reason}
+        <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{describeCheckReason(item)}
       </li>)}</ul>
       {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
     </section>}
