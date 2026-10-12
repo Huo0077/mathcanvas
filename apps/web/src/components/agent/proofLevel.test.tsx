@@ -1,4 +1,4 @@
-import { PROOF_BACKEND_REVIEW_FIELDS, PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKENDS } from "@draw/agent-core"
+import { PROOF_BACKEND_REVIEW_FIELDS, PROOF_BACKEND_REVIEWS, WIRED_PROOF_BACKENDS, proofScopeOf } from "@draw/agent-core"
 import { cleanup, render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
@@ -128,7 +128,7 @@ describe("证明级别：只读状态面（文案由真实数据推导）", () =
   })
 
   it("它落在**题设核验那一节之后**（用户先看这份图核了什么，再看这一档的级别）", () => {
-    const { container } = render(<ConfirmationPanel draft={{ ...draft, diagramVerification: { status: "passed", sampleValues: [], checks: [{ kind: "dihedral", sourceText: "二面角", status: "passed", reason: "实测一致" }] } }} />)
+    const { container } = render(<ConfirmationPanel draft={{ ...draft, diagramVerification: { status: "passed", sampleValues: [], checks: [{ kind: "dihedral", sourceText: "二面角", status: "passed", reason: "实测一致" }], ...proofScopeOf({}) } }} />)
 
     const section = container.querySelector(".agent-diagram-verification")!
     const notice = container.querySelector(".agent-proof-level")!

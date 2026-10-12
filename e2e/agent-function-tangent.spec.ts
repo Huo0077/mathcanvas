@@ -78,6 +78,15 @@ test("draws the curve and its tangent, and re-derives the slope from the committ
   await expect(check).toHaveAttribute("data-status", "passed")
   await expect(check).toContainText("f(x)=x³−3x")
   await expect(check).toContainText("x=1 处的切线")
+  /**
+   * **Task 15 加的第三个读数**：两条题设的**证据等级**分开写着 ——
+   * 曲线那一条只有 9 个采样点上的比较（`plot-only`），切线那一条是数值求导 + 独立回代
+   *（`verified-numeric`）。它们都通过，但不该被当成同一档证据。
+   */
+  await expect(check.locator('[data-evidence="plot-only"]')).toHaveCount(1)
+  await expect(check.locator('[data-evidence="verified-numeric"]')).toHaveCount(1)
+  await expect(check).toHaveAttribute("data-proof-scope", "figure-instance")
+  await expect(check).toHaveAttribute("data-universal-claims", "not-proven")
 
   await panel.getByRole("button", { name: "确认并提交" }).click()
   await expect(page.getByText("已提交")).toBeVisible()

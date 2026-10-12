@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import { proofScopeOf } from "@draw/agent-core"
 import { describe, expect, it, vi } from "vitest"
 
 import type { AgentDraftView } from "../../agentStore"
@@ -9,7 +10,7 @@ const baseline: AgentDraftView = { draftId: "d-1", draftVersion: 2, previewHash:
 function renderReport(status: "passed" | "unverified" | "failed") {
   const draft: AgentDraftView = { ...baseline, diagramVerification: { status, sampleValues: ["自由点 A 采用本图示例坐标 (0, 0, 1)"], checks: [
     { kind: "dihedral", sourceText: "二面角E-BC-D=45°", status, reason: status === "passed" ? "实测 45°" : "未得到可靠角度", expected: 45, actual: status === "passed" ? 45 : undefined }
-  ] } }
+  ], ...proofScopeOf({}) } }
   const onConfirm = vi.fn()
   render(<ConfirmationPanel draft={draft} onConfirm={onConfirm} onDiscard={() => {}} />)
   return onConfirm

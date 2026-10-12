@@ -1,7 +1,7 @@
 import type { AgentDraftView } from "../../agentStore"
 import { AssumptionList } from "./AssumptionList"
 import { countDeltas, removedObjectCount, summarizeDraftScale } from "./confirmationCounts"
-import { describeCheckReason } from "./confirmationWording"
+import { describeCheckEvidence, describeCheckReason, PROOF_SCOPE_LABEL, UNIVERSAL_CLAIMS_LABEL } from "./confirmationWording"
 import { ProofLevelNotice } from "./ProofLevelNotice"
 
 /**
@@ -136,12 +136,18 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       </ul>
     </section>}
 
-    {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status}>
+    {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status} data-proof-scope={draft.diagramVerification.proofScope} data-universal-claims={draft.diagramVerification.universalClaims}>
       <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
       <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
       <ul>{draft.diagramVerification.checks.map((item, index) => <li key={`${index}:${item.sourceText}`}>
         <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{describeCheckReason(item)}
+        {describeCheckEvidence(item) !== null && <em data-evidence={item.evidence}>（证据：{describeCheckEvidence(item)}）</em>}
       </li>)}</ul>
+      {/*
+        **证据范围自己说清楚**（Task 15）：上面的"通过 N 条"说的是**一个实例**，
+        不是"对所有参数/整个定义域成立"。这两句话都由报告字段推出来，界面上不另写判断。
+      */}
+      <p role="note" data-proof-scope-note>证据范围：{PROOF_SCOPE_LABEL[draft.diagramVerification.proofScope]}。{draft.diagramVerification.proofScopeNote}{UNIVERSAL_CLAIMS_LABEL[draft.diagramVerification.universalClaims]}</p>
       {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
     </section>}
 

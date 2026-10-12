@@ -352,7 +352,7 @@ describe("isolated drafts", () => {
   } as const
   const IR_PROMPT = "在三棱锥A-BCD中，BD=2，AB=AD，画示意图"
 
-  it("leaves the staged diagram report in its old shape while the IR switch is off", async () => {
+  it("leaves the staged diagram report in its old shape (plus the three Task 15 scope fields) while the IR switch is off", async () => {
     const store = createDraftStore()
     const record = store.create(createEmptyDocument("geometry3d"))
     const staged = await store.stage(record.draftId, [IR_TETRAHEDRON] as never, record.draftVersion, IR_PROMPT)
@@ -360,7 +360,8 @@ describe("isolated drafts", () => {
     expect(staged.ok).toBe(true)
     if (!staged.ok) return
     expect(staged.preview.diagramVerification?.status).toBe("passed")
-    expect(Object.keys(staged.preview.diagramVerification ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
+    // `obligationIR` 依旧只在开关打开时出现；`proofScope` 那三个是 2026-10-12 Task 15 加的、所有路径都有。
+    expect(Object.keys(staged.preview.diagramVerification ?? {}).sort()).toEqual(["checks", "proofScope", "proofScopeNote", "sampleValues", "status", "universalClaims"])
   })
 
   it("**形式证明开关关着 ⇒ 预览里连 `proofAttempt` 这一栏都没有**（默认路径逐字不变）", async () => {

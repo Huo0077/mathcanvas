@@ -109,8 +109,15 @@ describe("legacy compatibility of the obligation IR", () => {
     expect(report.status).toBe("passed")
     expect(report.checks).toHaveLength(7)
     expect(report.checks.map((item) => item.sourceText)).toEqual(legacy.givens.map((item) => item.sourceText))
-    // R6：IR 是"默认关闭的新能力"，所以不传选项时报告就是**旧形状**（没有那个字段）。
-    expect(Object.keys(report).sort()).toEqual(["checks", "sampleValues", "status"])
+    /**
+     * R6：IR 是"默认关闭的新能力"，所以不传选项时报告里**没有 `obligationIR`**。
+     *
+     * **2026-10-12 Task 15 有据改了这一条**：报告多了三个**证据范围**字段
+     *（`proofScope` / `universalClaims` / `proofScopeNote`），它们在**所有**路径上都出现 ——
+     * "图上成立 ≠ 全称成立"这句话必须默认就在面板上，不能藏在开关后面。
+     * 这三个字段与 IR 无关，所以这一条断言从"旧形状"改成"旧形状 + 那三个"。
+     */
+    expect(Object.keys(report).sort()).toEqual(["checks", "proofScope", "proofScopeNote", "sampleValues", "status", "universalClaims"])
   })
 
   it("attaches the same IR to the verification report once the caller switches it on", () => {

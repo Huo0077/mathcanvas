@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { AgentDraftView } from "../../agentStore"
 import type { DiagramCheck } from "@draw/agent-core"
+import { proofScopeOf } from "@draw/agent-core"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { countDeltas } from "./confirmationCounts"
 
@@ -237,7 +238,7 @@ describe("one-undo statement and actions", () => {
  */
 describe("题设核验的失败文案（裁决 A：面板侧改）", () => {
   const verify = (checks: DiagramCheck[]): AgentDraftView =>
-    draft({ diagramVerification: { status: "failed", checks, sampleValues: [] } })
+    draft({ diagramVerification: { status: "failed", checks, sampleValues: [], ...proofScopeOf({}) } })
 
   it("把「题设要求 0」换成读得懂的一句，并且旧句式不再出现", () => {
     const { container } = render(

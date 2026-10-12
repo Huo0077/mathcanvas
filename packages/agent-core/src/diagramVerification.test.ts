@@ -540,3 +540,118 @@ describe("Task 14: 直线与圆锥曲线的交点", () => {
     expect(chordCheck(report)?.status).toBe("passed")
   })
 })
+
+/**
+ * **Task 15：函数族的判据**（计划 `Task 15｜函数与导数真题纵向交付`）。
+ *
+ * 这一组钉的是判据层**今天就判错/判不了**的三件事：
+ *
+ * ① **断点被连线**：`f(x) = 1/x` 在 `x = 0` 没定义，旧判据在采样点上取到 `Infinity`
+ *    就直接报"未核验"——用户看到的是一句"尚未被可靠解析"，而不是"这条曲线断在哪里"。
+ *    更要紧的是**反方向**：题面是 `(x²−1)/(x−1)`（在 `x = 1` 处没有定义），图上画成
+ *    连续的 `x+1` —— 值处处相等，可它把一个断点画没了，必须红。
+ * ② **错切点**：`f(x) = |x|` 在 `x = 0` 没有切线。旧判据用**中心差分**求导，
+ *    `(|h| − |−h|)/2h = 0` —— 于是在尖点处"斜率 = 0"成立，一条水平线会被判**通过**。
+ * ③ **参数实例 ≠ 全称**：报告必须自己写清"这一轮核验的是一个图形/参数实例"，
+ *    不许让下游把它当"对所有参数都成立"。
+ */
+describe("Task 15: function-family premises", () => {
+  /** 一份只有一条函数曲线的候选图；表达式故意可以被换掉。 */
+  function graphFixture(drawnExpression: string, domain: [number, number] = [-2, 2]) {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画函数图",
+      factIds: [],
+      actions: [{ actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression: drawnExpression, domain } }] as never
+    }
+    const candidate = createEmptyDocument("calculus")
+    candidate.primitives.push({ id: "f", type: "function", expression: drawnExpression, domain })
+    return { plan, candidate }
+  }
+
+  /** 曲线 + 一条切线；切点的纵坐标也由调用方给，可以故意不落在曲线上。 */
+  function tangentFixture(touchX: number, slope: number, pointY: number, expression = "x^3-3*x") {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画函数图与切线",
+      factIds: [],
+      actions: [
+        { actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression, domain: [-2, 2] } },
+        { actionId: "function.create_tangent", actionKey: "t", factIds: [], inputs: { alias: "t", sourceId: "f", x: touchX } }
+      ] as never
+    }
+    const candidate = createEmptyDocument("calculus")
+    candidate.primitives.push({ id: "f", type: "function", expression, domain: [-2, 2] })
+    candidate.primitives.push({
+      id: "t", type: "tangent", sourceId: "f", x: touchX,
+      point: { x: touchX, y: pointY },
+      slope, a: { x: 0, y: 0 }, b: { x: 1, y: slope }, status: "approximate"
+    })
+    return { plan, candidate }
+  }
+
+  const checkOf = (report: ReturnType<typeof verifyDiagramObligations>, kind: string) => report.checks.find((check) => check.kind === kind)
+
+  it("**断点两侧都画对了 ⇒ passed**：题面在 x = 0 断开，图上也在 x = 0 断开", () => {
+    const { plan, candidate } = graphFixture("1/x")
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=1/x 的图像"), plan, candidate)
+    const check = checkOf(report, "functionGraph")
+    expect(check?.status).toBe("passed")
+    // 理由里必须说清"断在哪" —— 否则用户不知道这条通过是"两侧都对"还是"跳过了断点"。
+    expect(check?.reason).toContain("断开")
+    // 采样比较**不是**符号证明：这一条的证据等级只能是"只有折线"。
+    expect(check?.evidence).toBe("plot-only")
+  })
+
+  it("**断点被连线 ⇒ failed**：题面在 x = 1 没有定义，图上画成连续的 x + 1", () => {
+    const { plan, candidate } = graphFixture("x+1")
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=(x²−1)/(x−1) 的图像"), plan, candidate)
+    const check = checkOf(report, "functionGraph")
+    expect(check?.status).toBe("failed")
+    expect(check?.reason).toContain("断")
+  })
+
+  it("**错切点 ⇒ failed**：|x| 在 x = 0 是尖点，左右导数不等，那里没有切线", () => {
+    const { plan, candidate } = tangentFixture(0, 0, 0, "abs(x)")
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=|x| 的图像与它在 x=0 处的切线"), plan, candidate)
+    const check = checkOf(report, "tangentAt")
+    expect(check?.status).toBe("failed")
+    expect(check?.reason).toContain("左右导数")
+  })
+
+  it("**错切点 ⇒ failed**：斜率对、切点横坐标对，但切点的纵坐标不在曲线上", () => {
+    // f(x) = x³ − 3x 在 x = 1 处 f(1) = −2；这里把切点画在 (1, 5)，那条直线是 y = 5。
+    const { plan, candidate } = tangentFixture(1, 0, 5)
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=x^3-3*x 的图像与它在 x=1 处的切线"), plan, candidate)
+    const check = checkOf(report, "tangentAt")
+    expect(check?.status).toBe("failed")
+    expect(check?.reason).toContain("不相切")
+  })
+
+  it("**切点真的在曲线上 ⇒ passed**，而且证据等级是「数值回代」这一档", () => {
+    const { plan, candidate } = tangentFixture(1, 0, -2)
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=x^3-3*x 的图像与它在 x=1 处的切线"), plan, candidate)
+    const check = checkOf(report, "tangentAt")
+    expect(check?.status).toBe("passed")
+    expect(check?.evidence).toBe("verified-numeric")
+  })
+
+  it("报告自己写清证据范围：这是**图形实例**，不是全称证明", () => {
+    const { plan, candidate } = tangentFixture(1, 0, -2)
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=x^3-3*x 的图像与它在 x=1 处的切线"), plan, candidate)
+    expect(report.proofScope).toBe("figure-instance")
+    // 数值画图成功**永远**不得升级成形式证明 —— 这个字段今天只可能是这一个字面量。
+    expect(report.universalClaims).toBe("not-proven")
+  })
+
+  it("图上带了一个参数实例 ⇒ 范围降级成 parameter-instance，并写明只核验了那些取值", () => {
+    const { plan, candidate } = tangentFixture(1, 0, -2)
+    candidate.parameters["a"] = { id: "a", value: 1 }
+    const report = verifyDiagramObligations(parseDiagramObligations("画出 f(x)=x^3-3*x 的图像与它在 x=1 处的切线"), plan, candidate)
+    expect(report.proofScope).toBe("parameter-instance")
+    expect(report.universalClaims).toBe("not-proven")
+    expect(report.proofScopeNote).toContain("a = 1")
+  })
+})

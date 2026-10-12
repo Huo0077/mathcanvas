@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofScopeOf, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -515,7 +515,10 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
           kind: "unparsed", sourceText: "前一批题设", status: "unverified",
           reason: "草稿追加了操作，之前的题设尚未在最终候选图上重新核验。"
         }],
-        sampleValues: [...earlier.sampleValues, ...(checked?.sampleValues ?? [])]
+        sampleValues: [...earlier.sampleValues, ...(checked?.sampleValues ?? [])],
+        // 证据范围与全称状态**只从 `proofScopeOf` 来**：这条路拼出来的报告与核验器那份
+        // 必须是同一个口径，否则用户在两条路径上看到两种范围说法。
+        ...proofScopeOf(record.candidate.parameters)
       }
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]

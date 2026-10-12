@@ -133,8 +133,9 @@ describe("diagram checks on the real draft staging path", () => {
     ])
     expect(report?.sampleValues).toEqual([])
     expect(report?.status).toBe("passed")
-    // 字段本身**不在**：不是"值是 undefined"，而是这份旧形状里没有它。
-    expect(Object.keys(report ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
+    // `obligationIR` 字段本身**不在**：不是"值是 undefined"，而是这份报告里没有它。
+    // 2026-10-12 Task 15：三个证据范围字段在所有路径上都出现（"图上成立 ≠ 全称成立"默认就要说）。
+    expect(Object.keys(report ?? {}).sort()).toEqual(["checks", "proofScope", "proofScopeNote", "sampleValues", "status", "universalClaims"])
   })
 })
 

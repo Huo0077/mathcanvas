@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, distanceVector3, dotVector3, evaluateExpression, intersectLineWithConic, isPointName, lengthVector3, subtractVector3, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -15,11 +15,32 @@ export interface DiagramCheck {
   reason: string
   expected?: number
   actual?: number
+  /**
+   * **这条读数是怎么来的**（Task 15）：函数族的判据必须把证据等级写出来，
+   * 因为"采样折线上的比较"（`plot-only`）与"独立数值求导 + 回代"（`verified-numeric`）
+   * 是两种完全不同的可信度，混成一个 `passed` 就等于把它们拉平了。
+   */
+  evidence?: EvidenceGrade
 }
 export interface DiagramVerificationReport {
   status: DiagramCheckStatus
   checks: DiagramCheck[]
   sampleValues: string[]
+  /**
+   * **这一轮核验的证据范围**（Task 15）。
+   *
+   * `figure-instance`：核的是一个图形实例；`parameter-instance`：图上还带了参数取值。
+   * 两者都**不是**全称结论 —— 这个字段存在的意义就是让下游没法把"图上成立"
+   * 悄悄读成"对所有参数成立"。
+   */
+  proofScope: "figure-instance" | "parameter-instance"
+  /**
+   * 全称主张的证据状态。今天**只有** `"not-proven"` 这一个取值：
+   * 几何作图是数值/图形证据，本仓没有把它升级成形式证明的证据链。
+   */
+  universalClaims: "not-proven"
+  /** 上面那条范围的人话解释（含"只核验了哪些参数取值"）。 */
+  proofScopeNote: string
   /**
    * **统一 IR 的同一次解析结果**（Phase N1；设计 §3"任何 UI、Agent trace 都只读这份状态"）。
    *
@@ -260,17 +281,20 @@ function formatNumber(value: number): string {
 interface FigureTangent {
   /** 切点的横坐标（函数来源时就是它）。 */
   x: number
-  /** 图元里存着的斜率。**判据不直接信它** —— 见 `derivativeAt`。 */
+  /** 图元里存着的斜率。**判据不直接信它** —— 见 `derivativeAt` 与 `verifyTangentLine`。 */
   slope: number
+  /** 图元里存着的切点。**也不直接信** —— 它可能根本不在曲线上（Task 15 的错切点反例）。 */
+  pointY: number
   /** 来源函数那条曲线；没有就是"切线的来源不是函数"，算不出导数 ⇒ 未核验。 */
-  source: { expression: string } | null
+  source: { expression: string; domain: [number, number] } | null
 }
 
 /**
  * **候选图里那条唯一的、新画出来的切线**（V0d）。
  *
  * 与多面体、圆锥曲线同一条纪律：恰好一条才谈得上"题面说的就是它"。
- * 同时把它的**来源函数**一并取出来：没有来源就求不了导，那条路必须如实走到"未核验"。
+ * 同时把它的**来源函数**（表达式 + 定义域）一并取出来：没有来源就求不了导，
+ * 那条路必须如实走到"未核验"。
  */
 function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangent | null {
   if (plan.kind !== "plan") return null
@@ -280,10 +304,14 @@ function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?
   if (tangents.length !== 1) return null
   const [tangent] = tangents
   const source = candidate.primitives.find((primitive) => primitive.id === tangent.sourceId)
+  const domain = source?.type === "function" ? source.domain : undefined
   return {
     x: tangent.x,
     slope: tangent.slope,
-    source: source?.type === "function" ? { expression: source.expression } : null
+    pointY: tangent.point?.y ?? Number.NaN,
+    source: source?.type === "function" && domain !== undefined && Number.isFinite(domain[0]) && Number.isFinite(domain[1]) && domain[0] < domain[1]
+      ? { expression: source.expression, domain: [domain[0], domain[1]] }
+      : null
   }
 }
 
@@ -309,33 +337,44 @@ function candidateCurve(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
 const CURVE_SAMPLES = 9
 
 /**
- * **两条曲线在定义域上的最大函数值差**。
+ * **两条曲线在"共同有定义"的采样点上的最大函数值差**。
  *
  * ## 为什么是采样，而不是字符串比较、也不是我自己化简
  *
  * 题面写 `x³ − 3x`、图元里存 `x^3-3*x` —— **同一条曲线、两种写法**。字符串比会把它们判成
  * "不是这条函数"；而"先化简再比"要我另写一套化简，判据就变成"我的化简对不对"了。
  *
+ * ## 边界的第二条：有一侧没定义就**跳过**（Task 15）
+ *
+ * 原先这里遇到非有限值就整条返 `null`（⇒ 落"未核验"），于是 `1/x` 这种题面永远只能得到
+ * 一句"尚未被可靠解析"。可是"断点在哪、有几段"是**另一个问题**，由 `functionGraphEvidence`
+ * 的断点集合单独判（`calculate` 的 `functionGraph` 分支）。两件事混在一起时，
+ * 用户既不知道曲线对不对，也不知道断点对不对。
+ *
  * ## 边界（如实写在这里，不含糊）
  *
  * 采样等价**不是**符号证明 —— 两个不同的表达式恰好在 9 个点上取值相同是可能的。
  * 对高中阶段的有理 / 三角曲线，9 个点足以把"少一项""系数写错"这类错分开；
- * 但它证明的是"**在这 9 个点上没发现差异**"，不是"处处相同"。
+ * 但它证明的是"**在这 9 个点上没发现差异**"，不是"处处相同" —— 所以这条判据的证据等级
+ * 只能是 `plot-only`，它不许被读成"这条函数已经被证明了"。
  */
-function curveGap(stated: string, drawn: FigureFunction): number | null {
+function curveGapAcrossBreaks(stated: string, drawn: FigureFunction): number | null {
   try {
     const expected = compileExpression(stated)
     const actual = compileExpression(drawn.expression)
     const [low, high] = drawn.domain
     let worst = 0
+    let compared = 0
     for (let index = 0; index < CURVE_SAMPLES; index += 1) {
       const x = low + (high - low) * (index / (CURVE_SAMPLES - 1))
       const left = evaluateExpression(expected, { x })
       const right = evaluateExpression(actual, { x })
-      if (!Number.isFinite(left) || !Number.isFinite(right)) return null
+      if (!Number.isFinite(left) || !Number.isFinite(right)) continue
       worst = Math.max(worst, Math.abs(left - right))
+      compared += 1
     }
-    return worst
+    // 比不到三个点就说明这条"值相等"的读数没有内容，如实返 null（落"未核验"）。
+    return compared >= 3 ? worst : null
   } catch {
     return null
   }
@@ -400,7 +439,7 @@ interface FigureContext {
   planarPoints: readonly { name: string; x: number; y: number }[]
 }
 
-function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string } | null {
+function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string; evidence?: EvidenceGrade } | null {
   /**
    * **圆锥曲线不走点名表**（V0c）：它没有顶点名，自己就是被核验的对象。
    *
@@ -517,6 +556,21 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const tangent = figures.tangent
     if (stated === undefined || tangent === null || tangent.source === null) return null
     const abscissaGap = Math.abs(tangent.x - stated)
+    /**
+     * **先问"这一点有没有切线"**（Task 15）。中心差分在 `|x|` 的尖点处给出 `0`，
+     * 于是"斜率 = 0"成立、判据通过 —— 一条水平线被当成尖点处的切线。
+     * 可导性由**单侧差商**判，左侧 −1、右侧 +1 会把这件事直接说穿。
+     */
+    const differentiability = differentiabilityAt(tangent.source.expression, stated, tangent.source.domain)
+    if (!differentiability.differentiable) {
+      return {
+        actual: 1,
+        expected: 0,
+        tolerance: 1e-9,
+        evidence: "verified-numeric" as const,
+        detail: `题面要求在 x = ${formatNumber(stated)} 处作切线，但${differentiability.reason}`
+      }
+    }
     const expectedSlope = derivativeAt(tangent.source, stated)
     if (expectedSlope === null) return null
     if (abscissaGap > 1e-9) {
@@ -524,27 +578,83 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
         actual: abscissaGap,
         expected: 0,
         tolerance: distanceTolerance(1),
+        evidence: "verified-numeric" as const,
         detail: `切点画在 x = ${formatNumber(tangent.x)}，题设要求 x = ${formatNumber(stated)}。`
       }
     }
     const slopeGap = Math.abs(tangent.slope - expectedSlope)
+    if (slopeGap > distanceTolerance(expectedSlope)) {
+      return {
+        actual: slopeGap,
+        expected: 0,
+        tolerance: distanceTolerance(expectedSlope),
+        evidence: "verified-numeric" as const,
+        detail: `切线斜率实测 ${formatNumber(tangent.slope)}；由函数算得 f′(${formatNumber(stated)}) = ${formatNumber(expectedSlope)}。`
+      }
+    }
+    /**
+     * **斜率对了，还要问"这条直线本身是不是切线"**（Task 15）。
+     *
+     * 截距由图元**自报的切点纵坐标**决定，而那个数是内核填的。只比斜率的话，
+     * "切点落在曲线外"（例如 `(1, 5)` 配斜率 0 ⇒ 直线 `y = 5`）会被判通过 ——
+     * 那不可能是切线，它压根不碰这条曲线。所以这里把整条直线交给内核独立验一遍。
+     */
+    const intercept = tangent.pointY - tangent.slope * tangent.x
+    const verdict = verifyTangentLine(tangent.source.expression, tangent.source.domain, { slope: tangent.slope, intercept })
+    if (!verdict.tangent) {
+      return {
+        actual: verdict.residual,
+        expected: 0,
+        tolerance: distanceTolerance(1),
+        evidence: "verified-numeric" as const,
+        detail: `斜率与 f′(${formatNumber(stated)}) 一致，但这条直线整体与曲线不相切：${verdict.reason}`
+      }
+    }
     return {
-      actual: slopeGap,
+      actual: 0,
       expected: 0,
       tolerance: distanceTolerance(expectedSlope),
-      detail: `切线斜率实测 ${formatNumber(tangent.slope)}；由函数算得 f′(${formatNumber(stated)}) = ${formatNumber(expectedSlope)}。`
+      evidence: "verified-numeric" as const,
+      detail: `切点与斜率都由核验器自己算：f′(${formatNumber(stated)}) = ${formatNumber(expectedSlope)}；直线在 x = ${formatNumber(verdict.parameter ?? stated)} 处与曲线相切。`
     }
   }
   if (item.kind === "functionGraph") {
     const stated = item.expression
     if (stated === undefined || figures.curve === null) return null
-    const gap = curveGap(stated, figures.curve)
+    const drawn = figures.curve
+    /**
+     * **断点必须一一对上**（Task 15）。这是"断点被连线"的判据：
+     * 题面 `(x²−1)/(x−1)` 在 `x = 1` 没有定义，图上画成连续的 `x + 1` ——
+     * 两侧的函数值处处相等，可它把一个断点画没了，那是另一条曲线。
+     */
+    const statedEvidence = functionGraphEvidence(stated, drawn.domain)
+    const drawnEvidence = functionGraphEvidence(drawn.expression, drawn.domain)
+    if (statedEvidence.segments.length === 0 || drawnEvidence.segments.length === 0) return null
+    const breakTolerance = Math.max(0.01, (drawn.domain[1] - drawn.domain[0]) / 100)
+    const mismatch = statedEvidence.breaks.length !== drawnEvidence.breaks.length
+      || statedEvidence.breaks.some((entry, index) => Math.abs(entry - drawnEvidence.breaks[index]) > breakTolerance)
+    if (mismatch) {
+      const at = (breaks: readonly number[]) => breaks.length > 0 ? `${breaks.map(formatNumber).join("、")} 处断开（${breaks.length + 1} 段）` : "整段都没有断点"
+      return {
+        actual: 1,
+        expected: 0,
+        tolerance: 1e-9,
+        evidence: "plot-only" as const,
+        detail: `题面那条函数在 ${at(statedEvidence.breaks)}，图上画的却在 ${at(drawnEvidence.breaks)} —— 两条曲线的定义域不是一回事（把断点画成了连续曲线，或反过来）。`
+      }
+    }
+    const gap = curveGapAcrossBreaks(stated, drawn)
     if (gap === null) return null
+    const breakNote = statedEvidence.breaks.length > 0
+      ? `（在 ${statedEvidence.breaks.map(formatNumber).join("、")} 处断开，两侧各一段；断点本身不参与比较）`
+      : ""
     return {
       actual: gap,
       expected: 0,
       tolerance: distanceTolerance(1),
-      detail: `图上画的是 ${figures.curve.expression}；题设要求 ${stated}（在 ${CURVE_SAMPLES} 个采样点上比函数值）。`
+      // 采样比"值相等"**不是**符号证明，这一条永远只是折线证据。
+      evidence: "plot-only" as const,
+      detail: `图上画的是 ${drawn.expression}；题设要求 ${stated}${breakNote}（在 ${CURVE_SAMPLES} 个采样点上比函数值）。`
     }
   }
   const vertices = item.targets.map((name) => points.get(name))
@@ -739,6 +849,33 @@ export function missingNamedPoints(set: DiagramObligationSet, plan: PlanEnvelope
   return out
 }
 
+/**
+ * **这一轮核验的证据范围**（Task 15）—— 报告的三个范围字段只有这一个来源。
+ *
+ * 为什么写成函数而不是在三处各写一遍字面量：`draftStore` 在"追加操作后旧证据失效"那条路上
+ * **自己拼过一份报告**，测试夹具也各自拼过。三处各写一遍，就会出现"面板上写着图形实例、
+ * 另一条路上的报告写着别的东西"—— 那时用户看到的范围取决于他从哪条路进来。
+ *
+ * 规则只有一条：**图上带参数取值就是 `parameter-instance`**（那只是"在这些取值上成立"），
+ * 而无论哪种，`universalClaims` 今天都**只能是** `"not-proven"`。
+ */
+export function proofScopeOf(parameters: Readonly<Record<string, { value: number }>>): Pick<DiagramVerificationReport, "proofScope" | "universalClaims" | "proofScopeNote"> {
+  const parameterNames = Object.keys(parameters)
+  if (parameterNames.length === 0) {
+    return {
+      proofScope: "figure-instance",
+      universalClaims: "not-proven",
+      proofScopeNote: "这一轮核验的是**这一个图形实例**：数值回代在候选图上成立，不等于「全定义域 / 全参数都成立」的证明。"
+    }
+  }
+  const instance = Object.fromEntries(parameterNames.map((name) => [name, parameters[name].value]))
+  return {
+    proofScope: "parameter-instance",
+    universalClaims: "not-proven",
+    proofScopeNote: judgeUniversalClaim({ scope: "at-parameters", parameterNames }, [instance]).reason
+  }
+}
+
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
   const figures: FigureContext = {
@@ -784,7 +921,15 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     const reason = result.detail !== undefined
       ? (status === "passed" ? result.detail : `${result.detail}最大偏差 ${result.actual.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。`)
       : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`)
-    return { kind: item.kind, sourceText: item.sourceText, status, reason, expected: result.expected, actual: result.actual }
+    return {
+      kind: item.kind,
+      sourceText: item.sourceText,
+      status,
+      reason,
+      expected: result.expected,
+      actual: result.actual,
+      ...(result.evidence === undefined ? {} : { evidence: result.evidence })
+    }
   })
   checks.push(...set.unverified.map((entry): DiagramCheck => ({ kind: "unparsed", sourceText: entry.sourceText, status: "unverified", reason: entry.reason })))
   const sampleValues: string[] = []
@@ -795,10 +940,18 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   }
   if (checks.length === 0) checks.push({ kind: "unparsed", sourceText: "题设", status: "unverified", reason: "没有可靠识别到可核验的题设，不能用空报告宣布全部通过。" })
   const status = checks.some((entry) => entry.status === "failed") ? "failed" : checks.some((entry) => entry.status === "unverified") ? "unverified" : "passed"
+  /**
+   * **证据范围写在报告自己身上**（Task 15）。
+   *
+   * 为什么不是"让调用方自己判断"：`passed` 这个词太容易被下游读成"这道题对了"。
+   * 几何作图给出的是**数值/图形证据**：图上带参数取值时更弱 —— 那只是"在这些取值上成立"。
+   * 范围由 `proofScopeOf` 唯一地推出来（`draftStore` 拼旧证据那条路用的是同一个函数）。
+   */
   return {
     status,
     checks,
     sampleValues,
+    ...proofScopeOf(candidate.parameters),
     ...(options.obligationIR === true ? { obligationIR: buildObligationIR(set) } : {})
   }
 }

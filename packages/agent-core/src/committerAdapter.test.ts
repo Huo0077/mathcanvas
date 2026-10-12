@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import { createCommitterAdapter, type DraftStoreLike, type HostBridgeLike } from "./committerAdapter"
 import type { ConsentToken } from "./coordinatorPorts"
 import type { DocumentHandle, RunContext } from "./contracts"
+import { proofScopeOf } from "./diagramVerification"
 
 /**
  * Task 2.4 的接线：把协调器的 `CommitterPort` 接到 G0.5 的 `DraftStore` + `HostBridge`。
@@ -84,7 +85,8 @@ describe("committer adapter staging", () => {
   it("reports unverified diagram conditions to the gate even without caller acceptance", async () => {
     const drafts = makeDrafts({ stage: vi.fn(async () => ({ ok: true as const, preview: {
       draftVersion: 2, previewHash: "preview-2", diagramVerification: {
-        status: "unverified" as const, sampleValues: [], checks: [{ kind: "unparsed" as const, sourceText: "∠ABC=60°", status: "unverified" as const, reason: "尚未支持" }]
+        status: "unverified" as const, sampleValues: [], checks: [{ kind: "unparsed" as const, sourceText: "∠ABC=60°", status: "unverified" as const, reason: "尚未支持" }],
+        ...proofScopeOf({})
       }
     } })) })
     const adapter = createCommitterAdapter({ drafts, host: makeHost(), live: () => ({ handle: handleFor(document()), document: document() }) })

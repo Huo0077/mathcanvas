@@ -1,4 +1,4 @@
-import type { DiagramCheck } from "@draw/agent-core"
+import type { DiagramCheck, DiagramVerificationReport } from "@draw/agent-core"
 
 /**
  * **核验那一条在确认面板上怎么念**（2026-10-12 裁决 A；单独成模块的理由与
@@ -41,4 +41,37 @@ export function describeCheckReason(check: Pick<DiagramCheck, "status" | "reason
     return `实测偏差 ${check.actual.toPrecision(5)}（这一类条件要求偏差归零）。`
   }
   return check.reason
+}
+
+/**
+ * **每一条读数的证据等级怎么念**（Task 15）。
+ *
+ * 三种等级不是"可信度打分"，而是**这条读数是怎么来的**：
+ * 代数判别式（不依赖采样分辨率）／数值求根 + 独立回代／只有采样折线上的比较。
+ * 表按 `DiagramCheck["evidence"]` 的联合类型写成 `Record`，将来多一档就编译不过。
+ */
+export const EVIDENCE_LABEL: Record<NonNullable<DiagramCheck["evidence"]>, string> = {
+  algebraic: "由代数判别式解出",
+  "verified-numeric": "数值求根并独立回代",
+  "plot-only": "只有采样折线上的比较"
+}
+
+export function describeCheckEvidence(check: Pick<DiagramCheck, "evidence">): string | null {
+  return check.evidence === undefined ? null : EVIDENCE_LABEL[check.evidence]
+}
+
+/**
+ * **这一轮核验的范围怎么念**（Task 15）。
+ *
+ * 面板上"通过 2 / 失败 0 / 未核验 0"很容易被读成"这道题做对了"。它实际说的是
+ * **一个图形实例**（图上带参数取值时更弱）在核验器那几条判据下成立 ——
+ * 与"对所有参数成立""整题已证明"是两句话。范围与全称状态各说一句，都由报告字段推出来。
+ */
+export const PROOF_SCOPE_LABEL: Record<DiagramVerificationReport["proofScope"], string> = {
+  "figure-instance": "一个图形实例",
+  "parameter-instance": "图上带参数取值的实例"
+}
+
+export const UNIVERSAL_CLAIMS_LABEL: Record<DiagramVerificationReport["universalClaims"], string> = {
+  "not-proven": "图上成立不等于全称成立：这一轮没有证明任何「对所有参数 / 整个定义域都成立」的主张。"
 }

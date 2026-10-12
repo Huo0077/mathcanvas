@@ -33,7 +33,9 @@ import { compilePlan } from "./planCompiler"
  * 基线样本只在这次修复里抓取一次就固定下来 —— 它不随被测代码变化，所以它能发现回归，
  * 而"新代码自己跟自己比"不能。
  *
- * ## 2026-10-10 有据修订（**唯一一次**）：顶点标签跟随 `vertexNames`
+ * ## 有据修订（每一次都记在样本里，不许"悄悄修订"）
+ *
+ * ### 2026-10-10：顶点标签跟随 `vertexNames`
  *
  * 那批输入里有 `P-ABCD` 那类题面（顶点写在前面），样本记下的标签原是**按位置顺延**的 `A…E` ——
  * 而"核验里那个顶点 = 画布上那个标签"是一条**被裁决要修的真缺陷**（用户自测"点的名称对不上"）。
@@ -43,8 +45,22 @@ import { compilePlan } from "./planCompiler"
  * `pyramid-verified` 与 `pyramid-verified-with-ir-on` 有差异，每个恰好 `5` 个 `label`
  * ×（`operations[0].primitives` 与 `draftDocument.primitives`）= **20 处**，
  * 一律是 `A,B,C,D,E` → `P,A,B,C,D`（题面声明的点名）；其余 5 个用例**零差异**，
- * 报错文案 / 别名 / 键集合 / 题设报告一个字都没动。这 20 处记在样本的 `revised` 里，
- * 下面那条用例会**要求它确实存在** —— 基线可以修订，但不能"悄悄修订"。
+ * 报错文案 / 别名 / 键集合 / 题设报告一个字都没动。
+ *
+ * ### 2026-10-12：题设核验报告新增三个**证据范围**字段（Task 15）
+ *
+ * `diagramVerification` 多了 `proofScope` / `universalClaims` / `proofScopeNote` ——
+ * 而且它们在**所有**路径上都出现（不是开关后的能力）。理由：Task 15 要求面板默认就把
+ * "这一轮核的是一个图形实例，不是全称证明"写出来；藏进开关等于默认不说。
+ * 这**不是**"旧路径行为不变"那条保证被放宽：判据、文案、别名、草稿文档一个字节没动。
+ *
+ * **重抓之前同样先证明差异只有那一处**（同一套临时探针，跑完即删）：4 个有报告的用例
+ * 差异路径**恰好**是上面那三个；另外 2 个（`transport-invalid` / `audit-completes-defaults`）
+ * **零差异**；两种开关形状（缺席 / 显式 `false`）逐字节相同。探针把"差异必须恰好是那三个"
+ * 写成断言，差异一旦多一处就直接红、不写回。
+ *
+ * 样本的修订记录从单个 `revised` 改成 `revisions` 数组（2026-10-10 那条**逐字保留**、
+ * 只加了 `kind`），下面第一条用例要求每一条都带着理由、并逐条核对它改了什么。
  */
 interface GoldenCase {
   name: string
@@ -56,7 +72,16 @@ interface GoldenCase {
   diagramVerificationKeys: string[] | null
 }
 
-const golden = goldenRaw as unknown as { baselineCommit: string; revised?: { date: string; reason: string; changedLabels: number; cases: string[] }; cases: GoldenCase[] }
+interface GoldenRevision {
+  kind?: string
+  date: string
+  reason: string
+  fieldPath: string[]
+  changedLabels?: number
+  cases: string[]
+}
+
+const golden = goldenRaw as unknown as { baselineCommit: string; revisions?: GoldenRevision[]; cases: GoldenCase[] }
 
 /**
  * **时钟必须冻住**（第一次抓取踩到的坑，与抓取用例同一个时刻）。
@@ -81,17 +106,30 @@ const VARIANTS: { label: string; override: { diagramWitnessSearch?: boolean } }[
   { label: "显式 false（应用层实际传的形状）", override: { diagramWitnessSearch: false } }
 ]
 
-describe(`the witness-search-off path matches its recorded baseline (${golden.baselineCommit}${golden.revised === undefined ? "" : ` + the ${golden.revised.date} label revision`})`, () => {
+const revisions = golden.revisions ?? []
+const revisionLabel = revisions.length === 0 ? "" : ` + ${revisions.map((entry) => `${entry.date} ${entry.kind ?? "revision"}`).join(" + ")}`
+
+describe(`the witness-search-off path matches its recorded baseline (${golden.baselineCommit}${revisionLabel})`, () => {
   it("has a baseline sample that really covers both a success and a failure", () => {
     // 只覆盖一侧的黄金样本证明不了"off 路径没变"——所以先把样本本身的覆盖度钉住。
     expect(golden.baselineCommit).toBe("4707b64")
     /**
-     * **基线修订必须是"有据"的**（2026-10-10）：样本里带着修订说明、改了多少处、改了哪些用例。
+     * **基线修订必须是"有据"的**：样本里每条都带着修订说明、改了哪些字段、改了哪些用例。
      * 这一条挡的是"重抓一遍就当没事发生" —— 那正是这份文件存在的理由（不能被自己绕过）。
      */
-    expect(golden.revised?.reason.length ?? 0).toBeGreaterThan(0)
-    expect(golden.revised?.changedLabels).toBe(20)
-    expect(golden.revised?.cases).toEqual(["pyramid-verified", "pyramid-verified-with-ir-on"])
+    expect(revisions.length).toBeGreaterThanOrEqual(2)
+    for (const revision of revisions) {
+      expect(revision.reason.length, `${revision.date} 那条修订没有理由`).toBeGreaterThan(0)
+      expect(revision.cases.length).toBeGreaterThan(0)
+    }
+    // 2026-10-10：顶点标签（20 处）。
+    const labels = revisions.find((entry) => entry.kind === "labels")
+    expect(labels?.changedLabels).toBe(20)
+    expect(labels?.cases).toEqual(["pyramid-verified", "pyramid-verified-with-ir-on"])
+    // 2026-10-12（Task 15）：题设核验报告的三个证据范围字段。
+    const scope = revisions.find((entry) => entry.kind === "report-scope-fields")
+    expect(scope?.fieldPath).toEqual(["diagramVerification.proofScope", "diagramVerification.universalClaims", "diagramVerification.proofScopeNote"])
+    expect(scope?.cases).toEqual(["pyramid-fail-closed", "pyramid-verified", "pyramid-unverified-without-names", "pyramid-verified-with-ir-on"])
     expect(golden.cases.length).toBeGreaterThanOrEqual(6)
     const results = golden.cases.map((entry) => JSON.parse(entry.resultJson) as { ok: boolean; draftDocument: unknown })
     expect(results.some((entry) => entry.ok)).toBe(true)

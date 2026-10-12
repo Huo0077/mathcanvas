@@ -549,6 +549,51 @@ export function functionTangentPlan(): PlanEnvelope {
 }
 
 /**
+ * **Task 15 的两道函数题**：一道考**定义域/断点**，一道是**尖点处没有切线**的反例。
+ *
+ * 为什么这两道要进夹具，而不是只留在内核单测里：计划 Task 15 的出口要求
+ * **产品入口**上能看见"断点不许被连线"与"错切点必须挡住"两件事。
+ * 内核里判对、面板上仍旧放行，等于没做（本仓已经踩过"判据存在但接不进链路"的坑）。
+ *
+ * `1/x` 那道题面没写画多宽，唯一由系统选的是定义域 ⇒ 写进 `assumptions`；
+ * `|x|` 那道**故意照题面要求在尖点作切线**，交给核验器去红 —— 这才是负例该有的样子。
+ */
+export const FUNCTION_DOMAIN_PROMPT = "画出 f(x)=1/x 的图像"
+
+export function functionDomainPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作 f(x) = 1/x 的图像",
+    factIds: [],
+    assumptions: [
+      "定义域未指定：取 [-2, 2]。x = 0 处函数没有定义，图上必须是断开的两段，不许连成一条。"
+    ],
+    actions: [
+      { actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression: "1/x", domain: [-2, 2] } }
+    ] as unknown as DraftAction[]
+  }
+}
+
+export const FUNCTION_CORNER_PROMPT = "画出 f(x)=|x| 的图像与它在 x=0 处的切线"
+
+export function functionCornerPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "作 f(x) = |x| 的图像与它在 x = 0 处的切线",
+    factIds: [],
+    assumptions: [
+      "定义域未指定：取 [-2, 2]。题面要求在 x = 0 处作切线，而那是尖点 —— 系统照题面画，并把「这一点没有切线」交给核验器说。"
+    ],
+    actions: [
+      { actionId: "function.create_graph", actionKey: "f", factIds: [], inputs: { alias: "f", expression: "abs(x)", domain: [-2, 2] } },
+      { actionId: "function.create_tangent", actionKey: "tangent-at-0", factIds: [], inputs: { alias: "tangent-at-0", sourceId: "draft:f", x: 0 } }
+    ] as unknown as DraftAction[]
+  }
+}
+
+/**
  * **代表题六、七：双曲线与抛物线**（计划 V0c 的另外两类）。
  *
  * 与椭圆同一条纪律：题面是**方程**，参数被方程钉死，所以没有"系统自选"的自由度。

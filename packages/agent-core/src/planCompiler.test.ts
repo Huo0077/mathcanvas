@@ -195,10 +195,14 @@ describe("relation verification gate", () => {
   it("produces the legacy diagram report with no IR field when nobody passes the switch", () => {
     const result = compilePlan(polyhedronPlan(PYRAMID_VERTICES, PYRAMID_RELATIONS), context(createEmptyDocument("geometry3d"), { prompt: PYRAMID_PROMPT }))
 
-    // 报告本体仍然照旧（核验条数与结论一字未变），而且**字段本身不存在**。
+    /**
+     * 报告本体仍然照旧（核验条数与结论一字未变），`obligationIR` **字段本身不存在**。
+     * **2026-10-12 Task 15**：三个证据范围字段在所有路径上都出现（见
+     * `obligationIR.test.ts` 里那条的同款说明），所以这里断言的是"旧形状 + 那三个、且没有 IR"。
+     */
     expect(result.diagramVerification?.status).toBe("passed")
     expect(result.diagramVerification?.checks).toHaveLength(2)
-    expect(Object.keys(result.diagramVerification ?? {}).sort()).toEqual(["checks", "sampleValues", "status"])
+    expect(Object.keys(result.diagramVerification ?? {}).sort()).toEqual(["checks", "proofScope", "proofScopeNote", "sampleValues", "status", "universalClaims"])
   })
 
   it("treats an explicit false exactly like the default", () => {

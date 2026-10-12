@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
+import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -431,6 +431,13 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
   /** **代表题六、七**：双曲线与抛物线。与椭圆同一条纪律（精确匹配、不挂开关、参数由方程钉死）。 */
   { all: ["双曲线", "x²/9−y²/4"], exact: HYPERBOLA_PROMPT, skillIds: ["conics-tangents"], build: () => hyperbolaPlan() },
   { all: ["抛物线", "y²=4x"], exact: PARABOLA_PROMPT, skillIds: ["conics-tangents"], build: () => parabolaPlan() },
+  /**
+   * **Task 15（函数与导数纵向）的两道题**，放在通用的「f(x) + 切线」之前：
+   * 通用那条只要求两句关键词都出现、不要求逐字相等，所以它会把这道**尖点负例**
+   * 也抢过去（那时图会照 x³−3x 画，反例就不再是反例了）。
+   */
+  { all: ["f(x)", "1/x"], exact: FUNCTION_DOMAIN_PROMPT, skillIds: ["functions"], build: () => functionDomainPlan() },
+  { all: ["f(x)", "|x|", "切线"], exact: FUNCTION_CORNER_PROMPT, skillIds: ["functions", "conics-tangents"], build: () => functionCornerPlan() },
   /**
    * **代表题五（计划 V0d）**：函数图像与它在某点的切线。
    *
