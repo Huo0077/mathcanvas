@@ -49,11 +49,24 @@
 CI（GitHub Actions）里**没有** Lean，也没有这 7 GB，所以 CI 上跑的是**判据层**
 （假 runner + 假 Lean 输出），真实端到端那条是**显式 gated** 的（工具链/工程不在就 skip 并写明理由）。
 
-## 一条已知的取舍
+## 依赖闭包是**钉住**的（2026-10-10 起）
 
-`lakefile.toml` 里的 `[[require]] rev = "master"`（mathlib 官方推荐写法）意味着
-**`lake update` 会把 mathlib 挪到 master 当时的位置**。要让两次运行可比，
-`.lake/lake-manifest.json` 才是真正的锁定处（本次实测的 mathlib commit 是
-`0826a5e4ff8877949060d03ce8955545bfb2b47f`），而**它不进仓库**（在 `.lake/` 里）。
-所以"换台机器复跑会拿到同一份 mathlib"这件事**今天没有保证** ——
-这是本工程已知的一条代价，写在这里而不是藏起来。
+`lakefile.toml` 的 mathlib `rev` 钉在 commit **`c20717eaa791af9dd3f7847f5ba91623bda9ab6b`**，
+而 `lake-manifest.json` **一起进仓库** —— 它把整棵依赖树（mathlib 之外还有 aesop / batteries /
+Qq / plausible / importGraph / proofwidgets / LeanSearchClient / Cli）逐条钉住。
+所以"换台机器复跑会拿到同一份 mathlib"这件事**有保证**了，不再靠当时的实测值。
+
+**改那个 `rev` 等于升级 mathlib**：必须重跑真证明用例（`scripts/proof-spike/lean4EndToEnd.test.ts`），
+**并且同步这份 README**（`scripts/proof-spike/lean4Pin.test.ts` 会盯着两处 rev 是否逐字相同、
+以及这里写的是不是当前那个 commit）。
+
+## 仍然要有心理准备的两件事
+
+- **首次要下 GB 级的东西**（上一节的实测代价：约 27 分钟、压缩缓存 0.42 GB、展开约 7.5 GB/工程）。
+  展开目录在 `.lake/`，被 `.gitignore`（一行 `/.lake`）挡住，**不进仓库**；
+  **首次下载、升级 mathlib、复制缓存或改变桌面发行体积都要先单独征得用户同意**，
+  本任务的默认运行**不做**这些动作。
+- **工具链不随包**：这份仓库里没有 Lean 二进制，也没有 mathlib 源码。跑真证明要本机有
+  `lean-toolchain` 指的那份工具链（`~/.elan/toolchains/leanprover--lean4---v4.35.0-rc3`）。
+  CI（GitHub Actions）上既没有 Lean、也没有这 7 GB ⇒ CI 跑的是**判据层**，
+  真实端到端那条显式 gated（工具链/工程不在就 skip 并写明理由）。
