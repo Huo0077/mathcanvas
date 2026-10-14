@@ -182,6 +182,50 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
     expect(report.totals.repairedCount).toBe(0)
   })
 
+  /**
+   * **费用算不出来就是 `null`**（2026-10-16，为付费那一跑补的口径）。
+   *
+   * 仓里**没有价目表**：能拿到的只有用量（token 数），拿不到钱。把"算不出"记成 `0`
+   * 会让费用那条阈值**凭空通过**（`0 ≤ $0.25` 永远成立），于是报告里会出现一条
+   * "费用达标"的绿字 —— 而那正是本仓最忌的"没测当成测了"。所以：
+   * 没有费用读数 ⇒ 合计是 `null` ⇒ 那条阈值**不通过**（与"人评没标就是 `null`"同一条口径）。
+   */
+  it("**费用没测到 ⇒ 合计 `null`、费用阈值不通过**（不许拿 0 冒充）", () => {
+    const cases = [...EXAM_CASES, ...HELD_OUT_CASES]
+    const withoutCost: ExamTrialObservation[] = cases.flatMap((entry) => [1, 2, 3].map((trial) => ({
+      caseId: entry.id,
+      family: entry.family,
+      trial,
+      outcome: "planned" as const,
+      latencyMs: 1000,
+      costUsd: null
+    })))
+    const report = summarizeExamEvaluation(granted(), withoutCost, CONTEXT)
+
+    expect(report.totals.costUsd).toBeNull()
+    for (const family of report.families) expect(family.costUsd, `${family.family} 的费用合计`).toBeNull()
+    const costVerdicts = report.verdicts.filter((verdict) => verdict.metric === "costPerCase")
+    expect(costVerdicts.length).toBeGreaterThan(0)
+    for (const verdict of costVerdicts) {
+      expect(verdict.actual, "没测到就是 null").toBeNull()
+      expect(verdict.passed, "0 ≤ 阈值会让它凭空通过 —— 这里必须是不通过").toBe(false)
+    }
+    // 费用不认识，**不该把别的读数拖坏**：成功那几条照旧。
+    for (const family of report.families) expect(family.passAt1).toBe(1)
+  })
+
+  it("**有一次算不出钱，那一族与总计就是 `null`** —— 不拿已有的那几次求和冒充合计", () => {
+    const mixed = observations(() => "planned").map((entry, index) => (index === 0 ? { ...entry, costUsd: null } : entry))
+    const report = summarizeExamEvaluation(granted(), mixed, CONTEXT)
+
+    expect(report.totals.costUsd).toBeNull()
+    const triangle = report.families.find((entry) => entry.family === "triangle")!
+    expect(triangle.costUsd).toBeNull()
+    // 别的族每一次都有费用 ⇒ 照旧是数（不是"全表一起变 null"）。
+    const conic = report.families.find((entry) => entry.family === "conic")!
+    expect(conic.costUsd).toBeCloseTo(9 * 0.1, 9)
+  })
+
   it("**请求清单**：36 个请求、最坏 $10.35（这是给用户点头用的分母）", () => {
     const plan = examRequestPlan(FROZEN_THRESHOLDS)
     expect(plan.requests).toBe(36)

@@ -168,7 +168,13 @@ export interface ExamTrialObservation {
   /** **人评**才填；没标注就没这一栏（不许用模型自评冒充）。 */
   readability?: "readable" | "partly" | "unreadable"
   latencyMs: number
-  costUsd: number
+  /**
+   * 这一次试验花了多少钱。**没测出来就是 `null`**（不是 0）——
+   * 仓里**没有价目表**，从 provider 拿到的只有用量（token 数），拿不到钱；
+   * 把"算不出"记成 0 会让费用那条阈值**凭空通过**（0 ≤ $0.25 永远成立）。
+   * 与"人评没标就是 `null`"同一条口径：**没测就不算过**。
+   */
+  costUsd: number | null
   detail?: string
 }
 
@@ -183,7 +189,8 @@ export interface ExamFamilyResult {
   /** **同轮修好**的题数（单独一栏，不进上面两个）。 */
   repairedCount: number
   p95LatencyMs: number
-  costUsd: number
+  /** 这一族的费用合计；**有一次试验算不出钱就是 `null`**（见 `ExamTrialObservation.costUsd`）。 */
+  costUsd: number | null
   /** 人评 `unreadable` 的比例；**没标注就是 `null`**。 */
   unreadableShare: number | null
   /** 非成功**结局**的分布（按结局计数：clarification / rejected / error / not_measured）。 */
@@ -214,7 +221,8 @@ export interface ExamEvaluationReport {
   cases: number
   trialsPerCase: number
   families: ExamFamilyResult[]
-  totals: { requests: number; costUsd: number; passAt1: number; passAt3: number; repairedCount: number }
+  /** 总计：**费用有一次算不出就是 `null`**（见 `ExamTrialObservation.costUsd`）。 */
+  totals: { requests: number; costUsd: number | null; passAt1: number; passAt3: number; repairedCount: number }
   /** 逐条对照**事先冻结**的阈值；过不了线就报过不了。 */
   verdicts: ExamVerdict[]
   /**
@@ -304,7 +312,13 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
       passAt3: entry.cases.length === 0 ? 0 : casesWithAnySuccess.length / entry.cases.length,
       repairedCount: repaired.length,
       p95LatencyMs: percentile95(familyObservations.map((observation) => observation.latencyMs)),
-      costUsd: familyObservations.reduce((sum, observation) => sum + observation.costUsd, 0),
+      /**
+       * **有一次算不出钱，这一族的合计就是 `null`** —— 不拿"已有的那几次"求和冒充合计
+       *（那会把"没测"摊薄成一个看起来偏小的数，正好往阈值那边靠）。
+       */
+      costUsd: familyObservations.some((observation) => observation.costUsd === null)
+        ? null
+        : familyObservations.reduce((sum, observation) => sum + (observation.costUsd ?? 0), 0),
       unreadableShare: annotated.length === 0 ? null : annotated.filter((observation) => observation.readability === "unreadable").length / annotated.length,
       failureStages,
       failureLayers
@@ -315,7 +329,7 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
   for (const family of families) {
     const freeze = plan.families.find((entry) => entry.family === family.family)!
     const thresholds = freeze.thresholds
-    const costPerCase = family.cases === 0 ? null : family.costUsd / family.cases
+    const costPerCase = family.cases === 0 || family.costUsd === null ? null : family.costUsd / family.cases
     verdicts.push({ family: family.family, metric: "passAt1", threshold: thresholds.passAt1, actual: family.passAt1, passed: family.passAt1 >= thresholds.passAt1 })
     verdicts.push({ family: family.family, metric: "passAt3", threshold: thresholds.passAt3, actual: family.passAt3, passed: family.passAt3 >= thresholds.passAt3 })
     verdicts.push({
@@ -343,7 +357,10 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
     families,
     totals: {
       requests: observations.length,
-      costUsd: observations.reduce((sum, observation) => sum + observation.costUsd, 0),
+      /** 同上：**有一次算不出钱，总计就是 `null`**（不拿部分和冒充合计）。 */
+      costUsd: observations.some((observation) => observation.costUsd === null)
+        ? null
+        : observations.reduce((sum, observation) => sum + (observation.costUsd ?? 0), 0),
       passAt1: allCases === 0 ? 0 : successesAt1.length / allCases,
       passAt3: allCases === 0 ? 0 : successesAny.length / allCases,
       repairedCount: families.reduce((sum, family) => sum + family.repairedCount, 0)
@@ -382,7 +399,11 @@ export interface ExamRunCaseResult {
   /** 失败落在哪一层（同一套四层；成功 / 问路 / 出错不写这一栏）。 */
   failureLayer?: ExamFailureLayer
   readability?: ExamTrialObservation["readability"]
-  costUsd: number
+  /**
+   * 这一次花了多少钱；**算不出来就填 `null`**（仓里没有价目表时这是唯一诚实的写法，
+   * 见 `ExamTrialObservation.costUsd`）—— 填 0 会让费用阈值凭空通过。
+   */
+  costUsd: number | null
   /** 没给就用墙钟实测。 */
   latencyMs?: number
   detail?: string
@@ -432,7 +453,12 @@ export async function runExamEvaluation(request: ExamRunRequest): Promise<ExamRu
   }
   const report = summarizeExamEvaluation(request.plan, observations, { provider: request.request.provider, model: request.request.model, repairPath: request.request.repairPath })
   const maxCostUsd = request.plan.authorization.maxCostUsd ?? 0
-  if (report.totals.costUsd > maxCostUsd) {
+  /**
+   * **超支核对只在"钱算得出来"时才做**：`totals.costUsd === null` 表示仓里没有价目表、
+   * 这一轮**没有可用的费用读数** —— 那时既不能说"没超"，也不能拿它去拦下整轮
+   * （报告照样给你，费用那一栏如实是 `null`、那条阈值如实不通过）。
+   */
+  if (report.totals.costUsd !== null && report.totals.costUsd > maxCostUsd) {
     return { ok: false, reason: `实际费用 $${report.totals.costUsd} 超过授权的最高费用 $${maxCostUsd} —— 这一轮如实报超支，报告仍然给你（见 detail）。\n${JSON.stringify(report)}` }
   }
   return { ok: true, report }
