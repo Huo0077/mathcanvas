@@ -90,6 +90,15 @@ function isTangentAnchorPatch(document: GeometryDocument, value: unknown): boole
     return typeof anchor.pointId === "string"
       && document.primitives.some((primitive) => primitive.id === anchor.pointId && primitive.type === "point")
   }
+  /**
+   * **过外点那条锚法**（2026-10-16）：要过的点必须真实存在（与 `point` 同一条判据），
+   * `branch` 只能是 0 或 1（一个点向一条曲线最多两条切线，与 `parameter` 那条同一把尺子）。
+   */
+  if (anchor.kind === "through") {
+    return typeof anchor.pointId === "string"
+      && (anchor.branch === undefined || anchor.branch === 0 || anchor.branch === 1)
+      && document.primitives.some((primitive) => primitive.id === anchor.pointId && primitive.type === "point")
+  }
   return false
 }
 

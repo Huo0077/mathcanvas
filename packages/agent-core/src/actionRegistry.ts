@@ -631,7 +631,11 @@ export const ACTIONS = {
     rawFieldTypes: {},
     // 平铺的 `sourceId` 与**嵌套的** `anchor.pointId`：跟随动点时两处都是那个点，
     // 都可以指向同一份计划里新建的对象（漏掉嵌套那条会报 `target_not_found: draft:P`）。
-    references: [{ field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } }],
+    // **过外点那条同样要解析**（2026-10-16）：它引用的也是同一份计划里刚建出来的那个点名。
+    references: [
+      { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } },
+      { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "through" } } }
+    ],
     required: ["sourceId"],
     defaults: {
       x: { policy: "safe_default", value: 0, reason: "切点横坐标未指定，取 x = 0。" }

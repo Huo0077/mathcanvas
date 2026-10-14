@@ -110,7 +110,13 @@ const planeSchema: JsonSchema = {
 const tangentAnchorSchema: JsonSchema = {
   oneOf: [
     { type: "object", properties: { kind: { type: "string", enum: ["point"] }, pointId: { type: "string" } }, required: ["kind", "pointId"], additionalProperties: false },
-    { type: "object", properties: { kind: { type: "string", enum: ["parameter"] }, parameter: { type: "number" }, branch: { type: "integer" } }, required: ["kind", "parameter"], additionalProperties: false }
+    { type: "object", properties: { kind: { type: "string", enum: ["parameter"] }, parameter: { type: "number" }, branch: { type: "integer" } }, required: ["kind", "parameter"], additionalProperties: false },
+    /**
+     * **过曲线外一点**（2026-10-16）：`branch` 选第几条切线（一个点最多两条）。
+     * 发布出去的 schema 与真正接受的载荷必须是同一种东西 —— 这条与 `patches.ts` 的校验、
+     * `scene-graph` 的锚点类型是同一份契约的三处落点，缺一处模型就会"看得到却写不进去"。
+     */
+    { type: "object", properties: { kind: { type: "string", enum: ["through"] }, pointId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "pointId"], additionalProperties: false }
   ]
 }
 

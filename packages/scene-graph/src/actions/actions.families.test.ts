@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import { compileActions } from "./index"
 import type { ActionContext, DraftAction, IdAllocator } from "./types"
+import { recomputeCurveTangent } from "../analysisRecompute"
 
 /**
  * Task 0.5 第二批：把剩余动作族补上（计划 Step 2 点名的"函数分析、切线 anchor、半径规则"）。
@@ -157,6 +158,72 @@ describe("curve tangent anchor", () => {
 
     expect(result.operations).toHaveLength(0)
     expect(result.diagnostics[0].code).toBe("point_not_bound")
+  })
+
+  /**
+   * **过曲线外一点作切线**（2026-10-16，Task 15 的边界「外点双切线没有产品动作」）。
+   *
+   * 判据全部**自己算**：那条直线要真的过那个点、而且要真的与曲线相切（切点处斜率 = 导数）。
+   * 题面形状就是 2021 新高考Ⅰ卷 7 题那一类（外点向曲线作多条切线）。
+   */
+  describe("过外点的切线", () => {
+    /** 把 `point-1` 挪到外点位置：`y = x²` 下方 (0, −1) ⇒ 恰好两条切线。 */
+    function documentWithExternalPoint(x: number, y: number) {
+      const document = planarDocument()
+      document.primitives = document.primitives.map((primitive) => primitive.type === "point" && primitive.id === "point-1" ? { ...primitive, x, y } : primitive)
+      return document
+    }
+
+    function compileThrough(document: ReturnType<typeof planarDocument>, branch: number) {
+      return compileActions(document, [action({ actionId: "function.create_tangent", inputs: { alias: `t${branch}`, sourceId: "fn-1", anchor: { kind: "through", pointId: "point-1", branch } } })], contextWith(document))
+    }
+
+    it("`(0, −1)` 向 `y = x²` 的两支各作一条：编译期先解出来，再落一个带锚点的图元", () => {
+      const document = documentWithExternalPoint(0, -1)
+      for (const branch of [0, 1]) {
+        const result = compileThrough(document, branch)
+        expect(result.diagnostics, `branch=${branch}`).toEqual([])
+        expect(result.operations[0]).toMatchObject({ op: "addPrimitive", primitive: { type: "tangent", sourceId: "fn-1", anchor: { kind: "through", pointId: "point-1", branch } } })
+      }
+    })
+
+    it("重算之后两条切线**都真的过那个点、也都真的相切**（自己算，不读图元自报的斜率）", () => {
+      const document = documentWithExternalPoint(0, -1)
+      const source = document.primitives.find((primitive) => primitive.id === "fn-1")
+      if (source?.type !== "function") throw new Error("fixture 里应有函数曲线 fn-1")
+      const map = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+
+      const slopes: number[] = []
+      for (const branch of [0, 1]) {
+        const compiled = compileThrough(document, branch)
+        const tangent = compiled.operations[0]
+        if (tangent?.op !== "addPrimitive") throw new Error(`branch=${branch} 没产出图元`)
+        const recomputed = recomputeCurveTangent(tangent.primitive as never, source, map as never, document.parameters)
+        // ① 过外点：`(P − 切点)` 与直线方向共线。
+        const along = { x: recomputed.b.x - recomputed.a.x, y: recomputed.b.y - recomputed.a.y }
+        const toPoint = { x: 0 - recomputed.point.x, y: -1 - recomputed.point.y }
+        expect(Math.abs(along.x * toPoint.y - along.y * toPoint.x) / Math.hypot(along.x, along.y), `branch=${branch} 过外点`).toBeLessThan(1e-9)
+        // ② 相切：切点在曲线上（`y = x²`），且斜率 = `2x`。
+        expect(recomputed.point.y, `branch=${branch} 切点在曲线上`).toBeCloseTo(recomputed.point.x ** 2, 6)
+        expect(recomputed.slope, `branch=${branch} 斜率 = 2x`).toBeCloseTo(2 * recomputed.point.x, 6)
+        slopes.push(recomputed.slope)
+      }
+      // ③ 两条是**不同**的切线（否则"两条"这件事没发生）。
+      expect(Math.abs(slopes[0]! - slopes[1]!)).toBeGreaterThan(0.5)
+    })
+
+    it("`(0, 1)` 在抛物线**里面** ⇒ 作不出切线：编译期就拒（`no_tangent`），不落一个空图元", () => {
+      const result = compileThrough(documentWithExternalPoint(0, 1), 0)
+      expect(result.operations).toHaveLength(0)
+      expect(result.diagnostics[0]?.code).toBe("no_tangent")
+    })
+
+    it("非函数曲线（圆）如实拒绝：`unsupported_source` —— 不假装读过（内核那一侧还没有同一个求解器）", () => {
+      const document = documentWithExternalPoint(0, -1)
+      const result = compileActions(document, [action({ actionId: "function.create_tangent", inputs: { alias: "t", sourceId: "circle-1", anchor: { kind: "through", pointId: "point-1", branch: 0 } } })], contextWith(document))
+      expect(result.operations).toHaveLength(0)
+      expect(result.diagnostics[0]?.code).toBe("unsupported_source")
+    })
   })
 })
 

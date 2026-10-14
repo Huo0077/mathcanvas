@@ -48,5 +48,15 @@ export function tangentAnchorLabel(anchor: TangentAnchor | undefined, pointLabel
     const label = pointLabel(anchor.pointId)
     return label ? `跟随动点 ${label}` : "定位点已不存在"
   }
+  /**
+   * **过外点**（2026-10-16）与"跟随动点"必须**分开说**：前者切点在那个点自己身上，
+   * 后者的切点是**解出来**的（那个点只是切线要经过的地方）—— 写成同一句会让用户
+   * 以为切点就是它，而图上那条切线的切点明明在别处。
+   */
+  if (anchor.kind === "through") {
+    const label = pointLabel(anchor.pointId)
+    const which = (anchor.branch ?? 0) === 0 ? "第一条" : "第二条"
+    return label ? `过点 ${label} 的${which}切线` : "要过的点已不存在"
+  }
   return `曲线参数 ${Number.isFinite(anchor.parameter) ? anchor.parameter.toFixed(3) : "—"}`
 }

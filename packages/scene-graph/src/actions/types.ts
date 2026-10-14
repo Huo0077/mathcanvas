@@ -447,10 +447,17 @@ export interface FunctionCreateTangentAction extends ActionBase {
   }
 }
 
-/** 切线的定位方式：曲线自然参数 / 跟随动点 / 缺省（函数来源按 x）。 */
+/**
+ * 切线的定位方式：曲线自然参数 / 跟随动点 / **过曲线外一点** / 缺省（函数来源按 `x`）。
+ *
+ * `through` 与 `point` 的分工：`point` 是"**跟随动点**"（那个点原先就绑在这条曲线上，
+ * 切线在**它自己**那儿作）；`through` 是"**过这个点**"（点在曲线外，切点是**解出来**的，
+ * 一个点一般对应两条切线 ⇒ 用 `branch` 选第几条）。
+ */
 export type TangentAnchorInput =
   | { kind: "parameter"; parameter: number; branch?: number }
   | { kind: "point"; pointId: string }
+  | { kind: "through"; pointId: string; branch?: number }
 
 export interface FunctionAnalyzeAction extends ActionBase {
   actionId: "function.analyze"

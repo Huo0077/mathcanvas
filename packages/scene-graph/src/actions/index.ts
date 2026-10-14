@@ -2,6 +2,7 @@ import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
+import { tangentThroughPoint } from "../analysisRecompute"
 import { solidTopology3 } from "../sectionRecompute"
 import type { ActionContext, ActionDiagnostic, CompileResult, DraftAction, IdAllocator } from "./types"
 
@@ -967,6 +968,47 @@ function compileTangent(action: Extract<DraftAction, { actionId: "function.creat
   let sourceId = inputs.sourceId
   let anchor: Record<string, unknown>
   let x = inputs.x ?? 0
+
+  /**
+   * **过曲线外一点**（2026-10-16，Task 15 的边界「外点双切线没有产品动作」）。
+   *
+   * 与另外两条锚法不同：切点**不在题面里**，要由内核解出来 ⇒ 这里**必须**先解一次，
+   * 解不出来就当场拒绝（"这个点作不出第 N 条切线"），而不是先落一个空图元再等重算报错。
+   * 判据只有一处（`tangentThroughPoint` → 内核 `tangentsFromPoint`），重算那一侧调的是同一个。
+   *
+   * 记进图元的 `x` 是**解出来的切点横坐标**（函数来源的口径），重算会再算一遍填几何。
+   */
+  if (anchorInput?.kind === "through") {
+    const point = findPrimitive(context.targetDocument, anchorInput.pointId)
+    if (point?.type !== "point") {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "anchor_not_found", `no plane point ${anchorInput.pointId} to pass through`)], aliasToId: {} }
+    }
+    const branch = anchorInput.branch ?? 0
+    const solved = tangentThroughPoint(wanted, { x: point.x, y: point.y }, branch)
+    if (!solved.ok) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, solved.status === "failed" ? "unsupported_source" : "no_tangent", solved.diagnostic)], aliasToId: {} }
+    }
+    const id = context.idAllocator.allocate("tangent", inputs.alias)
+    return {
+      operations: [{
+        op: "addPrimitive",
+        primitive: {
+          id,
+          type: "tangent",
+          sourceId: inputs.sourceId,
+          x: solved.parameter,
+          point: { x: solved.parameter, y: 0 },
+          slope: 0,
+          a: { x: 0, y: 0 },
+          b: { x: 1, y: 0 },
+          status: "approximate",
+          anchor: { kind: "through", pointId: anchorInput.pointId, branch }
+        } as unknown as PrimitiveSpec
+      }],
+      diagnostics: [],
+      aliasToId: { [inputs.alias]: id }
+    }
+  }
 
   if (anchorInput?.kind === "point") {
     // 动点定位：来源必须是**那条轨道**，而不是点本身；点必须已经绑在轨道上。

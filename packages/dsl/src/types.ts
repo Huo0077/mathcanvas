@@ -388,6 +388,12 @@ export interface DerivativePrimitive extends PrimitivePresentation {
 export type TangentAnchor =
   | { kind: "parameter"; parameter: number; branch?: number }
   | { kind: "point"; pointId: string }
+  /**
+   * **过曲线外一点**（2026-10-16）：切点不在文档里、由求解器算出来。
+   * 与 `point` 的区别：`point` 是"跟随一个**绑在这条曲线上**的动点"（切线在它自己那儿作），
+   * `through` 是"过这个**曲线外**的点"（一个点一般对应两条切线 ⇒ `branch` 选第几条）。
+   */
+  | { kind: "through"; pointId: string; branch?: number }
 
 export interface TangentPrimitive extends PrimitivePresentation {
   id: string

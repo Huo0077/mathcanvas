@@ -1,5 +1,5 @@
 import { isSampledPrimitiveType, type Coordinate, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, arcConstraint, circleConstraint, constraintTangentAt, ellipseConstraint, evaluateParameterExpression, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, lineConstraint, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, parabolaConstraint, polylineConstraint, rayConstraint, segmentConstraint, tangentSegment, type CurveTangent, type PlanarConstraint, type SampledPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, arcConstraint, circleConstraint, constraintTangentAt, ellipseConstraint, evaluateParameterExpression, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, lineConstraint, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, parabolaConstraint, polylineConstraint, rayConstraint, segmentConstraint, tangentSegment, tangentsFromPoint, type CurveTangent, type PlanarConstraint, type SampledPrimitive } from "@draw/geometry-kernel"
 
 /**
  * **解析类图元的重算**（从 `operations.ts` 拆出，评审方案 2）。
@@ -128,6 +128,38 @@ function extendedTangentEndpoints(point: Coordinate, slope: number, vertical: bo
  * 几何由内核 `constraintTangentAt` 给出（点 + 单位方向），并用 `tangentSegment` 展开成可见线段。
  * 之所以不用斜截式：圆的左右顶点切线是**竖直**的，斜率在那里是无穷大。
  */
+
+/**
+ * **过曲线外一点求切线**（2026-10-16，Task 15 的边界「外点双切线 / 公切线没有产品动作」）。
+ *
+ * 判据**不重写**：内核 `tangentsFromPoint` 早就会算这一族（2021 新高考Ⅰ卷 7 题那种
+ * "从曲线外一点向指数函数作两条切线"，连"临界一条 / 一条都没有 / 退化"都有结论），
+ * 这里只做"锚点 → 那一次调用"的翻译，并把"第几条"翻成**切点参数** ——
+ * 于是编译期与重算期走的是**同一个**求解器（一处真源），而重算之后填几何那一段与
+ * `parameter` 那条锚法**共用同一段收尾**。
+ *
+ * **这一档只收函数曲线**：圆 / 圆锥曲线那一侧内核还没有同一个求解器（那需要各自的
+ * 代数求解，不是这里能替它编的）—— 如实拒绝，**不假装读过**：拒绝的理由会一路带到
+ * 编译诊断与重算诊断上。
+ */
+export function tangentThroughPoint(
+  source: PrimitiveSpec,
+  point: { x: number; y: number },
+  branch: number
+): { ok: true; parameter: number } | { ok: false; status: "failed" | "undefined"; diagnostic: string } {
+  if (source.type !== "function") return { ok: false, status: "failed", diagnostic: "过外点的切线目前只支持函数曲线（圆与圆锥曲线暂时没有同一个求解器）。" }
+  const set = tangentsFromPoint(source.expression, source.domain, point)
+  const chosen = set.tangents[branch]
+  if (chosen === undefined) {
+    return {
+      ok: false,
+      status: "undefined",
+      diagnostic: `这个点向这条曲线作不出第 ${branch + 1} 条切线${set.diagnostic === undefined ? "。" : `：${set.diagnostic}`}`
+    }
+  }
+  return { ok: true, parameter: chosen.parameter }
+}
+
 export function recomputeCurveTangent(
   primitive: Extract<PrimitiveSpec, { type: "tangent" | "normal" }>,
   source: PrimitiveSpec,
@@ -139,6 +171,32 @@ export function recomputeCurveTangent(
   if (!anchor || !constraint) return { ...primitive, status: "failed" as const, diagnostic: "切线来源曲线不支持参数化" }
   const lastBranch = Math.max(0, constraint.branchCount - 1)
   const clampBranch = (branch: number | undefined) => Math.min(Math.max(branch ?? 0, 0), lastBranch)
+  /**
+   * **过外点那条锚法先解**（`through`）：切点是解出来的，不走下面"定位点 → 参数"那两套。
+   * 解不出来时**如实失败**（`failed` = 这一档不支持 / 点不存在；`undefined` = 作不出那条切线）。
+   */
+  if (anchor.kind === "through") {
+    const point = primitiveMap.get(anchor.pointId)
+    if (point?.type !== "point") return { ...primitive, status: "failed" as const, diagnostic: "切线要过的那个点不存在" }
+    const solved = tangentThroughPoint(source, { x: point.x, y: point.y }, anchor.branch ?? 0)
+    if (!solved.ok) return { ...primitive, status: solved.status, diagnostic: solved.diagnostic }
+    const raw = constraintTangentAt(constraint, solved.parameter, 0)
+    if (!raw) return { ...primitive, status: "undefined" as const, diagnostic: "这条曲线在该位置没有切线" }
+    const tangent: CurveTangent = primitive.type === "normal" ? normalFromTangent(raw) : raw
+    const { a, b } = tangentSegment(tangent, primitive.halfLength ?? INFINITE_TANGENT_EXTENT)
+    const vertical = Math.abs(tangent.direction.x) <= 1e-9
+    return {
+      ...primitive,
+      x: tangent.point.x,
+      point: tangent.point,
+      slope: vertical ? 0 : tangent.direction.y / tangent.direction.x,
+      vertical,
+      a,
+      b,
+      status: "approximate" as const,
+      diagnostic: undefined
+    }
+  }
   const target = ((): { parameter: number; branch: number } | null => {
     if (anchor.kind === "parameter") return { parameter: anchor.parameter, branch: clampBranch(anchor.branch) }
     const point = primitiveMap.get(anchor.pointId)
