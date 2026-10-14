@@ -110,6 +110,22 @@ describe("incremental scene content sync", () => {
     expect(sceneShell.dataset.sceneSyncs).toBe("1")
   })
 
+  it("**虚实线的读数写到场景容器上**（Task 16 边界）：画了几段虚线、以及开关是什么状态", () => {
+    const cube = { id: "cube-hidden", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } } as PrimitiveSpec
+    const { syncContent, sceneShell, deps } = harness([cube])
+
+    syncContent()
+    // 开关开着 ⇒ 真的建了隐藏棱的虚线；**段数由构造那一层决定，这里只要求是正数**（不写死几段）。
+    expect(sceneShell.dataset.hiddenEdgesShown).toBe("true")
+    expect(Number(sceneShell.dataset.hiddenEdgeSegments)).toBeGreaterThan(0)
+
+    // 关掉开关再同步：画面上不再有那些虚线 ⇒ 如实读成 0 段、状态 false。
+    deps.displayFlagsRef.current = { ...deps.displayFlagsRef.current, showHiddenEdges: false }
+    syncContent()
+    expect(sceneShell.dataset.hiddenEdgesShown).toBe("false")
+    expect(sceneShell.dataset.hiddenEdgeSegments).toBe("0")
+  })
+
   it("reuses every object when nothing changed, instead of rebuilding the scene", () => {
     const { syncContent, sceneShell, objectsOf } = harness()
     syncContent()

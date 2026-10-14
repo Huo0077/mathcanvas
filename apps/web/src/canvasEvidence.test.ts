@@ -16,6 +16,25 @@ import { canvasEvidenceAttributes, canvasEvidenceOf, hiddenPointLabels, measureR
  * 而不是"从文档推"——后者正是计划点名不算数的那一种。
  */
 
+it("**3D 虚实线**：`shown` 与「这次画了几段」分开报，缺省如实是没画（Task 16 边界）", () => {
+  /**
+   * 虚线画在 WebGL 里、DOM 量不到，所以这两个数由**真的建了它的那一层**
+   *（`threeSceneContent` 的同步）写进 dataset，这一层只转述。
+   * **`shown`（开关）与段数（画面上真有）是两件事**：只报开关会让"开着但一段都没画出来"
+   * 看起来也正常。
+   */
+  const geometry = createEmptyDocument("geometry3d")
+  const root = document.createElement("div")
+  const withEdges = canvasEvidenceAttributes(canvasEvidenceOf({ document: geometry, root, viewport: { width: 400, height: 300 }, objectsMeasurable: false, hiddenEdges: { shown: true, segments: 12 } }), false)
+  expect(withEdges["data-canvas-hidden-edges-shown"]).toBe("true")
+  expect(withEdges["data-canvas-hidden-edges"]).toBe("12")
+
+  // 缺省（2D 画布、或调用方没给）⇒ 如实"没画、0 段"，不编一个数。
+  const bare = canvasEvidenceAttributes(canvasEvidenceOf({ document: geometry, root, viewport: { width: 400, height: 300 } }))
+  expect(bare["data-canvas-hidden-edges-shown"]).toBe("false")
+  expect(bare["data-canvas-hidden-edges"]).toBe("0")
+})
+
 const SVG = "http://www.w3.org/2000/svg"
 
 function svgElement<K extends keyof SVGElementTagNameMap>(name: K, attributes: Record<string, string | number>): SVGElementTagNameMap[K] {

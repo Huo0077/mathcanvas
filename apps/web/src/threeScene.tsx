@@ -336,7 +336,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
     if (!shell) return
     const root = pointLabelOverlayRef.current ?? shell
     const viewport = { width: shell.clientWidth, height: shell.clientHeight }
-    const measured = canvasEvidenceAttributes(canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false }), false)
+    /**
+     * **虚实线的读数**（Task 16 边界）：由 `syncContent` 写在场景容器上（它才知道这次真画了几段），
+     * 这里只转述。没写过时如实读成"没画、0 段"。
+     */
+    const segments = Number(shell.dataset.hiddenEdgeSegments ?? "")
+    const hiddenEdges = { shown: shell.dataset.hiddenEdgesShown === "true", segments: Number.isFinite(segments) && segments > 0 ? segments : 0 }
+    const measured = canvasEvidenceAttributes(canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges }), false)
     setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
   })
 

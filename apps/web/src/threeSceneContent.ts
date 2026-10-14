@@ -103,6 +103,23 @@ export interface ThreeSceneContentDeps {
  *
  * 两者共用同一张记录表（`contentRecords`），所以拖完之后的整场同步不会把它当成"没见过的对象"再建一次。
  */
+/**
+ * **一条实体的隐藏棱（虚线）画了几段**（Task 16 边界，2026-10-14）。
+ *
+ * 判据只读**已经建出来的那个 group**：`createSolidGroup` 在开关打开时挂一个
+ * `userData.visualRole === "hidden-edges"` 的 `LineSegments`（成对顶点），段数就是
+ * 顶点数的一半。**重建那条判据不在这里** —— 哪几条棱该算隐藏由 `createSolidGroup` 一处决定，
+ * 这一层只是把它画出来的东西数一遍（少了这一条，DOM 上的数就成了第二份真相）。
+ *
+ * 开关关着时 group 里根本没有那个子对象 ⇒ 如实数到 0 段（"现在没画"）。
+ */
+function hiddenEdgeSegmentsOf(group: THREE.Object3D | null): number {
+  const child = group?.children.find((entry) => entry.userData.visualRole === "hidden-edges")
+  if (child === undefined) return 0
+  const position = (child as THREE.LineSegments).geometry?.getAttribute("position")
+  return position === undefined ? 0 : Math.floor(position.count / 2)
+}
+
 export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFlagsRef, previewsRef, previewHoverKeyRef, previewHoverRef, curveToleranceBucketRef, circleRadiusPreviewRef, rotationHandleRef, trackRadiusHandleRef, sceneSyncsRef, cameraStateRef, scene, camera, sceneShell, viewportSize, syncPointHandleScales, pointHandles, visiblePointLabels, measurementVisuals, previewGroups, previewByKey, sceneBounds, points, topologyOwners, objectIndex, grid
  }: ThreeSceneContentDeps) {
     /**
@@ -218,11 +235,22 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       objectIndex.set(primitive.id, object)
     })
 
+    let hiddenEdgeSegments = 0
     visibleSolids(document).forEach((primitive) => {
       const selected = selectedIds.includes(primitive.id)
       const flags = `sel:${selected};hidden:${showHiddenEdges};normals:${showNormals};transparent:${transparentFaces};unfold:${unfoldProgress > 0.001 ? unfoldProgress.toFixed(4) : "0"}`
-      keepContent(`solid:${primitive.id}`, signer.of(primitive.id, flags), () => createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }), alive, order)
+      const group = keepContent(`solid:${primitive.id}`, signer.of(primitive.id, flags), () => createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }), alive, order)
+      hiddenEdgeSegments += hiddenEdgeSegmentsOf(group)
     })
+    /**
+     * **虚实线要能被画布证据读到**（Task 16 的边界，2026-10-14）：3D 的虚线画在 WebGL 里、
+     * DOM 量不到，所以把它**画了几段、现在显不显示**写到场景容器的 data 上 ——
+     * 与 `dataset.sceneSyncs` 同一个位置、同一条纪律（DOM 上的数由真的建了它的那一层写）。
+     */
+    if (sceneShell) {
+      sceneShell.dataset.hiddenEdgeSegments = String(hiddenEdgeSegments)
+      sceneShell.dataset.hiddenEdgesShown = showHiddenEdges ? "true" : "false"
+    }
     rimCircles.forEach((entry) => {
       const selected = selectedIds.includes(entry.id)
       const group = keepContent(`rim:${entry.id}`, signer.of(entry.id, `rims:${entry.circles.length};${curveToleranceFlag}`), () => createRimCircles3(entry.id, entry.circles, curveTolerance, selected, RIM_CURVE_COLOR), alive, order)

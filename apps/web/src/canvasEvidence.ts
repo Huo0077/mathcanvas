@@ -44,6 +44,14 @@ export interface CanvasEvidence {
   diagnostics: LayoutDiagnostic[]
   /** 文档里有名字、而画布这次没画出来的点名（相机看不见 / 被过滤）。 */
   hiddenLabels: string[]
+  /**
+   * **3D 的虚实线**（Task 16 的边界，2026-10-14）：这次画了几段隐藏棱的虚线、以及那个显示开关的状态。
+   *
+   * 为什么必须有这一栏：虚线画在 WebGL 里、DOM 量不到，于是"画布上有没有那些虚线"在证据面上
+   * **根本没有落点**（上一版只给相机可见性与标签）。数字由**真的建了它的那一层**
+   *（`threeSceneContent` 的同步）写到场景容器上，这一层只读着转述 —— 不在这里重算"哪几条棱算隐藏"。
+   */
+  hiddenEdges: { shown: boolean; segments: number }
 }
 
 interface Rect {
@@ -236,7 +244,7 @@ export function hiddenPointLabels(document: GeometryDocument, renderedLabels: re
  * 一个乱报警的检查器会被学会忽略），只在 `data-canvas-objects-measurable="false"` 上说清
  * "这一份没有对象盒子"，标签那几条判据照常跑。
  */
-export function canvasEvidenceOf(input: { document: GeometryDocument; root: ParentNode; viewport: Viewport; labelSize?: { width: number; height: number }; objectsMeasurable?: boolean }): CanvasEvidence {
+export function canvasEvidenceOf(input: { document: GeometryDocument; root: ParentNode; viewport: Viewport; labelSize?: { width: number; height: number }; objectsMeasurable?: boolean; hiddenEdges?: { shown: boolean; segments: number } }): CanvasEvidence {
   const objectsMeasurable = input.objectsMeasurable ?? true
   const measured = measureRenderedCanvas(input.root, input.labelSize ?? LABEL_BOX_SIZE)
   const judged = objectsMeasurable ? measured.boxes : measured.boxes.filter((box) => box.kind === "label")
@@ -247,7 +255,9 @@ export function canvasEvidenceOf(input: { document: GeometryDocument; root: Pare
     viewport: input.viewport,
     boxes: measured.boxes,
     diagnostics,
-    hiddenLabels: hiddenPointLabels(input.document, measured.renderedLabels)
+    hiddenLabels: hiddenPointLabels(input.document, measured.renderedLabels),
+    // 缺省（2D 画布、或调用方没给）如实记"没画、0 段"，不编一个数。
+    hiddenEdges: input.hiddenEdges ?? { shown: false, segments: 0 }
   }
 }
 
@@ -271,6 +281,12 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
      */
     "data-canvas-diagnostic-errors": evidence.diagnostics.filter((entry) => entry.severity === "error").map((entry) => entry.code).join(","),
     "data-canvas-hidden-labels": evidence.hiddenLabels.join(","),
+    /**
+     * **3D 虚实线**（Task 16 边界）：`shown` 是那个显示开关、`hidden-edges` 是**这次真的画了**
+     * 几段隐藏棱的虚线。两者分开报 —— "开关开着"与"画面上真有那些虚线"是两件事。
+     */
+    "data-canvas-hidden-edges-shown": evidence.hiddenEdges.shown ? "true" : "false",
+    "data-canvas-hidden-edges": String(evidence.hiddenEdges.segments),
     "data-canvas-objects-measurable": objectsMeasurable ? "true" : "false"
   }
 }
