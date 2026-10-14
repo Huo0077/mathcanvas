@@ -533,6 +533,32 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
+    /**
+     * **`侧面 AA₁B₁B 为正方形`**（2026-10-15 用户现场，直三棱柱那道题）。
+     *
+     * 现场：这句**读得出、验不了**（`relation_not_checkable`），于是整轮停在"题设还没核验，
+     * 本次不会提交" —— 图其实已经建好了。根因是没有任何读取器认"…为正方形"，
+     * 它被"面 XX"那条通用模式吞掉，落成一个核验不了的关系。
+     *
+     * 判据**复用**已有的两种，不新造 `square` 义务（新造就意味着核验器里再写一套，
+     * 同一件事两个真源）：四边形 `ABCD` 是正方形 ⟺ **四条边等长** + **相邻两边垂直**。
+     * 一句话读出**四条**题设（读取器契约本来就允许返回数组）。
+     *
+     * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
+     */
+    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*正方形`, "g"),
+    read: (m) => {
+      const [a, b, c, d] = names(m[1])
+      if (a === undefined || b === undefined || c === undefined || d === undefined) return null
+      return [
+        { kind: "equalLength", targets: [a, b, b, c] },
+        { kind: "equalLength", targets: [b, c, c, d] },
+        { kind: "equalLength", targets: [c, d, d, a] },
+        { kind: "perpendicular", targets: [a, b, b, c] }
+      ]
+    }
+  },
+  {
     pattern: new RegExp(`(?:平面|底面|面)\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),
     // `planeLengths` 必须是**点名个数**，不是字串长度：`A₁B₁C₁D₁` 是 4 个点、字串长 8。
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })

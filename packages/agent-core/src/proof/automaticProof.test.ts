@@ -77,7 +77,13 @@ describe("产品侧自动调用：先问该不该跑，再看跑出来什么", (
 
   it("**前提指不出出处 ⇒ 不跑**，而且要说清是哪一条前提没有着落", async () => {
     const { channel, calls } = fakeChannel([])
-    const obligations = parseDiagramObligations("在四棱锥 P-ABCD 中，底面 ABCD 是正方形，求证 PA ⊥ 平面 ABCD")
+    /**
+     * 样本句原来是 `底面 ABCD 是正方形`。**2026-10-15 起它读得出出处了**（新增的读取器把
+     * "…为正方形"落成四条可核验题设：三条等长 + 一条相邻边垂直），于是它不再代表
+     * "**前提指不出出处**"这件事。用例的**意图与断言一字不动**，只换成今天仍读不出的那种写法
+     *（"菱形"落进 `unverified`，不会变成 `given`）。
+     */
+    const obligations = parseDiagramObligations("在四棱锥 P-ABCD 中，底面 ABCD 是梯形，求证 PA ⊥ 平面 ABCD")
     const result = await attemptAutomaticProof(request({ obligations, channel }))
 
     // **先钉住上游那件事**：解析层会跳过「求证」从句 —— 这一句在题面里是**目标**，不是给定。

@@ -71,9 +71,22 @@ describe("棱柱宿主：题面点名的中点由系统补建", () => {
     expect(result.diagramVerification?.status, why).toBe("passed")
   })
 
-  it("**如实钉住剩下那一处缺口**：「侧面…为正方形」今天核验不了（`relation_not_checkable`）", () => {
-    const codes = compile(USER_PROMPT).diagnostics.map((entry) => entry.code)
-    // 这一条不是在"验收通过"，而是把**已知缺口**写成会红的判据：等它被补上时，这条用例会提醒改这里。
-    expect(codes, "「侧面…为正方形」今天读得出、验不了 —— 补上之后请把这条断言改成'整轮通过'").toContain("relation_not_checkable")
+  it("**用户原话整句**：编译 ok、题设核验 `passed`（含「侧面…为正方形」）", () => {
+    const result = compile(USER_PROMPT)
+    const why = result.diagramVerification === undefined
+      ? `没有核验报告；诊断：${result.diagnostics.map((entry) => `${entry.stage}/${entry.code}: ${entry.detail}`).join("；")}`
+      : result.diagramVerification.checks.map((check) => `${check.sourceText}:${check.status}${check.status === "unverified" ? `（${check.reason}）` : ""}`).join("；")
+    expect(result.diagnostics.filter((entry) => entry.severity === "error").map((entry) => entry.code), why).toEqual([])
+    expect(result.ok, why).toBe(true)
+    expect(result.diagramVerification?.status, why).toBe("passed")
+    /**
+     * 「为正方形」读出的是**四条**可核验题设（等长×3 + 垂直×1），不是一条"验不了"的关系。
+     *
+     * 不去断言"没有 `relation_not_checkable`"：那条是**警告**（关于"计划里没声明 relation"，
+     * 与这句话无关，`planCompiler.test.ts` 另有钉住）。这里要的是**正面的**证据 ——
+     * 那四条判据真的出现在核验报告里，而且条条通过。
+     */
+    const squareChecks = result.diagramVerification?.checks.filter((check) => check.sourceText.includes("正方形")) ?? []
+    expect(squareChecks.map((check) => check.status), `正方形那四条：${squareChecks.map((check) => `${check.kind}:${check.status}`).join("，")}`).toEqual(["passed", "passed", "passed", "passed"])
   })
 })
