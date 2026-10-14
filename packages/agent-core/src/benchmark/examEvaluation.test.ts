@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import { assertExamSet, EXAM_CASES, HELD_OUT_CASES } from "./examSet"
-import { examRequestPlan, examTrialOutcomeOf, runExamEvaluation, summarizeExamEvaluation, type ExamTrialObservation } from "./examEvaluation"
+import { examRequestPlan, examTrialOutcomeOf, examTrialVerdictOf, runExamEvaluation, summarizeExamEvaluation, type ExamTrialObservation } from "./examEvaluation"
 import { FROZEN_THRESHOLDS, type FrozenBenchmarkPlan } from "./frozenThresholds"
 
 /**
@@ -23,7 +23,7 @@ function granted(overrides: Partial<FrozenBenchmarkPlan["authorization"]> = {}):
   return { ...FROZEN_THRESHOLDS, authorization: { status: "granted", maxRequests: 36, maxCostUsd: 12, grantedBy: "用户", grantedOn: "2026-10-13", ...overrides } }
 }
 
-const CONTEXT = { provider: "deepseek", model: "deepseek-chat", requests: 36, estimatedCostUsd: 9 }
+const CONTEXT = { provider: "deepseek", model: "deepseek-chat", requests: 36, estimatedCostUsd: 9, repairPath: "not-driven" as const }
 
 /** 造一份"跑完了"的观测：每题三次，结局由调用方按题给。 */
 function observations(outcomeFor: (caseId: string, trial: number) => ExamTrialObservation["outcome"]): ExamTrialObservation[] {
@@ -52,12 +52,20 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
   })
 
   it("**同轮修复成功单独计**，不许混进 pass@1 或 pass@3", () => {
-    const report = summarizeExamEvaluation(granted(), observations(() => "planned_after_repair"), CONTEXT)
+    // 「有修复」这件事**必须由调用方声明**：这一跑走的是协调器那条带修复回路的路径。
+    const repairedRun = { ...CONTEXT, repairPath: "coordinator-driven" as const }
+    const report = summarizeExamEvaluation(granted(), observations(() => "planned_after_repair"), repairedRun)
     const triangle = report.families.find((entry) => entry.family === "triangle")!
     expect(triangle.passAt1, "修好不等于一次成功").toBe(0)
     expect(triangle.passAt3, "同轮修复不是独立试验").toBe(0)
     expect(triangle.repairedCount, "但它是另一个读数").toBe(3) // triangle 是 2 道开发集 + 1 道留出集，三道都要同轮修复
     expect(report.totals.repairedCount).toBeGreaterThan(0)
+  })
+
+  it("**「没走协调器」与「同轮修复」不许同时成立**：声明与观测矛盾就抛，不取一个", () => {
+    expect(() => summarizeExamEvaluation(granted(), observations(() => "planned_after_repair"), CONTEXT)).toThrow(/协调器/)
+    // 同一份观测，声明对了就照记（这一条是上一条的反面，保证抛的是"矛盾"而不是"修复"）。
+    expect(() => summarizeExamEvaluation(granted(), observations(() => "planned_after_repair"), { ...CONTEXT, repairPath: "coordinator-driven" })).not.toThrow()
   })
 
   it("**人评没标就是 null**（不许拿「没标」当可读/不可读）", () => {
@@ -114,6 +122,64 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
     // 模型回了一段解释而不是计划 ⇒ 这一次没画出图（记 `rejected`，不是"成功"也不是"问路"）。
     expect(examTrialOutcomeOf({ kind: "answer" })).toBe("rejected")
     expect(examTrialOutcomeOf({ kind: "error" })).toBe("error")
+  })
+
+  /**
+   * **Task 20 的第二块（2026-10-14）：失败落在哪一层**。
+   *
+   * 计划原文要的是 plan / schema / 构造 / 核验 / 可读性**五层**的失败分布，而上一次交付
+   * 只覆盖了 planning 一层 —— 剩下的四层连"落点"都没有。这一组用例钉住四层的判定：
+   * 每一档的**层名**都从 `compilePlan` 的原始读数来（诊断层名 / 核验结局），而判定只在一处。
+   */
+  it("**失败落在哪一层**：模型没给计划 / schema / 构造 / 核验四档各有层名", () => {
+    // ① 模型回了解释（没进编译器）⇒ `plan`。
+    expect(examTrialVerdictOf({ kind: "answer" })).toEqual({ outcome: "rejected", failureLayer: "plan" })
+    // ② 计划在**前四层**被拒（传输解析 / 字段审计 / 引用解析 / 参数补全）⇒ `schema`。
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: ["transport"] } })).toEqual({ outcome: "rejected", failureLayer: "schema" })
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: ["field_audit", "geometry_validation"] } })).toEqual({ outcome: "rejected", failureLayer: "schema" })
+    // ③ 计划合法但**图造不出来**（几何语义校验 / 动作编译）⇒ `construct`。
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: ["geometry_validation"] } })).toEqual({ outcome: "rejected", failureLayer: "construct" })
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: ["action_compile"] } })).toEqual({ outcome: "rejected", failureLayer: "construct" })
+    // ④ 编译过了、**题设核验**没过 ⇒ `verify`（与产品提交闸同一条判据：核验不是 passed 就不许提交）。
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: true, errorStages: [], verification: "unverified" } })).toEqual({ outcome: "rejected", failureLayer: "verify" })
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: true, errorStages: [], verification: "failed" } })).toEqual({ outcome: "rejected", failureLayer: "verify" })
+    // ⑤ 编译过 + 核验 passed（或这一轮根本没有核验报告）⇒ 成功。
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: true, errorStages: [], verification: "passed" } })).toEqual({ outcome: "planned" })
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: true, errorStages: [] } })).toEqual({ outcome: "planned" })
+    // ⑥ **诊断缺失就不编层名**：`ok:false` 却一条错误诊断都没有时，只记结局、不猜层。
+    expect(examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: [] } })).toEqual({ outcome: "rejected" })
+    // ⑦ 规划器自己抛了 ⇒ `error`：谈不到"卡在哪一层"。
+    expect(examTrialVerdictOf({ kind: "error" })).toEqual({ outcome: "error" })
+    expect(examTrialVerdictOf({ kind: "clarification" })).toEqual({ outcome: "clarification" })
+  })
+
+  it("**层名与结局分开数**：`failureLayers` 只数给出了层名的那些，层名定不出来的不猜", () => {
+    const cases = [...EXAM_CASES, ...HELD_OUT_CASES]
+    const withLayers: ExamTrialObservation[] = cases.flatMap((entry) => [1, 2, 3].map((trial) => ({
+      caseId: entry.id,
+      family: entry.family,
+      trial,
+      // 第一族：三次都卡在构造层；其余族：三次都撞上"编译器没给原因"（只记结局、不记层）。
+      outcome: "rejected" as const,
+      ...(entry.family === "triangle" ? { failureLayer: "construct" as const } : {}),
+      latencyMs: 1000,
+      costUsd: 0.1
+    })))
+    const report = summarizeExamEvaluation(granted(), withLayers, CONTEXT)
+    const triangle = report.families.find((entry) => entry.family === "triangle")!
+    // 三角族 3 道样本 × 3 次 = 9 条观测，条条都是"卡在构造层"。
+    expect(triangle.failureLayers).toEqual({ construct: 9 })
+    expect(triangle.failureStages).toEqual({ rejected: 9 })
+    const conic = report.families.find((entry) => entry.family === "conic")!
+    // 结局照数，层名一栏**空着**（不是 0 猜成一个层名）。
+    expect(conic.failureStages).toEqual({ rejected: 9 })
+    expect(conic.failureLayers).toEqual({})
+  })
+
+  it("**报告带出这一跑有没有走协调器**（`not-driven` 时 `repairedCount` 只能是 0）", () => {
+    const report = summarizeExamEvaluation(granted(), observations(() => "rejected"), CONTEXT)
+    expect(report.repairPath).toBe("not-driven")
+    expect(report.totals.repairedCount).toBe(0)
   })
 
   it("**请求清单**：36 个请求、最坏 $10.35（这是给用户点头用的分母）", () => {

@@ -345,6 +345,23 @@ export function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geomet
 }
 
 /**
+ * **计划需要的目标工作区**（固定偏好次序：三维优先，其次平面）；不需要切时返回 `null`。
+ *
+ * `wanted` 是个**集合展开**，成员顺序来自动作在计划里的先后 —— 而那是模型随手写出来的。
+ * 拿它决定切哪个工作区，就把"顺序决定行为"从门口放了回来（下面那段注释记着上一回同类事故：
+ * 一笔 `planar.*` 写在前面，后面的立体动作必然被工作区守卫拒掉）。
+ * 次序的理由：三维文档同样接受平面动作（反过来的包含关系不成立），所以先取 `geometry3d`；
+ * 剩下的两个都在 2D 那一侧，取 `conics`（平面几何是这两族共同的家）。
+ *
+ * **抽出来是因为有两个调用方**：协调器的 `prepareWorkspaceFor`（真的切）与 Task 20 的
+ * 评测适配器（编译前按同一次序选文档）。次序只有一份 —— 第二份必然与第一份分叉。
+ */
+export function planWorkspaceFor(plan: PlanEnvelope): "conics" | "geometry3d" | null {
+  const wanted = planWorkspaces(plan)
+  return wanted.includes("geometry3d") ? "geometry3d" : wanted.includes("conics") ? "conics" : wanted[0] ?? null
+}
+
+/**
  * 把工作区切到计划需要的那个。
  *
  * **三维优先**：一条计划里既有平面动作又有立体动作时，目标只能是 `geometry3d` ——
@@ -360,17 +377,10 @@ export function planWorkspaces(plan: PlanEnvelope): readonly ("conics" | "geomet
  * 而这条指令本来就不属于那个工作区 —— 如实拒绝比悄悄切走更尊重用户。
  */
 function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true; switched?: boolean } | { ok: false; detail: string } {
-  const wanted = planWorkspaces(plan)
   /**
-   * **目标工作区按固定的偏好次序取，不用 `wanted[0]`。**
-   *
-   * `wanted` 是个**集合展开**，成员顺序来自动作在计划里的先后 —— 而那是模型随手写出来的。
-   * 拿它决定切哪个工作区，就把"顺序决定行为"从门口放了回来（这个函数下面那段注释记着
-   * 上一回同类事故：一笔 `planar.*` 写在前面，后面的立体动作必然被工作区守卫拒掉）。
-   * 次序的理由：三维文档同样接受平面动作（反过来的包含关系不成立），所以先取 `geometry3d`；
-   * 剩下的两个都在 2D 那一侧，取 `conics`（平面几何是这两族共同的家）。
+   * **目标工作区按固定的偏好次序取**（次序的判据只有一处：`planWorkspaceFor`）。
    */
-  const target = wanted.includes("geometry3d") ? "geometry3d" : wanted.includes("conics") ? "conics" : wanted[0]
+  const target = planWorkspaceFor(plan)
   if (!target) return { ok: true }
   const current = useSceneStore.getState().document.workspace
   if (current === target) return { ok: true }

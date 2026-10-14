@@ -1,5 +1,6 @@
 import { EXAM_CASES, HELD_OUT_CASES, type ExamCase, type ExamFamily } from "./examSet"
 import { assertPaidRunAllowed, frozenSample, FROZEN_THRESHOLDS, type FrozenBenchmarkPlan } from "./frozenThresholds"
+import type { PlanStage } from "../contracts"
 
 /**
  * **Task 20 的记账与执行骨架**：授权一到就能跑，而且跑完的账只有一种算法。
@@ -34,7 +35,7 @@ export type ExamTrialOutcome =
   | "planned_after_repair"
   /** 规划器反问（题面读不出唯一构造）。 */
   | "clarification"
-  /** 编译/核验不通过。 */
+  /** **没画出图来**：模型给的不是计划，或者编译/题设核验没过（具体卡在哪一层见 `failureLayer`）。 */
   | "rejected"
   /** 这一层自己出岔子。 */
   | "error"
@@ -44,12 +45,126 @@ export type ExamTrialOutcome =
 export const EXAM_SUCCESS_OUTCOMES: readonly ExamTrialOutcome[] = ["planned"]
 export const EXAM_REPAIRED_OUTCOME: ExamTrialOutcome = "planned_after_repair"
 
+/**
+ * **失败落在哪一层**（计划点名的五层里，机器判得了的那四层）。
+ *
+ * 第五层是**可读性**：它只有人真的标过才有值（`ExamTrialObservation.readability`）——
+ * 把"没标"塞进这个枚举，就等于替人评编一个读数。
+ */
+export type ExamFailureLayer = "plan" | "schema" | "construct" | "verify"
+
+/**
+ * **六层编译 → 四层验收**（`PlanStage` 的六层并成两层）。
+ *
+ * 传进来的必须**按编译顺序**排（`compilePlan` 的 `diagnostics` 本来就是那个顺序），
+ * 只看**第一条**错误诊断落在哪一层。「卡在哪一层」问的是**最早**卡住的地方 ——
+ * 把后面几层一起算进来，会让一条 `transport` 错误被记成"构造也没过"。
+ *
+ * 合档的理由：六层里没有五、六个验收位。前四层（传输解析 / 字段审计 / 引用解析 /
+ * 参数补全）说的是「这份计划根本不是一份合法计划」（`schema`）；后两层
+ * （几何语义校验 / 动作编译）说的是「计划合法、但图造不出来」（`construct`）。
+ *
+ * **空数组 ⇒ `null`**（编译器没给原因）：层名定不出来时报告里就如实少一栏，
+ * 不拿一个猜的层名把账凑平。
+ */
+export function examFailureLayerForStages(stages: readonly PlanStage[]): ExamFailureLayer | null {
+  const first = stages[0]
+  if (first === undefined) return null
+  return first === "geometry_validation" || first === "action_compile" ? "construct" : "schema"
+}
+
+/**
+ * **同轮修复这一轮有没有被判过**（由调用方声明，这一层不猜）。
+ *
+ * - `coordinator-driven`：这一跑的 `runCase` 走的是协调器那条**带修复回路**的路径，
+ *   所以 `planned_after_repair` 有可能出现；
+ * - `not-driven`：只做了「一次规划 + 一次编译」（没有第二次问模型的机会）。这时
+ *   `repairedCount` 必为 0，而它的含义是「**这一轮没走协调器**」，**不是**「没有发生过修复」
+ *   —— 两句话不能混：前者是关于**这次测量**的事实，后者是关于**产品**的断言。
+ */
+export type ExamRepairPath = "coordinator-driven" | "not-driven"
+
+/** 一次尝试的**原始事实** —— 映射成结局与失败层所需要的全部输入。 */
+export interface ExamAttemptFacts {
+  kind: "plan" | "clarification" | "answer" | "error"
+  /**
+   * **同一轮里修过一次**才成。只有走协调器那条路才可能为 `true`
+   * （修复发生在协调器的编译回路里，单次 `plan()` 的端口看不到它）。
+   */
+  repaired?: boolean
+  /**
+   * 这份计划在**编译器**那儿的结局。**只有 `kind: "plan"` 时才有**。
+   *
+   * 缺省 = **没编译过**（端口那一层只看得到规划）：那时按旧口径记 `planned`，
+   * 但这**不是**"编译也过了"，而是"压缩机没跑" —— 所以付费那一跑必须给这一栏，
+   * 否则报告会把"没量"读成"量了、而且过了"。
+   */
+  compile?: {
+    /** `compilePlan(...).ok`。 */
+    accepted: boolean
+    /** **按编译顺序**排的错误级诊断层名（`severity === "error"`）。空数组 = 编译器没给原因。 */
+    errorStages: readonly PlanStage[]
+    /** 题设核验的结局（`compiled.diagramVerification?.status`）；**没有那一栏时不写这个键**。 */
+    verification?: "passed" | "failed" | "unverified"
+  }
+}
+
+export interface ExamAttemptVerdict {
+  outcome: ExamTrialOutcome
+  /** 失败落在哪一层；**成功、问路、这一层自己出错都不写这一栏**（层名无从谈起）。 */
+  failureLayer?: ExamFailureLayer
+}
+
+/**
+ * **一次尝试的原始事实 → 结局 + 失败层**（Task 20 唯一的一处判定）。
+ *
+ * 判据的次序就是产品那条链路的次序：
+ *
+ * 1. 规划器抛了 ⇒ `error`（这一层自己出岔子，谈不到"卡在哪一层"）；
+ * 2. 模型反问 ⇒ `clarification`；
+ * 3. 模型回了一段解释而不是计划 ⇒ `rejected`，层名 `plan`（**没走到编译器**）；
+ * 4. 计划进了编译器：`!accepted` ⇒ `rejected`，层名取自**第一条**错误诊断
+ *    （`examFailureLayerForStages`；诊断缺失 ⇒ 不写层名）；
+ * 5. 编译过了但**题设核验**不是 `passed` ⇒ `rejected`，层名 `verify` ——
+ *    这一条与产品的提交闸同一条判据（`hostBridge`：核验不是 `passed` 就不许提交，
+ *    面板上确认按钮也不出现）；
+ * 6. 其余 ⇒ `planned`（修过一次才成的记 `planned_after_repair`，**单独一档**）。
+ */
+export function examTrialVerdictOf(facts: ExamAttemptFacts): ExamAttemptVerdict {
+  if (facts.kind === "error") return { outcome: "error" }
+  if (facts.kind === "clarification") return { outcome: "clarification" }
+  if (facts.kind === "answer") return { outcome: "rejected", failureLayer: "plan" }
+  const compiled = facts.compile
+  if (compiled !== undefined) {
+    if (!compiled.accepted) {
+      const layer = examFailureLayerForStages(compiled.errorStages)
+      return layer === null ? { outcome: "rejected" } : { outcome: "rejected", failureLayer: layer }
+    }
+    if (compiled.verification !== undefined && compiled.verification !== "passed") {
+      return { outcome: "rejected", failureLayer: "verify" }
+    }
+  }
+  return { outcome: facts.repaired === true ? EXAM_REPAIRED_OUTCOME : "planned" }
+}
+
+/**
+ * **只要结局**（同一条判据的另一半读法，给不需要层名的调用方）。
+ *
+ * 保留这个名字是因为它已经在多个调用方与用例里出现；实现**就是**上面那一处判定，
+ * 不另写一份 —— 两份判据必然分叉。
+ */
+export function examTrialOutcomeOf(facts: ExamAttemptFacts): ExamTrialOutcome {
+  return examTrialVerdictOf(facts).outcome
+}
+
 export interface ExamTrialObservation {
   caseId: string
   family: ExamFamily
   /** 第几次独立试验（1..trialsPerCase）。 */
   trial: number
   outcome: ExamTrialOutcome
+  /** 失败落在哪一层（只有非成功结局才可能有；编译器没给原因时**不写这一栏**）。 */
+  failureLayer?: ExamFailureLayer
   /** **人评**才填；没标注就没这一栏（不许用模型自评冒充）。 */
   readability?: "readable" | "partly" | "unreadable"
   latencyMs: number
@@ -71,8 +186,16 @@ export interface ExamFamilyResult {
   costUsd: number
   /** 人评 `unreadable` 的比例；**没标注就是 `null`**。 */
   unreadableShare: number | null
-  /** 非成功结局的分布（失败落在哪一层）。 */
+  /** 非成功**结局**的分布（按结局计数：clarification / rejected / error / not_measured）。 */
   failureStages: Record<string, number>
+  /**
+   * **失败落在哪一层**的分布（按层计数）。与 `failureStages` 是两个问题：
+   * 前者说"结局是什么"，这一栏说"**卡在哪一层**"（计划原文点名的五层里的机器那四层）。
+   *
+   * **它可能比 `failureStages` 里的失败条数少** —— 编译器没给错误诊断时层名定不出来，
+   * 那一档如实不出现在这里（宁可少一栏，也不猜一个层名）。
+   */
+  failureLayers: Partial<Record<ExamFailureLayer, number>>
 }
 
 export interface ExamVerdict {
@@ -94,12 +217,21 @@ export interface ExamEvaluationReport {
   totals: { requests: number; costUsd: number; passAt1: number; passAt3: number; repairedCount: number }
   /** 逐条对照**事先冻结**的阈值；过不了线就报过不了。 */
   verdicts: ExamVerdict[]
+  /**
+   * **同轮修复这一轮有没有被判过**（由调用方声明，报告原样带出来）。
+   *
+   * `not-driven` 时 `repairedCount` 必为 0 —— 读者据此才能把"这一轮没走协调器"
+   * 与"没有修复发生过"分开（前者是关于这次测量的事实，后者是对产品的断言）。
+   */
+  repairPath: ExamRepairPath
   authorization: { requests: number; maxCostUsd: number; grantedBy: string; grantedOn: string }
 }
 
 export interface ExamEvaluationContext {
   provider: string
   model: string
+  /** 这一跑的 `runCase` 走没走协调器那条带修复的路径（声明式，见 `ExamRepairPath`）。 */
+  repairPath: ExamRepairPath
 }
 
 function percentile95(values: readonly number[]): number {
@@ -139,6 +271,15 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
     const trials = new Set(observations.filter((entry) => entry.caseId === caseId).map((entry) => entry.trial))
     if (trials.size !== plan.trialsPerCase) throw new Error(`${caseId} 的独立试次只有 ${trials.size} 次，缺 ${plan.trialsPerCase - trials.size} 次。`)
   }
+  /**
+   * **声明与观测必须自洽**：说了"这一轮没走协调器"，就不可能记下"同轮修复"。
+   *
+   * 两边矛盾时**抛**而不是取一个：这一条正是适配器那条边界要挡住的事 ——
+   * 让 `repairedCount` 的 0 只可能是"没走协调器"，不可能是"修复发生了、但没接上标记"。
+   */
+  if (context.repairPath === "not-driven" && observations.some((observation) => observation.outcome === EXAM_REPAIRED_OUTCOME)) {
+    throw new Error("这一轮声明没走协调器，却记下了「同轮修复」—— 声明与观测必有一处在编。")
+  }
 
   const families: ExamFamilyResult[] = expected.map((entry) => {
     const familyObservations = observations.filter((observation) => observation.family === entry.family)
@@ -147,9 +288,13 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
     const repaired = entry.cases.filter((caseId) => familyObservations.some((observation) => observation.caseId === caseId && observation.outcome === EXAM_REPAIRED_OUTCOME))
     const annotated = familyObservations.filter((observation) => observation.readability !== undefined)
     const failureStages: Record<string, number> = {}
+    const failureLayers: Partial<Record<ExamFailureLayer, number>> = {}
     for (const observation of familyObservations) {
       if (EXAM_SUCCESS_OUTCOMES.includes(observation.outcome) || observation.outcome === EXAM_REPAIRED_OUTCOME) continue
       failureStages[observation.outcome] = (failureStages[observation.outcome] ?? 0) + 1
+      // 层名定不出来的那一档**不编**（见 `failureLayers` 的注释）：这里只数真的给出了层名的。
+      const layer = observation.failureLayer
+      if (layer !== undefined) failureLayers[layer] = (failureLayers[layer] ?? 0) + 1
     }
     return {
       family: entry.family,
@@ -161,7 +306,8 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
       p95LatencyMs: percentile95(familyObservations.map((observation) => observation.latencyMs)),
       costUsd: familyObservations.reduce((sum, observation) => sum + observation.costUsd, 0),
       unreadableShare: annotated.length === 0 ? null : annotated.filter((observation) => observation.readability === "unreadable").length / annotated.length,
-      failureStages
+      failureStages,
+      failureLayers
     }
   })
 
@@ -203,32 +349,9 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
       repairedCount: families.reduce((sum, family) => sum + family.repairedCount, 0)
     },
     verdicts,
+    repairPath: context.repairPath,
     authorization: { requests: observations.length, maxCostUsd: plan.authorization.maxCostUsd ?? 0, grantedBy: plan.authorization.grantedBy ?? "", grantedOn: plan.authorization.grantedOn ?? "" }
   }
-}
-
-/**
- * **一次规划请求的原始结局 → 记账用的试验结局**（Task 20 的适配层判据）。
- *
- * 为什么要单独一个纯函数：真正的 provider 调用那一侧会变（今天走 `PlannerPort`，
- * 将来可能走协调器那条带修复的路），而**"什么算成功"这句话只能有一处**。
- *
- * ## 这一档记不下"同轮修复"
- *
- * `repaired` 由**调用方**给：修复发生在协调器的编译回路里，规划器端口看不到它。
- * 所以：
- * - 端口这一层（单次 `plan()`）永远传 `repaired: false`；
- * - 走协调器那条路时，把它的修复标记原样传进来 ⇒ 结局就是 `planned_after_repair`
- *   （**单独一档**，既不算 pass@1、也不算独立的 pass@3）。
- *
- * **边界（如实写）**：今天产品侧那条适配器只覆盖**单次规划请求**，所以"同轮修复"这一档
- * 在真跑时会是 0 —— 要么把协调器的修复标记接进来，要么在报告里如实读成"这一轮没走协调器"。
- */
-export function examTrialOutcomeOf(attempt: { kind: "plan" | "clarification" | "answer" | "error"; repaired?: boolean }): ExamTrialOutcome {
-  if (attempt.kind === "plan") return attempt.repaired === true ? EXAM_REPAIRED_OUTCOME : "planned"
-  if (attempt.kind === "clarification") return "clarification"
-  if (attempt.kind === "answer") return "rejected"
-  return "error"
 }
 
 /** **请求清单**（给用户点头用的分母：多少请求、最坏多少钱）。 */export interface ExamRequestPlan {
@@ -256,6 +379,8 @@ export function examRequestPlan(plan: FrozenBenchmarkPlan = FROZEN_THRESHOLDS): 
 
 export interface ExamRunCaseResult {
   outcome: ExamTrialOutcome
+  /** 失败落在哪一层（同一套四层；成功 / 问路 / 出错不写这一栏）。 */
+  failureLayer?: ExamFailureLayer
   readability?: ExamTrialObservation["readability"]
   costUsd: number
   /** 没给就用墙钟实测。 */
@@ -266,7 +391,7 @@ export interface ExamRunCaseResult {
 export interface ExamRunRequest {
   plan: FrozenBenchmarkPlan
   /** 这次请求的额度与「谁点的头」——它必须落在 `plan.authorization` 之内。 */
-  request: { provider: string; model: string; requests: number; estimatedCostUsd: number; grantedBy: string; grantedOn: string }
+  request: { provider: string; model: string; requests: number; estimatedCostUsd: number; grantedBy: string; grantedOn: string; repairPath: ExamRepairPath }
   /** 真正的调用（产品路径上是模型规划器）。**授权不过时它一次都不会被调用。** */
   runCase: (examCase: ExamCase, trial: number) => Promise<ExamRunCaseResult>
 }
@@ -297,6 +422,7 @@ export async function runExamEvaluation(request: ExamRunRequest): Promise<ExamRu
         family: examCase.family,
         trial,
         outcome: result.outcome,
+        ...(result.failureLayer === undefined ? {} : { failureLayer: result.failureLayer }),
         ...(result.readability === undefined ? {} : { readability: result.readability }),
         latencyMs: result.latencyMs ?? Date.now() - started,
         costUsd: result.costUsd,
@@ -304,7 +430,7 @@ export async function runExamEvaluation(request: ExamRunRequest): Promise<ExamRu
       })
     }
   }
-  const report = summarizeExamEvaluation(request.plan, observations, { provider: request.request.provider, model: request.request.model })
+  const report = summarizeExamEvaluation(request.plan, observations, { provider: request.request.provider, model: request.request.model, repairPath: request.request.repairPath })
   const maxCostUsd = request.plan.authorization.maxCostUsd ?? 0
   if (report.totals.costUsd > maxCostUsd) {
     return { ok: false, reason: `实际费用 $${report.totals.costUsd} 超过授权的最高费用 $${maxCostUsd} —— 这一轮如实报超支，报告仍然给你（见 detail）。\n${JSON.stringify(report)}` }

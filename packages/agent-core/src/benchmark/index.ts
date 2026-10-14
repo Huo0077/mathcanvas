@@ -91,15 +91,21 @@ export {
  * 一次都不会被调用）。不碰网络：真正的调用由注入的 `runCase` 承担。
  */
 export {
+  examFailureLayerForStages,
   examRequestPlan,
   examTrialOutcomeOf,
+  examTrialVerdictOf,
   EXAM_REPAIRED_OUTCOME,
   EXAM_SUCCESS_OUTCOMES,
   runExamEvaluation,
   summarizeExamEvaluation,
+  type ExamAttemptFacts,
+  type ExamAttemptVerdict,
   type ExamEvaluationContext,
   type ExamEvaluationReport,
+  type ExamFailureLayer,
   type ExamFamilyResult,
+  type ExamRepairPath,
   type ExamRequestPlan,
   type ExamRunCaseResult,
   type ExamRunOutcome,

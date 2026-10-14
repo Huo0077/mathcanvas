@@ -18,7 +18,8 @@ import {
   type PlanCompileResult,
   type PlanRequest,
   type ReadabilityGroup,
-  type RunContext
+  type RunContext,
+  type WorkspaceId
 } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
@@ -155,7 +156,7 @@ export function workspaceFor(entry: BenchmarkCase): "geometry3d" | "cad" {
  * - **`conversationId === runId`**：真实运行里 conversationId 是会话 id、runId 是另一回事
  *  （`agentRunner` 里两者不同）。评测每条题都是独立的一次，没有会话可归属，所以拿 runId 顶上。
  */
-export function planRequestFor(prompt: string, workspace: "geometry3d" | "cad", runId: string, document: ReturnType<typeof createEmptyDocument>): PlanRequest {
+export function planRequestFor(prompt: string, workspace: WorkspaceId, runId: string, document: ReturnType<typeof createEmptyDocument>): PlanRequest {
   /**
    * **文档由调用方传进来，不在这里再建一份**（2026-10-05 复核 M-1）。
    *
