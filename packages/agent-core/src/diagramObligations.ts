@@ -546,28 +546,31 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
      */
-    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(正方形|矩形|长方形)`, "g"),
+    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(正方形|矩形|长方形|菱形)`, "g"),
     read: (m) => {
       const [a, b, c, d] = names(m[1])
       if (a === undefined || b === undefined || c === undefined || d === undefined) return null
       /**
-       * **矩形也一起收**（2026-10-15）：它与正方形只差"边长是否相等"这一步 ——
-       * 判据都是**已有的**两种，所以这里只按词分派，不再各写一条读取器。
-       * 矩形：三个相邻的直角（`AB⊥BC`、`BC⊥CD`、`CD⊥DA`）足以定死；
-       * 正方形：再要求四条边等长。
+       * **同一句话的三种形状，判据全是已有的两种**（2026-10-15）：只按词分派，各写一条读取器
+       * 就等于把"四边形是什么形状"这件事抄三遍。
+       *
+       * - **矩形 / 长方形**：三个相邻直角（三个直角才定死一个四边形）；
+       * - **菱形**：四条边等长（取三对相邻边即可）；
+       * - **正方形**：两者都要。
        */
+      const equalEdges = [
+        { kind: "equalLength" as const, targets: [a, b, b, c] },
+        { kind: "equalLength" as const, targets: [b, c, c, d] },
+        { kind: "equalLength" as const, targets: [c, d, d, a] }
+      ]
       const rightAngles = [
         { kind: "perpendicular" as const, targets: [a, b, b, c] },
         { kind: "perpendicular" as const, targets: [b, c, c, d] },
         { kind: "perpendicular" as const, targets: [c, d, d, a] }
       ]
+      if (m[2] === "菱形") return equalEdges
       if (m[2] !== "正方形") return rightAngles
-      return [
-        { kind: "equalLength", targets: [a, b, b, c] },
-        { kind: "equalLength", targets: [b, c, c, d] },
-        { kind: "equalLength", targets: [c, d, d, a] },
-        ...rightAngles
-      ]
+      return [...equalEdges, ...rightAngles]
     }
   },
   {

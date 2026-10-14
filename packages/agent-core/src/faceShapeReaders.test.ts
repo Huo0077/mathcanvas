@@ -34,6 +34,16 @@ describe("面形状读取：正方形 / 矩形", () => {
     }
   })
 
+  it("菱形 ⇒ 四条边等长，**不**要求直角（与矩形正好互补）", () => {
+    const givens = parseDiagramObligations("在四棱柱ABCD-A₁B₁C₁D₁中，底面ABCD是菱形").givens
+    expect(givens.filter((item) => item.kind === "equalLength").map((item) => item.targets)).toEqual([
+      ["A", "B", "B", "C"],
+      ["B", "C", "C", "D"],
+      ["C", "D", "D", "A"]
+    ])
+    expect(givens.filter((item) => item.kind === "perpendicular")).toEqual([])
+  })
+
   it("用户那道题的整句照旧（正方形那条不许被矩形分派改坏）", () => {
     const givens = parseDiagramObligations("在直三棱柱ABC-A₁B₁C₁中，侧面AA₁B₁B为正方形，AB=2，BC=2，E、F分别为AC和CC₁的中点，且BF⊥A₁B₁。").givens
     expect(givens.filter((item) => item.kind === "equalLength").length).toBe(3)
