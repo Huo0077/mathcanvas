@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -923,8 +923,46 @@ export function proofScopeOf(parameters: Readonly<Record<string, { value: number
   }
 }
 
+/**
+ * **`O` 约定为原点**（Task 14 的边界「面积核验要求图上真有那个点名」，2026-10-14）。
+ *
+ * 解析几何里 `O` **就是原点**（`△OAB` 的面积、`OA` 的长都以它为原点），而一道题里
+ * 常常**不会**把 `O` 画出来（图上只有椭圆、直线与 A/B）—— 于是那条面积/长度条件
+ * 永远停在"点名缺失：O，未核验"，用户与门禁都没法往前走。
+ *
+ * 这一档把它按**约定**补上：`O` 取 `(0, 0)`，并在**那条判据自己的理由里**写明这件事
+ *（"系统替你做的选择要显形"——`diagramVerification` 的 checks 就是面板上那一列，
+ * 所以披露写在 `reason` 里，不需要另开一条通道）。
+ *
+ * **不认约定的三种情形**（都不猜）：
+ * - 图上**已经有** `O` 这个点名 —— 那时它就是图上那个点；
+ * - 题面**用坐标定义过** `O`（`pointCoordinate`）—— 那时 O 在哪由题面说了算；
+ * - 题面**用构造定义过** `O`（`O为 BD的中点` / 分点那一类）—— 那是"题面点名、系统补建"
+ *   那条路的事（见 `planCompiler.namedPoints.test.ts`），拿约定去顶它会把它顶坏。
+ */
+export const ORIGIN_POINT_NAME = "O"
+
+export function statedOriginNames(set: DiagramObligationSet, drawn: { has(name: string): boolean }): string[] {
+  if (drawn.has(ORIGIN_POINT_NAME)) return []
+  const usesOrigin = set.givens.some((item) => item.targets.includes(ORIGIN_POINT_NAME))
+  if (!usesOrigin) return []
+  const definedByPrompt = set.givens.some((item) => {
+    if (item.kind === "pointCoordinate" || item.kind === "midpoint") return item.targets[0] === ORIGIN_POINT_NAME
+    // 分点那一类：`O` 是不是"被算出来的那个点"由内核那一处判据说了算（不另写一套）。
+    if (item.kind === "segmentRatio") return ratioParameterFor(item.targets, ORIGIN_POINT_NAME, item.value).ok
+    return false
+  })
+  return definedByPrompt ? [] : [ORIGIN_POINT_NAME]
+}
+
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const points = candidatePoints(plan, candidate, base)
+  /**
+   * **`O` 按约定补成原点**（见 `statedOriginNames`）：补的是**这一份核验**用的点名表，
+   * 不往文档里加任何东西 —— 图上没有 O 这件事仍然是真的，所以披露写在判据理由里。
+   */
+  const originNames = points === null ? [] : statedOriginNames(set, points)
+  for (const name of originNames) points?.set(name, { x: 0, y: 0, z: 0 })
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
@@ -965,9 +1003,17 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
       }
     }
     const status = Math.abs(result.actual - result.expected) <= result.tolerance ? "passed" : "failed"
-    const reason = result.detail !== undefined
+    /**
+     * **披露**：这一条用到了"`O` 按原点"这个约定时，在它自己的理由里写出来 ——
+     * 面板上那一列就是这份 `reason`，用户看得见系统替他定了什么（与"代表值"同一条纪律）。
+     */
+    const originNote = originNames.length > 0 && item.targets.includes(ORIGIN_POINT_NAME)
+      ? `（\`O\` 按**原点** (0, 0) 取：图上没有这个点名，这是解析几何的常用约定，不是图上量出来的。）`
+      : ""
+    const baseReason = result.detail !== undefined
       ? (status === "passed" ? result.detail : `${result.detail}最大偏差 ${result.actual.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。`)
       : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`)
+    const reason = `${baseReason}${originNote}`
     return {
       kind: item.kind,
       sourceText: item.sourceText,
