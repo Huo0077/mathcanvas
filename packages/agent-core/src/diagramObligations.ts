@@ -1,5 +1,7 @@
 import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 
+import { parseShapeClause } from "./solver/shapeGrammar"
+
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
@@ -28,6 +30,16 @@ export type DiagramObligationKind =
   | "conicChord"
   | "tangentAt"
   | "functionGraph"
+  /**
+   * **线面角**（Task 13 的边界「斜棱柱明说倾角」，2026-10-14）：`AA′与底面所成角为45°`
+   * ⇒ `targets` 前两个是线段的两个点名、其余是平面的点名（与 `planePerpendicular` 同一条约定，
+   * `planeLengths` 也是同一个含义）。
+   *
+   * 为什么它必须是一条**判据**而不是"构造时顺手读一下"：题面明说的倾角此前**完全没进链**
+   *（解析器里没有"所成角"的读取器）⇒ 写 45° 与写 60° 取到的是同一个**代表值**，
+   * 图上那条侧棱与底面实际成 30°。那是"题面明说的条件等于没发生"，比读不懂更糟。
+   */
+  | "linePlaneAngle"
 
 /**
  * 题面写下的**直线**（用于 `conicChord`）。
@@ -136,6 +148,11 @@ const TRIANGLE_NAME = `${POINT_NAME}${POINT_NAME}${POINT_NAME}`
  * 搜索层只能报"题面没有给出线段⊥平面的写法"（**题面明明给了**，是解析层没产出来）。
  */
 const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME}){0,3}`
+/**
+ * 题面写"底面"时留下的**占位**（不是点名）：整句解析完之后由 `resolveStatedBasePlane`
+ * 落成具体点名。写成一个常量是因为它要跨两个函数用，而"哪个字面量表示占位"不该有第二份。
+ */
+const STATED_BASE = "底面"
 const finitePositive = (value: string): number | null => {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : null
@@ -397,6 +414,30 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
+    /**
+     * **线面角**（Task 13 边界，2026-10-14）：`AA′与底面所成角为45°` / `AA′与平面ABC所成角为60°`。
+     *
+     * 两种写法都收：**平面点名**直接写出来的（`平面ABC`），以及只写"**底面**"的 ——
+     * 后者的底环由**形状从句**给出，而形状从句的解析只有一处（`parseShapeClause`），
+     * 所以这一条先原样留下"底面"这个占位，由 `resolveStatedBasePlane` 在整句解析完**之后**
+     * 落成具体点名（认不出底环就如实落未核验，**不猜一个平面**）。
+     *
+     * 范围是 **(0°, 90°)**：`0°` 不是角（`finitePositive` 已经挡掉），`90°` 是"侧棱躺进底面"。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*与\\s*(?:平面\\s*)?(${PLANE_NAME}|底面)\\s*所成角\\s*(?:为|=|是)\\s*(\\d+(?:\\.\\d+)?)\\s*°`, "g"),
+    read: (m) => {
+      const value = finitePositive(m[3])
+      if (value === null || value >= 90) return null
+      const line = names(m[1])
+      if (line.length !== 2) return null
+      const stated = m[2]
+      if (stated === "底面") return { kind: "linePlaneAngle", targets: [...line, STATED_BASE], value, planeLengths: [2, 1] }
+      const plane = names(stated)
+      if (plane.length < 3 || new Set(plane).size !== plane.length) return null
+      return { kind: "linePlaneAngle", targets: [...line, ...plane], value, planeLengths: [2, plane.length] }
+    }
+  },
+  {
     pattern: new RegExp(`(?:平面|底面|面)\\s*(${PLANE_NAME})\\s*(?:⊥|垂直于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),
     // `planeLengths` 必须是**点名个数**，不是字串长度：`A₁B₁C₁D₁` 是 4 个点、字串长 8。
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
@@ -574,6 +615,34 @@ function unverifiedClauseReason(leftover: string): string {
     : "这个条件没有被可靠解析或数值非法，未核验。"
 }
 
+/**
+ * **把"底面"这个占位落成具体点名**（Task 13 边界：斜棱柱的明说倾角）。
+ *
+ * 为什么放在整句解析**之后**、而不是读取器里：读取器只看得到自己那一小段匹配，
+ * 而"哪几个点是底面"写在**形状从句**里（`在斜三棱柱ABC-A′B′C′中`）。底环的解析只有一处
+ *（`parseShapeClause`），所以这里问它 —— 不另写一套"哪几个点是底面"的判据。
+ *
+ * **认不出底环就如实落未核验**（没有形状从句、或从句里没有点名表）：那时不知道量哪个平面，
+ * 猜一个平面比说"没核验"糟得多。
+ */
+function resolveStatedBasePlane(givens: DiagramObligation[], unverified: DiagramObligationSet["unverified"], prompt: string): void {
+  for (let index = givens.length - 1; index >= 0; index -= 1) {
+    const obligation = givens[index]!
+    if (obligation.kind !== "linePlaneAngle" || obligation.targets[2] !== STATED_BASE) continue
+    const base = parseShapeClause(prompt)?.base ?? null
+    if (base === null || base.length < 3) {
+      givens.splice(index, 1)
+      unverified.push({
+        sourceText: obligation.sourceText,
+        reason: "这条线面角写的是「底面」，而题面里没有可识别的形状从句（底环点名）—— 不知道要量哪张平面，未核验。"
+      })
+      continue
+    }
+    obligation.targets = [...obligation.targets.slice(0, 2), ...base]
+    obligation.planeLengths = [2, base.length]
+  }
+}
+
 export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {
   const boundary = /(?:求证|证明)/.exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
@@ -616,6 +685,12 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       for (let at = start; at < end; at++) used.add(at)
     }
   }
+
+  /**
+   * **"底面"落成点名**：线面角那一条收的是占位，形状从句才知道底环是哪几个点。
+   * 放在残留扫描**之前**：落不出底环时它要能如实变成一条"未核验"。
+   */
+  resolveStatedBasePlane(givens, unverified, givenText)
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {
     if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue

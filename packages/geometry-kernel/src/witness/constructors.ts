@@ -389,7 +389,11 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
     /**
      * **代表斜向必须让用户看见**（与"系统自选"同一条纪律）：题面只说了"斜"，
      * 斜多少是系统定的 —— 写进 `freeValues`（那一列就是"系统替你定了什么"），不藏在代码里。
+     *
+     * **题面明说的倾角不算系统自选**（Task 13 边界，2026-10-14）：`lateralTiltSource === "stated"`
+     * 时这一行**不写** —— 否则会把题面写明的条件谎报成"系统替你定的值"。
      */
+    if (spec.lateralTiltSource === "stated") return constructed
     return {
       ...constructed,
       witness: {

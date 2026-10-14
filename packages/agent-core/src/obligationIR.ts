@@ -63,7 +63,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   "planePerpendicular", "dihedral", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
   "conicAxes", "tangentAt", "functionGraph",
   /** Task 11：面积由核验器**从最终坐标自己算**（`diagramVerification.calculate` 的 `area` 支）。 */
-  "area"
+  "area",
+  /** Task 13 边界（2026-10-14）：线面角由核验器从最终坐标自己算（`linePlaneAngle` 支）。 */
+  "linePlaneAngle"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -74,8 +76,8 @@ const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.
 /** 逐条 claim 的容差：与核验器同一套判据（长度用绝对、关系用无量纲、角度用度）。 */
 function toleranceFor(kind: DiagramObligationKind, value: number | undefined): ObligationTolerance | undefined {
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
-  // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）。
-  if (kind === "planarAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）；线面角是同一族的第三个数。
+  if (kind === "planarAngle" || kind === "linePlaneAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。

@@ -271,7 +271,7 @@ describe("Task 13 变式 —— 棱柱上的点名（探针）", () => {
    * 判据就是**两个不同的角**：如果那个代表值真的与题面无关，两遍读出来的就该是**同一个数**。
    * （同一族的"二面角"当初也是这样被抓出来的：45° 与 60° 量出来都是 45.000。）
    */
-  it("斜棱柱明说倾角：写 45° 与写 60°，取到的代表斜向是同一个数（缺口已钉住）", () => {
+  it("斜棱柱明说倾角：45° 与 60° 取到的斜向**不再相同**，而且就是题面那个角的余角", () => {
     const tiltOf = (degrees: number): number => {
       const prompt = `在斜三棱柱ABC-A′B′C′中，AB=2，AA′与底面所成角为${degrees}°，画出这个斜三棱柱`
       const shaped = specForPrompt(prompt, givensOf(prompt))
@@ -279,16 +279,63 @@ describe("Task 13 变式 —— 棱柱上的点名（探针）", () => {
       if (shaped.status !== "ok") return Number.NaN
       return shaped.spec.lateralTiltDegrees ?? Number.NaN
     }
-    const fortyFive = tiltOf(45)
-    const sixty = tiltOf(60)
-    // **今天的实情**：题面写多少都不影响它 —— 取的是代表值。
-    expect(Number.isFinite(fortyFive), `45° 读到的代表斜向：${fortyFive}`).toBe(true)
-    expect(fortyFive, "45° 与 60° 读到的代表斜向是同一个数 ⇒ 题面明说的倾角没有进链").toBe(sixty)
     /**
-     * **修法方向（未做）**：解析器加一个"`AA′` 与底面所成角为 n°"的读取器 ⇒ 新义务种类 ⇒
-     * IR 判性 ⇒ `lateralTiltDegrees` 用它；**同时**要有一条从最终坐标量"侧棱与底面所成角"的核验，
-     * 否则就变成"读得懂但没人核"—— 那比读不懂更糟（`diagramVerification` 现在是按点名条件那条路走的）。
+     * `lateralTiltDegrees` 的口径是**与底面法向**的夹角，而题面写的是**线面角** ——
+     * 两者互为余角。这两个数**不能写反**：写 45° 时恰好都是 45°（掩盖错误的那种巧合），
+     * 写 60° 时才分得开（法向 30° vs 线面 60°）。所以两条都用上。
      */
+    expect(tiltOf(45), "写 45° ⇒ 与法向 45°").toBeCloseTo(45, 6)
+    expect(tiltOf(60), "写 60° ⇒ 与法向 30°（不是 60°）").toBeCloseTo(30, 6)
+    expect(tiltOf(45), "题面那个角真的进了链 ⇒ 两个角不再取到同一个数").not.toBeCloseTo(tiltOf(60), 6)
+  })
+
+  /**
+   * **端到端那一条**：题面明说 45°，搜到的实例必须**真的**满足 45° —— 由测试**自己从坐标量**。
+   *
+   * 这一条同时钉住三层：解析层读得出（`linePlaneAngle`）、构造层用它（`lateralTiltDegrees`）、
+   * 核验层量得出来（`diagramVerification` 的线面角判据）。少了第三层就是"读得懂但没人核" ——
+   * 那比读不懂更糟（本仓把这句话写在修法方向上）。
+   */
+  it("斜三棱柱明说倾角 45° ⇒ 实例真的满足（自己从最终坐标量线面角）", () => {
+    const prompt = "在斜三棱柱ABC-A′B′C′中，AB=2，AA′与底面所成角为45°，画出这个斜三棱柱"
+    const parsed = parseObligationWithLegacy(prompt)
+    const shaped = specForPrompt(prompt, givensOf(prompt))
+    expect(shaped.status, JSON.stringify(shaped)).toBe("ok")
+    if (shaped.status !== "ok") return
+
+    const result = searchWitness({ obligations: parsed.ir, shape: shaped.recognised.family, spec: shaped.spec, seed: 1, maxCandidates: 8, timeoutMs: 10_000 })
+    const why = result.status === "verified_instance"
+      ? "verified_instance"
+      : result.status === "no_witness"
+        ? result.failures.join(" / ")
+        : result.reasons.join(" / ")
+    expect(result.status, `今天读到的是：${why}`).toBe("verified_instance")
+    if (result.status !== "verified_instance") return
+
+    const at = new Map(result.candidate.names.map((name, index) => [name, result.candidate.vertices[index]!]))
+    const must = (name: string): Vector3 => {
+      const found = at.get(name)
+      if (found === undefined) throw new Error(`候选里没有点名 ${name}；现有：${[...at.keys()].join("、")}`)
+      return found
+    }
+    const subtract = (left: Vector3, right: Vector3): Vector3 => ({ x: left.x - right.x, y: left.y - right.y, z: left.z - right.z })
+    const dot = (left: Vector3, right: Vector3): number => left.x * right.x + left.y * right.y + left.z * right.z
+    const cross = (left: Vector3, right: Vector3): Vector3 => ({
+      x: left.y * right.z - left.z * right.y,
+      y: left.z * right.x - left.x * right.z,
+      z: left.x * right.y - left.y * right.x
+    })
+    const norm = (value: Vector3): number => Math.hypot(value.x, value.y, value.z)
+
+    // 线面角 = arcsin(|v·n| / (|v||n|))，v 是侧棱 AA′、n 是底面 ABC 的法向。
+    const a = must("A")
+    const direction = subtract(must("A′"), a)
+    const normal = cross(subtract(must("B"), a), subtract(must("C"), a))
+    expect(norm(direction)).toBeGreaterThan(1e-9)
+    expect(norm(normal)).toBeGreaterThan(1e-9)
+    const sine = Math.abs(dot(direction, normal)) / (norm(direction) * norm(normal))
+    const degrees = (Math.asin(Math.min(1, Math.max(0, sine))) * 180) / Math.PI
+    expect(degrees, `自算 AA′ 与底面 ABC 的线面角 = ${degrees.toFixed(4)}°`).toBeCloseTo(45, 3)
   })
 
   /**

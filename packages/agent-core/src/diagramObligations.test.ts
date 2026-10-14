@@ -441,3 +441,45 @@ describe("非标准曲线：明确不归类（不是「没写清楚」）", () =
     expect(reason, reason).toBe("原题出现了尚未被可靠解析的几何条件，未核验。")
   })
 })
+
+/**
+ * **线面角：`AA′与底面所成角为45°`**（Task 13 的边界「斜棱柱明说倾角」，2026-10-14）。
+ *
+ * 此前解析器里**没有"所成角"的读取器**，于是这句话既进不了 `relations`、也改不动
+ * `lateralTiltDegrees` —— 题面写 45° 还是 60°，搜索层取的都是同一个**代表值**，
+ * 而图上那条侧棱与底面实际成 30°（60° 是**与法向**的夹角）。那是"题面明说的条件等于没发生"。
+ *
+ * 两条要点：
+ * - **"底面"要能解析出来**：那句话里写的是"底面"，不是点名列 —— 底环由**形状从句**
+ *   （`在斜三棱柱ABC-A′B′C′中`）给出，而形状从句的解析只有一处（`parseShapeClause`），
+ *   所以这里读出来的就是那一处的结果，不另写一套"哪几个点是底面"；
+ * - **认不出就如实落未核验**：没有形状从句 ⇒ 没有底环 ⇒ 读不出来（不猜一个平面）。
+ */
+describe("线面角（斜棱柱的明说倾角）", () => {
+  const angleOf = (prompt: string) => parseDiagramObligations(prompt).givens.find((item) => item.kind === "linePlaneAngle")
+
+  it("`AA′与底面所成角为45°` ⇒ 线段两个点名 + **底环三个点名**（来自形状从句）", () => {
+    const angle = angleOf("在斜三棱柱ABC-A′B′C′中，AB=2，AA′与底面所成角为45°，画出这个斜三棱柱")
+    expect(angle?.targets).toEqual(["A", "A′", "A", "B", "C"])
+    expect(angle?.value).toBe(45)
+    // 与 `planePerpendicular` 同一条约定：前两个是线段、其余是平面。
+    expect(angle?.planeLengths).toEqual([2, 3])
+  })
+
+  it("`AA′与平面ABC所成角为60°` 也认（平面点名直接写出来的那一半）", () => {
+    const angle = angleOf("在斜三棱柱ABC-A′B′C′中，AA′与平面ABC所成角为60°")
+    expect(angle?.targets).toEqual(["A", "A′", "A", "B", "C"])
+    expect(angle?.value).toBe(60)
+  })
+
+  it("写 `0°` / `90°` ⇒ 读不出来（前者不是角，后者侧棱躺进底面）", () => {
+    expect(angleOf("在斜三棱柱ABC-A′B′C′中，AA′与底面所成角为0°")).toBeUndefined()
+    expect(angleOf("在斜三棱柱ABC-A′B′C′中，AA′与底面所成角为90°")).toBeUndefined()
+  })
+
+  it("**没有形状从句 ⇒ 没有底环 ⇒ 不猜**：如实落进未核验", () => {
+    const parsed = parseDiagramObligations("在斜三棱柱中，AA′与底面所成角为45°，画出这个斜三棱柱")
+    expect(parsed.givens.some((item) => item.kind === "linePlaneAngle")).toBe(false)
+    expect(parsed.unverified.some((item) => item.sourceText.includes("所成角"))).toBe(true)
+  })
+})

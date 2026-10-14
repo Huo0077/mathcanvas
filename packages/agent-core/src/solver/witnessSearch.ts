@@ -1,4 +1,4 @@
-import { buildFromPoints, constructShapeFromSpec, createBuilderContext, hasEqualSideChain, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { buildFromPoints, canonicalPointName, constructShapeFromSpec, createBuilderContext, hasEqualSideChain, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
 
 import { parseShapeClause, type RecognisedShape } from "./shapeGrammar"
 import { createEmptyDocument } from "@draw/dsl"
@@ -548,13 +548,46 @@ function specForFrustum(rings: RecognisedShape, relations: readonly WitnessRelat
 const OBLIQUE_TILT_DEGREES = 60
 
 /**
+ * **题面明说的斜向**（Task 13 边界，2026-10-14）：`AA′与底面所成角为45°` ⇒ 用 45°，
+ * 不再取代表值。
+ *
+ * ## 两个角不能写反
+ *
+ * `lateralTiltDegrees` 的口径是**侧棱与底面法向**的夹角，而题面写的是**线面角** ——
+ * 两者互为余角：题面 45° ⇒ 法向 45°，题面 60° ⇒ 法向 30°。`OBLIQUE_TILT_DEGREES = 60`
+ * 之所以是 60，正是"代表线面角 30°"那一侧的口径（60 = 90 − 30）。
+ *
+ * ## 只认**侧棱 + 底面**那一条
+ *
+ * 不能拿"第一条线面角"顶上：题面完全可能写的是 `A′B 与平面 ABC 所成角`（那不是侧棱）。
+ * 所以判据两条同时成立才算：① 线段的两个点名是 `X` 与 `X′`（`canonicalPointName` 同一套口径）；
+ * ② 平面点名与底环**同集合**。不成立 ⇒ 返回 `null`（回落代表值），不猜。
+ */
+function statedLateralTilt(givens: readonly GeometryObligation[], base: readonly string[]): number | null {
+  for (const obligation of givens) {
+    if (obligation.kind !== "linePlaneAngle" || typeof obligation.expected !== "number") continue
+    const targets = obligation.targets
+    const line = targets.slice(0, 2)
+    const plane = targets.slice(2)
+    const [foot, apex] = line
+    if (foot === undefined || apex === undefined || plane.length < 3) continue
+    if (!base.includes(foot)) continue
+    if (canonicalPointName(apex) !== `${canonicalPointName(foot)}′`) continue
+    const samePlane = plane.length === base.length && base.every((name) => plane.some((stated) => canonicalPointName(stated) === canonicalPointName(name)))
+    if (!samePlane) continue
+    return 90 - obligation.expected
+  }
+  return null
+}
+
+/**
  * **斜棱柱：由入口语法给的底环 / 顶环 + 解析器给的关系组出 spec**（S3）。
  *
  * 与台体同一条理由：斜棱柱的拉伸方向**不是从某句题设读出来的**（题面只说"斜"），
  * 所以两个环只能来自**入口语法**（`在斜三棱柱ABC-A′B′C′中`）。斜向由 `lateralTiltDegrees`
  * 交给内核（那里的拉伸向量按它算），其余自由标量与其他族同一个口径。
  */
-function specForObliquePrism(rings: RecognisedShape, relations: readonly WitnessRelation[]): SolidShapeSpec {
+function specForObliquePrism(rings: RecognisedShape, relations: readonly WitnessRelation[], statedTilt: number | null): SolidShapeSpec {
   const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(rings.base, relations)
   const top = [...(rings.top ?? [])]
   const freeScalars: FreeScalar[] = freeBaseEdges.map((edge, index) => ({
@@ -573,7 +606,12 @@ function specForObliquePrism(rings: RecognisedShape, relations: readonly Witness
     top: [top[0] ?? `${orderedBase[0]!}′`],
     relations: [...relations],
     freeScalars,
-    lateralTiltDegrees: OBLIQUE_TILT_DEGREES
+    lateralTiltDegrees: statedTilt ?? OBLIQUE_TILT_DEGREES,
+    /**
+     * **这个斜向是谁给的**：题面明说 ⇒ `stated`（**不**写进"系统替你选了什么"），
+     * 只说了"斜" ⇒ `representative`（那是系统自选，必须让用户看见）。构造层按它决定文案。
+     */
+    lateralTiltSource: statedTilt === null ? "representative" : "stated"
   }
   // "高是不是自由的"**问内核**（与棱锥 / 棱柱 / 台体同一个判据），不在这一层再判一遍。
   if (shapeHeightIsFree(skeleton)) {
@@ -625,7 +663,7 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
      * `在斜三棱柱ABC-A′B′C′中` 已经把底环与顶环都写清楚了；"斜多少"题面没说，
      * 由 `OBLIQUE_TILT_DEGREES` 取一个**代表值**并写进 assumptions（系统自选，不是题面说的）。
      */
-    return { status: "ok", spec: specForObliquePrism(recognised, kernelRelations(givens)), recognised }
+    return { status: "ok", spec: specForObliquePrism(recognised, kernelRelations(givens), statedLateralTilt(givens, recognised.base)), recognised }
   }
   const relations = kernelRelations(givens)
   if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }

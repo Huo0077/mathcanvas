@@ -57,6 +57,16 @@ export interface SolidShapeSpec {
    * **新增顶层字段必须先有一次对应的形状块落地**，斜棱柱就是那一次。
    */
   lateralTiltDegrees?: number
+  /**
+   * **这个斜向是谁给的**（Task 13 边界，2026-10-14）：题面**明说** ⇒ `"stated"`；
+   * 题面只说"斜"、没说斜多少 ⇒ `"representative"`（系统取的代表值）。
+   *
+   * 为什么必须有这一栏：构造层要按它决定**要不要写进 `freeValues`** —— 那一列的含义是
+   * "系统替你定了什么"，而题面明说的角**不是**系统定的。只有"斜向是多少"这一个数，
+   * 两种来源分不开，明说的角就会被写成系统自选。
+   * 缺省（`undefined`）= 直棱柱，没有斜向这回事，行为与改动前逐字相同。
+   */
+  lateralTiltSource?: "representative" | "stated"
 }
 
 /**

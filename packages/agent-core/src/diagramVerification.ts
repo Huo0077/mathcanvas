@@ -771,6 +771,28 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     // 面积是 L²（不是无量纲），所以容差随量级走 —— 与 `obligationIR.toleranceFor` 同一把尺子。
     return { actual: area, expected: numeric, tolerance: Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric)) }
   }
+  /**
+   * **线面角**（Task 13 边界：斜棱柱的明说倾角，2026-10-14）。
+   *
+   * 判据**自己从最终坐标算**：线方向 `v` 与平面法向 `n` 满足 `sin(线面角) = |v·n| / (|v||n|)` ——
+   * 不读构造过程留下的量（那是"读得懂但没人核"的反面：这条角的判据只有这一处）。
+   *
+   * `targets` 的前两个是线段、其余是平面（与 `planePerpendicular` 同一条约定，`planeLengths` 同义）。
+   * 线段退化为一点、平面三点共线（法向为 0）时返回 `null`：如实"未核验"，而不是把 0/0 报成一个角。
+   */
+  if (item.kind === "linePlaneAngle") {
+    if (numeric === undefined) return null
+    const lineCount = item.planeLengths?.[0] ?? 2
+    if (lineCount !== 2 || vertices.length < 5) return null
+    const [from, to, first, second, third] = vertices as Vector3[]
+    const direction = subtractVector3(to!, from!)
+    const normal = crossVector3(subtractVector3(second!, first!), subtractVector3(third!, first!))
+    const denominator = lengthVector3(direction) * lengthVector3(normal)
+    if (!(denominator > 1e-12)) return null
+    const sine = Math.abs(dotVector3(direction, normal)) / denominator
+    const degrees = (Math.asin(Math.min(1, Math.max(0, sine))) * 180) / Math.PI
+    return { actual: degrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
+  }
   const kind = item.kind === "perpendicular" ? "perpendicular" : "parallel"
   /**
    * **平面可以用 3–6 个点名**（S2：底面支持 3–6 边）。多余的点先核**共面性**，
