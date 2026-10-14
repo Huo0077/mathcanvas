@@ -12,6 +12,7 @@
 pub mod proxy;
 pub mod secrets;
 pub mod conversations;
+pub mod exam;
 pub mod repository;
 pub mod providers;
 pub mod proof;

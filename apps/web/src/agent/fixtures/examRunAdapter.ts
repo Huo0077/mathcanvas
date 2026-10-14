@@ -50,8 +50,13 @@ import { planRequestFor } from "./benchmarkPlanningEval"
 
 export interface ExamRunAdapterDeps {
   planner: PlannerPort
-  /** 这一次请求花了多少钱（由 provider 侧按真实用量给）。 */
-  costOf: (request: { examCase: ExamCase; trial: number; outcome: PlanOutcome | null; error: unknown }) => number
+  /**
+   * 这一次请求花了多少钱（由 provider 侧按真实用量给）。
+   *
+   * **可以返回 `null`**（2026-10-16）：仓里没有价目表时，能拿到的只有用量、拿不到钱 ——
+   * 那时如实返回 `null`。返回 0 会让费用那条阈值凭空通过（见 core 的 `examEvaluation`）。
+   */
+  costOf: (request: { examCase: ExamCase; trial: number; outcome: PlanOutcome | null; error: unknown }) => number | null
   /** 墙钟（测试里注入固定值）。 */
   now?: () => number
   /** **这道题从哪个工作区开始**（缺省按族取，见 `workspaceForFamily`）。 */

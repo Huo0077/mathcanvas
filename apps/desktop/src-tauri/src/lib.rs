@@ -68,8 +68,14 @@ pub struct BlobState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // **受闸的评测跑**（Task 20，用户选 B）：`--exam-run <报告路径>`。
+    //
+    // 参数在**起窗口之前**读一次，之后只读不改（`ExamRunState` 里没有写入口）——
+    // 前端能问"要不要跑、报告写到哪"，但**决定不了路径**，也就拿不到"写任意文件"的能力。
+    let exam_run = commands::exam::ExamRunState::from_args(std::env::args().skip(1));
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
+            app.manage(exam_run);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -165,7 +171,9 @@ pub fn run() {
             commands::proxy::proxy_session,
             commands::proxy::proxy_cancel,
             commands::proof::check_lean_proof,
-            commands::proof::lean_proof_availability
+            commands::proof::lean_proof_availability,
+            commands::exam::exam_run_target,
+            commands::exam::exam_run_finish
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
