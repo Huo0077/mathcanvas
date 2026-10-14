@@ -809,8 +809,66 @@ describe("native observation tool loop", () => {
       resolveProvider: async () => ({ ok: true, provider: withTools }),
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }] })
     })
-    await expect(planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/budget/)
+    // **报错要能自己说清是哪本账**（2026-10-14 用户现场改）：点名 generation / network
+    // 的剩余量，并说明工具次数是另一本账 —— 否则用户只能整段贴开发者视图。
+    await expect(planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))).rejects.toThrow(/generation 0/)
     expect(executeTool).not.toHaveBeenCalled()
+  })
+
+  /**
+   * **用户现场那条路**（2026-10-14，直三棱柱那道题）：两次尝试，**修复那次读了两次场景**。
+   *
+   * 现场的账：提问① 1 代 + 工具轮预扣 1 代 + 修复提问 1 代 + 修复的第一个工具轮预扣 1 代
+   * ⇒ 用满 4 代，而**修复的第二个工具轮**还要一代 —— 预检在"剩 0"时抛出，
+   * 整轮什么都没落下。现场报错正是这句："预算不够用这次工具的结果"。
+   *
+   * 所以这条用例跑**两遍同一条路**：
+   * - `generation: 4`（旧默认）⇒ **必须红**（这就是现场）；
+   * - 默认（现在 6）⇒ **必须走完**，且恰好 5 代 5 网。
+   *
+   * 好处是"红"这件事**留在用例里**：谁把默认降回去，第一遍那半会立刻告诉他"这就是当年那个现场"。
+   */
+  it("修复轮读两次场景：旧上限 4 必红、默认预算下走得完（5 代 5 网）", async () => {
+    /**
+     * 每一轮模型干什么：`tool` = 要求读场景、`plan` = 交出计划。
+     * 顺序照现场：第一次尝试 [读, 出计划]；修复 [读, 读, 出计划]。
+     */
+    const script = ["tool", "plan", "tool", "tool", "plan"] as const
+    const runFlow = (budget: ReturnType<typeof createBudget>) => {
+      const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "ok", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
+      let round = 0
+      const planner = createModelPlanner({
+        resolveProvider: async () => ({ ok: true, provider: withTools }),
+        runModel: async () => {
+          const step = script[round]!
+          round += 1
+          return step === "tool"
+            ? { ok: true, events: [{ kind: "tool_call", requestId: `r${round}`, attemptId: `a${round}`, toolCallId: `call-${round}`, toolId: "scene_inspect", input: { documentId: "doc-1" } }] }
+            : { ok: true, events: [{ kind: "tool_call", requestId: `r${round}`, attemptId: `a${round}`, toolCallId: `plan-${round}`, toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] }
+        }
+      })
+      /** 协调器的两次 `spend`（每轮问模型之前）：按同一处判据扣，模拟一次"尝试"。 */
+      const attempt = async () => {
+        if (!budget.consume("generation").ok || !budget.consume("network").ok) return null
+        return planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
+      }
+      return { attempt, executeTool }
+    }
+
+    // ① 旧默认 4：第二遍（修复的第二个工具轮）必须死在预算上 —— 这就是现场。
+    const tight = runFlow(createBudget({ generation: 4, network: 6 }))
+    await tight.attempt()
+    await expect(tight.attempt()).rejects.toThrow(/generation 0/)
+    expect(tight.executeTool, "死在预算上时第三个读工具一次都不许执行").toHaveBeenCalledTimes(2)
+
+    // ② 现在默认：同一条路走得完，恰好 5 代 5 网。
+    const budget = createBudget()
+    const flow = runFlow(budget)
+    expect(parsePlanEnvelope((await flow.attempt())!.plan).ok, "首次尝试").toBe(true)
+    expect(parsePlanEnvelope((await flow.attempt())!.plan), "修复尝试（现场死在这一步）").toMatchObject({ ok: true })
+    expect(flow.executeTool, "两次尝试共读三次场景").toHaveBeenCalledTimes(3)
+    expect(budget.snapshot().used.generation, "提问① + 工具 + 修复提问 + 工具 + 工具").toBe(5)
+    expect(budget.snapshot().used.network).toBe(5)
   })
 
   it("keeps transport retry limits per request instead of counting successful read-tool rounds as failures", async () => {

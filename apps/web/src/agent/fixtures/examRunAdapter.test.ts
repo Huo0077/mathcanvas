@@ -144,7 +144,9 @@ describe("Task 20: 规划请求 → 编译 → 试验结局", () => {
     const result = await runCase(SOLID_CASE, 3)
     expect(result.costUsd).toBe(0.3)
     expect(seen).toEqual([{ caseId: SOLID_CASE.id, trial: 3, hasOutcome: true }])
-    // 冻结表那一侧仍然没有授权：这一层**不会**自己去跑任何东西（它只被 runExamEvaluation 调用）。
-    expect(FROZEN_THRESHOLDS.authorization.status).toBe("pending")
+    // 冻结表里现在是**用户点过头的那份授权**（2026-10-14，逐字记在 `frozenThresholds.ts`）——
+    // 而这一层仍然**不会**自己去跑任何东西：它只被 `runExamEvaluation` 调用，
+    // 授权闸在那边（`assertPaidRunAllowed`）。这条断言守的是"这一层没有自己的开关"。
+    expect(FROZEN_THRESHOLDS.authorization.status).toBe("granted")
   })
 })

@@ -516,7 +516,19 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            * `budget exhausted: budget_repair`。工具调用次数由 `tool` 那本账管（协调器按次扣）。
            */
           if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
-            throw new ModelPlannerError("provider_failed", "budget exhausted before the model could use the tool results")
+            /**
+             * **报错要说清"哪本账、还剩多少"**（2026-10-14，用户现场）。
+             *
+             * 原先只有一句 `budget exhausted before the model could use the tool results` ——
+             * 用户拿着它读不出任何下一步（连"是钱不够还是次数不够"都看不出），
+             * 只能把开发者视图整段贴出来才能定位。工具次数那本账与这里无关，
+             * 所以一并说清，免得下一个人去改错的那本账。
+             */
+            const remaining = { generation: request.budget.remaining("generation"), network: request.budget.remaining("network") }
+            throw new ModelPlannerError(
+              "provider_failed",
+              `预算不够用这次工具的结果：还需要 generation ≥ 1 且 network ≥ 1，实际剩 generation ${remaining.generation}、network ${remaining.network}（工具调用次数是另一本账）。`
+            )
           }
 
           /** 到这里"整批都会执行"已经确定 —— 下面只做事，不再改主意。 */

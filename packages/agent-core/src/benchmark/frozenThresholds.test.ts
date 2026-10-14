@@ -61,13 +61,31 @@ describe("Task 20: 事先冻结的样本与阈值", () => {
   })
 
   it("**授权还没点头 ⇒ 一个请求都不许发**（计划写死的停止条件）", () => {
-    expect(FROZEN_THRESHOLDS.authorization.status).toBe("pending")
-    const decision = assertPaidRunAllowed(FROZEN_THRESHOLDS, { requests: 36, estimatedCostUsd: 9 })
+    /**
+     * 用**显式造一份 pending 的复制品**，不拿仓库里的冻结表：冻结表在 2026-10-14
+     * 已按用户授权改成 `granted`（见下一条）。这条守的是**规则** ——
+     * `status !== "granted"` 时一次都不放行 —— 而不是"仓库里此刻恰好是 pending"。
+     */
+    const pending: FrozenBenchmarkPlan = { ...FROZEN_THRESHOLDS, authorization: { ...FROZEN_THRESHOLDS.authorization, status: "pending" } }
+    const decision = assertPaidRunAllowed(pending, { requests: 36, estimatedCostUsd: 9 })
     expect(decision.ok).toBe(false)
     if (decision.ok) throw new Error("未授权时不许放行")
     expect(decision.reason).toContain("付费授权")
     // 也不许"不给请求数就当 0 个"这类绕过：任何请求都被拒。
-    expect(assertPaidRunAllowed(FROZEN_THRESHOLDS, { requests: 1, estimatedCostUsd: 0.01 }).ok).toBe(false)
+    expect(assertPaidRunAllowed(pending, { requests: 1, estimatedCostUsd: 0.01 }).ok).toBe(false)
+  })
+
+  it("**授权按用户原话逐字记下**：谁点的头、多少个请求、多少钱（缺一栏就不算点头）", () => {
+    const authorization = FROZEN_THRESHOLDS.authorization
+    expect(authorization.status).toBe("granted")
+    expect(authorization.maxRequests, "用户同意的是 36 个请求").toBe(36)
+    expect(authorization.maxCostUsd, "用户同意的上限是 $12").toBe(12)
+    expect(authorization.grantedBy, "谁点的头（人给的，不是系统自己）").toBe("X")
+    expect(authorization.grantedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    // 点头之后，**这一次实测的清单**（36 请求 / 最坏 $10.35）必须在额度之内 ⇒ 放行。
+    expect(assertPaidRunAllowed(FROZEN_THRESHOLDS, { requests: 36, estimatedCostUsd: 10.35 })).toMatchObject({ ok: true })
+    // 而多一个请求就被拒（授权是"恰好 36"，不是"大概 36"）。
+    expect(assertPaidRunAllowed(FROZEN_THRESHOLDS, { requests: 37, estimatedCostUsd: 10.35 }).ok).toBe(false)
   })
 
   it("点头之后**仍受请求数与费用上限约束**，而且缺一栏照样拒", () => {

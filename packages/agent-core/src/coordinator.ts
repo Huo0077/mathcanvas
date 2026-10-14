@@ -181,7 +181,16 @@ export interface AgentCoordinator {
  * **信封类一次 + 编译类两次**（两类各有自己的额度，见 `schemaRepairs` / `compileRepairs`，
  * 理由写在 `MAX_COMPILE_REPAIR_ATTEMPTS`）。
  */
-const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
+/**
+ * **一轮运行最多向模型要几次计划**：第一次 + 信封类修复 + 编译类修复。
+ *
+ * **导出是为了让预算能对着它算**（2026-10-14）：每一次尝试在正常情况下要花
+ * **两次生成**（一次提问 + 一次"带着工具结果再问"），所以 `DEFAULT_BUDGET_LIMITS.generation`
+ * 的下界就是它乘二 —— 那两个数字曾经各写各的（计划里的 4 代 vs 这里的 3 次尝试），
+ * 结果是"读一次场景就把修复额度用光"（用户 2026-10-14 现场）。挂上之后谁改这里，
+ * `budget.test.ts` 里那条不变量会立刻红。
+ */
+export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
 
 /**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。

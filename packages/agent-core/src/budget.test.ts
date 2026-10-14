@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { createBudget, DEFAULT_BUDGET_LIMITS } from "./budget"
+import { MAX_PLAN_ATTEMPTS } from "./coordinator"
 
 /**
  * Task 2.1 Step 2 要求逐条断言计划给出的数字：
@@ -10,10 +11,14 @@ import { createBudget, DEFAULT_BUDGET_LIMITS } from "./budget"
  * 最后半句的落点在这里：预算**没有文档入参、也不返回文档**，所以它根本不可能改写文档。
  * 真正要守的是"被拒时一个单位都不扣" —— 若先扣再判，被拒的那次会白吃余量，
  * "还能重试几次"从此对不上，协调器会以为还有额度而继续跑。
+ *
+ * **2026-10-14：`generation` 一项**按现场读数由 4 修订为 6**（其余数字仍是计划原文）。
+ * 修订的理由在下面那条不变量用例里 —— 它把预算与协调器的修复额度直接挂钩，
+ * 而不是再写死一个数字。
  */
 describe("run budget defaults match the plan", () => {
   it("uses the numbers the plan names", () => {
-    expect(DEFAULT_BUDGET_LIMITS.generation).toBe(4)
+    expect(DEFAULT_BUDGET_LIMITS.generation, "2026-10-14 由 4 修订为 6：只读工具轮要多花一次生成").toBe(6)
     expect(DEFAULT_BUDGET_LIMITS.network).toBe(6)
     expect(DEFAULT_BUDGET_LIMITS.tool).toBe(24)
     expect(DEFAULT_BUDGET_LIMITS.actions_per_stage).toBe(32)
@@ -22,19 +27,51 @@ describe("run budget defaults match the plan", () => {
     expect(DEFAULT_BUDGET_LIMITS.time).toBeGreaterThan(0)
     expect(DEFAULT_BUDGET_LIMITS.geometry).toBeGreaterThan(0)
   })
+
+  /**
+   * **代际预算必须装得下"前三次尝试都读一次场景"**（2026-10-14，用户现场）。
+   *
+   * 每一次尝试在正常情况下花**两次生成**：一次提问、一次带着工具结果再问。
+   * 数字**算出来**而不是再抄一遍：谁把修复额度加一次，这条用例就会红，
+   * 逼着同一个人回答"那代际给几代"。
+   *
+   * ## 为什么是"前三次"而不是"每一次"（这条残余缺口是**有意留的**）
+   *
+   * 协调器最多允许 `MAX_PLAN_ATTEMPTS` 次（首次 + 信封修复 + 编译修复 **两次** = 4）。
+   * 若按"每一次都读场景"配，默认得抬到 **8**，而网络账本也要跟着抬到 8 ——
+   * 那是把计划里的两个数字一起翻倍，比用户 2026-10-14 批准的那一档（4 → 6，
+   * 与 `network` 对齐）大得多。所以这里取**恰好装得下前三次**：
+   * 用户现场那条路（计划①→读场景→编译被拒→修复读场景→出计划）在第 4 代就齐了，
+   * 真实的三维修复也基本落在三次以内。**第 4 次若还要读场景，就停在预算上** ——
+   * 这是有意的：宁可停在一轮有界的地方，也不为最坏情况把默认抬上去。
+   * 下面第二条断言把那 2 代的余量**明写出来**，免得日后有人以为它是笔误。
+   */
+  it("代际预算装得下“前三次尝试各读一次场景”（并与网络账本对齐）", () => {
+    expect(
+      DEFAULT_BUDGET_LIMITS.generation,
+      `协调器最多 ${MAX_PLAN_ATTEMPTS} 次尝试，每次最多 2 次生成（提问 + 用工具结果）；默认按“前三次”配`
+    ).toBeGreaterThanOrEqual((MAX_PLAN_ATTEMPTS - 1) * 2)
+    expect(
+      MAX_PLAN_ATTEMPTS * 2 - DEFAULT_BUDGET_LIMITS.generation,
+      "最坏情况（四次尝试都读场景）需要这么多代，而现在**有意**不给：第 4 次会停在预算上"
+    ).toBe(2)
+    expect(DEFAULT_BUDGET_LIMITS.network, "每一次网络往返必然是一次生成，所以网络不该比代际更松").toBeGreaterThanOrEqual(DEFAULT_BUDGET_LIMITS.generation)
+  })
 })
 
 describe("budget consumption", () => {
-  it("stops at the limit and never lets the fifth generation through", () => {
+  it("stops at the limit and never lets one generation past it", () => {
     const budget = createBudget()
 
-    for (let index = 0; index < 4; index += 1) expect(budget.consume("generation").ok).toBe(true)
+    // 用**上限本身**驱动，而不是再抄一个数：改默认值时这条用例跟着走，语义不变。
+    const limit = DEFAULT_BUDGET_LIMITS.generation
+    for (let index = 0; index < limit; index += 1) expect(budget.consume("generation").ok).toBe(true)
 
-    const fifth = budget.consume("generation")
-    expect(fifth.ok).toBe(false)
-    if (!fifth.ok) {
-      expect(fifth.reason).toBe("exceeds_limit")
-      expect(fifth.remaining).toBe(0)
+    const past = budget.consume("generation")
+    expect(past.ok).toBe(false)
+    if (!past.ok) {
+      expect(past.reason).toBe("exceeds_limit")
+      expect(past.remaining).toBe(0)
     }
     expect(budget.remaining("generation")).toBe(0)
   })

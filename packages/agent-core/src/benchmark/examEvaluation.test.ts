@@ -96,11 +96,26 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
 
   it("**没有授权就跑不起来**：执行入口先过授权闸", async () => {
     const runCase = vi.fn(async () => ({ outcome: "planned" as const, costUsd: 0.1 }))
-    const pending = await runExamEvaluation({ plan: FROZEN_THRESHOLDS, request: { ...CONTEXT, grantedBy: "用户", grantedOn: "2026-10-13" }, runCase })
+    /**
+     * 用**显式造一份 pending** 的计划，而不是仓库里的冻结表 —— 冻结表在 2026-10-14
+     * 已按用户授权改成 `granted`（见 `frozenThresholds.test.ts` 那条"按原话逐字记下"）。
+     * 这条要守的是**规则**：`status !== "granted"` 时一次 `runCase` 都不许发生。
+     */
+    const pendingPlan = { ...FROZEN_THRESHOLDS, authorization: { ...FROZEN_THRESHOLDS.authorization, status: "pending" as const } }
+    const pending = await runExamEvaluation({ plan: pendingPlan, request: { ...CONTEXT, grantedBy: "X", grantedOn: "2026-10-14" }, runCase })
     expect(pending.ok).toBe(false)
     if (pending.ok) throw new Error("未授权不许跑")
     expect(pending.reason).toContain("付费授权")
     expect(runCase, "连一次 provider 调用都不该发生").not.toHaveBeenCalled()
+  })
+
+  it("**声称的授权人与冻结表不一致 ⇒ 拒**（点头这件事不能由调用方自己声称）", async () => {
+    const runCase = vi.fn(async () => ({ outcome: "planned" as const, costUsd: 0.1 }))
+    const mismatch = await runExamEvaluation({ plan: FROZEN_THRESHOLDS, request: { ...CONTEXT, grantedBy: "别人", grantedOn: "2026-10-14" }, runCase })
+    expect(mismatch.ok).toBe(false)
+    if (mismatch.ok) throw new Error("授权人不一致必须拒")
+    expect(mismatch.reason).toContain("授权人")
+    expect(runCase).not.toHaveBeenCalled()
   })
 
   it("**授权之后**跑满 36 次并把报告交出来（这里用假 provider，一个网络请求都没有）", async () => {

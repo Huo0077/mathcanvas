@@ -101,7 +101,16 @@ export const FROZEN_THRESHOLDS: FrozenBenchmarkPlan = {
   frozenOn: "2026-10-12",
   paidRuns: 0,
   trialsPerCase: 3,
-  authorization: { status: "pending" },
+  /**
+   * **授权**（2026-10-14 由用户给出，逐字记在这里）。
+   *
+   * 用户原话：「同意 36 请求 / 上限 $12」+ 授权人 `X`。这三样是**冻结表里唯一会被
+   * 用户意图改变的一栏** —— 阈值一个字都没动（跑完再改线就是自欺，见文件头）。
+   *
+   * `maxRequests: 36` 与本次实测的请求清单（12 题 × 3 次独立试验）**恰好相等**：
+   * 多一个请求都会被 `assertPaidRunAllowed` 拒掉。
+   */
+  authorization: { status: "granted", maxRequests: 36, maxCostUsd: 12, grantedBy: "X", grantedOn: "2026-10-14" },
   families: [
     {
       family: "triangle",
