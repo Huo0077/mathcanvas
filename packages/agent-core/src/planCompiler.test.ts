@@ -682,6 +682,30 @@ describe("compile repair advice", () => {
     expect(hint).toContain("只能用一次")
     expect(hint).toContain("一一对应")
   })
+
+  /**
+   * **2026-10-15 用户第三现场（同一道四棱锥）**：这一次**合同全过了**（信封 / 字段 / 名字都对），
+   * 死在**几何**上 —— 模型把顶点放在了底面中心上方，于是 `PD` 成了一条体对角线：
+   * 垂直残差 `0.81650 = √(2/3)`、`PD` 量出 `3.4641 = 2√3`（D=(0,0,0)、P=(2,2,2) 正是这两个数）。
+   *
+   * 它看得到实测值（修复请求里带着），但**"该怎么摆"没人告诉它**：两次几何修复都没改对。
+   * 这一条提醒补的就是那句话 —— 说清"棱 ⊥ 平面"是**沿法向**，不是"顶点在底面中心上方"。
+   */
+  it("explains where the apex goes when a line is stated perpendicular to a plane", () => {
+    const hint = ask([
+      { code: "relation_not_satisfied", path: "envelope.relations", detail: "关系 relation-0（perpendicular）不成立：残差 8.16e-1 超过容差 1.00e-6。" },
+      { code: "diagram_condition_failed", path: "envelope.actions", detail: "PD ⊥ 平面 ABCD：实测 0.81650，题设要求 0。" },
+      { code: "diagram_condition_failed", path: "envelope.actions", detail: "PD = 2：实测 3.4641，题设要求 2。" }
+    ])
+
+    // 说清"沿法向"，而不是"在底面中心上方"——这是那一轮真正读错的地方。
+    expect(hint).toContain("法向")
+    expect(hint).toContain("垂足")
+    // 长度条件与垂直关系**一起**才把点钉死。
+    expect(hint).toContain("坐标差")
+    // 不许把原始读数原样退回（那正是它看了两轮也没改对的东西）。
+    expect(hint).toContain("不要把顶点放在底面中心")
+  })
 })
 
 /**
