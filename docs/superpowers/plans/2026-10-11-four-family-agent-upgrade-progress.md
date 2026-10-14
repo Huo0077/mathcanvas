@@ -326,6 +326,8 @@
 
       **2026-10-14 第二批（免授权）**：① **修掉一条会让付费那一跑"看起来在跑"的真缺陷** —— 上一版给规划器的请求是 `{ run, userMessage } as never`，而真实的 `createModelPlanner().plan()` 头一件事就读 `request.model.context`（`modelPlanner.ts:369`）⇒ 在任何请求发出**之前**抛 `TypeError`（RED 读数：`expected [] to deeply equal [ 'p-bench' ]`，transport 一次都没被调用；结局 36 条 `error`、花费 $0，而报告只看得到 pass@1 = 0）。请求改由 `planRequestFor`（产品同一份形状）组装。② **一次试验 = 规划 + 编译**（同一个 `compilePlan`），新增 `ExamFailureLayer` 四层与唯一判定 `examTrialVerdictOf`，把计划点名的五层里**上一批没有落点的四层**补上（可读性仍归人评）：模型没给计划 ⇒ `plan`；前四层编译被拒 ⇒ `schema`；后两层 ⇒ `construct`；编译过了但核验不是 `passed` ⇒ `verify`（与产品提交闸同一条判据）。层名只看第一条错误诊断，编译器没给原因就**不编层名**。③ **`repairPath` 落成字段**（本适配器 `not-driven`，且与"同轮修复"矛盾时**抛**）⇒ `repairedCount === 0` 只意味着"这一轮没走协调器"。④ 新增 `agentRunner.planWorkspaceFor`：工作区偏好次序**收成一处**，协调器与评测共用。门禁：全量单测 **375 文件 / 4427 通过 + 1 todo / 0 失败**（44.85 s，exit 0）；全量 e2e **237 通过**（2.0 m，exit 0）；`typecheck` exit 0；`lint` 0 error / 13 warning。**仍未做**：付费实测（未授权）、修复回路接线（端口看不到协调器的修复标记）。
 
+      **2026-10-16 用户已授权（36 请求 / 上限 $12）；花钱前的诚实性前置已补**：仓里**没有价目表** ⇒ 费用**没测到就是 `null`**（`costUsd` 全线 `number | null`；“有一次算不出，那一族与总计就是 `null`”，不拿部分和冒充；超支核对只在钱算得出来时做；`costPerCase` 阈值**如实不通过**）。两条新用例（全表无费用 ⇒ 阈值条条不通过且成功读数不受影响；混一条 ⇒ 只那一族与总计为 `null`）。门禁：全量单测 **379 文件 / 4487 通过 + 1 todo / 0 失败**（44.37 s，exit 0）、`typecheck` exit 0、`lint` 0 error / 13 warning；**全量 e2e 236/237**（唯一一条是已记过的负载敏感抖动，单独跑绿）。**仍未做**：受闸入口（桌面壳 `--exam-run` 启动模式，用户选 B）→ 零成本干跑 → 把授权值写进冻结表 → 真跑 36 次。
+
 **停止条件**：用户未同意请求数和最高费用，或样本/阈值未预先冻结，就停在 Task 20；不能跳去 Task 21。
 
 ### Task 21｜全量验收和作图／Lean 分别裁决
