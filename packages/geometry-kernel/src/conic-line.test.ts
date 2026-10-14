@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { CirclePrimitive, Coordinate, EllipsePrimitive, HyperbolaPrimitive, ParabolaPrimitive } from "@draw/dsl"
 
-import { intersectLineWithConic } from "./conic-line"
+import { conicResidualAt, intersectLineWithConic } from "./conic-line"
 
 /**
  * **代数**直线 ∩ 圆锥曲线（Task 14）。
@@ -166,3 +166,103 @@ describe("代数直线 ∩ 圆锥曲线", () => {
     expect(intersectLineWithConic(horizontal(0), { id: "e0", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 0, radiusY: 2 }).kind).toBe("degenerate")
   })
 })
+
+/**
+ * **「点在圆锥曲线上」的判据**（施工单①，2026-10-15）。
+ *
+ * ## 为什么要**导出**一个薄包装，而不是在核验层另写一份
+ *
+ * 题面那句 `P 是椭圆上任意一点` 今天**整句消失**（既不进给定、也不进未核验），所以它需要
+ * 一条真判据。写这条判据要用到"一点离曲线多远"，而本模块**已经有**那个算法
+ * （`buildLocalForm` → `evaluate` → 残差 `|Q| / max(1, |∇Q|)`，长度量纲）——
+ * 只是模块私有。在 `diagramVerification` 里另写一份隐式方程，就是本仓反复付代价的
+ * "同一个判断写两遍"：两份一旦分叉，"点在不在曲线上"会出现两个答案。
+ *
+ * 所以这里导出 `conicResidualAt`，**判据仍然只有一处**（本文件）。
+ *
+ * ## 这组用例的口径：判据自己算
+ *
+ * 期望值一律由测试**按公式现算**（`|Q| / max(1, |∇Q|)`，局部坐标里），不读被测函数的自报值；
+ * 并且刻意钉住它的**性质**：在曲线上的点是浮点噪声量级、离曲线的点是**一阶**估计
+ *（不是精确距离，比真距离小）—— 免得下游把它当成"到曲线的精确距离"用。
+ */
+describe("点在圆锥曲线上：残差只算一处", () => {
+  const ellipse: EllipsePrimitive = { id: "e", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 }
+
+  it("椭圆上的一点：残差是浮点噪声量级，梯度按测试自己算的公式对上", () => {
+    const angle = 0.4
+    const point: Coordinate = { x: 3 * Math.cos(angle), y: 2 * Math.sin(angle) }
+    const evidence = conicResidualAt(ellipse, point)
+    expect(evidence).not.toBeNull()
+    if (evidence === null) throw new Error("expected a residual")
+    // 自己算：Q = x²/9 + y²/4 − 1（这一点上恒为 0），∇Q = (2x/9, 2y/4)。
+    const value = point.x * point.x / 9 + point.y * point.y / 4 - 1
+    const gradient = { x: 2 * point.x / 9, y: 2 * point.y / 4 }
+    const expectedResidual = Math.abs(value) / Math.max(1, Math.hypot(gradient.x, gradient.y))
+    expect(evidence.value).toBeCloseTo(value, 12)
+    expect(evidence.gradient.x).toBeCloseTo(gradient.x, 12)
+    expect(evidence.gradient.y).toBeCloseTo(gradient.y, 12)
+    expect(evidence.residual).toBeCloseTo(expectedResidual, 12)
+    expect(evidence.residual).toBeLessThan(1e-12)
+  })
+
+  it("椭圆外的点：残差是**一阶**估计（自己按同一公式现算），不是精确距离", () => {
+    /**
+     * `(0, 3)` 在 `x²/9 + y²/4 = 1` 外面：`Q = 9/4 − 1 = 1.25`、`|∇Q| = 1.5`
+     * ⇒ 残差 `1.25 / 1.5 ≈ 0.8333`；而它到椭圆的**真实**距离是 `1`（最近点 `(0, 2)`）。
+     * 两个数都要钉住：前者是判据用的量，后者说明**别把它当精确距离**。
+     */
+    const evidence = conicResidualAt(ellipse, { x: 0, y: 3 })
+    expect(evidence).not.toBeNull()
+    if (evidence === null) throw new Error("expected a residual")
+    expect(evidence.residual).toBeCloseTo(1.25 / 1.5, 12)
+    expect(evidence.residual).toBeLessThan(1)
+  })
+
+  it("旋转椭圆：残差与旋转无关（在局部坐标里算）", () => {
+    const rotated: EllipsePrimitive = { id: "er", type: "ellipse", center: { x: 1, y: -1 }, radiusX: 4, radiusY: 1, rotation: Math.PI / 6 }
+    const cos = Math.cos(rotated.rotation!)
+    const sin = Math.sin(rotated.rotation!)
+    const local = { x: 4 * Math.cos(1.1), y: Math.sin(1.1) }
+    const world: Coordinate = { x: rotated.center.x + local.x * cos - local.y * sin, y: rotated.center.y + local.x * sin + local.y * cos }
+    const evidence = conicResidualAt(rotated, world)
+    expect(evidence).not.toBeNull()
+    if (evidence === null) throw new Error("expected a residual")
+    // 世界坐标下自己算：先转回局部，再代方程与梯度。
+    const dx = world.x - rotated.center.x
+    const dy = world.y - rotated.center.y
+    const localX = dx * cos + dy * sin
+    const localY = -dx * sin + dy * cos
+    const value = localX * localX / 16 + localY * localY - 1
+    expect(evidence.value).toBeCloseTo(value, 12)
+    expect(evidence.residual).toBeLessThan(1e-12)
+  })
+
+  it("圆 / 双曲线 / 抛物线三类都在同一条判据上：曲线上的点残差为噪声量级", () => {
+    const circle: CirclePrimitive = { id: "c", type: "circle", center: { x: 0, y: 0 }, radius: 2 }
+    const hyperbola: HyperbolaPrimitive = { id: "h", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" }
+    const parabola: ParabolaPrimitive = { id: "p", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "x" }
+    // 圆上 (2, 0)；双曲线（实轴沿 x）上 (3cosh 0.7, 2sinh 0.7)；抛物线 y² = 4x 上 (1, 2)。
+    const samples: [string, PlanarConicSample, Coordinate][] = [
+      ["圆", circle, { x: 2, y: 0 }],
+      ["双曲线", hyperbola, { x: 3 * Math.cosh(0.7), y: 2 * Math.sinh(0.7) }],
+      ["抛物线", parabola, { x: 1, y: 2 }]
+    ]
+    for (const [name, conic, point] of samples) {
+      const evidence = conicResidualAt(conic, point)
+      expect(evidence, name).not.toBeNull()
+      if (evidence === null) throw new Error(`expected a residual for ${name}`)
+      expect(evidence.residual, name).toBeLessThan(1e-12)
+    }
+  })
+
+  it("退化的曲线参数与非有限点：一律 null，不猜一个数出来", () => {
+    expect(conicResidualAt({ id: "e0", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 0, radiusY: 2 }, { x: 0, y: 0 })).toBeNull()
+    expect(conicResidualAt({ id: "p0", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 0, axis: "x" }, { x: 0, y: 0 })).toBeNull()
+    expect(conicResidualAt(ellipse, { x: Number.NaN, y: 0 })).toBeNull()
+    expect(conicResidualAt(ellipse, { x: 0, y: Number.POSITIVE_INFINITY })).toBeNull()
+  })
+})
+
+/** 上面那张表里三类曲线的联合类型（与 `conicResidualAt` 的入参同一份定义）。 */
+type PlanarConicSample = Parameters<typeof conicResidualAt>[0]

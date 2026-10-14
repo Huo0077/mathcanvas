@@ -49,6 +49,18 @@ export type DiagramObligationKind =
    * **进不了核验面板**。
    */
   | "functionLineIntersections"
+  /**
+   * **点在圆锥曲线上**（施工单①，2026-10-15）：`P 是椭圆上任意一点` ⇒ `targets: ["P"]`、
+   * `conicKind` 是题面说的那一种曲线。
+   *
+   * 为什么它是一条**判据**而不是"读一下就算了"：这句话此前**整句消失**（既不进给定、也不进
+   * 未核验），于是"图上那个 P 到底在不在椭圆上"从来没人问过 —— 把 P 画在椭圆里面，报告照样全绿。
+   * 那是与当年 `弦 AB 的长为 3` 同一种病：**一条题设等于没发生**。
+   *
+   * **"任意一点"那层普遍性不属于这一条**：这里核的是图上这一点（实例），普遍性由报告的
+   * `proofScope` / `universalClaims` 如实承担，判据不许假装证明了它。
+   */
+  | "pointOnConic"
 
 /**
  * 题面写下的**直线**（用于 `conicChord`）。
@@ -88,6 +100,11 @@ export interface DiagramObligation {
   planeLengths?: [number, number]
   coordinate?: { x: number; y: number; z: number }
   conic?: DiagramConicStated
+  /**
+   * `pointOnConic` 专用：题面那句里写的**是哪一种**圆锥曲线（`P 是椭圆上一点` ⇒ `"ellipse"`）。
+   * 只记种类，不记半轴 —— 那句话里没有半轴，记了就是给半轴造出第二个来源。
+   */
+  conicKind?: "ellipse" | "hyperbola" | "parabola"
   /** `conicChord` 专用：题面写下的那条直线。 */
   line?: DiagramStatedLine
   /** `conicChord` 专用：题面声称的交点情形（**代数重数**那一套，与 `intersectLineWithConic` 的档位同名）。 */
@@ -113,7 +130,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "line" | "expectation">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation">
 
 interface Matcher {
   pattern: RegExp
@@ -351,6 +368,44 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /x\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*y(?![a-zA-Z])/g,
     read: (m) => parabolaAxis(Number(m[1]), "y")
+  },
+  {
+    /**
+     * **点在圆锥曲线上**（施工单①，2026-10-15）：`P 是椭圆上任意一点` / `P 在双曲线上` / `M 为椭圆上一点`。
+     *
+     * ## 为什么它必须是一条**读取器**，而不是"再往触发词表里加个词"
+     *
+     * 加词只能让这句落进"未核验"（用户看得见，但没人判）；而它是一条**读得懂、也量得动**的
+     * 条件：点在不在曲线上，内核有现成的残差判据（`conicResidualAt`，复用 `conic-line.ts`
+     * 那套局部隐式形式，**不另写一份方程**）。读成真义务之后，"图上那个 P 到底在不在椭圆上"
+     * 才第一次有人问 —— 此前把 P 画在椭圆里面，报告照样全绿。
+     *
+     * ## 三种说法、三类曲线
+     *
+     * `是 / 为 / 在` 三种系词都收（卷面上都常见，与"弦 AB 的长为 n"那条同一族的连接词），
+     * 曲线只收**点名的三种**：`椭圆 / 双曲线 / 抛物线` —— 写"圆锥曲线"时**读不出来**
+     *（"是哪一条"没有答案，而判据要拿它问"图上那条曲线是不是题面说的那一种"，猜不得）。
+     *
+     * ## 刻意**不**收的：`P 是椭圆外一点`
+     *
+     * "在外面"与"在曲线上"是**相反**的两件事，读成这条就是替题面改题。它由残留扫描器接住
+     *（触发词表里有 `椭圆外` 这一类）⇒ 落"未核验"，不静默消失。
+     *
+     * ## 尾部只收**封闭的几种说法**
+     *
+     * `任意一点 / 任意点 / 一点 / 的点 / 动点` 五种尾巴里的一种，**不做"往后吃几个字"**：
+     * 那样会把后面紧挨着的真条件（`P 是椭圆上一点且AB=2`）一起吞进 `sourceText`，
+     * 而按字符占位的去重会让被吞掉的那条**再也不被扫描**——那正是"静默丢掉一条题设"。
+     * 尾巴必须收进来的理由只有一个：`sourceText` 是面板上给用户看的那句话，
+     * 而"任意"两个字正是"这只是一次实例核验"的**唯一线索**（判据文案会指着它披露）。
+     */
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:是|为|在)\\s*(椭圆|双曲线|抛物线)\\s*上(?:\\s*(?:任意|任取)\\s*一点|\\s*任意点|\\s*一点|\\s*的点|\\s*动点)?`, "g"),
+    read: (m) => {
+      const targets = names(m[1])
+      // 恰好一个点名：`PA 是椭圆上…` 那种连写读不出（读一半比读不出更坏）。
+      if (targets.length !== 1) return null
+      return { kind: "pointOnConic", targets, conicKind: m[2] === "椭圆" ? "ellipse" : m[2] === "双曲线" ? "hyperbola" : "parabola" }
+    }
   },
   /**
    * **直线与圆锥曲线的交点**（Task 14）：`…与直线 y = x + 1 相交于 A、B 两点` / `…与直线 x = 3 相切`。
@@ -772,6 +827,15 @@ const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:�
 const CURVE_EQUATION_TERM = /(?:^|[^A-Za-z])[xy]\s*(?:\^\s*2|²)/
 
 /**
+ * **「在曲线外」的形状**（施工单①的另一半，2026-10-15）：`椭圆外 / 双曲线外 / 抛物线外 / 圆外`。
+ *
+ * 为什么它要单独一句话：它与刚接上的那条 `pointOnConic`（`P 是椭圆上一点`）**只差一个字**，
+ * 说的却是**相反**的事。落进通用文案（"尚未被可靠解析"）时，用户会以为"换个写法就能被认出来"，
+ * 于是把"在外面"改写成"在曲线上"—— 那是**替题面改题**。所以这里明说：判据今天只管"在曲线上"。
+ */
+const OUTSIDE_CURVE_TERM = /(?:椭圆|双曲线|抛物线|圆)\s*外/
+
+/**
  * **一条残留条件的理由**（Task 14 的边界：「非标准曲线的明确不归类」，2026-10-14）。
  *
  * 调研 §C 原文：`2024 新课标Ⅰ卷第 11 题`是**非标准曲线**，"暂记范围外/跨家族候选，
@@ -783,9 +847,13 @@ const CURVE_EQUATION_TERM = /(?:^|[^A-Za-z])[xy]\s*(?:\^\s*2|²)/
  * 否则同一句话会随它落在哪条路径而给出两种说法。
  */
 function unverifiedReasonFor(leftover: string): string {
-  return CURVE_EQUATION_TERM.test(leftover)
-    ? "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
-    : "原题出现了尚未被可靠解析的几何条件，未核验。"
+  if (CURVE_EQUATION_TERM.test(leftover)) {
+    return "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+  }
+  if (OUTSIDE_CURVE_TERM.test(leftover)) {
+    return "「点在曲线**外**」与「点在曲线上」是两件相反的事，而今天的判据只有后一条（`pointOnConic`）—— 这一句不会被读成「在曲线上」，也没有「在外面」的判据，如实未核验。"
+  }
+  return "原题出现了尚未被可靠解析的几何条件，未核验。"
 }
 
 /**
@@ -892,7 +960,9 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 一个句型可以蕴含多条判据（`底面ABCD是菱形` ⇒ 三条等长），所以读取器允许返回数组。
       const drafts = result === null ? [] : Array.isArray(result) ? result : [result]
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "functionLineIntersections" || new Set(result.targets).size >= 2)
+      // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
+      // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)
@@ -969,7 +1039,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
      * 见 `curvePointClauses.test.ts` 里钉住的那一条），但两件事要分开处理 ——
      * 这一行只负责"真正的圆"。
      */
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
+    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }

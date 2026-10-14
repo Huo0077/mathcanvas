@@ -132,16 +132,65 @@ function evaluate(form: LocalForm, point: Coordinate): { value: number; gradient
   }
 }
 
-/** 报告点上的两样残差（都在**局部**坐标里算，与旋转无关）。 */
-function evidenceAt(form: LocalForm, localPoint: Coordinate, direction: Coordinate): { residual: number; tangency: number } {
+/** 局部形式在一点上的**值 + 梯度 + 距离估计** —— 全模块**只有这一处**算残差。 */
+function localEvidence(form: LocalForm, localPoint: Coordinate): ConicPointResidual {
   const { value, gradient } = evaluate(form, localPoint)
   const gradientLength = Math.hypot(gradient.x, gradient.y)
+  return {
+    value,
+    gradient,
+    residual: gradientLength > 0 ? Math.abs(value) / Math.max(1, gradientLength) : Math.abs(value)
+  }
+}
+
+/** 报告点上的两样残差（都在**局部**坐标里算，与旋转无关）。 */
+function evidenceAt(form: LocalForm, localPoint: Coordinate, direction: Coordinate): { residual: number; tangency: number } {
+  const { gradient, residual } = localEvidence(form, localPoint)
+  const gradientLength = Math.hypot(gradient.x, gradient.y)
   const directionLength = Math.hypot(direction.x, direction.y)
-  const residual = gradientLength > 0 ? Math.abs(value) / Math.max(1, gradientLength) : Math.abs(value)
   const tangency = gradientLength > 0 && directionLength > 0
     ? Math.abs(gradient.x * direction.x + gradient.y * direction.y) / (gradientLength * directionLength)
     : 1
   return { residual, tangency }
+}
+
+/**
+ * **一点在圆锥曲线上的读数**（施工单①，2026-10-15）。
+ *
+ * ## 为什么导出它，而不是让核验层自己写一份隐式方程
+ *
+ * 题面那句 `P 是椭圆上任意一点` 原先**整句消失**（既不进给定、也不进未核验），要把它变成
+ * 一条真判据就得问"这一点离曲线多远"—— 而那个算法**已经在本模块里**
+ *（`buildLocalForm` → `evaluate` → 残差），只是模块私有。另写一份就是本仓反复付代价的
+ * "同一个判断写两遍"：两份一旦分叉，"点在不在曲线上"会有两个答案。
+ *
+ * ## 口径（下游要按这个用）
+ *
+ * `residual` 是 `|Q| / max(1, |∇Q|)`（**长度量纲**）—— 它是**一阶**估计，不是精确距离：
+ * 在曲线上的点是浮点噪声量级；离曲线远时会**偏小**（`(0, 3)` 对 `x²/9 + y²/4 = 1` 给 0.8333，
+ * 而真实距离是 1）。所以拿它当判据时容差按长度给，**不要**把它当"到曲线的精确距离"。
+ *
+ * `gradient` 是**局部**坐标（轴对齐、顶点/中心为原点）里的梯度，与 `value` 同一个坐标系 ——
+ * 世界坐标的旋转变换已经在这一层做掉了，调用方要判"在曲线的哪一侧"时用它。
+ *
+ * 算不出来的两种情形（曲线参数退化 / 点不是有限数）一律 `null`，**不猜一个数出来**：
+ * 调用方据此落"未核验"，而不是落一个看起来很正常的残差。
+ */
+export interface ConicPointResidual {
+  /** 局部隐式形式在这一点上的值 `Q(P)`（量纲随系数，只作读数）。 */
+  value: number
+  /** 局部梯度 `∇Q(P)`。 */
+  gradient: Coordinate
+  /** 距离估计 `|Q(P)| / max(1, |∇Q(P)|)`（长度量纲）。 */
+  residual: number
+}
+
+/** 一点离一条圆锥曲线多远（见 `ConicPointResidual` 的口径；算不出来返回 `null`）。 */
+export function conicResidualAt(conic: PlanarConic, point: Coordinate): ConicPointResidual | null {
+  if (!finite(point)) return null
+  const form = buildLocalForm(conic)
+  if (form === null) return null
+  return localEvidence(form, form.toLocal(point))
 }
 
 export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): LineConicIntersection {

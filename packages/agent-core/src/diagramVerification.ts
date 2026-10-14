@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -272,6 +272,14 @@ function describeChordExpectation(kind: "secant" | "tangent" | "single" | "none"
   return "没有交点"
 }
 
+/**
+ * 曲线种类的人话（判据文案用）。与 `describeConic` 分开：那一份给的是**参数**，
+ * 这一份给的是**名字**，而 `pointOnConic` 要问的恰恰是"图上是哪一种、题面说的是哪一种"。
+ */
+function conicKindName(kind: "ellipse" | "hyperbola" | "parabola"): string {
+  return kind === "ellipse" ? "椭圆" : kind === "hyperbola" ? "双曲线" : "抛物线"
+}
+
 /** 数字的可读写法：整数不带小数点，其余最多六位。 */
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : Number(value.toFixed(6)).toString()
@@ -540,6 +548,47 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       }
     }
     return { actual: 0, expected: 0, tolerance, detail: `已按候选图坐标核验：这条直线与曲线${describeChordExpectation(expectation)}，交点个数与位置都对得上。` }
+  }
+  /**
+   * **点在圆锥曲线上**（施工单①，2026-10-15）：`P 是椭圆上任意一点`。
+   *
+   * 判据三层，每一层都问**候选图自己**：
+   * ① 图上有没有**恰好一条**新画的圆锥曲线（`candidateConic`，与 `conicAxes` 同一处判据）；
+   * ② 它是不是**题面说的那一种** —— 题面说椭圆而图上画的是抛物线时，这不是"残差大小"能表达的错，
+   *   所以与 `conicAxes` 的"轴反了"同一档：直接判失败并说清两种曲线（**不拿抛物线替椭圆判 P**）；
+   * ③ 那一点离这条曲线多远 —— 交给内核 `conicResidualAt`（复用 `conic-line.ts` 的局部隐式形式，
+   *   **这里不写第二份方程**）。点在不在图上由点名表决定：图上没有 `P` 时返回 `null`，
+   *   由调用方如实报"点名缺失：P"，**不硬凑一个点**。
+   *
+   * **"任意一点"那层普遍性不属于这一条**：这里核的是图上这一点（实例）。
+   * 题面自己写了"任意"时，理由里另有一句**指回报告证明范围**的披露 ——
+   * 少了它，一个绿字很容易被读成"对任意点都成立"。
+   */
+  if (item.kind === "pointOnConic") {
+    const name = item.targets[0]
+    const figure = figures.conic
+    if (name === undefined || figure === null) return null
+    if (item.conicKind !== undefined && figure.kind !== item.conicKind) {
+      return {
+        actual: 1,
+        expected: 0,
+        tolerance: 1e-9,
+        detail: `题面说的是${conicKindName(item.conicKind)}，而图上唯一那条圆锥曲线是${conicKindName(figure.kind)} —— 图上没有题面说的那种曲线，点 ${name} 也就无从谈起。`
+      }
+    }
+    const point = points.get(name)
+    if (point === undefined) return null
+    const evidence = conicResidualAt(figure.primitive, { x: point.x, y: point.y })
+    if (evidence === null) return null
+    const universal = /任意|任取/.test(item.sourceText)
+      ? "（题面写的是**任意**一点：这一条核的是**图上这一点**，不是对任意点的证明 —— 「任意一点都成立」那层普遍性由报告的证明范围如实承担。）"
+      : ""
+    return {
+      actual: evidence.residual,
+      expected: 0,
+      tolerance: distanceTolerance(1),
+      detail: `实测点 ${name} (${formatNumber(point.x)}, ${formatNumber(point.y)}) 到这条曲线的残差 ${formatNumber(evidence.residual)}（0 = 正好在曲线上；这是**一阶**距离估计，不是精确距离）。${universal}`
+    }
   }
   /**
    * **切线**（V0d）：题面只说"在 `x = 1` 处的切线"，斜率由**函数**决定。
@@ -997,7 +1046,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
               ? "候选图里没有唯一、可读的圆锥曲线，或题面那条直线的写法没读出来，未核验。"
               : item.kind === "tangentAt"
               ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
-              : item.kind === "functionGraph"
+              : item.kind === "pointOnConic"
+                ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。"
+                : item.kind === "functionGraph"
                 ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
                 : "点名缺失、图形退化或角度无法计算，未核验。"
       }

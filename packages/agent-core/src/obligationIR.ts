@@ -67,7 +67,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** Task 13 边界（2026-10-14）：线面角由核验器从最终坐标自己算（`linePlaneAngle` 支）。 */
   "linePlaneAngle",
   /** Task 15 边界（2026-10-14）：交点个数由核验器从**图上那条曲线**自己数（`functionLineIntersections` 支）。 */
-  "functionLineIntersections"
+  "functionLineIntersections",
+  /** 施工单①（2026-10-15）：点在不在曲线上，由核验器拿内核的残差从**图上那一点**自己算（`pointOnConic` 支）。 */
+  "pointOnConic"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -88,6 +90,9 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "tangentAt") return { kind: "absolute", value: distanceTolerance(1) }
   // 函数曲线比的是"两条曲线在采样点上的**函数值差**"，也是绝对量。
   if (kind === "functionGraph") return { kind: "absolute", value: distanceTolerance(1) }
+  // 「点在曲线上」比的是**残差**（内核 `conicResidualAt`，长度量纲的**一阶**距离估计）
+  // ⇒ 与点坐标、半轴同一把绝对尺子。用相对容差会把"偏离 0.3"这种明显错误按比例放过去。
+  if (kind === "pointOnConic") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
@@ -105,6 +110,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     ...(item.planeLengths === undefined ? {} : { planeLengths: [...item.planeLengths] as [number, number] }),
     ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } }),
     ...(item.conic === undefined ? {} : { conic: { ...item.conic } }),
+    ...(item.conicKind === undefined ? {} : { conicKind: item.conicKind }),
     ...(item.expression === undefined ? {} : { expression: item.expression })
   }
   return {
@@ -229,6 +235,7 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     ...(item.geometry?.planeLengths === undefined ? {} : { planeLengths: [...item.geometry.planeLengths] as [number, number] }),
     ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } }),
     ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } }),
+    ...(item.geometry?.conicKind === undefined ? {} : { conicKind: item.geometry.conicKind }),
     ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression })
   }))
   return {

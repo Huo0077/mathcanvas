@@ -38,17 +38,45 @@ describe("曲线上的点：今天不能被静默丢掉", () => {
     expect(accounted.some((text) => text.includes("母线")), `给定/未核验：${JSON.stringify(accounted)}`).toBe(true)
   })
 
-  it("**另一处同类缺口（如实钉住）**：「P 是椭圆上任意一点」今天也读不出来，而且**整句消失**", () => {
+  it("**已收口（施工单①，2026-10-15）**：`P 是椭圆上任意一点` 现在读成一条**可核验**的题设", () => {
     /**
-     * 这条是上一轮那次**子串误伤顺带照出来的**：`圆上` 命中「椭**圆上**」时，这句会落进未核验；
-     * 把触发词收窄成 `(?<!椭)圆上` 之后，它又回到"**没人管**"的状态。
-     *
-     * 今天的事实与当年那条 `弦 AB 的长为 3` 是同一种病：**既不进给定、也不进未核验**。
-     * 补上"点在圆锥曲线上"的读取器之后，这条断言要**翻转**成"落进未核验 / 能核验"。
+     * 这条断言原先钉的是**缺口本身**（"整句消失"）。现在它翻转成正面判据：
+     * 那句话必须进 `givens`，带点名 `P` 与曲线种类 `ellipse`，而且**不许**再落进未核验
+     *（同一句话在两处记账，就是这个仓最忌讳的那种乱账）。
      */
     const parsed = parseDiagramObligations("椭圆 x²/9+y²/4=1，P 是椭圆上任意一点，作 P 处的切线。")
-    const accounted = [...parsed.givens, ...parsed.unverified].map((item) => item.sourceText)
-    expect(parsed.givens.filter((item) => item.sourceText.includes("椭圆上")), "今天读不出来").toEqual([])
-    expect(accounted.some((text) => text.includes("椭圆上")), `今天它应当是**消失**的（这正是缺口本身）：${JSON.stringify(accounted)}`).toBe(false)
+    const pointOn = parsed.givens.filter((item) => item.kind === "pointOnConic")
+    expect(pointOn.map((item) => item.targets), `给定：${JSON.stringify(parsed.givens.map((i) => [i.kind, i.targets]))}`).toEqual([["P"]])
+    expect(pointOn[0]!.sourceText).toBe("P 是椭圆上任意一点")
+    expect(pointOn[0]!.conicKind).toBe("ellipse")
+    expect(parsed.unverified.some((entry) => entry.sourceText.includes("椭圆上"))).toBe(false)
+  })
+
+  it("三种说法 × 三类曲线都收：`是` / `在` / `为` × 椭圆 / 双曲线 / 抛物线", () => {
+    const cases: [string, "ellipse" | "hyperbola" | "parabola"][] = [
+      ["双曲线 x²/4−y²/3=1，P 是双曲线上一点", "hyperbola"],
+      ["抛物线 y²=4x，Q 在抛物线上", "parabola"],
+      ["椭圆 x²/9+y²/4=1，M 为椭圆上一点", "ellipse"]
+    ]
+    for (const [prompt, kind] of cases) {
+      const parsed = parseDiagramObligations(prompt)
+      const found = parsed.givens.find((item) => item.kind === "pointOnConic")
+      expect(found?.conicKind, prompt).toBe(kind)
+      expect(found?.targets.length, prompt).toBe(1)
+    }
+  })
+
+  it("**不是**这一条的写法不许被顺手读成它：`外一点` 说的是相反的事", () => {
+    /**
+     * `P 是椭圆外一点` 与"在曲线上"是**相反**的两件事 —— 读成 `pointOnConic` 就是把题面读反，
+     * 而"读反"比"读不出"更坏（用户拿到一个绿字，图上那点却在曲线里面）。
+     *
+     * 但"在外面"同样是一条题设，所以它也不许消失：这正是触发词表要接住的那一类
+     *（与当年 `弦 AB 的长为 3` 同一种病）。
+     */
+    const outside = parseDiagramObligations("椭圆 x²/9+y²/4=1，P 是椭圆外一点。")
+    expect(outside.givens.filter((item) => item.kind === "pointOnConic")).toEqual([])
+    const accounted = [...outside.givens.map((item) => item.sourceText), ...outside.unverified.map((entry) => entry.sourceText)]
+    expect(accounted.some((text) => text.includes("椭圆外")), `既没读出来、也没落进未核验：${JSON.stringify(accounted)}`).toBe(true)
   })
 })

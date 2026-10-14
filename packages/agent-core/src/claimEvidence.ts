@@ -104,6 +104,14 @@ export interface ObligationGeometry {
    * 字符串比会让题面与图元各写一种写法时误判为"不是这条函数"。
    */
   expression?: string
+  /**
+   * 题面在「点在圆锥曲线上」那句里写下的**曲线种类**（`P 是椭圆上一点` ⇒ `"ellipse"`）。
+   *
+   * 与 `conic` 同一条理由：它是原话里的结构信息，generic 字段装不下 —— 判据要拿它问
+   * 「图上唯一那条圆锥曲线是不是题面说的那一种」（`diagramVerification` 的 `pointOnConic` 支）。
+   * **只记种类、不记半轴**：那句话里没写半轴，记了就等于给半轴造出第二个来源。
+   */
+  conicKind?: "ellipse" | "hyperbola" | "parabola"
 }
 
 /**
