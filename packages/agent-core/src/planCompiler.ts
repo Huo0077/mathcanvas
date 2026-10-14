@@ -1242,12 +1242,35 @@ function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOn
       const target = at(otherLabel)
       if (target === null) continue
 
-      const outcome = foldAnglesForTargetDistance(moving, pivot, { x: alongTo.x - pivot.x, y: alongTo.y - pivot.y, z: alongTo.z - pivot.z }, target, obligation.expected)
+      const axisVector = { x: alongTo.x - pivot.x, y: alongTo.y - pivot.y, z: alongTo.z - pivot.z }
+      const outcome = foldAnglesForTargetDistance(moving, pivot, axisVector, target, obligation.expected)
       if (outcome.status !== "solved") continue
+      /**
+       * **允许区间之外的那一支要说出来**（Task 12 的边界「两支角合法时另一支未披露」，2026-10-14）。
+       *
+       * `A·cosθ + B·sinθ = d² − K` 闭式**至多两支**角：`solved` 那一档只返回**允许区间内**的候选，
+       * 另一支（`360° − θ`，也就是"朝折痕另一侧折"）被区间过滤掉了 —— 而**它同样满足题面那个距离**
+       *（用户那道题：`C` 在底面内，`P(−θ)` 与 `P(θ)` 关于底面镜像，到 `C` 的距离一样）。
+       * 只披露一支，用户会以为"折角只有这一个解"。
+       *
+       * 判据不新写：**拿同一个求解器、把区间放开**再问一次，差集就是那些"合法但没取"的支
+       *（`a` 取反是同一个图形，所以放开区间不会造出假的支）。
+       */
+      const widened = foldAnglesForTargetDistance(moving, pivot, axisVector, target, obligation.expected, { minimumDegrees: -360, maximumDegrees: 360 })
+      const extras = widened.status === "solved"
+        ? widened.degrees.filter((degrees) => !outcome.degrees.some((kept) => Math.abs(kept - degrees) <= 1e-6))
+        : []
+
+      const actionIndex = first.plan.actions.indexOf(fold)
+      /**
+       * **没取的那一支也要说出来**（Task 12 的边界「两支角合法时另一支未披露」，2026-10-14）：
+       * `A·cosθ + B·sinθ = d² − K` 闭式**至多两支**角，而 `solved` 那一档只返回**允许区间内**的候选 ——
+       * 另一支（"朝折痕另一侧折"）被区间过滤掉了。它**同样满足**题面那个距离，所以必须披露，
+       * 否则用户会以为"折角只有这一个解"。
+       */
       const degrees = outcome.degrees[0]
       if (degrees === undefined) continue
 
-      const actionIndex = first.plan.actions.indexOf(fold)
       const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
         ...first.plan,
         actions: first.plan.actions.map((action) => action === fold
@@ -1256,13 +1279,22 @@ function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOn
       }
       const second = compileOnce(patched, context)
       if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") continue
+      /**
+       * **没取的那些支也要说出来**（Task 12 的边界「两支角合法时另一支未披露」，2026-10-14）：
+       * 写上"另外还有 N 支（…）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们"。
+       * 不说出来，用户会以为"折角只有这一个解"。
+       */
+      const undisclosed = [...outcome.degrees.slice(1), ...extras]
+      const note = undisclosed.length === 0
+        ? ""
+        : `另外还有 ${undisclosed.length} 支折角（${undisclosed.join("°、")}°）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们。`
       return {
         ...second.result,
         assumptions: [
           ...second.result.assumptions,
           {
             id: `solved-fold-angle.${apexAs}`,
-            text: `题面给的是折完之后的距离（${obligation.sourceText}），没有直接给折角：系统按「绕 ${hinge.from}${hinge.to} 旋转、${apex} 折到 ${apexAs}」把它**反求**出来，得到折角 ${degrees}°。`,
+            text: `题面给的是折完之后的距离（${obligation.sourceText}），没有直接给折角：系统按「绕 ${hinge.from}${hinge.to} 旋转、${apex} 折到 ${apexAs}」把它**反求**出来，得到折角 ${degrees}°。${note}`,
             kind: "witness",
             value: { apexAs, hingeFrom: hinge.from, hingeTo: hinge.to, angleDegrees: degrees },
             overridable: true,
