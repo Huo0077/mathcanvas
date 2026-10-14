@@ -628,8 +628,12 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 它既不进 `givens`、也不进 `unverified`，用户与判据都看不见它存在过。
      * 本仓把"静默丢掉一个条件"当最贵的一类错 —— 所以这一档补的是**读取器**，
      * 判据照旧复用 `fixedLength`（两个点名之间的距离，核验器那一侧已经有判据，不新造）。
+     *
+     * **`长度` 也要收**（2026-10-15，由 `examClauseCoverage.test.ts` 的审计照出来）：
+     * 「弦 AB 的**长度**是 3」与「的长为 3」是同一件事的两种写法，而前者同样**没有 `=`**
+     * ⇒ 只收"长为"时它照样**静默消失**（审计那一条就是因此才存在的）。
      */
-    pattern: new RegExp(`弦\\s*(${SEGMENT_NAME})\\s*的?长\\s*(?:为|是|＝|=|：|:)\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
+    pattern: new RegExp(`弦\\s*(${SEGMENT_NAME})\\s*的?长(?:度)?\\s*(?:为|是|＝|=|：|:)\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
     read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
   },
   {
