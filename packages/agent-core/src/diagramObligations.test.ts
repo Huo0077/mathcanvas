@@ -483,3 +483,37 @@ describe("线面角（斜棱柱的明说倾角）", () => {
     expect(parsed.unverified.some((item) => item.sourceText.includes("所成角"))).toBe(true)
   })
 })
+
+/**
+ * **函数与直线的交点个数**（Task 15 的边界，2026-10-14）。
+ *
+ * 边界原文：「函数与直线的**交点数**尚未有义务种类与匹配器 ⇒ 真题里"多交点"那一型的
+ * 产品入口仍是作图 + 内核读数，**未进核验面板**」。内核那一侧早就有 `functionLineRoots`
+ *（代数路径给精确根、数值路径带 `complete`），缺的是"题面写了几个交点"这条判据。
+ */
+describe("函数与直线的交点个数", () => {
+  const intersectionsOf = (prompt: string) => parseDiagramObligations(prompt).givens.find((item) => item.kind === "functionLineIntersections")
+
+  it("`直线 y=0.5 与 f(x)=sin x 的图像有三个交点` ⇒ 直线 + 个数（中文数字也认）", () => {
+    const item = intersectionsOf("直线 y=0.5 与 f(x)=sin x 的图像有三个交点")
+    expect(item?.line).toEqual({ kind: "slope", slope: 0, intercept: 0.5 })
+    expect(item?.value).toBe(3)
+  })
+
+  it("顺序反过来、个数写阿拉伯数字也认：`f(x)=x³−3x 的图像与直线 y=1 恰有 2 个交点`", () => {
+    const item = intersectionsOf("f(x)=x³−3x 的图像与直线 y=1 恰有 2 个交点")
+    expect(item?.line).toEqual({ kind: "slope", slope: 0, intercept: 1 })
+    expect(item?.value).toBe(2)
+  })
+
+  it("斜线与竖线两种写法都收", () => {
+    expect(intersectionsOf("直线 y=x+1 与 f(x)=x^3-3*x 的图像有两个交点")?.line).toEqual({ kind: "slope", slope: 1, intercept: 1 })
+    expect(intersectionsOf("直线 x=2 与 f(x)=x^3-3*x 的图像有一个交点")?.line).toEqual({ kind: "vertical", x: 2 })
+  })
+
+  it("**没写个数就不产这条**：如实落进未核验，不拿「相交」当个数", () => {
+    const parsed = parseDiagramObligations("直线 y=0.5 与 f(x)=sin x 的图像相交")
+    expect(parsed.givens.some((item) => item.kind === "functionLineIntersections")).toBe(false)
+    expect(parsed.unverified.some((item) => item.sourceText.includes("相交"))).toBe(true)
+  })
+})

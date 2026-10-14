@@ -40,6 +40,15 @@ export type DiagramObligationKind =
    * 图上那条侧棱与底面实际成 30°。那是"题面明说的条件等于没发生"，比读不懂更糟。
    */
   | "linePlaneAngle"
+  /**
+   * **函数与直线的交点个数**（Task 15 的边界，2026-10-14）：`直线 y=0.5 与 f(x)=sin x 的图像有三个交点`
+   * ⇒ `line` 是题面那条直线、`value` 是题面写的**个数**；`targets` 为空（这一条不带点名）。
+   *
+   * 边界原文：内核那一侧早就有 `functionLineRoots`（代数路径给精确根、数值路径带 `complete`），
+   * 缺的是"题面写了几个交点"这条判据 ⇒ 真题里"多交点"那一型的产品入口只有作图 + 内核读数，
+   * **进不了核验面板**。
+   */
+  | "functionLineIntersections"
 
 /**
  * 题面写下的**直线**（用于 `conicChord`）。
@@ -252,6 +261,29 @@ function statedSlope(raw: string | undefined): number | null {
   return Number.isFinite(value) ? value : null
 }
 
+/**
+ * `functionLineIntersections` 用的"有几个交点"那一段（Task 15 边界，2026-10-14）。
+ *
+ * 个数**中文与阿拉伯数字都收**（卷面与前缀两种写法都常见：`有三个交点` / `恰有 2 个交点`），
+ * 前缀（恰有 / 共有 / 有）可有可无。**它必须是最后一个捕获组** ——
+ * 三条线形模式的 `read` 按固定下标取这个数。
+ */
+const INTERSECTION_COUNT_CLAIM = `(?:恰有|共有|有)?\\s*([一二三四五六七八九十两\\d]+)\\s*个(?:不同的)?交点`
+
+/** 中文数字与前缀写法都收的**交点个数**；认不出来返回 `null`（那一条不当作义务）。 */
+function statedIntersectionCount(raw: string): number | null {
+  const value = Number(raw)
+  if (Number.isInteger(value) && value > 0) return value
+  const chinese: Record<string, number> = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
+  return chinese[raw] ?? null
+}
+
+/** 把「直线 + 个数」两段读成一条 `functionLineIntersections` 义务；个数认不出来就返回 `null`。 */
+function intersectionCountDraft(line: DiagramStatedLine, rawCount: string): Pick<DiagramObligation, "kind" | "targets" | "line" | "value"> | null {
+  const count = statedIntersectionCount(rawCount)
+  return count === null ? null : { kind: "functionLineIntersections", targets: [], line, value: count }
+}
+
 /** 把「直线 + 情形」两段读成一条 `conicChord` 义务；情形认不出来就返回 `null`（那条直线不当作义务）。 */
 function chordDraft(
   line: DiagramStatedLine,
@@ -435,6 +467,46 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const plane = names(stated)
       if (plane.length < 3 || new Set(plane).size !== plane.length) return null
       return { kind: "linePlaneAngle", targets: [...line, ...plane], value, planeLengths: [2, plane.length] }
+    }
+  },
+  /**
+   * **函数与直线的交点个数**（Task 15 边界）：三条读取器与圆锥曲线那一族**同一套线形写法**
+   *（斜截式 / 水平线 / 竖直线，连"水平线后面不许再跟 `x`"那条守卫都一样），差别只在
+   * 末端收的是"有几个交点"而不是"相交于 A、B"。
+   *
+   * ## 为什么"个数"写在**前瞻**里，而不是吃掉中间那段
+   *
+   * 题面里那段曲线描述带着 `f(x)=…`，而它**已经**被函数定义那条读取器按字符占位收走了
+   *（解析器按字符去重：任何重叠都会让后一条读取器整条跳过）。所以这三条只**占用**
+   *「直线 …」那一段，个数用一个有界前瞻（`{0,30}?`，不跨标点）去看 ——
+   * 两边都不抢对方的地盘。曲线写在前面、直线写在前面，两种语序都收。
+   *
+   * 数字后面那句 `(?![eE][+-]?\d)` 是**防半读**：`y = 1e-12` 若被读成 `y = 1`，
+   * 得到的是一个**看着成立、其实换了条件**的义务 —— 宁可读不出（落未核验）。
+   */
+  {
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\s*\\d*(?:\\.\\d+)?)(?![eE][+-]?\\d)\\s*\\*?\\s*x\\s*(?:([+-])\\s*(\\d+(?:\\.\\d+)?)(?![eE][+-]?\\d))?(?=[^，,。；;]{0,30}?${INTERSECTION_COUNT_CLAIM})`, "g"),
+    read: (m) => {
+      const slope = statedSlope(m[1])
+      if (slope === null) return null
+      const intercept = m[3] === undefined ? 0 : Number(m[3]) * (m[2] === "-" ? -1 : 1)
+      return intersectionCountDraft({ kind: "slope", slope, intercept }, m[4] ?? "")
+    }
+  },
+  {
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)(?![eE][+-]?\\d)(?!\\s*\\*?\\s*x)(?=[^，,。；;]{0,30}?${INTERSECTION_COUNT_CLAIM})`, "g"),
+    read: (m) => {
+      const intercept = Number(m[1])
+      if (!Number.isFinite(intercept)) return null
+      return intersectionCountDraft({ kind: "slope", slope: 0, intercept }, m[2] ?? "")
+    }
+  },
+  {
+    pattern: new RegExp(`直线\\s*x\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)(?![eE][+-]?\\d)(?=[^，,。；;]{0,30}?${INTERSECTION_COUNT_CLAIM})`, "g"),
+    read: (m) => {
+      const x = Number(m[1])
+      if (!Number.isFinite(x)) return null
+      return intersectionCountDraft({ kind: "vertical", x }, m[2] ?? "")
     }
   },
   {
@@ -679,7 +751,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 一个句型可以蕴含多条判据（`底面ABCD是菱形` ⇒ 三条等长），所以读取器允许返回数组。
       const drafts = result === null ? [] : Array.isArray(result) ? result : [result]
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "functionLineIntersections" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)

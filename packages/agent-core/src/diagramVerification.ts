@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -792,6 +792,31 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const sine = Math.abs(dotVector3(direction, normal)) / denominator
     const degrees = (Math.asin(Math.min(1, Math.max(0, sine))) * 180) / Math.PI
     return { actual: degrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
+  }
+  /**
+   * **函数与直线的交点个数**（Task 15 的边界，2026-10-14）。
+   *
+   * 判据数的是**图上那条曲线**与题面那条直线的交点（`functionLineRoots`：代数路径给精确根、
+   * 数值路径带 `complete`），不读构造过程留下的量 —— 与函数值、切线那两条同一条纪律。
+   *
+   * **`complete === false` ⇒ 未核验，不是 failed**：数值路径自己说"这个个数不能当个数用"
+   * （分辨不出的近重根）时，报"个数不对"就是拿一个算不准的量去指责用户。
+   */
+  if (item.kind === "functionLineIntersections") {
+    if (numeric === undefined || item.line === undefined || figures.curve === null) return null
+    // 竖直线与 `y = f(x)` 至多一个交点：这一档按"函数图与直线求交"的判据**不适用**，如实留白。
+    if (item.line.kind === "vertical") return null
+    const roots = functionLineRoots(figures.curve.expression, figures.curve.domain, { slope: item.line.slope, intercept: item.line.intercept })
+    if (!roots.complete) return null
+    const actual = roots.roots.length
+    return {
+      actual,
+      expected: numeric,
+      // 个数是整数：容差 0（与 `obligationIR.toleranceFor` 同一把尺子）。
+      tolerance: 0,
+      evidence: roots.grade,
+      detail: `图上这条曲线与题面那条直线量到 ${actual} 个交点（题面说 ${numeric} 个）。`
+    }
   }
   const kind = item.kind === "perpendicular" ? "perpendicular" : "parallel"
   /**

@@ -654,4 +654,44 @@ describe("Task 15: function-family premises", () => {
     expect(report.universalClaims).toBe("not-proven")
     expect(report.proofScopeNote).toContain("a = 1")
   })
+
+  /**
+   * **函数与直线的交点个数**（Task 15 的边界，2026-10-14）。
+   *
+   * 判据自己从**图上那条曲线**数（`functionLineRoots`：代数路径给精确根，数值路径带
+   * `complete`），不读构造过程留下的量。三条方向都要有读数：
+   * 个数对 ⇒ `passed`；个数不对 ⇒ `failed`；**分辨不出近重根 ⇒ 未核验**（不许把
+   * "算不准"说成"个数不对"）。
+   */
+  it("**交点数对 ⇒ passed**：`sin x` 与 `y = 0.5` 在 [−5, 5] 上确实是 3 个", () => {
+    const { plan, candidate } = graphFixture("sin(x)", [-5, 5])
+    const report = verifyDiagramObligations(parseDiagramObligations("直线 y=0.5 与 f(x)=sin x 的图像有三个交点"), plan, candidate)
+    const check = checkOf(report, "functionLineIntersections")
+    expect(check?.status, check?.reason).toBe("passed")
+    expect(check?.reason).toContain("3")
+  })
+
+  it("**交点数不对 ⇒ failed**：同一条曲线、同一个区间，题面说 4 个", () => {
+    const { plan, candidate } = graphFixture("sin(x)", [-5, 5])
+    const report = verifyDiagramObligations(parseDiagramObligations("直线 y=0.5 与 f(x)=sin x 的图像有四个交点"), plan, candidate)
+    const check = checkOf(report, "functionLineIntersections")
+    expect(check?.status, check?.reason).toBe("failed")
+  })
+
+  it("**分辨不出近重根 ⇒ 未核验**（不是 failed）：`cos x − 1` 在 0 处那种分辨不出的接触", () => {
+    const { plan, candidate } = graphFixture("cos(x)-1", [-5, 5])
+    // 与内核那条已记的样本同形：`cos x − 1 + 1e-12`（写成小数，`e` 记法不在这条读取器的范围内）。
+    const report = verifyDiagramObligations(parseDiagramObligations("直线 y=-0.000000000001 与 f(x)=cos x-1 的图像有一个交点"), plan, candidate)
+    const check = checkOf(report, "functionLineIntersections")
+    // 数值路径自己说"这个个数不能当个数用"时，判据**如实留白**：不许报成"个数不对"。
+    expect(check === undefined || check.status === "unverified", JSON.stringify(check)).toBe(true)
+  })
+
+  it("**`y = 1e-12` 这种指数记法不半读**：宁可读不出（落未核验），也不读成 `y = 1`", () => {
+    const { plan, candidate } = graphFixture("cos(x)-1", [-5, 5])
+    const parsed = parseDiagramObligations("直线 y=1e-12 与 f(x)=cos x-1 的图像有一个交点")
+    expect(parsed.givens.some((item) => item.kind === "functionLineIntersections")).toBe(false)
+    const report = verifyDiagramObligations(parsed, plan, candidate)
+    expect(checkOf(report, "functionLineIntersections")).toBeUndefined()
+  })
 })
