@@ -1,5 +1,7 @@
 # Agent 下一轮进度：高中作图题（当前范围）
 
+> **2026-10-14 用户现场故障修复（代际预算）**：3D 真题在**修复轮**死在 `budget exhausted before the model could use the tool results`（整轮没落下任何东西）。根因：**计划 Task 2.1 定的"4 次逻辑生成"是在只读工具出现之前定的**，而一个工具轮（读场景 + 带着结果再问）要多花**一次生成**。修法（用户选 A）：`generation` **4 → 6**（与 `network` 对齐，其余额度不动），并把 `MAX_PLAN_ATTEMPTS` 导出、在 `budget.test.ts` 挂上不变量 `generation ≥ (MAX_PLAN_ATTEMPTS − 1) × 2`（余量 2 代**明写**：第 4 次尝试若还读场景就停在预算上，这是有意的）；报错也改成点名"哪本账、还剩多少"。现场那条路**进了用例**（旧默认 4 必红、默认必绿，5 代 5 网）。逐条读数见[当前状态](current-status.md)。
+
 > **最后更新：2026-10-12（四家族真题驱动升级；Task 1–19 完成状态已镜像）：本文件以下 V0–V3 长表为此前执行快照，不再担当下一步计划。** 用户将范围明确为三角形、圆锥曲线、函数/导数、立体几何；[本轮已完成的真题需求调研](research/2026-10-11-four-family-exam-diagram-survey.md)独立归档，下一步按[严格从 Task 1 到 Task 21 的唯一实施计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)执行。真题调研已做≠真题评测集/产品能力已交付；**Task 1–19 已于 2026-10-12 完成（含原翻折题的端到端通过、四族纵向交付与真实画布证据、证明范围分级与迟到产物失效，以及 Lean 工程定义钉住 + 本机真跑 8 passed / 1195 s）—— 注意 Task 19 只做了本机那一半，真桌面发行验收未做，不标"已发布自动证明"；下一项是 Task 20（四族真实模型质量），其停车条件是先要付费 provider 授权**（逐条读数见[主计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md) §7）。
 
 ## 2026-10-11 当前实施顺序镜像（唯一新编号）
