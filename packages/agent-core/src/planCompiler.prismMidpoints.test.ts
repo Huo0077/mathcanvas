@@ -87,6 +87,8 @@ describe("棱柱宿主：题面点名的中点由系统补建", () => {
      * 那四条判据真的出现在核验报告里，而且条条通过。
      */
     const squareChecks = result.diagramVerification?.checks.filter((check) => check.sourceText.includes("正方形")) ?? []
-    expect(squareChecks.map((check) => check.status), `正方形那四条：${squareChecks.map((check) => `${check.kind}:${check.status}`).join("，")}`).toEqual(["passed", "passed", "passed", "passed"])
+    // **六条**：三条边等长 + **三个相邻直角**（2026-10-15 把矩形并进同一条读取器时，
+    // 直角从一个补成三个 —— 三个直角才真正定死一个四边形；正方形比矩形多那三条等长）。
+    expect(squareChecks.map((check) => check.status), `正方形那六条：${squareChecks.map((check) => `${check.kind}:${check.status}`).join("，")}`).toEqual(["passed", "passed", "passed", "passed", "passed", "passed"])
   })
 })

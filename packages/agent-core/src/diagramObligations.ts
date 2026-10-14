@@ -546,15 +546,27 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
      */
-    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*正方形`, "g"),
+    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(正方形|矩形|长方形)`, "g"),
     read: (m) => {
       const [a, b, c, d] = names(m[1])
       if (a === undefined || b === undefined || c === undefined || d === undefined) return null
+      /**
+       * **矩形也一起收**（2026-10-15）：它与正方形只差"边长是否相等"这一步 ——
+       * 判据都是**已有的**两种，所以这里只按词分派，不再各写一条读取器。
+       * 矩形：三个相邻的直角（`AB⊥BC`、`BC⊥CD`、`CD⊥DA`）足以定死；
+       * 正方形：再要求四条边等长。
+       */
+      const rightAngles = [
+        { kind: "perpendicular" as const, targets: [a, b, b, c] },
+        { kind: "perpendicular" as const, targets: [b, c, c, d] },
+        { kind: "perpendicular" as const, targets: [c, d, d, a] }
+      ]
+      if (m[2] !== "正方形") return rightAngles
       return [
         { kind: "equalLength", targets: [a, b, b, c] },
         { kind: "equalLength", targets: [b, c, c, d] },
         { kind: "equalLength", targets: [c, d, d, a] },
-        { kind: "perpendicular", targets: [a, b, b, c] }
+        ...rightAngles
       ]
     }
   },
