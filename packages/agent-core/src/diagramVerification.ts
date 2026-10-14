@@ -89,7 +89,22 @@ function foldedNamesOf(input: Record<string, unknown>): unknown {
   return foldVertexNames(vertexNames as string[], apex, apexAs)
 }
 
-function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): Map<string, Vector3> | null {  if (plan.kind !== "plan") return null
+/**
+ * **候选图的点名表，或者"为什么建不出来"**（2026-10-15 用户现场，四棱锥那道题）。
+ *
+ * 原先这一层只回 `Map | null`，而 `null` 有**八个**不同的成因（哪一笔动作没带点名、
+ * 名字与顶点数不符、顶点不是空间点、计划里有两笔多面体……）。核验层把它们**压成同一句话**
+ * ——"候选图缺少唯一、可靠的顶点名映射" —— 于是现场那一轮（用户贴来的读数）根本看不出
+ * 该改什么：是该让模型补 `vertexNames`，还是该查为什么有两个立体。
+ *
+ * 这不是"文案不好看"：核验的失败理由**就是**面板上给用户看的那一列，也是下一个人唯一的线索。
+ * 所以每个守卫各自带一句**点名到具体那一栏**的理由（与预算那条报错"点名哪本账、还剩多少"同一条纪律）。
+ */
+type CandidatePointMap =
+  | { readonly ok: true; readonly points: Map<string, Vector3> }
+  | { readonly ok: false; readonly reason: string }
+
+function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): CandidatePointMap {  if (plan.kind !== "plan") return { ok: false, reason: "计划信封不是一份计划（`kind` 不是 `plan`）" }
   const actions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "polyhedron3" }> => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
@@ -105,17 +120,23 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    */
   if (actions.length > 0) {
     // Without a unique solid there is no reliable alias → candidate solid mapping.
-    if (actions.length !== 1 || solids.length !== 1) return null
+    if (actions.length !== 1 || solids.length !== 1) {
+      return { ok: false, reason: `计划里有 ${actions.length} 笔 \`solid.create_polyhedron\`，候选图里有 ${solids.length} 只新多面体 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
+    }
     const input = actions[0].inputs
-    if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
+    if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
+      return { ok: false, reason: "这一笔多面体**没有带点名**（`vertexNames`）：图上的顶点只有模板编号（`P1`…），题面里的点名对不上它" }
+    }
     const names = input.vertexNames
     const solid = solids[0]
-    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) return null
+    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
+      return { ok: false, reason: `这一笔多面体的 \`vertexNames\` 与它的顶点对不上（给了 ${Array.isArray(names) ? names.length : "非数组"} 个名字、体有 ${solid.vertexIds.length} 个顶点；名字必须合法且互不重复）` }
+    }
     for (const [index, name] of names.entries()) {
       const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
-      if (vertex?.type !== "point3") return null
+      if (vertex?.type !== "point3") return { ok: false, reason: `多面体的第 ${index + 1} 个顶点（\`${solid.vertexIds[index]}\`）不是空间点` }
       const position = vertex.position
-      if (![position.x, position.y, position.z].every(Number.isFinite)) return null
+      if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `多面体的顶点 ${name} 坐标不是有限数` }
       points.set(name as string, position)
     }
   }
@@ -137,11 +158,26 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    */
   const faceActions = plan.actions.filter((action) => action.actionId === "solid.create_face" || action.actionId === "solid.fold")
   if (faceActions.length > 0) {
-    const faces = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive.type === "face3" && !priorIds.has(primitive.id))
-    if (faces.length !== faceActions.length) return null
+    /**
+     * **多面体自己的那些面不算**（2026-10-15 用户现场，四棱柱/四棱锥那道题）。
+     *
+     * 一只 `polyhedron3` 的子对象里**本来就带着它的面**（`faceIds`，类型里是必填的）。
+     * 原先这里只按"新出现的 `face3`"数，于是"一笔多面体 + 一笔 `solid.create_face`"
+     *（模型为了让 `平面 PAD` 看得见，顺手补的那一笔）恒定撞上 `faces.length !== faceActions.length`
+     * —— 判据把多面体的 5 只面也算成"新面片"，读数成了 **6 只新面片 vs 1 笔建面**，
+     * 整张点名表于是建不出来，题设一条都核不了（**现场读数就是这样**）。
+     * 按归属排除之后，"新面片"才真的等于"由建面/折那几笔产出的面"。
+     */
+    const ownedFaceIds = new Set(solids.flatMap((solid) => solid.faceIds))
+    const faces = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive.type === "face3" && !priorIds.has(primitive.id) && !ownedFaceIds.has(primitive.id))
+    if (faces.length !== faceActions.length) {
+      return { ok: false, reason: `计划里有 ${faceActions.length} 笔建面/折，候选图里有 ${faces.length} 只新面片 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
+    }
     for (const [faceIndex, action] of faceActions.entries()) {
       const input = action.inputs as unknown as Record<string, unknown>
-      if (typeof input !== "object" || input === null || !("vertexNames" in input)) return null
+      if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
+        return { ok: false, reason: "这一笔面片**没有带点名**（`vertexNames`）：图上的顶点只有模板编号，题面里的点名对不上它" }
+      }
       /**
        * **折多一层"改名"**：被带走的那个点折后叫 `apexAs`（题面里的 `A` 折完就叫 `P`），
        * 所以表里该出现的是**折后**那个名字。换算用编译器**同一份**规则（`foldVertexNames`）——
@@ -149,12 +185,14 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
        */
       const names = action.actionId === "solid.fold" ? foldedNamesOf(input) : input.vertexNames
       const face = faces[faceIndex]!
-      if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) return null
+      if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
+        return { ok: false, reason: `这一笔面片的 \`vertexNames\` 与它的顶点对不上（给了 ${Array.isArray(names) ? names.length : "非数组"} 个名字、面有 ${face.pointIds.length} 个顶点；名字必须合法且互不重复）` }
+      }
       for (const [nameIndex, name] of names.entries()) {
         const vertex = candidate.primitives.find((primitive) => primitive.id === face.pointIds[nameIndex])
-        if (vertex?.type !== "point3") return null
+        if (vertex?.type !== "point3") return { ok: false, reason: `面片的第 ${nameIndex + 1} 个顶点（\`${face.pointIds[nameIndex]}\`）不是空间点` }
         const position = vertex.position
-        if (![position.x, position.y, position.z].every(Number.isFinite)) return null
+        if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `面片的顶点 ${name} 坐标不是有限数` }
         points.set(name as string, position)
       }
     }
@@ -215,7 +253,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   for (const [label, position] of labelled) {
     if (position !== null && !points.has(label)) points.set(label, position)
   }
-  return points
+  return { ok: true, points }
 }
 
 /**
@@ -927,8 +965,9 @@ export interface MissingNamedPoint {
  *（"候选图缺少唯一、可靠的顶点名映射"），两边不许混。
  */
 export function missingNamedPoints(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): MissingNamedPoint[] {
-  const points = candidatePoints(plan, candidate, base)
-  if (points === null) return []
+  const mapped = candidatePoints(plan, candidate, base)
+  if (!mapped.ok) return []
+  const points = mapped.points
   const out: MissingNamedPoint[] = []
   for (const item of set.givens) {
     if (!isPointBased(item.kind)) continue
@@ -1005,7 +1044,10 @@ export function statedOriginNames(set: DiagramObligationSet, drawn: { has(name: 
 }
 
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
-  const points = candidatePoints(plan, candidate, base)
+  const mapped = candidatePoints(plan, candidate, base)
+  const points = mapped.ok ? mapped.points : null
+  /** 建不出点名表时**那一句理由**（见 `CandidatePointMap`）：面板上那一列就是它，所以要说清是哪一种缺。 */
+  const pointMapReason = mapped.ok ? null : mapped.reason
   /**
    * **`O` 按约定补成原点**（见 `statedOriginNames`）：补的是**这一份核验**用的点名表，
    * 不往文档里加任何东西 —— 图上没有 O 这件事仍然是真的，所以披露写在判据理由里。
@@ -1024,7 +1066,14 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   }
   const checks: DiagramCheck[] = set.givens.map((item) => {
     const pointBased = isPointBased(item.kind)
-    if (pointBased && points === null) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", reason: "候选图缺少唯一、可靠的顶点名映射；不能按题面顺序猜坐标。" }
+    if (pointBased && points === null) {
+      return {
+        kind: item.kind,
+        sourceText: item.sourceText,
+        status: "unverified",
+        reason: `候选图缺少可靠的点名映射：${pointMapReason ?? "原因不明"}；不能按题面顺序猜坐标。`
+      }
+    }
     const result = calculate(item, points ?? new Map(), figures)
     if (result === null) {
       /**

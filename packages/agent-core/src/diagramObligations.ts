@@ -650,15 +650,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 两条 `midpoint`，与单写法走**同一个**判据。
      *
      * **必须排在下一条单写法之前**：先长的、再短的（与 `segmentRatio` 那两条同一个道理）。
+     *
+     * **`棱` / `边` 是可选的量词**（2026-10-15 用户现场，四棱锥那道题）：卷面写的是
+     * `E、F 分别为**棱** AB、PB 的中点`，而上面这条原先只认紧跟着线段名的写法 ⇒ 整句落进
+     * "尚未被可靠解析" ⇒ E、F 两个点谁也没被点名 ⇒ 补点的入口直接断掉。两种量词都收，
+     * 但**只收这两个**（`面 AB` / `对角线 AC` 之类的说法要各自有判据才收，不顺手放行）。
      */
-    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => [
       { kind: "midpoint", targets: [m[1], ...names(m[3])] },
       { kind: "midpoint", targets: [m[2], ...names(m[4])] }
     ]
   },
   {
-    pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(?:棱|边)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
   },
   {
