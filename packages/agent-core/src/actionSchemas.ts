@@ -16,6 +16,11 @@ export interface JsonSchema {
   minimum?: number
   minItems?: number
   maxItems?: number
+  /**
+   * 数组元素必须互不相同（2026-10-15）：`vertexNames` 按下标与 `vertices` 一一对应，
+   * 而校验器（`actionInputs.ts`）在棱柱 / 多面体 / 面片 / 折面四处都判重名 —— 发布出去也必须写上。
+   */
+  uniqueItems?: boolean
 }
 
 export interface ActionToolSchema {
@@ -128,6 +133,32 @@ const tangentAnchorSchema: JsonSchema = {
  * 后两者来自 `actionRegistry` 的全局种类表。
  */
 function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): JsonSchema {
+  const base = baseSchemaForField(field, spec, actionId)
+  const minimum = FIELD_MIN_ITEMS[`${actionId}.${field}`]
+  return minimum === undefined ? base : { ...base, minItems: minimum }
+}
+
+/**
+ * **逐动作的字段下限**（2026-10-15 用户现场）。
+ *
+ * 通用的字段种类给的是"这一类字段最常见的那条线"，而少数动作的**真下限**与它不同 ——
+ * 发通用下限就等于对模型说错话，而模型只能一轮踩一条、修复机会用完就整轮停
+ *（现场那份计划两次被拒：`a planar face needs at least three vertices` 与
+ * `vertex name 'F' is used twice`，两句话校验器一直在执行、schema 里一条都没写）。
+ *
+ * 表里每一条都**逐条对应** `actionInputs.ts` 的校验器；`actionSchemas.test.ts` 有一条
+ * 枚举全部动作的守卫，改了一边不改另一边就会红。这是本仓的老规矩：
+ * **发布出去的 schema 与真正接受的载荷必须是同一种东西**。
+ */
+const FIELD_MIN_ITEMS: Record<string, number> = {
+  // 面片可以是三角形（`平面 PAD` 就是），通用 `vertexList` 的 4 是**闭合多面体**的下限。
+  "solid.create_face.vertices": 3,
+  "solid.fold.vertices": 3,
+  // 棱柱：底环 n + 顶环 n ⇒ 至少 6 个（校验器原话：an even number of at least six names）。
+  "solid.create_prism.vertexNames": 6
+}
+
+function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId): JsonSchema {
   const enumValues = spec.enumValues?.[field]
   if (enumValues !== undefined) return { type: "string", enum: enumValues }
   /**
@@ -164,7 +195,15 @@ function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): Js
     case "pointList": return { type: "array", items: pointSchema }
     case "vectorList": return { type: "array", items: vectorSchema, minItems: 3 }
     case "vertexList": return { type: "array", items: vectorSchema, minItems: 4 }
-    case "stringList": return { type: "array", items: { type: "string" } }
+    /**
+     * **名字表：`uniqueItems` 是必须发布的**（2026-10-15 用户现场）。
+     *
+     * `vertexNames` 与 `vertices` **按下标一一对应**，所以重名没有意义、校验器一律拒
+     *（`duplicate_name`，棱柱 / 多面体 / 面片 / 折面四处都判）。而原先发布的只有
+     * "这是一个字符串数组" —— 模型于是写出 `F` 出现两次的那份计划，整轮停在信封上。
+     * 发布 `uniqueItems` 之后，"同一个名字只用一次"就是**它看得见**的规矩。
+     */
+    case "stringList": return { type: "array", items: { type: "string" }, uniqueItems: true }
     case "faceRings": return { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3 }, minItems: 4 }
     case "plane": return planeSchema
     case "tangentAnchor": return tangentAnchorSchema

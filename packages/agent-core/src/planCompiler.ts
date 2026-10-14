@@ -1884,6 +1884,21 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
   }
   /**
+   * **面片点数不够**（2026-10-15 用户现场，四棱锥那道题）：模型想给「线段 EF」建一笔面片，
+   * 只给两个点 ⇒ `a planar face needs at least three vertices`。它需要的不是"再试一次"，
+   * 而是知道**它真正想做的事没有对应的动作**：立体几何里没有"画线段"的动作，
+   * 实体的棱已经画出来了。这句话写进提醒里，才不至于下一轮再拿面片去凑。
+   */
+  const shortFace = errors.some((error) => error.path.includes(".inputs.vertices") && error.detail.includes("at least three vertices"))
+  if (shortFace) {
+    advice.push("提醒：`solid.create_face` 至少要**三个**互异、不共线的共面点。**一条线段不要用面片去凑** —— 立体几何里**没有**「画线段」的动作，实体的棱已经由 `solid.*` 建好并画出来了；要说明 `EF` 请在文字里说，不要为它建面片。")
+  }
+  /** **重名**（同日现场，修复那一轮）：`vertexNames` 按下标与 `vertices` 一一对应，重名没有意义。 */
+  const duplicateName = errors.some((error) => error.code === "duplicate_name")
+  if (duplicateName) {
+    advice.push("提醒：`vertexNames` 里**每个名字只能用一次**（它按下标与 `vertices` 一一对应）。想让同一个点在一笔动作里出现两次是做不到的 —— 去掉重复的那一个，或拆成两笔动作。")
+  }
+  /**
    * **面塌了**（2026-10-11 用户现场，第三堵墙）：`face ring [0,1,5] has zero area …
    * these vertices are collinear`。那句话很准，但**没告诉模型为什么塌** —— 现场是模型一直在拿
    * `solid.create_polyhedron` 去拼一只**开放**的图形（平面四边形 + 翻折片），而拼闭合体时

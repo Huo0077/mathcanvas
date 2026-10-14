@@ -29,6 +29,45 @@ describe("action tool schemas", () => {
   })
 })
 
+/**
+ * **发布出去的 schema 与真正接受的载荷必须是同一种东西**（2026-10-15 用户现场）。
+ *
+ * 现场那一轮，模型的两份计划都被信封拒了，理由**恰好是两条它无从知道的规矩**：
+ * `a planar face needs at least three vertices`（面片至少三个点）与
+ * `vertex name 'F' is used twice`（`vertexNames` 不许重名）。校验器（`actionInputs.ts`）
+ * 一直执行这两条，而发布出去的 schema 里**一条都没写** —— 模型只能一轮踩一条，
+ * 修复机会用完就整轮停。本仓在切线那次 P0-A 就立过这条规矩（"发布出去的 schema 与
+ * 真正接受的载荷是同一种东西"），这一组用例把它钉在**枚举全部动作**的层面，
+ * 而不是靠人记得逐个看。
+ */
+describe("发布的 schema 不许隐瞒校验器会执行的规矩", () => {
+  it("名字表一律 `uniqueItems`：四个动作的校验器都判重名", () => {
+    const withNames = allActionToolSchemas().filter((schema) => schema.inputSchema.properties?.vertexNames !== undefined)
+    expect(withNames.length, "至少要覆盖棱柱 / 多面体 / 面片 / 折面").toBeGreaterThanOrEqual(4)
+    for (const schema of withNames) {
+      expect(schema.inputSchema.properties?.vertexNames, schema.actionId).toMatchObject({ type: "array", uniqueItems: true })
+    }
+  })
+
+  it("面片（`solid.create_face` / `solid.fold`）的 `vertices` 是**至少三个**，不是四个", () => {
+    /**
+     * 校验器对面片的要求是 "≥ 3 个点"（`a planar face needs at least three vertices`），
+     * 而通用的 `vertexList` 种类发布的是 `minItems: 4`（那是**闭合多面体**的下限）。
+     * 面片写成三角形是**合法且常见**的（`平面 PAD` 就是三角形），
+     * 发布 4 会让模型以为三角形面片不被接受 —— 于是它要么改用多面体去套、要么凑第四个点
+     *（现场第二次那份计划里的重名 `F` 正是"凑点"的形状）。
+     */
+    expect(actionToolSchema("solid.create_face").inputSchema.properties?.vertices).toMatchObject({ minItems: 3 })
+    expect(actionToolSchema("solid.fold").inputSchema.properties?.vertices).toMatchObject({ minItems: 3 })
+    // 闭合多面体的下限**照旧是 4**（三个点围不出体积）——两件事不许互相带跑。
+    expect(actionToolSchema("solid.create_polyhedron").inputSchema.properties?.vertices).toMatchObject({ minItems: 4 })
+  })
+
+  it("棱柱的 `vertexNames` 是**偶数个且至少六个**（底环 n + 顶环 n）", () => {
+    expect(actionToolSchema("solid.create_prism").inputSchema.properties?.vertexNames).toMatchObject({ minItems: 6 })
+  })
+})
+
 describe("published schemas match the existing action parser", () => {
   it("does not demand fields that parameter audit can safely complete", () => {
     expect(actionToolSchema("solid.create_template").inputSchema.required).toEqual(["alias", "template"])

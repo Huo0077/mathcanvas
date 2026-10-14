@@ -659,6 +659,29 @@ describe("compile repair advice", () => {
     expect(hint).not.toContain("schemaVersion")
     expect(hint).not.toContain("factIds")
   })
+
+  /**
+   * **2026-10-15 用户现场（四棱锥那道题）的两条真实签名**：模型想给「线段 EF」建一笔面片
+   * ⇒ 只给两个点被拒（`a planar face needs at least three vertices`）；修复那一轮又写出
+   * 重名的 `F`（`vertex name 'F' is used twice`）。两句都在说"形状不对"，而模型需要知道的是
+   * **它真正想做的事没有对应的动作**。这两条提醒就是补上那句话。
+   */
+  it("explains that a segment must not be faked with a face", () => {
+    const hint = ask([{ code: "invalid_type", path: "envelope.actions[2].inputs.vertices", detail: "a planar face needs at least three vertices" }])
+
+    expect(hint).toContain("三个")
+    expect(hint).toContain("线段")
+    // 说清"立体几何里没有画线段的动作"，否则它会再试一次面片。
+    expect(hint).toContain("没有")
+    expect(hint).toContain("画线段")
+  })
+
+  it("explains that vertex names may not repeat", () => {
+    const hint = ask([{ code: "duplicate_name", path: "envelope.actions[2].inputs.vertexNames[2]", detail: "vertex name 'F' is used twice" }])
+
+    expect(hint).toContain("只能用一次")
+    expect(hint).toContain("一一对应")
+  })
 })
 
 /**
