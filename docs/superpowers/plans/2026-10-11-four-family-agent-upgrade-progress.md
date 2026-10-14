@@ -259,6 +259,8 @@
 - [x] `npm.cmd exec vitest run -- packages/geometry-kernel/src/calculus.test.ts packages/geometry-kernel/src/curve-intersections.test.ts packages/agent-core/src/diagramVerification.test.ts --reporter=dot`；`npm.cmd run test:e2e -- e2e/agent-function-tangent.spec.ts e2e/agent-exam-function.spec.ts --workers=1`。同一题的数值画图成功不得升级为形式证明。
       **2026-10-12 完成**：定向 `calculus.test.ts`（9）+ `curve-intersections.test.ts` + `diagramVerification.test.ts`（46）+ 新 `function-evidence.test.ts`（19）全绿；两个 e2e **3 passed**（26.9 s）、**全量 e2e 229 通过**（2.6 m，0 抖动）；全量单测 **368 文件 / 4364 通过 + 1 todo / 0 失败**（125.34 s，exit 0）；`typecheck` exit 0；`lint` **0 error / 13 warning**（与基线同数：新模块里那条 unused 已清）；`docs-consistency` 4 文件 12 通过。**"数值画图不得升级成形式证明"是类型上的**：`universalClaims` 只有 `not-proven` 一个取值，`grade` 把"折线上的比较"单列一档。
 
+      **2026-10-14 收口边界「函数∩直线的交点数」**（边界原文：尚未有义务种类与匹配器 ⇒ "多交点"那一型进不了核验面板）：`diagramObligations` 新增 `functionLineIntersections`（斜截式 / 水平线 / 竖直线三条线形与圆锥曲线那一族同一套；个数中文与阿拉伯数字都认）；个数写在**前瞻**里、只占用「直线 …」那段（中间的 `f(x)=…` 已被函数定义读取器按字符占位收走，吃进来会因重叠整条跳过 —— 首版就是这么红的），数字后加 `(?![eE][+-]?\d)` 防 `y=1e-12` 被半读成 `y=1`；`obligationIR` 按**整数容差 0** 判性；`diagramVerification` 调 `functionLineRoots` 数**图上那条曲线**与题面那条直线的交点，`complete === false`（分辨不出近重根）时**如实未核验、不报 failed**，竖直线留白。门禁：全量单测 **375 文件 / 4442 通过 + 1 todo / 0 失败**（51.36 s，exit 0）、**全量 e2e 237 通过（2.2 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。
+
 ### Task 16｜真实画布和过期证据
 
 **文件**：apps/web/src/agent/geometryWorkerHost.ts、workerContracts.ts、draftStore.ts、agentRunner.ts，packages/geometry-kernel/src/dependency-graph.ts；新建 e2e/agent-exam-visual-and-stale.spec.ts。
