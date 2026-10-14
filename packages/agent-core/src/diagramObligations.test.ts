@@ -485,6 +485,53 @@ describe("线面角（斜棱柱的明说倾角）", () => {
 })
 
 /**
+ * **`∠A` 单字母角**（Task 11 的边界，2026-10-14）。
+ *
+ * 边界原文逐字：「`∠A` 单字母角不认」。三条读取器都要三个点名（`∠ABC`），而卷面上
+ * `∠A=60°` 更常见 —— 它只给了一个点名，**两条边是哪两条**要看**形状从句的环**
+ *（`平面三角形ABC中` ⇒ 顶点 `A` 的邻点是 `C` 与 `B`）。所以这一档的修法与"底面"那条同形：
+ * 读取器先留占位，整句解析完**再问形状从句**（环的解析只有 `parseShapeClause` 一处）；
+ * 问不出来就**如实落未核验**（不猜两条边）。
+ *
+ * 判据与构造**一个字都不改**：落成 `[前一个点名, 顶点, 后一个点名]` 之后走的就是既有的
+ * `planarAngle`（核验器量内部角、内核 `deriveAngledTriangleBase` 构造）。
+ */
+describe("单字母角：靠形状从句把两条边定出来", () => {
+  const angleOf = (prompt: string) => parseDiagramObligations(prompt).givens.find((item) => item.kind === "planarAngle")
+
+  it("`平面三角形ABC中，AB=8，∠A=60°` ⇒ 落成 `[C, A, B]`（中间是顶点）", () => {
+    const angle = angleOf("平面三角形ABC中，AB=8，∠A=60°")
+    expect(angle?.targets).toEqual(["C", "A", "B"])
+    expect(angle?.value).toBe(60)
+  })
+
+  it("四边形按同一套取邻点：`平面四边形ABCD中，AB=2，∠B=90°` ⇒ `[A, B, C]`（环上第二位）", () => {
+    expect(angleOf("平面四边形ABCD中，AB=2，∠B=90°")?.targets).toEqual(["A", "B", "C"])
+  })
+
+  it("三个点名的写法照旧走前面那条读取器（不被单字母那条半吃）", () => {
+    expect(angleOf("平面三角形ABC中，∠BAC=30°")?.targets).toEqual(["B", "A", "C"])
+  })
+
+  it("**没有形状从句 ⇒ 不知道两条边是哪两条**：如实落未核验（不猜）", () => {
+    const parsed = parseDiagramObligations("∠A=60°，画出这个三角形")
+    expect(parsed.givens.some((item) => item.kind === "planarAngle")).toBe(false)
+    expect(parsed.unverified.some((item) => item.sourceText.includes("∠A"))).toBe(true)
+  })
+
+  it("顶点不在环上 ⇒ 也不猜", () => {
+    const parsed = parseDiagramObligations("平面三角形ABC中，∠D=60°")
+    expect(parsed.givens.some((item) => item.kind === "planarAngle")).toBe(false)
+    expect(parsed.unverified.some((item) => item.sourceText.includes("∠D"))).toBe(true)
+  })
+
+  it("退化的度数读不出来：`∠A=180°` / `∠A=0°`", () => {
+    expect(angleOf("平面三角形ABC中，∠A=180°")).toBeUndefined()
+    expect(angleOf("平面三角形ABC中，∠A=0°")).toBeUndefined()
+  })
+})
+
+/**
  * **弦长与面积：Task 14 的边界到底缺什么**（2026-10-14 量清楚再动手）。
  *
  * 边界原文只有四个字「弦长/面积未接」，没有写修法方向 —— 所以先量：

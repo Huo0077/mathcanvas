@@ -162,6 +162,11 @@ const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME}){0,3}`
  * 落成具体点名。写成一个常量是因为它要跨两个函数用，而"哪个字面量表示占位"不该有第二份。
  */
 const STATED_BASE = "底面"
+/**
+ * **单字母角**（`∠A`）留下的占位：它只给了一个点名，**两条边是哪两条**要看形状从句的环。
+ * 由 `resolveStatedVertexAngle` 落成 `[前一个点名, 顶点, 后一个点名]`（判据与构造照旧）。
+ */
+const STATED_VERTEX_ANGLE = "顶点角"
 const finitePositive = (value: string): number | null => {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : null
@@ -443,6 +448,24 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const targets = [m[1], m[2], m[3]]
       if (new Set(targets).size !== 3) return null
       return { kind: "planarAngle", targets, value }
+    }
+  },
+  {
+    /**
+     * **单字母角**（Task 11 的边界「`∠A` 单字母角不认」，2026-10-14）：`∠A=60°`。
+     *
+     * 它必须排在**三个点名那条之后**：`∠ABC=60°` 里 `∠A` 后面跟的是 `B` 而不是 `=`，
+     * 所以三条读取器不会互相半吃 —— 但顺序仍然固定，免得以后有人把这条挪到前面。
+     *
+     * 顶点用**一个点名**记下来，两条边由 `resolveStatedVertexAngle` 在整句解析完之后
+     * 按**形状从句的环**取邻点（环的解析只有 `parseShapeClause` 一处，不另写一套）。
+     */
+    pattern: /∠\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
+    read: (m) => {
+      const value = finitePositive(m[2])
+      // 与三点名那条同一把尺子：`0°` 不是角、`≥180°` 不是内角。
+      if (value === null || value >= 180) return null
+      return { kind: "planarAngle", targets: [m[1], STATED_VERTEX_ANGLE], value }
     }
   },
   {
@@ -738,6 +761,36 @@ function resolveStatedBasePlane(givens: DiagramObligation[], unverified: Diagram
   }
 }
 
+/**
+ * **把单字母角 `∠A` 落成三个点名**（Task 11 的边界，2026-10-14）。
+ *
+ * `∠A` 只说了一个点名，两条边（`AB`、`AC`）**必须从形状从句的环上取邻点** ——
+ * 而这个环的解析只有一处（`parseShapeClause`），所以这里问它，不另写一套"谁是邻点"。
+ *
+ * **问不出来就不猜**（没有形状从句、环少于三点、顶点不在环上）：那三个情形都说明
+ * "题面里没有可识别的图形"，那时如实落未核验 —— 猜两条边就是替题面改题。
+ */
+function resolveStatedVertexAngle(givens: DiagramObligation[], unverified: DiagramObligationSet["unverified"], prompt: string): void {
+  for (let index = givens.length - 1; index >= 0; index -= 1) {
+    const obligation = givens[index]!
+    if (obligation.kind !== "planarAngle" || obligation.targets[1] !== STATED_VERTEX_ANGLE) continue
+    const vertex = obligation.targets[0]!
+    const ring = parseShapeClause(prompt)?.base ?? null
+    const at = ring === null ? -1 : ring.indexOf(vertex)
+    if (ring === null || ring.length < 3 || at < 0) {
+      givens.splice(index, 1)
+      unverified.push({
+        sourceText: obligation.sourceText,
+        reason: "这条角只写了一个点名（如 `∠A`），而题面里没有可识别的形状从句（点名环）、或这个顶点不在环上 —— 不知道是哪两条边，未核验。"
+      })
+      continue
+    }
+    const previous = ring[(at - 1 + ring.length) % ring.length]!
+    const next = ring[(at + 1) % ring.length]!
+    obligation.targets = [previous, vertex, next]
+  }
+}
+
 export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {
   const boundary = /(?:求证|证明)/.exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
@@ -786,6 +839,8 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
    * 放在残留扫描**之前**：落不出底环时它要能如实变成一条"未核验"。
    */
   resolveStatedBasePlane(givens, unverified, givenText)
+  /** 单字母角同理：顶点有了、两条边要从形状从句的环上取。 */
+  resolveStatedVertexAngle(givens, unverified, givenText)
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {
     if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
