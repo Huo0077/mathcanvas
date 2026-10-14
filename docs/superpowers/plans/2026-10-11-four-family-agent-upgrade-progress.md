@@ -272,6 +272,8 @@
 
 **退出**：三角、立体、圆锥、函数四族实际画布/相机/标签均同草稿版本；改题或撤销后旧图证据 stale。截图不能替代条件回代。
 
+      **2026-10-14 收口边界「3D 虚实线 DOM 读不到」**（边界原文：虚实线在 Three.js 内部、这一层只给相机可见性与标签）：虚线是 `createSolidGroup` 按开关建出来的，所以**由真的建了它的那一层**（`threeSceneContent` 的同步）数段数（顶点数 ÷ 2）并写进场景容器 dataset（`hiddenEdgeSegments` / `hiddenEdgesShown`，与既有 `dataset.sceneSyncs` 同一位置同一条纪律）；`threeScene.tsx` 只转述，`canvasEvidence` 新增 `hiddenEdges: { shown, segments }` 与两个属性 `data-canvas-hidden-edges-shown` / `data-canvas-hidden-edges`（缺省"没画、0 段"）。**开关与段数分开报** —— 只报开关会让"开着但一段都没建出来"看起来也正常。门禁：全量单测 **375 文件 / 4444 通过 + 1 todo / 0 失败**（44.31 s，exit 0）、**全量 e2e 237 通过（1.9 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。**仍未做**：转出视锥无确定性产品做法、"取消拖动"不是现有动作、教师/学生签收未做。
+
 ### Task 17｜Lean 原题前提与受限引理分级
 
 **文件**：`packages/agent-core/src/proof/proofGoalReader.ts`、`proofGoals.ts`、`proofPremiseBridge.ts`、`canonicalProof.ts`、`lean4Adapter.ts`、`automaticProof.ts` 及同名测试；复用 `packages/agent-core/src/obligationIR.ts` 原文 span/ID。禁止更改 Rust 的模板白名单来给未证事实放行。
