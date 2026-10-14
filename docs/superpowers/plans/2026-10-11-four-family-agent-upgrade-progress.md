@@ -250,6 +250,8 @@
 
       **2026-10-14 收口边界「弦长/面积未接」（先量后改）**：**面积那一半不是解析缺口** —— `△OAB的面积为3` 今天就读成 `area`（三个点名 + 值，核验器从最终坐标算），核不核得出来只取决于**图上有没有点名 `O`**（作图侧）；**弦长那一半是真缺口，而且比"未核验"更糟**：`弦 AB 的长为 3` 这种写法两条读取器都不认、句子里又没有 `=` ⇒ 残留扫描器也够不到 ⇒ **静默丢掉一条题设**。修法：`diagramObligations` 新增 `弦 AB 的长为 n`（连接词 `为/是/＝/=` 都收）与 `|AB|=n` 两条读取器，判据**复用 `fixedLength`**（不新造），根号写法照收。RED 三条先真红（`expected [] to deeply equal [ [ 'AB', 3 ] ]`）→ `diagramObligations.test.ts` **52 通过**。门禁：全量单测 **375 文件 / 4448 通过 + 1 todo / 0 失败**（44.06 s，exit 0）、**全量 e2e 237 通过（1.9 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。
 
+      **2026-10-14 收口边界「面积核验要求图上真有那个点名」**：解析几何里 `O` 约定为原点，而题目通常不画 `O` ⇒ `△OAB的面积为…` 卡在"点名缺失：O，未核验"。修法：`statedOriginNames`（一处判据）+ 在 `verifyDiagramObligations` 里补进**这一份核验用的点名表**（不动文档），披露写进那条判据的 `reason`。**三条不认约定的情形**：图上已有 `O`；题面用坐标定义过 `O`；题面用构造定义过 `O`（`O为 BD的中点` 一类）—— 最后一条是**实测逼出来的**（第一版只挡坐标 ⇒ 全量红 6 条），判据交给内核 `ratioParameterFor`。端到端用例：题面点名 O、图上没有 ⇒ 面积 `passed`、`actual = 1`、理由写明按原点取。门禁：全量单测 **378 文件 / 4459 通过 + 1 todo / 0 失败**（44.82 s，exit 0）、**全量 e2e 237 通过（2.0 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。**下一件**：外点双切线/公切线的产品动作（探过路：要新锚点 + `analysisRecompute` + 内核"过外点求切线"，不是一轮的量）。
+
 ### Task 15｜函数与导数真题纵向交付
 
 **文件**：`packages/geometry-kernel/src/calculus.ts`、`evaluate.ts`、`curve-intersections.ts` 及测试；`packages/agent-core/src/diagramVerification.ts`；`apps/web/src/agent/localPlanner.ts` 与现有函数图入口；扩 `e2e/agent-function-tangent.spec.ts`，新建 `e2e/agent-exam-function.spec.ts`。
