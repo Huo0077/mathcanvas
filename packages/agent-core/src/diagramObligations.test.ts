@@ -412,3 +412,32 @@ describe("Task 14：直线与圆锥曲线的交点义务", () => {
     expect(parsed.givens.some((item) => item.kind === "conicAxes")).toBe(true)
   })
 })
+
+/**
+ * **非标准曲线的「明确不归类」**（Task 14 的边界，2026-10-14 收口）。
+ *
+ * 调研 §C 原文：`2024 新课标Ⅰ卷第 11 题`是**非标准曲线**，"暂记范围外/跨家族候选，
+ * **不伪装成椭圆/双曲线/抛物线**"。而今天的实情是：这类方程落进**通用**的未核验文案
+ *（"这个条件没有被可靠解析或数值非法"）—— 那句话把**范围外**说成了**没写清楚**：
+ * 用户会以为换个写法就能被认出来，然后一遍遍改题面。
+ *
+ * 判据两条、方向相反：
+ * - 曲线方程（**小写** `x` / `y` 的平方项）⇒ 明说"没有归入三类标准圆锥曲线"，记**明确不归类**；
+ * - `AB²=4` 这类**点名线段的平方**（大写字母）⇒ 照旧是通用文案。少了这条反向判据，
+ *   贴上"非标准曲线"标签就是**过度解释**，那比不解释更糟。
+ */
+describe("非标准曲线：明确不归类（不是「没写清楚」）", () => {
+  const reasonOf = (prompt: string, needle: string): string => parseDiagramObligations(prompt).unverified.find((item) => item.sourceText.includes(needle))?.reason ?? ""
+
+  it("`x²+xy+y²=1` 这类方程：明说是范围外，不许只说「没被可靠解析」", () => {
+    const reason = reasonOf("平面直角坐标系中，曲线 x²+xy+y²=1，画出这条曲线", "x²+xy+y²=1")
+    expect(reason, reason).toContain("明确不归类")
+    expect(reason, reason).toContain("椭圆")
+    expect(reason, reason).not.toContain("没有被可靠解析")
+  })
+
+  it("点名的线段平方 `AB²=4` **不**贴「非标准曲线」标签（那是过度解释）", () => {
+    const reason = reasonOf("在三角形ABC中，AB²=4，画出三角形ABC", "AB²=4")
+    expect(reason, reason).toBe("原题出现了尚未被可靠解析的几何条件，未核验。")
+  })
+})

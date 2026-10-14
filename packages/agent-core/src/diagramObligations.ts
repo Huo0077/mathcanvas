@@ -538,6 +538,42 @@ function radicalValue(text: string): number | null {
 
 const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?/g
 
+/**
+ * **曲线方程的形状**：**小写** `x` / `y` 后面跟平方（`x²` / `x^2` / `y²`）。
+ *
+ * 为什么拿**小写**当判据：本仓的点名一律大写，所以 `AB²=4` 是**线段的平方**，
+ * 不是坐标变量的平方。少了这一条，`AB²=4` 会被贴上"非标准曲线"的标签 ——
+ * 那是**过度解释**，比不解释更糟。
+ */
+const CURVE_EQUATION_TERM = /(?:^|[^A-Za-z])[xy]\s*(?:\^\s*2|²)/
+
+/**
+ * **一条残留条件的理由**（Task 14 的边界：「非标准曲线的明确不归类」，2026-10-14）。
+ *
+ * 调研 §C 原文：`2024 新课标Ⅰ卷第 11 题`是**非标准曲线**，"暂记范围外/跨家族候选，
+ * **不伪装成椭圆/双曲线/抛物线**"。而此前的实情是：这类方程落进**通用**的未核验文案
+ * —— 那句话把**范围外**说成了**没写清楚**，用户会以为换个写法就能被认出来，
+ * 于是反复改题面。所以曲线方程这一档要**单独说清它是范围外**。
+ *
+ * 两处残留路径（逐句那条与整句 leftover 那条）**共用这一个函数**：理由只有一处文案，
+ * 否则同一句话会随它落在哪条路径而给出两种说法。
+ */
+function unverifiedReasonFor(leftover: string): string {
+  return CURVE_EQUATION_TERM.test(leftover)
+    ? "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+    : "原题出现了尚未被可靠解析的几何条件，未核验。"
+}
+
+/**
+ * **非标准曲线**（同一个判据的另一半）：逐句残留那条路径原本用的是一句更短的话，
+ * 现在也走 `unverifiedReasonFor` —— 两处说法一致。
+ */
+function unverifiedClauseReason(leftover: string): string {
+  return CURVE_EQUATION_TERM.test(leftover)
+    ? unverifiedReasonFor(leftover)
+    : "这个条件没有被可靠解析或数值非法，未核验。"
+}
+
 export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {
   const boundary = /(?:求证|证明)/.exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
@@ -600,7 +636,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       const clause = [...givenText.matchAll(/[^，,。；;\n]+/g)]
         .find((entry) => (entry.index ?? 0) <= match.index && match.index < (entry.index ?? 0) + entry[0].length)
       const sourceText = clause?.[0].trim() ?? match[0]
-    unverified.push({ sourceText, reason: "这个条件没有被可靠解析或数值非法，未核验。" })
+    unverified.push({ sourceText, reason: unverifiedClauseReason(sourceText) })
   }
 
   if (options.spatialPointConditions === true) {
@@ -634,7 +670,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(leftover)
         || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(leftover))
     if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
-      unverified.push({ sourceText: leftover, reason: "原题出现了尚未被可靠解析的几何条件，未核验。" })
+      unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }
   givens.sort((left, right) => left.start - right.start)
