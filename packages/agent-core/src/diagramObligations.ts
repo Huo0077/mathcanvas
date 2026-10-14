@@ -959,7 +959,17 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
     const unknownPointCondition = options.spatialPointConditions === true
       && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(leftover)
         || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(leftover))
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
+    /**
+     * **触发词表**（残留扫描器：这些词出现了，说明"这里有一条题设没被读出来"）。
+     *
+     * `(?<!椭)圆上` 那个负向后顾是**实测逼出来的**（2026-10-15）：直接写 `圆上` 会命中
+     * 「椭**圆上**」—— 于是设计夹具里那句 `P 是椭圆上任意一点` 从"被忽略"变成
+     * "落进未核验"，进而把那条设计用例从 `awaiting_confirmation` 打成 `failed`。
+     * 也就是说：**这个误伤顺带暴露了另一处真缺口**（`椭圆上` 这类今天同样读不出来，
+     * 见 `curvePointClauses.test.ts` 里钉住的那一条），但两件事要分开处理 ——
+     * 这一行只负责"真正的圆"。
+     */
+    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }
