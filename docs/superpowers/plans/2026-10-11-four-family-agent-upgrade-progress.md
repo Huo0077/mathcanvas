@@ -248,6 +248,8 @@
 
       **2026-10-14 边界收口（非标准曲线的「明确不归类」）**：调研 §C 对 `2024 新课标Ⅰ卷第 11 题`的原话是"非标准曲线，暂记范围外/跨家族候选，不伪装成椭圆/双曲线/抛物线"，而此前这类方程落进**通用**残留文案「原题出现了尚未被可靠解析的几何条件」—— 把**范围外**说成了**没写清楚**。修法：`diagramObligations.ts` 新增 `CURVE_EQUATION_TERM`（**小写** `x`/`y` 的平方项）与理由函数，两条残留路径共用同一句；命中时明说"没有归入本仓支持的三类标准圆锥曲线 ⇒ **明确不归类**（范围外）"。**反向判据**：`AB²=4`（大写=线段平方）照旧走通用文案，不许被贴该标签。**RED → GREEN**：修前实测拿到通用那句，两条断言都挂；修后 `diagramObligations.test.ts` 40 通过。门禁：全量单测 375 文件 / **4429 通过** + 1 todo / 0 失败（45.83 s，exit 0）、全量 e2e **237 通过**（2.0 m）、`typecheck` exit 0、`lint` 0 error / 13 warning。**仍未做**：弦长 / 面积未接。
 
+      **2026-10-14 收口边界「弦长/面积未接」（先量后改）**：**面积那一半不是解析缺口** —— `△OAB的面积为3` 今天就读成 `area`（三个点名 + 值，核验器从最终坐标算），核不核得出来只取决于**图上有没有点名 `O`**（作图侧）；**弦长那一半是真缺口，而且比"未核验"更糟**：`弦 AB 的长为 3` 这种写法两条读取器都不认、句子里又没有 `=` ⇒ 残留扫描器也够不到 ⇒ **静默丢掉一条题设**。修法：`diagramObligations` 新增 `弦 AB 的长为 n`（连接词 `为/是/＝/=` 都收）与 `|AB|=n` 两条读取器，判据**复用 `fixedLength`**（不新造），根号写法照收。RED 三条先真红（`expected [] to deeply equal [ [ 'AB', 3 ] ]`）→ `diagramObligations.test.ts` **52 通过**。门禁：全量单测 **375 文件 / 4448 通过 + 1 todo / 0 失败**（44.06 s，exit 0）、**全量 e2e 237 通过（1.9 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。
+
 ### Task 15｜函数与导数真题纵向交付
 
 **文件**：`packages/geometry-kernel/src/calculus.ts`、`evaluate.ts`、`curve-intersections.ts` 及测试；`packages/agent-core/src/diagramVerification.ts`；`apps/web/src/agent/localPlanner.ts` 与现有函数图入口；扩 `e2e/agent-function-tangent.spec.ts`，新建 `e2e/agent-exam-function.spec.ts`。
