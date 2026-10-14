@@ -935,7 +935,24 @@ function materialisedPointActions(
    *（`scene-graph` 的 `compileSolidFace` 与 `buildFromPoints` 用的是同一条命名约定），
    * 所以判据仍然是"**恰好一笔**能给出点名与棱的宿主"。
    */
-  const hosts = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_face")
+  /**
+   * **能补点的宿主：判据是"它有没有点名"，不是"它是哪一种形状"**（2026-10-14，用户现场）。
+   *
+   * 原先这里是 `actionId === "solid.create_polyhedron" || actionId === "solid.create_face"` ——
+   * 于是**直三棱柱那道题补不了**（`E、F 分别为 AC 和 CC₁ 的中点`读出来也没用，宿主是
+   * `solid.create_prism`），运行最后卡在"点名缺失：F"。用户当场把这件事说清了：
+   * 按形状打补丁，下次是棱锥、再下次是圆锥 —— 永远在追现场。
+   *
+   * 这一层真正需要的只有两样：**顶点表**（用来验"两端都是点名"）与**按 `${宿主id}:eN`
+   * 命名的棱**（下面按**候选文档**实测，找不到或不唯一就整批不补，见 `orientation`）。
+   * 于是判据收成一句：**输入里带 ≥3 个点名的动作就是宿主** —— 棱柱、棱锥、棱台、多面体、
+   * 平面片，以及以后新增的任何一种体，**自动都算**，不需要再改这一行。
+   */
+  const hosts = plan.actions.filter((action) => {
+    const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
+    return typeof inputs === "object" && inputs !== null && Array.isArray(inputs.vertexNames)
+      && inputs.vertexNames.length >= 3 && inputs.vertexNames.every((name) => typeof name === "string")
+  })
   if (hosts.length !== 1) return null
   const inputs = hosts[0].inputs
   if (typeof inputs !== "object" || inputs === null) return null
@@ -957,7 +974,15 @@ function materialisedPointActions(
    * 判据写在**第一遍编译出来的候选文档**上（宿主是同一只、坐标没被改过），返回 `+1` 表示这条棱
    * 的方向就是 `from → to`，`-1` 表示反过来，`null` 表示**这条棱找不到或不唯一** ⇒ 不补。
    */
-  const edges = document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "edge3" }> => primitive.type === "edge3" && primitive.id.startsWith(`${hostId}:e`) && primitive.pointIds.length === 2)
+  /**
+   * **找棱只看端点点名，不看 id 前缀**（2026-10-14 用户现场，与上面那条同一个教训）。
+   *
+   * 原先这里是 ``primitive.id.startsWith(`${hostId}:e`)`` —— 那是**某一种体自己的命名习惯**，
+   * 棱柱就不是这么命名的，于是 `orientation` 一条棱都找不到 ⇒ 整批不补 ⇒ 又回到
+   * "点名缺失：E / F"。而 `orientation` 下面真正需要的信息是**这条棱的两个端点是谁**，
+   * 唯一性也由它自己强制（`matches.length !== 1` 就不补）。所以前缀这一问是多余且易错的。
+   */
+  const edges = document.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "edge3" }> => primitive.type === "edge3" && primitive.pointIds.length === 2)
   const labelOf = (id: string): string | undefined => {
     const primitive = document.primitives.find((candidate) => candidate.id === id)
     return primitive?.type === "point3" ? (primitive as { label?: string }).label : undefined

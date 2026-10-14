@@ -542,6 +542,26 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "equilateral", targets: names(m[1]) })
   },
   {
+    /**
+     * **并列写法**：`E、F 分别为 AC 和 CC₁ 的中点`（2026-10-14 用户现场，直三棱柱那道题）。
+     *
+     * 卷面上这是**最常见**的写法之一，而原先只认单写法（下一条）⇒ 整句落进
+     * "原题出现了尚未被可靠解析的几何条件"，于是 E、F 两个点谁也没被点名，
+     * 最后卡在"点名缺失：F"那道门上（用户当场读数）。
+     *
+     * 一句话读出**两条**题设：本文件的读取器契约本来就允许返回数组
+     *（`ObligationDraft | ObligationDraft[]`），所以这里不需要为"并列"另造判据 ——
+     * 两条 `midpoint`，与单写法走**同一个**判据。
+     *
+     * **必须排在下一条单写法之前**：先长的、再短的（与 `segmentRatio` 那两条同一个道理）。
+     */
+    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    read: (m) => [
+      { kind: "midpoint", targets: [m[1], ...names(m[3])] },
+      { kind: "midpoint", targets: [m[2], ...names(m[4])] }
+    ]
+  },
+  {
     pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
   },
