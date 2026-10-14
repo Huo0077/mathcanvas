@@ -309,6 +309,8 @@
 - [x] 本机已有已授权工具链时，先跑 `npm.cmd exec vitest run -- packages/agent-core/src/proof/lean4Toolchain.test.ts packages/agent-core/src/proof/lean4Adapter.test.ts scripts/proof-spike/lean4TemplateAllowlist.test.ts --reporter=dot`，再**单独**跑慢集成 `npm.cmd exec vitest run -- scripts/proof-spike/lean4EndToEnd.test.ts --maxWorkers=1`、`npm.cmd run proof:smoke` 与 `npm.cmd run test:rust`。打包后在干净/无网的桌面上验证“明确不可用仍能画图”和“工具链可用才有真实证明”；冷、热运行耗时/版本/哈希/许可和包体如实列出。没有真桌面发行验收，就算本机 Lean 真跑绿也不标“已发布自动证明”。
       **2026-10-12 完成（本机那一半）**：定向三份 **74 通过**；慢集成 `npm run test:lean` **8 passed / 1195.4 s**（冷启动单独量 219.5 s；四类目标各 ~62 s 全部 `formally_proved / verified / exit=0`，公理恰好三个白名单；`sorry` 那次 **exit=0 而判 `failed`**；窄 import 64.4 s vs `import Mathlib` 588.4 s）；`npm run proof:smoke` **8 通过**（十栏审查含版本/许可/进程模型/原生依赖/启动预算/超时策略/失败行为/缓存与沙箱，**强沙箱"未测"如实写着**）；`npm run test:rust` **250 通过 / 0 失败 / 3 ignored**。**打包后在干净/无网桌面的验收没有做**（本机没有打包产物与另一台干净机器）⇒ **不标"已发布自动证明"**、不主张发行可用；"明确不可用仍能画图"这一条另有浏览器证据（Task 18 的 `e2e/agent-proof-lifecycle.spec.ts` 2 passed）。
 
+      **2026-10-14 桌面那一半的补读数**：先纠正一条过期的话 —— 工作副本里**早就有** 0.1.0→3.3.13 的 MSI（最新 2026-10-11 16:23），但它们**早于当前 HEAD**，不能当当前版本的读数；于是在当前 HEAD（工作树干净）重跑 `npm --workspace @draw/desktop run bundle` **exit 0**：cargo `release` **38.86 s**，产出 `MathCanvas_3.3.14_x64_en-US.msi` **6.71 MB**（SHA256 `77A98F52…`）、`MathCanvas_3.3.14_x64-setup.exe` **4.96 MB**（`7FF8E01E…`）、`mathcanvas-desktop.exe` **16.66 MB**（`7F5D51C7…`）；冒烟启动刚构建的 exe（不是安装包）：窗口标题 `MathCanvas`、`CloseMainWindow` ⇒ **优雅退出 code 0**。**仍未做**：干净/无网机器上的发行验收（本机没有第二台干净机器）；在本机安装 MSI/NSIS（要管理员权限、会改动这台机器 —— 未获明确同意不做）。
+
 ### Task 20｜四族真实模型质量
 
 **文件**：apps/web/src/agent/fixtures/benchmarkPlanningEval.ts、scripts/agent-eval.mjs、packages/agent-core/src/benchmark/ 及现有评测测试。
