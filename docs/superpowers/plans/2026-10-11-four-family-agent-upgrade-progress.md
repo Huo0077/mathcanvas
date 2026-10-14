@@ -267,6 +267,8 @@
 
       **2026-10-14 收口边界「函数∩直线的交点数」**（边界原文：尚未有义务种类与匹配器 ⇒ "多交点"那一型进不了核验面板）：`diagramObligations` 新增 `functionLineIntersections`（斜截式 / 水平线 / 竖直线三条线形与圆锥曲线那一族同一套；个数中文与阿拉伯数字都认）；个数写在**前瞻**里、只占用「直线 …」那段（中间的 `f(x)=…` 已被函数定义读取器按字符占位收走，吃进来会因重叠整条跳过 —— 首版就是这么红的），数字后加 `(?![eE][+-]?\d)` 防 `y=1e-12` 被半读成 `y=1`；`obligationIR` 按**整数容差 0** 判性；`diagramVerification` 调 `functionLineRoots` 数**图上那条曲线**与题面那条直线的交点，`complete === false`（分辨不出近重根）时**如实未核验、不报 failed**，竖直线留白。门禁：全量单测 **375 文件 / 4442 通过 + 1 todo / 0 失败**（51.36 s，exit 0）、**全量 e2e 237 通过（2.2 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。
 
+      **2026-10-16 收口边界「外点双切线没有产品动作」**：`function.create_tangent` 新增锚点 `{ kind: "through", pointId, branch }` —— 判据**复用**内核 `tangentsFromPoint`（`tangentThroughPoint` 只做翻译并把"第几条"翻成切点参数），编译期与重算期**同一个求解器**，重算共用既有 `parameter` 那段收尾。契约九处落点由 typecheck 逐个逼出（动作输入类型 / dsl 存储类型 / dsl 校验 / 补丁校验 / 编译 / 重算 / 发布 schema / 登记表嵌套引用 / 检查器文案）。**只收函数曲线**（圆与圆锥曲线如实 `unsupported_source`）；**公切线**与题面层面的核验仍未做。4 条用例：`(0, −1)` 向 `y = x²` 两支各一条、重算后测试自算"过点且相切、两条不同"、`(0, 1)` 在里面 ⇒ `no_tangent`、圆 ⇒ `unsupported_source`。门禁：全量单测 **379 文件 / 4485 通过 + 1 todo / 0 失败**（44.18 s，exit 0）、**全量 e2e 237 通过（2.0 m，exit 0）**、`typecheck` exit 0、`lint` 0 error / 13 warning。
+
 ### Task 16｜真实画布和过期证据
 
 **文件**：apps/web/src/agent/geometryWorkerHost.ts、workerContracts.ts、draftStore.ts、agentRunner.ts，packages/geometry-kernel/src/dependency-graph.ts；新建 e2e/agent-exam-visual-and-stale.spec.ts。
