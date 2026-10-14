@@ -595,6 +595,29 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
   },
   {
+    /**
+     * **弦长**（Task 14 的边界「弦长/面积未接」，2026-10-14 实测后补）：`弦 AB 的长为 3`。
+     *
+     * ## 为什么这条比"读不出来"更值得修
+     *
+     * 卷面上这句**没有 `=`**，所以两条既有读取器（`AB=3` 与面积）都不认它，
+     * 而残留扫描器的触发词也够不到它 ⇒ 结果是**静默丢掉一条题设**：
+     * 它既不进 `givens`、也不进 `unverified`，用户与判据都看不见它存在过。
+     * 本仓把"静默丢掉一个条件"当最贵的一类错 —— 所以这一档补的是**读取器**，
+     * 判据照旧复用 `fixedLength`（两个点名之间的距离，核验器那一侧已经有判据，不新造）。
+     */
+    pattern: new RegExp(`弦\\s*(${SEGMENT_NAME})\\s*的?长\\s*(?:为|是|＝|=|：|:)\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
+    read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
+  },
+  {
+    /**
+     * **`|AB|=3`**：线段长的另一种常见记法（绝对值号）。与上面那条同一条理由 ——
+     * 判据复用 `fixedLength`，不新造；根号写法（`|AB|=3√2`）照收。
+     */
+    pattern: new RegExp(`\\|\\s*(${SEGMENT_NAME})\\s*\\|\\s*(?:＝|=)\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
+    read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
+  },
+  {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),
     read: (m) => ({ kind: "equalLength", targets: [...names(m[1]), ...names(m[2])] })
   },  {

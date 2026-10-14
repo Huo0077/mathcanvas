@@ -485,6 +485,44 @@ describe("线面角（斜棱柱的明说倾角）", () => {
 })
 
 /**
+ * **弦长与面积：Task 14 的边界到底缺什么**（2026-10-14 量清楚再动手）。
+ *
+ * 边界原文只有四个字「弦长/面积未接」，没有写修法方向 —— 所以先量：
+ *
+ * - **面积这一半不是读取器缺口**：`△OAB的面积为3` 今天就读成 `area`（三个点名 + 值）。
+ *   它核不核得出来只取决于**图上有没有点名 `O`**（那是作图那一侧的事，不是解析）。
+ * - **弦长这一半是真缺口，而且比"未核验"更糟**：`弦 AB 的长为 3` 这种卷面常见写法
+ *   **两条读取器都不认**，而这句里**没有 `=`** ⇒ 残留扫描器的触发词也够不到它
+ *   ⇒ 结果是**静默丢掉一条题设**（既不进 `givens`，也不进 `unverified`）。本仓把
+ *   "静默丢掉一个条件"当最贵的一类错，所以这一条要读出来。
+ */
+describe("弦长与面积：边界实测", () => {
+  const lengthsOf = (prompt: string) => parseDiagramObligations(prompt).givens.filter((item) => item.kind === "fixedLength").map((item) => [item.targets.join(""), item.value])
+
+  it("**面积这一半读得出来**：`△OAB的面积为3` ⇒ `area`（三个点名 + 值）", () => {
+    const parsed = parseDiagramObligations("椭圆 x²/9+y²/4=1 与直线 y=0.5 相交于 A、B 两点，△OAB的面积为3")
+    const area = parsed.givens.find((item) => item.kind === "area")
+    expect(area?.targets).toEqual(["O", "A", "B"])
+    expect(area?.value).toBe(3)
+  })
+
+  it("**静默丢掉**（修之前）：`弦 AB 的长为 3` 既不进给定、也不进未核验 —— 这句话**消失**了", () => {
+    const parsed = parseDiagramObligations("椭圆 x²/9+y²/4=1 与直线 y=0.5 相交于 A、B 两点，弦 AB 的长为 3")
+    expect(lengthsOf("椭圆 x²/9+y²/4=1 与直线 y=0.5 相交于 A、B 两点，弦 AB 的长为 3")).toEqual([["AB", 3]])
+    // 它必须是**读出来**的，不是"落进未核验" —— 后者只是把消失换成了噪声。
+    expect(parsed.unverified.filter((item) => item.sourceText.includes("弦 AB"))).toEqual([])
+  })
+
+  it("`|AB|=3` 这种绝对值记法也认（今天它落进未核验：句子里有 `=`）", () => {
+    expect(lengthsOf("椭圆 x²/9+y²/4=1 与直线 y=0.5 相交于 A、B 两点，|AB|=3")).toEqual([["AB", 3]])
+  })
+
+  it("根号写法照收：`弦 AB 的长为 3√2`", () => {
+    expect(lengthsOf("椭圆 x²/9+y²/4=1 与直线 y=0.5 相交于 A、B 两点，弦 AB 的长为 3√2")[0]?.[1]).toBeCloseTo(3 * Math.sqrt(2), 9)
+  })
+})
+
+/**
  * **函数与直线的交点个数**（Task 15 的边界，2026-10-14）。
  *
  * 边界原文：「函数与直线的**交点数**尚未有义务种类与匹配器 ⇒ 真题里"多交点"那一型的
