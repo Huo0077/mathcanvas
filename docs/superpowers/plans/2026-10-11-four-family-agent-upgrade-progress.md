@@ -226,7 +226,7 @@
 - [x] **RED**：以用户原题中经独立回代的 ABCD/E/F 为输入，不提供模型猜的 P 或角，要求系统在允许的 `(0°,180°]` 中求出使 `PC=4√3` 的折角；反向折痕、修改 PC 无可行解、折痕退化/翻折后面重合分别判对。原先 `solid.fold(angle=90)` 的单测不得冒充这条 RED。
 - [x] 对**固定点到旋转后点的距离**优先利用 `rotateAboutAxis` 所确定的三角关系解析枚举候选角；更一般的目标关系才进行有上界的区间搜索，并把找不到根与不能证明无解分开。每一候选交既有 `solid.fold` 物化，核验器从最终 P/C 坐标重算 PC、折痕不动与被折面刚体长度；多支保留来源/选择，不凭 90° 特判。
 - [x] 运行 `npm.cmd exec vitest run -- packages/geometry-kernel/src/witness/constructors.test.ts packages/scene-graph/src/actions/solidFoldAction.test.ts packages/agent-core/src/diagramFoldPoints.test.ts packages/agent-core/src/diagramVerification.test.ts --reporter=dot`。此任务过后仍需 Task 16 的真实产品验收 才能说“整题能画”。
-      **2026-10-12 完成**：读数与边界见 §7 表第 12 行；更一般目标关系的区间搜索未做，e2e 归 Task 16。
+      **2026-10-12 完成**：读数与边界见 §7 表第 12 行；更一般目标关系的区间搜索未做，e2e 归 Task 16。**2026-10-14 收口「两支角合法时另一支未披露」**：`solved` 那一档只返回允许区间内的候选，另一支（`360° − θ`，"朝折痕另一侧折"）被区间过滤掉了 —— 而它同样满足题面那个距离（`C` 在底面内 ⇒ `P(−θ)` 与 `P(θ)` 到 `C` 等距）。修法是**拿同一个求解器、把区间放开**再问一次，差集写进假设文案（"另外还有 N 支折角（…）同样满足题面那个距离…系统没有取它们"）；判据不新写。新 `planCompiler.foldBranches.test.ts` 用用户原话跑完整 `compilePlan` 并自己核对（落盘 `|PC| = 4√3`、放开区间确实两支、刚好一支没取、且出现在文案里），旧四条 `faceRatios` 用例无回归。门禁：全量单测 **377 文件 / 4456 通过 + 1 todo / 0 失败**（43.54 s，exit 0）、`typecheck` exit 0、`lint` 0 error / 13 warning；**全量 e2e 236/237**（唯一一条是已记过的负载敏感抖动，单独跑绿）。
 
 ### Task 13｜立体几何真题纵向交付
 
