@@ -15,7 +15,7 @@
 | Task 17 ✅ | **已完成（2026-10-12）**：`ProofScopeReport`（每条原题条件四档 + 源 span + 系统选择；结局 `limited_lemma` / `whole_problem` / `unsupported`）、`AutomaticProofResult.scope` 必填、升级文案写明"受限引理"；后端没验过永远不是整题，`whole_problem` 产品路径不可达（无完整命题产物）。 |
 | Task 18 ✅ | **已完成（2026-10-12）**：`ProofAttemptIdentity` + `proofAttemptStaleness`（六档、看哈希不看版本号、没绑哈希一律过期）、草稿层每次读预览都重判、面板按范围分档并列出没进命题的条件、浏览器"证明不可用不挡作图" e2e 2 passed。**边界**：桌面真跑一次 Lean 后改题/撤销的 UI/IPC/版本证据未做。 |
 | Task 19 ✅ | **已完成本机那一半（2026-10-12）**：工程定义钉住（`lean4Pin.test.ts` 4 条）+ README 矛盾段改掉；`lean --version` == `lake env lean --version` == `4.35.0-rc3`、`.lake` 7.00 GB ⇒ 零下载；安全判据 74 通过、`test:rust` 250 通过、`proof:smoke` 8 通过、`test:lean` 8 passed / 1195.4 s。**未做**：打包后干净/无网桌面验收 ⇒ 不标"已发布自动证明"。 |
-| Task 20 | **进行中（免授权部分已完成）**：样本按题号冻结 + 每族阈值 + `paidRuns: 0`；`assertPaidRunAllowed` **未授权一律拒**；离线分布 **12/12 仍需真实 provider**（唯一被本地回应那条拿到的是夹具图）。**请求 36 个 / 最高 $12，等授权**。 |
+| Task 20 | **进行中（免授权部分已完成）**：样本按题号冻结 + 每族阈值 + `paidRuns: 0`；`assertPaidRunAllowed` **未授权一律拒**；离线分布 **12/12 仍需真实 provider**（唯一被本地回应那条拿到的是夹具图）。**请求 36 个 / 最高 $12，等授权**。**2026-10-14 第二批（免授权）**：适配器从"单次规划请求"改成**规划 + 编译**（同一个 `compilePlan`），失败落在四层（`plan` / `schema` / `construct` / `verify`），报告带 `repairPath`；并修掉一条真缺陷 —— 上一版请求缺 `model.context` 等字段，真实 `createModelPlanner` 会在**发请求之前**抛错（RED 实测 transport 调用 **0** 次），即付费那一跑会"看起来在跑"而实际一个 token 都没花。门禁：单测 375 文件 / 4427 通过 / 0 失败、e2e 237 通过、typecheck exit 0、lint 0 error / 13 warning。**付费实测仍未跑（未授权）**。 |
 | Task 17–19 | Lean 四受限目标历史存在；原题完整前提、产物 stale 和干净机发行未验。 |
 | Task 20–21 | 真实 provider 未获新授权、正式发布未放行；不跳号。 |
 
