@@ -871,6 +871,33 @@ describe("native observation tool loop", () => {
     expect(budget.snapshot().used.network).toBe(5)
   })
 
+  /**
+   * **模型把计划包成字符串**（2026-10-14 用户现场，第二次重试）。
+   *
+   * 现场：模型第一遍把三棱柱的点名写错（3 个而不是 6 个）被拒，第二遍**点名改对了**，
+   * 却把整个信封双重编码成字符串交上来 ⇒ 引擎判 `expected the plan envelope object,
+   * got a string` ⇒ **整轮硬失败**，连一次修复机会都没有。
+   *
+   * 现在按文本解一次（**只在解出来确实是对象时**），并留一行痕 —— 静默接受仍然不做。
+   */
+  it("计划被包成字符串：按 JSON 解一次并留痕，不再整轮硬失败", async () => {
+    const diagnostics: string[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      onDiagnostic: (line) => diagnostics.push(line),
+      runModel: async () => ({
+        ok: true,
+        // `goodEnvelope` 是一段**字符串**：这里原样交给工具参数，重现双重编码那一次。
+        events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: goodEnvelope as never }]
+      })
+    })
+
+    const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] } }))
+
+    expect(parsePlanEnvelope(result.plan).ok, "字符串形式的信封应当被解出来并按计划走").toBe(true)
+    expect(diagnostics.some((line) => line.includes("按 JSON 解了一次")), `留痕：${diagnostics.join(" ／ ")}`).toBe(true)
+  })
+
   it("keeps transport retry limits per request instead of counting successful read-tool rounds as failures", async () => {
     const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "read", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
     let requests = 0

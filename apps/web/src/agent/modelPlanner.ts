@@ -233,7 +233,10 @@ export function buildPlanToolSchema(actionIds: readonly string[]) {
     type: "function",
     function: {
       name: PLAN_TOOL_NAME,
-      description: "Propose a validated plan, a clarification, or a read-only answer. This tool never commits the document.",
+      description:
+        "Propose a validated plan, a clarification, or a read-only answer. This tool never commits the document. " +
+        /** **把"必须是对象"写进模型每轮都读的那句话里**（2026-10-14 用户现场）。 */
+        "The argument must be a JSON object (schemaVersion / kind / goal plus actions, questions or answer) — never a string containing JSON.",
       parameters: {
         type: "object",
         properties: {
@@ -278,6 +281,31 @@ export function buildPlanToolSchema(actionIds: readonly string[]) {
       }
     }
   }
+}
+
+/**
+ * **模型把计划包成字符串时，按文本解一次**（2026-10-14 用户现场，第二次重试）。
+ *
+ * 工具参数在**线路上本来就是一段 JSON 文本**（provider 方言如此），于是模型时不时把整个
+ * 信封**双重编码**成字符串交上来 —— 我方 schema 明明是 `type: "object"` + `required`
+ * + `additionalProperties: false`，它照样这么发。之前的结果是整轮**硬失败**
+ *（`expected the plan envelope object, got a string`），用户连一次修复机会都没有。
+ *
+ * 纪律不变：**不做静默接受** —— 只在"解出来确实是一个对象"时用它，并**留痕**
+ *（开发者详细视图那一行）；解不出来就按原样交回去，让信封校验报逐条字段错误。
+ */
+export function coerceEnvelopeArgument(input: unknown, onDiagnostic?: (line: string) => void): unknown {
+  if (typeof input !== "string") return input
+  try {
+    const parsed: unknown = JSON.parse(input)
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      onDiagnostic?.("[model] plan_set_plan 的参数是一段字符串，系统按 JSON 解了一次（对象形式的合同没有变）")
+      return parsed
+    }
+  } catch {
+    // 解不出来不是这条要处理的情形：原样交回去，由信封校验如实报错。
+  }
+  return input
 }
 
 /** Default shape for callers without a scoped action list. */
@@ -598,7 +626,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
              * 通过就把**校验过的值**交出去（字段归一化、白名单都已落实）；不通过则把原值交出去，
              * 让协调器按它自己的路径报**逐条字段错误**（修复通道在它手里，这一层不做决定）。
              */
-            const validated = parsePlanEnvelope(toolCall.input)
+            const validated = parsePlanEnvelope(coerceEnvelopeArgument(toolCall.input, dependencies.onDiagnostic))
             if (!validated.ok) {
               // 工具通道上送的参数**不是**信封：同样把原文（有界）留给本机诊断。
               dependencies.onDiagnostic?.(`[model] tool call ${toolCall.toolId} carried a plan that failed the envelope check: ${describeParseErrors(validated.errors)} — 参数：${boundedExcerpt(JSON.stringify(toolCall.input) ?? String(toolCall.input))}`)
