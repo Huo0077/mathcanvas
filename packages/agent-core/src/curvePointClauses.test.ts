@@ -37,4 +37,18 @@ describe("曲线上的点：今天不能被静默丢掉", () => {
     const accounted = [...parsed.givens.map((item) => item.sourceText), ...parsed.unverified.map((entry) => entry.sourceText)]
     expect(accounted.some((text) => text.includes("母线")), `给定/未核验：${JSON.stringify(accounted)}`).toBe(true)
   })
+
+  it("**另一处同类缺口（如实钉住）**：「P 是椭圆上任意一点」今天也读不出来，而且**整句消失**", () => {
+    /**
+     * 这条是上一轮那次**子串误伤顺带照出来的**：`圆上` 命中「椭**圆上**」时，这句会落进未核验；
+     * 把触发词收窄成 `(?<!椭)圆上` 之后，它又回到"**没人管**"的状态。
+     *
+     * 今天的事实与当年那条 `弦 AB 的长为 3` 是同一种病：**既不进给定、也不进未核验**。
+     * 补上"点在圆锥曲线上"的读取器之后，这条断言要**翻转**成"落进未核验 / 能核验"。
+     */
+    const parsed = parseDiagramObligations("椭圆 x²/9+y²/4=1，P 是椭圆上任意一点，作 P 处的切线。")
+    const accounted = [...parsed.givens, ...parsed.unverified].map((item) => item.sourceText)
+    expect(parsed.givens.filter((item) => item.sourceText.includes("椭圆上")), "今天读不出来").toEqual([])
+    expect(accounted.some((text) => text.includes("椭圆上")), `今天它应当是**消失**的（这正是缺口本身）：${JSON.stringify(accounted)}`).toBe(false)
+  })
 })
