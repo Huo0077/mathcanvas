@@ -996,8 +996,26 @@ function materialisedPointActions(
     return labelOf(matches[0]!.pointIds[0]!) === from ? 1 : -1
   }
 
+  /**
+   * **"要么全补、要么不补"只对"能补的那几类"成立**（2026-10-15 用户现场，直三棱柱那道题）。
+   *
+   * 现场：题面同时有 `E、F 分别为 AC 和 CC₁ 的中点` 与 `BF ⊥ A₁B₁`。后者也点名了 F，
+   * 于是 `missingNamedPoints` 给出**三条**条目：两条 `midpoint`（能补）+ 一条 `perpendicular`
+   *（**不是**能用一笔动作定的构造）。原先的循环遍历**全部**条目，遇到 `perpendicular`
+   * 那条 `constructiblePoint` 返回 `null` ⇒ **整批放弃** ⇒ E、F 一个都没建出来，
+   * 运行最后卡在"点名缺失：F"。
+   *
+   * 判据说清楚：不可构造的那些条目**不是"算不出来的那一条"**，而是**期待** ——
+   * "BF 垂直于 A₁B₁"正是要靠补出来的 F 去满足的（第二遍核验照样会判它，判不过就整批不补）。
+   * 所以这里先收成"能补的那几类"，再在那几类之间执行全补或不补；
+   * 而**没有被任何可补条目覆盖到的缺点名**仍然会让第二遍核验失败 ⇒ 救援如实放弃，
+   * 不会出现"补了一半就交差"。
+   */
+  const constructible = entries.filter((entry) => entry.kind === "midpoint" || entry.kind === "segmentRatio")
+  if (constructible.length === 0) return null
+
   const points: MaterialisedPoint[] = []
-  for (const entry of entries) {    const built = constructiblePoint(entry, vertexNames, plan.actions.length + points.length)
+  for (const entry of constructible) {    const built = constructiblePoint(entry, vertexNames, plan.actions.length + points.length)
     /**
      * **要么全补、要么不补**（设计 §3.2）：有一条算不出来就整批不补。
      *
