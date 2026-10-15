@@ -90,6 +90,36 @@ function foldedNamesOf(input: Record<string, unknown>): unknown {
 }
 
 /**
+ * **名字表对不上时，说清是哪个名字**（2026-10-15 用户现场）。
+ *
+ * 现场读数只说了"给了 3 个名字、面有 3 个顶点" —— 个数相等，所以那句话**指不出真凶**。
+ * 复现出来的真因是**模型把撇写成弯撇** `C’`（U+2019），不在点名字母表里。
+ * 所以这里把"非法"与"重复"分别点名出来（非法的那几个连字形一起给），
+ * 下一个人一眼就能看出是字符问题还是重名问题。
+ */
+function nameTableProblem(names: unknown, expected: number, kind: string): string {
+  const given = Array.isArray(names) ? names.length : "非数组"
+  const head = `给了 ${given} 个名字、${kind}有 ${expected} 个顶点`
+  if (!Array.isArray(names)) return `${head}（\`vertexNames\` 不是数组）`
+  const seen = new Set<string>()
+  const invalid: string[] = []
+  const duplicated: string[] = []
+  for (const name of names) {
+    if (typeof name !== "string" || !isPointName(name)) {
+      invalid.push(typeof name === "string" ? name : String(name))
+      continue
+    }
+    if (seen.has(name)) duplicated.push(name)
+    seen.add(name)
+  }
+  return [
+    head,
+    ...(invalid.length === 0 ? [] : [`**不是合法点名**的是 ${invalid.map((name) => `\`${name}\``).join("、")}（点名 = 一个大写字母 + 至多两个撇/下标；撇的变体在入口处已归一）`]),
+    ...(duplicated.length === 0 ? [] : [`**重复**的是 ${duplicated.map((name) => `\`${name}\``).join("、")}`])
+  ].join("；")
+}
+
+/**
  * **候选图的点名表，或者"为什么建不出来"**（2026-10-15 用户现场，四棱锥那道题）。
  *
  * 原先这一层只回 `Map | null`，而 `null` 有**八个**不同的成因（哪一笔动作没带点名、
@@ -130,7 +160,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
     const names = input.vertexNames
     const solid = solids[0]
     if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
-      return { ok: false, reason: `这一笔多面体的 \`vertexNames\` 与它的顶点对不上（给了 ${Array.isArray(names) ? names.length : "非数组"} 个名字、体有 ${solid.vertexIds.length} 个顶点；名字必须合法且互不重复）` }
+      return { ok: false, reason: `这一笔多面体的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, solid.vertexIds.length, "体")}` }
     }
     for (const [index, name] of names.entries()) {
       const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
@@ -186,7 +216,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
       const names = action.actionId === "solid.fold" ? foldedNamesOf(input) : input.vertexNames
       const face = faces[faceIndex]!
       if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
-        return { ok: false, reason: `这一笔面片的 \`vertexNames\` 与它的顶点对不上（给了 ${Array.isArray(names) ? names.length : "非数组"} 个名字、面有 ${face.pointIds.length} 个顶点；名字必须合法且互不重复）` }
+        return { ok: false, reason: `这一笔面片的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, face.pointIds.length, "面")}` }
       }
       for (const [nameIndex, name] of names.entries()) {
         const vertex = candidate.primitives.find((primitive) => primitive.id === face.pointIds[nameIndex])

@@ -96,6 +96,18 @@ describe("现场那道四棱锥：点名对不上图上的顶点时，系统要�
     expect(reason, reason).toContain("面片")
   })
 
+  /**
+   * **名字非法时，理由要指名道姓**（2026-10-15 用户现场：那句"给了 3 个名字、面有 3 个顶点"
+   * 在**个数相等**时指不出真凶，真因是弯撇；撇的变体现在已在入口归一，但别的非法写法
+   *（小写、全角）仍要能一眼看出是哪一个名字）。
+   */
+  it("名字**非法**时，理由点名是哪一个（不再只说给了几个）", () => {
+    const result = run([polyhedron(["A", "B", "C", "D", "p"])])
+    const reason = reasonFor(result, "PD = 2")
+    expect(reason, reason).toContain("不是合法点名")
+    expect(reason, reason).toContain("`p`")
+  })
+
   it("**模型读的那份技能说明**也把这条写进去了（现场那一轮就是没写名字）", () => {
     /**
      * 判据为什么长这样：模型的**唯一**依据是这份技能说明（`summary` 会进提示词），

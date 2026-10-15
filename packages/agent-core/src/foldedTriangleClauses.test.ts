@@ -1,6 +1,9 @@
+import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
+import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { parseDiagramObligations } from "./diagramObligations"
+import { compilePlan } from "./planCompiler"
 import { parseShapeClause } from "./solver/shapeGrammar"
 
 /**
@@ -46,10 +49,13 @@ describe("Rt△ABC 折起那道题：读得出什么、还读不出什么", () =
     const parsed = parseDiagramObligations(PROMPT)
     const lengths = parsed.givens.filter((item) => item.kind === "fixedLength").map((item) => [item.targets.join(""), item.value])
     // `C'D=1` 是括号里那句「（即 C'D=1，已知垂直）」读出来的 —— 一并记着。
-    expect(lengths, ledger(parsed)).toEqual([["AC", 3], ["BC", 4], ["CD", 1], ["C'D", 1]])
+    // 撇归一到 `′`（见上一条的说明），所以这里是 `C′D`。
+    expect(lengths, ledger(parsed)).toEqual([["AC", 3], ["BC", 4], ["CD", 1], ["C′D", 1]])
     const perpendicular = parsed.givens.find((item) => item.kind === "perpendicular")
     // 线的两个点名 + 平面的三个点名（`C'D⊥平面 ABD`）。
-    expect(perpendicular?.targets, ledger(parsed)).toEqual(["C'", "D", "A", "B", "D"])
+    // **撇已归一成规范字形 `′`**（2026-10-15）：题面写 `C'`、模型写 `C’`、文档标签写 `C′`
+    // 都归到同一种字符，映射才对得上 —— 所以这里断言的是 `C′`，不是题面里那个 ASCII 撇。
+    expect(perpendicular?.targets, ledger(parsed)).toEqual(["C′", "D", "A", "B", "D"])
   })
 
   it("**`D 为 AC 上一点` 不再静默消失**（今天还没有判据，但必须看得见）", () => {
@@ -86,5 +92,52 @@ describe("Rt△ABC 折起那道题：读得出什么、还读不出什么", () =
     const parsed = parseDiagramObligations(PROMPT)
     const accounted = [...parsed.givens.map((item) => item.sourceText), ...parsed.unverified.map((entry) => entry.sourceText)].join("｜")
     expect(accounted, `题设账：${accounted}`).not.toContain("折起")
+  })
+
+  /**
+   * **现场根因：模型把撇写成了弯撇**（`C’`，U+2019）。
+   *
+   * 贴来的读数是「这一笔面片的 `vertexNames` 与它的顶点对不上（给了 3 个名字、面有 3 个顶点）」——
+   * **个数相等**，所以那句话指不出真凶。离线复现出来的真因是**字符**：弯撇不在点名字母表里
+   *（`isPointName("C’") === false`），于是整张点名表建不出来，七条题设报同一句话。
+   *
+   * 修法：**读计划时把撇的变体归一到 `′`**（`actionInputs`），题面一侧的 `names()` 走同一个函数。
+   * 这条判据钉住"归一之后映射真的建起来了"。
+   */
+  it("撇写成弯撇（`C’`）时名字照样对得上 —— 不再报「与它的顶点对不上」", () => {
+    const C = { x: 0, y: 0, z: 0 }
+    const A = { x: 3, y: 0, z: 0 }
+    const B = { x: 0, y: 4, z: 0 }
+    const D = { x: 1, y: 0, z: 0 }
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "折",
+      factIds: [],
+      actions: [
+        { actionId: "solid.create_face", actionKey: "abd", factIds: [], inputs: { alias: "abd", vertices: [A, B, D], vertexNames: ["A", "B", "D"], label: "平面ABD" } },
+        { actionId: "solid.fold", actionKey: "bcd", factIds: [], inputs: { alias: "bcd", vertexNames: ["B", "C", "D"], vertices: [B, C, D], hinge: { from: "B", to: "D" }, apex: "C", apexAs: "C\u2019", angle: 90, label: "折起的三角形" } }
+      ]
+    } as unknown as PlanEnvelope
+
+    const result = compilePlan(plan, { document: createEmptyDocument("geometry3d"), prompt: PROMPT, conversationId: "curly-prime", documentGeneration: 0 })
+    const reasons = (result.diagramVerification?.checks ?? []).map((check) => check.reason).join("｜")
+    const why = `ok=${result.ok}；诊断：${result.diagnostics.map((entry) => `${entry.stage}/${entry.code}: ${entry.detail}`).join(" || ")}；核验：${reasons}`
+
+    // ① 名字表建起来了：**没有**那句"对不上"。
+    expect(reasons, why).not.toContain("与它的顶点对不上")
+    /**
+     * ② 弯撇那个点真的在图上（归一之后叫 `C′`）：`C'D=1` 因此**核得出来** ——
+     * 这一条比"读文档标签"强（编译没过时 `draftDocument` 是 `null`，而"这条长度量出来了"
+     * 本身就证明那个点存在、且核验器按它的坐标算过）。
+     */
+    const foldedLength = (result.diagramVerification?.checks ?? []).find((entry) => entry.sourceText.includes("C'D=1"))
+    expect(foldedLength?.status, why).toBe("passed")
+    /**
+     * ③ **仍然如实记着的第二处缺口**：折前的 `C` 在折后不存在，所以 `AC=3` / `BC=4` / `CD=1`
+     * 这类**折前条件**依旧"点名缺失：C" —— 那不是字符问题，是"折前条件今天一律对最终文档核验"。
+     * 把它钉在这里，免得下一轮把这条读数当成"归一没生效"。
+     */
+    expect(reasons, `核验：${reasons}`).toContain("点名缺失：C")
   })
 })

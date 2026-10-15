@@ -1,5 +1,5 @@
 import { type ParseError } from "./contracts"
-import { MAX_SOLID_SEGMENTS } from "@draw/geometry-kernel"
+import { canonicalPointName, MAX_SOLID_SEGMENTS } from "@draw/geometry-kernel"
 import { updatableInputFields } from "@draw/scene-graph"
 import { ACTIONS, CONIC_KINDS, SOLID_TEMPLATES, declaredFieldKind, type ActionSpec, type ActionId } from "./actionRegistry"
 import { boundedString, fail, finiteNumber, isPlainObject, optionalFiniteNumber, quotedName, readIdReference, readPoint2, readScopedReference, readVector3, rejectUnknownFields } from "./schemaReaders"
@@ -432,8 +432,10 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         const names: string[] = []
         for (const [index, name] of value.vertexNames.entries()) {
-          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
-          if (read === null) return null
+          const raw = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (raw === null) return null
+          /** 撇的排版变体在这里归一（`canonicalPointName`）：文档标签与题面点位必须是同一种字符，否则映射对不上。 */
+          const read = canonicalPointName(raw)
           if (names.includes(read)) {
             errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
             return null
@@ -554,8 +556,10 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         const names: string[] = []
         for (const [index, name] of value.vertexNames.entries()) {
-          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
-          if (read === null) return null
+          const raw = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (raw === null) return null
+          /** 撇的排版变体在这里归一（`canonicalPointName`）：文档标签与题面点位必须是同一种字符，否则映射对不上。 */
+          const read = canonicalPointName(raw)
           if (names.includes(read)) {
             // 重名会让"名字 → 下标"不是函数，判据无法唯一定位顶点。
             errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
@@ -617,8 +621,10 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       }
       const names: string[] = []
       for (const [index, name] of value.vertexNames.entries()) {
-        const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
-        if (read === null) return null
+        const raw = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+        if (raw === null) return null
+        /** 撇的排版变体在这里归一（`canonicalPointName`）：折痕与顶点都按名字指认，字形必须一致。 */
+        const read = canonicalPointName(raw)
         if (names.includes(read)) {
           // 重名会让"名字 → 下标"不是函数：折痕与顶点的指认都会变得没有唯一解。
           errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
@@ -637,13 +643,14 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       for (const endpoint of ["from", "to"] as const) {
         const read = boundedString(hingeFields[endpoint], `${path}.hinge.${endpoint}`, errors)
         if (read === null) return null
-        hinge[endpoint] = read
+        hinge[endpoint] = canonicalPointName(read)
       }
       out.hinge = hinge
       for (const field of ["apex", "apexAs"] as const) {
         const read = boundedString(value[field], `${path}.${field}`, errors)
         if (read === null) return null
-        out[field] = read
+        /** 与 `vertexNames` 同一口径：折后被带走的那个名字也要归一，否则查不到它是哪一个顶点。 */
+        out[field] = canonicalPointName(read)
       }
       if (typeof value.angle !== "number" || !Number.isFinite(value.angle)) {
         errors.push(fail("invalid_type", `${path}.angle`, "expected a finite fold angle in degrees"))
@@ -695,8 +702,10 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         const names: string[] = []
         for (const [index, name] of value.vertexNames.entries()) {
-          const read = boundedString(name, `${path}.vertexNames[${index}]`, errors)
-          if (read === null) return null
+          const raw = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+          if (raw === null) return null
+          /** 撇的排版变体在这里归一（`canonicalPointName`）：文档标签与题面点位必须是同一种字符，否则映射对不上。 */
+          const read = canonicalPointName(raw)
           if (names.includes(read)) {
             // 重名会让"名字 → 下标"不是函数，判据无法唯一定位顶点。
             errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))

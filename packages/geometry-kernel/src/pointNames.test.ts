@@ -53,6 +53,21 @@ describe("点名语法", () => {
     expect(canonicalPointName("A'")).toBe("A′")
     expect(canonicalPointName("A'₁")).toBe("A′₁")
     expect(canonicalPointName("A′")).toBe("A′")
+    /**
+     * **撇的排版变体都要归一**（2026-10-15 用户现场，Rt△ABC 折起）：模型把 `C'` 写成了
+     * **弯撇** `C’`（U+2019），而字母表只认 ASCII `'` 与 `′` ⇒ `isPointName` 为假 ⇒
+     * 整张点名表建不出来（七条题设报同一句话）。所以把常见变体逐字钉住。
+     */
+    expect(canonicalPointName("A’")).toBe("A′")
+    expect(canonicalPointName("A´")).toBe("A′")
+    expect(canonicalPointName("Aʹ")).toBe("A′")
+    expect(canonicalPointName("Aʼ")).toBe("A′")
+    expect(canonicalPointName("A`")).toBe("A′")
+    // 别的字符**不碰**：全角与小写仍然不是点名（归一不许变成"什么都收"）。
+    expect(isPointName("Ａ")).toBe(false)
+    expect(isPointName("a")).toBe(false)
+    expect(canonicalPointName("Ａ")).toBe("Ａ")
+    expect(canonicalPointName("a")).toBe("a")
   })
 
   it("不是点名的写法不许被凑合", () => {

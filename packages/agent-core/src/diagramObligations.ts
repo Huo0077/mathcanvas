@@ -1,4 +1,4 @@
-import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
+import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 
 import { parseShapeClause } from "./solver/shapeGrammar"
 
@@ -157,7 +157,11 @@ const POINT_COORDINATE_MATCHER: Matcher = {
  * 在解析层**根本读不出来**（棱柱题面 `AA₁⊥平面ABCD` 实测 0 条给定，只能作为 `unverified` 残留）。
  * 现在与核验器、内核顶面命名共用内核的 `pointNames`（S1，设计 §3.3）。
  */
-const names = (value: string): string[] => splitPointNames(value)
+/**
+ * 拆点名。**顺带把撇的排版变体归一**（`canonicalPointName`）：题面写 `C'`、模型写 `C’`、
+ * 文档标签写 `C′` 都归成同一种字符 —— 否则核验按名字查表时永远对不上（2026-10-15 用户现场）。
+ */
+const names = (value: string): string[] => splitPointNames(value).map(canonicalPointName)
 
 /**
  * 规则里拼点名子模式的**唯一**来源 —— 与 `names()` 同出一处。
