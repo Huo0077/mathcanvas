@@ -74,8 +74,17 @@ const SHAPE_CLAUSE = /在\s*(正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|
  *
  * **`平面` 二字可省**，多边形名必须与环长对得上（与立体那一支同一条纪律：
  * 数词与环长不符就问路，不替用户编一套）。
+ *
+ * ## `Rt` / `直角` 与 `△`（2026-10-15 用户现场）
+ *
+ * 现场那句 `Rt△ABC 中，∠C=90°，AC=3，BC=4。` **一条都没认出来**（`Rt` 是修饰词、`△` 是
+ * 三角形的符号，而这里只收"三角形"三个字）⇒ 环不存在 ⇒ `∠C=90°` 落成
+ * "题面里没有可识别的形状从句（点名环）…不知道是哪两条边"。
+ *
+ * **只认环**：`Rt△ABC` 这种写法本身**不说**直角在哪个顶点（题面下一句才说 `∠C=90°`），
+ * 凭 `Rt` 猜一个顶点就是替题面编条件 —— 所以这一层**不产出任何角度**，直角照旧由题面那句读。
  */
-const PLANAR_CLAUSE = /(?:平面)?\s*(四边形|三角形|五边形|六边形)\s*([A-Z][^\s，,。；;、]*?)\s*中/
+const PLANAR_CLAUSE = /(?:Rt|直角)?\s*(?:平面)?\s*(四边形|三角形|△|五边形|六边形)\s*([A-Z][^\s，,。；;、]*?)\s*中/
 
 const DASH = /[-−—–]/
 
@@ -103,7 +112,8 @@ function parsePlanarClause(prompt: string): RecognisedShape | null {
   if (match === null) return null
   const [, keyword, nameList] = match
   if (keyword === undefined || nameList === undefined) return null
-  const expected = NUMERALS[keyword[0]!]
+  // `△` 是三角形的符号（2026-10-15）：它没有数词可读，环长按 3 判 —— 与"三角形"同一个数。
+  const expected = keyword === "△" ? 3 : NUMERALS[keyword[0]!]
   if (expected === undefined) return null
   const base = ringOf(nameList)
   if (base === null || base.length !== expected) return null

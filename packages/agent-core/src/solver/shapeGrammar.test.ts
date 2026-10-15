@@ -138,6 +138,25 @@ describe("平面图形从句（乙案 Task 1）", () => {
     expect(parseShapeClause("在三角形ABC中，AB=3")?.base).toEqual(["A", "B", "C"])
   })
 
+  /**
+   * **`Rt△ABC` 与 `△ABC` 也要认**（2026-10-15 用户现场：`Rt△ABC 中，∠C=90°，AC=3，BC=4。`）。
+   *
+   * 现场读数：`∠C=90°` 落成"题面里没有可识别的形状从句（点名环）…不知道是哪两条边"，
+   * 而三条长度条件也没能帮上忙 —— 根因就是这一句**没被认出来**：`Rt` 是修饰词、`△` 是
+   * 三角形的符号，而这条正则只收"三角形"三个字。
+   *
+   * **只认环，不从 `Rt` 推出"哪个顶点是直角"**：`Rt△ABC` 这个写法本身**不说**直角在哪个顶点
+   *（题面下一句才说 `∠C=90°`），凭 `Rt` 猜一个顶点就是替题面编条件。
+   */
+  it("`Rt△ABC 中` 与 `△ABC 中` 认得出环（但不从 `Rt` 猜哪个是直角）", () => {
+    const right = parseShapeClause("Rt△ABC 中，∠C=90°，AC=3，BC=4。")
+    expect(right?.family).toBe("planar-figure")
+    expect(right?.base).toEqual(["A", "B", "C"])
+    expect(parseShapeClause("△ABC中，∠C=90°")?.base).toEqual(["A", "B", "C"])
+    // 直角由题面那句 `∠C=90°` 说，不由 `Rt` 猜 —— 形状这一层不带角度。
+    expect(right).not.toHaveProperty("rightAngle")
+  })
+
   it("护栏：立体那三族与既有问路**逐字不变**", () => {
     expect(parseShapeClause("在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，画出这个四棱锥")?.family).toBe("pyramid")
     expect(parseShapeClause("在三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.family).toBe("prism")
