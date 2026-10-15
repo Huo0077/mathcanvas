@@ -712,9 +712,44 @@ describe("representative tasks from the design", () => {
   /**
    * 同一句原话、同样**不给** `relations`，但坐标是歪的 —— 系统从原话抽出来的关系必须抓到它。
    * 这条防的是"方案 C 退化成放行不管"。
+   *
+   * **2026-10-15 起这一条的前提变成"把推导关掉"**（用户裁决：见证搜索默认开）：
+   * 默认那条路上，歪坐标会被**按题面重造**（下面那条用例钉住它），所以"拒"这件事只在
+   * 用户显式关掉推导、或题面条件不在可构造集合里时才成立 —— 而这两件事都必须仍然可验。
    */
-  it("refuses the same prompt when the coordinates do not satisfy the relations it read", async () => {
+  it("refuses the same prompt when the coordinates do not satisfy the relations it read（推导显式关掉）", async () => {
     // 直接在夹具上换掉顶点（只挪 P），其余照旧；`kind: "plan"` 是夹具本来就有的。
+    const base = pyramidPlan()
+    const skewed = {
+      ...base,
+      kind: "plan" as const,
+      actions: [{
+        actionId: "solid.create_polyhedron" as const,
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          vertices: [{ x: 1, y: 0, z: 4 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 3, z: 0 }, { x: 0, y: 3, z: 0 }],
+          faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+        }
+      }]
+    }
+    const { runtime } = makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d"), witnessSearch: false })
+
+    const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
+
+    expect(events.at(-1)).toBe("failed")
+  })
+
+  /**
+   * **同一句话在默认路径（推导开着）下不再被拒**（2026-10-15 用户裁决的现场）。
+   *
+   * 现场连续几次失败都是同一个形状：**模型手写的坐标不满足它自己读到的关系**，
+   * 而系统明明有"按题面条件造坐标"的能力（乙案 / 见证搜索），却默认关着。
+   * 现在默认开：这份歪坐标会被替换成按题面构造的那一组，于是走到确认面板。
+   * 判据只说"没被拒"（面板出现），**不替核验打分** —— 坐标对不对仍由第二遍核验说了算。
+   */
+  it("derives the coordinates on the default path instead of refusing the skewed ones", async () => {
     const base = pyramidPlan()
     const skewed = {
       ...base,
@@ -734,7 +769,7 @@ describe("representative tasks from the design", () => {
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
 
-    expect(events.at(-1)).toBe("failed")
+    expect(events.at(-1)).toBe("awaiting_confirmation")
   })
 
   it("drafts the oblique-prism section with midpoints at 0.5 and a moving point at the audited 0.4", async () => {

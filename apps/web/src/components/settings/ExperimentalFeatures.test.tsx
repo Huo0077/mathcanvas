@@ -41,15 +41,17 @@ describe("设置 → 实验性功能", () => {
     expect(screen.getByRole("switch", { name: /约束拖动/ }).getAttribute("aria-checked")).toBe("true")
   })
 
-  it("offers a default-off witness-search switch with honest coverage and persists the choice", () => {
+  it("witness search is **on by default** (2026-10-15) with honest coverage, and can be turned off", () => {
     render(<ExperimentalFeatures />)
     const toggle = screen.getByRole("switch", { name: "示意图见证搜索" })
-    expect(toggle.getAttribute("aria-checked")).toBe("false")
-    expect(screen.getByText(/只覆盖部分棱锥题型/)).toBeTruthy()
-    expect(screen.getByText(/题设核验/)).toBeTruthy()
-    fireEvent.click(toggle)
-    expect(loadWitnessSearchEnabled()).toBe(true)
+    // 默认开：这条救援「只救不抢」（候选已经满足题设时一步都不动），所以按用户裁决变成默认行为。
     expect(toggle.getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByText(/只覆盖部分题型/)).toBeTruthy()
+    expect(screen.getByText(/题设核验/)).toBeTruthy()
+    // 点一下 = **关掉**它（默认开之后，这一下是"不要替我重造坐标"）。
+    fireEvent.click(toggle)
+    expect(loadWitnessSearchEnabled()).toBe(false)
+    expect(toggle.getAttribute("aria-checked")).toBe("false")
     expect(loadConstrainedDragEnabled()).toBe(false)
   })
   /**
@@ -74,8 +76,12 @@ describe("设置 → 实验性功能", () => {
     expect(toggle.getAttribute("aria-checked")).toBe("true")
     // 落到存储里（面板读的是存储，不是自己那份 state）。
     expect(JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "{}")).toMatchObject({ proofExport: true })
-    // 而且**只开这一个**。
-    expect(loadWitnessSearchEnabled()).toBe(false)
+    /**
+     * **而且只开这一个、只写自己那个键**：见证搜索的默认开与这一下无关 ——
+     * 所以这里不再断言它为 `false`，改为断言"存下来的偏好里**没有**见证搜索这个键"
+     * （它现在是默认值，不是被这一下打开的）。
+     */
+    expect(JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "{}")).not.toHaveProperty("witnessSearch")
     expect(loadConstrainedDragEnabled()).toBe(false)
   })
 

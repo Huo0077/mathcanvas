@@ -39,11 +39,15 @@ describe("agent next phase feature flags", () => {
    * **这条判据真正盯的东西没变**：生产缺省不许自己变成开。上面第一条（`createAgentNextPhaseFlags()`
    * 全关）仍然把"有人把缺省改成 true"挡着；而"只有偏好能开、且只能开那一个"由下面两条钉住。
    */
-  it("keeps the application-owned flags fully off when no preference is stored", () => {
+  it("除见证搜索外全部关着：没存过偏好时，只有它默认开（2026-10-15 用户裁决）", () => {
     localStorage.clear()
 
+    /**
+     * `witnessSearch` 是**唯一**默认开的：它是「只救不抢」的救援（第一遍核验通过就一步不动、
+     * 第二遍必须真的通过才采用），默认开是单调变好；另外四个仍然必须由用户显式打开。
+     */
     expect(agentNextPhaseFlags()).toEqual({
-      obligationIR: false, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: false
+      obligationIR: false, witnessSearch: true, constrainedDrag: false, openProblemCompiler: false, proofExport: false
     })
   })
 
@@ -76,7 +80,8 @@ describe("agent next phase feature flags", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ proofExport: true }))
 
     expect(agentNextPhaseFlags()).toEqual({
-      obligationIR: false, witnessSearch: false, constrainedDrag: false, openProblemCompiler: false, proofExport: true
+      // `witnessSearch` 为 `true` 是**默认值**（2026-10-15 用户裁决），不是被 `proofExport` 这一下打开的。
+      obligationIR: false, witnessSearch: true, constrainedDrag: false, openProblemCompiler: false, proofExport: true
     })
 
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ proofExport: false }))

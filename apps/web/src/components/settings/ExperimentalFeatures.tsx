@@ -25,10 +25,12 @@ import { loadConstrainedDragEnabled, loadProofExportEnabled, loadWitnessSearchEn
  *
  * ## 为什么这里只有三个开关，不是五个
  *
- * `constrainedDrag` / `witnessSearch` / `proofExport` 都有真实执行路径与产品入口，但都默认关；
- * 见证搜索仅限有界题型的候选救援，可能替换模型给的坐标；
- * **形式证明导出**会在跑完作图之后去起一个 Lean 进程（只有桌面版能真跑），
- * 两条都必须显式选择。`obligationIR` / `openProblemCompiler` 没有可用的用户任务入口，
+ * `constrainedDrag` / `witnessSearch` / `proofExport` 都有真实执行路径与产品入口。
+ * **`constrainedDrag` 与 `proofExport` 默认关**，必须显式选择；而
+ * **「示意图见证搜索」2026-10-15 起默认开**（用户裁决）：它「只救不抢」——
+ * 第一遍核验通过时一步都不动，只有核验没过时才按题面条件搜另一组坐标，且第二遍必须真的通过
+ * 才采用（见 `nextPhasePreferences.ts` 的说明）。关掉它 = "不要替我重造坐标"。
+ * `obligationIR` / `openProblemCompiler` 没有可用的用户任务入口，
  * 不因这一页保存的偏好而被打开。
  */
 export function ExperimentalFeatures() {
@@ -39,7 +41,7 @@ export function ExperimentalFeatures() {
   return (
     <section className="experimental-features" aria-label="实验性功能">
       <h3>实验性功能</h3>
-      <p>这些开关会改变画布的行为，默认都是关的。打开哪一个，就只有哪一个生效。</p>
+      <p>这些开关会改变画布的行为。默认都关着，**只有「示意图见证搜索」默认开**（它可以关掉）。</p>
       <label className="experimental-feature-row">
         <span className="experimental-feature-text">
           <strong>约束拖动</strong>
@@ -64,7 +66,7 @@ export function ExperimentalFeatures() {
         <span className="experimental-feature-text">
           <strong>示意图见证搜索</strong>
           <span className="experimental-feature-hint">
-            关着：使用原来的候选图核验。打开：仅当候选不满足题设时尝试寻找另一组坐标；只覆盖部分棱锥题型，不保证所有高中题都能画。题设核验和手动确认不会跳过。
+            默认开：仅当候选不满足题设时，按题面条件尝试寻找另一组坐标（只覆盖部分题型，不保证所有高中题都能画；第二遍核验必须真的通过才会采用）。关掉：只用原来的候选图核验。题设核验和手动确认不会跳过。
           </span>
         </span>
         <input

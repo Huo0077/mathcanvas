@@ -74,17 +74,37 @@ export function saveConstrainedDragEnabled(enabled: boolean): void {
     // 见上：存不下属于可接受降级。
   }
 }
-/** 显式开启才允许编译期搜索并替换候选坐标；损坏的存储永远不能启用。 */
+/**
+ * 读「见证搜索」开关（Phase N2）—— **2026-10-15 用户裁决：默认开、可显式关掉**。
+ *
+ * ## 为什么改成默认开
+ *
+ * 这条救援的纪律是「**只救不抢**」（`planCompiler.rescuedByWitnessSearch`）：
+ * 第一遍的核验**通过**时它一步都不动（`not-needed`）；只有核验**没通过**（未核验 / 失败）时，
+ * 才按题面条件搜一组坐标，而且**第二遍必须真的通过**才采用，否则原样交回第一遍并标明坐标来源。
+ * 也就是说它**不可能**让一份本来能过的计划变差，只能把"本来会停在门禁上"的那一轮救回来 ——
+ * 而用户现场连续几次失败（三棱柱、四棱锥 ×3、Rt△ABC 折起）全都停在这条路上：
+ * 模型手写的坐标不满足题面条件，而系统明明有"按题面造坐标"的能力却默认关着。
+ *
+ * 所以按用户裁决把它变成**默认行为**；`false` 仍然有效（用户在设置里关掉它）。
+ *
+ * ## 语义（与之前那条"坏数据读成关"的差别，写清楚）
+ *
+ * **只有显式 `false` 才算关**；没存过、JSON 坏掉、值不是布尔（例如字符串 `"true"`）
+ * 一律按**默认（开）**读 —— 一条乱码不该悄悄关掉一个默认能力（真要关，设置里有开关）。
+ * 这与 `constrainedDrag` / `proofExport` 那两条**默认关**的实验开关口径相反，是刻意的：
+ * 它们是"打开会改变行为、必须显式选择"，而这一条是"默认就该跑、可以关掉"。
+ */
 export function loadWitnessSearchEnabled(): boolean {
   const store = storage()
-  if (store === null) return false
+  if (store === null) return true
   try {
     const serialized = store.getItem(NEXT_PHASE_PREFERENCES_KEY)
-    if (serialized === null) return false
-    const parsed = JSON.parse(serialized) as NextPhasePreferences | null
-    return parsed !== null && typeof parsed === "object" && parsed.witnessSearch === true
+    if (serialized === null) return true
+    const parsed = JSON.parse(serialized) as unknown
+    return !(parsed !== null && typeof parsed === "object" && (parsed as { witnessSearch?: unknown }).witnessSearch === false)
   } catch {
-    return false
+    return true
   }
 }
 

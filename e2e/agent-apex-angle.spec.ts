@@ -59,7 +59,9 @@ test.beforeEach(async ({ page }) => {
 
 test("an angle whose leg is the apex is solved for the height, verified in the panel, and measures 60° after commit", async ({ page }) => {
   await page.getByRole("button", { name: "设置" }).click()
-  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
+  // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
+  // 点一下会把这条救援**关掉**，而本用例正需要它开着。
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
   await openAgent(page)
   await page.getByRole("textbox", { name: "对话输入" }).fill(APEX_ANGLE)
   await page.getByRole("button", { name: "发送" }).click()

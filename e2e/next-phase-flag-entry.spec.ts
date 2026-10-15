@@ -71,23 +71,26 @@ test("仅切约束拖动时，偏好里没有见证搜索及其它未启用能�
   //（`obligationIR` / `openProblemCompiler`）—— 都不在这里，因为 `agentNextPhaseFlags()` **故意不读**它们。
   expect(stored).toEqual({ constrainedDrag: true })
 })
-test("用户可显式启用见证搜索，刷新保留，且不会同时打开其它能力", async ({ page }) => {
+test("见证搜索**默认开**、可以关掉、刷新保留，且不会连带打开其它能力", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "设置" }).click()
   const search = page.getByRole("switch", { name: "示意图见证搜索" })
-  await expect(search).not.toBeChecked()
-  await expect(page.getByText(/只覆盖部分棱锥题型/)).toBeVisible()
-  await expect(page.getByText(/题设核验和手动确认不会跳过/)).toBeVisible()
-  await search.click()
+  /**
+   * **2026-10-15 用户裁决：这条救援默认就是开的**（「只救不抢」—— 候选已经满足题设时一步都不动，
+   * 第二遍必须真的通过才采用）。所以这条用例的方向与从前相反：**默认 checked，点一下是关掉它**。
+   */
   await expect(search).toBeChecked()
-  const first = await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))
-  expect(first).toEqual({ witnessSearch: true })
+  await expect(page.getByText(/只覆盖部分题型/)).toBeVisible()
+  await expect(page.getByText(/题设核验和手动确认不会跳过/)).toBeVisible()
+  // 默认开**不写偏好**：只有用户显式关掉时才落存储。
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))).toBeNull()
+  await search.click()
+  await expect(search).not.toBeChecked()
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))).toEqual({ witnessSearch: false })
   await page.reload()
   await page.getByRole("button", { name: "设置" }).click()
-  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
-  await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
-  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
+  await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
 })
 
 /**
@@ -119,7 +122,8 @@ test("形式证明导出：默认关、能打开、刷新保留，且只开它�
   await page.reload()
   await page.getByRole("button", { name: "设置" }).click()
   await expect(page.getByRole("switch", { name: "形式证明导出" })).toBeChecked()
-  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
+  // 见证搜索默认就是开的（2026-10-15 用户裁决），所以这里看的是**它没被这一下写进偏好**。
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
   await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
 })
 

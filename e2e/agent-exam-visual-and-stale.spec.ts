@@ -262,7 +262,9 @@ test("the 3D canvas reports its version and its point labels, and says which rea
 test("the triangle family draws on the canvas the same version that was committed", async ({ page }) => {
   // 见证搜索那条救援路径要打开（夹具的坐标是错的，靠它按题面重造）——与 `agent-exam-triangle` 同一套。
   await page.getByRole("button", { name: "设置" }).click()
-  await page.getByRole("switch", { name: "示意图见证搜索" }).click()
+  // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
+  // 点一下会把这条救援**关掉**，而本用例正需要它开着。
+  await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
   await commit(page, TRIANGLE)
 
   await expect(page.locator('[data-3d-scene="true"]')).toBeVisible()

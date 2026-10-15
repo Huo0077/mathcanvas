@@ -41,9 +41,11 @@ describe("N3 产品入口：设置 → 实验性功能 → 约束拖动", () => 
     fireEvent.click(screen.getByRole("switch", { name: /约束拖动/ }))
 
     expect(agentNextPhaseFlags().constrainedDrag).toBe(true)
-    // 而且**只开这一个** —— 另外四个必须仍是关的。
-    expect(agentNextPhaseFlags().witnessSearch).toBe(false)
+    // 而且**只开这一个** —— 另外两个没有入口的能力必须仍是关的。
+    // （`witnessSearch` 2026-10-15 起**默认就是开的**（用户裁决），所以这里不再断言它为 false；
+    //   它在这里为 true 与点这个开关无关。）
     expect(agentNextPhaseFlags().proofExport).toBe(false)
+    expect(agentNextPhaseFlags().obligationIR).toBe(false)
   })
 
   it("存过的偏好在下次开应用时仍然有效（跨会话保持）", () => {

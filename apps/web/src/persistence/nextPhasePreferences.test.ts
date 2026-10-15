@@ -33,8 +33,13 @@ describe("next-phase 偏好（localStorage）", () => {
     expect(loadConstrainedDragEnabled()).toBe(false)
   })
 
-  it("见证搜索默认关闭，必须显式打开并且不覆盖约束拖动", () => {
-    expect(loadWitnessSearchEnabled()).toBe(false)
+  it("见证搜索**默认开**（2026-10-15 用户裁决）；显式关掉才关，且不覆盖约束拖动", () => {
+    /**
+     * 与同组那两条实验开关口径相反，这里是刻意的：这条救援「只救不抢」——
+     * 第一遍核验通过时它一步都不动，第二遍必须真的通过才采用（见 `nextPhasePreferences.ts` 的说明）。
+     * 所以默认开是单调变好；`false` 仍然有效，让用户在设置里关掉它。
+     */
+    expect(loadWitnessSearchEnabled()).toBe(true)
     saveConstrainedDragEnabled(true)
     saveWitnessSearchEnabled(true)
     expect(loadWitnessSearchEnabled()).toBe(true)
@@ -44,11 +49,15 @@ describe("next-phase 偏好（localStorage）", () => {
     expect(loadConstrainedDragEnabled()).toBe(true)
   })
 
-  it("畸形见证搜索偏好和字符串 true 都不能启用替换坐标的能力", () => {
+  it("坏数据**不会把默认能力关掉**：畸形 JSON 与字符串 `\"true\"` 都按默认（开）读", () => {
+    /**
+     * 原先这一条钉的是"坏数据不能**启用**"（那时默认是关）。默认翻转之后它钉的是反面：
+     * 坏数据不能**关掉**一个默认能力 —— 两条都成立的原因是同一个：**偏好只认布尔 `false`**。
+     */
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, '{ bad json')
-    expect(loadWitnessSearchEnabled()).toBe(false)
+    expect(loadWitnessSearchEnabled()).toBe(true)
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, JSON.stringify({ witnessSearch: "true" }))
-    expect(loadWitnessSearchEnabled()).toBe(false)
+    expect(loadWitnessSearchEnabled()).toBe(true)
   })
   it("存的是坏东西 → 当作关，不抛异常", () => {
     localStorage.setItem(NEXT_PHASE_PREFERENCES_KEY, "{ 这不是 JSON")
