@@ -140,4 +140,85 @@ describe("Rt△ABC 折起那道题：读得出什么、还读不出什么", () =
      */
     expect(reasons, `核验：${reasons}`).toContain("点名缺失：C")
   })
+
+  /**
+   * **这道题的题面自相矛盾**（2026-10-15，本轮的算术读数）。
+   *
+   * 题面写 `将 △BCD 沿 BD 折起 … 且 C'D⊥平面 ABD`。折是**绕直线 BD 的旋转**，而旋转
+   * **保持向量在轴方向上的分量**：`⟨DC', û⟩ = ⟨DC, û⟩`（`û` 是 BD 的单位方向）。
+   *
+   * 而 `C'D ⊥ 平面 ABD` 蕴含 `C'D ⊥ BD`（`BD` 就在那张平面里）⇒ 必须有 `⟨DC, û⟩ = 0`。
+   * 实测：`D=(1,0,0)`、`C=(0,0,0)`、`B=(0,4,0)` ⇒ `DC=(-1,0,0)`、`û=(-1,4,0)/√17`
+   * ⇒ `⟨DC, û⟩ = 1/√17 ≈ 0.2425 ≠ 0` —— **折哪个角都不行**。
+   *
+   * 这条用例把"扫遍所有折角的最小残差"自己算出来，并**对上引擎在同一处的读数**
+   *（现场那一笔折角是 90°，而 90° 恰好是残差最小处）：最小值 `= 1/√17`，
+   * 正好等于那个**不变量**。**所以"再补两个功能让它通过"是错的期待** ——
+   * 正确做法是让系统**说出这是矛盾**（下一步），而不是去凑一个折角。
+   */
+  it("**`C'D⊥平面 ABD` 与题面其余条件不可能同时成立**（旋转不变量，自己算）", () => {
+    const C = { x: 0, y: 0, z: 0 }
+    const B = { x: 0, y: 4, z: 0 }
+    const D = { x: 1, y: 0, z: 0 }
+    const axisLength = Math.hypot(B.x - D.x, B.y - D.y, B.z - D.z)
+    const axis = { x: (B.x - D.x) / axisLength, y: (B.y - D.y) / axisLength, z: (B.z - D.z) / axisLength }
+    const along = { x: C.x - D.x, y: C.y - D.y, z: C.z - D.z }
+    /** Rodrigues：把 `v` 绕单位轴 `axis`（过 `D`）转 `theta`。 */
+    const rotate = (theta: number) => {
+      const dot = along.x * axis.x + along.y * axis.y + along.z * axis.z
+      const parallel = { x: axis.x * dot, y: axis.y * dot, z: axis.z * dot }
+      const perp = { x: along.x - parallel.x, y: along.y - parallel.y, z: along.z - parallel.z }
+      const cross = { x: axis.y * perp.z - axis.z * perp.y, y: axis.z * perp.x - axis.x * perp.z, z: axis.x * perp.y - axis.y * perp.x }
+      return {
+        x: parallel.x + perp.x * Math.cos(theta) + cross.x * Math.sin(theta),
+        y: parallel.y + perp.y * Math.cos(theta) + cross.y * Math.sin(theta),
+        z: parallel.z + perp.z * Math.cos(theta) + cross.z * Math.sin(theta)
+      }
+    }
+    /** `DC' ⊥ 平面 ABD`（平面是 `z = 0`，法向 `(0,0,1)`）的残差 = 与法向夹角的正弦。 */
+    const residual = (theta: number) => {
+      const v = rotate(theta)
+      const length = Math.hypot(v.x, v.y, v.z)
+      return Math.sqrt(Math.max(0, 1 - (v.z / length) ** 2))
+    }
+    let best = Number.POSITIVE_INFINITY
+    let bestAt = 0
+    for (let step = 0; step < 720; step += 1) {
+      const theta = (step / 720) * 2 * Math.PI
+      const value = residual(theta)
+      if (value < best) { best = value; bestAt = theta }
+    }
+    // ① 最小值就是那个不变量 `|⟨DC, û⟩|` —— 扫遍所有折角都消不掉。
+    const invariant = Math.abs(along.x * axis.x + along.y * axis.y + along.z * axis.z)
+    expect(invariant, "不变量 = 1/√17").toBeCloseTo(1 / Math.sqrt(17), 12)
+    expect(best, "扫遍所有折角的最小残差").toBeCloseTo(invariant, 9)
+    expect(best, "离 0 很远：这条题设不可能成立").toBeGreaterThan(0.2)
+    // ② 最小值出现在 90°，而**现场那一笔折角正是 90°** —— 所以引擎报的 0.24254 就是最小值本身。
+    expect(bestAt, "最小处在 90°").toBeCloseTo(Math.PI / 2, 6)
+    expect(residual(Math.PI / 2), "与现场读数 0.24254 对上").toBeCloseTo(0.24254, 4)
+
+    /**
+     * **对照：换一个目标方向就成立了**（所以这更像题面的笔误，而不是"系统做不到"）。
+     *
+     * 同样绕 `BD` 折，若题面写的是 `C'D ⊥ AB`（`AB` 不在铰链上），扫一遍就能找到使
+     * `⟨DC', AB⟩ = 0` 的折角；这里把它算出来并回代，证明"折"这件事本身没问题。
+     */
+    const A = { x: 3, y: 0, z: 0 }
+    const ab = { x: B.x - A.x, y: B.y - A.y, z: B.z - A.z }
+    const perpendicularToAB = (theta: number) => {
+      const v = rotate(theta)
+      const cosine = (v.x * ab.x + v.y * ab.y + v.z * ab.z) / (Math.hypot(v.x, v.y, v.z) * Math.hypot(ab.x, ab.y, ab.z))
+      return Math.abs(cosine)
+    }
+    let bestVariant = Number.POSITIVE_INFINITY
+    let bestVariantAt = 0
+    for (let step = 0; step < 7200; step += 1) {
+      const theta = (step / 7200) * 2 * Math.PI
+      const value = perpendicularToAB(theta)
+      if (value < bestVariant) { bestVariant = value; bestVariantAt = theta }
+    }
+    expect(bestVariant, "`C'D ⊥ AB` 有解（残差可以到 0）").toBeLessThan(1e-3)
+    // 解析解也对得上：`⟨DC', AB⟩ = 19/17 + (32/17)·cosθ = 0 ⇒ cosθ = −19/32`。
+    expect(Math.cos(bestVariantAt), "找到的折角对上解析解").toBeCloseTo(-19 / 32, 3)
+  })
 })
