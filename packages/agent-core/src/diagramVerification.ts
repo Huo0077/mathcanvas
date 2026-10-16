@@ -834,6 +834,45 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (length(at(1), at(2)) <= 1e-10) return null
     return { actual: length(middle, average), expected: 0, tolerance: distanceTolerance(length(at(1), at(2))) }
   }
+  /**
+   * **点在线段上**（2026-10-15 用户现场，Rt△ABC 折起那道题）：`D 为 AC 上一点`。
+   *
+   * 与 `pointOnConic` **只差一个字**，但它是**两件事**，而且**必须分开说** ——
+   * 因为它们不是同一种错：
+   * ① **共线**：点到这条**直线**的距离必须为 0 ⇒ 不为 0 就是「**根本不在 `AC` 这条线上**」；
+   * ② **在线段内**：参数 `t = (D−A)·(C−A)/|AC|²` 必须落在 `[0,1]` ⇒ `t<0` / `t>1` 是
+   *    「**在延长线上**」。题面写的是「`AC` 上一点」，而「`AC` 的延长线上一点」是**另一件事** ——
+   *    把这两种读错法说成同一句，用户不知道该改哪里。
+   *
+   * 残余取两者的**较大值**（等价于「点到这条线段的距离」）：`expected = 0`，
+   * 容差用**长度那把尺子**并按 `|AC|` 缩放（与上面 `midpoint` 同一条约定 —— 所以 IR 那一侧
+   * **不给**一个固定容差，见 `obligationIR.toleranceFor` 的说明）。
+   * 点名缺失（图上没有 `D`/`A`/`C`）时返回 `null`，由调用方如实报「点名缺失：X」。
+   *
+   * **位置提醒（本轮踩到）**：这一支必须排在 `at` 的**定义之后**（`const at = …` 在下面）——
+   * 早先挨着 `pointOnConic` 放，运行时 `ReferenceError: Cannot access 'at' before initialization`。
+   */
+  if (item.kind === "pointOnSegment") {
+    const [name, from, to] = [item.targets[0], item.targets[1], item.targets[2]]
+    if (name === undefined || from === undefined || to === undefined) return null
+    const point = at(0)
+    const start = at(1)
+    const end = at(2)
+    const span = length(start, end)
+    if (span <= 1e-10) return null
+    const along = ((point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y) + (point.z - start.z) * (end.z - start.z)) / (span * span)
+    const foot = { x: start.x + along * (end.x - start.x), y: start.y + along * (end.y - start.y), z: start.z + along * (end.z - start.z) }
+    const offLine = length(point, foot)
+    /** 超出 `[0,1]` 的那一段，按长度计（`t<0` 是在起点这一侧的延长线上）。 */
+    const outside = along < 0 ? -along * span : along > 1 ? (along - 1) * span : 0
+    const tolerance = distanceTolerance(span)
+    const detail = offLine > tolerance
+      ? `实测点 ${name} 到直线 ${from}${to} 的距离 ${formatNumber(offLine)}（0 = 正好在这条线上）—— 它**根本不在** ${from}${to} 这条线上。`
+      : outside > tolerance
+        ? `点 ${name} 确实在直线 ${from}${to} 上，但**不在线段内**：参数 t=${formatNumber(along)} 落在 [0,1] 之外（超出 ${formatNumber(outside)}）—— 题面说的是「${from}${to} 上一点」，而这是**延长线**上的一点，两件事。`
+        : `点 ${name} 落在线段 ${from}${to} 上（参数 t=${formatNumber(along)}，到直线距离 ${formatNumber(offLine)}）。`
+    return { actual: Math.max(offLine, outside), expected: 0, tolerance, detail }
+  }
   if (item.kind === "planePerpendicular") {
     const firstCount = item.planeLengths?.[0] ?? item.targets.length / 2
     const secondCount = item.planeLengths?.[1] ?? item.targets.length - firstCount

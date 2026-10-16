@@ -58,18 +58,20 @@ describe("Rt△ABC 折起那道题：读得出什么、还读不出什么", () =
     expect(perpendicular?.targets, ledger(parsed)).toEqual(["C′", "D", "A", "B", "D"])
   })
 
-  it("**`D 为 AC 上一点` 不再静默消失**（今天还没有判据，但必须看得见）", () => {
+  it("**`D 为 AC 上一点` 现在读成一条义务**（判据：共线 + 落在线段内）", () => {
     /**
-     * 这一条是本轮**读账摊开之后照出来的第三处缺陷**：`D 为 AC 上一点` 此前既不进给定、
-     * 也不进未核验 —— 与当年 `弦 AB 的长为 3`、`P 是椭圆上任意一点` 同一种病。
-     * 本轮先把**触发词**接上（不许消失）并给它一句**说得清**的理由；
-     * 真判据（与该线段共线且落在线段内）还没做 —— 做到之后这条断言要**翻转**成"读成一条义务"。
+     * 这一条最初钉的是"它不再静默消失"（触发词接上、理由说得清），并在注释里写明
+     * **真判据做到之后这条断言要翻转**。2026-10-15 就是那一天：判据（`pointOnSegment`）
+     * 落地了 —— 这句从"未核验"变成**给定**，`targets` = [点, 线段两端]，
+     * 判两件事：① 与这条直线共线、② 落在线段内（`t ∈ [0,1]`）。
      */
     const parsed = parseDiagramObligations(PROMPT)
-    const entry = parsed.unverified.find((item) => item.sourceText.includes("AC 上一点"))
-    expect(entry, ledger(parsed)).toBeDefined()
-    expect(entry!.reason, entry!.reason).toContain("还没有判据")
-    expect(parsed.givens.some((item) => item.targets.join("").includes("AC") && item.kind === "segmentRatio"), "今天读不成义务").toBe(false)
+    const onSegment = parsed.givens.filter((item) => item.kind === "pointOnSegment")
+    expect(onSegment.map((item) => item.targets), ledger(parsed)).toEqual([["D", "A", "C"]])
+    // 它**不再**留在未核验里。
+    expect(parsed.unverified.map((entry) => entry.sourceText).join("｜"), ledger(parsed)).not.toContain("AC 上一点")
+    // 而且**不许**被读成别的种类（`segmentRatio` 那条曾经是个诱惑）。
+    expect(parsed.givens.some((item) => item.kind === "segmentRatio" && item.targets.join("").includes("AC")), ledger(parsed)).toBe(false)
   })
 
   it("**还读不出的**照实留在未核验里（不静默、也不假装读懂）", () => {
