@@ -23,6 +23,9 @@
  *   **按扩语法处理**（另一条路是明确拒绝整道题，那条被否掉了）。三层及以上没有真实来源，不收。
  * - **ASCII 下标 `A1` 不算点名**。它必须留在"读不出"那一侧（进 `unverified` 显形），
  *   不许在这里被凑合解析成 `A₁` —— 那正是"悄悄改题"的老毛病。
+ *   **分界（2026-10-15 用户现场）**：这条契约管的是**题面**；而 `canonicalPointName` 会把
+ *   ASCII 数字后缀归一（下面那条注释），它用在**计划里那份名字表**与**比较**上 ——
+ *   题面里的 `A1` 仍然读不出，计划里的 `A2` 会被读成 `A₂`（那是模型在说"这个顶点叫 A₂"）。
  * - `′` 与 `'` 是**同一个后缀的两种字形**：两者都合法，但**比较时必须按规范字形**
  *   （`canonicalPointName`），否则同一个点会以两种写法同时进点名表。
  * - `splitPointNames` 只在拆出来的点名**正好铺满输入**时返回结果；有看不懂的字符就返回 `[]`
@@ -67,8 +70,25 @@ export const POINT_NAME_SUFFIXES: readonly string[] = [POINT_NAME_PRIME, "₁", 
  * 不碰别的字符：`Ｂ`（全角）、`c`（小写）、`C `（带空格）仍然不是点名。
  */
 export function canonicalPointName(value: string): string {
-  return value.replace(/['’´ʹʼ`]/g, POINT_NAME_PRIME)
+  const primes = value.replace(/['’´ʹʼ`]/g, POINT_NAME_PRIME)
+  /**
+   * **ASCII 数字后缀归一到下标字形**（2026-10-15 用户现场，正四棱柱 `A₂B₂C₂D₂`）。
+   *
+   * 现场：题面写的是**下标**，而模型在计划的名字表里写成了 `A2`/`B2`/`C2`/`D2` ⇒
+   * `isPointName` 为假 ⇒ 整张点名表建不出来 ⇒ 七条题设报同一句"与它的顶点对不上"。
+   * 与"弯撇"同一类：**同一个名字的两种写法**，在**读入**时归一，两侧才是同一种字符。
+   *
+   * 三条边界：① 只对**以字母开头**的串做（别的串原样返回）；② 只在前一个字符是字母或后缀
+   * 时才替换（`A2` → `A₂`，`A12` → `A₁₂`）；③ 只认 `1`–`6`（`0` 没有下标字形，
+   * `A10` 归一成 `A₁0` 之后**仍然不是**点名 —— 不许凑出一个"看着像"的名字）。
+   * 题面那一侧的契约（`A1` 读不出）**不受影响**：那条走 `POINT_NAME_SOURCE` 的正则。
+   */
+  if (!/^[A-Z]/.test(primes)) return primes
+  return primes.replace(/(?<=[A-Z′₁₂₃₄₅₆1-6])[1-6]/g, (digit) => SUBSCRIPT_DIGITS[digit] ?? digit)
 }
+
+/** ASCII 数字 → 下标字形（`canonicalPointName` 用；只收 `1`–`6`，与 `POINT_NAME_SUFFIXES` 同一套）。 */
+const SUBSCRIPT_DIGITS: Record<string, string> = { "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆" }
 
 /** 这个名字已经带了几层后缀（0–2）。不是点名时返回 `-1`。 */
 export function pointNameSuffixCount(value: string): number {

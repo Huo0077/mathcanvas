@@ -70,6 +70,27 @@ describe("点名语法", () => {
     expect(canonicalPointName("a")).toBe("a")
   })
 
+  /**
+   * **ASCII 数字下标也是"同一个名字的另一种写法"**（2026-10-15 用户现场，正四棱柱）：
+   * 题面写的是**下标** `A₂`，而模型在**计划的名字表**里写成了 `A2` —— 于是
+   * `isPointName("A2")` 为假、整张点名表建不出来（七条题设报同一句"与它的顶点对不上"）。
+   *
+   * **分界要守住**：`isPointName("A1")` **仍然为假** —— 题面里的 `A1` 照旧留在"读不出"那一侧
+   *（不许被凑合解析，见模块注释那条契约）；这里归一的是**计划里那份名字表**。
+   */
+  it("计划里的名字表：ASCII 数字下标归一到下标字形（题面那一侧的契约不动）", () => {
+    expect(canonicalPointName("A1")).toBe("A₁")
+    expect(canonicalPointName("A2")).toBe("A₂")
+    expect(canonicalPointName("A12")).toBe("A₁₂")
+    expect(canonicalPointName("A1′")).toBe("A₁′")
+    // `0` 没有下标字形 ⇒ 归一之后**仍然不是**点名（不许凑出一个看着像的名字）。
+    expect(canonicalPointName("A10")).toBe("A₁0")
+    expect(isPointName(canonicalPointName("A10"))).toBe(false)
+    // 题面那一侧一个字没动。
+    expect(isPointName("A1")).toBe(false)
+    expect(isPointName("A₁")).toBe(true)
+  })
+
   it("不是点名的写法不许被凑合", () => {
     expect(isPointName("AB")).toBe(false)
     expect(isPointName("A1")).toBe(false)

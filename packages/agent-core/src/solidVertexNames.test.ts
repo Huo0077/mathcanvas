@@ -108,6 +108,40 @@ describe("现场那道四棱锥：点名对不上图上的顶点时，系统要�
     expect(reason, reason).toContain("`p`")
   })
 
+  /**
+   * **模型把下标写成数字**（`A2` 而不是 `A₂`）—— 2026-10-15 用户现场（正四棱柱 A₂B₂C₂D₂）。
+   *
+   * 现场那条诊断已经把真凶点名出来了（`**不是合法点名**的是 A2、B2、C2、D2`），而题面里写的是
+   * **下标** ⇒ 与"弯撇"同一类：**同一个名字的两种写法**。题面那一侧的契约（`A1` 必须留在
+   * "读不出"侧）**一个字没动**；这里归一的只是**计划里那份名字表**。
+   *
+   * 判据两条：① 不再报"与它的顶点对不上"（表建起来了）；② `AA₂=1` 这类条件因此**核得出来**
+   *（`A` 来自棱柱、`A₂` 来自那一笔面片）。
+   */
+  it("**下标写成数字**（`A2`）时名字照样对得上，条件核得出来", () => {
+    const prompt = "正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2，AA₁=4。点 A₂,B₂,C₂,D₂ 分别在棱 AA₁,BB₁,CC₁,DD₁ 上，且 AA₂=1，BB₂=2。"
+    const A = { x: 0, y: 0, z: 0 }
+    const B = { x: 2, y: 0, z: 0 }
+    const C = { x: 2, y: 2, z: 0 }
+    const D = { x: 0, y: 2, z: 0 }
+    const actions = [
+      { actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism", basePolygon: [A, B, C, D], vector: { x: 0, y: 0, z: 4 }, vertexNames: ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"], label: "正四棱柱" } },
+      // 截面那个四边形：**名字用 ASCII 数字**（现场那一笔就是这个形状）。
+      { actionId: "solid.create_face", actionKey: "cut", factIds: [], inputs: { alias: "cut", vertices: [{ x: 0, y: 0, z: 1 }, { x: 2, y: 0, z: 2 }, { x: 2, y: 2, z: 3 }, { x: 0, y: 2, z: 2 }], vertexNames: ["A2", "B2", "C2", "D2"], label: "截面 A₂B₂C₂D₂" } }
+    ]
+    const result = compilePlan(
+      { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "正四棱柱截面", factIds: [], actions } as unknown as PlanEnvelope,
+      { document: createEmptyDocument("geometry3d"), prompt, conversationId: "digit-suffix", documentGeneration: 0 }
+    )
+    const checks = result.diagramVerification?.checks ?? []
+    const why = `ok=${result.ok}；诊断：${result.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join(" || ")}；核验：${checks.map((check) => `${check.sourceText} => ${check.status}`).join(" | ")}`
+
+    expect(checks.map((check) => check.reason).join("｜"), why).not.toContain("与它的顶点对不上")
+    // `AA₂=1` 归一之后找得到两个端点：`A` 在棱柱上、(0,0,1) 那个点归一后叫 `A₂`。
+    const length = checks.find((check) => check.sourceText.startsWith("AA₂=1"))
+    expect(length?.status, why).toBe("passed")
+  })
+
   it("**模型读的那份技能说明**也把这条写进去了（现场那一轮就是没写名字）", () => {
     /**
      * 判据为什么长这样：模型的**唯一**依据是这份技能说明（`summary` 会进提示词），
