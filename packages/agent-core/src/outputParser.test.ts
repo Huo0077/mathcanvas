@@ -35,7 +35,7 @@ const ROUND_TWO_INVENTED_SEGMENT = JSON.stringify({
   kind: "plan",
   goal: "平面四边形与翻折片（脱敏）",
   factIds: [],
-  actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+  actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_wire", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
 })
 
 /**
@@ -73,7 +73,7 @@ describe("Task 2 — an unregistered action is not a malformed envelope", () => 
     const message = describeSchemaFailureForUser(schemaFailureDetail(second.errors), [schemaFailureDetail(first.errors)])
 
     // ① 点名那个不存在的动作。
-    expect(message).toContain("solid.create_segment")
+    expect(message).toContain("solid.create_wire")
     // ② 三个路径都要在（用户/模型才知道是三笔都写错了，不是一笔）。
     for (const index of [0, 1, 2]) expect(message).toContain(`envelope.actions[${index}].actionId`)
     // ③ 上一轮引擎已经给过的建议要一起回到用户面前 —— 那正是模型走偏的原因。
@@ -323,18 +323,22 @@ describe("repair prompt", () => {
    * 现场第二轮：模型把 `solid.create_segment` 写了三次。原提示只给出三条路径
    *（`envelope.actions[0..2].actionId: unregistered action '…'`），**没有说"这个动作不存在、
    * 你该用哪个"** —— 而它上一轮刚被同一类问题挡过一次，每一轮只有一次修复机会。
+   *
+   * **2026-10-15：那个名字后来真的实现了**（立体里的线段动作 ⇒ `solid.create_segment`，
+   * 见 `solidSegment.test.ts`）。这条用例要的是"**不存在的**动作名能被点名"，所以夹具换成
+   * 一个今天仍然不存在的名字（`solid.create_wire`）—— 覆盖不变，现场记录也照旧留着。
    */
   it("names the invented solid action and tells the model not to look for it", () => {
     const invented = JSON.stringify({
       ...validPlan,
-      actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+      actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_wire", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
     })
     const result = parseStrictJsonEnvelope(invented)
     if (result.ok) throw new Error("expected a failure")
 
     const prompt = describeRepairPrompt(result)
 
-    expect(prompt).toContain("solid.create_segment")
+    expect(prompt).toContain("solid.create_wire")
     expect(prompt).toContain("solid.create_face")
     expect(prompt).toContain("不要自己造动作名")
   })

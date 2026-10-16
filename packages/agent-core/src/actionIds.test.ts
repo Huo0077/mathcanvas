@@ -32,8 +32,11 @@ describe("draft action catalogue", () => {
     // "平面四边形 + 翻折片"这类**开放曲面**原先没有入口，模型只能拿多面体去套、必然被拒）之后的实测值。
     // **34** 是加上 `solid.fold`（2026-10-11 用户现场：「将三角形AEF沿EF翻折至三角形PEF」连发 7 次都不通；
     // 折后的坐标由内核的刚体旋转算出来，模型不再手算 —— 它手算的那几次给出的都是退化几何）之后的实测值。
-    expect(DRAFT_ACTION_IDS).toHaveLength(34)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(34)
+    // **35** 是加上 `solid.create_segment`（2026-10-15 用户现场：立体里"两点连成一条线段"**没有动作** ——
+    // 模型要画 `EF`、`BD` 只能拿 `planar.create_segment` 凑，而那条落在 `z=0` 上，`planCompiler`
+    // 甚至专门劝它别这么干 ⇒ 模型无处可去）之后的实测值。
+    expect(DRAFT_ACTION_IDS).toHaveLength(35)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(35)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

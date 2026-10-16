@@ -252,7 +252,7 @@ describe("the confirm and commit cycle", () => {
               kind: "plan",
               goal: "平面四边形与翻折片（脱敏）",
               factIds: [],
-              actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
+              actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_wire", actionKey: `seg-${index}`, factIds: [], inputs: {} }))
             }) as unknown as PlanEnvelope,
           requestId: `req-${attempt}`,
           attemptId: `attempt-${attempt}`
@@ -266,7 +266,7 @@ describe("the confirm and commit cycle", () => {
     expect(result.phase).toBe("failed")
     const message = useAgentStore.getState().activeConversation!.messages.at(-1)!.failure?.message ?? ""
     // ① 点名那个不存在的动作，② 三个路径一个不少。
-    expect(message).toContain("solid.create_segment")
+    expect(message).toContain("solid.create_wire")
     for (const index of [0, 1, 2]) expect(message).toContain(`envelope.actions[${index}].actionId`)
     // ③ 上一轮引擎已经给过的正确出口要一起回到用户面前。
     expect(message).toContain("solid.create_face")

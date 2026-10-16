@@ -48,9 +48,12 @@ describe("Task 3 — the prompt menu and the action catalogue are the same set",
     expect(policy).toContain("solid.fold")
     expect(policy).toContain("开放的面")
     expect(policy).toContain("闭合实体")
-    // 立体里**没有**线段动作；平面线段才叫 `planar.create_segment`。
+    // **立体与平面的线段是两件事**（2026-10-15 用户现场）：立体里"两点连成一条线段"用
+    // `solid.create_segment`（**只给两个点名**，两端必须是图上已经有的点）；平面的线段才叫
+    // `planar.create_segment`（它落在 `z=0` 上）。这一句此前写的是「立体里**没有**线段动作」——
+    // 于是模型**无处可去**（它当年自己造的名字**正是** `solid.create_segment`）。
+    expect(policy).toContain("solid.create_segment")
     expect(policy).toContain("planar.create_segment")
-    expect(policy).not.toContain("solid.create_segment")
   })
 })
 

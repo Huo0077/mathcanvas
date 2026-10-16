@@ -290,7 +290,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 那段规则本身会点名 `solid.create_face`，而它并不在本轮菜单里。
        */
       ...(input.actionIds.some((actionId) => actionId.startsWith("solid."))
-        ? ["**面分三种，别混**：**开放的面**（四边形、三角形片、翻折片这类不围出体积的平面图形）用 `solid.create_face`（每张给 `vertices` 与 `vertexNames`，它**自带面、也自带边**）；**闭合实体**（要围出体积的多面体）用 `solid.create_polyhedron`；沿折痕**折**用 `solid.fold`（折后坐标由内核算，不要手写）。立体里**没有**线段动作 —— 平面的线段才叫 `planar.create_segment`；**不要自己造动作名**。"]
+        ? ["**面分三种，别混**：**开放的面**（四边形、三角形片、翻折片这类不围出体积的平面图形）用 `solid.create_face`（每张给 `vertices` 与 `vertexNames`，它**自带面、也自带边**）；**闭合实体**（要围出体积的多面体）用 `solid.create_polyhedron`；沿折痕**折**用 `solid.fold`（折后坐标由内核算，不要手写）。**立体里两点连成一条线段**用 `solid.create_segment`：**只给两个点名**（`vertexNames`）—— 两端必须是图上**已经建出来**的点（题面点名的顶点、棱上的分点、折出来的点），坐标由前面几笔决定，**不要再写一遍坐标**；点名对不上会被当场拒。**平面的**线段才叫 `planar.create_segment`（它落在 `z=0` 上）。**不要自己造动作名**。"]
         : []),
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),

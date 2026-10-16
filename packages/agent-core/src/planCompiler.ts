@@ -1989,7 +1989,7 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   const advice: string[] = []
   const planarZ = errors.some((error) => error.path.includes(".inputs.points") && error.detail.includes("'z'"))
   if (planarZ) {
-    advice.push("提醒：`planar.*` 动作在**平面上**作图，坐标只能有 `x`、`y`，**不接受 `z`** —— 带上 `z` 会被直接拒。立体图元（顶点/棱/面）请由 `solid.*` 动作一次建出；不要再用 `planar.*` 去补立体的边。")
+    advice.push("提醒：`planar.*` 动作在**平面上**作图，坐标只能有 `x`、`y`，**不接受 `z`** —— 带上 `z` 会被直接拒。立体图元（顶点/棱/面）请由 `solid.*` 动作一次建出；**要连两点之间的线**用 `solid.create_segment`（**只给两个点名**，两端必须是图上已经有的点），不要再用 `planar.*` 去补立体的边。")
   }
   const answerInPlan = errors.some((error) => error.path === "envelope.answer" || error.path === "envelope.toolResultRefs" || error.path === "envelope.questions")
   if (answerInPlan) {

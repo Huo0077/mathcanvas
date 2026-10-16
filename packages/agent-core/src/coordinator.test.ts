@@ -52,7 +52,7 @@ function inventedSegmentEnvelope(): PlanEnvelope {
     kind: "plan",
     goal: "平面四边形与翻折片（脱敏）",
     factIds: ["fact-1"],
-    actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_segment", actionKey: `seg-${index}`, factIds: ["fact-1"], inputs: {} }))
+    actions: [0, 1, 2].map((index) => ({ actionId: "solid.create_wire", actionKey: `seg-${index}`, factIds: ["fact-1"], inputs: {} }))
   } as unknown as PlanEnvelope
 }
 
@@ -226,7 +226,7 @@ describe("coordinator refusal paths", () => {
 
     expect(harness.coordinator.phase()).toBe("failed")
     const failure = events.at(-1)?.detail ?? ""
-    expect(failure).toContain("solid.create_segment")
+    expect(failure).toContain("solid.create_wire")
     for (const index of [0, 1, 2]) expect(failure).toContain(`envelope.actions[${index}].actionId`)
 
     const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest

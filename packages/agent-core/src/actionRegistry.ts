@@ -478,6 +478,22 @@ export const ACTIONS = {
     required: ["vertices"]
   },
   /**
+   * **立体里"两点连成一条线段"**（2026-10-15 用户现场，四棱锥那道题的 `EF`）。
+   *
+   * 此前立体几何**没有**这个动作，而 `planCompiler` 还专门劝模型"别用 `planar.create_segment`
+   * 去补立体的边"（那条提示是对的：平面线段落在 `z=0` 上）—— 于是模型**无处可去**。
+   *
+   * **只收点名**（`vertexNames`，恰好两个）：两端必须是文档里已经建出来的点，
+   * 坐标由那几笔决定 —— 再让模型写一遍坐标就是第二个真源（现场为这件事栽过很多次）。
+   */
+  "solid.create_segment": {
+    inputFields: ["alias", "vertexNames", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["vertexNames"],
+    defaults: { vertexNames: { policy: "ask_user", question: "这条线段连的是图上哪两个点？给两个点名。" } }
+  },
+  /**
    * **把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
    *
    * 现场那句话「将三角形AEF沿EF翻折至三角形PEF」连发 7 次、7 次死因各不相同，其中查实的一条是

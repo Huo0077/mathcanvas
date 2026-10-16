@@ -27,10 +27,16 @@ describe("Task 3 — the published tool schema and the action catalogue are the 
   })
 
   it("never publishes a name that no action implements", () => {
-    const published = publishedActionIds(buildPlanToolSchema(["solid.create_segment", "planar.create_point"]))
+    /**
+     * **这个名字换过一次**（2026-10-15）：现场模型自己造的动作名正是 `solid.create_segment`，
+     * 而那条缺口**后来真的被补上了**（立体里的线段动作，`scene-graph` 的 `compileSolidSegmentAction`）
+     * ⇒ 它现在**是**实现过的动作，拿它当"没人实现的名字"前提就反了。
+     * 覆盖不变：换一个今天仍然不存在的名字（`solid.create_wire`）。
+     */
+    const published = publishedActionIds(buildPlanToolSchema(["solid.create_wire", "planar.create_point"]))
 
     expect(published).toEqual(["planar.create_point"])
-    expect(published).not.toContain("solid.create_segment")
+    expect(published).not.toContain("solid.create_wire")
   })
 })
 

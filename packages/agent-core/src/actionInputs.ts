@@ -532,6 +532,44 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
      * **几何语义**（互异 / 不共线 / 共面）留给内核 —— 与 `solid.create_polyhedron` 那条边界同源，
      * 不在传输层抄第二遍。
      */
+    case "solid.create_segment": {
+      /**
+       * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。
+       *
+       * 两端必须是这份文档里**已经建出来**的点（题面点名的顶点、棱上的分点、折出来的点），
+       * 由执行层按点名从文档取 `pointIds`（`scene-graph` 的 `compileSolidSegmentAction`）。
+       * 所以这里**恰好收两个**名字。
+       */
+      const out: Record<string, unknown> = withAlias({})
+      if (!Array.isArray(value.vertexNames)) {
+        errors.push(fail("invalid_type", `${path}.vertexNames`, "expected the two point names this segment connects"))
+        return null
+      }
+      if (value.vertexNames.length !== 2) {
+        errors.push(fail("invalid_type", `${path}.vertexNames`, `a spatial segment connects exactly two named points, got ${value.vertexNames.length}`))
+        return null
+      }
+      const names: string[] = []
+      for (const [index, name] of value.vertexNames.entries()) {
+        const raw = boundedString(name, `${path}.vertexNames[${index}]`, errors)
+        if (raw === null) return null
+        /** 与其余点名读者**同一个函数**：撇与数字下标的排版变体在这里归一。 */
+        const read = canonicalPointName(raw)
+        if (names.includes(read)) {
+          errors.push(fail("duplicate_name", `${path}.vertexNames[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+          return null
+        }
+        names.push(read)
+      }
+      out.vertexNames = names
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_face": {
       const out: Record<string, unknown> = withAlias({})
       if (!Array.isArray(value.vertices)) {

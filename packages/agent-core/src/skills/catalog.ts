@@ -53,7 +53,8 @@ const EXPECTED_HASHES: Record<string, string> = {
   /** 2026-10-07 重签：再加 `solid.create_round_frustum`（S4.3：圆台 —— 参数化动作 + 内核多边形近似）。 */
   /** 2026-10-10 重签：再加 `solid.create_face`（立体工作区里的**平面多边形 / 面片** —— "平面四边形 + 翻折片"这类开放曲面原先没有入口）。 */
   /** 2026-10-11 重签：再加 `solid.fold`（用户现场那句「将三角形AEF沿EF翻折至三角形PEF」连发 7 次都不通；折后的坐标由内核旋转算，模型不再手算）。 */
-  "spatial-modeling": "dc04009dcf12c51a64273e81c9fe72042f8ae3d675b45782a1f96fbe721debae",
+  /** 2026-10-15 重签：再加 `solid.create_segment`（用户现场：立体里"两点连成一条线段"**没有动作** —— 模型只能拿 `planar.create_segment` 凑，而那条落在 `z=0` 上）。 */
+  "spatial-modeling": "1c4612a959c13519fdf08807524fad4900d38f35bbf15f32c0b706711955af53",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",

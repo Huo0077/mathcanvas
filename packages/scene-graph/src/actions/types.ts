@@ -295,6 +295,27 @@ export interface SolidCreateFaceAction extends ActionBase {
 }
 
 /**
+ * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场）。
+ *
+ * 立体几何里此前**没有**这个动作：模型要画 `EF`、`BD` 这类线，只能拿棱去凑（`planar.create_segment`
+ * 是**平面**动作，用它会得到一条落在 z=0 上的线 —— 那不是题面要的那条）。现场那道四棱锥题
+ * 正是卡在这里。
+ *
+ * **只按点名连**：两端必须是**文档里已经存在**的点（题面点名的顶点、棱上的分点、折出来的点）。
+ * 不给坐标 —— 坐标本来就该由前面几笔（实体/绑点/折）决定，再让模型手写一遍就是第二个真源。
+ * 物化出来的是 `segment3`（**自由线段**，不是 `edge3`：`edge3` 属于实体面上的棱，带 `faceIds`）。
+ */
+export interface SolidCreateSegmentAction extends ActionBase {
+  actionId: "solid.create_segment"
+  inputs: {
+    alias: DraftAlias
+    /** **恰好两个**互不相同的点名，且都必须是这份文档里已经有的点。 */
+    vertexNames: string[]
+    label?: string
+  }
+}
+
+/**
  * **把一只平面片沿折痕折起来**（2026-10-11 用户现场）。
  *
  * 现场那句话：「将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3」—— 同一句连发 7 次、
@@ -540,6 +561,7 @@ export type DraftAction =
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction
   | SolidCreateFaceAction
+  | SolidCreateSegmentAction
   | SolidFoldAction
   | SolidCreateRoundFrustumAction
   | DynamicBindPointAction

@@ -764,6 +764,49 @@ export function compileSolidFace(
   return { primitives: [...points, ...edges, face], pointIds, edgeIds, diagnostics: [] }
 }
 
+/**
+ * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场，四棱锥那道题的 `EF`）。
+ *
+ * ## 为什么要有它
+ *
+ * 立体几何里此前**没有**这个动作，而 `planCompiler` 还专门劝模型"别用 `planar.create_segment`
+ * 去补立体的边"（那条提示是对的：平面线段落在 `z=0` 上，不是题面要的那条）—— 于是模型**无处可去**。
+ *
+ * ## 只按点名连（不给坐标）
+ *
+ * 两端必须是**这份文档里已经存在**的点：题面点名的顶点、棱上的分点（`dynamic.create_bound_point`）、
+ * 折出来的点。坐标本来就由前面几笔决定，再让模型手写一遍就是第二个真源（现场为这件事栽过很多次）。
+ * 所以点名少一个、或对不上任何已有点，都**一条图元都不产出**并说清是**哪些**名字没找到 ——
+ * 与其余动作同一条纪律：宁可不做，也不做一半。
+ *
+ * 物化出来的是 `segment3`（**自由线段**）：`edge3` 是实体面上的棱（带 `faceIds`），
+ * 拿它来表达"两点连成的线"会把一条自由线段伪装成某个面的一部分。
+ */
+function compileSolidSegmentAction(action: Extract<DraftAction, { actionId: "solid.create_segment" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+  if (context.targetWorkspace !== "geometry3d") {
+    return refuse("workspace_mismatch", "a spatial segment can only be created in the solid workspace")
+  }
+  const names = inputs.vertexNames
+  if (names.length !== 2) {
+    return refuse("segment_endpoint_count", `一条线段**恰好**要两个点名，这里给了 ${names.length} 个：${names.join("、")}。`)
+  }
+  if (names[0] === names[1]) {
+    return refuse("segment_endpoint_same", `一条线段的两个端点不能是同一个点（两处都写了 ${names[0]}）。`)
+  }
+  const at = (name: string) => context.targetDocument.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === name)
+  const first = at(names[0]!)
+  const second = at(names[1]!)
+  const missing = names.filter((name) => at(name) === undefined)
+  if (missing.length > 0 || first === undefined || second === undefined) {
+    return refuse("segment_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")} —— 线段的两端必须是**已经建出来**的点（先建实体/棱上的分点，再连线段）。`)
+  }
+  const id = context.idAllocator.allocate("segment", inputs.alias)
+  const primitive: PrimitiveSpec = { id, type: "segment3", pointIds: [first.id, second.id], ...(inputs.label === undefined ? {} : { label: inputs.label }) }
+  return { operations: [{ op: "addPrimitives", primitives: [primitive] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileSolidFaceAction(action: Extract<DraftAction, { actionId: "solid.create_face" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1480,6 +1523,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_segment":
+      return compileSolidSegmentAction(action, context)
     case "solid.fold":
       return compileSolidFoldAction(action, context)
     case "dynamic.bind_point":

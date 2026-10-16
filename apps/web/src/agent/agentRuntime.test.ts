@@ -529,7 +529,9 @@ describe("the assembled runtime actually runs", () => {
     // 必然被信封拒（用户看到的是 `budget exhausted: budget_repair`）。
     // `solid.fold` 是 **2026-10-11 补的**（同一位用户、同一道题）：沿折痕把一片折起来，
     // **折后的坐标由内核旋转算出来**，模型不再手算 —— 它手算的那几次给出的都是退化几何。
-    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_face", "solid.fold", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
+    // `solid.create_segment` 是 **2026-10-15 补的**（同一位用户）：立体里"两点连成一条线段"此前**没有动作**，
+    // 模型只能拿 `planar.create_segment` 凑（那条落在 `z=0` 上）—— 它**只给两个点名**，坐标由前面几笔决定。
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_face", "solid.create_segment", "solid.fold", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })
