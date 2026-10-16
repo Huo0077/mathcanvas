@@ -80,6 +80,7 @@ function primitiveDependencies(primitive: PrimitiveSpec, relations?: { owners: M
    * 少了这条边，切点会停在旧位置 —— 而"切线随动点动态变化"正是用户要的那个性质。
    */
   if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") dependencies.push(primitive.anchor.pointId)
+  if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "common") dependencies.push(primitive.anchor.otherSourceId)
   /**
    * "以动点为圆心"与"半径随动点走"的圆依赖那两个点。
    * 这两条边是整条动态链路的关键：圆心点 / 驱动点一动，`center` 与 `radius` 的派生缓存就过期，

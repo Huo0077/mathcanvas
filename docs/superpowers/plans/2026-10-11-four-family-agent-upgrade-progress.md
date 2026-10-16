@@ -402,3 +402,11 @@
 - **新鲜证据**：定向测试 **6 个文件 / 28 个测试全部通过**；4 个相关 TypeScript 项目检查全部 exit 0；`npm run lint` exit 0（0 error，13 条既有 warning）。这是自动化闭环证据，不是人工视觉签收。
 - **边界**：展开仅支持已有 `polyhedron3`，不声称任意曲面展开或自动选择展开树；Task 15、16、18、19、20、21 不因此升级。
 - **提交**：功能提交 `4e0354a` 已推送到 `origin/main`。保留未提交的审查探针和桌面 Cargo 改动；本报告作为四份进度文档之一随区块提交。
+
+## 2026-10-16 功能补完区块 D2（Task 15 函数公切线）
+
+Task 15 的公切线缺口已在支持范围内补齐：新增 `function.create_tangent` 的 common anchor，接通 parse → compile → commit → recompute；题面 `commonTangent` obligation 接入独立验证。当前只收两条显式 `function` 图元和 branch 0/1，验证为实例级 `verified-numeric`，不外推形式证明。
+
+验证：7 个定向文件 / 138 个测试通过；geometry-kernel、scene-graph、agent-core、dsl typecheck 均 exit 0；lint 0 error / 13 既有 warning；diff 检查通过。仍未覆盖非函数曲线、真实 provider、人工验收和完整桌面发行。
+
+本区块代码与四份进度文档应独立提交并推送；提交号在推送后回填。

@@ -501,6 +501,7 @@ export type TangentAnchorInput =
   | { kind: "parameter"; parameter: number; branch?: number }
   | { kind: "point"; pointId: string }
   | { kind: "through"; pointId: string; branch?: number }
+  | { kind: "common"; otherSourceId: string; branch?: number }
 
 export interface FunctionAnalyzeAction extends ActionBase {
   actionId: "function.analyze"

@@ -53,6 +53,7 @@ function cascadeSources(primitive: PrimitiveSpec): string[] {
    * 动点没了，切线就不知道该切在哪 —— 它是纯派生的，随点一起注销，而不是留一条悬空的旧切线。
    */
   if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") return [primitive.anchor.pointId]
+  if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "common") return [primitive.anchor.otherSourceId]
   const analysisSource = functionAnalysisSourceId(primitive)
   return analysisSource === null ? [] : [analysisSource]
 }

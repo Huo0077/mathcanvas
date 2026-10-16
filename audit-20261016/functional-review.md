@@ -152,7 +152,7 @@
 ### 4. Task 13、15、19 的当前实现缺口（不是仅据计划自述）
 
 - **立体**：当前 action registry/输入、物化与 witness 链路覆盖 `solid.create_face`、折叠和已有实体；本轮检索未找到原卡“面上点依赖/展开”的完整 agent 产品动作—编译—独立回代—浏览器验收链路。已有旋转/展开相关内核函数不等价于该纵向交付已完成。
-- **函数**：`packages/geometry-kernel/src/function-evidence.ts:651` 有 `commonTangents`，单测可运行；产品动作 `packages/scene-graph/src/actions/index.ts` 与重算 `analysisRecompute.ts` 已接 `tangentThroughPoint`，但没有消费 `commonTangents`。所以外点双切线不应继续报缺，公切线仍不能按完整产品交付验收。
+- **函数**：公切线已接通 `parseActionToolInput → compileActions → commitPatch → recomputeCurveTangent`，并由题面 `commonTangent` obligation 进入独立 `diagramVerification`。当前只支持两条显式 `function` 图元、`branch` 0/1；不支持圆/椭圆/任意曲线的公切线，也不构成形式证明、真实模型或桌面验收。
 - **Lean 安全**：`apps/desktop/src-tauri/src/proof/source.rs:45–99` 使用固定子串黑名单与几条必备标记，并未对整份源码做严格模板白名单解析，也不是操作系统隔离。本轮不宣称已经成功执行逃逸 payload。
 - **Lean 资源限制**：`apps/desktop/src-tauri/src/proof/mod.rs:245–268` 在 `wait_with_output()` 收集完 stdout/stderr 后才 `tail_of`。尾部 4000 字节限制只限制最终返回文本，不限制运行期间输出采集内存。这个结论来自当前实现，不冒充本轮已做内存压测。
 
@@ -184,14 +184,14 @@
 | 10 | 边上分点/动态依赖 | 完成（已支持边上点范围） | 内核比例方向、重合/越界拒绝、落盘比例回代与依赖更新测试通过；namedPoints 的不相容同名分点确实拒绝，非仅存在旧 RED 注释。 |
 | 11 | 三角形纵向交付 | 完成（构造与代表题链路） | SSA 两解、无解/欠定、面积、换点名及最终坐标独立回代测试通过；浏览器确认/撤销通过。真实模型泛化归 Task 20，不从本地 exact 题面推出。 |
 | 12 | 目标距离反求折角 | 完成（支持范围内） | 固定距离解析求角与单折叠 planarAngle/dihedral/linePlaneAngle 有界搜索已接入 compilePlan；候选逐一回代完整题设。not-found 不冒充 unreachable，耦合多折叠、未支持关系仍拒绝。定向 212/212、原用户翻折浏览器链路 7/7。 |
-| 13 | 立体纵向交付 | 部分完成 | 代表翻折题、分点、空间关系与错误缺点名拒绝已跑通；原卡面上点、展开等完整产品/验收链路仍缺，不能将代表翻折题推广为全部立体类型完成。 |
+| 13 | 立体纵向交付 | 部分完成（支持范围内） | 面上点与 `solid.unfold` 已进入真实 parse/compile/commit/render 链路；仍只支持已有 `polyhedron3` 和可展开范围，不覆盖任意曲面、自动展开树或人工视觉签收。 |
 | 14 | 圆锥曲线纵向交付 | 完成（已支持圆锥曲线范围） | 实轴语义、参数反求、代数交点/重根/竖线、弦长/面积回代与错轴/丢交点拒绝测试通过；不把非圆锥曲线硬分类，也不将代表题成功当真实模型准确率。 |
-| 15 | 函数/导数纵向交付 | 部分完成 | 断点分段、尖点拒绝切线、数值/形式证明分级和外点双切线内核/动作已有证据；原卡公切线仅有内核，缺产品动作与题面核验闭环。抽象函数安全不支持不是擅自判作已画出。 |
-| 16 | 真实画布/过期证据 | 部分完成 | 四族浏览器 hash/画布/撤销等流程通过；仍有隐藏点诊断误报，3D实体测量边界，旧证据实际消费接线及桌面/人评缺口。 |
+| 15 | 函数/导数纵向交付 | 完成（支持范围内） | 函数公切线已完成产品动作、动态重算、删除级联、题面 obligation 与独立数值核验；支持两条显式 `function`、branch 0/1。`verified-numeric` 仍是实例级数值证据，不是形式证明；非函数曲线、真实模型、桌面/人工验收仍未完成。 |
+| 16 | 真实画布/过期证据 | 部分完成 | 2D/3D 提交后实时证据消费与过期拒绝已修复并有浏览器证据；候选视觉门禁、3D/WebGL 可测性边界、桌面发行和人工可读性仍缺。 |
 | 17 | 原题前提与受限引理分级 | 完成（分级防误报范围） | proof scope 和“额外题设不得升整题”测试通过；产品仍只有受限引理能力，whole_problem 未交付，不能宣称整题证明完成。 |
-| 18 | 异步证明绑定/UI | 部分完成，不可按完成放行 | UI/浏览器降级通过，但已复现 invalidated 草稿的迟到 stage 仍返回 verified；完整 inputHash/backendVersion 未贯穿。 |
+| 18 | 异步证明绑定/UI | 部分完成（生命周期修复） | 失效/被替换/并发暂存的迟到结果已拒绝并绑定原请求、题面哈希和后端版本；真实 Lean、桌面 proof 生命周期与发行验收仍未执行。 |
 | 19 | Lean工具链/安全/发行 | 部分完成 | 有 pin、后端和过滤检查实现；本轮没有完整真实 Lean/当前桌面发行验收，输出尾截断也不是采集内存硬上限。 |
-| 20 | 真实模型质量 | 未完成 | 没有本轮真实 provider 的成功率/费用/时延/人评；且调用额度和人评门禁存在已复现问题，应先修门禁再花钱。 |
+| 20 | 真实模型质量 | 未完成（门禁已修） | 本地预算、人评覆盖与 provider 请求门禁已有功能回归；没有真实 provider 的成功率/pass@k/费用/时延/人工评分，因此不能签收模型质量。 |
 | 21 | 完整发布验收/分开裁决 | 未完成 | 当前完整 Web 回归通过；不能代替真实模型、Lean安全、桌面、CI、人评与来源哈希等独立证据。 |
 
 ## D1 功能补完记录（2026-10-16）
@@ -226,3 +226,13 @@ npm.cmd exec vitest run -- --config audit-20261016/probe.vitest.config.ts --repo
 - **新鲜证据**：定向测试 **6 个文件 / 28 个测试全部通过**；4 个相关 TypeScript 项目检查全部 exit 0；`npm run lint` exit 0（0 error，13 条既有 warning）。这是自动化闭环证据，不是人工视觉签收。
 - **边界**：展开仅支持已有 `polyhedron3`，不声称任意曲面展开或自动选择展开树；Task 15、16、18、19、20、21 不因此升级。
 - **提交**：功能提交 `4e0354a` 已推送到 `origin/main`。保留未提交的审查探针和桌面 Cargo 改动；本报告作为四份进度文档之一随区块提交。
+
+## 2026-10-16 功能闭环增量：Task 15 函数公切线（支持范围内完成）
+
+本区块按真实产品链路验收，不把几何内核单测或文档描述当成产品完成。
+
+- **产品链路**：`function.create_tangent` 支持 `anchor.kind = common`、第二个函数源引用和 `branch`；动作经过 `parseActionToolInput → compileActions → commitPatch`，提交后由 `recomputeCurveTangent` 动态重算。删除第二个来源函数时，依赖公切线级联删除；修改任一来源函数时切线随之更新。
+- **核验链路**：题面“两条公切线”解析为 `commonTangent` obligation；独立核验器重新计算 `commonTangents`，检查数量、branch 唯一性、两条来源函数身份、每条直线同时相切以及 slope/intercept 一致性。通过证据等级为 `verified-numeric`，报告范围仍是 `figure-instance`，`universalClaims` 仍为 `not-proven`。
+- **支持边界**：当前只支持两条显式 `function` 图元和 branch `0/1`；非法 source、自引用、圆形 source、无解、缺 branch、重复 branch 均拒绝。非函数曲线公切线、形式证明、真实 provider 评测、人工教师/学生验收、完整桌面发行仍未完成。
+- **新鲜证据**：`commonTangent.product.test.ts` 与 6 个既有合同/核验文件共 **7 个文件 / 138 个测试通过**；geometry-kernel、scene-graph、agent-core、dsl 四个 TypeScript 项目 `tsc --noEmit` 均 exit 0；`npm run lint` 0 error / 13 条既有 warning；`git diff --check` 通过。
+- **判定**：Task 15 在上述支持范围内完成；不能把该结果外推为所有函数族、形式证明或真实模型准确率。

@@ -261,6 +261,7 @@ function isTangentAnchor(byId: Map<string, unknown>, value: unknown): boolean {
   if (value.kind === "point") return typeof value.pointId === "string" && referenceType(byId, value.pointId) === "point"
   // **过外点**（2026-10-16）：引用的同样必须是一个真实存在的点图元；分支只允许 0 / 1（最多两条切线）。
   if (value.kind === "through") return typeof value.pointId === "string" && referenceType(byId, value.pointId) === "point" && (value.branch === undefined || value.branch === 0 || value.branch === 1)
+  if (value.kind === "common") return typeof value.otherSourceId === "string" && referenceType(byId, value.otherSourceId) === "function" && (value.branch === undefined || value.branch === 0 || value.branch === 1)
   return false
 }
 

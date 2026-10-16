@@ -1,5 +1,5 @@
 import { isSampledPrimitiveType, type Coordinate, type GeometryDocument, type PrimitiveSpec } from "@draw/dsl"
-import { adaptiveSampleFunctionSegments, arcConstraint, circleConstraint, constraintTangentAt, ellipseConstraint, evaluateParameterExpression, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, lineConstraint, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, parabolaConstraint, polylineConstraint, rayConstraint, segmentConstraint, tangentSegment, tangentsFromPoint, type CurveTangent, type PlanarConstraint, type SampledPrimitive } from "@draw/geometry-kernel"
+import { adaptiveSampleFunctionSegments, arcConstraint, commonTangents, circleConstraint, constraintTangentAt, ellipseConstraint, evaluateParameterExpression, findExtrema, findInflectionPoints, findZeros, functionGraphConstraint, hyperbolaConstraint, lineConstraint, normalFromTangent, numericalDerivative, numericalIntegralWithDiagnostics, numericalSecondDerivative, parabolaConstraint, polylineConstraint, rayConstraint, segmentConstraint, tangentSegment, tangentsFromPoint, type CurveTangent, type PlanarConstraint, type SampledPrimitive } from "@draw/geometry-kernel"
 
 /**
  * **解析类图元的重算**（从 `operations.ts` 拆出，评审方案 2）。
@@ -167,6 +167,38 @@ export function recomputeCurveTangent(
   parameters: GeometryDocument["parameters"]
 ): Extract<PrimitiveSpec, { type: "tangent" | "normal" }> {
   const anchor = primitive.anchor
+  if (anchor?.kind === "common") {
+    const other = primitiveMap.get(anchor.otherSourceId)
+    if (source.type !== "function" || other?.type !== "function") {
+      return { ...primitive, status: "failed" as const, diagnostic: "公切线目前只支持两条函数曲线" }
+    }
+    const solved = commonTangents(source.expression, other.expression, source.domain, other.domain)
+    const candidate = solved.tangents[anchor.branch ?? 0]
+    if (!candidate) {
+      return { ...primitive, status: solved.status === "unsupported" ? "failed" as const : "undefined" as const, diagnostic: solved.diagnostic ?? "这两条曲线没有该分支的公切线" }
+    }
+    const directionLength = Math.hypot(1, candidate.slope)
+    const raw: CurveTangent = {
+      point: { x: candidate.first.x, y: candidate.first.y },
+      direction: { x: 1 / directionLength, y: candidate.slope / directionLength },
+      parameter: candidate.first.parameter,
+      branch: 0
+    }
+    const tangent: CurveTangent = primitive.type === "normal" ? normalFromTangent(raw) : raw
+    const { a, b } = tangentSegment(tangent, primitive.halfLength ?? INFINITE_TANGENT_EXTENT)
+    const vertical = Math.abs(tangent.direction.x) <= 1e-9
+    return {
+      ...primitive,
+      x: candidate.first.parameter,
+      point: tangent.point,
+      slope: vertical ? Number.POSITIVE_INFINITY : tangent.direction.y / tangent.direction.x,
+      a,
+      b,
+      vertical,
+      status: "approximate",
+      diagnostic: undefined
+    }
+  }
   const constraint = pathConstraint(source, parameters)
   if (!anchor || !constraint) return { ...primitive, status: "failed" as const, diagnostic: "切线来源曲线不支持参数化" }
   const lastBranch = Math.max(0, constraint.branchCount - 1)

@@ -206,3 +206,27 @@ describe("tool inputs reuse the actual plan parser", () => {
     if (!result.ok) expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "unscoped_reference", path: "tool.inputs.target" })]))
   })
 })
+describe("common tangent input path", () => {
+  it("publishes and parses the common anchor without collapsing the two references", () => {
+    const anchor = actionToolSchema("function.create_tangent").inputSchema.properties?.anchor
+    expect(anchor?.oneOf).toEqual(expect.arrayContaining([expect.objectContaining({ properties: expect.objectContaining({ kind: expect.objectContaining({ enum: ["common"] }), otherSourceId: expect.objectContaining({ type: "string" }) }) })]))
+    const result = parseActionToolInput("function.create_tangent", { alias: "ct", sourceId: "f", anchor: { kind: "common", otherSourceId: "g", branch: 1 } }, "step-common")
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.inputs).toMatchObject({ sourceId: "f", anchor: { kind: "common", otherSourceId: "g", branch: 1 } })
+  })
+
+  it("accepts draft references in both common-tangent slots", () => {
+    const result = parseActionToolInput("function.create_tangent", { alias: "ct", sourceId: { scope: "draft", alias: "f" }, anchor: { kind: "common", otherSourceId: { scope: "draft", alias: "g" } } }, "step-common-draft")
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.value.inputs).toMatchObject({ sourceId: "draft:f", anchor: { otherSourceId: "draft:g" } })
+  })
+
+  it("rejects malformed common anchors at their field paths", () => {
+    const badBranch = parseActionToolInput("function.create_tangent", { alias: "ct", sourceId: "f", anchor: { kind: "common", otherSourceId: "g", branch: 2 } }, "step-common-branch")
+    expect(badBranch.ok).toBe(false)
+    if (!badBranch.ok) expect(badBranch.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: "tool.inputs.anchor.branch" })]))
+    const unknown = parseActionToolInput("function.create_tangent", { alias: "ct", sourceId: "f", anchor: { kind: "common", otherSourceId: "g", extra: true } }, "step-common-extra")
+    expect(unknown.ok).toBe(false)
+    if (!unknown.ok) expect(unknown.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "unknown_field", path: "tool.inputs.anchor.extra" })]))
+  })
+})

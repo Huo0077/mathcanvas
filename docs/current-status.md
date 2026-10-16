@@ -1526,3 +1526,11 @@ GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。
 - **新鲜证据**：定向测试 **6 个文件 / 28 个测试全部通过**；4 个相关 TypeScript 项目检查全部 exit 0；`npm run lint` exit 0（0 error，13 条既有 warning）。这是自动化闭环证据，不是人工视觉签收。
 - **边界**：展开仅支持已有 `polyhedron3`，不声称任意曲面展开或自动选择展开树；Task 15、16、18、19、20、21 不因此升级。
 - **提交**：功能提交 `4e0354a` 已推送到 `origin/main`。保留未提交的审查探针和桌面 Cargo 改动；本报告作为四份进度文档之一随区块提交。
+
+## 2026-10-16 功能闭环增量：Task 15 函数公切线（支持范围内完成）
+
+本区块已按真实产品路径验收：`function.create_tangent` 的 `anchor.kind = common` 从工具输入进入动作编译，提交到 scene graph 后由重算器维护真实切线几何；来源函数变更会重算，删除来源会级联清理依赖。题面“两条公切线”进入 `commonTangent` obligation，独立验证器重新求解并核验数量、branch、来源身份、两条曲线相切关系和直线参数，不能只相信图元自报的 slope/point。
+
+当前支持范围是两条显式 `function` 图元、branch 0/1；`verified-numeric` 仅表示当前图形实例的独立数值证据，报告仍为 `figure-instance` / `not-proven`。非函数曲线、形式证明、真实模型评测、人工验收和完整桌面发行不在本区块完成范围。
+
+新鲜证据：7 个定向测试文件 / 138 个测试通过；4 个相关 TypeScript 项目检查 exit 0；lint 0 error / 13 条既有 warning；diff 检查通过。

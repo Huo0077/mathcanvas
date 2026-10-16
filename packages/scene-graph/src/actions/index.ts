@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, faceHost3, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { areCoplanar, buildFromPoints, commonTangents, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, faceHost3, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { tangentThroughPoint } from "../analysisRecompute"
@@ -1043,6 +1043,45 @@ function compileTangent(action: Extract<DraftAction, { actionId: "function.creat
    *
    * 记进图元的 `x` 是**解出来的切点横坐标**（函数来源的口径），重算会再算一遍填几何。
    */
+  if (anchorInput?.kind === "common") {
+    const other = findPrimitive(context.targetDocument, anchorInput.otherSourceId)
+    if (wanted.type !== "function" || other?.type !== "function") {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "unsupported_source", "common tangents currently require two function sources")], aliasToId: {} }
+    }
+    if (other.id === wanted.id) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_anchor", "a common tangent needs two different function sources")], aliasToId: {} }
+    }
+    const branch = anchorInput.branch ?? 0
+    if (branch !== 0 && branch !== 1) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_anchor", "common tangent branch must be 0 or 1")], aliasToId: {} }
+    }
+    const solved = commonTangents(wanted.expression, other.expression, wanted.domain, other.domain)
+    const candidate = solved.tangents[branch]
+    if (!candidate) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, solved.status === "unsupported" ? "unsupported_source" : "no_tangent", solved.diagnostic ?? ("no common tangent branch " + (branch + 1)))], aliasToId: {} }
+    }
+    const id = context.idAllocator.allocate("tangent", inputs.alias)
+    return {
+      operations: [{
+        op: "addPrimitive",
+        primitive: {
+          id,
+          type: "tangent",
+          sourceId: inputs.sourceId,
+          x: candidate.first.parameter,
+          point: { x: candidate.first.x, y: candidate.first.y },
+          slope: candidate.slope,
+          a: { x: candidate.first.x - 1, y: candidate.first.y - candidate.slope },
+          b: { x: candidate.first.x + 1, y: candidate.first.y + candidate.slope },
+          status: "approximate",
+          anchor: { kind: "common", otherSourceId: anchorInput.otherSourceId, branch }
+        } as unknown as PrimitiveSpec
+      }],
+      diagnostics: [],
+      aliasToId: { [inputs.alias]: id }
+    }
+  }
+
   if (anchorInput?.kind === "through") {
     const point = findPrimitive(context.targetDocument, anchorInput.pointId)
     if (point?.type !== "point") {

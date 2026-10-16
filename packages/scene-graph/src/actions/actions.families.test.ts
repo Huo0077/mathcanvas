@@ -1,6 +1,7 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
+import { commitPatch } from "../patches"
 import { compileActions } from "./index"
 import type { ActionContext, DraftAction, IdAllocator } from "./types"
 import { recomputeCurveTangent } from "../analysisRecompute"
@@ -252,5 +253,92 @@ describe("parameter family", () => {
 
     expect(result.operations).toHaveLength(0)
     expect(result.diagnostics[0].code).toBe("empty_expression")
+  })
+})
+
+
+describe("common tangent product path", () => {
+  it("compiles a common tangent and recomputes one verified line from two function sources", () => {
+    const document = planarDocument()
+    document.primitives = [
+      ...document.primitives,
+      { id: "fn-2", type: "function", expression: "-(x-2)*(x-2)+1", domain: [-2, 3], samples: 64 }
+    ]
+    const result = compileActions(document, [action({
+      actionId: "function.create_tangent",
+      inputs: { alias: "ct", sourceId: "fn-1", anchor: { kind: "common", otherSourceId: "fn-2", branch: 0 } }
+    })], contextWith(document))
+    expect(result.diagnostics).toEqual([])
+    const operation = result.operations[0]
+    expect(operation).toMatchObject({ op: "addPrimitive", primitive: { type: "tangent", sourceId: "fn-1", anchor: { kind: "common", otherSourceId: "fn-2", branch: 0 } } })
+    if (operation?.op !== "addPrimitive") throw new Error("common tangent operation missing")
+    const source = document.primitives.find((primitive) => primitive.id === "fn-1")
+    if (source?.type !== "function") throw new Error("first function missing")
+    const map = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+    const recomputed = recomputeCurveTangent(operation.primitive as never, source, map as never, document.parameters)
+    expect(recomputed.status).toBe("approximate")
+    expect(recomputed.point.y).toBeCloseTo(recomputed.point.x * recomputed.point.x, 6)
+    expect(recomputed.slope).toBeCloseTo(2 - Math.sqrt(2), 6)
+    const other = recomputed.point.y - recomputed.slope * recomputed.point.x
+    const secondX = 2 - recomputed.slope / 2
+    const secondY = -((secondX - 2) ** 2) + 1
+    expect(secondY - recomputed.slope * secondX).toBeCloseTo(other, 6)
+  })
+})
+
+
+describe("common tangent edit lifecycle", () => {
+  function committedCommon() {
+    const document = planarDocument()
+    document.primitives.push({ id: "fn-2", type: "function", expression: "-(x-2)*(x-2)+1", domain: [-2, 3], samples: 64 })
+    const compiled = compileActions(document, [action({ actionId: "function.create_tangent", inputs: { alias: "ct", sourceId: "fn-1", anchor: { kind: "common", otherSourceId: "fn-2", branch: 0 } } })], contextWith(document))
+    expect(compiled.diagnostics).toEqual([])
+    const committed = commitPatch(document, compiled.operations[0])
+    expect(committed.error).toBeUndefined()
+    expect(committed.changed).toBe(true)
+    return committed.document
+  }
+
+  it("recomputes on editing the second source and stops drawing a branch that disappears", () => {
+    const document = committedCommon()
+    const before = document.primitives.find(p => p.type === "tangent")
+    if (before?.type !== "tangent") throw new Error("tangent missing")
+    const moved = commitPatch(document, { op: "updatePrimitive", id: "fn-2", patch: { expression: "-(x-2)*(x-2)+0.5" } })
+    expect(moved.error).toBeUndefined()
+    const after = moved.document.primitives.find(p => p.id === before.id)
+    if (after?.type !== "tangent") throw new Error("tangent missing after edit")
+    expect(after.status).toBe("approximate")
+    expect(after.slope).toBeCloseTo(2 - Math.sqrt(3), 6)
+    expect(after.slope).not.toBeCloseTo(before.slope, 4)
+    const gone = commitPatch(moved.document, { op: "updatePrimitive", id: "fn-2", patch: { expression: "x*x+1" } })
+    expect(gone.error).toBeUndefined()
+    expect(gone.document.primitives.find(p => p.id === before.id)).toMatchObject({ status: "undefined", anchor: { kind: "common", otherSourceId: "fn-2", branch: 0 } })
+  })
+
+  it("deleting the second source also deletes its dependent tangent", () => {
+    const document = committedCommon()
+    const removed = commitPatch(document, { op: "deleteObjects", ids: ["fn-2"] })
+    expect(removed.error).toBeUndefined()
+    expect(removed.document.primitives.some(p => p.type === "tangent")).toBe(false)
+  })
+
+  it.each([
+    ["ghost", 0, "unsupported_source"],
+    ["circle-1", 0, "unsupported_source"],
+    ["fn-1", 0, "invalid_anchor"],
+    ["fn-2", 2, "invalid_anchor"]
+  ])("refuses invalid common anchor %s / %s without operations", (otherSourceId, branch, code) => {
+    const document = committedCommon()
+    const result = compileActions(document, [action({ actionId: "function.create_tangent", inputs: { alias: "bad", sourceId: "fn-1", anchor: { kind: "common", otherSourceId, branch } } })], contextWith(document))
+    expect(result.operations).toEqual([])
+    expect(result.diagnostics[0]?.code).toBe(code)
+  })
+
+  it.each([["x*x+1", "no_tangent"], ["notAFunc(x)", "unsupported_source"]])("refuses unsolved source %s without an empty tangent", (expression, code) => {
+    const document = planarDocument()
+    document.primitives.push({ id: "fn-2", type: "function", expression, domain: [-2, 3], samples: 64 })
+    const result = compileActions(document, [action({ actionId: "function.create_tangent", inputs: { alias: "bad", sourceId: "fn-1", anchor: { kind: "common", otherSourceId: "fn-2" } } })], contextWith(document))
+    expect(result.operations).toEqual([])
+    expect(result.diagnostics[0]?.code).toBe(code)
   })
 })

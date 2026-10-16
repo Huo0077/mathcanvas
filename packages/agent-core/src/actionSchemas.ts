@@ -122,7 +122,8 @@ const tangentAnchorSchema: JsonSchema = {
      * 发布出去的 schema 与真正接受的载荷必须是同一种东西 —— 这条与 `patches.ts` 的校验、
      * `scene-graph` 的锚点类型是同一份契约的三处落点，缺一处模型就会"看得到却写不进去"。
      */
-    { type: "object", properties: { kind: { type: "string", enum: ["through"] }, pointId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "pointId"], additionalProperties: false }
+    { type: "object", properties: { kind: { type: "string", enum: ["through"] }, pointId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "pointId"], additionalProperties: false },
+    { type: "object", properties: { kind: { type: "string", enum: ["common"] }, otherSourceId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "otherSourceId"], additionalProperties: false }
   ]
 }
 

@@ -84,7 +84,7 @@ function isCurveRotationPatch(document: GeometryDocument, value: unknown): boole
  */
 function isTangentAnchorPatch(document: GeometryDocument, value: unknown): boolean {
   if (!value || typeof value !== "object") return false
-  const anchor = value as { kind?: unknown; parameter?: unknown; branch?: unknown; pointId?: unknown }
+  const anchor = value as { kind?: unknown; parameter?: unknown; branch?: unknown; pointId?: unknown; otherSourceId?: unknown }
   if (anchor.kind === "parameter") return Number.isFinite(anchor.parameter) && (anchor.branch === undefined || anchor.branch === 0 || anchor.branch === 1)
   if (anchor.kind === "point") {
     return typeof anchor.pointId === "string"
@@ -98,6 +98,11 @@ function isTangentAnchorPatch(document: GeometryDocument, value: unknown): boole
     return typeof anchor.pointId === "string"
       && (anchor.branch === undefined || anchor.branch === 0 || anchor.branch === 1)
       && document.primitives.some((primitive) => primitive.id === anchor.pointId && primitive.type === "point")
+  }
+  if (anchor.kind === "common") {
+    return typeof anchor.otherSourceId === "string"
+      && (anchor.branch === undefined || anchor.branch === 0 || anchor.branch === 1)
+      && document.primitives.some((primitive) => primitive.id === anchor.otherSourceId && primitive.type === "function")
   }
   return false
 }

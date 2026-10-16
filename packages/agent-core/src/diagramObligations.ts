@@ -30,6 +30,7 @@ export type DiagramObligationKind =
   | "conicChord"
   | "tangentAt"
   | "functionGraph"
+  | "commonTangent"
   /**
    * **线面角**（Task 13 的边界「斜棱柱明说倾角」，2026-10-14）：`AA′与底面所成角为45°`
    * ⇒ `targets` 前两个是线段的两个点名、其余是平面的点名（与 `planePerpendicular` 同一条约定，
@@ -122,6 +123,8 @@ export interface DiagramObligation {
   expectation?: "secant" | "tangent" | "single" | "none"
   /** 题面写下的函数表达式（**已规范化**：上标转 `^`、隐式乘号补 `*`）。 */
   expression?: string
+  /** `commonTangent` 专用：题面写下的两条函数表达式。 */
+  expressions?: [string, string]
 }
 
 export interface DiagramSourceSpan {
@@ -141,7 +144,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions">
 
 interface Matcher {
   pattern: RegExp
@@ -491,6 +494,24 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const x = Number(m[1])
       if (!Number.isFinite(x)) return null
       return chordDraft({ kind: "vertical", x }, m[2] ?? "", m[3] ?? m[4])
+    }
+  },
+  /**
+   * **两条函数的公切线**：`f(x)=x² 与 g(x)=−(x−2)²+1 的两条公切线`。
+   *
+   * 必须先消费整段两个函数定义，再让普通 `functionGraph` matcher 处理单条函数；
+   * 否则第二条表达式会变成未核验残留，题面数量也会丢失。
+   */
+  {
+    pattern: /[fgh]\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]+?)\s*(?:与|和)\s*[fgh]\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]+?)\s*(?:的)?\s*(?:([一二三四五六七八九十两\d]+)\s*条)?公切线/g,
+    read: (m) => {
+      const first = normalizeStatedExpression(m[1])
+      const second = normalizeStatedExpression(m[2])
+      if (first === null || second === null) return null
+      const count = m[3] === undefined ? 1 : statedIntersectionCount(m[3])
+      return count !== null && Number.isInteger(count) && count > 0
+        ? { kind: "commonTangent", targets: [], expressions: [first, second], value: count }
+        : null
     }
   },
   /**
@@ -1049,7 +1070,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)

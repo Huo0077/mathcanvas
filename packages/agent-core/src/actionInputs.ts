@@ -102,8 +102,37 @@ function normalizeSectionPlane(value: unknown, path: string, errors: ParseError[
  * - 字段没给（缺字段走审计的默认策略，是合法路径）；
  * - 种类表认不出（调用方按宽容处理；"认不出"由 `actionFieldParity.test.ts` 在测试期挡住）。
  */
+function readTangentAnchor(value: unknown, path: string, errors: ParseError[]): Record<string, unknown> | undefined {
+  if (!isPlainObject(value)) {
+    errors.push(fail("invalid_type", path, "expected a tangent anchor object"))
+    return undefined
+  }
+  const kind = boundedString(value.kind, `${path}.kind`, errors)
+  if (kind === null) return undefined
+  if (kind !== "point" && kind !== "parameter" && kind !== "through" && kind !== "common") {
+    errors.push(fail("invalid_type", `${path}.kind`, "expected point, parameter, through, or common"))
+    return undefined
+  }
+  const allowed = kind === "point" || kind === "through" ? ["kind", "pointId", "branch"] : kind === "common" ? ["kind", "otherSourceId", "branch"] : ["kind", "parameter", "branch"]
+  rejectUnknownFields(value, allowed, path, errors)
+  const branch = value.branch
+  if (branch !== undefined && (typeof branch !== "number" || !Number.isFinite(branch) || !Number.isInteger(branch) || (branch !== 0 && branch !== 1))) {
+    errors.push(fail("invalid_type", `${path}.branch`, "expected branch 0 or 1"))
+  }
+  if (kind === "parameter") {
+    const parameter = finiteNumber(value.parameter, `${path}.parameter`, errors)
+    if (parameter === null) return undefined
+    return { kind, parameter, ...(branch === undefined ? {} : { branch }) }
+  }
+  const idField = kind === "common" ? "otherSourceId" : "pointId"
+  const id = readIdReference(value[idField], `${path}.${idField}`, errors)
+  if (id === null) return undefined
+  return { kind, [idField]: id, ...(branch === undefined ? {} : { branch }) }
+}
+
 function readByDeclaredKind(spec: ActionSpec, field: string, provided: unknown, path: string, errors: ParseError[]): unknown {
   switch (declaredFieldKind(spec, field)) {
+    case "tangentAnchor": return readTangentAnchor(provided, path, errors)
     case "string": return boundedString(provided, path, errors) ?? undefined
     case "number": return finiteNumber(provided, path, errors) ?? undefined
     case "boolean": {

@@ -396,6 +396,7 @@ export type TangentAnchor =
    * `through` 是"过这个**曲线外**的点"（一个点一般对应两条切线 ⇒ `branch` 选第几条）。
    */
   | { kind: "through"; pointId: string; branch?: number }
+  | { kind: "common"; otherSourceId: string; branch?: number }
 
 export interface TangentPrimitive extends PrimitivePresentation {
   id: string

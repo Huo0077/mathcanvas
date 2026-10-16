@@ -669,7 +669,8 @@ export const ACTIONS = {
     // **过外点那条同样要解析**（2026-10-16）：它引用的也是同一份计划里刚建出来的那个点名。
     references: [
       { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "point" } } },
-      { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "through" } } }
+      { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "pointId", when: { field: "kind", equals: "through" } } },
+      { field: "sourceId", kind: "id", nested: { outer: "anchor", inner: "otherSourceId", when: { field: "kind", equals: "common" } } }
     ],
     required: ["sourceId"],
     defaults: {

@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, commonTangents, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -398,6 +398,37 @@ interface FigureFunction {
 }
 
 /** **候选图里那条唯一的、新画出来的函数曲线**（V0d）。与其它几类同一条"恰好一条"纪律。 */
+interface FigureCommonTangent extends FigureTangent {
+  branch: number | null
+  otherSource: { expression: string; domain: [number, number] } | null
+}
+
+/** 候选图里所有新建的公切线；每条都保留两条来源曲线，核验器不信图元自报的结论。 */
+function candidateCommonTangents(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureCommonTangent[] {
+  if (plan.kind !== "plan" || !plan.actions.some((action) => action.actionId === "function.create_tangent" && (action.inputs as { anchor?: { kind?: string } }).anchor?.kind === "common")) return []
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  return candidate.primitives.flatMap((primitive): FigureCommonTangent[] => {
+    const anchor = primitive.type === "tangent" ? primitive.anchor : undefined
+    if (primitive.type !== "tangent" || priorIds.has(primitive.id) || anchor?.kind !== "common") return []
+    const source = candidate.primitives.find((entry) => entry.id === primitive.sourceId)
+    const other = candidate.primitives.find((entry) => entry.id === anchor.otherSourceId)
+    const sourceData = source?.type === "function" && Number.isFinite(source.domain[0]) && Number.isFinite(source.domain[1]) && source.domain[0] < source.domain[1]
+      ? { expression: source.expression, domain: [source.domain[0], source.domain[1]] as [number, number] }
+      : null
+    const otherData = other?.type === "function" && Number.isFinite(other.domain[0]) && Number.isFinite(other.domain[1]) && other.domain[0] < other.domain[1]
+      ? { expression: other.expression, domain: [other.domain[0], other.domain[1]] as [number, number] }
+      : null
+    return [{
+      x: primitive.x,
+      slope: primitive.slope,
+      pointY: primitive.point?.y ?? Number.NaN,
+      source: sourceData,
+      branch: anchor.branch ?? null,
+      otherSource: otherData
+    }]
+  })
+}
+
 function candidateCurve(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureFunction | null {
   if (plan.kind !== "plan") return null
   if (!plan.actions.some((action) => action.actionId === "function.create_graph")) return null
@@ -504,6 +535,7 @@ function describeConic(conic: ConicDescription): string {
 interface FigureContext {
   conic: FigureConic | null
   tangent: FigureTangent | null
+  commonTangents: readonly FigureCommonTangent[]
   curve: FigureFunction | null
   /**
    * **候选图里带点名的平面点**（`point` 图元的 `label` 就是点名）。
@@ -668,6 +700,45 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 没有来源函数 ⇒ 求不了导 ⇒ 返回 `null`，由调用方如实报"未核验"。
    * **不许**退化成"那就只查横坐标吧" —— 那只核验了一半，却看起来像全过了。
    */
+  if (item.kind === "commonTangent") {
+    const stated = item.expressions
+    const candidates = figures.commonTangents
+    const expectedCount = item.value
+    if (stated === undefined || expectedCount === undefined || candidates.length === 0) return null
+    const fail = (detail: string) => ({ actual: 1, expected: 0, tolerance: 1e-9, evidence: "verified-numeric" as const, detail })
+    if (candidates.length !== expectedCount) return fail("题面要求 " + expectedCount + " 条公切线，候选图实际有 " + candidates.length + " 条。")
+    if (candidates.some((entry) => entry.branch === null || !Number.isInteger(entry.branch) || entry.branch < 0)) return fail("候选图中的公切线缺少有效 branch，不能确认每条解对应哪一支。")
+    const branches = candidates.map((entry) => entry.branch as number)
+    if (new Set(branches).size !== branches.length) return fail("候选图重复了公切线 branch：" + branches.join("、") + "。")
+    if (candidates.some((entry) => entry.source === null || entry.otherSource === null)) return null
+    const first = candidates[0]!.source!
+    const second = candidates[0]!.otherSource!
+    const firstGap = curveGapAcrossBreaks(stated[0], first)
+    const secondGap = curveGapAcrossBreaks(stated[1], second)
+    if (firstGap === null || secondGap === null) return null
+    const curveTolerance = distanceTolerance(1)
+    if (firstGap > curveTolerance || secondGap > curveTolerance) return fail("候选图的两条函数与题面不一致：第一条最大偏差 " + firstGap.toPrecision(5) + "，第二条最大偏差 " + secondGap.toPrecision(5) + "。")
+    if (candidates.some((entry) => {
+      const source = entry.source!
+      const other = entry.otherSource!
+      return Math.abs(source.domain[0] - first.domain[0]) > 1e-9 || Math.abs(source.domain[1] - first.domain[1]) > 1e-9 || Math.abs(other.domain[0] - second.domain[0]) > 1e-9 || Math.abs(other.domain[1] - second.domain[1]) > 1e-9
+    })) return fail("公切线没有全部引用同一对题面函数，不能把候选支混在一起核验。")
+    const solved = commonTangents(first.expression, second.expression, first.domain, second.domain)
+    if (solved.status !== "solved" || !solved.complete) return null
+    if (solved.tangents.length !== expectedCount) return fail("独立重算得到 " + solved.tangents.length + " 条公切线，而题面要求 " + expectedCount + " 条。")
+    for (const entry of candidates) {
+      const expected = solved.tangents[entry.branch as number]
+      if (expected === undefined) return fail("候选图引用了不存在的公切线 branch " + entry.branch + "。")
+      const intercept = entry.pointY - entry.slope * entry.x
+      const firstVerdict = verifyTangentLine(first.expression, first.domain, { slope: entry.slope, intercept })
+      const secondVerdict = verifyTangentLine(second.expression, second.domain, { slope: entry.slope, intercept })
+      const lineGap = Math.max(Math.abs(entry.slope - expected.slope), Math.abs(intercept - expected.intercept))
+      if (!firstVerdict.tangent || !secondVerdict.tangent || lineGap > distanceTolerance(Math.max(1, Math.abs(expected.slope), Math.abs(expected.intercept)))) {
+        return fail("branch " + entry.branch + " 的直线没有同时与两条函数相切：" + firstVerdict.reason + "；" + secondVerdict.reason)
+      }
+    }
+    return { actual: 0, expected: 0, tolerance: 1e-9, evidence: "verified-numeric" as const, detail: "独立重算确认 " + expectedCount + " 条公切线；每条都同时与两条题面函数相切。" }
+  }
   if (item.kind === "tangentAt") {
     const stated = item.value
     const tangent = figures.tangent
@@ -1126,6 +1197,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
+    commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: candidateCurve(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
@@ -1164,6 +1236,8 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
               ? "候选图里没有唯一、可读的圆锥曲线，或题面那条直线的写法没读出来，未核验。"
               : item.kind === "tangentAt"
               ? "候选图里没有唯一、可读的切线，或那条切线没有函数来源（求不了导），未核验。"
+              : item.kind === "commonTangent"
+                ? "候选图里没有足够且可读的公切线，或两条函数来源无法独立核验，未核验。"
               : item.kind === "pointOnConic"
                 ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。"
                 : item.kind === "functionGraph"
