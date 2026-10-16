@@ -1,0 +1,35 @@
+[
+  {
+    "documentId": "doc-7ff603f7-3256-4f75-94e4-8cebd9ccb966",
+    "epoch": "epoch:doc-7ff603f7-3256-4f75-94e4-8cebd9ccb966",
+    "generation": 1,
+    "workspace": "conics",
+    "objectCount": 0,
+    "objectIds": [],
+    "semanticContentMatchesStoredHash": true
+  },
+  {
+    "documentId": "doc-887beec3-c347-43f1-a705-11697688f8e6",
+    "epoch": "epoch:doc-887beec3-c347-43f1-a705-11697688f8e6",
+    "generation": 2,
+    "workspace": "geometry3d",
+    "objectCount": 2,
+    "objectIds": [
+      "point3-1",
+      "point3-2"
+    ],
+    "semanticContentMatchesStoredHash": true
+  },
+  {
+    "documentId": "doc-ca6c6894-3fb8-404e-9640-b8ecb13a9885",
+    "epoch": "epoch:doc-ca6c6894-3fb8-404e-9640-b8ecb13a9885",
+    "generation": 3,
+    "workspace": "conics",
+    "objectCount": 2,
+    "objectIds": [
+      "point-1",
+      "point-2"
+    ],
+    "semanticContentMatchesStoredHash": true
+  }
+]

@@ -1,0 +1,23 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:12644) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:22 char:1
++ node node_modules/vitest/vitest.mjs run scripts/docs-consistency *> a ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:12644) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48532) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30264) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  12 passed (12)
+   Start at  07:39:53
+   Duration  4.89s (transform 218ms, setup 159ms, import 428ms, tests 1.57s, environment 9.67s)
+

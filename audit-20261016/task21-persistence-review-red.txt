@@ -1,0 +1,75 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:47836) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:63 char:1
++ node node_modules/vitest/vitest.mjs run apps/web/src/services/documen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:47836) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/services/documentPersistence.test.ts (24 tests | 2 failed) 54ms
+     × does not adopt a conflicting external head for a queued autosave 16ms
+     × preserves another document's queued final edit when resetting a workspace 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > does not adopt
+ a conflicting external head for a queued autosave
+AssertionError: expected [ { ok: false, …(2) }, …(1) ] to deeply equal [ ObjectContaining{…}, …(1) ]
+
+- Expected
++ Received
+
+@@ -3,9 +3,9 @@
+      "code": "stale_head",
+      "detail": "document identity or generation changed",
+      "ok": false,
+    },
+    {
+-     "code": "stale_head",
+-     "ok": false,
++     "generation": 3,
++     "ok": true,
+    },
+  ]
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:483:22
+    481|     const last = { ...first, primitives: [...first.primitives, { id: "…
+    482|     const outcomes = await Promise.all([adapter.save(first, 1), adapte…
+    483|     expect(outcomes).toEqual([
+       |                      ^
+    484|       expect.objectContaining({ ok: false, code: "stale_head" }),
+    485|       expect.objectContaining({ ok: false, code: "stale_head" })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > preserves anot
+her document's queued final edit when resetting a workspace
+AssertionError: expected [ 'first' ] to deeply equal [ 'first', 'last' ]
+
+- Expected
++ Received
+
+  [
+    "first",
+-   "last",
+  ]
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:523:109
+    521|     expect((await firstSave).ok).toBe(true)
+    522|     expect((await finalSave).ok).toBe(true)
+    523|     expect(JSON.parse(rows.get(original.metadata.id)!.content).primiti…
+       |                                                                                                             ^
+    524|     expect(rows.get(other.metadata.id)?.epoch).toBe("new-workspace-epo…
+    525|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 22 passed (24)
+   Start at  07:32:19
+   Duration  6.92s (transform 2.13s, setup 56ms, import 4.25s, tests 54ms, environment 1.84s)
+

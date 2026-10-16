@@ -1,0 +1,44 @@
+
+ RUN  v4.1.11 D:/draw/draw
+
+node.exe : (node:50796) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided
+.
+At line:1 char:1
++ & "D:\nodejs/node.exe" "D:\nodejs/node_modules/npm/bin/npx-cli.js" vi ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:50796) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/services/documentPersistence.test.ts (22 tests | 1 failed) 40ms
+     × waits for an in-flight import before saving edits in its new era 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > waits for an i
+n-flight import before saving edits in its new era
+AssertionError: expected [ 'imported' ] to deeply equal [ 'imported', 'later' ]
+
+- Expected
++ Received
+
+  [
+    "imported",
+-   "later",
+  ]
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:470:109
+    468|     expect((await reset).ok).toBe(true)
+    469|     expect((await save).ok).toBe(true)
+    470|     expect(JSON.parse(rows.get(original.metadata.id)!.content).primiti…
+       |                                                                                                             ^
+    471|     expect(adapter.handle()?.epoch).toBe("import-epoch")
+    472|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 21 passed (22)
+   Start at  07:22:22
+   Duration  6.13s (transform 2.03s, setup 54ms, import 3.95s, tests 40ms, environment 1.57s)

@@ -103,10 +103,18 @@ export function handleFromSnapshot(snapshot: DocumentSnapshot): DocumentHandle {
 export function createDocumentPersistence(dependencies: PersistenceDependencies): DocumentPersistence {
   const { repository, projectId } = dependencies
   let head: DocumentHandle | null = null
-  /** 上一次**成功**保存的内容指纹。相同的内容不再发 IPC。 */
-  let lastSavedFingerprint: string | null = null
-  /** 换了一世之后自增：在途的保存用**发起时**的值比对，不符就丢弃结果。 */
-  let generation = 0
+  // Each workspace owns a different document. Never borrow another document's CAS head.
+  const heads = new Map<string, DocumentHandle>()
+  type SaveResult = { ok: true; generation: number } | RepositoryFailure
+  const saveQueues = new Map<string, Promise<SaveResult>>()
+  function remember(snapshot: DocumentSnapshot): DocumentHandle {
+    head = handleFromSnapshot(snapshot)
+    heads.set(head.documentId, head)
+    return head
+  }
+  /** Each document has its own import era; unrelated workspace saves remain valid. */
+  const eras = new Map<string, number>()
+  const eraOf = (documentId: string) => eras.get(documentId) ?? 0
 
   async function restore(): Promise<RestoreOutcome> {
     /**
@@ -118,8 +126,7 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
     if (found.ok) {
       const document = documentFromSnapshot(found.value)
       if (document) {
-        head = handleFromSnapshot(found.value)
-        lastSavedFingerprint = found.value.contentHash
+        remember(found.value)
         return { document, created: false }
       }
       // 快照里存的不是文档：**如实说**，但给出一份可用的空文档（不能让用户卡在启动上）。
@@ -153,16 +160,14 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
       if (latest.ok && latest.value !== null) {
         const document = documentFromSnapshot(latest.value)
         if (document) {
-          head = handleFromSnapshot(latest.value)
-          lastSavedFingerprint = latest.value.contentHash
+          remember(latest.value)
           return { document, created: false }
         }
       }
       // `not_found` 且项目里空无一物：**首次启动的正常状态**，还没保存过任何东西。
       const created = await repository.create(projectId, fresh)
       if (created.ok) {
-        head = handleFromSnapshot(created.value)
-        lastSavedFingerprint = created.value.contentHash
+        remember(created.value)
         return { document: fresh, created: true }
       }
       return { document: fresh, created: true, failure: created }
@@ -171,56 +176,83 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
     return { document: fresh, created: true, failure: found }
   }
 
-  async function save(document: GeometryDocument, actions: number): Promise<{ ok: true; generation: number } | RepositoryFailure> {
+  function superseded(documentId: string): SaveResult {
+    return { ok: true, generation: heads.get(documentId)?.generation ?? 0 }
+  }
+
+  async function saveNow(document: GeometryDocument, actions: number, epochAtStart: number): Promise<SaveResult> {
+    if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
     const fingerprint = contentFingerprint(document)
-    // 内容没变：**连 IPC 都不发**。这是高频路径上最省的一次挡。
-    if (lastSavedFingerprint !== null && fingerprint === lastSavedFingerprint && head) {
-      return { ok: true, generation: head.generation }
+    let expected = heads.get(document.metadata.id)
+    if (!expected) {
+      // A new workspace may be new to this adapter but already present on disk.
+      const found = await repository.readHead(projectId, document.metadata.id)
+      if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
+      if (found.ok) expected = remember(found.value)
+      else if (found.code === "not_found") {
+        const created = await repository.create(projectId, document)
+        if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
+        if (!created.ok) return created
+        remember(created.value)
+        return { ok: true, generation: created.value.generation }
+      } else return found
     }
-    if (!head) {
-      const created = await repository.create(projectId, document)
-      if (!created.ok) return created
-      head = handleFromSnapshot(created.value)
-      lastSavedFingerprint = created.value.contentHash
-      return { ok: true, generation: created.value.generation }
+    if (fingerprint === expected.contentHash) {
+      head = expected
+      return { ok: true, generation: expected.generation }
     }
 
-    const epochAtStart = generation
-    const expected = head
     const receipt = await repository.commit(projectId, document, expected, actions)
+    // Import/reset invalidates successes AND failures from the preceding era.
+    if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
     if (!receipt.ok) {
-      /**
-       * `stale_head` 分两种，处理**不同**：
-       * - 内容其实没变（别人只是又存了一遍）→ 重新读 head 并当成成功（用户的改动已经在库里了）；
-       * - 内容变了 → 如实把冲突交给调用方（它要决定是"重新读一遍再保存"还是"让用户选"）。
-       */
       if (receipt.code === "stale_head") {
         const latest = await repository.readHead(projectId, document.metadata.id)
-        if (latest.ok) {
-          if (latest.value.contentHash === fingerprint) {
-            head = handleFromSnapshot(latest.value)
-            lastSavedFingerprint = fingerprint
-            return { ok: true, generation: latest.value.generation }
-          }
-          head = handleFromSnapshot(latest.value)
+        if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
+        if (latest.ok && latest.value.contentHash === fingerprint) {
+          remember(latest.value)
+          return { ok: true, generation: latest.value.generation }
         }
+        // A different external head remains an unresolved conflict, including for queued edits.
       }
       return receipt
     }
 
-    // 换了一世之后回来的结果一律丢弃：那是"上一次编辑"的保存，不该决定现在的 head。
-    if (epochAtStart !== generation) return { ok: true, generation: head?.generation ?? expected.generation }
-
-    if (receipt.value.outcome.kind === "committed" || receipt.value.outcome.kind === "replayed") {
-      head = { ...expected, generation: receipt.value.outcome.generation, contentHash: receipt.value.outcome.contentHash }
-    }
-    lastSavedFingerprint = fingerprint
+    head = { ...expected, generation: receipt.value.outcome.generation, contentHash: fingerprint }
+    heads.set(head.documentId, head)
     return { ok: true, generation: receipt.value.outcome.generation }
   }
 
-  async function reset(document: GeometryDocument): Promise<{ ok: true; generation: number } | RepositoryFailure> {
-    // 换了一世：在途的保存从这一刻起全部作废。
-    generation += 1
+  function save(document: GeometryDocument, actions: number): Promise<SaveResult> {
+    const epochAtStart = eraOf(document.metadata.id)
+    const previous = saveQueues.get(document.metadata.id)
+    // Rapid edits must not race the first create or reuse the same CAS generation.
+    // A different workspace remains independent; reset never waits for a stuck save.
+    const run = () => saveNow(document, actions, epochAtStart)
+    const pending = previous ? previous.then(run, run) : run()
+    trackSave(document.metadata.id, pending)
+    return pending
+  }
+
+  function trackSave(documentId: string, pending: Promise<SaveResult>): void {
+    saveQueues.set(documentId, pending)
+    void pending.finally(() => {
+      if (saveQueues.get(documentId) === pending) saveQueues.delete(documentId)
+    }).catch(() => {})
+  }
+
+  function reset(document: GeometryDocument): Promise<SaveResult> {
+    // Supersede only this document, without waiting for its old in-flight saves.
+    const era = eraOf(document.metadata.id) + 1
+    eras.set(document.metadata.id, era)
+    saveQueues.delete(document.metadata.id)
+    const pending = resetNow(document, era)
+    // New edits wait for this import, not for superseded old saves.
+    trackSave(document.metadata.id, pending)
+    return pending
+  }
+
+  async function resetNow(document: GeometryDocument, epochAtStart: number): Promise<SaveResult> {
     /**
      * **走 `replaceEpoch` 而不是"删掉再建"或"当成一次普通提交"。**
      *
@@ -230,17 +262,17 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
      * ②"打开文件"这条路径在语义上根本不是"创建"，用 `create` 去表达它必然要处理一堆反例。
      */
     const replaced = await repository.replaceEpoch(projectId, document)
+    if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
     if (replaced.ok) {
-      head = handleFromSnapshot(replaced.value)
-      lastSavedFingerprint = replaced.value.contentHash
+      remember(replaced.value)
       return { ok: true, generation: replaced.value.generation }
     }
     // 库里还没有这份文档（用户打开的文件是全新的）：那就建出来。
     if (replaced.code === "not_found") {
       const created = await repository.create(projectId, document)
+      if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
       if (!created.ok) return created
-      head = handleFromSnapshot(created.value)
-      lastSavedFingerprint = created.value.contentHash
+      remember(created.value)
       return { ok: true, generation: created.value.generation }
     }
     return replaced

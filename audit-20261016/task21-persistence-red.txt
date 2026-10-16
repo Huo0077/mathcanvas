@@ -1,0 +1,66 @@
+
+ RUN  v4.1.11 D:/draw/draw
+
+node.exe : (node:44060) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided
+.
+At line:1 char:1
++ & "D:\nodejs/node.exe" "D:\nodejs/node_modules/npm/bin/npx-cli.js" vi ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:44060) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/services/documentPersistence.test.ts (19 tests | 2 failed) 48ms
+     × creates a newly entered workspace instead of committing with another document's head 15ms
+     × serializes rapid edits during the first save so the latest content is durable 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > creates a newl
+y entered workspace instead of committing with another document's head
+AssertionError: expected { ok: false, code: 'not_found', …(1) } to match object { ok: true }
+(2 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "ok": true,
++   "ok": false,
+  }
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:403:42
+    401|     const solid = createEmptyDocument("geometry3d")
+    402|     solid.primitives.push({ id: "P", type: "point3", position: { x: 0,…
+    403|     expect(await adapter.save(solid, 1)).toMatchObject({ ok: true })
+       |                                          ^
+    404|     expect(JSON.parse(rows.get(solid.metadata.id)!.content).primitives…
+    405|     expect(rows.get(original.metadata.id)?.contentHash).toBe(contentFi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > serializes rap
+id edits during the first save so the latest content is durable
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:420:53
+    418|     const last = { ...first, primitives: [...first.primitives, { id: "…
+    419|     const outcomes = await Promise.all([adapter.save(first, 1), adapte…
+    420|     expect(outcomes.every((outcome) => outcome.ok)).toBe(true)
+       |                                                     ^
+    421|     expect(JSON.parse(rows.get(solid.metadata.id)!.content).primitives…
+    422|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 17 passed (19)
+   Start at  07:18:21
+   Duration  6.20s (transform 2.02s, setup 54ms, import 3.94s, tests 48ms, environment 1.61s)

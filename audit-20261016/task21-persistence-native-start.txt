@@ -1,0 +1,126 @@
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Document | MathCanvas · 交互绘图引擎
+ControlType.Group |
+ControlType.Group | 全局模块
+ControlType.List |
+ControlType.ListItem | 画布与制图
+ControlType.Button | 传统工作区
+ControlType.Text | 画布与制图
+ControlType.ListItem | 对话式作图
+ControlType.Button | Agent 工作区
+ControlType.Text | 对话式作图
+ControlType.ListItem | provider 与密钥
+ControlType.Button | 模型服务
+ControlType.Text | provider 与密钥
+ControlType.Group | 工作区
+ControlType.List |
+ControlType.ListItem |
+ControlType.Button | 跳转到平面几何
+ControlType.ListItem |
+ControlType.Button | 跳转到立体几何
+ControlType.ListItem |
+ControlType.Button | 跳转到工程制图
+ControlType.Group |
+ControlType.Group | MathCanvas
+ControlType.Group | 工作模式
+ControlType.Group | 工作区标签
+ControlType.Button | 文件
+ControlType.Button | 平面几何
+ControlType.Button | 立体几何
+ControlType.Button | 工程制图
+ControlType.Edit | 搜索
+ControlType.Group | 文件与历史
+ControlType.Button | 打开 .mgeo
+ControlType.Button | 保存 .mgeo
+ControlType.Button | 项目包…
+ControlType.Button | 撤销
+ControlType.Button | 重做
+ControlType.Button | 设置
+ControlType.Group | 功能区控制
+ControlType.Button | 收起功能区
+ControlType.Button | 固定功能区
+ControlType.Group | 功能区
+ControlType.Button | 收起绘制
+ControlType.Button | 选择工具
+ControlType.Button | 绘制空间点
+ControlType.Button | 绘制线段
+ControlType.Button | 绘制空间直线
+ControlType.Button | 绘制空间射线
+ControlType.Button | 绘制空间平面
+ControlType.Button | 绘制空间面
+ControlType.Button | 收起立体与截面
+ControlType.Button | 添加空间点
+ControlType.Button | 添加立方体
+ControlType.Button | 添加棱锥
+ControlType.Button | 添加正四面体
+ControlType.Button | 添加圆柱
+ControlType.Button | 添加圆锥
+ControlType.Button | 创建截面
+ControlType.Button | 收起由选中点构造
+ControlType.Button | 由选中点创建空间直线
+ControlType.Button | 由选中点创建空间平面
+ControlType.Button | 由选中点创建空间面
+ControlType.Button | 添加空间圆轨道
+ControlType.Button | 收起多模态输入
+ControlType.Button | 文字转换
+ControlType.Button | 图片转换
+ControlType.Button | 收起作业操作
+ControlType.Button | 删除对象
+ControlType.Button | 锁定对象
+ControlType.Button | 收起文件输出
+ControlType.Button | 导出 SVG
+ControlType.Button | 导出 HTML
+ControlType.Button | 导出 CSV
+ControlType.Button | 导出 PNG
+ControlType.Button | 保存 .mgeo
+ControlType.Group |
+ControlType.Text | 对象管理
+ControlType.Text | π代数区
+ControlType.Text | 0
+ControlType.Text | 参数
+ControlType.Text | 还没有参数。拖动一个绑定到曲线上的点会自动生成它的驱动参数。
+ControlType.Button | 新建参数
+ControlType.Group | 3D 几何场景
+ControlType.Image | 3D 几何画布
+ControlType.Group | 三维测量标注
+ControlType.Group | 三维点标注
+ControlType.Group | 3D显示控制
+ControlType.Button | 常用立体
+ControlType.Button | 透明面
+ControlType.Button | 隐藏边
+ControlType.Button | 旋转环
+ControlType.Button | 法向量
+ControlType.Button | 展开
+ControlType.Button | 测量二面角
+ControlType.Button | 自动取景
+ControlType.Button | 以面为剖切面
+ControlType.Group | 3D视角控制
+ControlType.Button | 自由拖动
+ControlType.Button | 平移视角
+ControlType.Button | 适应视图
+ControlType.Button | 重置3D视角
+ControlType.Text | 左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放
+ControlType.StatusBar |
+ControlType.Text | 添加点、线或面开始探索三维空间。
+ControlType.Text | ∴
+ControlType.Group |
+ControlType.Group | 属性检查器
+ControlType.Text | 选中对象
+ControlType.Text | π属性面板
+ControlType.Text | 未选择任何图元
+ControlType.Text | 在画布中点击点、直线或椭圆即可配置几何参数与外观参数
+ControlType.StatusBar | 操作提示
+ControlType.Text | 点击图元查看属性，或在画布中拖拽框选多个对象
+ControlType.Text | 坐标 —
+ControlType.Text | 对象
+ControlType.Text | 0
+ControlType.Text | 工作区
+ControlType.Text | geometry3d
+ControlType.Pane |

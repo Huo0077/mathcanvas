@@ -365,3 +365,163 @@ describe("the handle used for CAS", () => {
     expect(handle.contentHash).toBe(contentFingerprint(stored))
   })
 })
+
+
+describe("saving across workspace document identities", () => {
+  function multiDocumentRepository() {
+    const rows = new Map<string, DocumentSnapshot>()
+    const { repository } = makeRepository()
+    repository.readHead = async (_project, id) => rows.has(id)
+      ? { ok: true, value: rows.get(id)! }
+      : { ok: false, code: "not_found", detail: `no document ${id}` }
+    repository.readLatestHead = async () => ({ ok: true, value: [...rows.values()].at(-1) ?? null })
+    repository.create = async (_project, document) => {
+      if (rows.has(document.metadata.id)) return { ok: false, code: "stale_head", detail: "already exists" }
+      const row = snapshot(document)
+      rows.set(row.documentId, row)
+      return { ok: true, value: row }
+    }
+    repository.commit = async (_project, document, expected) => {
+      const row = rows.get(document.metadata.id)
+      if (!row) return { ok: false, code: "not_found", detail: `no document ${document.metadata.id}` }
+      if (expected.documentId !== document.metadata.id || row.epoch !== expected.epoch || row.generation !== expected.generation || row.contentHash !== expected.contentHash) {
+        return { ok: false, code: "stale_head", detail: "document identity or generation changed" }
+      }
+      const next = snapshot(document, row.generation + 1, row.epoch)
+      rows.set(next.documentId, next)
+      return { ok: true, value: { idempotencyKey: "test", committedAt: 0, outcome: { kind: "committed", generation: next.generation, contentHash: next.contentHash } } }
+    }
+    return { repository, rows }
+  }
+
+  it("creates a newly entered workspace instead of committing with another document's head", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    const original = (await adapter.restore()).document
+    const solid = createEmptyDocument("geometry3d")
+    solid.primitives.push({ id: "P", type: "point3", position: { x: 0, y: 0, z: 4 } })
+    expect(await adapter.save(solid, 1)).toMatchObject({ ok: true })
+    expect(JSON.parse(rows.get(solid.metadata.id)!.content).primitives).toHaveLength(1)
+    expect(rows.get(original.metadata.id)?.contentHash).toBe(contentFingerprint(original))
+    const edited = { ...original, primitives: [{ id: "A", type: "point" as const, x: 1, y: 2 }] }
+    expect(await adapter.save(edited, 1)).toMatchObject({ ok: true })
+    expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives[0].id).toBe("A")
+    expect(JSON.parse(rows.get(solid.metadata.id)!.content).primitives[0].id).toBe("P")
+  })
+
+  it("serializes rapid edits during the first save so the latest content is durable", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    await adapter.restore()
+    const solid = createEmptyDocument("geometry3d")
+    const first = { ...solid, primitives: [{ id: "P", type: "point3" as const, position: { x: 0, y: 0, z: 4 } }] }
+    const last = { ...first, primitives: [...first.primitives, { id: "Q", type: "point3" as const, position: { x: 1, y: 0, z: 0 } }] }
+    const outcomes = await Promise.all([adapter.save(first, 1), adapter.save(last, 1)])
+    expect(outcomes.every((outcome) => outcome.ok)).toBe(true)
+    expect(JSON.parse(rows.get(solid.metadata.id)!.content).primitives.map((p: { id: string }) => p.id)).toEqual(["P", "Q"])
+  })
+
+  it("reads an existing workspace head and commits with its own epoch", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    await adapter.restore()
+    const solid = createEmptyDocument("geometry3d")
+    rows.set(solid.metadata.id, snapshot(solid, 7, "solid-epoch"))
+    const edited = { ...solid, primitives: [{ id: "P", type: "point3" as const, position: { x: 0, y: 0, z: 4 } }] }
+    expect(await adapter.save(edited, 1)).toEqual({ ok: true, generation: 8 })
+    expect(rows.get(solid.metadata.id)?.epoch).toBe("solid-epoch")
+  })
+
+  it("retains CAS conflicts when returning to a previously saved workspace", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    const original = (await adapter.restore()).document
+    const solid = createEmptyDocument("geometry3d")
+    expect((await adapter.save(solid, 0)).ok).toBe(true)
+    const theirs = { ...original, primitives: [{ id: "theirs", type: "point" as const, x: 3, y: 4 }] }
+    rows.set(original.metadata.id, snapshot(theirs, 2))
+    const mine = { ...original, primitives: [{ id: "mine", type: "point" as const, x: 1, y: 2 }] }
+    expect(await adapter.save(mine, 1)).toMatchObject({ ok: false, code: "stale_head" })
+    expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives[0].id).toBe("theirs")
+  })
+
+  it("waits for an in-flight import before saving edits in its new era", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    const original = (await adapter.restore()).document
+    let finish!: () => void
+    const gate = new Promise<void>((resolve) => { finish = resolve })
+    repository.replaceEpoch = async (_project, document) => {
+      await gate
+      const row = snapshot(document, 2, "import-epoch")
+      rows.set(row.documentId, row)
+      return { ok: true, value: row }
+    }
+    const imported = { ...original, primitives: [{ id: "imported", type: "point" as const, x: 2, y: 3 }] }
+    const reset = adapter.reset(imported)
+    const edited = { ...imported, primitives: [...imported.primitives, { id: "later", type: "point" as const, x: 4, y: 5 }] }
+    const save = adapter.save(edited, 1)
+    // Flush work launched before reset completes: it must not commit against the previous era.
+    await Promise.resolve()
+    await Promise.resolve()
+    finish()
+    expect((await reset).ok).toBe(true)
+    expect((await save).ok).toBe(true)
+    expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives.map((p: { id: string }) => p.id)).toEqual(["imported", "later"])
+    expect(adapter.handle()?.epoch).toBe("import-epoch")
+  })
+
+  it("does not adopt a conflicting external head for a queued autosave", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    const original = (await adapter.restore()).document
+    const theirs = { ...original, primitives: [{ id: "theirs", type: "point" as const, x: 3, y: 4 }] }
+    rows.set(original.metadata.id, snapshot(theirs, 2))
+    const first = { ...original, primitives: [{ id: "mine-first", type: "point" as const, x: 1, y: 2 }] }
+    const last = { ...first, primitives: [...first.primitives, { id: "mine-last", type: "point" as const, x: 5, y: 6 }] }
+    const outcomes = await Promise.all([adapter.save(first, 1), adapter.save(last, 1)])
+    expect(outcomes).toEqual([
+      expect.objectContaining({ ok: false, code: "stale_head" }),
+      expect.objectContaining({ ok: false, code: "stale_head" })
+    ])
+    expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives.map((p: { id: string }) => p.id)).toEqual(["theirs"])
+  })
+
+  it("preserves another document's queued final edit when resetting a workspace", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const adapter = persistence(repository)
+    const original = (await adapter.restore()).document
+    let finish!: () => void
+    let started!: () => void
+    const gate = new Promise<void>((resolve) => { finish = resolve })
+    const committing = new Promise<void>((resolve) => { started = resolve })
+    const commit = repository.commit
+    let firstCommit = true
+    repository.commit = async (...args) => {
+      if (firstCommit) {
+        firstCommit = false
+        started()
+        await gate
+      }
+      return commit(...args)
+    }
+    repository.replaceEpoch = async (_project, document) => {
+      const row = snapshot(document, 1, "new-workspace-epoch")
+      rows.set(row.documentId, row)
+      return { ok: true, value: row }
+    }
+    const first = { ...original, primitives: [{ id: "first", type: "point" as const, x: 1, y: 2 }] }
+    const last = { ...first, primitives: [...first.primitives, { id: "last", type: "point" as const, x: 5, y: 6 }] }
+    const firstSave = adapter.save(first, 1)
+    await committing
+    const finalSave = adapter.save(last, 1)
+    const other = createEmptyDocument("geometry3d")
+    expect((await adapter.reset(other)).ok).toBe(true)
+    finish()
+    expect((await firstSave).ok).toBe(true)
+    expect((await finalSave).ok).toBe(true)
+    expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives.map((p: { id: string }) => p.id)).toEqual(["first", "last"])
+    expect(rows.get(other.metadata.id)?.epoch).toBe("new-workspace-epoch")
+  })
+
+})
