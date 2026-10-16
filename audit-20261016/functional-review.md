@@ -278,3 +278,15 @@ This block records a real product run through the installed desktop WebView and 
 - **CLI boundary:** `npm run bench:agent -- --mode=real_provider` still records every case as `not_measured`; it is not counted as a real provider result. The numbers above came from the confirmed desktop product path and are kept separate from the deterministic-local and planning-contract tests.
 - **Acceptance:** Task 20 is **partially complete**. The real provider execution and honest failure/latency readout are functional. The frozen four-family gold evaluation is still not complete: there is no valid independent gold oracle for the 12 frozen cases, the planning run has no human annotations, cost is unavailable, and the 8-case tool-ring result is far below a publishable quality claim. No pass is inferred from the existence of the report.
 - **Evidence file:** `audit-20261016/task20-provider-ui.txt` contains the rendered product report captured after the run.
+
+## 2026-10-16 Functional audit: Task 21 desktop release and runtime boundary
+
+This block records an actual release build, installer run, installed-app launch, and WebView IPC probe. It does not treat a successful compile as teacher/student acceptance.
+
+- **Release build:** `npm --workspace @draw/desktop run build` exited `0` and produced `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`.
+- **Installers:** `npm --workspace @draw/desktop run bundle` exited `0` and produced both `MathCanvas_3.3.14_x64_en-US.msi` and `MathCanvas_3.3.14_x64-setup.exe`. The installer run exited `0`; the installed application launched with window title `MathCanvas` and `Responding=True`.
+- **Installed WebView/IPC:** the real installed page loaded at `http://tauri.localhost/`. IPC returned active profile `deepseek-v4-flash`, one configured OpenAI-compatible profile, `has_secret=true`, and `run_event_count=82`. This is evidence that the installed WebView and Tauri bridge are alive, not merely that Rust code compiled.
+- **Automatic Lean boundary:** the same installed IPC call returned `lean_proof_availability.outcome=unavailable`, with detail that neither `DRAW_LEAN_LAKE` nor `DRAW_LEAN_PROJECT` is configured. The desktop path therefore did not execute a Lean proof on this machine. This is separate from ordinary drawing and separate from provider evaluation.
+- **Manual acceptance boundary:** no teacher acceptance record, student acceptance record, clean-machine/offline installation record, or end-to-end user confirmation/revise/undo acceptance record exists in this audit. These cannot be inferred from the installer exit code or from IPC health.
+- **Acceptance:** Task 21 is **partially complete**. The release engineering path, installer generation, installation, launch, WebView load, and IPC smoke path are verified. Lean configuration and teacher/student acceptance remain incomplete, so the task is not release-accepted as a whole.
+- **Evidence files:** `audit-20261016/task21-desktop-build.txt`, `task21-desktop-bundle.txt`, `task21-install.txt`, `task21-launch.txt`, and `task21-ipc-evidence.json` record the corresponding runtime evidence.
