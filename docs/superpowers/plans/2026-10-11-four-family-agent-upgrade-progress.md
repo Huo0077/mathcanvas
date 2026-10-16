@@ -410,3 +410,9 @@ Task 15 的公切线缺口已在支持范围内补齐：新增 `function.create_
 验证：7 个定向文件 / 138 个测试通过；geometry-kernel、scene-graph、agent-core、dsl typecheck 均 exit 0；lint 0 error / 13 既有 warning；diff 检查通过。仍未覆盖非函数曲线、真实 provider、人工验收和完整桌面发行。
 
 本区块代码与四份进度文档应独立提交并推送；提交号在推送后回填。
+
+## 2026-10-16 功能补完区块 E1（Task 19 实时输出上限）
+
+修复证明 runner 的真实资源问题：`wait_with_output()` 改为 stdout/stderr 并行流式读取，尾部缓冲固定为 4000 字节；超时杀进程并回收后不返回半成品。新增 2 条 Rust 回归；`cargo check --lib` exit 0，`cargo test --lib proof` 2/2 通过。
+
+仅完成实时输出内存上限这一项；OS 隔离、真实 Lean 慢集成、桌面发行/安装验收仍未完成。

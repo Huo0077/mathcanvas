@@ -25,6 +25,7 @@ pub mod source;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// **默认墙钟上限**：与 TS 侧适配器的默认预算同一个量级（180 s）。
 ///
@@ -171,7 +172,7 @@ pub async fn run_lean(configuration: &LeanConfiguration, source: &str, timeout_m
     }
 
     let started = Instant::now();
-    /**
+    /*
      * **先问一次工具链自己的版本**（`lake env lean --version` 的第一行），再跑证明。
      *
      * 顺序是刻意的：适配器**跑完之后**才读版本串（它要先知道证明成没成），所以版本必须在跑之前拿到。
@@ -219,6 +220,46 @@ pub async fn lean_version(configuration: &LeanConfiguration, timeout_ms: u64) ->
     None
 }
 
+/// 按字节流实时读取并只保留尾部，避免 `wait_with_output()` 在进程运行期间无限累积输出。
+async fn capture_tail<R: AsyncRead + Unpin>(mut reader: R, max_bytes: usize) -> Vec<u8> {
+    let mut retained = Vec::with_capacity(max_bytes.min(8192));
+    let mut chunk = [0_u8; 8192];
+    loop {
+        match reader.read(&mut chunk).await {
+            Ok(0) => break,
+            Ok(read) => append_tail_bytes(&mut retained, &chunk[..read], max_bytes),
+            Err(_) => break,
+        }
+    }
+    retained
+}
+
+fn append_tail_bytes(retained: &mut Vec<u8>, chunk: &[u8], max_bytes: usize) {
+    if max_bytes == 0 {
+        retained.clear();
+        return;
+    }
+    if chunk.len() >= max_bytes {
+        retained.clear();
+        retained.extend_from_slice(&chunk[chunk.len() - max_bytes..]);
+        return;
+    }
+    retained.extend_from_slice(chunk);
+    if retained.len() > max_bytes {
+        let excess = retained.len() - max_bytes;
+        retained.drain(..excess);
+    }
+}
+
+fn display_captured_tail(bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    if bytes.len() >= OUTPUT_TAIL_BYTES {
+        format!("…（前面输出已省略）\n{text}")
+    } else {
+        text.into_owned()
+    }
+}
+
 async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_ms: u64, started: Instant) -> LeanRunOutcome {
     let mut command = tokio::process::Command::new(&configuration.lake);
     // **固定 argv**：`lake env lean <临时文件>`。没有 shell、没有可拼接的参数。
@@ -227,7 +268,7 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     command.kill_on_drop(true);
 
-    let child = match command.spawn() {
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
             return LeanRunOutcome {
@@ -238,37 +279,81 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
                 duration_ms: started.elapsed().as_millis() as u64,
                 detail: format!("起不来：{}（{}）", configuration.lake.display(), error),
                 backend_version: None,
-            }
+            };
         }
     };
 
-    match tokio::time::timeout(Duration::from_millis(timeout_ms.max(1)), child.wait_with_output()).await {
-        Err(_) => LeanRunOutcome {
-            outcome: LeanOutcome::Timeout,
-            exit_code: None,
-            stdout: String::new(),
-            stderr: String::new(),
-            duration_ms: started.elapsed().as_millis() as u64,
-            detail: format!("进程级墙钟超时（{timeout_ms} ms）：已杀进程，**不返回半成品证明**。"),
-            backend_version: None,
-        },
-        Ok(Err(error)) => LeanRunOutcome {
-            outcome: LeanOutcome::Failed,
-            exit_code: None,
-            stdout: String::new(),
-            stderr: String::new(),
-            duration_ms: started.elapsed().as_millis() as u64,
-            detail: format!("等进程结束时出错：{error}"),
-            backend_version: None,
-        },
-        Ok(Ok(output)) => LeanRunOutcome {
-            outcome: LeanOutcome::Exited,
-            exit_code: output.status.code(),
-            stdout: tail_of(&String::from_utf8_lossy(&output.stdout), OUTPUT_TAIL_BYTES),
-            stderr: tail_of(&String::from_utf8_lossy(&output.stderr), OUTPUT_TAIL_BYTES),
-            duration_ms: started.elapsed().as_millis() as u64,
-            detail: "进程跑完了。**这还不是判定** —— 「证明成没成立」看 TS 侧对 `#print axioms` 报告的判据（`exit=0` 连 `sorry` 都满足）。".to_string(),
-            backend_version: None,
-        },
+    let stdout = child.stdout.take().map(|stream| tokio::spawn(capture_tail(stream, OUTPUT_TAIL_BYTES)));
+    let stderr = child.stderr.take().map(|stream| tokio::spawn(capture_tail(stream, OUTPUT_TAIL_BYTES)));
+    let wait_result = tokio::time::timeout(Duration::from_millis(timeout_ms.max(1)), child.wait()).await;
+    match wait_result {
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            let _ = join_capture(stdout).await;
+            let _ = join_capture(stderr).await;
+            LeanRunOutcome {
+                outcome: LeanOutcome::Timeout,
+                exit_code: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                duration_ms: started.elapsed().as_millis() as u64,
+                detail: format!("进程级墙钟超时（{timeout_ms} ms）：已杀进程，**不返回半成品证明**。"),
+                backend_version: None,
+            }
+        }
+        Ok(Err(error)) => {
+            let _ = join_capture(stdout).await;
+            let _ = join_capture(stderr).await;
+            LeanRunOutcome {
+                outcome: LeanOutcome::Failed,
+                exit_code: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                duration_ms: started.elapsed().as_millis() as u64,
+                detail: format!("等进程结束时出错：{error}"),
+                backend_version: None,
+            }
+        }
+        Ok(Ok(status)) => {
+            let stdout = display_captured_tail(&join_capture(stdout).await);
+            let stderr = display_captured_tail(&join_capture(stderr).await);
+            LeanRunOutcome {
+                outcome: LeanOutcome::Exited,
+                exit_code: status.code(),
+                stdout,
+                stderr,
+                duration_ms: started.elapsed().as_millis() as u64,
+                detail: "进程跑完了。**这还不是判定** —— 「证明成没成立」看 TS 侧对 `#print axioms` 报告的判据（`exit=0` 连 `sorry` 都满足）。".to_string(),
+                backend_version: None,
+            }
+        }
+    }
+}
+
+async fn join_capture(handle: Option<tokio::task::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    match handle {
+        Some(handle) => handle.await.unwrap_or_default(),
+        None => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_tail_bytes;
+
+    #[test]
+    fn bounded_tail_keeps_only_latest_bytes() {
+        let mut retained = Vec::new();
+        append_tail_bytes(&mut retained, b"abc", 4);
+        append_tail_bytes(&mut retained, b"def", 4);
+        assert_eq!(retained, b"cdef");
+    }
+
+    #[test]
+    fn oversized_chunk_is_trimmed_without_growing_buffer() {
+        let mut retained = Vec::new();
+        append_tail_bytes(&mut retained, b"0123456789", 4);
+        assert_eq!(retained, b"6789");
     }
 }

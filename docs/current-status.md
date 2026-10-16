@@ -1534,3 +1534,9 @@ GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。
 当前支持范围是两条显式 `function` 图元、branch 0/1；`verified-numeric` 仅表示当前图形实例的独立数值证据，报告仍为 `figure-instance` / `not-proven`。非函数曲线、形式证明、真实模型评测、人工验收和完整桌面发行不在本区块完成范围。
 
 新鲜证据：7 个定向测试文件 / 138 个测试通过；4 个相关 TypeScript 项目检查 exit 0；lint 0 error / 13 条既有 warning；diff 检查通过。
+
+## 2026-10-16 功能闭环增量：Task 19 本地证明执行的实时输出上限
+
+证明 runner 不再用 `wait_with_output()` 在内存中收集完整输出：stdout/stderr 由并行异步读取任务实时消费，各自只保留最后 4000 字节；超时先 kill/reap 再丢弃半成品输出。模板白名单、固定 lake 路径和墙钟预算仍保持不变。
+
+证据：`cargo check --lib` exit 0；`cargo test --lib proof` 2 passed / 0 failed。此区块仍不宣称严格 OS 隔离、真实 Lean 慢集成、桌面发行或安装验收。
