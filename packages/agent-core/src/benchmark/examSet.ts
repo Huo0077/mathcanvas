@@ -319,11 +319,15 @@ export interface OracleCheck {
   measured: number
   expected: number
   tolerance: number
+  /** Missing/unexpected readings are explicit failures, never successful measurements. */
+  status?: "measured" | "missing" | "unexpected"
 }
+
+export type OracleFailure = OracleCheck | { condition: string; status: "missing" }
 
 export type OracleVerdict =
   | { accepted: true; failed: readonly never[]; reason: "satisfied" }
-  | { accepted: false; failed: readonly OracleCheck[]; reason: "not_a_gold_case" | "condition_failed" }
+  | { accepted: false; failed: readonly OracleFailure[]; reason: "not_a_gold_case" | "condition_failed" }
 
 /**
  * **拿一道题的 oracle 判一份实测读数。**
@@ -333,15 +337,50 @@ export type OracleVerdict =
  * 1. 这道题的答案**经过独立复核**（`answerIndependentlyReviewed === true`）。
  *    否则直接 `not_a_gold_case` —— **连判都不判**。这一条比"不许带 oracle"更彻底：
  *    没复核过的题不该发出任何一个"通过"（调研 §3.5：目前一条都没有）。
- * 2. 每一条实测读数都在容差内。**错图必须被拒** —— 这是 oracle 有牙的唯一证据。
+ * 2. 每个必需条件有且仅有一条实测读数，且所有读数均为有限值、在有限非负容差内。**错图必须被拒** —— 这是 oracle 有牙的唯一证据。
  *
  * 不满足的那几条**逐条返回**（不是一句"不通过"）：判据要能告诉人**差在哪**。
  */
+function oracleConditionLabel(oracle: string): string {
+  const equals = oracle.indexOf("=")
+  return (equals >= 0 ? oracle.slice(0, equals) : oracle).trim()
+}
+
 export function judgeAgainstOracle(case_: ExamCase, checks: readonly OracleCheck[]): OracleVerdict {
-  if (case_.provenance.answerIndependentlyReviewed !== true || case_.oracle === undefined) {
+  if (case_.provenance.answerIndependentlyReviewed !== true || (case_.oracle === undefined || case_.oracle.length === 0)) {
     return { accepted: false, failed: [], reason: "not_a_gold_case" }
   }
-  const failed = checks.filter((check) => !(Math.abs(check.measured - check.expected) <= check.tolerance))
+
+  // Match measurements to the reviewed conditions one-to-one. An empty or partial
+  // measurement list must never be able to pass a reviewed oracle.
+  const required = case_.oracle.map(oracleConditionLabel)
+  const consumed = new Set<number>()
+  const failed: OracleFailure[] = []
+
+  for (const check of checks) {
+    const match = required.findIndex((condition, index) => !consumed.has(index) && condition === check.condition.trim())
+    if (match < 0) {
+      failed.push({ ...check, status: "unexpected" })
+      continue
+    }
+    consumed.add(match)
+    if ((check.status !== undefined && check.status !== "measured") ||
+        !Number.isFinite(check.measured) || !Number.isFinite(check.expected) ||
+        !Number.isFinite(check.tolerance) || check.tolerance < 0 ||
+        !(Math.abs(check.measured - check.expected) <= check.tolerance)) {
+      failed.push({ ...check, status: check.status ?? "measured" })
+    }
+  }
+
+  for (const [index, condition] of required.entries()) {
+    if (!consumed.has(index)) {
+      failed.push({
+        condition,
+        status: "missing"
+      })
+    }
+  }
+
   return failed.length === 0
     ? { accepted: true, failed: [], reason: "satisfied" }
     : { accepted: false, failed, reason: "condition_failed" }

@@ -138,6 +138,49 @@ describe("Task 9 — 错图必须被 oracle 拒掉；没复核过的题不许判
     expect(verdict.failed).toEqual([])
   })
 
+  it("rejects a reviewed oracle when a required condition has no measurement", () => {
+    const verdict = judgeAgainstOracle(reviewed, [
+      { condition: "|AB|", measured: 8, expected: 8, tolerance: 1e-9 }
+    ])
+
+    expect(verdict.accepted).toBe(false)
+    expect(verdict.reason).toBe("condition_failed")
+    expect(verdict.failed).toHaveLength(1)
+  })
+
+  it("rejects empty measurements and reports every missing condition", () => {
+    const verdict = judgeAgainstOracle(reviewed, [])
+    expect(verdict.accepted).toBe(false)
+    expect(verdict.failed.map(check => check.status)).toEqual(["missing", "missing"])
+  })
+
+  it("rejects duplicate measurements even when the count matches the oracle", () => {
+    const check = { condition: "|AB|", measured: 8, expected: 8, tolerance: 1e-9 }
+    const verdict = judgeAgainstOracle(reviewed, [check, check])
+    expect(verdict.accepted).toBe(false)
+    expect(verdict.failed.map(check => check.status)).toEqual(["unexpected", "missing"])
+  })
+
+  it("rejects extra measurements instead of silently ignoring them", () => {
+    const single = { ...reviewed, oracle: ["|AB| = 8"] }
+    const check = { condition: "|AB|", measured: 8, expected: 8, tolerance: 1e-9 }
+    expect(judgeAgainstOracle(single, [check, check]).accepted).toBe(false)
+  })
+
+  it("does not treat an empty reviewed oracle as a gold case", () => {
+    expect(judgeAgainstOracle({ ...reviewed, oracle: [] }, []).reason).toBe("not_a_gold_case")
+  })
+
+  it.each([
+    { measured: Infinity, expected: 8, tolerance: Infinity },
+    { measured: 8, expected: 4, tolerance: Infinity },
+    { measured: 8, expected: 8, tolerance: -1 },
+    { measured: 8, expected: 8, tolerance: 1e-9, status: "missing" as const }
+  ])("rejects invalid measurement contracts: %j", values => {
+    const single = { ...reviewed, oracle: ["|AB| = 8"] }
+    expect(judgeAgainstOracle(single, [{ condition: "|AB|", ...values }]).accepted).toBe(false)
+  })
+
   it("refuses to judge at all when the answer was never independently reviewed", () => {
     // 同一个"图是对的"读数，换到一条**没复核过**的题上 —— 不许它发出"通过"。
     const unreviewed = caseWith({ oracle: ["|AB| = 8"] })

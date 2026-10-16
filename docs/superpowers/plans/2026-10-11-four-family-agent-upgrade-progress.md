@@ -375,3 +375,9 @@
 ## 2026-10-16 功能补完区块 B（Task 20 评测门禁）
 
 实际修复并验证评测入口：固定工作量为 12 题 × 3 次 = 36，声明不一致在 provider 调用前拒绝；授权请求数/费用与本次预估费用拒绝 NaN、负数和非整数；人评未完整覆盖时 readability 指标为 null 且不通过；真实调用通过共享预算计数重试，超授权立即拒绝。评测合同测试 20/20、冻结授权与评测合计 28/28 通过；全仓 typecheck exit 0；lint 0 error / 13 既有 warning。此区块只验门禁，不冒充真实 provider、人评或桌面发行验收。详细执行见 `docs/superpowers/plans/2026-10-16-functional-completion.md`。
+
+## 2026-10-16 功能补完 C1（Task 9：oracle 完整性）
+
+已复现并修复：缺一条或全部实测读数时误判通过。现在按 oracle 条件名一一配对，缺失/重复/多余读数均拒绝；空 oracle 不能成为金标；无限数、非法容差及非实测状态不能通过。缺失项用明确的 missing 记录，不伪造测量值。新增 9 条边界测试，定向 20/20 通过；全仓 typecheck exit 0；lint 0 error / 13 既有 warning；diff 检查通过。
+
+边界：此区块只补离线判据，不新增未经独立人工复核的真题答案，verifiedGoldCaseIds 仍为空。Task 16 仍在检查实际消费接线，区块 C 尚未整体验收。

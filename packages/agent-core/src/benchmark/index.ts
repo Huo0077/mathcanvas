@@ -62,6 +62,7 @@ export {
   type ExamSetProblemCode,
   type ExamSourceLevel,
   type OracleCheck,
+  type OracleFailure,
   type OracleVerdict
 } from "./examSet"
 /**
