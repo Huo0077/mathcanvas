@@ -1,9 +1,10 @@
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import type { RenderEvidence } from "@draw/agent-core"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
 import { createDraftStore, type DraftStore } from "./draftStore"
-import { createHostBridge } from "./hostBridge"
+import { createHostBridge, type CandidateRenderEvidenceInput, type CandidateRenderEvidencePort } from "./hostBridge"
 
 /**
  * Task 0.8：**HostBridge 与一次性同意**。
@@ -16,7 +17,27 @@ import { createHostBridge } from "./hostBridge"
  * - 同意**会过期**；
  * - `commit` **不是模型可见的工具**（只有宿主/UI 能创建同意）。
  */
-function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: number; conversationId?: string } = {}) {
+function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEvidence {
+  return {
+    mode: "structured_only",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: input.documentHash,
+    viewport: { width: 800, height: 600 },
+    boxes: input.candidate.primitives.map((primitive, index) => ({
+      id: primitive.id,
+      x: 20 + index * 40,
+      y: 20,
+      width: 24,
+      height: 24,
+      kind: "object",
+      shape: "shape"
+    }))
+  }
+}
+
+function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: number; conversationId?: string; candidateRenderEvidence?: CandidateRenderEvidencePort | null } = {}) {
   const drafts: DraftStore = createDraftStore()
   let document: GeometryDocument = createEmptyDocument("conics")
   let conversationId: string | null = options.conversationId ?? null
@@ -32,7 +53,8 @@ function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: numbe
     conversationId: options.conversationId,
     readConversationId: () => conversationId,
     now: options.now ?? (() => 1_000),
-    consentTtlMs: options.ttlMs ?? 60_000
+    consentTtlMs: options.ttlMs ?? 60_000,
+    candidateRenderEvidence: options.candidateRenderEvidence === null ? undefined : options.candidateRenderEvidence ?? structuredRenderEvidence
   })
   return { bridge, drafts, replaced, getDocument: () => document, setConversation: (next: string | null) => { conversationId = next } }
 }
@@ -196,7 +218,8 @@ describe("host bridge consent", () => {
       live: () => ({ handle: createDocumentHandle(harness.getDocument(), "project-1"), document: harness.getDocument() }),
       replace: () => {},
       runId: "run-2",
-      now: () => 1_000
+      now: () => 1_000,
+      candidateRenderEvidence: structuredRenderEvidence
     })
     const consent = other.requestConsent(record.draftId)
     if (!consent.ok) throw new Error("expected consent")
@@ -326,5 +349,71 @@ describe("consent handles", () => {
     expect(consent.record.expectedHandles.target.documentId).toBeTruthy()
     expect(consent.record.expectedHandles.target.contentHash).toBeTruthy()
     expect(consent.record.expectedHandles.target.generation).toBe(harness.getDocument().revision)
+  })
+})
+
+
+describe("candidate render evidence gate", () => {
+  it("refuses consent when a real operation has no candidate renderer", async () => {
+    const harness = makeBridge({ candidateRenderEvidence: null })
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
+
+    const consent = harness.bridge.requestConsent(record.draftId)
+
+    expect(consent).toEqual({ ok: false, reason: "unverified_render", detail: "candidate render evidence is not supported by this host" })
+  })
+
+  it("accepts a bound structured render evidence record", async () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
+
+    const consent = harness.bridge.requestConsent(record.draftId)
+
+    expect(consent.ok).toBe(true)
+    if (consent.ok) {
+      expect(consent.record.renderEvidenceBinding).toMatchObject({
+        draftId: record.draftId,
+        draftVersion: record.draftVersion + 1,
+        mode: "structured_only"
+      })
+    }
+  })
+
+  it("rejects a stale render evidence record instead of authorizing it", async () => {
+    const drafts = createDraftStore()
+    let document: GeometryDocument = createEmptyDocument("conics")
+    let evidenceHash = "0".repeat(64)
+    const dependencies = {
+      drafts,
+      live: () => ({ handle: createDocumentHandle(document, "project-1"), document }),
+      replace: (candidate: GeometryDocument) => { document = candidate },
+      runId: "run-stale",
+      candidateRenderEvidence: (input: { runId: string; draftId: string; draftVersion: number; candidate: GeometryDocument; documentHash: string }) => ({
+        mode: "structured_only",
+        runId: input.runId,
+        draftId: input.draftId,
+        draftVersion: input.draftVersion,
+        documentHash: evidenceHash,
+        viewport: { width: 800, height: 600 },
+        boxes: input.candidate.primitives.map((primitive, index) => ({ id: primitive.id, x: 10 + index * 30, y: 10, width: 20, height: 20, kind: "object", shape: "shape" }))
+      })
+    }
+    const bridge = createHostBridge(dependencies as Parameters<typeof createHostBridge>[0])
+    const record = drafts.create(document, bridge.live()!.handle)
+    await stagePoint(drafts, record.draftId, record.draftVersion)
+    const expectedHash = (await import("@draw/agent-core")).canonicalContentHash(drafts.getPreview(record.draftId)!.candidate)
+    evidenceHash = expectedHash
+
+    const consent = bridge.requestConsent(record.draftId)
+
+    expect(consent.ok).toBe(true)
+    if (consent.ok) {
+      evidenceHash = "f".repeat(64)
+      const receipt = bridge.commit(record.draftId, consent.record)
+      expect(receipt.ok).toBe(false)
+      if (!receipt.ok) expect(receipt.reason).toBe("stale_render")
+    }
   })
 })

@@ -4,9 +4,10 @@ import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
-import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION } from "@draw/agent-core"
+import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION, type RenderEvidence } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
+import type { CandidateRenderEvidenceInput } from "./hostBridge"
 import type { WorkerLike } from "./geometryWorkerClient"
 import { resetGeometryWorkerForTests } from "./geometryWorkerHost"
 import { handleGeometryRequest } from "./workerRuntime"
@@ -52,6 +53,26 @@ function exportPreflight(): ExportPreflightPort {
   return { preflight: vi.fn(() => ({ format: "svg", supported: true, requiresUserAcceptance: false, omitted: [], fontLoss: [], approximationNotes: [], blockedReasons: [], projectedEntityCount: 0 })) }
 }
 
+function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEvidence {
+  return {
+    mode: "structured_only",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: input.documentHash,
+    viewport: { width: 800, height: 600 },
+    boxes: input.candidate.primitives.map((primitive, index) => ({
+      id: primitive.id,
+      x: 20 + (index % 8) * 95,
+      y: 20 + Math.floor(index / 8) * 120,
+      width: 80,
+      height: 80,
+      kind: "object",
+      shape: "shape"
+    }))
+  }
+}
+
 function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
@@ -70,7 +91,8 @@ function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocu
     ...(options.obligationIR === undefined && options.witnessSearch === undefined && options.proofExport === undefined ? {} : { agentNextPhaseFlags: { obligationIR: options.obligationIR ?? false, witnessSearch: options.witnessSearch ?? false, constrainedDrag: false, openProblemCompiler: false, proofExport: options.proofExport ?? false } }),
     projectId,
     runId: "run-1",
-    now: () => 1_000
+    now: () => 1_000,
+    candidateRenderEvidence: structuredRenderEvidence
   })
   return { runtime, written, current: () => current }
 }
@@ -531,7 +553,7 @@ describe("the assembled runtime actually runs", () => {
     // **折后的坐标由内核旋转算出来**，模型不再手算 —— 它手算的那几次给出的都是退化几何。
     // `solid.create_segment` 是 **2026-10-15 补的**（同一位用户）：立体里"两点连成一条线段"此前**没有动作**，
     // 模型只能拿 `planar.create_segment` 凑（那条落在 `z=0` 上）—— 它**只给两个点名**，坐标由前面几笔决定。
-    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_face", "solid.create_segment", "solid.fold", "solid.create_round_frustum", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
+    expect([...context.availableActions]).toEqual(["solid.create_template", "solid.create_prism", "solid.create_sphere", "solid.create_tetrahedron", "solid.create_regular_pyramid", "solid.create_polyhedron", "solid.create_face", "solid.create_segment", "solid.fold", "solid.create_round_frustum", "solid.unfold", "derived.create_circumsphere", "derived.create_insphere", "dynamic.create_bound_point"])
     // 没有请求的技能不该出现，而且**不该**变成一条"未登记"警告（那是给清单本身有问题用的）。
     expect(context.warnings).toEqual([])
   })

@@ -58,5 +58,9 @@ export function tangentAnchorLabel(anchor: TangentAnchor | undefined, pointLabel
     const which = (anchor.branch ?? 0) === 0 ? "第一条" : "第二条"
     return label ? `过点 ${label} 的${which}切线` : "要过的点已不存在"
   }
+  if (anchor.kind === "common") {
+    const branch = (anchor.branch ?? 0) + 1
+    return `????? ${branch} ????`
+  }
   return `曲线参数 ${Number.isFinite(anchor.parameter) ? anchor.parameter.toFixed(3) : "—"}`
 }

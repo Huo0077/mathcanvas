@@ -1,5 +1,15 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { countDraftObjects, type DraftObjectCounts } from "@draw/agent-core"
+import {
+  canonicalContentHash,
+  countDraftObjects,
+  diagnoseLayout,
+  evidenceIdentityProblem,
+  renderEvidenceStaleness,
+  type DraftObjectCounts,
+  type LayoutDiagnostic,
+  type RenderEvidence,
+  type RenderEvidenceMode
+} from "@draw/agent-core"
 import { commitTransaction, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftStore } from "./draftStore"
@@ -46,6 +56,13 @@ export interface ConsentRecord {
   conversationId?: string
   expiresAt: number
   nonce: string
+  /** ????? consent ???????? */
+  renderEvidenceBinding?: {
+    draftId: string
+    draftVersion: number
+    documentHash: string
+    mode: RenderEvidenceMode
+  }
 }
 
 export type PreviewArtifact = {
@@ -72,11 +89,36 @@ export type PreviewArtifact = {
   counts: DraftObjectCounts
   /** 基础文档的对象数，供面板说清"这次会多出/少掉多少"。 */
   baseCounts: DraftObjectCounts
+  /** ???????????????????? unverified? */
+  candidateRenderVerification?: CandidateRenderVerification
 }
 
 export type PreviewResult = { ok: true; artifact: PreviewArtifact } | { ok: false; reason: "unknown_draft" }
 
-export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" | "unverified_diagram" }
+export interface CandidateRenderEvidenceInput {
+  runId: string
+  draftId: string
+  draftVersion: number
+  candidate: GeometryDocument
+  documentHash: string
+}
+
+export type CandidateRenderEvidencePort = (input: CandidateRenderEvidenceInput) => RenderEvidence | null
+
+export type CandidateRenderVerification = {
+  status: "passed" | "unverified" | "failed" | "stale"
+  mode?: RenderEvidenceMode
+  diagnostics: readonly LayoutDiagnostic[]
+  detail?: string
+  binding?: {
+    draftId: string
+    draftVersion: number
+    documentHash: string
+    mode: RenderEvidenceMode
+  }
+}
+
+export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" | "unverified_diagram" | "unverified_render" | "stale_render" | "failed_render"; detail?: string }
 
 /**
  * 提交**被拒**的理由。
@@ -87,7 +129,7 @@ export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; r
  * 协调器里 `no_change → completed` 成了死代码、用户看到"运行失败"。
  * 从类型上去掉它，将来再想让"成功"走失败通道就会被 `tsc` 拦下。
  */
-export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "unverified_diagram" | "commit_rejected"
+export type CommitReason = "missing_consent" | "consumed_consent" | "unminted_consent" | "wrong_run" | "expired_consent" | "stale_preview" | "stale_conversation" | "unknown_draft" | "stale_source" | "unverified_diagram" | "unverified_render" | "stale_render" | "failed_render" | "commit_rejected"
 
 export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: CommitReason; detail?: string }
 
@@ -109,6 +151,8 @@ export interface HostBridgeDependencies {
   readConversationId?: () => string | null
   now?: () => number
   consentTtlMs?: number
+  /** ?????????????? fail-closed? */
+  candidateRenderEvidence?: CandidateRenderEvidencePort
 }
 
 export interface HostBridge {
@@ -124,6 +168,41 @@ let nonceCounter = 0
 function mintNonce(runId: string): string {
   nonceCounter += 1
   return `${runId}:nonce-${nonceCounter}`
+}
+
+function verifyCandidateRender(
+  dependencies: HostBridgeDependencies,
+  input: CandidateRenderEvidenceInput
+): CandidateRenderVerification {
+  if (dependencies.candidateRenderEvidence === undefined) {
+    return { status: "unverified", diagnostics: [], detail: "candidate render evidence is not supported by this host" }
+  }
+
+  let evidence: RenderEvidence | null
+  try {
+    evidence = dependencies.candidateRenderEvidence(input)
+  } catch (error) {
+    return { status: "unverified", diagnostics: [], detail: `candidate render evidence failed: ${error instanceof Error ? error.message : String(error)}` }
+  }
+  if (evidence === null) return { status: "unverified", diagnostics: [], detail: "candidate render evidence is unavailable" }
+
+  const identityProblem = evidenceIdentityProblem(evidence)
+  if (identityProblem !== null) return { status: "unverified", mode: evidence.mode, diagnostics: [], detail: identityProblem }
+
+  const staleness = renderEvidenceStaleness(evidence, { draftId: input.draftId, documentHash: input.documentHash })
+  if (staleness.stale) return { status: "stale", mode: evidence.mode, diagnostics: [], detail: staleness.detail }
+
+  const diagnostics = diagnoseLayout(evidence.viewport, evidence.boxes)
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+  const binding = { draftId: input.draftId, draftVersion: input.draftVersion, documentHash: input.documentHash, mode: evidence.mode }
+  if (errors.length > 0) return { status: "failed", mode: evidence.mode, diagnostics, detail: errors.map((entry) => entry.detail).join("; "), binding }
+  return { status: "passed", mode: evidence.mode, diagnostics, binding }
+}
+
+function renderFailure(verification: CandidateRenderVerification): { reason: "unverified_render" | "stale_render" | "failed_render"; detail?: string } {
+  if (verification.status === "stale") return { reason: "stale_render", detail: verification.detail }
+  if (verification.status === "failed") return { reason: "failed_render", detail: verification.detail }
+  return { reason: "unverified_render", detail: verification.detail }
 }
 
 export function createHostBridge(dependencies: HostBridgeDependencies): HostBridge {
@@ -162,7 +241,16 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           ...(artifact.promptNormalisation === undefined ? {} : { promptNormalisation: artifact.promptNormalisation }),
           ...(artifact.proofAttempt === undefined ? {} : { proofAttempt: artifact.proofAttempt }),
           counts: countDraftObjects(artifact.candidate),
-          baseCounts: current ? countDraftObjects(current.document) : emptyCounts
+          baseCounts: current ? countDraftObjects(current.document) : emptyCounts,
+          ...(artifact.stageCount === 0
+            ? { candidateRenderVerification: { status: "passed", diagnostics: [] } satisfies CandidateRenderVerification }
+            : { candidateRenderVerification: verifyCandidateRender(dependencies, {
+              runId,
+              draftId: artifact.draftId,
+              draftVersion: artifact.draftVersion,
+              candidate: artifact.candidate,
+              documentHash: canonicalContentHash(artifact.candidate)
+            }) })
         }
       }
     },
@@ -172,6 +260,16 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
       if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
+      const renderVerification = artifact.stageCount === 0
+        ? { status: "passed", diagnostics: [] } satisfies CandidateRenderVerification
+        : verifyCandidateRender(dependencies, {
+          runId,
+          draftId: artifact.draftId,
+          draftVersion: artifact.draftVersion,
+          candidate: artifact.candidate,
+          documentHash: canonicalContentHash(artifact.candidate)
+        })
+      if (renderVerification.status !== "passed") return { ok: false, ...renderFailure(renderVerification) }
       const handle = current.handle
       /**
        * **CAS 的基准是"草稿编译时"的那份文档，不是"点确认时"的这一份**（2026-09-22 修 / 外部审查 X2）。
@@ -206,7 +304,8 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           allowedEffects: [`${artifact.stageCount} action(s) applied to ${handle.documentId}`],
           ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
           expiresAt: now() + ttl,
-          nonce
+          nonce,
+          ...(renderVerification.binding === undefined ? {} : { renderEvidenceBinding: renderVerification.binding })
         }
       }
     },
@@ -240,6 +339,25 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
 
       // 仍要走 Compare-and-Swap：授权是"用户同意过"，不等于"文档没被动过"。
+      if (artifact.stageCount > 0) {
+        const renderVerification = verifyCandidateRender(dependencies, {
+          runId,
+          draftId: artifact.draftId,
+          draftVersion: artifact.draftVersion,
+          candidate: artifact.candidate,
+          documentHash: canonicalContentHash(artifact.candidate)
+        })
+        if (renderVerification.status !== "passed") return { ok: false, ...renderFailure(renderVerification) }
+        const bound = consent.renderEvidenceBinding
+        if (bound === undefined || renderVerification.binding === undefined
+          || bound.draftId !== renderVerification.binding.draftId
+          || bound.draftVersion !== renderVerification.binding.draftVersion
+          || bound.documentHash !== renderVerification.binding.documentHash
+          || bound.mode !== renderVerification.binding.mode) {
+          return { ok: false, reason: "stale_render", detail: "candidate render evidence changed after consent" }
+        }
+      }
+
       const current = dependencies.live()
       const expected = consent.expectedHandles.target
       if (!current || current.handle.epoch !== expected.epoch || current.handle.generation !== expected.generation || current.handle.contentHash !== expected.contentHash) {

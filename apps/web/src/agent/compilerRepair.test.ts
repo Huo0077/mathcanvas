@@ -9,7 +9,8 @@ import {
   type Observation,
   type PlannerPort,
   type PlanEnvelope,
-  type PlanRequest
+  type PlanRequest,
+  type RenderEvidence
 } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { createDocumentHandle } from "@draw/scene-graph"
@@ -17,7 +18,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import { createAgentRuntime } from "./agentRuntime"
 import { createDraftStore } from "./draftStore"
-import { createHostBridge } from "./hostBridge"
+import { createHostBridge, type CandidateRenderEvidenceInput } from "./hostBridge"
 
 /**
  * **编译阶段的修复请求必须真的驱动那一次修复**（Agent DSL 切片 Task 4 的接线缺口）。
@@ -139,6 +140,26 @@ function scriptedPlanner(plans: unknown[]) {
 }
 
 /** 走**应用真实装配**的运行时（`createAgentRuntime`）。 */
+function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEvidence {
+  return {
+    mode: "structured_only",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: input.documentHash,
+    viewport: { width: 800, height: 600 },
+    boxes: input.candidate.primitives.map((primitive, index) => ({
+      id: primitive.id,
+      x: 20 + (index % 8) * 95,
+      y: 20 + Math.floor(index / 8) * 120,
+      width: 80,
+      height: 80,
+      kind: "object",
+      shape: "shape"
+    }))
+  }
+}
+
 function makeRuntime(plans: unknown[]) {
   const document = baseDocument()
   let current = document
@@ -153,7 +174,8 @@ function makeRuntime(plans: unknown[]) {
     observer: { observe: vi.fn(async () => emptyObservation) },
     exportPreflight: exportPreflight(),
     projectId,
-    runId: "run-1"
+    runId: "run-1",
+    candidateRenderEvidence: structuredRenderEvidence
   })
   return { runtime, requests, written, document, current: () => current }
 }

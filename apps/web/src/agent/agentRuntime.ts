@@ -29,7 +29,7 @@ import { createDraftStore, type DraftStore } from "./draftStore"
 import { agentNextPhaseFlags, type AgentNextPhaseFlags } from "./featureFlags"
 import { createWorkerCompileStrategy } from "./geometryWorkerHost"
 import type { WorkerLike } from "./geometryWorkerClient"
-import { createHostBridge, type HostBridge } from "./hostBridge"
+import { createHostBridge, type CandidateRenderEvidencePort, type HostBridge } from "./hostBridge"
 
 /**
  * **把 Agent 的各个部件真正组装起来**（Task 2.4 的宿主接线）。
@@ -100,6 +100,8 @@ export interface AgentRuntimeDependencies {
   readConversationId?: () => string | null
   consentTtlMs?: number
   now?: () => number
+  /** ?? HostBridge ?????????????? HostBridge fail-closed? */
+  candidateRenderEvidence?: CandidateRenderEvidencePort
   /**
    * **这次运行请求哪些技能**（`SKILL_MANIFESTS` 里的 id）。
    *
@@ -255,7 +257,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
     ...(dependencies.readConversationId === undefined ? {} : { readConversationId: dependencies.readConversationId }),
     now: dependencies.now,
-    consentTtlMs: dependencies.consentTtlMs
+    consentTtlMs: dependencies.consentTtlMs,
+    ...(dependencies.candidateRenderEvidence === undefined ? {} : { candidateRenderEvidence: dependencies.candidateRenderEvidence })
   })
 
   // ---- 草稿工具：**共用同一个 `drafts`**，否则模型看到的草稿与提交的不是一回事。 ----

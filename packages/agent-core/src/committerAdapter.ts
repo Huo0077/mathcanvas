@@ -79,7 +79,7 @@ export interface DraftStoreLike {
 /** `HostBridge` 里适配器用到的部分。 */
 export interface HostBridgeLike {
   preview(draftId: string): { ok: true; artifact: { draftVersion: number; previewHash: string } } | { ok: false; reason: "unknown_draft" }
-  requestConsent(draftId: string): { ok: true; record: unknown } | { ok: false; reason: "unknown_draft" | "unverified_diagram" }
+  requestConsent(draftId: string): { ok: true; record: unknown } | { ok: false; reason: string; detail?: string }
   commit(draftId: string, consent: unknown): { ok: true; receipt: { changed: boolean; draftId: string } } | { ok: false; reason: string; detail?: string }
 }
 

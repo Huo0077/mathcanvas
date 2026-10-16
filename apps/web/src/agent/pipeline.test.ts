@@ -1,11 +1,12 @@
 import { createEmptyDocument } from "@draw/dsl"
+import type { RenderEvidence } from "@draw/agent-core"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { beforeEach, describe, expect, it } from "vitest"
 
 import { createSceneDocumentPort } from "../services/sceneDocumentPort"
 import { useSceneStore } from "../store"
 import { createDraftStore, type DraftStore } from "./draftStore"
-import { createHostBridge, type HostBridge } from "./hostBridge"
+import { createHostBridge, type CandidateRenderEvidenceInput, type HostBridge } from "./hostBridge"
 
 /**
  * **G0.5 三条 Gate 的端到端证明**（Task 0.7 + 0.8 串起来）。
@@ -24,6 +25,26 @@ import { createHostBridge, type HostBridge } from "./hostBridge"
  */
 
 /** 每个替身都被显式标注出来——这个文件的价值就在于"哪些是真的"一眼可查。 */
+function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEvidence {
+  return {
+    mode: "structured_only",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: input.documentHash,
+    viewport: { width: 800, height: 600 },
+    boxes: input.candidate.primitives.map((primitive, index) => ({
+      id: primitive.id,
+      x: 20 + index * 40,
+      y: 20,
+      width: 24,
+      height: 24,
+      kind: "object",
+      shape: "shape"
+    }))
+  }
+}
+
 function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
   localStorage.clear()
   const base = createEmptyDocument("conics")
@@ -42,7 +63,8 @@ function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
     replace: (candidate) => port.replace(candidate),
     runId: "run-1",
     now: options.now ?? (() => 1_000),
-    consentTtlMs: options.ttlMs ?? 60_000
+    consentTtlMs: options.ttlMs ?? 60_000,
+    candidateRenderEvidence: structuredRenderEvidence
   })
   return { bridge, drafts, port }
 }
