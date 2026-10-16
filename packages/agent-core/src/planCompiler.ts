@@ -19,7 +19,7 @@ import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
-import { buildFigureIntent } from "./figureIntent"
+import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
 import { verifyRelations, type RelationLookup } from "./relations"
@@ -339,6 +339,14 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   const first = compileOnce(input, context)
   const materialised = rescueWithMaterialisedPoints(context, first)
   if (materialised !== null) return materialised
+  /**
+   * **题面说要折、计划里却没有折**：按题面补上那一笔（选项②，2026-10-15）。
+   *
+   * 排在折角反求**之前**是必须的：折角反求要有一笔 `solid.fold` 才谈得上反求它的角。
+   * 顺序因此是「补点 → **补折** → 反求折角 → 见证搜索」。
+   */
+  const synthesised = rescueWithSynthesisedFold(context, first)
+  if (synthesised !== null) return synthesised
   /**
    * **折角反求**排在见证搜索之前：它是**解析**的、确定的、也不吃候选预算（Task 12）。
    * 它同样"只救不抢"：第一遍通过了就一步都不动。
@@ -1218,6 +1226,93 @@ function foldRigidityDiagnostics(
  *
  * 求出来的角**写进 `assumptions`**（一句人话 + 被定下来的值），因为题面没给过它。
  */
+/**
+ * **题面说要折，而计划里没有折那一笔 ⇒ 按题面把 `solid.fold` 补上**（选项②，2026-10-15）。
+ *
+ * ## 为什么需要它
+ *
+ * 现场那道题（`平面四边形 + 定比分点 + 沿 EF 翻折至 PEF，使 PC=4√3`）卡在**模型写不对计划**上：
+ * 它两轮都在拼一只"折后的闭合体"（面塌了、折的引用又不在片上）。而**题面那句翻折一直是可读的** ——
+ * `readFoldTransformations` 早就把它解析成 `{ face, hinge, apex, apexAs }`（Task 13 起），
+ * 只是那份解析**此前只被用来判"折是不是刚体运动"**，从来没有人拿它去**补那一笔动作**。
+ * 于是"题面说折、图上没有折"这件事，系统看得见，却不动手。
+ *
+ * ## 纪律（与另外三条救援逐条相同）
+ *
+ * 1. **只救不抢**：第一遍核验通过了就一步都不动（`status === "passed"` 直接返回 `null`）。
+ * 2. **计划里已经有折就不碰**：那是折角反求的活，不是这一支的（否则会给同一只片补出第二笔折）。
+ * 3. **点名必须真的在图上**：折片那三个名字（折痕两端 + 被带走的点）都要能在"折之前"的文档里
+ *    找到，缺一个就**不补** —— 补一笔引用不到点的动作只会换来一句"引用缺失"，那不是救援。
+ * 4. **折角这一半交给同一条救援**（"同一个判断不写两遍"）：题面给的是**折完之后的**距离/位置，
+ *    所以补上来的那一笔先取 90°，再由 `rescueWithSolvedFoldAngle` 按题面条件**反求**折角；
+ *    它自己也要过"第二遍必须真的通过"那一关。
+ * 5. **补了什么要说出来**：写进 `assumptions`（人话 + 定下来的东西），因为计划里本来没有这一笔。
+ */
+function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  const report = first.result.diagramVerification
+  if (report === undefined || report.status === "passed") return null
+  const plan = first.plan
+  if (plan === null || context.prompt === undefined) return null
+  if (plan.actions.some((action) => action.actionId === "solid.fold")) return null
+
+  const fold = readFoldTransformations(context.prompt)[0]
+  if (fold === undefined) return null
+
+  /**
+   * 折片上的三个点名 = 折痕两端 + 被带走的那个点；顺序按题面里那个三角形（`face`），**确定性**。
+   * 取点走**文档的点名**（`label`），与折角反求"摘掉折叠再编译一次"是同一条口径：
+   * `dynamic.create_bound_point` 建出来的 `E`、`F` 没有 `vertices` 数组，只能从文档取。
+   */
+  const flap = [...fold.face]
+  if (flap.length !== 3 || !flap.includes(fold.apex) || !flap.includes(fold.hinge.from) || !flap.includes(fold.hinge.to)) return null
+  const document = first.result.draftDocument
+  if (document === null) return null
+  const labelled = new Set(
+    document.primitives
+      .filter((primitive) => primitive.type === "point3")
+      .map((primitive) => (primitive as { label?: unknown }).label)
+      .filter((label): label is string => typeof label === "string")
+  )
+  if (!flap.every((name) => labelled.has(name))) return null
+
+  const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
+    ...plan,
+    actions: [
+      ...plan.actions,
+      {
+        actionId: "solid.fold",
+        actionKey: "synthesised-fold",
+        factIds: [],
+        inputs: {
+          alias: "synthesised-fold",
+          vertexNames: flap,
+          hinge: { from: fold.hinge.from, to: fold.hinge.to },
+          apex: fold.apex,
+          apexAs: fold.apexAs,
+          /** 先取 90°：题面没直接给折角时，由下面那条反求（或核验）说了算。 */
+          angle: 90,
+          label: `${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 折到 ${fold.apexAs}`
+        }
+      }
+    ] as typeof plan.actions
+  }
+  const disclosure = {
+    id: `synthesised-fold.${fold.apexAs}`,
+    text: `题面说的是把 ${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 翻折到 ${fold.apexAs}，而**计划里没有折这一笔**：系统按题面把这一笔补上（折角先取 90°，再按题面条件反求或核验）。`,
+    kind: "witness" as const,
+    value: { apex: fold.apex, apexAs: fold.apexAs, hingeFrom: fold.hinge.from, hingeTo: fold.hinge.to },
+    overridable: true,
+    path: `envelope.actions[${plan.actions.length}].inputs`
+  }
+
+  const withFold = compileOnce(patched, context)
+  const solved = rescueWithSolvedFoldAngle(context, withFold)
+  if (solved !== null) return { ...solved, assumptions: [disclosure, ...solved.assumptions] }
+  /** 题面若直接给了折角（不需要反求），就走普通那一关：第二遍必须 `ok` + 有草稿 + 核验通过。 */
+  if (!withFold.result.ok || withFold.result.draftDocument === null || withFold.result.diagramVerification?.status !== "passed") return null
+  return { ...withFold.result, assumptions: [disclosure, ...withFold.result.assumptions] }
+}
+
 function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   const report = first.result.diagramVerification
   if (report === undefined || report.status === "passed") return null

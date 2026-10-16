@@ -132,16 +132,18 @@ function locate(prompt: string, sourceText: string): DiagramSourceSpan | null {
  * `input.transformations` 原样带过，**没有任何东西去读题面里那句"翻折"** —— 于是
  * "题面说的是折"这件事在机器里没有形状，下游（例如"折不折得起来"的判据）也就无从下手。
  *
- * 收两种实测过的写法（用户原句 / 计划摘要里的简写）：
+ * 收三种实测过的写法（用户原句 / 计划摘要里的简写 / **卷面最常见的 `△`**）：
  * - `将三角形AEF沿EF翻折至三角形PEF`
  * - `AEF 沿 EF 翻至 PEF`
+ * - **`将 △AEF 沿 EF 翻折至 △PEF`**（2026-10-15 用户现场 —— 用户原话用的就是 `△`，
+ *   而这儿原先只认"三角形"与裸名 ⇒ **读不出** ⇒ 下游那条"按题面补折"的救援整条落空）
  *
  * 判据：折痕那两个名字**必须同时出现在折前与折后**（那是"这两点不动"的定义），
  * `apex` / `apexAs` 就是各自剩下的那一个。任何一处对不上就**不产出**这条变换 ——
  * 宁可说"没读懂"，也不产出一条半对的。
  */
 export function readFoldTransformations(prompt: string): FigureTransformation[] {
-  const pattern = /(?:将)?\s*(?:三角形)?\s*([A-Z]{3})\s*沿\s*([A-Z]{2})\s*翻[折转]?\s*(?:至|成)?\s*(?:三角形)?\s*([A-Z]{3})/g
+  const pattern = /(?:将)?\s*(?:三角形|△|Δ)?\s*([A-Z]{3})\s*沿\s*([A-Z]{2})\s*翻[折转]?\s*(?:至|成)?\s*(?:三角形|△|Δ)?\s*([A-Z]{3})/g
   const out: FigureTransformation[] = []
   for (const match of prompt.matchAll(pattern)) {
     const face = match[1]!
