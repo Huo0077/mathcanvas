@@ -1510,3 +1510,8 @@ GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。
 - 验证：新增 5 条先红后绿；4 文件 55 条单测通过；真实浏览器 6/6（28.9 s），验证 2D accepted=true、3D partial/accepted=false、撤销后 failed/empty_canvas。首次 e2e 暴露旧选择器不能读取 stale 过渡态，改为稳定状态属性，并等待新测量再验空画布。
 - 全仓 typecheck exit 0；lint 0 error / 13 既有 warning；diff 检查通过。
 - 边界：这是提交后真实画布的证据消费，不是确认前候选图渲染，也不等于 HostBridge 在提交前已验证视觉。候选图视觉门禁、桌面画布与人工可读性仍未验收；Task 16 不据此升级为全部完成。数学条件仍由独立核验器判断。
+
+
+## 2026-10-16 功能补完 D1（Task 12）
+
+目标关系的有界折叠搜索已接入真实 `compilePlan`：当前支持单折叠的平面角、二面角、线面角。搜索预算、有限残差、跨极点保护和 `not-found`/`unreachable` 分级均有功能测试；固定距离解析结果逐支回代。定向 212/212、Task 13 原用户翻折浏览器链路与画布证据 7/7 通过；`typecheck` exit 0，lint 0 error / 13 existing warnings。Task 13 面上点/展开、Task 15 公切线产品闭环仍未完成。

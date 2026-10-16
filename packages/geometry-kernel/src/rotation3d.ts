@@ -219,3 +219,80 @@ export function composeEuler3(euler: Vector3, axis: WorldAxis3, radians: number)
   const composed = multiplyRotationMatrix3(axisRotationMatrix3(axis, radians), eulerRotationMatrix3(euler))
   return eulerFromRotationMatrix3(composed)
 }
+
+/** A finite numerical search is witness discovery, never a proof that all roots were found. */
+export interface FoldSearchOptions {
+  minimumDegrees?: number
+  maximumDegrees?: number
+  segments?: number
+  maxEvaluations?: number
+  residualTolerance?: number
+}
+
+export interface FoldSearchOutcome {
+  status: "solved" | "not-found" | "invalid-input"
+  degrees: number[]
+  evaluations: number
+  complete: false
+  termination: "sampled" | "budget-exhausted" | "invalid-input"
+}
+
+/**
+ * Search (minimumDegrees, maximumDegrees] with uniform samples and bracket bisection.
+ * Every callback consumes the same bounded budget. A sign change alone is not a root:
+ * only finite residuals within tolerance are returned (in particular, poles are rejected).
+ * Tangencies and narrow/oscillatory branches may be missed; not-found is NOT unreachable.
+ */
+export function searchFoldAngles(residual: (degrees: number) => number, options: FoldSearchOptions = {}): FoldSearchOutcome {
+  const { minimumDegrees: minimum = 0, maximumDegrees: maximum = 180, segments = 36,
+    maxEvaluations = 384, residualTolerance: tolerance = 1e-8 } = options
+  const invalid = !Number.isFinite(minimum) || !Number.isFinite(maximum) || maximum <= minimum
+    || !Number.isFinite(maximum - minimum)
+    || !Number.isInteger(segments) || segments < 1 || segments > 512
+    || !Number.isInteger(maxEvaluations) || maxEvaluations < 1 || maxEvaluations > 4096
+    || !Number.isFinite(tolerance) || tolerance <= 0
+  if (invalid) return { status: "invalid-input", degrees: [], evaluations: 0, complete: false, termination: "invalid-input" }
+
+  let evaluations = 0
+  let exhausted = false
+  const degrees: number[] = []
+  const evaluate = (angle: number): number => {
+    if (evaluations >= maxEvaluations) { exhausted = true; return NaN }
+    evaluations += 1
+    return residual(angle)
+  }
+  const accept = (angle: number, value: number): boolean => {
+    if (!Number.isFinite(value) || Math.abs(value) > tolerance) return false
+    if (angle > minimum && angle <= maximum && !degrees.some(kept => Math.abs(kept - angle) <= 1e-6)) degrees.push(angle)
+    return true
+  }
+  let left = minimum
+  let leftValue = evaluate(left)
+  for (let index = 1; index <= segments; index += 1) {
+    const right = index === segments ? maximum : minimum + (maximum - minimum) * index / segments
+    const rightValue = evaluate(right)
+    if (exhausted) break
+    accept(right, rightValue)
+    if (Number.isFinite(leftValue) && Number.isFinite(rightValue)
+      && Math.abs(leftValue) > tolerance && Math.abs(rightValue) > tolerance
+      && Math.sign(leftValue) !== Math.sign(rightValue)) {
+      let low = left
+      let high = right
+      let lowValue = leftValue
+      // At most 64 bisections, in addition to the shared evaluation cap.
+      for (let iteration = 0; iteration < 64; iteration += 1) {
+        const middle = low + (high - low) / 2
+        if (middle === low || middle === high) break
+        const value = evaluate(middle)
+        if (exhausted || !Number.isFinite(value)) break
+        if (accept(middle, value)) break
+        if (Math.sign(value) === Math.sign(lowValue)) { low = middle; lowValue = value } else high = middle
+      }
+    }
+    if (exhausted) break
+    left = right
+    leftValue = rightValue
+  }
+  return { status: degrees.length > 0 ? "solved" : "not-found", degrees: degrees.sort((a, b) => a - b),
+    evaluations, complete: false, termination: exhausted ? "budget-exhausted" : "sampled" }
+}

@@ -1,6 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
-import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance } from "@draw/geometry-kernel"
+import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance, searchFoldAngles } from "@draw/geometry-kernel"
 
 import {
   MAX_REPAIR_ATTEMPTS,
@@ -1314,6 +1314,61 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
 }
 
 function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  return rescueWithAnalyticFoldAngle(context, first) ?? rescueWithSearchedFoldAngle(context, first)
+}
+
+/** Numeric fallback for supported angle relations; the final whole-diagram check remains authoritative. */
+function rescueWithSearchedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification === undefined || first.result.diagramVerification.status === "passed"
+    || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const plan = first.plan
+  const folds = plan.actions.filter(action => action.actionId === "solid.fold")
+  // Coupled multi-fold systems need a separate solver, not sequential one-angle guesses.
+  if (folds.length !== 1) return null
+  const fold = folds[0]!
+  const apexAs = (fold.inputs as { apexAs?: unknown }).apexAs
+  if (typeof apexAs !== "string") return null
+  const actionIndex = plan.actions.indexOf(fold)
+  const patchedAt = (angle: number): Extract<PlanEnvelope, { kind: "plan" }> => ({
+    ...plan,
+    actions: plan.actions.map(action => action === fold
+      ? { ...action, inputs: { ...(action.inputs as Record<string, unknown>), angle } }
+      : action) as typeof plan.actions
+  })
+  // Shared across all relations, so a long prompt cannot multiply the compile budget.
+  let remaining = 192
+  for (const obligation of first.obligations.ir.obligations) {
+    if (remaining <= 1) break
+    if (!["planarAngle", "dihedral", "linePlaneAngle"].includes(obligation.kind)
+      || obligation.judgeability !== "supported" || !obligation.targets.includes(apexAs)
+      || typeof obligation.expected !== "number" || !Number.isFinite(obligation.expected)) continue
+    const outcome = searchFoldAngles(angle => {
+      const trial = compileOnce(patchedAt(angle), context).result
+      const check = trial.diagramVerification?.checks.find(check => check.kind === obligation.kind && check.sourceText === obligation.sourceText)
+      return check?.actual !== undefined && check.expected !== undefined ? check.actual - check.expected : NaN
+    }, { maxEvaluations: Math.min(160, remaining - 1) })
+    remaining -= outcome.evaluations
+    for (const degrees of outcome.degrees) {
+      if (remaining <= 0) break
+      remaining -= 1
+      const second = compileOnce(patchedAt(degrees), context)
+      if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") continue
+      return {
+        ...second.result,
+        assumptions: [...second.result.assumptions, {
+          id: `searched-fold-angle.${apexAs}`,
+          text: `题面关系（${obligation.sourceText}）未直接给折角：在 (0°,180°] 内有界数值搜索得到 ${degrees}°，并已回代核验全部题设。这只是数值见证，不保证枚举全部分支；未搜到不等于证明无解。候选角：${outcome.degrees.join("°、")}°。`,
+          kind: "witness", value: { apexAs, angleDegrees: degrees, method: "bounded-numerical", complete: false,
+            evaluations: outcome.evaluations, termination: outcome.termination, candidates: outcome.degrees },
+          overridable: true, path: `envelope.actions[${actionIndex}].inputs.angle`
+        }]
+      }
+    }
+  }
+  return null
+}
+
+function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   const report = first.result.diagramVerification
   if (report === undefined || report.status === "passed") return null
   if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
@@ -1427,39 +1482,39 @@ function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOn
        * 另一支（"朝折痕另一侧折"）被区间过滤掉了。它**同样满足**题面那个距离，所以必须披露，
        * 否则用户会以为"折角只有这一个解"。
        */
-      const degrees = outcome.degrees[0]
-      if (degrees === undefined) continue
+      for (const degrees of outcome.degrees) {
 
-      const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
-        ...first.plan,
-        actions: first.plan.actions.map((action) => action === fold
-          ? { ...action, inputs: { ...(action.inputs as Record<string, unknown>), angle: degrees } }
-          : action) as typeof first.plan.actions
-      }
-      const second = compileOnce(patched, context)
-      if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") continue
-      /**
-       * **没取的那些支也要说出来**（Task 12 的边界「两支角合法时另一支未披露」，2026-10-14）：
-       * 写上"另外还有 N 支（…）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们"。
-       * 不说出来，用户会以为"折角只有这一个解"。
-       */
-      const undisclosed = [...outcome.degrees.slice(1), ...extras]
-      const note = undisclosed.length === 0
-        ? ""
-        : `另外还有 ${undisclosed.length} 支折角（${undisclosed.join("°、")}°）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们。`
-      return {
-        ...second.result,
-        assumptions: [
-          ...second.result.assumptions,
-          {
-            id: `solved-fold-angle.${apexAs}`,
-            text: `题面给的是折完之后的距离（${obligation.sourceText}），没有直接给折角：系统按「绕 ${hinge.from}${hinge.to} 旋转、${apex} 折到 ${apexAs}」把它**反求**出来，得到折角 ${degrees}°。${note}`,
-            kind: "witness",
-            value: { apexAs, hingeFrom: hinge.from, hingeTo: hinge.to, angleDegrees: degrees },
-            overridable: true,
-            path: `envelope.actions[${actionIndex}].inputs.angle`
-          }
-        ]
+        const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
+          ...first.plan,
+          actions: first.plan.actions.map((action) => action === fold
+            ? { ...action, inputs: { ...(action.inputs as Record<string, unknown>), angle: degrees } }
+            : action) as typeof first.plan.actions
+        }
+        const second = compileOnce(patched, context)
+        if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") continue
+        /**
+         * **没取的那些支也要说出来**（Task 12 的边界「两支角合法时另一支未披露」，2026-10-14）：
+         * 写上"另外还有 N 支（…）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们"。
+         * 不说出来，用户会以为"折角只有这一个解"。
+         */
+        const undisclosed = [...outcome.degrees.filter(other => Math.abs(other - degrees) > 1e-6), ...extras]
+        const note = undisclosed.length === 0
+          ? ""
+          : `另外还有 ${undisclosed.length} 支折角（${undisclosed.join("°、")}°）同样满足题面那个距离（差别只在朝折痕另一侧折），系统没有取它们。`
+        return {
+          ...second.result,
+          assumptions: [
+            ...second.result.assumptions,
+            {
+              id: `solved-fold-angle.${apexAs}`,
+              text: `题面给的是折完之后的距离（${obligation.sourceText}），没有直接给折角：系统按「绕 ${hinge.from}${hinge.to} 旋转、${apex} 折到 ${apexAs}」把它**反求**出来，得到折角 ${degrees}°。${note}`,
+              kind: "witness",
+              value: { apexAs, hingeFrom: hinge.from, hingeTo: hinge.to, angleDegrees: degrees },
+              overridable: true,
+              path: `envelope.actions[${actionIndex}].inputs.angle`
+            }
+          ]
+        }
       }
     }
   }

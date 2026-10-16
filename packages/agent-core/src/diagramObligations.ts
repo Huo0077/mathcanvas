@@ -579,7 +579,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * 范围是 **(0°, 90°)**：`0°` 不是角（`finitePositive` 已经挡掉），`90°` 是"侧棱躺进底面"。
      */
-    pattern: new RegExp(`(${SEGMENT_NAME})\\s*与\\s*(?:平面\\s*)?(${PLANE_NAME}|底面)\\s*所成角\\s*(?:为|=|是)\\s*(\\d+(?:\\.\\d+)?)\\s*°`, "g"),
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*与\\s*(?:平面\\s*)?(${PLANE_NAME}|底面)\\s*所成(?:的)?角\\s*(?:为|=|是)\\s*(\\d+(?:\\.\\d+)?)\\s*°`, "g"),
     read: (m) => {
       const value = finitePositive(m[3])
       if (value === null || value >= 90) return null
