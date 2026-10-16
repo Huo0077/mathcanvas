@@ -146,6 +146,9 @@ export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef
       sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
     }
     renderer.render(scene, camera)
+    // Camera/drag frames live outside React. Notify evidence consumers only after
+    // both overlays and WebGL have painted; a React-only effect misses final frames.
+    sceneShell?.dispatchEvent(new Event("mathcanvas:three-frame"))
   }
 
   /** `syncPointHandleScales` 也要给出去：内容同步在算包围盒之前要先把手柄缩放到位。 */

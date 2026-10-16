@@ -1626,3 +1626,15 @@ This block records an executable functional change, not a documentation-only rev
 - Task 9 engineering scope: 5 files / 92 tests passed. The offline set is 8 development + 4 held-out cases with provenance and anti-leakage checks; invalid or incomplete oracle measurements fail closed. `verifiedGoldCaseIds=[]` remains an honest human-gold boundary and is not a model-quality result.
 - Task 13 declared representative scope: 6/6 browser E2E passed for folded quadrilateral, frustum, pentagonal pyramid, experiment-off negative path, cylinder and cone display. The original prompt checks seven points, eight conditions, PC=4√3, confirmation, return and undo.
 - Evidence: `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).
+
+## 2026-10-16 Task 16: live 3D camera evidence regression
+
+Functional defect reproduced before the fix: retained overlay nodes marked `hidden` were counted as visible, and camera-only frames did not trigger React-based evidence measurement. The browser RED independently observed six hidden point labels while evidence incorrectly reported none. Unit RED: 2 failed / 14 passed; browser RED: 1 failed.
+
+The fix excludes hidden labels (including hidden ancestors) and refreshes evidence after actual overlay/WebGL frames, with document-bound subscriptions and cleanup. View-only camera changes do not change document identity. Recovery by Fit View is measured again; 3D evidence remains **partial**, never promoted to passed while object bounds are not measurable.
+
+Fresh GREEN evidence: 5 unit files / **28 passed**; 2 browser files / **9 passed** (real WebGL camera failure/recovery plus proof-unavailable/flag-off paths); workspace typecheck and changed-file lint exit 0. Independent code review against `82dfdca` found no Critical or Important findings and independently reran 16/16 changed-file unit tests.
+
+Logs: `audit-20261016/task16-camera-{red,green,browser-red,browser-green,typecheck,lint}.txt` and matching `.exit` files. RED logs deliberately have nonzero exits; they are reproduction evidence, not current failures.
+
+**Acceptance boundary:** Task 16 stays partial: candidate pre-confirmation visual gating, complete WebGL object measurement, installed-desktop evidence and independent human readability are not established by this block. Task 18 browser downgrade is verified but installed real-Lean lifecycle is not. Current whole-card totals remain **16 complete (1-15,17), 3 partial (16,18,19), 2 not complete / not release-accepted (20,21)**. Task 19 bounded admission/configured runner success is a completed sub-scope, not completion of the whole card. The Goal stays active.

@@ -175,6 +175,9 @@ export function measureRenderedCanvas(root: ParentNode, labelSize: { width: numb
   ]
   const seen = new Map<string, number>()
   for (const element of labelElements) {
+    // Overlay nodes are deliberately retained across camera frames. A retained node is
+    // not visible evidence when the renderer (or its ancestor) has hidden it.
+    if (element.closest("[hidden]")) continue
     const name = labelName(element)
     if (name === null) continue
     const rect = tagRect(element, labelSize)

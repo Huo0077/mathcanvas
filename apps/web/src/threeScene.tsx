@@ -324,27 +324,23 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
    * 那条判据，而不是编一个尺寸出来。
    */
   const [canvasEvidence, setCanvasEvidence] = useState<CanvasEvidence | null>(null)
-  /**
-   * **刻意不给依赖表**：3D 的点标注是渲染循环在 WebGL 里投影后写进覆盖层的，
-   * **转视角**会让"哪些点名在画面里"变掉，而相机状态在 ref 上、不是 React 状态 ——
-   * 任何依赖表都抓不到它。循环风险由 `setCanvasEvidence` 里那道"签名没变就返回原对象"
-   * 的闸挡住（同一个对象 ⇒ React 跳过重渲染）。
-   */
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Subscribe to actual renderer frames, not only React updates. Rebinding after
+  // a document change captures the new document; same-evidence writes bail out.
   useEffect(() => {
     const shell = containerRef.current
     if (!shell) return
-    const root = pointLabelOverlayRef.current ?? shell
-    const viewport = { width: shell.clientWidth, height: shell.clientHeight }
-    /**
-     * **虚实线的读数**（Task 16 边界）：由 `syncContent` 写在场景容器上（它才知道这次真画了几段），
-     * 这里只转述。没写过时如实读成"没画、0 段"。
-     */
-    const segments = Number(shell.dataset.hiddenEdgeSegments ?? "")
-    const hiddenEdges = { shown: shell.dataset.hiddenEdgesShown === "true", segments: Number.isFinite(segments) && segments > 0 ? segments : 0 }
-    const measured = canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges })
-    setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
-  })
+    const measure = () => {
+      const root = pointLabelOverlayRef.current ?? shell
+      const viewport = { width: shell.clientWidth, height: shell.clientHeight }
+      const segments = Number(shell.dataset.hiddenEdgeSegments ?? "")
+      const hiddenEdges = { shown: shell.dataset.hiddenEdgesShown === "true", segments: Number.isFinite(segments) && segments > 0 ? segments : 0 }
+      const measured = canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges })
+      setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
+    }
+    shell.addEventListener("mathcanvas:three-frame", measure)
+    measure()
+    return () => shell.removeEventListener("mathcanvas:three-frame", measure)
+  }, [document])
 
   const selectedFace = document.primitives.find((primitive) => selectedIds.includes(primitive.id) && primitive.type === "face3")
   const facePoints = selectedFace?.type === "face3" ? selectedFace.pointIds.map((id) => document.primitives.find((candidate) => candidate.id === id)).filter((point): point is Point3Primitive => point?.type === "point3").map((point) => point.position) : []

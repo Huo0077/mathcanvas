@@ -220,3 +220,23 @@ describe("canvas evidence consumption", () => {
     expect(consumed["data-canvas-evidence-stale-reason"]).toBe("draft_replaced")
   })
 })
+
+
+it("does not count a retained hidden 3D overlay label as visible", () => {
+  const geometry = createEmptyDocument("geometry3d")
+  geometry.primitives.push({ id: "a", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" })
+  const root = document.createElement("div")
+  const label = document.createElement("span")
+  label.dataset.pointId = "a"
+  label.textContent = "A"
+  label.style.left = "100px"
+  label.style.top = "100px"
+  root.append(label)
+  label.hidden = true
+  const evidence = canvasEvidenceOf({ document: geometry, root, viewport: { width: 800, height: 600 }, objectsMeasurable: false })
+  expect(evidence.hiddenLabels).toEqual(["A"])
+  expect(evidence.boxes).toEqual([])
+  expect(canvasEvidenceAttributes(evidence, false, geometry)["data-canvas-evidence-status"]).toBe("failed")
+  label.hidden = false
+  expect(canvasEvidenceOf({ document: geometry, root, viewport: { width: 800, height: 600 }, objectsMeasurable: false }).hiddenLabels).toEqual([])
+})

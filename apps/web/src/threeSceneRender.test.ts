@@ -3,6 +3,8 @@ import * as THREE from "three"
 
 import { applyCameraState, createCameraState } from "./threeCamera"
 import { createThreeSceneRender } from "./threeSceneRender"
+import { canvasEvidenceOf, type CanvasEvidence } from "./canvasEvidence"
+import { createEmptyDocument } from "@draw/dsl"
 
 describe("3D overlay projection", () => {
   it("places a vertex label using the current camera even when no grid refreshes its matrices", () => {
@@ -41,4 +43,50 @@ describe("3D overlay projection", () => {
     const volumeLeft = Number.parseFloat((measurementOverlay.querySelector('[data-measurement-id="volume"]') as HTMLElement).style.left)
     expect(Math.abs(volumeLeft - (expected - 10))).toBeLessThan(0.5)
   })
+})
+
+
+it("publishes evidence after the final camera frame without a React render", () => {
+  const camera = new THREE.PerspectiveCamera(42, 800 / 600, 0.1, 1000)
+  camera.position.set(0, 0, 10)
+  camera.lookAt(0, 0, 0)
+  const point = { id: "a", type: "point3" as const, position: { x: 0, y: 0, z: 0 }, label: "A" }
+  const geometry = createEmptyDocument("geometry3d")
+  geometry.primitives.push(point)
+  const shell = document.createElement("div")
+  const labels = document.createElement("div")
+  shell.append(labels)
+  const snapshots: CanvasEvidence[] = []
+  let painted = 0
+  shell.addEventListener("mathcanvas:three-frame", () => {
+    expect(painted).toBe(snapshots.length + 1)
+    snapshots.push(canvasEvidenceOf({ document: geometry, root: labels, viewport: { width: 800, height: 600 }, objectsMeasurable: false }))
+  })
+  const renderer = {
+    domElement: { getBoundingClientRect: () => ({ width: 800, height: 600 }) },
+    render: () => { painted += 1 }
+  } as unknown as THREE.WebGLRenderer
+  const { render } = createThreeSceneRender({
+    renderer, scene: new THREE.Scene(), camera, cameraStateRef: { current: createCameraState() },
+    sceneShell: shell, autoFitRef: { current: false }, selectedIdsRef: { current: [] },
+    measurementOverlayRef: { current: null }, pointLabelOverlayRef: { current: labels },
+    measurementVisuals: [], visiblePointLabels: [point], objectIndex: new Map(), pointHandles: [], viewport: { height: 600 },
+    curveToleranceBucketRef: { current: 0 }, setCurveToleranceBucket: () => undefined, applyGridPlacement: () => undefined
+  })
+  render()
+  expect(snapshots).toHaveLength(1)
+  expect(snapshots[0].hiddenLabels).toEqual([])
+  expect(snapshots[0].boxes).toHaveLength(1)
+  camera.lookAt(0, 0, 20)
+  render()
+  expect(labels.querySelector<HTMLElement>("[data-point-id]")?.hidden).toBe(true)
+  expect(snapshots).toHaveLength(2)
+  expect(snapshots[1].hiddenLabels).toEqual(["A"])
+  expect(snapshots[1].boxes).toEqual([])
+  // A view-only change must not pretend that geometry changed.
+  expect(snapshots[1].documentHash).toBe(snapshots[0].documentHash)
+  camera.lookAt(0, 0, 0)
+  render()
+  expect(snapshots[2].hiddenLabels).toEqual([])
+  expect(snapshots[2].boxes).toHaveLength(1)
 })

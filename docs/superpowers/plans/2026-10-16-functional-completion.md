@@ -175,8 +175,8 @@ The recorded functional blocks above were checked against product code baseline 
 
 Current matrix:
 
-- **Complete within declared support scope:** Tasks 1-15, 17, 19 bounded source-admission/configured-runner scope (17 tasks).
-- **Partial:** Tasks 16, 18 (2 tasks).
+- **Complete within declared support scope:** Tasks 1-15, 17 (16 tasks). Task 19 has completed bounded admission/configured-runner sub-scope only.
+- **Partial:** Tasks 16, 18, 19 (3 tasks).
 - **Not complete / not release-accepted:** Tasks 20, 21 (2 tasks).
 
 The remaining items are not being marked complete by documentation: Task 16 needs candidate visual/3D/human evidence gates; Task 18 needs installed proof lifecycle and release acceptance; Task 19 still needs strict isolation and packaged release validation; Task 20 needs the authorized real-provider quality evaluation; Task 21 needs teacher/student and clean-machine/offline release acceptance. Task 9 human gold remains empty by explicit boundary and is not silently treated as model quality.
@@ -201,3 +201,15 @@ This block records an executable functional change, not a documentation-only rev
 - Task 9: 5 files / 92 tests passed; 8 development + 4 held-out offline cases, provenance and anti-leakage, and fail-closed oracle behavior are executable. `verifiedGoldCaseIds=[]` remains a human-gold boundary.
 - Task 13: 6/6 browser E2E passed for the folded quadrilateral, frustum, pentagonal pyramid, experiment-off negative path, cylinder and cone display; the original prompt checks seven points, eight conditions, `PC = 4√3`, confirmation, return and undo.
 - Evidence: `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).
+
+## 2026-10-16 Task 16: live 3D camera evidence regression
+
+Functional defect reproduced before the fix: retained overlay nodes marked `hidden` were counted as visible, and camera-only frames did not trigger React-based evidence measurement. The browser RED independently observed six hidden point labels while evidence incorrectly reported none. Unit RED: 2 failed / 14 passed; browser RED: 1 failed.
+
+The fix excludes hidden labels (including hidden ancestors) and refreshes evidence after actual overlay/WebGL frames, with document-bound subscriptions and cleanup. View-only camera changes do not change document identity. Recovery by Fit View is measured again; 3D evidence remains **partial**, never promoted to passed while object bounds are not measurable.
+
+Fresh GREEN evidence: 5 unit files / **28 passed**; 2 browser files / **9 passed** (real WebGL camera failure/recovery plus proof-unavailable/flag-off paths); workspace typecheck and changed-file lint exit 0. Independent code review against `82dfdca` found no Critical or Important findings and independently reran 16/16 changed-file unit tests.
+
+Logs: `audit-20261016/task16-camera-{red,green,browser-red,browser-green,typecheck,lint}.txt` and matching `.exit` files. RED logs deliberately have nonzero exits; they are reproduction evidence, not current failures.
+
+**Acceptance boundary:** Task 16 stays partial: candidate pre-confirmation visual gating, complete WebGL object measurement, installed-desktop evidence and independent human readability are not established by this block. Task 18 browser downgrade is verified but installed real-Lean lifecycle is not. Current whole-card totals remain **16 complete (1-15,17), 3 partial (16,18,19), 2 not complete / not release-accepted (20,21)**. Task 19 bounded admission/configured runner success is a completed sub-scope, not completion of the whole card. The Goal stays active.

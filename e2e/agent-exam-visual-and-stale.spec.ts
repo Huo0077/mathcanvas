@@ -309,3 +309,24 @@ test("a view-only change does not invalidate the figure evidence", async ({ page
 
   await page.screenshot({ path: "test-results/task16-canvas-stale.png" })
 })
+
+
+test("3D camera evidence excludes retained hidden labels and recovers after fit", async ({ page }) => {
+  await commit(page, SOLID_FOLD)
+  const scene = page.locator('[data-3d-scene="true"]')
+  const canvas = scene.locator("canvas")
+  const originalHash = (await canvasEvidence(page)).hash
+  await canvas.hover()
+  // Move the actual camera through the geometry, not a synthetic DOM mutation.
+  await page.mouse.wheel(0, -12000)
+  await expect.poll(() => scene.locator("[data-point-id][hidden]").count()).toBeGreaterThan(0)
+  const expectedHidden = await scene.locator("[data-point-id][hidden]").allTextContents()
+  await expect.poll(async () => (await canvasEvidence(page)).hidden.split(",").filter(Boolean).sort()).toEqual(expectedHidden.map((name) => name.trim()).sort())
+  expect((await canvasEvidence(page)).status).toBe("failed")
+  expect((await canvasEvidence(page)).hash).toBe(originalHash)
+  await page.getByRole("button", { name: "适应视图", exact: true }).click()
+  await expect.poll(() => scene.locator("[data-point-id][hidden]").count()).toBe(0)
+  await expect.poll(async () => (await canvasEvidence(page)).hidden).toBe("")
+  expect((await canvasEvidence(page)).status).toBe("partial")
+  expect((await canvasEvidence(page)).hash).toBe(originalHash)
+})
