@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, USER_FOLD_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
+import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -33,6 +33,17 @@ export interface LocalIntent {
   all: readonly string[]
   /** 固定代表题必须逐字匹配，不能把改了题设的请求套入旧坐标。 */
   exact?: string
+  /**
+   * **"只在问读数"那道闸也放它过**（2026-10-15 用户现场，翻折那道题）。
+   *
+   * 缺省（不写）时：句子里**没有建模动词**、又出现"求/多少/证明"这类问法 ⇒ `isAnalysisQuestion`
+   * 判真 ⇒ **带技能的意图一律跳过**（那条纪律的用意是"用户只想要一个读数时别替他建图"）。
+   *
+   * 而这条例外是**完整的一道题**：题面把图形完全确定（`PC=4√3` 连折角都定死了），
+   * 用户要的正是"把图作出来 + 核题设"，两问的"证明/求"属于目标层。所以这一条要能穿过那道闸 ——
+   * 但**只给它自己**（不给任何别的意图），并且理由写在用例里。
+   */
+  allowWhenAsking?: boolean
   /** 至少出现一个（缺省表示不需要）。 */
   any?: readonly string[]
   /**
@@ -411,8 +422,18 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    *
    * 夹具故意填**错的折角**（30°），所以这一条走的正是 **Task 12 的折角反求**：
    * 浏览器里能通过核验，就只可能是因为系统按 `PC=4√3` 把角算出来了。
+   *
+   * ## 2026-10-15：从"逐字匹配"改成**签名匹配**（用户现场）
+   *
+   * `exact` 要求归一化后**与夹具原文逐字相同**，而用户手上那句是**同一道题的另一种写法**
+   *（`△AEF` 对 `三角形AEF`、`AE=2/5 AD` 对 `AE:AD=2:5`，还多带了 `（1）证明…（2）求…` 两问）
+   * ⇒ 匹配不上 ⇒ 落到模型那条路 ⇒ 那一轮以"模型计划写不对"收场。签名里放的是**这道题的定义性特征**
+   *（四边形 + 翻折 + `PC=4√3`），不是排版。
+   *
+   * 同时它要 `allowWhenAsking`：这道题的问法里没有建模动词、还有"证明/求"，
+   * 否则会被"只在问读数"那道闸挡掉（见 `LocalIntent.allowWhenAsking` 的说明）。
    */
-  { all: ["四边形", "翻折"], exact: USER_FOLD_PROMPT, skillIds: ["planar-basics", "spatial-modeling"], build: () => userFoldPlan() },
+  { all: ["四边形", "翻折", "pc=4√3"], allowWhenAsking: true, skillIds: ["planar-basics", "spatial-modeling"], build: () => userFoldPlan() },
   /**
    * **代表题四（计划 V0c）**：椭圆。
    *
@@ -531,7 +552,7 @@ export function matchLocalIntent(prompt: string, options: { enableFreeApex?: boo
   // 不求技能的意图（例如"有什么"那条只读回答）不受影响 —— 它们本来就要在问句里命中。
   const analysis = isAnalysisQuestion(normalized)
   for (const intent of LOCAL_INTENTS) {
-    if (analysis && intent.skillIds.length > 0) continue
+    if (analysis && intent.skillIds.length > 0 && intent.allowWhenAsking !== true) continue
     if (intent.exact !== undefined && normalized.trim() !== intent.exact.toLowerCase()) continue
     if (!intent.all.every((token) => normalized.includes(token.toLowerCase()))) continue
     if (intent.any && !intent.any.some((token) => normalized.includes(token.toLowerCase()))) continue

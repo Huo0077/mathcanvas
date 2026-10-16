@@ -734,6 +734,27 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     /**
+     * **`AE=2/5 AD`：分数写法的定比分点**（2026-10-15 用户现场，翻折那道题）。
+     *
+     * 卷面上这是最常见的写法之一，而原先只认 `AE:AD=2:5`（冒号）与 `AD=2AB`（倍数）两种 ⇒
+     * 整句落进"尚未被可靠解析" ⇒ E、F 两条题设**谁也没被核**（现场读账就是那两条）。
+     *
+     * 判据与冒号那条是**同一个** `segmentRatio`：值 = **前比后**（`|AE| / |AD|`）。
+     *
+     * **必须排在长度读取器之前**：`AE=2/5 AD` 会被长度那条半吃成 `AE=2`
+     *（`2` 后面是 `/`，不在它的负向断言集合里）⇒ 留下 ` /5 AD` 那半截**没有 `=`**、
+     * 残留扫描器也看不见它 —— 那又成了"静默丢掉一个条件"。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*\\/\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
+    read: (m) => {
+      const numerator = finitePositive(m[2])
+      const denominator = finitePositive(m[3])
+      if (numerator === null || denominator === null) return null
+      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[4])], value: numerator / denominator }
+    }
+  },
+  {
+    /**
      * **长度**：`AB=8`、`AD=5√3`、`AD=√3`（根号写法 2026-10-11 用户现场）。
      *
      * 末尾的负向断言比原来多带一个 `√`：`AD=5√3√2` 这种畸形写法**不许被半吃掉** ——

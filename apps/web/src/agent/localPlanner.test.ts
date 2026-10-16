@@ -745,3 +745,37 @@ describe("V0c local hyperbola and parabola", () => {
     expect(compiled.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["y²=4x:passed"])
   })
 })
+
+/**
+ * **用户手上那句（一道完整题目，带"证明/求"）也要被这条代表题接住**（2026-10-15 用户现场）。
+ *
+ * 此前两处都挡着：
+ * ① 那条意图写的是 `exact: USER_FOLD_PROMPT` —— 要求归一化后**与夹具原文逐字相同**，
+ *    而用户那句是**同一道题的另一种写法**（`△AEF` 对 `三角形AEF`、`AE=2/5 AD` 对 `AE:AD=2:5`，
+ *    还多带 `（1）证明…（2）求…` 两问）⇒ 匹配不上 ⇒ 落到模型那条路；
+ * ② 就算签名对上了，它**没有建模动词**、又带"证明/求" ⇒ 被 `isAnalysisQuestion` 那道闸跳过。
+ *
+ * 这一条把端到端钉住：**用用户原话**，本地规划器给出那份代表计划，编译后**题设核验通过**
+ *（折角由 `PC=4√3` 反求 —— 夹具里那个 30° 是**故意填错的**）。
+ */
+describe("the fold intent accepts the user's own wording", () => {
+  const USER_WORDING = [
+    "平面四边形 ABCD 中，AB=8，CD=3，AD=5√3，",
+    "∠ADC=90°，∠BAD=30°。",
+    "点 E,F 满足 AE=2/5 AD，AF=1/2 AB。",
+    "将 △AEF 沿 EF 翻折至 △PEF，使得 PC=4√3。",
+    "（1）证明：EF⊥PD；",
+    "（2）求平面 PCD 与平面 PBF 所成二面角的正弦值。"
+  ].join("\n")
+
+  it("matches the representative intent, and the plan verifies for that wording", async () => {
+    const intent = matchLocalIntent(USER_WORDING)
+    expect(intent, "本地规划器要认这一句（签名匹配 + 穿过「只在问读数」那道闸）").not.toBeNull()
+
+    const envelope = await plan(USER_WORDING)
+    expect(parsePlanEnvelope(envelope).ok, "代表计划的信封要过传输层").toBe(true)
+    const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), prompt: USER_WORDING, conversationId: "fold-user-wording", documentGeneration: 0 })
+    const why = `ok=${compiled.ok}；诊断：${compiled.diagnostics.map((item) => `${item.code}: ${item.detail}`).join(" || ")}；核验：${(compiled.diagramVerification?.checks ?? []).map((check) => `${check.sourceText} => ${check.status}`).join(" | ")}`
+    expect(compiled.diagramVerification?.status, why).toBe("passed")
+  })
+})
