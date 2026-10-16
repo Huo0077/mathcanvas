@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { areCoplanar, buildFromPoints, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, faceHost3, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { tangentThroughPoint } from "../analysisRecompute"
@@ -919,6 +919,28 @@ function resolveFlapVertices(document: ActionContext["targetDocument"], names: r
   return out
 }
 
+function compileSolidUnfoldAction(action: Extract<DraftAction, { actionId: "solid.unfold" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a solid can only be unfolded in the solid workspace")], aliasToId: {} }
+  }
+  if (inputs.target.documentId !== context.targetDocument.metadata.id) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "cross_document_reference", "an unfold target must stay inside the target document")], aliasToId: {} }
+  }
+  if (!Number.isFinite(inputs.progress) || inputs.progress < 0 || inputs.progress > 1) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "unfold_progress_invalid", "unfold progress must be finite and within [0, 1]")], aliasToId: {} }
+  }
+  const target = findPrimitive(context.targetDocument, inputs.target.entityId)
+  if (!target || target.type !== "polyhedron3") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "unfold_target_invalid", `unfold target ${inputs.target.entityId} is not a polyhedron3`)], aliasToId: {} }
+  }
+  return {
+    operations: [{ op: "updatePrimitive", id: target.id, patch: { unfoldProgress: inputs.progress } }],
+    diagnostics: [],
+    aliasToId: {}
+  }
+}
+
 function compileSolidFoldAction(action: Extract<DraftAction, { actionId: "solid.fold" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1336,6 +1358,73 @@ function resolveEdgeByNames(document: GeometryDocument, hostEntityId: string, ed
   if (matches.length === 0) return { code: "edge_not_found", detail: `no edge between ${edge.from} and ${edge.to} on ${hostEntityId}; known names: ${known.join(", ") || "(none)"}` }
   return { code: "ambiguous_edge", detail: `more than one edge joins ${edge.from} and ${edge.to} on ${hostEntityId}` }
 }
+function compileCreateFacePoint(action: Extract<DraftAction, { actionId: "dynamic.create_face_point" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a face point can only be created in the solid workspace")], aliasToId: {} }
+  }
+  if (!inputs.face || inputs.face.documentId !== context.targetDocument.metadata.id) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "cross_document_reference", "a face point must stay inside the target document")], aliasToId: {} }
+  }
+  if (!Array.isArray(inputs.uv) || inputs.uv.length !== 2 || !inputs.uv.every((value) => Number.isFinite(value))) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_uv", "uv must contain exactly two finite numbers")], aliasToId: {} }
+  }
+  if (inputs.parameterIds !== undefined) {
+    if (inputs.parameterIds.length !== 2 || inputs.parameterIds.some((id) => typeof id !== "string" || id.length === 0)) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_parameter_ids", "parameterIds must contain exactly two non-empty ids")], aliasToId: {} }
+    }
+    const missing = inputs.parameterIds.filter((id) => !context.targetDocument.parameters[id])
+    if (missing.length > 0) {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "parameter_not_found", `no parameter ${missing[0]}`)], aliasToId: {} }
+    }
+  }
+  const face = findPrimitive(context.targetDocument, inputs.face.entityId)
+  if (!face) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "face_not_found", `no face ${inputs.face.entityId}`)], aliasToId: {} }
+  }
+  if (face.type !== "face3") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "not_a_face", `face reference ${inputs.face.entityId} points to a ${face.type}`)], aliasToId: {} }
+  }
+  const vertices: Vector3[] = []
+  for (const pointId of face.pointIds) {
+    const point = findPrimitive(context.targetDocument, pointId)
+    if (point?.type !== "point3") {
+      return { operations: [], diagnostics: [diagnostic(actionKey, "face_geometry_missing", `face ${face.id} has missing point3 geometry`)], aliasToId: {} }
+    }
+    vertices.push(point.position)
+  }
+  const host = faceHost3(vertices)
+  if (!host || host.domain.v === undefined) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "degenerate_face", `face ${face.id} cannot provide a valid parameter domain`)], aliasToId: {} }
+  }
+  const [u, v] = inputs.uv
+  const [minU, maxU] = host.domain.u
+  const [minV, maxV] = host.domain.v
+  if (u < minU || u > maxU || v < minV || v > maxV) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "uv_out_of_bounds", "uv is outside the face parameter domain")], aliasToId: {} }
+  }
+  const evaluated = host.evaluate({ u, v })
+  const closest = host.closestParameter(evaluated)
+  if (Math.abs(closest.u - u) > 1e-8 || closest.v === undefined || Math.abs(closest.v - v) > 1e-8) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "uv_outside_face", "uv is outside the actual face boundary")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("point3", inputs.alias)
+  const binding = {
+    kind: "onFace" as const,
+    faceId: face.id,
+    uv: [u, v] as [number, number],
+    ...(inputs.parameterIds === undefined ? {} : { parameterIds: inputs.parameterIds })
+  }
+  const primitive: PrimitiveSpec = {
+    id,
+    type: "point3",
+    position: { x: 0, y: 0, z: 0 },
+    binding,
+    ...(inputs.label === undefined ? { label: inputs.alias } : { label: inputs.label })
+  }
+  return { operations: [{ op: "addPrimitive", primitive }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileCreateBoundPoint(action: Extract<DraftAction, { actionId: "dynamic.create_bound_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (!Number.isFinite(inputs.parameter)) {
@@ -1527,10 +1616,14 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidSegmentAction(action, context)
     case "solid.fold":
       return compileSolidFoldAction(action, context)
+    case "solid.unfold":
+      return compileSolidUnfoldAction(action, context)
     case "dynamic.bind_point":
       return compileBindPoint(action, context)
     case "dynamic.create_bound_point":
       return compileCreateBoundPoint(action, context)
+    case "dynamic.create_face_point":
+      return compileCreateFacePoint(action, context)
     case "dynamic.bind_curve":
       return compileBindCurve(action, context)
     case "dynamic.set_radius_rule":

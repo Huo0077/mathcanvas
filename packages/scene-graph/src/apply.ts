@@ -304,6 +304,12 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       if (operation.patch.center3) primitive.center = { ...primitive.center, ...operation.patch.center3 }
       if (operation.patch.radius3 !== undefined) primitive.radius = operation.patch.radius3
     }
+    if (primitive.type === "polyhedron3" && operation.patch.unfoldProgress !== undefined) {
+      if (!Number.isFinite(operation.patch.unfoldProgress) || operation.patch.unfoldProgress < 0 || operation.patch.unfoldProgress > 1) {
+        return { document, changed: false, error: "unfold progress must be finite and within [0, 1]" }
+      }
+      primitive.unfoldProgress = operation.patch.unfoldProgress
+    }
     if (operation.patch.label !== undefined) primitive.label = operation.patch.label
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
     if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {

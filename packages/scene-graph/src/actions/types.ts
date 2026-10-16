@@ -329,6 +329,14 @@ export interface SolidCreateSegmentAction extends ActionBase {
  * **共用同一个** Rodrigues 原语。折完仍走 `solid.create_face` 那一套退化校验
  *（互异 / 不共线 / 共面），失败时**一条图元都不产出**。
  */
+export interface SolidUnfoldAction extends ActionBase {
+  actionId: "solid.unfold"
+  inputs: {
+    target: SceneReference
+    progress: number
+  }
+}
+
 export interface SolidFoldAction extends ActionBase {
   actionId: "solid.fold"
   inputs: {
@@ -387,6 +395,20 @@ export interface SceneReference {
  * 参数一律是宿主的**自然参数**（棱是仿射比例、曲线是角度/轴向参数），
  * 中点因此就是 `parameter = 0.5`，不需要"中点"这种特例语义。
  */
+export interface DynamicCreateFacePointAction extends ActionBase {
+  actionId: "dynamic.create_face_point"
+  inputs: {
+    alias: DraftAlias
+    /** ?????????????? `face3`?????????????? */
+    face: SceneReference
+    /** ?????????????????????? */
+    uv: [number, number]
+    /** ?????????????? u?v? */
+    parameterIds?: [string, string]
+    label?: string
+  }
+}
+
 export interface DynamicCreateBoundPointAction extends ActionBase {
   actionId: "dynamic.create_bound_point"
   inputs: {
@@ -563,9 +585,11 @@ export type DraftAction =
   | SolidCreateFaceAction
   | SolidCreateSegmentAction
   | SolidFoldAction
+  | SolidUnfoldAction
   | SolidCreateRoundFrustumAction
   | DynamicBindPointAction
   | DynamicCreateBoundPointAction
+  | DynamicCreateFacePointAction
   | DynamicCreateLocusAction
   | DynamicBindCurveAction
   | DynamicSetRadiusRuleAction

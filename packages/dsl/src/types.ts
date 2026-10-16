@@ -253,6 +253,8 @@ export interface Polyhedron3Primitive extends PrimitivePresentation {
   edgeIds: string[]
   faceIds: string[]
   construction?: SolidConstruction
+  /** Persisted unfold amount for this polyhedron, in the closed interval [0, 1]. */
+  unfoldProgress?: number
 }
 
 export interface LinePrimitive extends PrimitivePresentation {

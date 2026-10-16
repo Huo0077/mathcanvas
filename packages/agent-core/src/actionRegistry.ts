@@ -162,6 +162,8 @@ export type FieldKind =
   | "scopedRef"      // {scope:"draft",alias} / {scope:"scene",ref}
   | "idList"         // 同一文档内的裸 id 数组
   | "interval"       // 有界区间 [lo, hi]，两个有限数且 lo < hi（函数图像的定义域）
+  | "uv"             // ?????? [u, v]
+  | "stringPair"     // ???????????????
 
 /**
  * **按字段名的种类表**（大多数动作共用）。
@@ -173,6 +175,7 @@ export type FieldKind =
 export const FIELD_KINDS: Record<string, FieldKind> = {
   // 字符串族
   alias: "string", label: "string", id: "string", expression: "string", analysis: "string",
+  parameterIds: "stringPair",
   parameterId: "string",
   // 有界区间：函数图像的定义域。**不是两个普通数字** —— "lo < hi" 是它的一部分形状。
   domain: "interval",
@@ -182,7 +185,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   radius: "number", radiusX: "number", radiusY: "number", radiusBottom: "number", radiusTop: "number", height: "number", edge: "number",
   focalParameter: "number", rotation: "number", startAngle: "number", endAngle: "number",
   x: "number", factor: "number", parameter: "number", value: "number", min: "number",
-  max: "number", step: "number",
+  max: "number", step: "number", progress: "number",
   // 整数族（`segments` 是圆类的分段数：正整数，与 `sides` 同一档）
   sides: "integer", hostSub: "integer", segments: "integer",
   // 平面点 / 空间向量
@@ -235,6 +238,8 @@ export function declaredFieldKind(spec: ActionSpec, field: string): FieldKind | 
  * 漏掉不会红、只会让模型与编译器各说各话。
  */
 export interface RawFieldTypes {
+  /** ??????????? */
+  uv?: "uv"
   /** 平面动作里 `center` 是 2D 点、正棱锥里是 3D 底面中心 —— 同一个名字两种形状。 */
   center?: "point" | "vector"
   /** `section.create` 的 `origin` 是"点 + 法向"里的那个点，与模板实体的 3D 位置同形。 */
@@ -518,6 +523,13 @@ export const ACTIONS = {
      */
     required: ["vertexNames", "hinge", "apex", "apexAs", "angle"]
   },
+  "solid.unfold": {
+    inputFields: ["target", "progress"],
+    requiresAlias: false,
+    rawFieldTypes: {},
+    references: [{ field: "target", kind: "scoped" }],
+    required: ["target", "progress"]
+  },
   "solid.create_round_frustum": {
     inputFields: ["alias", "center", "radiusBottom", "radiusTop", "height", "segments", "label"],
     requiresAlias: true,
@@ -603,6 +615,13 @@ export const ACTIONS = {
    * `parameter` 的默认是 **0.4**（规格 §6.3 的普通动点），而**中点由调用方显式给 0.5** ——
    * 审计不许把显式约束覆盖成默认值（`parameterAudit.test.ts` 钉住这条）。
    */
+  "dynamic.create_face_point": {
+    inputFields: ["alias", "face", "uv", "parameterIds", "label"],
+    requiresAlias: true,
+    rawFieldTypes: { uv: "uv" },
+    references: [{ field: "face", kind: "scoped" }],
+    required: ["alias", "face", "uv"]
+  },
   "dynamic.create_bound_point": {
     inputFields: ["alias", "host", "hostSub", "hostEdge", "parameter", "parameterId", "label"],
     requiresAlias: true,

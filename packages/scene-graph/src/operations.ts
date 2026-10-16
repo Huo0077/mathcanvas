@@ -136,6 +136,8 @@ export interface PrimitiveUpdatePatch {
   segments?: number
   position3?: Vector3
   binding3?: Point3Binding
+  /** Persisted unfold amount for a polyhedron3, constrained to [0, 1]. */
+  unfoldProgress?: number
 }
 
 /**

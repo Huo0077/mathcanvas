@@ -121,6 +121,22 @@ function readByDeclaredKind(spec: ActionSpec, field: string, provided: unknown, 
       return provided
     }
     case "point": return readPoint2(provided, path, errors) ?? undefined
+    case "uv": {
+      if (!Array.isArray(provided) || provided.length !== 2) {
+        errors.push(fail("invalid_type", path, "expected exactly two finite numbers"))
+        return undefined
+      }
+      const uv = provided.map((entry, index) => finiteNumber(entry, `${path}[${index}]`, errors))
+      return uv.every((entry): entry is number => entry !== null) ? uv : undefined
+    }
+    case "stringPair": {
+      if (!Array.isArray(provided) || provided.length !== 2) {
+        errors.push(fail("invalid_type", path, "expected exactly two strings"))
+        return undefined
+      }
+      const values = provided.map((entry, index) => boundedString(entry, `${path}[${index}]`, errors))
+      return values.every((entry): entry is string => entry !== null) ? values : undefined
+    }
     /**
      * **有界区间**：两个**有限**数、且 `lo < hi`（`function.create_graph` 的定义域）。
      *
@@ -234,6 +250,46 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
   const withAlias = (fields: Record<string, unknown>) => (alias === null ? fields : { alias, ...fields })
 
   switch (actionId) {
+    case "solid.unfold": {
+      const out: Record<string, unknown> = withAlias({})
+      if (value.target === undefined) {
+        errors.push(fail("missing_field", `${path}.target`, "a solid unfold must declare a target reference"))
+      } else {
+        const target = readScopedReference(value.target, `${path}.target`, errors)
+        if (target !== null) out.target = target
+      }
+      const progress = finiteNumber(value.progress, `${path}.progress`, errors)
+      if (progress !== null) out.progress = progress
+      if (errors.length > 0) return null
+      return out
+    }
+    case "dynamic.create_face_point": {
+      const out: Record<string, unknown> = withAlias({})
+      if (value.face === undefined) {
+        errors.push(fail("missing_field", `${path}.face`, "a face point must declare a face reference"))
+      } else {
+        const face = readScopedReference(value.face, `${path}.face`, errors)
+        if (face !== null) out.face = face
+      }
+      if (!Array.isArray(value.uv) || value.uv.length !== 2) {
+        errors.push(fail("invalid_type", `${path}.uv`, "uv must be an array of exactly two finite numbers"))
+      } else {
+        const uv = value.uv.map((entry, index) => finiteNumber(entry, `${path}.uv[${index}]`, errors))
+        if (uv.every((entry): entry is number => entry !== null)) out.uv = uv
+      }
+      if (value.parameterIds !== undefined) {
+        if (!Array.isArray(value.parameterIds) || value.parameterIds.length !== 2) {
+          errors.push(fail("invalid_type", `${path}.parameterIds`, "parameterIds must be an array of exactly two strings"))
+        } else {
+          const parameterIds = value.parameterIds.map((entry, index) => boundedString(entry, `${path}.parameterIds[${index}]`, errors))
+          if (parameterIds.every((entry): entry is string => entry !== null)) out.parameterIds = parameterIds
+        }
+      }
+      const label = boundLabel(value.label, `${path}.label`, errors)
+      if (label !== undefined) out.label = label
+      if (errors.length > 0) return null
+      return out
+    }
     /**
      * **截面**：`sourceId` 原样带过，`plane` 收成一种写法（见 `normalizeSectionPlane`）。
      *

@@ -177,7 +177,7 @@ export function point3Index(document: GeometryDocument): Map<string, Point3Primi
  * 为什么抽成一处：校验（`patches.ts`）与应用（本文件）各写过一份，两份一旦不同步就会出现
  * "校验通过、提交却被拒"这种最难受的失败——实测就是这么撞上的（`circle3` 只加进了一份）。
  */
-export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "tangent", "normal", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "sphere"] as const
+export const EDITABLE_GEOMETRY_TYPES = ["point", "point3", "line", "segment", "ray", "polyline", "parabola", "ellipse", "hyperbola", "function", "circle", "arc", "tangent", "normal", "cube", "pyramid", "cylinder", "cone", "plane3", "circle3", "sphere", "polyhedron3"] as const
 
 /**
  * Point-driven objects only reference their points; those points are what a drag has to move.

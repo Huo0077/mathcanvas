@@ -28,6 +28,18 @@ const CUBE: PrimitiveSpec = { id: "cube-1", type: "cube", origin: { x: -1, y: -1
 /** 一个**自带圆心与半径**的轨道圆：它的半径手柄与三色环是两件事，要能分别断言。 */
 const ORBIT: PrimitiveSpec = { id: "orbit-1", type: "circle3", center: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius: 2 }
 
+const TETRAHEDRON: PrimitiveSpec[] = [
+  { id: "tetra-a", type: "point3", position: { x: 0, y: 0, z: 0 }, binding: { kind: "free" } },
+  { id: "tetra-b", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "free" } },
+  { id: "tetra-c", type: "point3", position: { x: 0, y: 2, z: 0 }, binding: { kind: "free" } },
+  { id: "tetra-d", type: "point3", position: { x: 0, y: 0, z: 2 }, binding: { kind: "free" } },
+  { id: "tetra-face-abc", type: "face3", pointIds: ["tetra-a", "tetra-b", "tetra-c"] },
+  { id: "tetra-face-adb", type: "face3", pointIds: ["tetra-a", "tetra-d", "tetra-b"] },
+  { id: "tetra-face-acd", type: "face3", pointIds: ["tetra-a", "tetra-c", "tetra-d"] },
+  { id: "tetra-face-bdc", type: "face3", pointIds: ["tetra-b", "tetra-d", "tetra-c"] },
+  { id: "tetra-solid", type: "polyhedron3", vertexIds: ["tetra-a", "tetra-b", "tetra-c", "tetra-d"], edgeIds: [], faceIds: ["tetra-face-abc", "tetra-face-adb", "tetra-face-acd", "tetra-face-bdc"], unfoldProgress: 0.75 }
+]
+
 /** 场景里真正画出来的三色环（按"哪根轴"认，不按组认：组本身也挂同一个 visualRole）。 */
 function ringsOnCanvas(scene: THREE.Scene): THREE.Object3D[] {
   const found: THREE.Object3D[] = []
@@ -92,6 +104,22 @@ function harness(primitives: PrimitiveSpec[] = [POINT]) {
   }
   return { ...content, deps, scene, sceneShell, objectsOf }
 }
+
+describe("persisted unfold rendering", () => {
+  it("renders each polyhedron from its persisted progress and only falls back to the UI flag when absent", () => {
+    const { syncContent, sceneShell, deps } = harness(TETRAHEDRON)
+
+    deps.displayFlagsRef.current = { ...deps.displayFlagsRef.current, unfoldProgress: 0.2 }
+    syncContent()
+    expect(sceneShell.dataset.unfoldObjects).toBe("tetra-solid:0.75")
+
+    const solid = deps.documentRef.current.primitives.find((primitive) => primitive.id === "tetra-solid")
+    if (solid?.type !== "polyhedron3") throw new Error("expected tetrahedron")
+    solid.unfoldProgress = undefined
+    syncContent()
+    expect(sceneShell.dataset.unfoldObjects).toBe("tetra-solid:0.20")
+  })
+})
 
 describe("incremental scene content sync", () => {
   it("draws a primitive on the first sync and records what it created", () => {

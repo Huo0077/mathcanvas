@@ -14,6 +14,7 @@ export interface JsonSchema {
   items?: JsonSchema
   oneOf?: readonly JsonSchema[]
   minimum?: number
+  maximum?: number
   minItems?: number
   maxItems?: number
   /**
@@ -135,6 +136,7 @@ const tangentAnchorSchema: JsonSchema = {
 function schemaForField(field: string, spec: ActionSpec, actionId: ActionId): JsonSchema {
   const base = baseSchemaForField(field, spec, actionId)
   const minimum = FIELD_MIN_ITEMS[`${actionId}.${field}`]
+  if (actionId === "solid.unfold" && field === "progress") return { ...base, minimum: 0, maximum: 1 }
   return minimum === undefined ? base : { ...base, minItems: minimum }
 }
 
@@ -219,6 +221,8 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
      */
     case "interval": return { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }
     /** 两个点名 `{from,to}`（按端点名指定棱）：形状与校验那侧的 `normalizeHostEdge` 一致。 */
+    case "uv": return { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }
+    case "stringPair": return { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 }
     case "namePair": return { type: "object", properties: { from: { type: "string" }, to: { type: "string" } }, required: ["from", "to"], additionalProperties: false }
     default:
       /**

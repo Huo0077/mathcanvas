@@ -214,9 +214,14 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     topologyOwners.clear()
     for (const [id, owner] of templateTopologyOwners(document)) topologyOwners.set(id, owner)
 
-    const unfoldedPolyhedra = unfoldProgress > 0.001
-      ? document.primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3" && primitive.visible !== false)
-      : []
+    const effectiveUnfoldProgress = (primitive: Polyhedron3Primitive): number => {
+      const persisted = primitive.unfoldProgress
+      const value = persisted === undefined ? unfoldProgress : persisted
+      return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
+    }
+    const unfoldedPolyhedra = document.primitives.filter((primitive): primitive is Polyhedron3Primitive =>
+      primitive.type === "polyhedron3" && primitive.visible !== false && effectiveUnfoldProgress(primitive) > 0.001
+    )
     const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
     document.primitives.filter(isUserVisiblePrimitive).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
@@ -334,9 +339,10 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     unfoldedPolyhedra.forEach((polyhedron) => {
       const topology = resolvePolyhedronTopology(document, polyhedron.id)
       if (!topology) return
-      const layout = unfoldPolyhedron3(topology.vertices, topology.faces, unfoldProgress, topology.rootFaceId)
+      const progress = effectiveUnfoldProgress(polyhedron)
+      const layout = unfoldPolyhedron3(topology.vertices, topology.faces, progress, topology.rootFaceId)
       if (layout.status !== "ok") return
-      keepContent(`unfold:${polyhedron.id}`, signer.of(polyhedron.id, `unfold:${unfoldProgress.toFixed(4)};sel:${selectedIds.includes(polyhedron.id)}`), () => createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)), alive, order)
+      keepContent(`unfold:${polyhedron.id}`, signer.of(polyhedron.id, `unfold:${progress.toFixed(4)};sel:${selectedIds.includes(polyhedron.id)}`), () => createUnfoldNetGroup(polyhedron.id, layout, selectedIds.includes(polyhedron.id)), alive, order)
       unfoldFaceCount += layout.faces.length
     })
     // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
@@ -494,6 +500,7 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       sceneShell.dataset.previewHoverKey = previewHoverKeyRef.current ?? ""
       sceneShell.dataset.unfoldFaces = String(unfoldFaceCount)
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
+      sceneShell.dataset.unfoldObjects = unfoldedPolyhedra.map((polyhedron) => `${polyhedron.id}:${effectiveUnfoldProgress(polyhedron).toFixed(2)}`).join(",")
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
       sceneShell.dataset.planeCount = String(planeCount)
       sceneShell.dataset.measurementLabelCount = String(measurementVisuals.length)
