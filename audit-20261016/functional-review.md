@@ -290,3 +290,12 @@ This block records an actual release build, installer run, installed-app launch,
 - **Manual acceptance boundary:** no teacher acceptance record, student acceptance record, clean-machine/offline installation record, or end-to-end user confirmation/revise/undo acceptance record exists in this audit. These cannot be inferred from the installer exit code or from IPC health.
 - **Acceptance:** Task 21 is **partially complete**. The release engineering path, installer generation, installation, launch, WebView load, and IPC smoke path are verified. Lean configuration and teacher/student acceptance remain incomplete, so the task is not release-accepted as a whole.
 - **Evidence files:** `audit-20261016/task21-desktop-build.txt`, `task21-desktop-bundle.txt`, `task21-install.txt`, `task21-launch.txt`, and `task21-ipc-evidence.json` record the corresponding runtime evidence.
+
+## 2026-10-16 Task 18 current-HEAD functional revalidation
+
+This entry supersedes the initial defect reproduction as the current-state verdict. The earlier `F1 / P1` section remains historical evidence of the defect that motivated the fix; it is not a claim about the current HEAD.
+
+- **Fresh executable evidence:** `npx vitest run apps/web/src/agent/draftStore.proofLifecycle.test.ts apps/web/src/agent/automaticProofStage.test.ts apps/web/src/agent/desktopProofChannel.test.ts --silent=false` completed with **3 test files / 20 tests passed / 0 failed / exit 0** on the current HEAD.
+- **Observed behaviors:** invalidated drafts reject late proof as `unknown_draft`; a newer stage rejects a late result as `stale_draft_version` and keeps the newer preview; pending proof does not publish a half-staged candidate; prompt normalization/raw prompt hashes and the proof binding (`claimId`, `goalSourceId`, `inputHash`, `backendVersion`) stay attached to the original attempt.
+- **Product boundary:** proof is best-effort and does not block ordinary drawing when the export flag is off; these tests do not constitute a real Lean execution, desktop installed UI lifecycle, or teacher/student acceptance.
+- **Acceptance:** Task 18 is **complete for the asynchronous lifecycle/binding slice** and remains **partial for the full task card** because real Lean integration, desktop proof lifecycle, and release/manual acceptance are still not verified.
