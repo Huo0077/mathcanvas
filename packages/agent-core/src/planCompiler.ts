@@ -2011,6 +2011,17 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
     advice.push("提醒：`plan_set_plan` 的那个参数必须是**对象本身**，不是**装着 JSON 的字符串** —— 请把 `goal` 与 `actions` 作为对象的字段**直接给出**，不要先把整份计划拼成一段文字再传（拼出来的那段还容易被写坏或被截断）。")
   }
   /**
+   * **线段引用的点还没建出来**（2026-10-15 用户现场，同一道翻折题第二次读数）。
+   *
+   * 现场：模型**已经在用** `solid.create_segment`，但它把连线段放在了**建出 `E`、`F` 之前** ——
+   * 同一份计划**按顺序**执行，于是两端都找不到。拒绝是对的，可**修复提示必须把"调换顺序"
+   * 说成一个动作**：只说"必须是已经建出来的点"，模型两轮都在改名字（它没读成"移到后面"）。
+   */
+  const segmentReferenceMissing = errors.some((error) => error.code === "segment_reference_missing")
+  if (segmentReferenceMissing) {
+    advice.push("提醒：`solid.create_segment` 的两端必须**在这份文档里已经存在** —— 同一份计划**按顺序**执行，所以**建出这些点的笔要排在前面**（带 `vertexNames` 的实体 / 面片、`dynamic.create_bound_point`、`solid.fold` 都会建点）。修法是**把连线段的那几笔移到它们之后**（这是顺序问题，不是名字问题）；如果那个点确实没有任何一笔建它，就先补一笔。")
+  }
+  /**
    * **面片点数不够**（2026-10-15 用户现场，四棱锥那道题）：模型想给「线段 EF」建一笔面片，
    * 只给两个点 ⇒ `a planar face needs at least three vertices`。它需要的不是"再试一次"，
    * 而是知道**它真正想做的事没有对应的动作**：立体几何里没有"画线段"的动作，

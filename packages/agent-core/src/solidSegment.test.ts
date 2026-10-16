@@ -83,6 +83,23 @@ describe("立体里的线段动作：`solid.create_segment` 按点名连两个�
     expect(segments, why).toEqual([])
   })
 
+  /**
+   * **2026-10-15 现场（同一道翻折题，第二次读数）**：模型**已经在用**这个动作了（`actions[1]`、`[2]`
+   * 就是 `solid.create_segment`），但它把连线段放在了**建出 `E`、`F` 之前** —— 同一份计划**按顺序**
+   * 执行，于是两端都找不到。拒绝是对的，可**理由必须把"移到后面"说透**：只说"必须是已经建出来的点"，
+   * 模型两次都没把它读成"调换顺序"。
+   */
+  it("线段排在建点之前 ⇒ 理由要说清是**顺序**问题、并指出该把这一笔移到后面", () => {
+    const result = run([segmentAction(["E", "F"]), ...flatActions])
+    const why = result.diagnostics.map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`).join(" || ")
+
+    expect(result.ok, why).toBe(false)
+    expect(why, why).toContain("E")
+    // 「按顺序」「移到…之后」都要在 —— 这是给模型的那一步动作，不是解释。
+    expect(why, why).toContain("按顺序")
+    expect(why, why).toContain("之后")
+  })
+
   it("两个端点写成同一个点 ⇒ 被拒（一条线段的两个端点不能是同一点）", () => {
     const result = run([...flatActions, segmentAction(["E", "E"])])
     const why = result.diagnostics.map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`).join(" || ")

@@ -1449,6 +1449,19 @@ describe("面塌了的修复提示", () => {
     expect(hint).toContain("对象本身")
     expect(hint).toContain("装着 JSON 的字符串")
   })
+
+  /**
+   * **线段排在建点之前**（2026-10-15 用户现场，同一道翻折题第二次读数）：模型已经在用
+   * `solid.create_segment` 了，只是把连线段放在了**建出那两点之前**。拒绝的理由本身是对的，
+   * 但**修复提示**要把"**调换顺序**"这一步说成动作 —— 只说"必须是已经建出来的点"，
+   * 模型两次都没读出来（它一直以为要改名字）。
+   */
+  it("线段引用的点还没建出来时，提示要说清「把这一笔移到后面」", () => {
+    const hint = ask([{ code: "segment_reference_missing", path: "envelope.actions[1]", detail: "这些点名在这份文档里找不到对应的点：E —— 线段的两端必须是**已经建出来**的点。" }])
+
+    expect(hint).toContain("按顺序")
+    expect(hint).toContain("移到")
+  })
 })
 
 /**

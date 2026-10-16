@@ -800,7 +800,7 @@ function compileSolidSegmentAction(action: Extract<DraftAction, { actionId: "sol
   const second = at(names[1]!)
   const missing = names.filter((name) => at(name) === undefined)
   if (missing.length > 0 || first === undefined || second === undefined) {
-    return refuse("segment_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")} —— 线段的两端必须是**已经建出来**的点（先建实体/棱上的分点，再连线段）。`)
+    return refuse("segment_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")} —— 同一份计划是**按顺序**执行的，所以这一笔必须排在**建出这些点**的那几笔**之后**（带 \`vertexNames\` 的实体 / 面片、\`dynamic.create_bound_point\`、\`solid.fold\` 都会建点）。请把这一笔**移到后面**（这是顺序问题，不是名字问题）。`)
   }
   const id = context.idAllocator.allocate("segment", inputs.alias)
   const primitive: PrimitiveSpec = { id, type: "segment3", pointIds: [first.id, second.id], ...(inputs.label === undefined ? {} : { label: inputs.label }) }
