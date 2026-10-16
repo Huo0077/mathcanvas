@@ -888,8 +888,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
                */
               ? describeSchemaFailureForUser(detail, earlierRejections)
               : detail
-            : incomplete.includes("点名缺失：")
-              ? `题设还没核验，本次不会提交。${incomplete} 题面点到、图上却没有的点，系统只补建位置被题设唯一确定了的那几类（例如某条棱的中点、定比的分点）；这一点没能补上。`
+            : incomplete.includes("点名缺失：") || incomplete.includes("没有带点名") || incomplete.includes("缺少可靠的点名映射")
+              /**
+               * **"点名缺失"这句要说清"该改的是计划"，而不是让用户以为系统补不了**（2026-10-15）。
+               *
+               * 现场：模型交的计划里那几笔构造动作**没给 `vertexNames`**（或压根没建那几个点），
+               * 于是每条题设都报"点名缺失"。原先这一支只说"系统只补建位置被题设唯一确定的那几类…
+               * 这一点没能补上" —— 用户读到的是"**系统能力到此为止**"，而真因在**计划**里：
+               * 建图那一笔没给点名。所以这里补上**该往哪改**，并说明重出一版计划即可。
+               */
+              ? `题设还没核验，本次不会提交。${incomplete} 题面点到、图上却没有的点，系统只补建位置被题设唯一确定了的那几类（例如某条棱的中点、定比的分点）；这一点没能补上。**要改的是计划本身**：建图那一笔必须给 \`vertexNames\`（题面点到的顶点按 \`vertices\` 的下标把名字给全），或者先用 \`dynamic.create_bound_point\` 把那几个点单独建出来 —— 重新让模型出一版计划即可。`
               : `题设尚未核验，本次不会提交。${incomplete} 请补充明确点名，或改用受支持的条件表达。`,
           retryable: false
         }, eventRunId, generation())

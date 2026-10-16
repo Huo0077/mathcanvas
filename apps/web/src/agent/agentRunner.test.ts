@@ -233,6 +233,42 @@ describe("the confirm and commit cycle", () => {
    * 原先界面说的是"模型的回答不符合计划合同的形状……计划必须是一个 JSON 对象"，
    * 而那一份信封的顶层形状**一个字段都不缺**。
    */
+  /**
+   * **"点名缺失"要说清该改的是**计划**，而不是让用户以为系统补不了**（2026-10-15 用户现场）。
+   *
+   * 现场：模型那一版计划里构造动作**没给 `vertexNames`**（或压根没建那几个点），于是每条题设
+   * 都报"点名缺失：…"，整轮停在 `cannot confirm`（核验不完整，门禁不放行）。原先界面只说
+   * "系统只补建位置被题设唯一确定了的那几类…这一点没能补上" —— 用户读到的是"**系统能力到此为止**"，
+   * 而真因在**计划**里。这条用例钉住：这句话必须把"**要改的是计划本身**"与"重出一版计划"说出来。
+   */
+  it("**点名缺失**时把「要改的是计划本身」说给用户，而不是只说「系统补不了」", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({
+        // 一张**三角形**（表可靠：E、F、G 三个名字都合法），而题面点的是 A、B —— 于是每条题设
+        // 都落"点名缺失"，正是现场那一版的形状。
+        plan: {
+          schemaVersion: "mathcanvas.plan.v1",
+          kind: "plan",
+          goal: "一个三角形（脱敏：名字与题面对不上）",
+          factIds: [],
+          actions: [{ actionId: "solid.create_face", actionKey: "tri", factIds: [], inputs: { alias: "tri", vertexNames: ["E", "F", "G"], vertices: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 0, y: 3, z: 0 }], label: "三角形 EFG" } }]
+        } as unknown as PlanEnvelope,
+        requestId: "req-1",
+        attemptId: "attempt-1"
+      })
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "平面四边形 ABCD 中，AB=8。")
+    expect(result.phase).toBe("failed")
+    const message = useAgentStore.getState().activeConversation!.messages.at(-1)!.failure?.message ?? ""
+
+    expect(message, message).toContain("点名缺失")
+    // 真因与改法都要在：给 `vertexNames`（或先把点单独建出来），重出一版计划即可。
+    expect(message, message).toContain("vertexNames")
+    expect(message, message).toContain("重新让模型出一版计划")
+  })
+
   it("blames the invented action, not the envelope's shape, and repeats the advice the model ignored", async () => {
     let attempt = 0
     const planner: PlannerPort = {
