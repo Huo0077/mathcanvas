@@ -15,10 +15,8 @@ import { expect, test } from "@playwright/test"
  * ② **它不挡作图**：证明不可用时，"确认并提交"照样可点、而且真的提交成功。
  *   开关关着时那一栏**根本不存在**，同一张图同样提交得掉。
  *
- * **没做的（如实记着）**：桌面开旗 → 真跑一次 Lean → 改题/撤销 ⇒ 那一栏标 `stale`。
- * 那条要真桌面 + 真工具链，本机没有；它的判据在单测里钉住
- *（`proofArtifact.test.ts` 的 `proofAttemptStaleness` 与 `draftStore.test.ts` 的
- * "证明跑完之后草稿内容又变了 ⇒ 那一栏标 stale"），**不拿 mock 冒充真跑**。
+ * 浏览器还覆盖确认 → 一次撤销 → 历史结果过期。真实 Lean 接受与版本绑定
+ * 另由 Windows 原生 UIAutomation 桌面实测留证，不以浏览器降级结果冒充。
  */
 
 /** 同一只四棱锥，外加一句可形式化的目标（`PA ⊥ BD` 走性质定理那一类）。 */
@@ -70,6 +68,12 @@ test("browser has no proof backend: the section says so, shows the scope, and st
   await confirm.click()
   await expect(page.getByText("已提交").last()).toBeVisible()
 
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await page.getByRole("button", { name: "撤销", exact: true }).click()
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  const historicalProof = page.getByRole("region", { name: "形式证明" }).last()
+  await expect(historicalProof).toHaveAttribute("data-outcome", "stale")
+  await expect(historicalProof).toContainText("当前画布")
   await page.screenshot({ path: "test-results/task18-proof-degrade.png" })
 })
 

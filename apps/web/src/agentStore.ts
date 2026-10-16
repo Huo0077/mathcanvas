@@ -108,6 +108,8 @@ export interface AgentDraftView {
    * 默认路径逐字不变靠的就是这一条。
    */
   proofAttempt?: import("./agent/automaticProofStage").DraftProofAttempt
+  /** Only identities, never a document copy. Historical proof results are projected against the live scene. */
+  proofSceneBinding?: { documentId: string; baseContentHash: string; candidateContentHash: string }
 }
 
 /** 提交回执：成功与否、有没有真的改动、失败原因。 */

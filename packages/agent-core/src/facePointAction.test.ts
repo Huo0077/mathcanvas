@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { actionToolSchema } from "./actionSchemas"
 import { parseDraftAction } from "./schemas"

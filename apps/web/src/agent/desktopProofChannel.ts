@@ -27,11 +27,10 @@ import { invokeDesktop, isDesktopShell, NoDesktopShellError } from "../services/
  * 3. **命令名与参数逐字固定**：`check_lean_proof` + `{ source, timeoutMs }`。
  *    不接受可执行文件路径、不接受 shell 文本 —— 跑什么由桌面侧的**环境变量**决定。
  *
- * ## 它**仍然不是**产品路径
+ * ## 产品入口
  *
- * 这个模块是"接线"，但**没有任何产品流程在跑完作图之后调用它** —— 那一步（在桌面壳里
- * 对可证明的 claim 调一次、把产物挂进报告）**没做**。所以 `proofLevelStatus.ts` 里
- * "默认路径不调用它"这句今天仍然成立。
+ * `proofExport` 开启时，隔离草稿的 `automaticProofStage` 调用本通道；结果随预览进入确认面板。
+ * 默认关闭时不调用；后端不可用不阻断普通作图。受限引理已证不代表整道题已证。
  */
 
 /** 通道回包的四个词（与 Rust 侧 `LeanOutcome`、与库里的 `ProofChannelOutcome` 逐字同形）。 */

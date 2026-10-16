@@ -1,4 +1,4 @@
-﻿Task 9/13 functional verification — 2026-10-16
+Task 9/13 functional verification — 2026-10-16
 
 Task 9 command:
 npm.cmd exec vitest run -- packages/agent-core/src/benchmark/examSet.test.ts packages/agent-core/src/benchmark/examEvaluation.test.ts apps/web/src/agent/fixtures/benchmarkContract.test.ts apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts packages/agent-core/src/examClauseCoverage.test.ts --reporter=verbose

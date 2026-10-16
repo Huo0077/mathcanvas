@@ -1,0 +1,148 @@
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Document | MathCanvas · 交互绘图引擎
+ControlType.Group |
+ControlType.Group | 全局模块
+ControlType.List |
+ControlType.ListItem | 画布与制图
+ControlType.Button | 传统工作区
+ControlType.Text | 画布与制图
+ControlType.ListItem | 对话式作图
+ControlType.Button | Agent 工作区
+ControlType.Text | 对话式作图
+ControlType.ListItem | provider 与密钥
+ControlType.Button | 模型服务
+ControlType.Text | provider 与密钥
+ControlType.Group | 对话列表
+ControlType.Text | 对话
+ControlType.Button | 新建对话
+ControlType.List |
+ControlType.ListItem | 在四棱锥 P-ABCD 中，PA ⊥…1 轮 · 06:57×
+ControlType.Button | 在四棱锥 P-ABCD 中，PA ⊥… 1 轮 · 06:57
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Text | 1 轮
+ControlType.Text |  ·
+ControlType.Text | 06:57
+ControlType.Button | 删除对话：在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Group |
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Text | Agent 工作区 · 对话式作图
+ControlType.Button | 返回画布
+ControlType.Group | 对话结果
+ControlType.Group | 对话记录
+ControlType.List |
+ControlType.ListItem | 你06:54在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD
+ControlType.Text |
+ControlType.Text | 06:54
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD
+ControlType.ListItem | Agent06:54已提交1. 检查环境checking capabilities and the target handle成功2. 读取场景reading the scene成功3. 规划asking for a plan成功4. 暂存草稿staging 1 action(s)成功5. 校验checking the staged draft against the document成功6. 等待你确认waiting for the user to confirm the preview成功开发者详细视图（8 行）确认之后会发生什么会新增 19 个对象（共 19 个）按类别类别改动前改动后说明可编辑对象019确认后你可以在画布上选中、拖动、删除它们动作数1草稿版本2符合题设的一组示意图（不是普遍证明）通过 3 / 失败 0 / 未核验 0◦ PA ⊥ 平面 ABCD：通过。已按候选图坐标核验。◦ BC ∥ AD：通过。已按候选图坐标核验。◦ AB ⊥ AD：通过。已按候选图坐标核验。证据范围：一个图形实例。这一轮核验的是**这一个图形实例**：数值回代在候选图上成立，不等于「全定义域 / 全参数都成立」的证明。图上成立不等于全称成立：这一轮没有证明任何「对所有参数 / 整个定义域都成立」的主张。形式证明：受限引理已证（不是整道题）Lean 内核接受，依赖的公理在白名单内：[propext, Classical.choice, Quot.sound]。（正文由**系统**按这一类给出：性质定理那一类的正文由**系统**给出（`ᗮ` 给的方向与结论相反，所以要带 `inner_eq_zero_symm`；目标线那一段要写成生成文件里真有的表达式），不是模型写的。）这一次证的是**受限引理**，不是整道题（逐条依据见范围报告）。证明范围：只证了模板那一条受限引理。没进命题的题面条件：BC ∥ AD、AB ⊥ AD、BD 落在平面 ABCD 内。正文来源：系统按这一类给出的（不是模型写的）系统替你做的选择◦ 平面取自题面那条题设「PA ⊥ 平面 ABCD」。这只是题面里那一条受限目标的形式证明：原题其余题设没有进命题，不等于整题已证明；它也不影响这次作图的提交。形式证明这一档：本构建接上了 1 个形式证明后端◦ 接上的后端：lean4。◦ 只有后端回 verified、且产物与本条 claim 与这份输入的全部绑定项都吻合时，本条才会升到 formally_proved。系统替你做的假设◦ 题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：P(0, 0, 4)、A(0, 0, 0)、B(2, 0, 0)、C(2, 3, 0)、D(0, 3, 0)。确认后整批只占一步撤销；撤销一次就能回到现在的样子。确认并提交丢弃草稿已按确认提交。
+ControlType.Text |
+ControlType.Text | 06:54
+ControlType.Group | 运行状态
+ControlType.Group |
+ControlType.Text | 已提交
+ControlType.Group | 运行轨迹与工具
+ControlType.List |
+ControlType.ListItem | 检查环境checking capabilities and the target handle成功
+ControlType.ListItem | 读取场景reading the scene成功
+ControlType.ListItem | 规划asking for a plan成功
+ControlType.ListItem | 暂存草稿staging 1 action(s)成功
+ControlType.ListItem | 校验checking the staged draft against the document成功
+ControlType.ListItem | 等待你确认waiting for the user to confirm the preview成功
+ControlType.Group |
+ControlType.Button | 开发者详细视图（8 行）
+ControlType.Text | 开发者详细视图（
+ControlType.Text | 8
+ControlType.Text |  行）
+ControlType.Group | 确认改动
+ControlType.Group |
+ControlType.Text | 确认之后会发生什么
+ControlType.Text | 会新增 19 个对象（共 19 个）
+ControlType.Table | 按类别
+ControlType.Text | 按类别
+ControlType.DataItem |
+ControlType.DataItem | 类别
+ControlType.DataItem | 改动前
+ControlType.DataItem | 改动后
+ControlType.DataItem | 说明
+ControlType.DataItem |
+ControlType.DataItem | 可编辑对象
+ControlType.DataItem | 0
+ControlType.DataItem | 19
+ControlType.DataItem | 确认后你可以在画布上选中、拖动、删除它们
+ControlType.List |
+ControlType.ListItem | 动作数
+ControlType.Text | 动作数
+ControlType.Text | 1
+ControlType.ListItem | 草稿版本
+ControlType.Text | 草稿版本
+ControlType.Text | 2
+ControlType.Group | 题设核验
+ControlType.Text | 符合题设的一组示意图（不是普遍证明）
+ControlType.Text | 通过
+ControlType.Text | 3
+ControlType.Text |  / 失败
+ControlType.Text | 0
+ControlType.Text |  / 未核验
+ControlType.Text | 0
+ControlType.List |
+ControlType.ListItem | PA ⊥ 平面 ABCD：通过。已按候选图坐标核验。
+ControlType.Text | PA ⊥ 平面 ABCD
+ControlType.ListItem | BC ∥ AD：通过。已按候选图坐标核验。
+ControlType.Text | BC ∥ AD
+ControlType.ListItem | AB ⊥ AD：通过。已按候选图坐标核验。
+ControlType.Text | AB ⊥ AD
+ControlType.Group |
+ControlType.Text | 证据范围：
+ControlType.Text | 一个图形实例
+ControlType.Text | 。
+ControlType.Text | 这一轮核验的是**这一个图形实例**：数值回代在候选图上成立，不等于「全定义域 / 全参数都成立」的证明。
+ControlType.Text | 图上成立不等于全称成立：这一轮没有证明任何「对所有参数 / 整个定义域都成立」的主张。
+ControlType.Group | 形式证明
+ControlType.Text | 形式证明：受限引理已证（不是整道题）
+ControlType.Text | Lean 内核接受，依赖的公理在白名单内：[propext, Classical.choice, Quot.sound]。（正文由**系统**按这一类给出：性质定理那一类的正文由**系统**给出（`ᗮ` 给的方向与结论相反，所以要带 `inner_eq_zero_symm`；目标线那一段要写成生成文件里真有的表达式），不是模型写的。）这一次证的是**受限引理**，不是整道题（逐条依据见范围报告）。
+ControlType.Text | 证明范围：
+ControlType.Text | 只证了模板那一条受限引理。
+ControlType.Text | 没进命题的题面条件：
+ControlType.Text | BC ∥ AD、AB ⊥ AD、BD 落在平面 ABCD 内
+ControlType.Text | 。
+ControlType.Text | 正文来源：
+ControlType.Text | 系统按这一类给出的（不是模型写的）
+ControlType.Text | 系统替你做的选择
+ControlType.List |
+ControlType.ListItem | 平面取自题面那条题设「PA ⊥ 平面 ABCD」。
+ControlType.Group |
+ControlType.Text | 这只是题面里那一条受限目标的形式证明：原题其余题设没有进命题，不等于整题已证明；它也不影响这次作图的提交。
+ControlType.Group | 证明级别
+ControlType.Text | 形式证明这一档：本构建接上了 1 个形式证明后端
+ControlType.List |
+ControlType.ListItem | 接上的后端：lean4。
+ControlType.ListItem | 只有后端回 verified、且产物与本条 claim 与这份输入的全部绑定项都吻合时，本条才会升到 formally_proved。
+ControlType.Text | 系统替你做的假设
+ControlType.List |
+ControlType.ListItem | 题目没有给定具体尺寸，以下为系统选取的一组示例值（满足题面全部关系，可在属性栏修改）：P(0, 0, 4)、A(0, 0, 0)、B(2, 0, 0)、C(2, 3, 0)、D(0, 3, 0)。
+ControlType.Group |
+ControlType.Text | 确认后整批只占一步撤销；撤销一次就能回到现在的样子。
+ControlType.Button | 确认并提交
+ControlType.Button | 丢弃草稿
+ControlType.Text | 已按确认提交。
+ControlType.Group | 对话输入框
+ControlType.Edit | 对话输入
+ControlType.Text | Enter 发送 · Shift + Enter 换行 · 结果与代码会显示在上方
+ControlType.Button | 发送
+ControlType.Text |
+ControlType.Text | 本地项目库保存失败，改动只保留在会话内：no document doc-887beec3-c347-43f1-a705-11697688f8e6 in project local
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |

@@ -1,0 +1,44 @@
+node :         Info Looking up installed tauri packages to check mismatched versions...
+At line:3 char:347
++ ... INE='true'; node scripts/toolchain.mjs tauri build --no-bundle --conf ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (        Info Lo...hed versions...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+     Running beforeBuildCommand `npm run build --workspace @draw/web`
+
+> @draw/web@0.1.0 build
+> vite build --configLoader runner --outDir ../../build-check/mathcanvas-current --emptyOutDir
+
+[36mvite v7.3.6 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 577 modules transformed.
+rendering chunks...
+[33m[plugin vite:reporter]
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/
+settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported
+ by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into anothe
+r chunk.
+[39m
+computing gzip size...
+[2m../../build-check/mathcanvas-current/[22m[32mindex.html                               [39m[1m[2m    0.42 kB[22m[1m[22m[2m │ gzip:   0.31 kB[22m
+[2m../../build-check/mathcanvas-current/[22m[32massets/geometry.worker-DzL-UjVA.js       [39m[1m[2m  535.52 kB[22m[1m[22m
+[2m../../build-check/mathcanvas-current/[22m[35massets/index-BHV1ho07.css                [39m[1m[2m  106.15 kB[22m[1m[22m[2m │ gzip:  16.75 kB[22m
+[2m../../build-check/mathcanvas-current/[22m[36massets/engineeringExporters-ullWcTAG.js  [39m[1m[2m  433.81 kB[22m[1m[22m[2m │ gzip: 179.75 kB[22m
+[2m../../build-check/mathcanvas-current/[22m[36massets/index-DsxeFHEs.js                 [39m[1m[33m2,116.53 kB[39m[22m[2m │ gzip: 631.56 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-m
+anualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 21.84s[39m
+   Compiling mathcanvas-desktop v3.3.14 (D:\draw\draw\apps\desktop\src-tauri)
+warning: linker stdout: 正在创建库 D:\draw\draw\apps\desktop\src-tauri\target\release\deps\mathcanvas_desktop_lib.dll.lib 和对
+象 D:\draw\draw\apps\desktop\src-tauri\target\release\deps\mathcanvas_desktop_lib.dll.exp
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `mathcanvas-desktop` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 1m 29s
+       Built application at: D:\draw\draw\apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe

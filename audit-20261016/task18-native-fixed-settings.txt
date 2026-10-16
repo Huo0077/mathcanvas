@@ -1,0 +1,86 @@
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Document | MathCanvas · 交互绘图引擎
+ControlType.Group |
+ControlType.Group | 全局模块
+ControlType.List |
+ControlType.ListItem | 画布与制图
+ControlType.Button | 传统工作区
+ControlType.Text | 画布与制图
+ControlType.ListItem | 对话式作图
+ControlType.Button | Agent 工作区
+ControlType.Text | 对话式作图
+ControlType.ListItem | provider 与密钥
+ControlType.Button | 模型服务
+ControlType.Text | provider 与密钥
+ControlType.Group | 模型服务
+ControlType.Group |
+ControlType.Text | 模型服务
+ControlType.Text | 还没有配置
+ControlType.Text |  · 还没有选择使用哪一个
+ControlType.Button | 添加模型服务
+ControlType.List |
+ControlType.ListItem | 还没有配置任何模型服务。添加第一个
+ControlType.Text | 还没有配置任何模型服务。
+ControlType.Button | 添加第一个
+ControlType.StatusBar |
+ControlType.Group | 实验性功能
+ControlType.Text | 实验性功能
+ControlType.Text | 这些开关会改变画布的行为。默认都关着，**只有「示意图见证搜索」默认开**（它可以关掉）。
+ControlType.Text | 约束拖动
+ControlType.Text | 关着：拖动几何点就是原来的自由拖动。打开：拖动受约束的点时，它会沿约束走（并且占一步撤销）。
+ControlType.Button | 约束拖动
+ControlType.Text | 示意图见证搜索
+ControlType.Text | 默认开：仅当候选不满足题设时，按题面条件尝试寻找另一组坐标（只覆盖部分题型，不保证所有高中题都能画；第二遍核验必须真的通过才会采用）。关掉：只用原来的候选图核验。题设核验和手动确认不会跳过。
+ControlType.Button | 示意图见证搜索
+ControlType.Text | 形式证明导出
+ControlType.Text | 关着：跑完作图不会调用证明后端。打开：题面里那一条能形式化的目标会顺手去证一次（只有桌面版能真跑）， 结果与"正文是谁给的、系统替你选了哪些值"一起摆在确认面板上。原题其余题设不会进命题，所以那是这一条目标的形式证明，不等于整题已证明；作图与人工确认都不受影响。
+ControlType.Button | 形式证明导出
+ControlType.Group | 真实 provider 评测
+ControlType.Text | 真实 provider 评测：agent 工具环
+ControlType.Text | 用
+ControlType.Text | 真实模型
+ControlType.Text | 把
+ControlType.Text | agent 工具环
+ControlType.Text | 那套评测题跑一遍，得到发布门禁要的 pass@1 / pass@3 与延迟读数。它测的是"
+ControlType.Text | agent 能不能按要求把图形建出来
+ControlType.Text | " （
+ControlType.Text | 8
+ControlType.Text |  题 ×
+ControlType.Text | 3
+ControlType.Text |  轮 = 至少
+ControlType.Text | 24
+ControlType.Text |  次请求）—— 与下面那套
+ControlType.Text | 题集 benchmark 不是同一个坐标系
+ControlType.Text | ，两边的数字不能混着读。 它会真的发出请求并
+ControlType.Text | 产生费用
+ControlType.Text |  —— 所以要点两下才会开始。
+ControlType.Button | 跑真实评测（至少 24 次请求）
+ControlType.Group | 真实 provider 评测：题集 planning
+ControlType.Text | 真实 provider 评测：题集 planning
+ControlType.Text | 用
+ControlType.Text | 真实模型
+ControlType.Text | 跑
+ControlType.Text | 21
+ControlType.Text |  条 benchmark 题集里的前
+ControlType.Text | 3
+ControlType.Text |  条
+ControlType.Text | （
+ControlType.Text | 3
+ControlType.Text |  题 ×
+ControlType.Text | 1
+ControlType.Text |  轮 = 至少
+ControlType.Text | 3
+ControlType.Text |  次请求）， 记录每条题的
+ControlType.Text | 计划有没有被编译器接受
+ControlType.Text | （planned / rejected / error）。 它测的是"计划是否被编译接受"，**不需要金标准**，也
+ControlType.Text | 不是
+ControlType.Text | 上面那套 agent 工具环的 pass@1 —— 两套题集不同、坐标系不同，读的时候别混。
+ControlType.Button | 跑题集 planning 评测（至少 3 次请求）
+ControlType.Pane |

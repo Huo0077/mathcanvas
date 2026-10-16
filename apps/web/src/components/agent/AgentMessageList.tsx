@@ -4,6 +4,8 @@ import { highlightCode } from "../../codeHighlight"
 import { EmptyStateArt } from "../EmptyStateArt"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { RunStatus } from "./RunStatus"
+import { proofDraftForScene } from "../../agent/proofViewBinding"
+import { useSceneStore } from "../../store"
 
 /**
  * 展示区：上方预留的**对话结果与代码输出**区域。
@@ -46,6 +48,7 @@ function AssistantBody({ message }: { message: AgentMessage }) {
 
 export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onConfirm, onDiscard }: AgentMessageListProps) {
   const messages = conversation?.messages ?? []
+  const document = useSceneStore((state) => state.document)
 
   return <section className="agent-transcript" aria-label="对话结果" data-empty={messages.length === 0}>
     <div className="agent-transcript-scroll" role="log" aria-label="对话记录" aria-live="polite">
@@ -74,7 +77,7 @@ export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onCo
             {message.role === "assistant" && <RunStatus message={message} onRetry={onRetry} onRevise={onRevise} onStop={() => onStop?.(message.runId)} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
             {/* 有草稿时再给一块**确认面板**：它比状态卡里的摘要详细得多（精确计数、来源与目标、
                 假设、近似、导出省略、一步撤销声明）。计划把它与状态卡分开列，这里也分开渲染。 */}
-            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={message.draft} assumptions={message.draft.assumptions} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
+            {message.role === "assistant" && message.draft && <ConfirmationPanel draft={proofDraftForScene(message.draft, message.commit, document)} assumptions={message.draft.assumptions} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
             {/* 在途消息在气泡里**仍然**留一句带 `role="status"` 的短标签：屏幕阅读器靠它播报，
                 而状态卡负责说明"走到哪一步"。两者不重复，也不互相替代。 */}
             <div className="agent-bubble">

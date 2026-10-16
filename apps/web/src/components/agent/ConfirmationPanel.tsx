@@ -184,6 +184,9 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
     {draft.proofAttempt && <section className="agent-proof-attempt" aria-label="形式证明" data-outcome={draft.proofAttempt.outcome} data-proof-scope={draft.proofAttempt.scope?.outcome ?? "none"} data-proof-stale={draft.proofAttempt.stale?.kind ?? ""}>
       <h4>形式证明：{proofHeading(draft.proofAttempt)}</h4>
       <p>{draft.proofAttempt.detail}</p>
+      {draft.proofAttempt.binding && <p data-proof-backend-version={draft.proofAttempt.binding.backendVersion}>
+        检验后端：{draft.proofAttempt.binding.backendVersion}；命题绑定：<code>{draft.proofAttempt.binding.inputHash}</code>
+      </p>}
       {/*
         **"没进命题的那些条件"要摆出来**（Task 17 的范围报告 + Task 18 的界面）：
         用户看到"受限引理已证"时，最该知道的就是**哪些题面条件不在这一步里**。

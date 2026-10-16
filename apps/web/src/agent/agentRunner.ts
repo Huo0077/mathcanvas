@@ -805,6 +805,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // 草稿**只是视图**（标识 + 计数）；候选文档留在宿主侧，不进聊天记录。
         // 计数由宿主侧的 `preview()` 从**真实文档**算出（界面不自己数）。
         const preview = active.host.preview(draftId)
+        // Read the pinned base, not the live scene: it may already have changed while Lean was running.
+        const proofBase = active.drafts.baseHandleOf(draftId)
         // 这次**创建出来的对象 id**（候选文档 vs 当前文档的差集）：提交成功之后它们要进事实。
         // **只取 id**：候选文档本身一个字节都不离开这一层。
         if (commit && preview.ok) {
@@ -824,6 +826,13 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           // **形式证明那一次尝试**（§3-D）：关着时**连这个键都不写**（不是"值是 undefined"）——
           // 与草稿记录里那条口径一致，免得"默认路径逐字不变"在视图这一层被一个空键破坏。
           ...(preview.ok && preview.artifact.proofAttempt !== undefined ? { proofAttempt: preview.artifact.proofAttempt } : {}),
+          ...(preview.ok && preview.artifact.proofAttempt !== undefined && proofBase ? {
+            proofSceneBinding: {
+              documentId: proofBase.documentId,
+              baseContentHash: canonicalContentHash(JSON.parse(proofBase.contentHash)),
+              candidateContentHash: canonicalContentHash(JSON.parse(contentFingerprint(preview.artifact.candidate)))
+            }
+          } : {}),
           // 假设在**计划解析成功那一刻**就知道，而草稿是运行结束之后才拿到的 —— 中间没有第二条路。
           assumptions: active.assumptions()
         }, eventRunId, generation())

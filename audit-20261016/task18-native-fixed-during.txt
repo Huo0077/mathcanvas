@@ -1,0 +1,71 @@
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Document | MathCanvas · 交互绘图引擎
+ControlType.Group |
+ControlType.Group | 全局模块
+ControlType.List |
+ControlType.ListItem | 画布与制图
+ControlType.Button | 传统工作区
+ControlType.Text | 画布与制图
+ControlType.ListItem | 对话式作图
+ControlType.Button | Agent 工作区
+ControlType.Text | 对话式作图
+ControlType.ListItem | provider 与密钥
+ControlType.Button | 模型服务
+ControlType.Text | provider 与密钥
+ControlType.Group | 对话列表
+ControlType.Text | 对话
+ControlType.Button | 新建对话
+ControlType.List |
+ControlType.ListItem | 在四棱锥 P-ABCD 中，PA ⊥…1 轮 · 07:12×
+ControlType.Button | 在四棱锥 P-ABCD 中，PA ⊥… 1 轮 · 07:12
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Text | 1 轮
+ControlType.Text |  ·
+ControlType.Text | 07:12
+ControlType.Button | 删除对话：在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Group |
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥…
+ControlType.Text | 正在运行…
+ControlType.Button | 返回画布
+ControlType.Group | 对话结果
+ControlType.Group | 对话记录
+ControlType.List |
+ControlType.ListItem | 你07:12在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD
+ControlType.Text |
+ControlType.Text | 07:12
+ControlType.Text | 在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD
+ControlType.ListItem | Agent07:12进行中暂存草稿停止1. 检查环境checking capabilities and the target handle成功2. 读取场景reading the scene成功3. 规划asking for a plan成功4. 暂存草稿staging 1 action(s)成功开发者详细视图（6 行）正在生成回复…
+ControlType.Text |
+ControlType.Text | 07:12
+ControlType.Group | 运行状态
+ControlType.Group |
+ControlType.Text | 进行中
+ControlType.Text | 暂存草稿
+ControlType.Button | 停止
+ControlType.Group | 运行轨迹与工具
+ControlType.List |
+ControlType.ListItem | 检查环境checking capabilities and the target handle成功
+ControlType.ListItem | 读取场景reading the scene成功
+ControlType.ListItem | 规划asking for a plan成功
+ControlType.ListItem | 暂存草稿staging 1 action(s)成功
+ControlType.Group |
+ControlType.Button | 开发者详细视图（6 行）
+ControlType.Text | 开发者详细视图（
+ControlType.Text | 6
+ControlType.Text |  行）
+ControlType.StatusBar |
+ControlType.Text | 正在生成回复…
+ControlType.Group | 对话输入框
+ControlType.Edit | 对话输入
+ControlType.Text | Enter 发送 · Shift + Enter 换行 · 结果与代码会显示在上方
+ControlType.Button | 回复中
+ControlType.StatusBar |
+ControlType.Text | 正在生成回复…
+ControlType.Pane |

@@ -1,0 +1,22 @@
+
+ RUN  v4.1.11 D:/draw/draw
+
+npx.cmd : (node:32092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:16 char:1
++ npx.cmd vitest run apps/web/src/components/agent/AgentProofFreshness. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:32092) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15124) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35144) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49360) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  88 passed (88)
+   Start at  07:06:55
+   Duration  15.79s (transform 7.89s, setup 85ms, import 18.91s, tests 2.49s, environment 7.13s)

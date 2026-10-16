@@ -1,0 +1,25 @@
+npx.cmd : [33m[plugin vite:reporter]
+At line:2 char:22
++ ... ion .\draw; npx.cmd playwright test e2e/agent-proof-lifecycle.spec.ts ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33m[plugin vite:reporter] :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/
+settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported
+ by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into anothe
+r chunk.
+[39m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-m
+anualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+
+Running 2 tests using 1 worker
+
+  ok 1 e2e\agent-proof-lifecycle.spec.ts:44:5 › browser has no proof backend: the section says so, shows the scope, and still lets the figure through (3.0s)
+  ok 2 e2e\agent-proof-lifecycle.spec.ts:80:5 › with the flag off there is no proof section at all, and the figure still goes through (1.7s)
+
+  2 passed (26.8s)

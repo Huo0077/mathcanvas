@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import { assertActionIdCatalogueIsComplete, DRAFT_ACTION_IDS } from "./actionIds"
 import { parseDraftAction } from "./schemas"
