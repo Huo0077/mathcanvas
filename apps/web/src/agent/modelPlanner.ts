@@ -302,7 +302,21 @@ export function coerceEnvelopeArgument(input: unknown, onDiagnostic?: (line: str
       onDiagnostic?.("[model] plan_set_plan 的参数是一段字符串，系统按 JSON 解了一次（对象形式的合同没有变）")
       return parsed
     }
-  } catch {
+    /**
+     * **解出来不是对象**（2026-10-15 用户现场）：仍然**不静默接受**，但要说清"解出来是什么" ——
+     * 否则读数与"根本没能解"长得一模一样，现场只能看到那句含糊的 `got a string`。
+     */
+    onDiagnostic?.(`[model] plan_set_plan 的参数是一段字符串，按 JSON 解出来**不是对象**（${Array.isArray(parsed) ? "数组" : typeof parsed}）；按原样交回，由信封校验如实报错。`)
+    return input
+  } catch (error) {
+    /**
+     * **解析失败时把失败原因说出来**（2026-10-15 用户现场，翻折那道题）。
+     *
+     * 现场读数是 `got a string — the envelope must be a JSON object, not text that contains one`，
+     * 而这段强制转换明明在 —— 唯一解释就是那段字符串**没能被 `JSON.parse` 解析**（写坏/被截断）。
+     * 旧的 `catch {}` 什么都不说，于是"解不了"与"根本没试"在读数上无法区分。
+     */
+    onDiagnostic?.(`[model] plan_set_plan 的参数是一段字符串，但**按 JSON 解析失败**（${error instanceof Error ? error.message : String(error)}）；按原样交回，由信封校验如实报错。`)
     // 解不出来不是这条要处理的情形：原样交回去，由信封校验如实报错。
   }
   return input

@@ -898,6 +898,31 @@ describe("native observation tool loop", () => {
     expect(diagnostics.some((line) => line.includes("按 JSON 解了一次")), `留痕：${diagnostics.join(" ／ ")}`).toBe(true)
   })
 
+  /**
+   * **字符串解析不了时要说清"为什么"**（2026-10-15 用户现场，翻折那道题）。
+   *
+   * 现场读数是 `got a string — the envelope must be a JSON object, not text that contains one`，
+   * 而 `coerceEnvelopeArgument` 明明在 —— 唯一的解释是**那段字符串没能被 `JSON.parse` 解析**
+   *（模型这一版被截断或写坏了），而旧的 `catch {}` **什么都不说**，于是"解不了"与"根本没试"
+   * 在读数上长得一模一样。这一条钉住：解析失败必须**留痕**（含失败原因），且**仍然不静默接受**。
+   */
+  it("字符串解析不了：如实留痕「按 JSON 解析失败」，不静默接受", async () => {
+    const diagnostics: string[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      onDiagnostic: (line) => diagnostics.push(line),
+      runModel: async () => ({
+        ok: true,
+        // 引号没闭合 —— 现场那种"写坏了/被截断"的字符串。
+        events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: '{"actions": [{"actionId": "solid.create_face"' as never }]
+      })
+    })
+
+    await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] } }))
+
+    expect(diagnostics.some((line) => line.includes("按 JSON 解析失败")), `留痕：${diagnostics.join(" ／ ")}`).toBe(true)
+  })
+
   it("keeps transport retry limits per request instead of counting successful read-tool rounds as failures", async () => {
     const executeTool = vi.fn(async () => ({ status: "success" as const, summary: "read", next_actions: [], artifacts: [], payload: [], diagnostics: [] }))
     let requests = 0

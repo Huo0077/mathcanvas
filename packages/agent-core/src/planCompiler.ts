@@ -1905,6 +1905,17 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
   }
   /**
+   * **信封被包成字符串**（2026-10-15 用户现场，翻折那道题）：读数
+   * `expected the plan envelope object, got a string — the envelope must be a JSON object,
+   * not text that contains one`。引擎那侧的强制转换（`coerceEnvelopeArgument`）**只在
+   * "解出来确实是对象"时才用**，所以这一句出现意味着**解析失败**（写坏/被截断）或**解出来不是对象**；
+   * 两种情形下模型该做的是同一件事：**把字段直接写进对象里**，而不是先把整份计划拼成一段文字。
+   */
+  const envelopeWasText = errors.some((error) => error.path === "envelope" && /not text that contains one/.test(error.detail))
+  if (envelopeWasText) {
+    advice.push("提醒：`plan_set_plan` 的那个参数必须是**对象本身**，不是**装着 JSON 的字符串** —— 请把 `goal` 与 `actions` 作为对象的字段**直接给出**，不要先把整份计划拼成一段文字再传（拼出来的那段还容易被写坏或被截断）。")
+  }
+  /**
    * **面片点数不够**（2026-10-15 用户现场，四棱锥那道题）：模型想给「线段 EF」建一笔面片，
    * 只给两个点 ⇒ `a planar face needs at least three vertices`。它需要的不是"再试一次"，
    * 而是知道**它真正想做的事没有对应的动作**：立体几何里没有"画线段"的动作，

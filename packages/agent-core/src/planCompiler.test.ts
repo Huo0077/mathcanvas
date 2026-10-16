@@ -1433,6 +1433,22 @@ describe("面塌了的修复提示", () => {
     expect(hint).toContain("solid.create_face")
     expect(hint).toContain("solid.fold")
   })
+
+  /**
+   * **信封被包成字符串时，提示要说清"要对象本身"**（2026-10-15 用户现场，翻折那道题）。
+   *
+   * 现场读数：`invalid_type@envelope: expected the plan envelope object, got a string —
+   * the envelope must be a JSON object, not text that contains one`。引擎的强制转换
+   *（`coerceEnvelopeArgument`）只在"解出来确实是对象"时才用，所以这一句出现要么是**解析失败**、
+   * 要么是**解出来不是对象** —— 两种情形下模型该做的事是同一件：**把 `goal` 与 `actions`
+   * 作为对象的字段直接给出**，而不是先把计划拼成一段文字。此前模板里没有这一句。
+   */
+  it("信封被包成字符串时，说清「要对象本身、不要装着 JSON 的字符串」", () => {
+    const hint = ask([{ code: "invalid_type", path: "envelope", detail: "expected the plan envelope object, got a string — the envelope must be a JSON object, not text that contains one" }])
+
+    expect(hint).toContain("对象本身")
+    expect(hint).toContain("装着 JSON 的字符串")
+  })
 })
 
 /**
