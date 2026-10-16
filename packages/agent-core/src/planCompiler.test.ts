@@ -1462,6 +1462,20 @@ describe("面塌了的修复提示", () => {
     expect(hint).toContain("按顺序")
     expect(hint).toContain("移到")
   })
+
+  /**
+   * **线段的 `vertexNames` 写空了**（2026-10-15 用户现场，同一道题的第三次读数：那一轮预算耗尽，
+   * 而模型交上来的**修复稿**里 `solid.create_segment` 的 `vertexNames` 是**空数组**）。
+   *
+   * 传输层那条报错已经说清"要两个点名、给了 0 个"，但**修复提示**要再给一个**具体的例子** ——
+   * 模型那一轮是在"改结构"，很容易把这一栏漏掉（它前一轮刚被多面体那两条错带着跑）。
+   */
+  it("线段的点名写空了：提示要给出具体的例子", () => {
+    const hint = ask([{ code: "invalid_type", path: "envelope.actions[1].inputs.vertexNames", detail: "a spatial segment connects exactly two named points, got 0" }])
+
+    expect(hint).toContain("两个点名")
+    expect(hint).toContain('["E","F"]')
+  })
 })
 
 /**

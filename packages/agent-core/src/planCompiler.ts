@@ -2022,6 +2022,17 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
     advice.push("提醒：`solid.create_segment` 的两端必须**在这份文档里已经存在** —— 同一份计划**按顺序**执行，所以**建出这些点的笔要排在前面**（带 `vertexNames` 的实体 / 面片、`dynamic.create_bound_point`、`solid.fold` 都会建点）。修法是**把连线段的那几笔移到它们之后**（这是顺序问题，不是名字问题）；如果那个点确实没有任何一笔建它，就先补一笔。")
   }
   /**
+   * **线段的 `vertexNames` 写空了 / 写错了个数**（2026-10-15 用户现场，第三次读数）。
+   *
+   * 那一轮模型在"改结构"（同时被多面体那两条错带着跑），交上来的修复稿里
+   * `solid.create_segment` 的 `vertexNames` 是**空数组**。传输层已说清"要两个、给了 0 个"，
+   * 但修复提示里再给一个**具体的例子**更省事 —— 这一栏是它最容易漏的。
+   */
+  const segmentNamesWrong = errors.some((error) => /\.inputs\.vertexNames$/.test(error.path) && /segment connects exactly two named points|two point names this segment connects/.test(error.detail))
+  if (segmentNamesWrong) {
+    advice.push('提醒：`solid.create_segment` 的 `vertexNames` 必须是**恰好两个点名**、写成数组，例如 `["E","F"]`（就是你要连的那两个点）—— 不能留空、也不收坐标。这两个点由**前面几笔**建出来（同一份计划按顺序执行）。')
+  }
+  /**
    * **面片点数不够**（2026-10-15 用户现场，四棱锥那道题）：模型想给「线段 EF」建一笔面片，
    * 只给两个点 ⇒ `a planar face needs at least three vertices`。它需要的不是"再试一次"，
    * 而是知道**它真正想做的事没有对应的动作**：立体几何里没有"画线段"的动作，
