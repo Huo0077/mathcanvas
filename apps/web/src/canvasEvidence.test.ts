@@ -171,3 +171,52 @@ describe("Task 16: canvas evidence is measured from the rendered DOM", () => {
     expect(attributes["data-canvas-labels"]).toBe("1")
   })
 })
+
+
+describe("canvas evidence consumption", () => {
+  it("rejects an old rendered snapshot after document content changes", () => {
+    const geometry = createEmptyDocument("conics")
+    const evidence = canvasEvidenceOf({ document: geometry, root: renderedCanvas(), viewport: { width: 400, height: 300 } })
+    geometry.primitives.push({ id: "new-point", type: "point", x: 2, y: 3 })
+    const consumed = canvasEvidenceAttributes(evidence, true, geometry)
+    expect(consumed["data-canvas-evidence-status"]).toBe("stale")
+    expect(consumed["data-canvas-evidence-accepted"]).toBe("false")
+    expect(consumed["data-canvas-evidence-stale-reason"]).toBe("document_changed")
+    expect(consumed["data-canvas-boxes"]).toBeUndefined()
+  })
+
+  it("does not invalidate same-content evidence just for its snapshot version", () => {
+    const geometry = createEmptyDocument("conics")
+    const evidence = canvasEvidenceOf({ document: geometry, root: renderedCanvas(), viewport: { width: 400, height: 300 } })
+    const consumed = canvasEvidenceAttributes({ ...evidence, revision: evidence.revision + 1 }, true, geometry)
+    expect(consumed["data-canvas-evidence-status"]).toBe("passed")
+    expect(consumed["data-canvas-evidence-accepted"]).toBe("true")
+  })
+
+  it("does not call unmeasurable WebGL objects visually passed", () => {
+    const geometry = createEmptyDocument("geometry3d")
+    const evidence = canvasEvidenceOf({ document: geometry, root: document.createElement("div"), viewport: { width: 400, height: 300 }, objectsMeasurable: false })
+    const consumed = canvasEvidenceAttributes(evidence, false, geometry)
+    expect(consumed["data-canvas-evidence-status"]).toBe("partial")
+    expect(consumed["data-canvas-evidence-accepted"]).toBe("false")
+    // A caller cannot upgrade the scope after measurement.
+    expect(canvasEvidenceAttributes(evidence, true, geometry)["data-canvas-evidence-status"]).toBe("partial")
+  })
+
+  it("rejects missing point labels even when no layout diagnostic fired", () => {
+    const geometry = createEmptyDocument("geometry3d")
+    geometry.primitives.push({ id: "p", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "P" })
+    const evidence = canvasEvidenceOf({ document: geometry, root: document.createElement("div"), viewport: { width: 400, height: 300 }, objectsMeasurable: false })
+    const consumed = canvasEvidenceAttributes(evidence, false, geometry)
+    expect(consumed["data-canvas-evidence-status"]).toBe("failed")
+    expect(consumed["data-canvas-hidden-labels"]).toBe("P")
+  })
+
+  it("rejects a snapshot from a different workspace", () => {
+    const geometry = createEmptyDocument("conics")
+    const evidence = canvasEvidenceOf({ document: geometry, root: renderedCanvas(), viewport: { width: 400, height: 300 } })
+    const consumed = canvasEvidenceAttributes(evidence, true, createEmptyDocument("geometry3d"))
+    expect(consumed["data-canvas-evidence-status"]).toBe("stale")
+    expect(consumed["data-canvas-evidence-stale-reason"]).toBe("draft_replaced")
+  })
+})

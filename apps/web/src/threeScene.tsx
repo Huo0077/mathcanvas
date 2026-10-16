@@ -1,7 +1,7 @@
 import * as THREE from "three"
 import { useEffect, useRef, useState } from "react"
 
-import { canvasEvidenceAttributes, canvasEvidenceOf } from "./canvasEvidence"
+import { canvasEvidenceAttributes, canvasEvidenceOf, type CanvasEvidence } from "./canvasEvidence"
 import type { GeometryDocument, Point3Primitive, Vector3 } from "@draw/dsl"
 import { dihedralAngleDegrees, type Host3Parameter } from "@draw/geometry-kernel"
 import { planeThroughPoints } from "@draw/scene-graph"
@@ -323,7 +323,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
    * 视图口取容器的实际像素尺寸；还没排版（0×0）时**如实**走 `degenerate_viewport`
    * 那条判据，而不是编一个尺寸出来。
    */
-  const [canvasEvidence, setCanvasEvidence] = useState<Record<string, string>>({})
+  const [canvasEvidence, setCanvasEvidence] = useState<CanvasEvidence | null>(null)
   /**
    * **刻意不给依赖表**：3D 的点标注是渲染循环在 WebGL 里投影后写进覆盖层的，
    * **转视角**会让"哪些点名在画面里"变掉，而相机状态在 ref 上、不是 React 状态 ——
@@ -342,7 +342,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
      */
     const segments = Number(shell.dataset.hiddenEdgeSegments ?? "")
     const hiddenEdges = { shown: shell.dataset.hiddenEdgesShown === "true", segments: Number.isFinite(segments) && segments > 0 ? segments : 0 }
-    const measured = canvasEvidenceAttributes(canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges }), false)
+    const measured = canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges })
     setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
   })
 
@@ -361,7 +361,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} {...canvasEvidence} aria-label="3D 几何场景"
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, false, document))} aria-label="3D 几何场景"
     onPointerDownCapture={(event) => {
       if (!creationSession || event.button !== 0 || event.shiftKey || !isCreationCanvasTarget(event.target)) return
       event.stopPropagation()

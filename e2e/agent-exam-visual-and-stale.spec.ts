@@ -108,10 +108,12 @@ async function commit(page: Page, prompt: string, workspace: "平面几何" | "�
 async function canvasEvidence(page: Page): Promise<Record<string, string>> {
   return page.evaluate(() => {
     // 两个画布都由 `canvasEvidence.ts` 挂上同一组属性 ⇒ 按属性找，不靠类名（2D 的 svg 平时没有类名）。
-    const root = document.querySelector('[data-3d-scene="true"]') ?? document.querySelector("[data-canvas-objects-measurable]")
+    const root = document.querySelector('[data-3d-scene="true"]') ?? document.querySelector("[data-canvas-evidence-status]")
     if (!root) throw new Error("画布根元素找不到")
     const read = (name: string): string => root.getAttribute(name) ?? ""
     return {
+      status: read("data-canvas-evidence-status"),
+      accepted: read("data-canvas-evidence-accepted"),
       hash: read("data-document-hash"),
       revision: read("data-document-revision"),
       boxes: read("data-canvas-boxes"),
@@ -125,7 +127,7 @@ async function canvasEvidence(page: Page): Promise<Record<string, string>> {
 }
 
 /** 2D 画布那个 SVG（带证据属性）。 */
-const planarCanvas = (page: Page) => page.locator('svg[data-canvas-objects-measurable]')
+const planarCanvas = (page: Page) => page.locator('svg[data-canvas-evidence-status]')
 
 /** 落盘的那份文档（测试自己算哈希用它，不读画布结论）。 */
 async function committedDocument(page: Page, workspace: "geometry3d" | "conics" | "calculus"): Promise<unknown> {
@@ -161,6 +163,8 @@ test("the 2D canvas reports the version it is drawing, and the test re-derives t
 
   await expect(planarCanvas(page)).toBeVisible()
   const evidence = await canvasEvidence(page)
+  expect(evidence.status).toBe("passed")
+  expect(evidence.accepted).toBe("true")
   const document = await committedDocument(page, "conics")
 
   // ① 画布与草稿**同版本**：画布自己报的哈希 == 测试自己算出来的那一份。
@@ -184,12 +188,14 @@ test("undoing the commit changes the canvas version, so the old figure evidence 
 
   // 一步撤销：画布上那份内容变了 —— 旧证据（绑在 before.hash 上）从此对不上。
   await page.keyboard.press("Control+z")
+  await expect.poll(async () => (await canvasEvidence(page)).status).toBe("failed")
   await expect.poll(async () => (await canvasEvidence(page)).hash).not.toBe(before.hash)
   const after = await canvasEvidence(page)
   expect(after.hash).not.toBe(before.hash)
   // 撤销之后画布确实是空的：对象盒子归零、并且如实报"画布上没有可画的图形"。
   expect(Number(after.boxes)).toBe(0)
   expect(after.errors).toContain("empty_canvas")
+  expect(after.accepted).toBe("false")
   // 测试自己核对：落盘的文档也真的回到没有那条椭圆的状态（不是只有画布变了）。
   const document = (await committedDocument(page, "conics")) as { primitives?: { type: string }[] }
   expect((document.primitives ?? []).some((primitive) => primitive.type === "ellipse")).toBe(false)
@@ -233,6 +239,8 @@ test("the 3D canvas reports its version and its point labels, and says which rea
   expect(evidence.hash).toBe(await contentHash(page, await committedDocument(page, "geometry3d")))
   // ② 3D 的图形在 WebGL 里，DOM 量不到 —— 画布**如实标注**，而不是把"量不到"说成"画布是空的"。
   expect(evidence.measurable).toBe("false")
+  expect(evidence.status).toBe("partial")
+  expect(evidence.accepted).toBe("false")
   expect(evidence.errors).not.toContain("empty_canvas")
 
   /**

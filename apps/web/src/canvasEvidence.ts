@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, diagnoseLayout, type LayoutBox, type LayoutDiagnostic, type Viewport } from "@draw/agent-core"
+import { canonicalContentHash, diagnoseLayout, renderEvidenceStaleness, type LayoutBox, type LayoutDiagnostic, type Viewport } from "@draw/agent-core"
 
 /**
  * **真实画布证据**（Task 16）。
@@ -36,6 +36,8 @@ import { canonicalContentHash, diagnoseLayout, type LayoutBox, type LayoutDiagno
 export const LABEL_BOX_SIZE = { width: 28, height: 14 } as const
 
 export interface CanvasEvidence {
+  workspace: GeometryDocument["workspace"]
+  objectsMeasurable: boolean
   /** 这份证据绑在**哪一版内容**上（`canonicalContentHash`）。 */
   documentHash: string
   revision: number
@@ -250,6 +252,8 @@ export function canvasEvidenceOf(input: { document: GeometryDocument; root: Pare
   const judged = objectsMeasurable ? measured.boxes : measured.boxes.filter((box) => box.kind === "label")
   const diagnostics = diagnoseLayout(input.viewport, judged).filter((entry) => objectsMeasurable || entry.code !== "empty_canvas")
   return {
+    workspace: input.document.workspace,
+    objectsMeasurable,
     documentHash: canonicalContentHash(input.document),
     revision: input.document.revision,
     viewport: input.viewport,
@@ -267,8 +271,25 @@ export function canvasEvidenceOf(input: { document: GeometryDocument; root: Pare
  * 属性名与 `renderEvidence.ts` 的字段一一对应，**人话与数字分开**：
  * 数字给断言用，`data-canvas-diagnostics` 的码给"哪里不好"用（码是稳定可枚举的闭集）。
  */
-export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasurable = true): Record<string, string> {
+export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasurable = true, currentDocument?: GeometryDocument): Record<string, string> {
+  // Consumption checks the live content, not the snapshot's own identity. The scope here
+  // is a live workspace canvas, not an agent draft or a confirmation authorization.
+  const staleness = currentDocument === undefined ? null : renderEvidenceStaleness(
+    { draftId: evidence.workspace, draftVersion: evidence.revision + 1, documentHash: evidence.documentHash },
+    { draftId: currentDocument.workspace, documentHash: canonicalContentHash(currentDocument) }
+  )
+  if (staleness?.stale) return {
+    "data-canvas-evidence-status": "stale",
+    "data-canvas-evidence-accepted": "false",
+    "data-canvas-evidence-stale-reason": staleness.kind
+  }
+  const measurable = evidence.objectsMeasurable && objectsMeasurable
+  const status = staleness === null ? "unbound"
+    : evidence.hiddenLabels.length > 0 || evidence.diagnostics.some((entry) => entry.severity === "error") ? "failed"
+      : measurable ? "passed" : "partial"
   return {
+    "data-canvas-evidence-status": status,
+    "data-canvas-evidence-accepted": status === "passed" ? "true" : "false",
     "data-document-hash": evidence.documentHash,
     "data-document-revision": String(evidence.revision),
     "data-canvas-boxes": String(evidence.boxes.filter((box) => box.kind === "object").length),
@@ -287,6 +308,6 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
      */
     "data-canvas-hidden-edges-shown": evidence.hiddenEdges.shown ? "true" : "false",
     "data-canvas-hidden-edges": String(evidence.hiddenEdges.segments),
-    "data-canvas-objects-measurable": objectsMeasurable ? "true" : "false"
+    "data-canvas-objects-measurable": measurable ? "true" : "false"
   }
 }
