@@ -458,6 +458,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         attempts += 1
         request.signal.addEventListener("abort", onAbort)
         let result: ModelClientStart
+        if (request.beforeProviderRequest && !request.beforeProviderRequest(1)) {
+          throw new ModelPlannerError("provider_failed", "provider request budget exhausted before transport", false)
+        }
         try {
           result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools }, { isCancelled: () => request.signal.aborted })
         } finally {

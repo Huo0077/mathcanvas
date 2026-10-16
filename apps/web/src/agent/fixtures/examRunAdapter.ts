@@ -5,6 +5,10 @@ import {
   type ExamCase,
   type ExamFamily,
   type ExamRunCaseResult,
+  type ExamRunBudget,
+  type Budget,
+  type BudgetKind,
+  type BudgetDecision,
   type PlannerPort,
   type PlanOutcome,
   type WorkspaceId
@@ -81,9 +85,44 @@ export function workspaceForFamily(family: ExamFamily): WorkspaceId {
 }
 
 /** 一次试验的适配器（`runExamEvaluation` 的 `runCase` 就是它）。 */
-export function createExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase, trial: number) => Promise<ExamRunCaseResult> {
+type CappedBudget = Budget & {
+  beforeProviderRequest: (amount?: number) => boolean
+}
+
+function budgetWithProviderRequestCap(inner: Budget, outer: ExamRunBudget): CappedBudget {
+  // Retry/tool-continuation paths pre-reserve network budget through `consume`.
+  // The guard consumes only requests that reach the actual transport boundary.
+  let preReservedRequests = 0
+  return {
+    consume(kind: BudgetKind, amount = 1): BudgetDecision {
+      const internal = inner.consume(kind, amount)
+      if (!internal.ok || kind !== "network") return internal
+      if (outer.consumeRequest(amount)) {
+        preReservedRequests += amount
+        return internal
+      }
+      return { ok: false, kind, requested: amount, remaining: outer.remainingRequests(), reason: "exceeds_limit" }
+    },
+    beforeProviderRequest(amount = 1) {
+      if (!Number.isInteger(amount) || amount <= 0) return false
+      if (preReservedRequests >= amount) {
+        preReservedRequests -= amount
+        return true
+      }
+      return outer.consumeRequest(amount)
+    },
+    beginStage: () => inner.beginStage(),
+    remaining(kind) {
+      return kind === "network" ? Math.min(inner.remaining(kind), outer.remainingRequests()) : inner.remaining(kind)
+    },
+    snapshot: () => inner.snapshot(),
+    exhausted: () => inner.exhausted() || outer.remainingRequests() <= 0
+  }
+}
+
+export function createExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase, trial: number, budget?: ExamRunBudget) => Promise<ExamRunCaseResult> {
   const now = deps.now ?? (() => Date.now())
-  return async (examCase, trial) => {
+  return async (examCase, trial, budget) => {
     const started = now()
     const runId = `exam-${examCase.id}-${trial}`
     const workspace = deps.workspaceOf?.(examCase) ?? workspaceForFamily(examCase.family)
@@ -93,6 +132,11 @@ export function createExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase
     let outcome: PlanOutcome
     try {
       const request = planRequestFor(examCase.prompt, workspace, runId, document)
+      if (budget !== undefined) {
+        const capped = budgetWithProviderRequestCap(request.budget, budget)
+        request.budget = capped
+        request.beforeProviderRequest = capped.beforeProviderRequest
+      }
       outcome = await deps.planner.plan(request)
     } catch (error) {
       return {

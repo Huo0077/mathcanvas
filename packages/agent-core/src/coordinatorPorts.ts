@@ -49,6 +49,13 @@ export interface PlanRequest {
    */
   /** Scoped read-only tool execution provided by the coordinator, never by model output. */
   executeTool?: ToolPort["call"]
+  /**
+   * Optional guard used by harnesses that invoke a planner without the coordinator.
+   * It runs immediately before each real provider request; returning false must prevent
+   * the transport call. The normal coordinator leaves this unset because it charges the
+   * initial request and retry requests at its own provider boundary.
+   */
+  beforeProviderRequest?: (amount?: number) => boolean
   model: {
     context: ModelContext
     /** 当前阶段发布的工具。只读阶段没有写入工具，观察阶段连计划工具都没有。 */

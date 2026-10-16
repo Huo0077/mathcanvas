@@ -199,8 +199,15 @@ export function assertPaidRunAllowed(plan: FrozenBenchmarkPlan, request: PaidRun
   }
   const maxRequests = authorization.maxRequests
   const maxCostUsd = authorization.maxCostUsd
-  if (typeof maxRequests !== "number" || !Number.isFinite(maxRequests) || maxRequests <= 0 || typeof maxCostUsd !== "number" || !Number.isFinite(maxCostUsd) || maxCostUsd <= 0) {
-    return { ok: false, reason: "授权里没有写清请求数上限与最高费用（两个都要正数）—— 缺一个就不跑。" }
+  if (
+    typeof maxRequests !== "number" ||
+    !Number.isInteger(maxRequests) ||
+    maxRequests <= 0 ||
+    typeof maxCostUsd !== "number" ||
+    !Number.isFinite(maxCostUsd) ||
+    maxCostUsd < 0
+  ) {
+    return { ok: false, reason: "授权里没有写清有效的请求数上限与最高费用——缺一个就不跑。" }
   }
   if (typeof authorization.grantedBy !== "string" || authorization.grantedBy.trim().length === 0) {
     return { ok: false, reason: "授权没写是谁点的头（`grantedBy`）—— 系统不许自己给自己授权。" }
@@ -210,6 +217,9 @@ export function assertPaidRunAllowed(plan: FrozenBenchmarkPlan, request: PaidRun
   }
   if (request.requests > maxRequests) {
     return { ok: false, reason: `这次要发 ${request.requests} 个请求，超过授权的 ${maxRequests} 个。` }
+  }
+  if (typeof request.estimatedCostUsd !== "number" || !Number.isFinite(request.estimatedCostUsd) || request.estimatedCostUsd < 0) {
+    return { ok: false, reason: `预估费用必须是非负有限数字，收到 ${request.estimatedCostUsd}。` }
   }
   if (request.estimatedCostUsd > maxCostUsd) {
     return { ok: false, reason: `这次预估 $${request.estimatedCostUsd}，超过授权的最高费用 $${maxCostUsd}。` }

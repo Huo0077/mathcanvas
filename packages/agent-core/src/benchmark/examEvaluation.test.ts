@@ -130,6 +130,84 @@ describe("Task 20: 真实 provider 那一跑怎么记账", () => {
     for (const family of result.report.families) expect(family.passAt1).toBe(1)
   })
 
+  it("records provider requests separately from logical trials", async () => {
+    const plan: FrozenBenchmarkPlan = {
+      ...granted({ maxRequests: 2, maxCostUsd: 1, grantedBy: "user" }),
+      trialsPerCase: 1,
+      families: FROZEN_THRESHOLDS.families.map((family, index) => ({ ...family, samples: index === 0 ? family.samples.slice(0, 1) : [] }))
+    }
+    const runCase = vi.fn(async (_examCase: { id: string }, _trial: number, budget: { consumeRequest: () => boolean }) => {
+      expect(budget.consumeRequest()).toBe(true)
+      expect(budget.consumeRequest()).toBe(true)
+      return { outcome: "planned" as const, costUsd: 0.1 }
+    })
+    const result = await runExamEvaluation({
+      plan,
+      request: { ...CONTEXT, requests: 1, estimatedCostUsd: 0.1, grantedBy: "user", grantedOn: "2026-10-13" },
+      runCase: runCase as never
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.report.totals.requests).toBe(2)
+    expect(result.report.totals.logicalTrials).toBe(1)
+  })
+
+  it("rejects unknown frozen case ids before provider calls", async () => {
+    const plan: FrozenBenchmarkPlan = {
+       ...granted({ grantedBy: "user" }),
+      families: FROZEN_THRESHOLDS.families.map((family, index) => index === 0
+        ? { ...family, samples: [{ ...family.samples[0]!, caseId: "missing-case" }] }
+        : { ...family, samples: [] })
+    }
+    const runCase = vi.fn(async () => ({ outcome: "planned" as const, costUsd: 0.1 }))
+    const result = await runExamEvaluation({
+      plan,
+      request: { ...CONTEXT, requests: 3, estimatedCostUsd: 0.1, grantedBy: "user", grantedOn: "2026-10-13" },
+      runCase: runCase as never
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.reason).toContain("missing-case")
+    expect(runCase).not.toHaveBeenCalled()
+  })
+
+  it("declared request count must equal the fixed workload", async () => {
+    const runCase = vi.fn(async () => ({ outcome: "planned" as const, costUsd: 0.1 }))
+    const result = await runExamEvaluation({ plan: granted(), request: { ...CONTEXT, requests: 1, grantedBy: "用户", grantedOn: "2026-10-13" }, runCase: runCase as never })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toContain("36")
+    expect(runCase).not.toHaveBeenCalled()
+  })
+
+  it("rejects NaN and negative estimated costs", async () => {
+    const runCase = vi.fn(async () => ({ outcome: "planned" as const, costUsd: 0.1 }))
+    for (const estimatedCostUsd of [Number.NaN, -1]) {
+      const result = await runExamEvaluation({ plan: granted(), request: { ...CONTEXT, estimatedCostUsd, grantedBy: "用户", grantedOn: "2026-10-13" }, runCase: runCase as never })
+      expect(result.ok).toBe(false)
+    }
+    expect(runCase).not.toHaveBeenCalled()
+  })
+
+  it("requires complete human readability coverage", () => {
+    const partial = observations(() => "planned").map((entry, index) => index === 0 ? { ...entry, readability: "readable" as const } : entry)
+    const report = summarizeExamEvaluation(granted(), partial, CONTEXT)
+    const readability = report.verdicts.filter((entry) => entry.metric === "unreadable")
+    expect(readability.every((entry) => entry.actual === null && entry.passed === false)).toBe(true)
+  })
+
+  it("shares the request budget with retry attempts", async () => {
+    const runCase = vi.fn(async (_examCase: { id: string }, _trial: number, budget: { consumeRequest: () => boolean }) => {
+      budget.consumeRequest()
+      budget.consumeRequest()
+      return { outcome: "planned" as const, costUsd: 0.1 }
+    })
+    const result = await runExamEvaluation({ plan: granted(), request: { ...CONTEXT, grantedBy: "用户", grantedOn: "2026-10-13" }, runCase: runCase as never })
+    expect(result.ok).toBe(false)
+    expect(runCase).toHaveBeenCalled()
+  })
+
   it("**单次规划请求的结局映射只有一处**（含「修复过就单独记」）", () => {
     expect(examTrialOutcomeOf({ kind: "plan" })).toBe("planned")
     expect(examTrialOutcomeOf({ kind: "plan", repaired: true })).toBe("planned_after_repair")

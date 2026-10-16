@@ -1,5 +1,5 @@
-import { EXAM_CASES, HELD_OUT_CASES, type ExamCase, type ExamFamily } from "./examSet"
-import { assertPaidRunAllowed, frozenSample, FROZEN_THRESHOLDS, type FrozenBenchmarkPlan } from "./frozenThresholds"
+import { type ExamCase, type ExamFamily } from "./examSet"
+import { assertPaidRunAllowed, examCaseFor, frozenSample, FROZEN_THRESHOLDS, type FrozenBenchmarkPlan } from "./frozenThresholds"
 import type { PlanStage } from "../contracts"
 
 /**
@@ -222,7 +222,7 @@ export interface ExamEvaluationReport {
   trialsPerCase: number
   families: ExamFamilyResult[]
   /** 总计：**费用有一次算不出就是 `null`**（见 `ExamTrialObservation.costUsd`）。 */
-  totals: { requests: number; costUsd: number | null; passAt1: number; passAt3: number; repairedCount: number }
+  totals: { requests: number; logicalTrials: number; costUsd: number | null; passAt1: number; passAt3: number; repairedCount: number }
   /** 逐条对照**事先冻结**的阈值；过不了线就报过不了。 */
   verdicts: ExamVerdict[]
   /**
@@ -240,6 +240,8 @@ export interface ExamEvaluationContext {
   model: string
   /** 这一跑的 `runCase` 走没走协调器那条带修复的路径（声明式，见 `ExamRepairPath`）。 */
   repairPath: ExamRepairPath
+  /** Actual provider request count; omitted for legacy one-observation-per-request callers. */
+  providerRequests?: number
 }
 
 function percentile95(values: readonly number[]): number {
@@ -319,7 +321,10 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
       costUsd: familyObservations.some((observation) => observation.costUsd === null)
         ? null
         : familyObservations.reduce((sum, observation) => sum + (observation.costUsd ?? 0), 0),
-      unreadableShare: annotated.length === 0 ? null : annotated.filter((observation) => observation.readability === "unreadable").length / annotated.length,
+      // 人评必须覆盖这一族的每一次试验；部分标注也不能被当成完整分母放行。
+      unreadableShare: annotated.length === familyObservations.length && annotated.length > 0
+        ? annotated.filter((observation) => observation.readability === "unreadable").length / annotated.length
+        : null,
       failureStages,
       failureLayers
     }
@@ -356,7 +361,8 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
     trialsPerCase: plan.trialsPerCase,
     families,
     totals: {
-      requests: observations.length,
+      requests: context.providerRequests ?? observations.length,
+      logicalTrials: observations.length,
       /** 同上：**有一次算不出钱，总计就是 `null`**（不拿部分和冒充合计）。 */
       costUsd: observations.some((observation) => observation.costUsd === null)
         ? null
@@ -367,7 +373,7 @@ export function summarizeExamEvaluation(plan: FrozenBenchmarkPlan, observations:
     },
     verdicts,
     repairPath: context.repairPath,
-    authorization: { requests: observations.length, maxCostUsd: plan.authorization.maxCostUsd ?? 0, grantedBy: plan.authorization.grantedBy ?? "", grantedOn: plan.authorization.grantedOn ?? "" }
+    authorization: { requests: context.providerRequests ?? observations.length, maxCostUsd: plan.authorization.maxCostUsd ?? 0, grantedBy: plan.authorization.grantedBy ?? "", grantedOn: plan.authorization.grantedOn ?? "" }
   }
 }
 
@@ -394,6 +400,12 @@ export function examRequestPlan(plan: FrozenBenchmarkPlan = FROZEN_THRESHOLDS): 
   }
 }
 
+export interface ExamRunBudget {
+  /** 消费一次真实 provider 请求；返回 false 表示已经超过授权上限。 */
+  consumeRequest: (amount?: number) => boolean
+  remainingRequests: () => number
+}
+
 export interface ExamRunCaseResult {
   outcome: ExamTrialOutcome
   /** 失败落在哪一层（同一套四层；成功 / 问路 / 出错不写这一栏）。 */
@@ -414,7 +426,7 @@ export interface ExamRunRequest {
   /** 这次请求的额度与「谁点的头」——它必须落在 `plan.authorization` 之内。 */
   request: { provider: string; model: string; requests: number; estimatedCostUsd: number; grantedBy: string; grantedOn: string; repairPath: ExamRepairPath }
   /** 真正的调用（产品路径上是模型规划器）。**授权不过时它一次都不会被调用。** */
-  runCase: (examCase: ExamCase, trial: number) => Promise<ExamRunCaseResult>
+  runCase: (examCase: ExamCase, trial: number, budget: ExamRunBudget) => Promise<ExamRunCaseResult>
 }
 
 export type ExamRunOutcome = { ok: true; report: ExamEvaluationReport } | { ok: false; reason: string }
@@ -432,12 +444,50 @@ export async function runExamEvaluation(request: ExamRunRequest): Promise<ExamRu
     return { ok: false, reason: `这次请求声称的授权人（${request.request.grantedBy}）与冻结表里记的（${request.plan.authorization.grantedBy ?? "（没有）"}）不一致。` }
   }
 
-  const cases = [...EXAM_CASES, ...HELD_OUT_CASES]
+  const planned = examRequestPlan(request.plan)
+  if (request.request.requests !== planned.requests) {
+    return { ok: false, reason: `声明的请求工作量 ${request.request.requests} 与冻结的固定工作量 ${planned.requests} 不一致。` }
+  }
+
+  const cases: ExamCase[] = []
+  for (const family of request.plan.families) {
+    for (const sample of family.samples) {
+      const examCase = examCaseFor(sample.caseId)
+      if (examCase === null) {
+        return { ok: false, reason: `Frozen case ${family.family}/${sample.caseId} does not match the planned family; provider was not called.` }
+      }
+      if (examCase.family !== family.family) {
+        return { ok: false, reason: `Frozen case ${family.family}/${sample.caseId} does not match the planned family; provider was not called.` }
+      }
+      cases.push(examCase)
+    }
+  }
   const observations: ExamTrialObservation[] = []
+  let spentRequests = 0
+  let requestBudgetExceeded = false
+  const budget: ExamRunBudget = {
+    consumeRequest(amount = 1) {
+      if (!Number.isInteger(amount) || amount <= 0 || spentRequests + amount > decision.granted.maxRequests) {
+        requestBudgetExceeded = true
+        return false
+      }
+      spentRequests += amount
+      return true
+    },
+    remainingRequests() {
+      return decision.granted.maxRequests - spentRequests
+    }
+  }
   for (const examCase of cases) {
     for (let trial = 1; trial <= request.plan.trialsPerCase; trial += 1) {
       const started = Date.now()
-      const result = await request.runCase(examCase, trial)
+      const beforeRequests = spentRequests
+      const result = await request.runCase(examCase, trial, budget)
+      // 兼容旧的二参数适配器：没有显式消费真实请求时，一次逻辑试验按一次请求计。
+      if (spentRequests === beforeRequests && !budget.consumeRequest()) {
+        requestBudgetExceeded = true
+      }
+      if (requestBudgetExceeded) return { ok: false, reason: "真实 provider 请求次数超过授权上限。" }
       observations.push({
         caseId: examCase.id,
         family: examCase.family,
@@ -451,7 +501,7 @@ export async function runExamEvaluation(request: ExamRunRequest): Promise<ExamRu
       })
     }
   }
-  const report = summarizeExamEvaluation(request.plan, observations, { provider: request.request.provider, model: request.request.model, repairPath: request.request.repairPath })
+  const report = summarizeExamEvaluation(request.plan, observations, { provider: request.request.provider, model: request.request.model, providerRequests: spentRequests, repairPath: request.request.repairPath })
   const maxCostUsd = request.plan.authorization.maxCostUsd ?? 0
   /**
    * **超支核对只在"钱算得出来"时才做**：`totals.costUsd === null` 表示仓里没有价目表、

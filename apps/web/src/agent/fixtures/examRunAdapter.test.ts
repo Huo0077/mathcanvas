@@ -69,6 +69,34 @@ describe("Task 20: 规划请求 → 编译 → 试验结局", () => {
    * (reading 'context')` ⇒ `runModelCalls` 是 **0**、结局是 `error` —— 也就是"付费按钮看起来在跑、
    * 实际一次都没发"。现在请求由 `planRequestFor` 组装，形状与产品那一次相同。
    */
+  it("enforces the outer request cap before provider retries", async () => {
+    const RESOLVED = {
+      ok: true,
+      provider: { id: "p-bench", modelId: "m-bench", dialect: "openai", revision: 1, capabilities: { tools: "unknown", json: "unknown", vision: "unknown" } }
+    } as ProviderResolution
+    const rateLimited = { ok: false as const, failure: "rate_limited" as const, message: "429", retryable: true }
+    const runModel = vi.fn(async () => rateLimited)
+    let consumed = 0
+    const budget = {
+      consumeRequest(amount = 1) {
+        if (consumed + amount > 1) return false
+        consumed += amount
+        return true
+      },
+      remainingRequests: () => 1 - consumed
+    }
+    const runCase = createExamRunCase({
+      planner: createModelPlanner({ resolveProvider: async () => RESOLVED, runModel }),
+      costOf: () => 0
+    })
+
+    const result = await runCase(SOLID_CASE, 1, budget)
+
+    expect(result.outcome).toBe("error")
+    expect(runModel).toHaveBeenCalledTimes(1)
+    expect(consumed).toBe(1)
+  })
+
   it("**真实规划器能真的跑完一次**（请求形状完整；跑到 provider 而不是在门口抛）", async () => {
     const RESOLVED = {
       ok: true,

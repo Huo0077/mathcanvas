@@ -107,6 +107,7 @@ export {
   type ExamFamilyResult,
   type ExamRepairPath,
   type ExamRequestPlan,
+  type ExamRunBudget,
   type ExamRunCaseResult,
   type ExamRunOutcome,
   type ExamRunRequest,
