@@ -148,11 +148,24 @@ describe("plan envelope parsing", () => {
     expectRejected(parsePlanEnvelope({ goal: "说不清要干什么" }), "unknown_kind")
   })
 
-  it("still requires goal and actions on the plan branch", () => {
+  it("still requires actions on the plan branch（`goal` 不再必填，见下一条）", () => {
     const base = validPlan() as Record<string, unknown>
+    /**
+     * **`goal` 从"必填"改成"缺失就补"**（2026-10-15 用户现场）。
+     *
+     * 它原先必填的理由写在 `schemas.ts` 里：「给人看的一句话，**模型一直写得出**…系统不替它编」。
+     * 现场证伪了那个前提：模型在第 1 轮用了错误的动作形状、第 2 轮（唯一的修复轮）
+     * **整个 `goal` 字段都没了** ⇒ `invalid_type@envelope.goal: expected a string` ⇒ 整轮停。
+     * 修法与 `kind` / `schemaVersion` / `factIds` **同一条口径**：缺失走默认值，
+     * 由编译器用**题面原话**补（不是系统编一句话 —— 见 `planCompiler` 那一处）。
+     * **仍然拒的是"给了但不是字符串"**：那是一次真错误，值得报。
+     */
     const noGoal = { ...base }
     delete noGoal.goal
-    expectRejected(parsePlanEnvelope(noGoal), "invalid_type")
+    const withoutGoal = parsePlanEnvelope(noGoal)
+    expect(withoutGoal.ok, "缺 goal 现在收下").toBe(true)
+    if (withoutGoal.ok) expect(withoutGoal.value.goal, "缺失时是空串，由编译器补题面原话").toBe("")
+    expectRejected(parsePlanEnvelope({ ...base, goal: 42 }), "invalid_type")
 
     const noActions = { ...base }
     delete noActions.actions

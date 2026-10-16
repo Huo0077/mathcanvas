@@ -291,7 +291,19 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       errors.push(fail("schema_version_mismatch", "envelope.schemaVersion", `expected '${PLAN_SCHEMA_VERSION}'`))
     }
   }
-  const goal = boundedString(input.goal, "envelope.goal", errors)
+  /**
+   * **`goal` 也从"必填"改成"缺失就补"**（2026-10-15 用户现场）。
+   *
+   * 它原先必填的唯一理由是「**模型一直写得出**」—— 那个前提被现场证伪了：模型第 1 轮用错了
+   * 动作形状被拒，第 2 轮（**唯一的**修复轮）**整个 `goal` 字段都没交** ⇒
+   * `invalid_type@envelope.goal: expected a string` ⇒ 整轮停在一个字符串上。
+   *
+   * 与 `kind` / `schemaVersion` / `factIds` **同一条口径**：缺失走默认值。区别只在这里补的不是
+   * 一个常数 —— 编译器拿**题面原话**（第一句）补上（`planCompiler` 那一处），
+   * 所以**系统仍然不替模型编一句话**：显示出来的目标句就是用户自己写的题面。
+   * **"给了但不是字符串"照旧报错**：那是一次真错误，值得让模型知道。
+   */
+  const goal = input.goal === undefined ? "" : boundedString(input.goal, "envelope.goal", errors)
   const factIds = input.factIds === undefined ? [] : readStringArray(input.factIds, "envelope.factIds", errors)
 
   /**

@@ -3,7 +3,7 @@ import { crossVector3, dotVector3, lengthVector3, subtractVector3 } from "@draw/
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
-import { PLAN_SCHEMA_VERSION } from "./contracts"
+import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { roundFrustumChordError } from "./localPlanDefaults"
 import { compilePlan, describeCompileRepairPrompt, searchWitnessForPrompt, type PlanCompileContext, type PlanCompileResult } from "./planCompiler"
 import { createDraftTools } from "./tools/draftTools"
@@ -1409,5 +1409,45 @@ describe("面塌了的修复提示", () => {
     const prompt = ask([{ code: "unresolved_alias", path: "envelope.actions[1].inputs.host", detail: "no object has been created under the alias 'p1' before this action" }])
 
     expect(prompt).not.toContain("solid.create_face")
+  })
+})
+
+/**
+ * **模型没给 `goal` 时，用题面原话补上**（2026-10-15 用户现场，翻折那道题）。
+ *
+ * 现场：第 1 轮动作形状错被拒（用多面体去套平面四边形）、第 2 轮（**唯一的**修复轮）
+ * **整个 `goal` 字段没交** ⇒ `invalid_type@envelope.goal: expected a string` ⇒
+ * 整轮停在一个字符串上。修法与 `kind` / `schemaVersion` / `factIds` 是同一条口径
+ *（缺失走默认值）；区别在补的东西：这里补的是**用户自己写的那句话**（题面第一行），
+ * 不是系统另编一句 —— 而且"这一行不是模型给的"要**显形**（`goal_inferred` 警告进视图）。
+ */
+describe("缺 `goal` 时用题面原话补", () => {
+  it("目标句 = 题面第一行，并留一条 `goal_inferred` 警告", () => {
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          vertexNames: ["P", "A", "B", "C", "D"],
+          vertices: [{ x: 0, y: 0, z: 4 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }],
+          faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+        }
+      }]
+    } as unknown as PlanEnvelope
+    const prompt = "在四棱锥P-ABCD中，PA⊥平面ABCD，AB⊥AD。\n画出这个四棱锥。"
+    const result = compilePlan(plan, { document: createEmptyDocument("geometry3d"), prompt, conversationId: "goal-inferred", documentGeneration: 0 })
+    const why = `ok=${result.ok}；诊断：${result.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join(" || ")}`
+
+    // 系统补的是**题面原话**（第一行），不是另编的一句话。
+    expect(result.plan?.goal, why).toBe("在四棱锥P-ABCD中，PA⊥平面ABCD，AB⊥AD。")
+    // 而且"这一行不是模型给的"要显形（warning，不影响这一轮是否继续）。
+    const note = result.diagnostics.find((entry) => entry.code === "goal_inferred")
+    expect(note?.severity, why).toBe("warning")
+    expect(note?.detail, why).toContain("题面原话")
   })
 })

@@ -395,6 +395,18 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
     }
   }
 
+  /**
+   * **`goal` 缺失时用题面原话补**（2026-10-15 用户现场）。
+   *
+   * 传输层已经把"缺失"收成空串（`schemas.ts` 那一处写了理由：模型在唯一的修复轮里把整个
+   * `goal` 丢了，整轮停在一个字符串上）。这里补上的是**用户自己写的那句话**（题面第一行），
+   * 所以**系统仍然不替模型编一句话** —— 显示出来的目标句就是题面原文。
+   * "这一行不是模型给的"这件事**要显形**：下面那条 `goal_inferred` 警告会进开发者视图。
+   */
+  const promptGoal = context.prompt?.split("\n").map((line) => line.trim()).find((line) => line.length > 0) ?? ""
+  const goalWasMissing = parsed.value.goal.trim() === ""
+  if (goalWasMissing && promptGoal !== "") parsed.value.goal = promptGoal
+
   if (parsed.value.kind !== "plan") {
     // 澄清 / 只读回答：没有动作可编译，但**不是**失败。
     return {
@@ -434,7 +446,16 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    * 静默丢掉一条模型写过的东西，正是本仓最忌的那种静默；而它**不该**把整份计划作废
    *（那个决定的读数与理由写在 `schemas.ts` 的 `readRelations`）。
    */
-  const transportNotes = (parsed.notes ?? []).map((note) => planDiagnostic("transport", note.code, note.path, note.detail, "warning"))
+  const transportNotes = [
+    ...(parsed.notes ?? []).map((note) => planDiagnostic("transport", note.code, note.path, note.detail, "warning")),
+    /**
+     * **`goal` 的出处也要显形**（2026-10-15 用户现场）：模型没给这一栏、系统用题面原话补的，
+     * 就明说 —— 与"系统替你做的选择要写出来"是同一条纪律（只是这里替的是**一句话**，不是几何）。
+     */
+    ...(goalWasMissing && promptGoal !== ""
+      ? [planDiagnostic("transport", "goal_inferred", "envelope.goal", `模型这一轮没有给 \`goal\`；目标句取自**题面原话**「${promptGoal}」，系统没有替它另编一句话。`, "warning")]
+      : [])
+  ]
   const diagnostics: PlanDiagnostic[] = [...transportNotes, ...audit.diagnostics]
   const assumptions = [...audit.assumptions, ...approximationAssumptions(audit.actions)]
   const questions = [...audit.questions]
