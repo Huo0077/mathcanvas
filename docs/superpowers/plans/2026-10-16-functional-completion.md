@@ -168,3 +168,29 @@ Executable evidence:
 4. The second independent review found no Critical or Important issue. The only Minor note is the optional promotion of overflow cases into permanent runner-level regression tests.
 
 Boundary: structured_only is not screenshot/DOM/camera/vision proof. This block does not claim all fold problems or all exam variants, and does not change the partial verdicts for Task 20 real-provider evaluation or Task 21 teacher/student acceptance. Automatic Lean remains separately adjudicated.
+
+## Current-HEAD checkpoint (2026-10-16)
+
+The recorded functional blocks above were checked against product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`.
+
+Current matrix:
+
+- **Complete within declared support scope:** Tasks 1-8, 10-12, 14-15, 17 (14 tasks).
+- **Partial:** Tasks 9, 13, 16, 18, 19 (5 tasks).
+- **Not complete / not release-accepted:** Tasks 20, 21 (2 tasks).
+
+The remaining items are not being marked complete by documentation: Task 9 needs a formal independent gold/oracle set; Task 13 needs broader 3D support and acceptance; Task 16 needs candidate visual/3D/human evidence gates; Tasks 18-19 need real Lean, strict isolation, desktop lifecycle, and release validation; Task 20 needs the authorized real-provider quality evaluation; Task 21 needs teacher/student and clean-machine/offline release acceptance.
+
+Ordinary drawing is adjudicated separately from automatic Lean. The ordinary drawing representative paths are functional within their supported scope. Automatic Lean has no successful real execution evidence in this environment and remains closed for release claims. This is the current checkpoint, not completion of the active Goal; no task is promoted from partial or not-complete solely because its documentation exists.
+
+
+## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
+
+This block records an executable functional change, not a documentation-only review.
+
+- **Admission fix:** desktop Lean input now has positive closed-template admission for the four generated goal families (perpendicular, line-plane perpendicular, tangent slope, and line-in-plane). It binds theorem/report names, imports, heartbeat budget, declared points, repeated statement points, and the finite proof strategy; extra declarations/commands, substituted statements, block-comment wrapping, mismatched reports/imports, and arbitrary proof bodies are rejected before any process or temporary file is created. The old forbidden-token checks remain diagnostics, not the sole boundary.
+- **Compatibility evidence:** actual TypeScript adapter output, including renamed identifiers, is snapshotted into `apps/desktop/src-tauri/tests/fixtures/lean-admission.json`; the Rust suite exercises eight real generated fixtures.
+- **Fresh verification:** `proof_command` passed **19/19**; the seven proof TypeScript suites passed **97/97** before this block, and the combined admission/pinning/proof/benchmark contract slice passed **145/145**. Typecheck and changed-file lint were also clean.
+- **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
+- **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
+- **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.

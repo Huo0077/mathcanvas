@@ -1,0 +1,20 @@
+node.exe :    Compiling mathcanvas-desktop v3.3.14 (D:\draw\draw\apps\desktop\src-tauri)
+所在位置 D:\draw\draw\audit-20261016\run-lean-admission.ps1:5 字符: 1
++ & node scripts/toolchain.mjs cargo test --offline --locked --manifest ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling ma...ktop\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 28.58s
+     Running tests\proof_command.rs (apps\desktop\src-tauri\target\debug\deps\proof_command-d15acb375a1b149e.exe)
+
+running 1 test
+test real_configured_templates_execute_through_desktop_runner has been running for over 60 seconds
+REAL_LEAN perpendicular {"outcome":"exited","exitCode":0,"stdout":"'draw_perpendicular_goal' depends on axioms: [propext, Classical.choice, Quot.sound]\n","stderr":"","durationMs":257961,"detail":"杩涚▼璺戝畬浜嗐€?*杩欒繕涓嶆槸鍒ゅ畾** 鈥斺€?銆岃瘉鏄庢垚娌℃垚绔嬨€嶇湅 TS 渚у `#print axioms` 鎶ュ憡鐨勫垽鎹紙`exit=0` 杩?`sorry` 閮芥弧瓒筹級銆?,"backendVersion":"Lean (version 4.35.0-rc3, x86_64-w64-windows-gnu, commit 470d5ce1400764999581fd26d5d72b00d990b0f4, Release)"}
+REAL_LEAN linePlanePerpendicular {"outcome":"exited","exitCode":0,"stdout":"'draw_line_plane_perpendicular_goal' depends on axioms: [propext, Classical.choice, Quot.sound]\n","stderr":"","durationMs":69156,"detail":"杩涚▼璺戝畬浜嗐€?*杩欒繕涓嶆槸鍒ゅ畾** 鈥斺€?銆岃瘉鏄庢垚娌℃垚绔嬨€嶇湅 TS 渚у `#print axioms` 鎶ュ憡鐨勫垽鎹紙`exit=0` 杩?`sorry` 閮芥弧瓒筹級銆?,"backendVersion":"Lean (version 4.35.0-rc3, x86_64-w64-windows-gnu, commit 470d5ce1400764999581fd26d5d72b00d990b0f4, Release)"}
+REAL_LEAN tangentSlope {"outcome":"exited","exitCode":0,"stdout":"'draw_tangent_slope_goal' depends on axioms: [propext, Classical.choice, Quot.sound]\n","stderr":"","durationMs":65963,"detail":"杩涚▼璺戝畬浜嗐€?*杩欒繕涓嶆槸鍒ゅ畾** 鈥斺€?銆岃瘉鏄庢垚娌℃垚绔嬨€嶇湅 TS 渚у `#print axioms` 鎶ュ憡鐨勫垽鎹紙`exit=0` 杩?`sorry` 閮芥弧瓒筹級銆?,"backendVersion":"Lean (version 4.35.0-rc3, x86_64-w64-windows-gnu, commit 470d5ce1400764999581fd26d5d72b00d990b0f4, Release)"}
+REAL_LEAN lineInPlane {"outcome":"exited","exitCode":0,"stdout":"'draw_line_in_plane_goal' depends on axioms: [propext, Classical.choice, Quot.sound]\n","stderr":"","durationMs":69486,"detail":"杩涚▼璺戝畬浜嗐€?*杩欒繕涓嶆槸鍒ゅ畾** 鈥斺€?銆岃瘉鏄庢垚娌℃垚绔嬨€嶇湅 TS 渚у `#print axioms` 鎶ュ憡鐨勫垽鎹紙`exit=0` 杩?`sorry` 閮芥弧瓒筹級銆?,"backendVersion":"Lean (version 4.35.0-rc3, x86_64-w64-windows-gnu, commit 470d5ce1400764999581fd26d5d72b00d990b0f4, Release)"}
+test real_configured_templates_execute_through_desktop_runner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 462.58s
+

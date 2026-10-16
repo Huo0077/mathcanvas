@@ -479,3 +479,25 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 - [ ] This block does not expand the claim to every fold problem, every exam, screenshot/vision acceptance, or automatic Lean.
 
 This block is ready for an independent Task 12 commit and push. Ordinary drawing and automatic Lean continue as separate acceptance tracks.
+
+## 2026-10-16 Final functional review status
+
+This is the current functional status against product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`:
+
+- **Complete within supported scope:** Tasks 1-8, 10-12, 14-15, 17.
+- **Partial:** Tasks 9, 13, 16, 18, 19.
+- **Not complete / not release-accepted:** Tasks 20, 21.
+
+The table above must not be read as a claim that all 21 tasks are complete. Ordinary drawing and automatic Lean have separate acceptance gates. The current evidence includes representative ordinary drawing browser flows and real product action paths, but no successful real Lean execution, no publishable real-provider quality study, and no complete teacher/student or clean-machine release acceptance. See `audit-20261016/functional-review.md` for the evidence and exact blocker list.
+
+
+## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
+
+This block records an executable functional change, not a documentation-only review.
+
+- **Admission fix:** desktop Lean input now has positive closed-template admission for the four generated goal families (perpendicular, line-plane perpendicular, tangent slope, and line-in-plane). It binds theorem/report names, imports, heartbeat budget, declared points, repeated statement points, and the finite proof strategy; extra declarations/commands, substituted statements, block-comment wrapping, mismatched reports/imports, and arbitrary proof bodies are rejected before any process or temporary file is created. The old forbidden-token checks remain diagnostics, not the sole boundary.
+- **Compatibility evidence:** actual TypeScript adapter output, including renamed identifiers, is snapshotted into `apps/desktop/src-tauri/tests/fixtures/lean-admission.json`; the Rust suite exercises eight real generated fixtures.
+- **Fresh verification:** `proof_command` passed **19/19**; the seven proof TypeScript suites passed **97/97** before this block, and the combined admission/pinning/proof/benchmark contract slice passed **145/145**. Typecheck and changed-file lint were also clean.
+- **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
+- **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
+- **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.

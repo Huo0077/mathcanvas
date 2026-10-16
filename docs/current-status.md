@@ -1595,3 +1595,27 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 Task 12 now has a verified functional loop within its declared scope: bounded fold relation search is connected to the product compiler entry point; candidate layout evidence, undrawable-function fail-closed behavior, projection/area overflow protection, repair/workspace switching/consent/commit paths are all covered by current executable checks. Ordinary drawing for the solid representative and function/tangent representative passed separate browser E2E flows.
 
 Boundary: structured_only candidate evidence is not screenshot/DOM/real-camera/vision acceptance; this does not claim generalization to every fold problem or exam, and does not claim automatic Lean is complete. Task 20 real-provider quality evaluation and Task 21 teacher/student release acceptance remain separate verdicts.
+
+## 2026-10-16 Current-HEAD functional checkpoint
+
+The final review is based on product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`; the follow-up commit only records this result in documentation.
+
+- **14/21 complete within declared support scope:** Tasks 1-8, 10-12, 14-15, 17.
+- **5/21 partial:** Tasks 9, 13, 16, 18, 19.
+- **2/21 not complete or not release-accepted:** Tasks 20, 21.
+
+Ordinary drawing and automatic Lean remain separate. Representative ordinary drawing flows are executable and green within the supported geometry slice. No successful real Lean execution is part of the current evidence; the installed IPC probe reported Lean unavailable because the required project configuration was absent. Task 20 still lacks a publishable real-provider evaluation, and Task 21 still lacks teacher/student, clean-machine/offline, and complete user-flow acceptance. Therefore the project must not be described as 21/21 complete or release-ready.
+
+The detailed matrix and blocker list are in `audit-20261016/functional-review.md`. The latest functional code baseline is on `origin/main`; the final documentation commit will be checked against the remote after push.
+
+
+## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
+
+This block records an executable functional change, not a documentation-only review.
+
+- **Admission fix:** desktop Lean input now has positive closed-template admission for the four generated goal families (perpendicular, line-plane perpendicular, tangent slope, and line-in-plane). It binds theorem/report names, imports, heartbeat budget, declared points, repeated statement points, and the finite proof strategy; extra declarations/commands, substituted statements, block-comment wrapping, mismatched reports/imports, and arbitrary proof bodies are rejected before any process or temporary file is created. The old forbidden-token checks remain diagnostics, not the sole boundary.
+- **Compatibility evidence:** actual TypeScript adapter output, including renamed identifiers, is snapshotted into `apps/desktop/src-tauri/tests/fixtures/lean-admission.json`; the Rust suite exercises eight real generated fixtures.
+- **Fresh verification:** `proof_command` passed **19/19**; the seven proof TypeScript suites passed **97/97** before this block, and the combined admission/pinning/proof/benchmark contract slice passed **145/145**. Typecheck and changed-file lint were also clean.
+- **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
+- **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
+- **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.

@@ -2,7 +2,7 @@
 
 - 审查日期：2026-10-16（本机时区 America/Los_Angeles）。
 - 项目：`D:/draw/draw`
-- Git HEAD：`3632817016d5cab5e4939199467e0b557962b844`。
+- Git HEAD：`1ed452cb885f5a1959ecf1e4e56b7805e4b49251`。
 - 依据：`docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md` 中 Task 1–21 的功能要求与退出条件。
 - 方法：追踪实际入口到规划、编译、内核构造、条件核验、草稿、确认提交、画布及证明回包；运行当前源码的完整测试，并用额外离线探针寻找既有测试没有覆盖的反例。文档勾选不计为功能通过证据。
 - 修改边界：未修改产品代码、未更改原计划状态；保留已有 `apps/desktop/src-tauri/Cargo.toml` 工作区改动。只添加审查日志、探针与本报告。没有发起真实 provider 请求、执行恶意 Lean 代码、下载大体积工具链或安装桌面包。
@@ -311,3 +311,60 @@ This block is based on the current worktree relative to parent commit 5ddd6d7 (T
 - **Fresh verification:** five targeted Vitest files passed 121/121; agent-exam-solid.spec.ts passed 1/1; agent-function-tangent.spec.ts passed 1/1; both TypeScript projects typechecked; lint passed for the five changed source/test files.
 - **Independent review:** the second review found no Critical or Important issue. The only Minor suggestion was to promote projection/area overflow cases into permanent runner-level regression tests; this round already has layout-level tests and an independent runner probe.
 - **Verdict:** Task 12 is functionally complete for the declared browser-side bounded fold relation search and candidate commit-gate scope. It is not expanded to all fold problems, all exam variants, or automatic Lean. Ordinary drawing and automatic Lean remain separate acceptance tracks.
+
+## 2026-10-16 Current-HEAD functional checkpoint
+
+This section is a functional checkpoint of the product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`. It supersedes the opening summary and the historical defect descriptions where a later current-HEAD revalidation is recorded. This checkpoint does not change product behavior or complete the active Goal.
+
+### Overall decision
+
+The 21-task program is **not 21/21 complete**. The current evidence supports:
+
+- **14 tasks complete within their declared support scope:** Tasks 1-8, 10-12, 14-15, and 17.
+- **5 tasks partially complete:** Tasks 9, 13, 16, 18, and 19.
+- **2 tasks not complete / not release-accepted:** Tasks 20 and 21.
+
+"Complete within support scope" does not mean every mathematical family, every exam variant, real-provider quality, desktop release acceptance, or automatic Lean proof. Those are separate acceptance gates.
+
+### Current task matrix
+
+| Task | Final functional status | Evidence-based boundary |
+|---|---|---|
+| 1-8 | PASS within current compatibility/support scope | Current product tests and browser regression cover the implemented contracts; this is not a claim of unlimited problem coverage. |
+| 9 | PARTIAL | Offline entry and anti-false-positive guards run, but the independently reviewed gold cases and oracle coverage are missing. The empty/partial/duplicate/non-finite measurement defect is fixed (20/20 oracle tests). |
+| 10-12 | PASS within implemented support scope | Real parse/compile/commit/render paths and representative browser flows are covered; Task 12 is bounded fold relation search, not all fold problems. |
+| 13 | PARTIAL | Face points and `solid.unfold` are real product paths for existing `polyhedron3` objects; arbitrary surfaces, automatic unfolding trees, and manual visual acceptance are missing. |
+| 14-15 | PASS within implemented support scope | Conic and explicit two-function common-tangent paths are verified; this is not all curves, formal proof, model quality, or desktop acceptance. |
+| 16 | PARTIAL | Post-commit 2D/3D evidence consumption and stale rejection are verified, but candidate visual gating, full 3D/WebGL measurability, desktop, and human readability gates remain. |
+| 17 | PASS for limited-lemma anti-overclaim scope | The product distinguishes limited lemma / whole problem / unsupported; whole-problem automatic proof is intentionally not claimed. |
+| 18 | PARTIAL | Current lifecycle and identity binding reject invalidated or stale results; real Lean execution, desktop proof lifecycle, and release/manual acceptance are not verified. |
+| 19 | PARTIAL | Template/path checks, timeout, and bounded live output are implemented and tested; strict OS isolation, real Lean slow integration, and release acceptance remain. |
+| 20 | NOT COMPLETE | Provider execution path and budget gates run, but there is no publishable 12-case real-provider success/pass@k/cost/latency/human-score evaluation. |
+| 21 | NOT COMPLETE / NOT RELEASE-ACCEPTED | Release build, installer, installed launch, WebView, and IPC smoke pass; Lean is unavailable on this machine and teacher/student, clean-machine/offline, full user-flow, and source-hash acceptance are missing. |
+
+### Two independent acceptance tracks
+
+- **Ordinary drawing:** the current representative solid, function/tangent, and fold browser flows pass, and the face-point/unfold paths have executable parse/compile/commit/render evidence. This is a bounded functional result, not a release or real-model quality sign-off.
+- **Automatic Lean:** no successful real Lean proof execution is part of the current acceptance evidence. The installed IPC probe reported Lean as unavailable because the required Lean configuration was absent. Limited-lemma safety and asynchronous stale-result handling are verified separately; they must not be merged with ordinary drawing status.
+
+### Remaining blockers before a 21/21 or release claim
+
+1. Establish an independent, complete gold set and oracle contract for Task 9.
+2. Extend Task 13 and Task 16 beyond the current supported geometry/evidence slice, including real 3D visibility and human-readable acceptance.
+3. Complete real Lean execution, strict isolation, desktop proof lifecycle, and release validation for Tasks 18-19.
+4. Run the authorized real-provider evaluation with valid gold labels, complete human review, cost/latency accounting, and a publishable tool-ring result for Task 20.
+5. Record teacher/student acceptance, clean-machine/offline installation, complete user confirmation/revise/undo flow, and artifact/source hash evidence for Task 21.
+
+The correct final status is therefore **functional progress is substantial, but the 21-task plan and release gates remain open**.
+
+
+## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
+
+This block records an executable functional change, not a documentation-only review.
+
+- **Admission fix:** desktop Lean input now has positive closed-template admission for the four generated goal families (perpendicular, line-plane perpendicular, tangent slope, and line-in-plane). It binds theorem/report names, imports, heartbeat budget, declared points, repeated statement points, and the finite proof strategy; extra declarations/commands, substituted statements, block-comment wrapping, mismatched reports/imports, and arbitrary proof bodies are rejected before any process or temporary file is created. The old forbidden-token checks remain diagnostics, not the sole boundary.
+- **Compatibility evidence:** actual TypeScript adapter output, including renamed identifiers, is snapshotted into `apps/desktop/src-tauri/tests/fixtures/lean-admission.json`; the Rust suite exercises eight real generated fixtures.
+- **Fresh verification:** `proof_command` passed **19/19**; the seven proof TypeScript suites passed **97/97** before this block, and the combined admission/pinning/proof/benchmark contract slice passed **145/145**. Typecheck and changed-file lint were also clean.
+- **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
+- **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
+- **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.

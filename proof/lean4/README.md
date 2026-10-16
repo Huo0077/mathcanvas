@@ -70,3 +70,9 @@ Qq / plausible / importGraph / proofwidgets / LeanSearchClient / Cli）逐条钉
   `lean-toolchain` 指的那份工具链（`~/.elan/toolchains/leanprover--lean4---v4.35.0-rc3`）。
   CI（GitHub Actions）上既没有 Lean、也没有这 7 GB ⇒ CI 跑的是**判据层**，
   真实端到端那条显式 gated（工具链/工程不在就 skip 并写明理由）。
+
+## 桌面侧源码准入边界（2026-10-16）
+
+桌面 runner 不接受任意 Lean 文件。`apps/desktop/src-tauri/src/proof/source.rs` 对适配器的四类生成模板做正向有限语法检查：导入/open、`maxHeartbeats`、定理声明、点名绑定、证明策略和末尾 `#print axioms` 必须按目标类匹配；模型正文只能使用已支持的有限策略。额外声明/命令、替换命题、报告错配和块注释包装会在启动 Lean 前拒绝。
+
+这不是 OS 沙箱，也不证明数学命题成立。源码通过后才交给固定配置的 `lake env lean <file>`；Lean 的退出状态、实际版本和原始公理报告由桌面 runner 记录，TS 侧 `checkAxiomsReport` 再独立判断证明产物。工具链和 mathlib 缓存仍必须由调用方显式配置，默认不会发现、下载或升级.
