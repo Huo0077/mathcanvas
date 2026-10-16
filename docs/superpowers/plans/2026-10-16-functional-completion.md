@@ -154,3 +154,17 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 - **Observed behaviors:** invalidated drafts reject late proof as `unknown_draft`; a newer stage rejects a late result as `stale_draft_version` and keeps the newer preview; pending proof does not publish a half-staged candidate; prompt normalization/raw prompt hashes and the proof binding (`claimId`, `goalSourceId`, `inputHash`, `backendVersion`) stay attached to the original attempt.
 - **Product boundary:** proof is best-effort and does not block ordinary drawing when the export flag is off; these tests do not constitute a real Lean execution, desktop installed UI lifecycle, or teacher/student acceptance.
 - **Acceptance:** Task 18 is **complete for the asynchronous lifecycle/binding slice** and remains **partial for the full task card** because real Lean integration, desktop proof lifecycle, and release/manual acceptance are still not verified.
+
+
+## 2026-10-16 Task 12 functional closure revalidation (current worktree)
+
+**Status: complete within the declared support scope; not a claim that platform-wide visual acceptance or automatic Lean is complete.**
+
+Executable evidence:
+
+1. The real runner path covers candidate generation, isolated draft, confirmation, rejection, and unchanged live document. A mixed point plus sqrt(-x^2) candidate returns rejected/failed_render on confirmation.
+2. Layout-model tests cover function samples/tangent endpoints, undrawable functions, function projection overflow, and finite dimensions whose area overflows. Render evidence fails closed on non-finite viewport/box geometry or area overflow.
+3. Five targeted Vitest files passed 121/121; solid and function/tangent browser E2E passed 1/1 each; both TypeScript projects and changed-file lint passed.
+4. The second independent review found no Critical or Important issue. The only Minor note is the optional promotion of overflow cases into permanent runner-level regression tests.
+
+Boundary: structured_only is not screenshot/DOM/camera/vision proof. This block does not claim all fold problems or all exam variants, and does not change the partial verdicts for Task 20 real-provider evaluation or Task 21 teacher/student acceptance. Automatic Lean remains separately adjudicated.

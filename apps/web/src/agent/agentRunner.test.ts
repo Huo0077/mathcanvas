@@ -111,6 +111,36 @@ describe("the confirm and commit cycle", () => {
     resetAgent()
   })
 
+  it("does not authorize a mixed draft containing an undrawable function", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({
+        plan: {
+          schemaVersion: "mathcanvas.plan.v1",
+          kind: "plan",
+          goal: "mixed layout safety",
+          factIds: [],
+          assumptions: [],
+          actions: [
+            { actionId: "planar.create_point", actionKey: "point", factIds: [], inputs: { alias: "A", points: [{ x: 0, y: 0 }] } },
+            { actionId: "function.create_graph", actionKey: "undefined-curve", factIds: [], inputs: { alias: "undefined-curve", expression: "sqrt(-x^2)", domain: [-2, 2] } }
+          ]
+        } as never,
+        requestId: "mixed-layout",
+        attemptId: "attempt-1"
+      })
+    }
+    const runner = createAgentRunner({ planner })
+
+    const result = await runAndWait(runner, "mixed layout safety")
+
+    expect(result.phase).toBe("awaiting_confirmation")
+    const outcome = runner.confirm()
+    expect(outcome.status).toBe("rejected")
+    expect(outcome.detail ?? "").toContain("failed_render")
+    expect(runner.hasDraft()).toBe(true)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
   it("stages a draft without touching the document, then commits it on confirmation", async () => {
     const runner = createAgentRunner()
     const before = useSceneStore.getState().document

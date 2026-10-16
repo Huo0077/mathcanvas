@@ -1588,3 +1588,10 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 - **Observed behaviors:** invalidated drafts reject late proof as `unknown_draft`; a newer stage rejects a late result as `stale_draft_version` and keeps the newer preview; pending proof does not publish a half-staged candidate; prompt normalization/raw prompt hashes and the proof binding (`claimId`, `goalSourceId`, `inputHash`, `backendVersion`) stay attached to the original attempt.
 - **Product boundary:** proof is best-effort and does not block ordinary drawing when the export flag is off; these tests do not constitute a real Lean execution, desktop installed UI lifecycle, or teacher/student acceptance.
 - **Acceptance:** Task 18 is **complete for the asynchronous lifecycle/binding slice** and remains **partial for the full task card** because real Lean integration, desktop proof lifecycle, and release/manual acceptance are still not verified.
+
+
+## 2026-10-16 Current functional status increment: Task 12
+
+Task 12 now has a verified functional loop within its declared scope: bounded fold relation search is connected to the product compiler entry point; candidate layout evidence, undrawable-function fail-closed behavior, projection/area overflow protection, repair/workspace switching/consent/commit paths are all covered by current executable checks. Ordinary drawing for the solid representative and function/tangent representative passed separate browser E2E flows.
+
+Boundary: structured_only candidate evidence is not screenshot/DOM/real-camera/vision acceptance; this does not claim generalization to every fold problem or exam, and does not claim automatic Lean is complete. Task 20 real-provider quality evaluation and Task 21 teacher/student release acceptance remain separate verdicts.

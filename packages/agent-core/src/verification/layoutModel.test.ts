@@ -95,6 +95,68 @@ describe("document to screen boxes", () => {
     expect(diagnostics).toEqual([])
   })
 
+  it("uses rendered function samples and tangent endpoints as bounds", () => {
+    const model = buildLayoutModel({
+      primitives: [
+        { id: "function-1", type: "function", expression: "x^3-3*x", domain: [-2, 2], samples: 64 },
+        { id: "tangent-1", type: "tangent", sourceId: "function-1", x: 1, point: { x: 1, y: -2 }, slope: 0, a: { x: -2, y: -2 }, b: { x: 2, y: -2 }, status: "approximate" }
+      ]
+    })
+
+    expect(model.viewport.width).toBeGreaterThan(0)
+    expect(model.viewport.height).toBeGreaterThan(0)
+    expect(model.boxes.map((box) => box.id)).toEqual(["function-1", "tangent-1"])
+    expect(model.boxes.find((box) => box.id === "tangent-1")?.width).toBeCloseTo(240, 5)
+    expect(diagnoseLayout(model.viewport, model.boxes)).toEqual([])
+  })
+
+  it("does not treat an isolated function sample as a rendered curve", () => {
+    const model = buildLayoutModel({
+      primitives: [
+        { id: "undefined-curve", type: "function", expression: "sqrt(-x^2)", domain: [-2, 2], samples: 64 }
+      ]
+    })
+
+    expect(model.boxes).toEqual([])
+    expect(model.viewport).toEqual({ width: 0, height: 0 })
+  })
+
+  it("fails closed when projected function bounds overflow", () => {
+    const model = buildLayoutModel({
+      primitives: [
+        { id: "overflow-curve", type: "function", expression: "10^307*x", domain: [-2, 2], samples: 64 }
+      ]
+    })
+
+    expect(model.boxes).toEqual([])
+    expect(model.viewport).toEqual({ width: 0, height: 0 })
+    expect(diagnoseLayout(model.viewport, model.boxes).map((entry) => entry.code)).toEqual(["degenerate_viewport"])
+  })
+
+  it("rejects an undrawable function even when another object has a valid layout", () => {
+    const model = buildLayoutModel({
+      primitives: [
+        { id: "valid-point", type: "point", x: 0, y: 0 },
+        { id: "undefined-curve", type: "function", expression: "sqrt(-x^2)", domain: [-2, 2], samples: 64 }
+      ]
+    })
+
+    expect(model.boxes).toEqual([])
+    expect(model.viewport).toEqual({ width: 0, height: 0 })
+  })
+
+  it("fails closed when finite box dimensions overflow their area", () => {
+    const model = buildLayoutModel({
+      primitives: [
+        { id: "wide-curve", type: "function", expression: "x", domain: [-1e155, 1e155], samples: 2 }
+      ]
+    })
+
+    expect(Number.isFinite(model.viewport.width)).toBe(true)
+    expect(Number.isFinite(model.viewport.height)).toBe(true)
+    expect(diagnoseLayout(model.viewport, model.boxes).map((entry) => entry.code)).toEqual(["degenerate_viewport"])
+  })
+
   it("reports an overlap when two labelled points sit on top of each other", () => {
     /**
      * 两个标签叠在一起时**必须**被发现 —— 这是"纯本地视觉判据"存在意义的最小证明。

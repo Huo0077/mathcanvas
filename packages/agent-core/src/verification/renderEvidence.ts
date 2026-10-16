@@ -126,6 +126,16 @@ function area(box: LayoutBox): number {
   return Math.max(0, box.width) * Math.max(0, box.height)
 }
 
+function hasFiniteGeometry(box: LayoutBox): boolean {
+  const right = box.x + box.width
+  const bottom = box.y + box.height
+  return [box.x, box.y, box.width, box.height, right, bottom, area(box)].every((value) => Number.isFinite(value))
+}
+
+function hasFiniteViewport(viewport: Viewport): boolean {
+  return [viewport.width, viewport.height, viewport.width * viewport.height].every((value) => Number.isFinite(value))
+}
+
 function intersectionArea(a: LayoutBox, b: LayoutBox): number {
   const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
   const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
@@ -165,6 +175,13 @@ export function diagnoseLayout(
   thresholds: LayoutThresholds = DEFAULT_LAYOUT_THRESHOLDS
 ): LayoutDiagnostic[] {
   const diagnostics: LayoutDiagnostic[] = []
+
+  if (!hasFiniteViewport(viewport) || !(viewport.width > 0) || !(viewport.height > 0) || boxes.some((box) => !hasFiniteGeometry(box))) {
+    // Non-finite intermediate geometry would make Infinity/Infinity become
+    // NaN and silently bypass every comparison below. Fail closed before
+    // calculating visibility, overlap, or tiny-object ratios.
+    return [{ code: "degenerate_viewport", severity: "error", detail: "viewport or layout box geometry is non-finite", objectIds: [] }]
+  }
 
   if (!(viewport.width > 0) || !(viewport.height > 0)) {
     // 视口本身退化时，**后面每一条判定都没有意义** —— 如实说这一条，不去报一堆下游噪声。

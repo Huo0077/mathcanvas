@@ -1,3 +1,5 @@
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression } from "@draw/geometry-kernel"
+
 import type { LayoutBox, LayoutModel } from "./renderEvidence"
 
 /**
@@ -89,25 +91,58 @@ function positionOf(primitive: Record<string, unknown>): Point | null {
  * 有顶点族的（模板 / 点集多面体）取全部顶点的范围 —— 那才是"这个实体占多大地方"。
  * 顶点读不出来时退化成它自己的位置点。两者都没有就是 `null`（跳过）。
  */
+function coordinatePointsOf(value: unknown): Point[] {
+  if (Array.isArray(value)) return value.flatMap((entry) => coordinatePointsOf(entry))
+  if (typeof value !== "object" || value === null) return []
+  const point = positionOf(value as Record<string, unknown>)
+  return point ? [point] : []
+}
+
+function sampledFunctionSegmentsOf(primitive: Record<string, unknown>): Point[][] {
+  if (primitive.type !== "function" || typeof primitive.expression !== "string" || !Array.isArray(primitive.domain) || primitive.domain.length !== 2) return []
+  const [start, end] = primitive.domain
+  if (typeof start !== "number" || !Number.isFinite(start) || typeof end !== "number" || !Number.isFinite(end)) return []
+  const requestedSamples = typeof primitive.samples === "number" && Number.isFinite(primitive.samples) ? primitive.samples : 128
+  const samples = Math.max(2, Math.min(2048, Math.floor(requestedSamples)))
+  try {
+    return adaptiveSampleFunctionSegments(
+      (x) => evaluateParameterExpression(primitive.expression as string, { x }),
+      [start, end],
+      { initialSteps: samples, maxSteps: Math.max(samples, 2048) }
+    )
+      // The renderer emits polylines, so a one-point segment is not drawable evidence.
+      .filter((segment) => segment.length >= 2)
+      .map((segment) => segment.map(({ x, y }) => ({ x, y })))
+      .filter((segment) => segment.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)))
+  } catch {
+    return []
+  }
+}
+
 function worldBoundsOf(document: { primitives: readonly Record<string, unknown>[] }, primitive: Record<string, unknown>): { minX: number; minY: number; maxX: number; maxY: number } | null {
   const points: Point[] = []
   const vertexIds = primitive.vertexIds
   if (Array.isArray(vertexIds)) {
     for (const id of vertexIds) {
       const vertex = document.primitives.find((entry) => entry.id === id)
-      if (vertex) {
-        const point = positionOf(vertex)
-        if (point) points.push(point)
-      }
+      if (vertex) points.push(...coordinatePointsOf(vertex))
     }
   }
+  points.push(...coordinatePointsOf(primitive.position))
+  points.push(...coordinatePointsOf(primitive.point))
+  points.push(...coordinatePointsOf(primitive.points))
+  points.push(...coordinatePointsOf(primitive.a))
+  points.push(...coordinatePointsOf(primitive.b))
+  points.push(...sampledFunctionSegmentsOf(primitive).flat())
   if (points.length === 0) {
     const own = positionOf(primitive)
     if (own) points.push(own)
   }
   if (points.length === 0) return null
-  const xs = points.map((point) => point.x)
-  const ys = points.map((point) => point.y)
+  const finitePoints = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+  if (finitePoints.length === 0) return null
+  const xs = finitePoints.map((point) => point.x)
+  const ys = finitePoints.map((point) => point.y)
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
 }
 
@@ -124,6 +159,12 @@ function worldBoundsOf(document: { primitives: readonly Record<string, unknown>[
 export function buildLayoutModel(document: { primitives: readonly Record<string, unknown>[] }, options: LayoutModelOptions = DEFAULT_LAYOUT_MODEL_OPTIONS): LayoutModel {
   const entries: { id: string; label: string | undefined; bounds: { minX: number; minY: number; maxX: number; maxY: number } }[] = []
   for (const primitive of document.primitives) {
+    // A function primitive is only drawable when at least one sampled segment
+    // has two finite points. Do not let another valid object hide an
+    // unrenderable function from the candidate render gate.
+    if (primitive.type === "function" && sampledFunctionSegmentsOf(primitive).length === 0) {
+      return { viewport: { width: 0, height: 0 }, boxes: [] }
+    }
     const bounds = worldBoundsOf(document, primitive)
     if (!bounds) continue
     const id = typeof primitive.id === "string" ? primitive.id : null
@@ -142,8 +183,16 @@ export function buildLayoutModel(document: { primitives: readonly Record<string,
   const maxX = Math.max(...entries.map((entry) => entry.bounds.maxX))
   const maxY = Math.max(...entries.map((entry) => entry.bounds.maxY))
   const scale = options.pixelsPerUnit
-  const contentWidth = (maxX - minX) * scale
-  const contentHeight = (maxY - minY) * scale
+  const worldWidth = maxX - minX
+  const worldHeight = maxY - minY
+  const contentWidth = worldWidth * scale
+  const contentHeight = worldHeight * scale
+  if (
+    !Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY) ||
+    !Number.isFinite(worldWidth) || !Number.isFinite(worldHeight) ||
+    !Number.isFinite(contentWidth) || !Number.isFinite(contentHeight) ||
+    !(contentWidth >= 0) || !(contentHeight >= 0)
+  ) return { viewport: { width: 0, height: 0 }, boxes: [] }
 
   /**
    * 视口 = 内容 + 两侧留白，再按比例补足较窄的一边。
@@ -151,6 +200,9 @@ export function buildLayoutModel(document: { primitives: readonly Record<string,
    */
   const width = Math.max(contentWidth + options.padding * 2, (contentHeight + options.padding * 2) * options.aspectRatio, options.padding * 2)
   const height = Math.max(contentHeight + options.padding * 2, width / options.aspectRatio, options.padding * 2)
+  if (!Number.isFinite(width) || !Number.isFinite(height) || !(width > 0) || !(height > 0)) {
+    return { viewport: { width: 0, height: 0 }, boxes: [] }
+  }
 
   /** 内容居中：把世界坐标的原点挪到画布中间。 */
   const offsetX = (width - contentWidth) / 2
@@ -196,6 +248,10 @@ export function buildLayoutModel(document: { primitives: readonly Record<string,
         height: options.labelSize.height
       })
     }
+  }
+
+  if (!boxes.every((box) => [box.x, box.y, box.width, box.height].every(Number.isFinite))) {
+    return { viewport: { width: 0, height: 0 }, boxes: [] }
   }
 
   return { viewport: { width, height }, boxes }

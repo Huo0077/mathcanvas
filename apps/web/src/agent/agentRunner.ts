@@ -1,5 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, describeSchemaFailureForUser, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -447,6 +447,22 @@ export interface PlannerSelection {
  */
 export const MODEL_PLANNER_SKILL_IDS: readonly string[] = SKILL_MANIFESTS.map((manifest) => manifest.id)
 
+function buildStructuredCandidateRenderEvidence(input: {
+  runId: string
+  draftId: string
+  draftVersion: number
+  candidate: GeometryDocument
+}): RenderEvidence {
+  return {
+    mode: "structured_only",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: canonicalContentHash(input.candidate),
+    ...buildLayoutModel(input.candidate as unknown as { primitives: readonly Record<string, unknown>[] })
+  }
+}
+
 export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): AgentRunner {
   let sequence = 0
   /** 这一轮是谁在规划（`waiting` 那条分支要靠它说人话）。 */
@@ -608,7 +624,10 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         ...(pinned === null ? {} : { conversationId: pinned.conversationId }),
         readConversationId: () => useAgentStore.getState().activeConversation?.id ?? null,
         projectId: "local",
-        runId
+        runId,
+        // The browser host can deterministically verify the candidate layout from its structure.
+        // This is a structured-only gate, not a screenshot, DOM, or vision measurement.
+        candidateRenderEvidence: (input) => buildStructuredCandidateRenderEvidence(input)
       })
       /**
        * **把这一轮登记进按 `runId` 索引的表**（Fix round 1 / C2）。

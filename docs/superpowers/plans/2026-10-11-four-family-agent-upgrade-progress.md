@@ -467,3 +467,15 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 - **Observed behaviors:** invalidated drafts reject late proof as `unknown_draft`; a newer stage rejects a late result as `stale_draft_version` and keeps the newer preview; pending proof does not publish a half-staged candidate; prompt normalization/raw prompt hashes and the proof binding (`claimId`, `goalSourceId`, `inputHash`, `backendVersion`) stay attached to the original attempt.
 - **Product boundary:** proof is best-effort and does not block ordinary drawing when the export flag is off; these tests do not constitute a real Lean execution, desktop installed UI lifecycle, or teacher/student acceptance.
 - **Acceptance:** Task 18 is **complete for the asynchronous lifecycle/binding slice** and remains **partial for the full task card** because real Lean integration, desktop proof lifecycle, and release/manual acceptance are still not verified.
+
+
+## 2026-10-16 Task 12 current-HEAD functional acceptance
+
+- [x] Bounded fold relation search is connected to the real product compiler entry point with an explicit budget and incompleteness boundary.
+- [x] The real runner creates structured candidate evidence before confirmation and HostBridge revalidates it; an undrawable function cannot be hidden by another valid object in a mixed document.
+- [x] Projection, viewport, box-bound, and area overflow fail closed; normal solid and function/tangent paths show no regression.
+- [x] Repair round, workspace switching, consent, commit, and rejection remain observable in the real runtime path.
+- [x] Targeted tests: 5 files / 121 tests; two ordinary-drawing browser E2E tests at 1/1 each; typecheck and lint passed.
+- [ ] This block does not expand the claim to every fold problem, every exam, screenshot/vision acceptance, or automatic Lean.
+
+This block is ready for an independent Task 12 commit and push. Ordinary drawing and automatic Lean continue as separate acceptance tracks.

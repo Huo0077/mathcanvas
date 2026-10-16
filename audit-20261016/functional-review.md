@@ -299,3 +299,15 @@ This entry supersedes the initial defect reproduction as the current-state verdi
 - **Observed behaviors:** invalidated drafts reject late proof as `unknown_draft`; a newer stage rejects a late result as `stale_draft_version` and keeps the newer preview; pending proof does not publish a half-staged candidate; prompt normalization/raw prompt hashes and the proof binding (`claimId`, `goalSourceId`, `inputHash`, `backendVersion`) stay attached to the original attempt.
 - **Product boundary:** proof is best-effort and does not block ordinary drawing when the export flag is off; these tests do not constitute a real Lean execution, desktop installed UI lifecycle, or teacher/student acceptance.
 - **Acceptance:** Task 18 is **complete for the asynchronous lifecycle/binding slice** and remains **partial for the full task card** because real Lean integration, desktop proof lifecycle, and release/manual acceptance are still not verified.
+
+
+## 2026-10-16 Current-worktree functional review: Task 12 browser fold verification
+
+This block is based on the current worktree relative to parent commit 5ddd6d7 (Task 18 lifecycle revalidation) and on executable behavior, not document checkmarks.
+
+- **Real runner path:** planner -> isolated draft -> structured candidate layout evidence -> HostBridge consent -> commit was rechecked. A mixed candidate containing a valid point and an undrawable function makes confirm() return rejected with detail failed_render; the live document remains unchanged and the draft remains available for repair/retry.
+- **Layout safety:** insufficient function samples, function projection overflow, tangent endpoints omitted from bounds, and non-finite viewport/box coordinates or area intermediates all fail closed. A valid neighboring object cannot hide an undrawable function, and Infinity/Infinity cannot turn into a committable result.
+- **Evidence boundary:** candidate evidence is explicitly structured_only. It proves only the structured layout model; it is not a screenshot, DOM read, real-camera measurement, or vision result.
+- **Fresh verification:** five targeted Vitest files passed 121/121; agent-exam-solid.spec.ts passed 1/1; agent-function-tangent.spec.ts passed 1/1; both TypeScript projects typechecked; lint passed for the five changed source/test files.
+- **Independent review:** the second review found no Critical or Important issue. The only Minor suggestion was to promote projection/area overflow cases into permanent runner-level regression tests; this round already has layout-level tests and an independent runner probe.
+- **Verdict:** Task 12 is functionally complete for the declared browser-side bounded fold relation search and candidate commit-gate scope. It is not expanded to all fold problems, all exam variants, or automatic Lean. Ordinary drawing and automatic Lean remain separate acceptance tracks.
