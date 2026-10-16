@@ -1944,6 +1944,20 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (relationFailed) {
     advice.push("提醒：你给的坐标**不满足题面写下的关系**。`某条棱 ⊥ 平面` 的意思是那条棱**沿着平面的法向**：先把底面摆好（例如四个底面点都取同一个 `z`），再让那个顶点落在**垂足正上方** —— 顶点坐标 = 垂足 + 法向 × 棱长。**不要把顶点放在底面中心或别的顶点的正上方**（那会让这条棱变成斜线，残差与长度都不对）。`PD = 2` 这样的长度由两点的**坐标差**决定，与垂直关系**一起**才把这个点钉死；只满足其中一条，另一条就会实测出别的数。")
   }
+  /**
+   * **折的引用不在片上**（2026-10-15 用户现场，翻折那道题）—— 这一类错误此前**一条提示都没有**，
+   * 而它恰恰是**约定**错误（不是几何算错）：现场读数「这片上有 `P、E、F`」说明模型把**折后**的
+   * 名字写进了 `vertexNames`，而契约要的是**折前**的名字加 `apex`/`apexAs`。
+   *
+   * 提示分两半：① 这一笔的**约定**（折前名字、`apex` 是折前那个点、`apexAs` 是它折后叫什么、
+   * 折痕两端也必须是这片上的点名）；② 这类题的**正确形状**（一张 `solid.create_face` 建折前的
+   * 平面片 + 一笔 `solid.fold` 折它）—— 因为现场那两条错是**一起**出现的：模型在拼一只
+   * "折后的闭合体"，于是既塌了面、又把折后的名字当成了片上的点名。
+   */
+  const foldReferenceMissing = errors.some((error) => error.code === "fold_reference_missing")
+  if (foldReferenceMissing) {
+    advice.push("提醒：`solid.fold` 的 `vertexNames` 要写**折前**的名字（平面上那个名字，例如 `A、E、F`），`apex` 是**折前**被带走的那个点（`A`）、`apexAs` 是它折后叫什么（`P`）；`hinge` 的两端也必须是这片上的点名。**不要把折后的名字（`P`）写进 `vertexNames`** —— 折后名字由 `apexAs` 一个字段交代，两者同时写会被当场拒。这类题的形状是：先用 `solid.create_face` 一张一张把**折前的平面片**建出来（带折前点名），再用 `solid.fold` 折它；**不要**去拼一只「折后的闭合体」。")
+  }
   return advice
 }
 

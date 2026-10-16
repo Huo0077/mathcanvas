@@ -1410,6 +1410,29 @@ describe("面塌了的修复提示", () => {
 
     expect(prompt).not.toContain("solid.create_face")
   })
+
+  /**
+   * **2026-10-15 用户现场（翻折那道题）**：两次几何修复之后仍然同时报两条错 ——
+   * `degenerate_polyhedron`（面塌了，拼闭合体）与 `fold_reference_missing`
+   *（折痕两端与顶点必须是这只片上的点名；**片上有 `P、E、F`** ⇒ 模型把**折后**的名字
+   * 写进了 `vertexNames`，而契约要的是**折前**的 `A、E、F` + `apex`/`apexAs`）。
+   *
+   * 第一条**本来就有**提示（"开放图形不要拼闭合体"）；第二条**一条都没有** ——
+   * 而它恰恰是**约定**错误（不是几何算错），一句提示就可能救回来。
+   */
+  it("折的引用不在片上时，把「折前名字 + apex/apexAs」这套约定说清", () => {
+    const hint = ask([
+      { code: "degenerate_polyhedron", path: "envelope.actions[0]", detail: "face ring [0,3,4] has zero area (largest triangle 0.00e+0): these vertices are collinear, and a face needs three points that are not collinear" },
+      { code: "fold_reference_missing", path: "envelope.actions[1]", detail: "折痕两端与顶点都必须是这只片上的点名（这片上有 P、E、F）。" }
+    ])
+
+    // ① 说清这一笔要的是**折前**的名字，`apex`/`apexAs` 各自是什么。
+    expect(hint).toContain("折前")
+    expect(hint).toContain("apexAs")
+    // ② 并给出这套题的**正确形状**：一张 `solid.create_face`（折前平面片）+ 一笔 `solid.fold`。
+    expect(hint).toContain("solid.create_face")
+    expect(hint).toContain("solid.fold")
+  })
 })
 
 /**
