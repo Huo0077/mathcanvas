@@ -153,4 +153,23 @@ describe("现场那道四棱锥：点名对不上图上的顶点时，系统要�
     expect(spatial!.summary, spatial!.summary).toContain("必须用 `vertexNames`")
     expect(spatial!.summary, spatial!.summary).toContain("题设核验一条都过不了")
   })
+
+  /**
+   * **"平面图形 + 分点 + 沿某条线翻折"这类题的计划骨架与顺序**（2026-10-15 用户现场）。
+   *
+   * 现场反复出现的两个错：拿 `solid.create_polyhedron` 去套**平面四边形**（"开放图形不要拼闭合体"
+   * 这条提示它已经忽略四次），以及把**连线段排在建点之前**。两者都是**结构**问题 ——
+   * 写进技能说明是"**第一次就写对**"的那条路，而不是花掉修复轮（那一轮正是预算耗尽的那一轮）。
+   *
+   * 这条断言把骨架钉住：以后谁把这段删掉，这里就红。
+   */
+  it("**技能说明里写清了这类题的计划骨架与顺序**（先建折前平面片 → 再建分点 → 最后连线/折）", () => {
+    const spatial = SKILL_MANIFESTS.find((entry) => entry.id === "spatial-modeling")
+    expect(spatial, "技能目录里必须有 spatial-modeling").toBeDefined()
+    const summary = spatial!.summary
+    expect(summary, summary).toContain("计划骨架")
+    // 顺序那一条必须明写：同一份计划**按顺序**执行，后一笔引用不到前面的点名会被当场拒。
+    expect(summary, summary).toContain("先建点")
+    expect(summary, summary).toContain("再连线")
+  })
 })
