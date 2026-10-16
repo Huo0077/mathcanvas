@@ -49,6 +49,8 @@ export interface DraftProofAttempt {
   scope: { outcome: ProofScopeOutcome; goalSourceId: string | null; detail: string; outside: string[] } | null
   /** 过期时的结论（非空 ⇒ `outcome` 一定是 `stale`）。 */
   stale: { kind: string; detail: string } | null
+  /** Verified by the core adapter against the original request, never synthesized by the draft store. */
+  binding?: { inputHash: string; backendVersion: string }
 }
 
 export interface ProofStageRequest {
@@ -122,6 +124,7 @@ export async function attemptProofForStage(request: ProofStageRequest): Promise<
         .filter((entry) => entry.scope !== "formalized" && entry.scope !== "dischargedByNamedDerivation")
         .map((entry) => entry.sourceText)
     },
-    stale: null
+    stale: null,
+    ...(result.artifact === null ? {} : { binding: { inputHash: result.artifact.inputHash, backendVersion: result.artifact.backend.version } })
   }
 }

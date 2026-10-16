@@ -1485,3 +1485,8 @@ Worker 是**注入**的，所以这些规则在 jsdom 里能直接测（**10 条
 完整设计：`docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md`。
 完整计划：`docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md`。
 GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。
+
+
+## 2026-10-16 功能补完区块 A（Task 18）
+
+实际补完异步证明生命周期：私有暂存 + 发布 CAS，失效/取代后不返回成功；原题与规范化题面分别绑定，保存真实形式输入哈希与后端版本。新增 5 个生命周期合同用例（含独立 review 发现的规范化碰撞，确认 RED 后 GREEN）。相关回归 4 文件 / 50 通过；全仓 typecheck exit 0；lint 0 error / 13 既有 warning。详细执行及边界见 `docs/superpowers/plans/2026-10-16-functional-completion.md`。**本区块功能修复已验，不外推真实 Lean/桌面发行已验，Task 20/21 仍未完成**。下一块 B：评测门禁。

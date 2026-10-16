@@ -75,6 +75,12 @@ export interface DraftRecord {
    * 留着它才能在后续 `stage` 里复查"这一栏还配不配写'已验证'"（见 `proofAttemptFor`）。
    */
   proofAttemptIdentity?: import("@draw/agent-core").ProofAttemptIdentity
+  /** Prompt identity is separate from the formal proposition hash: even unparsed edits invalidate it. */
+  promptHash?: string
+  proofPromptHash?: string
+  /** Raw user wording identity; normalization must never make two source prompts equivalent. */
+  rawPromptHash?: string
+  proofRawPromptHash?: string
 }
 
 export interface DraftPreview {
@@ -365,6 +371,7 @@ export interface DraftStoreProofOptions {
 export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator, compile: CompileStrategy = compileOnCallerThread, proof: DraftStoreProofOptions = {}): DraftStore {
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
+  const stageLeases = new Map<string, object>()
 
   /**
    * **证明那一栏在每一次读预览时重新判一次过期**（Task 18）。
@@ -390,8 +397,11 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return markStale("document_changed", "这条证明没有记录它是给哪一份图的（旧记录）—— 不能据此升级现在这张图。")
     }
     const verdict = proofAttemptStaleness(identity, { ...identity, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision })
-    if (!verdict.stale) return record.proofAttempt
-    return markStale(verdict.kind, verdict.detail)
+    if (verdict.stale) return markStale(verdict.kind, verdict.detail)
+    if (record.proofPromptHash !== record.promptHash || record.proofRawPromptHash !== record.rawPromptHash) {
+      return markStale("input_changed", "题面已改变，旧证明不能据此升级当前目标。")
+    }
+    return record.proofAttempt
   }
 
   const previewOf = (record: DraftRecord): DraftPreview => ({
@@ -427,11 +437,16 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     },
 
     async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport, normalisations) {
-      const record = drafts.get(draftId)
-      if (!record) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
-      if (record.draftVersion !== expectedDraftVersion) {
-        return { ok: false, reason: "stale_draft_version", detail: `draft is at version ${record.draftVersion}, not ${expectedDraftVersion}` }
+      const source = drafts.get(draftId)
+      if (!source) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
+      if (source.draftVersion !== expectedDraftVersion) {
+        return { ok: false, reason: "stale_draft_version", detail: `draft is at version ${source.draftVersion}, not ${expectedDraftVersion}` }
       }
+      // Work privately across both awaits. A newer stage owns a new lease; a deleted
+      // draft can never be resurrected by a late compiler/proof result.
+      const lease = {}
+      stageLeases.set(draftId, lease)
+      const record = { ...source, candidate: cloneDocument(source.candidate) }
 
       /**
        * **编译走六层管线**（Agent DSL 切片 Task 4）。
@@ -527,6 +542,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || userMessage === undefined
         ? userMessage
         : applyNormalisation(userMessage, normalisation.accepted)
+      record.rawPromptHash = canonicalContentHash({ prompt: userMessage ?? null })
+      record.promptHash = canonicalContentHash({ prompt: effectivePrompt ?? null })
       if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
 
       const parsed = effectivePrompt && planHasVerifiableFigure(actions)
@@ -577,28 +594,42 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
          * 台上已经不是它当初跑的那一份，就标 `stale`，**不许**把"已验证"贴到新图上。
          */
         const attemptIdentity = { draftId: record.draftId, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision }
+        const claimId = `draft-goal:${record.draftId}:${record.rawPromptHash}`
         const attempt = await attemptProofForStage({
-          prompt: userMessage ?? "",
+          prompt: effectivePrompt ?? "",
           obligations: parsed.legacy,
           flagEnabled: true,
+          claimId,
           ...(proof.channel === undefined ? {} : { channel: proof.channel }),
           ...(proof.backendVersion === undefined ? {} : { backendVersion: proof.backendVersion })
         })
         if (attempt !== null) {
-          const live = { ...attemptIdentity, documentHash: canonicalContentHash(record.candidate), revision: record.candidate.revision }
-          const identity = { ...attemptIdentity, claimId: attempt.claimId ?? "", goalSourceId: attempt.scope?.goalSourceId ?? null, inputHash: "", backendVersion: "" }
-          const verdict = proofAttemptStaleness(identity, { ...live, claimId: attempt.claimId ?? "", goalSourceId: attempt.scope?.goalSourceId ?? null, inputHash: "", backendVersion: "" })
-          record.proofAttempt = verdict.stale
-            ? { ...attempt, outcome: "stale", detail: `${attempt.detail}【过期：${verdict.detail}】`, stale: { kind: verdict.kind, detail: verdict.detail } }
-            : attempt
-          record.proofAttemptIdentity = identity
+          // The adapter already verifies inputHash/claim/backend against the exact
+          // original proposition. Preserve that binding, not empty placeholders or
+          // a comparison of the returned claim with itself. Publication uses CAS below.
+          record.proofAttempt = attempt
+          record.proofPromptHash = record.promptHash
+          record.proofRawPromptHash = record.rawPromptHash
+          record.proofAttemptIdentity = {
+            ...attemptIdentity, claimId, goalSourceId: attempt.scope?.goalSourceId ?? null,
+            inputHash: attempt.binding?.inputHash ?? "",
+            backendVersion: attempt.binding?.backendVersion ?? proof.backendVersion ?? ""
+          }
         }
       }
 
       const merged = new Map(record.completionAssumptions.map((assumption) => [assumption.id, assumption]))
       for (const assumption of compiled.assumptions) merged.set(assumption.id, assumption)
       record.completionAssumptions = [...merged.values()]
+      if (!drafts.has(draftId) || invalidated.has(draftId)) {
+        return { ok: false, reason: "unknown_draft", detail: `draft ${draftId} was invalidated while staging` }
+      }
+      if (drafts.get(draftId) !== source || stageLeases.get(draftId) !== lease) {
+        return { ok: false, reason: "stale_draft_version", detail: "a newer stage superseded this asynchronous result" }
+      }
       record.draftVersion += 1
+      drafts.set(draftId, record)
+      stageLeases.delete(draftId)
       return { ok: true, preview: previewOf(record) }
     },
 
@@ -620,6 +651,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
 
     invalidate(draftId, reason) {
       invalidated.set(draftId, reason)
+      stageLeases.delete(draftId)
       drafts.delete(draftId)
     },
 
