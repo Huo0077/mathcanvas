@@ -1,0 +1,11 @@
+﻿Task 9/13 functional verification — 2026-10-16
+
+Task 9 command:
+npm.cmd exec vitest run -- packages/agent-core/src/benchmark/examSet.test.ts packages/agent-core/src/benchmark/examEvaluation.test.ts apps/web/src/agent/fixtures/benchmarkContract.test.ts apps/web/src/agent/fixtures/benchmarkPlanningEval.test.ts packages/agent-core/src/examClauseCoverage.test.ts --reporter=verbose
+Result: 5 files passed, 92 tests passed, 0 failed, exit 0.
+Functional findings: EXAM_CASES=8, HELD_OUT_CASES=4; structural/anti-leakage guards pass; malformed provenance rejected; empty/unreviewed gold fails closed; invalid, missing, duplicate, extra and out-of-tolerance measurements rejected; deterministic offline artifact reruns. verifiedGoldCaseIds remains [] by design and is not promoted to human/model acceptance.
+
+Task 13 command:
+npm.cmd run test:e2e -- e2e/agent-exam-solid.spec.ts e2e/agent-solid-family-path.spec.ts e2e/three-round-solid-points.spec.ts --workers=1
+Result: 6 tests passed, 0 failed, exit 0.
+Functional findings: original folded-quadrilateral prompt reaches draft, seven named points and eight conditions are independently checked, PC=4√3 is checked, confirm/return/undo works; frustum and pentagonal pyramid coordinates/topology/labels pass; experiment-off produces no draft/history; cylinder/cone point display passes. This verifies the declared representative solid scope, not arbitrary surfaces or human visual sign-off.

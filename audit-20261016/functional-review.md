@@ -7,7 +7,11 @@
 - 方法：追踪实际入口到规划、编译、内核构造、条件核验、草稿、确认提交、画布及证明回包；运行当前源码的完整测试，并用额外离线探针寻找既有测试没有覆盖的反例。文档勾选不计为功能通过证据。
 - 修改边界：未修改产品代码、未更改原计划状态；保留已有 `apps/desktop/src-tauri/Cargo.toml` 工作区改动。只添加审查日志、探针与本报告。没有发起真实 provider 请求、执行恶意 Lean 代码、下载大体积工具链或安装桌面包。
 
-## 总结裁决
+## 当前裁决（2026-10-16，后续功能修复与复验后）
+
+**16/21 完成（声明支持范围内）：Tasks 1–15、17；3/21 部分完成：16、18、19；2/21 未完成/未通过发行验收：20、21。** Task 19 的受限源码准入及配置后的真实 runner 子区块通过，不代表整张任务卡通过。当前矩阵和证据见文末；以下初始诊断、旧探针缺陷和计数均为历史快照，已修复项以后续复验为准。普通作图与自动 Lean 分别验收，不可宣称 21/21 或可发行。
+
+## 初始审查裁决（历史，已被后续区块与文末矩阵取代）
 
 **不能认定 21 项全部完成，也不能据当前证据签收最终发布。** 既有 Web 能力与四族代表题链路可运行；Task 9、12、13、15、16、18、19 尚有原范围内的功能或验收缺口，Task 20、21 未完成。逐项口径为：12 项完成（限定原有支持范围）、7 项部分完成、2 项未完成。Task 12 的固定点—旋转点距离反求已完成，但原卡更一般目标关系的区间搜索尚未实现，因此按整张任务卡判部分完成。
 
@@ -180,17 +184,17 @@
 | 6 | 可追溯 FigureIntent | 完成（已支持解析范围） | 条款 ID/源 span 与题面一致，额外 relations 不覆盖来源；不把尚未解析语句升级成已核验。 |
 | 7 | 缺宿主安全物化 | 完成（已支持构造范围） | 点名冲突、未核验条件、环顺序错误有拒绝路径，物化用内核候选而非随机补点；当前相关测试通过。 |
 | 8 | Worker/主线程同版 | 完成 | 编译结果、图元、报告、witnessSearch 标志与迟到回包测试通过；不等于桌面发行已通过。 |
-| 9 | 真题离线评测工件 | 部分完成 | 开发/留出来源守卫、离线入口和错值拒绝测试可运行；当前题面为调研摘要、无正式金标，且已复现 oracle 对空测量返回 satisfied，缺完整条件覆盖核验。 |
+| 9 | Offline exam engineering | PASS within engineering scope | 8 development + 4 held-out cases rerun offline; provenance, anti-leakage and fail-closed oracle checks pass. `verifiedGoldCaseIds=[]` remains a human-gold boundary, not Task 20 quality acceptance. |
 | 10 | 边上分点/动态依赖 | 完成（已支持边上点范围） | 内核比例方向、重合/越界拒绝、落盘比例回代与依赖更新测试通过；namedPoints 的不相容同名分点确实拒绝，非仅存在旧 RED 注释。 |
 | 11 | 三角形纵向交付 | 完成（构造与代表题链路） | SSA 两解、无解/欠定、面积、换点名及最终坐标独立回代测试通过；浏览器确认/撤销通过。真实模型泛化归 Task 20，不从本地 exact 题面推出。 |
 | 12 | 目标距离反求折角 | 完成（支持范围内） | 固定距离解析求角与单折叠 planarAngle/dihedral/linePlaneAngle 有界搜索已接入 compilePlan；候选逐一回代完整题设。not-found 不冒充 unreachable，耦合多折叠、未支持关系仍拒绝。定向 212/212、原用户翻折浏览器链路 7/7。 |
-| 13 | 立体纵向交付 | 部分完成（支持范围内） | 面上点与 `solid.unfold` 已进入真实 parse/compile/commit/render 链路；仍只支持已有 `polyhedron3` 和可展开范围，不覆盖任意曲面、自动展开树或人工视觉签收。 |
+| 13 | Representative solid delivery | PASS within declared scope | Original fold prompt, frustum, pentagonal pyramid, experiment-off negative path and cylinder/cone display pass browser E2E. Face-point/unfold product tests pass separately. Arbitrary surfaces and human visual acceptance are not claimed. |
 | 14 | 圆锥曲线纵向交付 | 完成（已支持圆锥曲线范围） | 实轴语义、参数反求、代数交点/重根/竖线、弦长/面积回代与错轴/丢交点拒绝测试通过；不把非圆锥曲线硬分类，也不将代表题成功当真实模型准确率。 |
 | 15 | 函数/导数纵向交付 | 完成（支持范围内） | 函数公切线已完成产品动作、动态重算、删除级联、题面 obligation 与独立数值核验；支持两条显式 `function`、branch 0/1。`verified-numeric` 仍是实例级数值证据，不是形式证明；非函数曲线、真实模型、桌面/人工验收仍未完成。 |
 | 16 | 真实画布/过期证据 | 部分完成 | 2D/3D 提交后实时证据消费与过期拒绝已修复并有浏览器证据；候选视觉门禁、3D/WebGL 可测性边界、桌面发行和人工可读性仍缺。 |
 | 17 | 原题前提与受限引理分级 | 完成（分级防误报范围） | proof scope 和“额外题设不得升整题”测试通过；产品仍只有受限引理能力，whole_problem 未交付，不能宣称整题证明完成。 |
 | 18 | 异步证明绑定/UI | 部分完成（生命周期修复） | 失效/被替换/并发暂存的迟到结果已拒绝并绑定原请求、题面哈希和后端版本；真实 Lean、桌面 proof 生命周期与发行验收仍未执行。 |
-| 19 | Lean工具链/安全/发行 | 部分完成（实时输出修复） | 模板检查、固定工具链路径、墙钟超时和实时有界 stdout/stderr 尾部已实现并有 Rust 回归；严格操作系统隔离、真实 Lean 慢集成、桌面发行与安装验收仍未完成。 |
+| 19 | Bounded Lean admission / configured runner | PARTIAL overall; bounded runner sub-block complete | Four generated templates pass positive admission, mutation rejection and real configured local Lean execution. OS sandbox, installed UI proof lifecycle and clean-machine release validation remain independent. |
 | 20 | 真实模型质量 | 未完成（门禁已修） | 本地预算、人评覆盖与 provider 请求门禁已有功能回归；没有真实 provider 的成功率/pass@k/费用/时延/人工评分，因此不能签收模型质量。 |
 | 21 | 完整发布验收/分开裁决 | 未完成 | 当前完整 Web 回归通过；不能代替真实模型、Lean安全、桌面、CI、人评与来源哈希等独立证据。 |
 
@@ -264,7 +268,7 @@ This block records runtime evidence. Research summaries, structured fixtures, an
 
 - **Runtime result:** Loaded `EXAM_CASES` and `HELD_OUT_CASES` directly. The development set has 8 cases and the held-out set has 4; `checkExamSet(EXAM_CASES, HELD_OUT_CASES)` returns no structural problems. However, `verifiedGoldCaseIds` is still `[]`; all 12 cases have `answerIndependentlyReviewed === false`; no case contains a valid oracle.
 - **Functional guard result:** `judgeAgainstOracle` is fail-closed in the running implementation: an unreviewed case or an empty oracle returns `not_a_gold_case`; an independently reviewed synthetic case rejects empty or partial measurements, duplicate/extra measurements, non-finite values, and out-of-tolerance values, and accepts only when every required condition is measured exactly once. `packages/agent-core/src/benchmark/examSet.test.ts` passes 20/20.
-- **Acceptance result:** Task 9 is **not complete**. The executable qualification rules and anti-false-pass oracle behavior are verified, but the repository has no real gold case with independent human answer review, usage permission, input hash, and expected figure evidence.
+- **Acceptance result:** Task 9 is **complete for the engineering/offline qualification scope**. The executable qualification rules and anti-false-pass oracle behavior are verified; the repository still has no human-reviewed gold case, so `verifiedGoldCaseIds=[]` remains a deliberate boundary for Task 20 model-quality acceptance.
 - **Non-substitutable evidence:** A survey summary is not a verbatim exam prompt; a re-published answer is not an independent review; a clean `checkExamSet` result validates dataset structure only and does not create a gold case. Real review records and evidence must be added before `verifiedGoldCaseIds` can be populated and a real exam evaluation can be accepted.
 - **Boundary:** This block does not promote offline synthetic oracle checks, unit tests, or documentation into human acceptance. Real provider evaluation (Task 20) and desktop/manual acceptance (Task 21) remain open.
 
@@ -314,14 +318,14 @@ This block is based on the current worktree relative to parent commit 5ddd6d7 (T
 
 ## 2026-10-16 Current-HEAD functional checkpoint
 
-This section is a functional checkpoint of the product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`. It supersedes the opening summary and the historical defect descriptions where a later current-HEAD revalidation is recorded. This checkpoint does not change product behavior or complete the active Goal.
+This section is a functional checkpoint of the product code baseline `374bcd4` (including bounded Lean admission); historical checks retain their original baselines. It supersedes the opening summary and the historical defect descriptions where a later current-HEAD revalidation is recorded. This checkpoint does not change product behavior or complete the active Goal.
 
 ### Overall decision
 
-The 21-task program is **not 21/21 complete**. The current evidence supports:
+The 21-task program is **not 21/21 complete**. The latest supported-scope matrix is 16 complete, 3 partial (16/18/19), and 2 not complete or not release-accepted (20/21). Task 19 remains partial as a whole; its source-admission/configured-runner sub-block is complete, not OS isolation or release acceptance. The current evidence supports:
 
-- **14 tasks complete within their declared support scope:** Tasks 1-8, 10-12, 14-15, and 17.
-- **5 tasks partially complete:** Tasks 9, 13, 16, 18, and 19.
+- **16 tasks complete within their declared support scope:** Tasks 1-15 and 17.
+- **3 tasks partially complete:** Tasks 16, 18, and 19.
 - **2 tasks not complete / not release-accepted:** Tasks 20 and 21.
 
 "Complete within support scope" does not mean every mathematical family, every exam variant, real-provider quality, desktop release acceptance, or automatic Lean proof. Those are separate acceptance gates.
@@ -331,27 +335,27 @@ The 21-task program is **not 21/21 complete**. The current evidence supports:
 | Task | Final functional status | Evidence-based boundary |
 |---|---|---|
 | 1-8 | PASS within current compatibility/support scope | Current product tests and browser regression cover the implemented contracts; this is not a claim of unlimited problem coverage. |
-| 9 | PARTIAL | Offline entry and anti-false-positive guards run, but the independently reviewed gold cases and oracle coverage are missing. The empty/partial/duplicate/non-finite measurement defect is fixed (20/20 oracle tests). |
+| 9 | PASS: offline exam engineering | 8 development + 4 held-out cases rerun offline; provenance, anti-leakage and fail-closed oracle checks pass. `verifiedGoldCaseIds=[]` remains a human-gold boundary, not Task 20 quality acceptance. |
 | 10-12 | PASS within implemented support scope | Real parse/compile/commit/render paths and representative browser flows are covered; Task 12 is bounded fold relation search, not all fold problems. |
-| 13 | PARTIAL | Face points and `solid.unfold` are real product paths for existing `polyhedron3` objects; arbitrary surfaces, automatic unfolding trees, and manual visual acceptance are missing. |
+| 13 | PASS: representative solid delivery | Original fold prompt, frustum, pentagonal pyramid, experiment-off negative path and cylinder/cone display pass browser E2E. Face-point/unfold product tests pass separately. Arbitrary surfaces and human visual acceptance are not claimed. |
 | 14-15 | PASS within implemented support scope | Conic and explicit two-function common-tangent paths are verified; this is not all curves, formal proof, model quality, or desktop acceptance. |
 | 16 | PARTIAL | Post-commit 2D/3D evidence consumption and stale rejection are verified, but candidate visual gating, full 3D/WebGL measurability, desktop, and human readability gates remain. |
 | 17 | PASS for limited-lemma anti-overclaim scope | The product distinguishes limited lemma / whole problem / unsupported; whole-problem automatic proof is intentionally not claimed. |
-| 18 | PARTIAL | Current lifecycle and identity binding reject invalidated or stale results; real Lean execution, desktop proof lifecycle, and release/manual acceptance are not verified. |
-| 19 | PARTIAL | Template/path checks, timeout, and bounded live output are implemented and tested; strict OS isolation, real Lean slow integration, and release acceptance remain. |
+| 18 | PARTIAL | Current lifecycle and identity binding reject invalidated or stale results; configured local Lean execution is verified separately, but installed desktop UI proof lifecycle and release/manual acceptance remain unverified. |
+| 19 | PARTIAL overall; bounded runner sub-block complete | Four generated templates pass positive admission, mutation rejection and real configured local Lean execution. OS sandbox, installed UI proof lifecycle and clean-machine release validation remain independent. |
 | 20 | NOT COMPLETE | Provider execution path and budget gates run, but there is no publishable 12-case real-provider success/pass@k/cost/latency/human-score evaluation. |
-| 21 | NOT COMPLETE / NOT RELEASE-ACCEPTED | Release build, installer, installed launch, WebView, and IPC smoke pass; Lean is unavailable on this machine and teacher/student, clean-machine/offline, full user-flow, and source-hash acceptance are missing. |
+| 21 | NOT COMPLETE / NOT RELEASE-ACCEPTED | Release build, installer, installed launch, WebView, and IPC smoke pass; the earlier installed probe lacked Lean configuration; configured runner success does not replace teacher/student, clean-machine/offline, full user-flow, and source-hash acceptance are missing. |
 
 ### Two independent acceptance tracks
 
 - **Ordinary drawing:** the current representative solid, function/tangent, and fold browser flows pass, and the face-point/unfold paths have executable parse/compile/commit/render evidence. This is a bounded functional result, not a release or real-model quality sign-off.
-- **Automatic Lean:** no successful real Lean proof execution is part of the current acceptance evidence. The installed IPC probe reported Lean as unavailable because the required Lean configuration was absent. Limited-lemma safety and asynchronous stale-result handling are verified separately; they must not be merged with ordinary drawing status.
+- **Automatic Lean:** all four bounded templates now have successful real Lean proof execution through the configured local desktop runner. The installed IPC probe reported Lean as unavailable because the required Lean configuration was absent. Limited-lemma safety and asynchronous stale-result handling are verified separately; they must not be merged with ordinary drawing status.
 
 ### Remaining blockers before a 21/21 or release claim
 
-1. Establish an independent, complete gold set and oracle contract for Task 9.
-2. Extend Task 13 and Task 16 beyond the current supported geometry/evidence slice, including real 3D visibility and human-readable acceptance.
-3. Complete real Lean execution, strict isolation, desktop proof lifecycle, and release validation for Tasks 18-19.
+1. Establish independent human gold labels for the Task 20 model-quality evaluation; Task 9 engineering qualification is complete with empty gold kept explicit.
+2. Extend Task 16 beyond the current supported evidence slice, including real 3D visibility and human-readable acceptance.
+3. Complete strict isolation, installed-desktop proof lifecycle, and release validation for Task 18/19 boundaries.
 4. Run the authorized real-provider evaluation with valid gold labels, complete human review, cost/latency accounting, and a publishable tool-ring result for Task 20.
 5. Record teacher/student acceptance, clean-machine/offline installation, complete user confirmation/revise/undo flow, and artifact/source hash evidence for Task 21.
 
@@ -368,3 +372,10 @@ This block records an executable functional change, not a documentation-only rev
 - **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
 - **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
 - **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.
+
+
+## 2026-10-16 Fresh functional closure: Task 9 and Task 13
+
+- **Task 9:** 5 targeted files / 92 tests passed. The real offline set is 8 development + 4 held-out cases with source anchors and anti-leakage checks. Invalid provenance and invalid, missing, duplicate, extra, non-finite or out-of-tolerance measurements fail closed. `verifiedGoldCaseIds=[]` remains an explicit human-gold boundary; it is not promoted to Task 20 model acceptance.
+- **Task 13:** 6/6 browser E2E passed. The original folded-quadrilateral flow independently checks seven named points and eight conditions, checks `PC = 4√3`, and supports confirm/return/undo; frustum, pentagonal pyramid, experiment-off, cylinder and cone display paths also pass. This closes the declared representative polyhedron scope, not arbitrary surfaces or human visual sign-off.
+- **Evidence:** `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).

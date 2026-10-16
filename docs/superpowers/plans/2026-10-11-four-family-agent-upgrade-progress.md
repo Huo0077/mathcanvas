@@ -1,6 +1,8 @@
 # MathCanvas 下一步：四家族 Agent 升级、旧能力兼容、缺陷修复与 Lean 收口
 
-> **最后更新：2026-10-15。** **两项与本计划有关的修订（都有现场读数）**：① **代际预算 4 → 6**（Task 2.1 原文那个 4 是在只读工具出现之前定的；一个"读场景"的工具轮要多花一次生成，用户那道三维题因此在修复轮死在 `budget exhausted`）—— 阈值与其余额度一字未动，`MAX_PLAN_ATTEMPTS` 已导出并挂上不变量用例；② **补点的宿主判据不再枚举形状**（原为多面体/平面片）—— 改成"输入里带 ≥3 个点名"，棱柱/棱锥/棱台/多面体/平面片一次全通；配套修掉"找棱靠 id 前缀"与"全补规则把不可构造题设算进来"（后者是"点名缺失"的真凶），并新增并列中点与面形状（正方形）两条读取器。**用户那道直三棱柱的题在代码里已跑通**（编译 ok + 题设核验 `passed`）。逐条读数见[当前状态](../../current-status.md)。状态：Task 1–18 已完成；Task 19–21 尚未完成，本文件对其余任务仍只有实施设计。 [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
+> **当前功能验收：2026-10-16。** 16/21 完成（支持范围内）：Tasks 1–15、17；3/21 部分完成：16、18、19；2/21 未完成/未发行验收：20、21。Task 19 受限准入和配置后 runner 子区块已通过，整卡仍 partial。逐块新鲜证据见文末及 `audit-20261016/functional-review.md`。
+
+> **历史更新：2026-10-15（以下计数已被 10-16 功能审查取代）。** **两项与本计划有关的修订（都有现场读数）**：① **代际预算 4 → 6**（Task 2.1 原文那个 4 是在只读工具出现之前定的；一个"读场景"的工具轮要多花一次生成，用户那道三维题因此在修复轮死在 `budget exhausted`）—— 阈值与其余额度一字未动，`MAX_PLAN_ATTEMPTS` 已导出并挂上不变量用例；② **补点的宿主判据不再枚举形状**（原为多面体/平面片）—— 改成"输入里带 ≥3 个点名"，棱柱/棱锥/棱台/多面体/平面片一次全通；配套修掉"找棱靠 id 前缀"与"全补规则把不可构造题设算进来"（后者是"点名缺失"的真凶），并新增并列中点与面形状（正方形）两条读取器。**用户那道直三棱柱的题在代码里已跑通**（编译 ok + 题设核验 `passed`）。逐条读数见[当前状态](../../current-status.md)。状态：Task 1–18 已完成；Task 19–21 尚未完成，本文件对其余任务仍只有实施设计。 [四家族真题作图需求调研](../../research/2026-10-11-four-family-exam-diagram-survey.md)已在本轮完成，并独立记录卷别、题号、题型和可信边界；**本计划不再包含“以后去调研真题”任务**。现有代码能力与测试的现在时仅以 [当前状态](../../current-status.md) 为准；旧 [V0–V3 追踪](../../agent-next-round-progress.md)的读数保留为历史快照。
 
 **Goal:** 在三角形、圆锥曲线、函数/导数、立体几何四家族内提高真实作图能力，**不回退已完成的手工绘图/Agent/保存导出/实验功能**；修复已确认缺陷，并把现有受限 Lean 证明路径按原题前提、产物有效性和桌面发行证据逐项收口。不能画或不能证明时如实解释。
 
@@ -432,7 +434,7 @@ This block records runtime evidence. Research summaries, structured fixtures, an
 
 - **Runtime result:** Loaded `EXAM_CASES` and `HELD_OUT_CASES` directly. The development set has 8 cases and the held-out set has 4; `checkExamSet(EXAM_CASES, HELD_OUT_CASES)` returns no structural problems. However, `verifiedGoldCaseIds` is still `[]`; all 12 cases have `answerIndependentlyReviewed === false`; no case contains a valid oracle.
 - **Functional guard result:** `judgeAgainstOracle` is fail-closed in the running implementation: an unreviewed case or an empty oracle returns `not_a_gold_case`; an independently reviewed synthetic case rejects empty or partial measurements, duplicate/extra measurements, non-finite values, and out-of-tolerance values, and accepts only when every required condition is measured exactly once. `packages/agent-core/src/benchmark/examSet.test.ts` passes 20/20.
-- **Acceptance result:** Task 9 is **not complete**. The executable qualification rules and anti-false-pass oracle behavior are verified, but the repository has no real gold case with independent human answer review, usage permission, input hash, and expected figure evidence.
+- **Acceptance result:** Task 9 is **complete for the engineering/offline qualification scope**. The executable qualification rules and anti-false-pass oracle behavior are verified; the repository still has no human-reviewed gold case, so `verifiedGoldCaseIds=[]` remains a deliberate boundary for Task 20 model-quality acceptance.
 - **Non-substitutable evidence:** A survey summary is not a verbatim exam prompt; a re-published answer is not an independent review; a clean `checkExamSet` result validates dataset structure only and does not create a gold case. Real review records and evidence must be added before `verifiedGoldCaseIds` can be populated and a real exam evaluation can be accepted.
 - **Boundary:** This block does not promote offline synthetic oracle checks, unit tests, or documentation into human acceptance. Real provider evaluation (Task 20) and desktop/manual acceptance (Task 21) remain open.
 
@@ -482,13 +484,13 @@ This block is ready for an independent Task 12 commit and push. Ordinary drawing
 
 ## 2026-10-16 Final functional review status
 
-This is the current functional status against product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`:
+This is the current functional status against product code baseline `374bcd4` (including bounded Lean admission); historical checks retain their original baselines:
 
-- **Complete within supported scope:** Tasks 1-8, 10-12, 14-15, 17.
-- **Partial:** Tasks 9, 13, 16, 18, 19.
+- **Complete within supported scope (16):** Tasks 1-15, 17.
+- **Partial (3):** Tasks 16, 18, 19.
 - **Not complete / not release-accepted:** Tasks 20, 21.
 
-The table above must not be read as a claim that all 21 tasks are complete. Ordinary drawing and automatic Lean have separate acceptance gates. The current evidence includes representative ordinary drawing browser flows and real product action paths, but no successful real Lean execution, no publishable real-provider quality study, and no complete teacher/student or clean-machine release acceptance. See `audit-20261016/functional-review.md` for the evidence and exact blocker list.
+The table above must not be read as a claim that all 21 tasks are complete. Ordinary drawing and automatic Lean have separate acceptance gates. The current evidence includes representative ordinary drawing browser flows and real product action paths, and configured local runner success for four bounded Lean templates, but no installed UI proof lifecycle, no publishable real-provider quality study, and no complete teacher/student or clean-machine release acceptance. See `audit-20261016/functional-review.md` for the evidence and exact blocker list.
 
 
 ## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
@@ -501,3 +503,10 @@ This block records an executable functional change, not a documentation-only rev
 - **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
 - **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
 - **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.
+
+
+## 2026-10-16 Task 9/13 fresh functional closure
+
+- Task 9 engineering scope complete: 5 targeted files / 92 tests passed. Eight development and four held-out cases, provenance, anti-leakage and fail-closed oracle checks are executable. `verifiedGoldCaseIds=[]` is still the human-gold boundary, not model-quality acceptance.
+- Task 13 declared representative solid scope complete: 6/6 browser E2E passed. The original fold prompt checks 7 points, 8 conditions, `PC = 4√3`, confirm/return/undo; frustum, pentagonal pyramid, experiment-off and cylinder/cone display also pass. Arbitrary surfaces and human sign-off are not claimed.
+- Evidence: `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).

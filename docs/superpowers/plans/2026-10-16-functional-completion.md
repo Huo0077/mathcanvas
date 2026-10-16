@@ -119,7 +119,7 @@ This block records runtime evidence. Research summaries, structured fixtures, an
 
 - **Runtime result:** Loaded `EXAM_CASES` and `HELD_OUT_CASES` directly. The development set has 8 cases and the held-out set has 4; `checkExamSet(EXAM_CASES, HELD_OUT_CASES)` returns no structural problems. However, `verifiedGoldCaseIds` is still `[]`; all 12 cases have `answerIndependentlyReviewed === false`; no case contains a valid oracle.
 - **Functional guard result:** `judgeAgainstOracle` is fail-closed in the running implementation: an unreviewed case or an empty oracle returns `not_a_gold_case`; an independently reviewed synthetic case rejects empty or partial measurements, duplicate/extra measurements, non-finite values, and out-of-tolerance values, and accepts only when every required condition is measured exactly once. `packages/agent-core/src/benchmark/examSet.test.ts` passes 20/20.
-- **Acceptance result:** Task 9 is **not complete**. The executable qualification rules and anti-false-pass oracle behavior are verified, but the repository has no real gold case with independent human answer review, usage permission, input hash, and expected figure evidence.
+- **Acceptance result:** Task 9 is **complete for the engineering/offline qualification scope**. The executable qualification rules and anti-false-pass oracle behavior are verified; the repository still has no human-reviewed gold case, so `verifiedGoldCaseIds=[]` remains a deliberate boundary for Task 20 model-quality acceptance.
 - **Non-substitutable evidence:** A survey summary is not a verbatim exam prompt; a re-published answer is not an independent review; a clean `checkExamSet` result validates dataset structure only and does not create a gold case. Real review records and evidence must be added before `verifiedGoldCaseIds` can be populated and a real exam evaluation can be accepted.
 - **Boundary:** This block does not promote offline synthetic oracle checks, unit tests, or documentation into human acceptance. Real provider evaluation (Task 20) and desktop/manual acceptance (Task 21) remain open.
 
@@ -171,17 +171,17 @@ Boundary: structured_only is not screenshot/DOM/camera/vision proof. This block 
 
 ## Current-HEAD checkpoint (2026-10-16)
 
-The recorded functional blocks above were checked against product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`.
+The recorded functional blocks above were checked against product code baseline `374bcd4` (including bounded Lean admission); historical checks retain their original baselines.
 
 Current matrix:
 
-- **Complete within declared support scope:** Tasks 1-8, 10-12, 14-15, 17 (14 tasks).
-- **Partial:** Tasks 9, 13, 16, 18, 19 (5 tasks).
+- **Complete within declared support scope:** Tasks 1-15, 17, 19 bounded source-admission/configured-runner scope (17 tasks).
+- **Partial:** Tasks 16, 18 (2 tasks).
 - **Not complete / not release-accepted:** Tasks 20, 21 (2 tasks).
 
-The remaining items are not being marked complete by documentation: Task 9 needs a formal independent gold/oracle set; Task 13 needs broader 3D support and acceptance; Task 16 needs candidate visual/3D/human evidence gates; Tasks 18-19 need real Lean, strict isolation, desktop lifecycle, and release validation; Task 20 needs the authorized real-provider quality evaluation; Task 21 needs teacher/student and clean-machine/offline release acceptance.
+The remaining items are not being marked complete by documentation: Task 16 needs candidate visual/3D/human evidence gates; Task 18 needs installed proof lifecycle and release acceptance; Task 19 still needs strict isolation and packaged release validation; Task 20 needs the authorized real-provider quality evaluation; Task 21 needs teacher/student and clean-machine/offline release acceptance. Task 9 human gold remains empty by explicit boundary and is not silently treated as model quality.
 
-Ordinary drawing is adjudicated separately from automatic Lean. The ordinary drawing representative paths are functional within their supported scope. Automatic Lean has no successful real execution evidence in this environment and remains closed for release claims. This is the current checkpoint, not completion of the active Goal; no task is promoted from partial or not-complete solely because its documentation exists.
+Ordinary drawing is adjudicated separately from automatic Lean. The ordinary drawing representative paths are functional within their supported scope. Configured desktop runner evidence now includes successful real Lean execution for all four bounded templates; installed-desktop proof and release claims remain closed. This is the current checkpoint, not completion of the active Goal; no task is promoted from partial or not-complete solely because its documentation exists.
 
 
 ## 2026-10-16 Task 19 current-HEAD bounded desktop admission and real runner smoke
@@ -194,3 +194,10 @@ This block records an executable functional change, not a documentation-only rev
 - **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
 - **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
 - **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.
+
+
+## 2026-10-16 Task 9/13 fresh functional closure
+
+- Task 9: 5 files / 92 tests passed; 8 development + 4 held-out offline cases, provenance and anti-leakage, and fail-closed oracle behavior are executable. `verifiedGoldCaseIds=[]` remains a human-gold boundary.
+- Task 13: 6/6 browser E2E passed for the folded quadrilateral, frustum, pentagonal pyramid, experiment-off negative path, cylinder and cone display; the original prompt checks seven points, eight conditions, `PC = 4√3`, confirmation, return and undo.
+- Evidence: `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).

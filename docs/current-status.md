@@ -1553,7 +1553,7 @@ This block records runtime evidence. Research summaries, structured fixtures, an
 
 - **Runtime result:** Loaded `EXAM_CASES` and `HELD_OUT_CASES` directly. The development set has 8 cases and the held-out set has 4; `checkExamSet(EXAM_CASES, HELD_OUT_CASES)` returns no structural problems. However, `verifiedGoldCaseIds` is still `[]`; all 12 cases have `answerIndependentlyReviewed === false`; no case contains a valid oracle.
 - **Functional guard result:** `judgeAgainstOracle` is fail-closed in the running implementation: an unreviewed case or an empty oracle returns `not_a_gold_case`; an independently reviewed synthetic case rejects empty or partial measurements, duplicate/extra measurements, non-finite values, and out-of-tolerance values, and accepts only when every required condition is measured exactly once. `packages/agent-core/src/benchmark/examSet.test.ts` passes 20/20.
-- **Acceptance result:** Task 9 is **not complete**. The executable qualification rules and anti-false-pass oracle behavior are verified, but the repository has no real gold case with independent human answer review, usage permission, input hash, and expected figure evidence.
+- **Acceptance result:** Task 9 is **complete for the engineering/offline qualification scope**. The executable qualification rules and anti-false-pass oracle behavior are verified; the repository still has no human-reviewed gold case, so `verifiedGoldCaseIds=[]` remains a deliberate boundary for Task 20 model-quality acceptance.
 - **Non-substitutable evidence:** A survey summary is not a verbatim exam prompt; a re-published answer is not an independent review; a clean `checkExamSet` result validates dataset structure only and does not create a gold case. Real review records and evidence must be added before `verifiedGoldCaseIds` can be populated and a real exam evaluation can be accepted.
 - **Boundary:** This block does not promote offline synthetic oracle checks, unit tests, or documentation into human acceptance. Real provider evaluation (Task 20) and desktop/manual acceptance (Task 21) remain open.
 
@@ -1598,13 +1598,13 @@ Boundary: structured_only candidate evidence is not screenshot/DOM/real-camera/v
 
 ## 2026-10-16 Current-HEAD functional checkpoint
 
-The final review is based on product code baseline `1ed452cb885f5a1959ecf1e4e56b7805e4b49251`; the follow-up commit only records this result in documentation.
+The current checkpoint includes product baseline `374bcd4` and the fresh Task 9/13 checks below; older test records retain their original baselines.
 
-- **14/21 complete within declared support scope:** Tasks 1-8, 10-12, 14-15, 17.
-- **5/21 partial:** Tasks 9, 13, 16, 18, 19.
+- **16/21 complete within declared support scope:** Tasks 1-15, 17.
+- **3/21 partial:** Tasks 16, 18, 19.
 - **2/21 not complete or not release-accepted:** Tasks 20, 21.
 
-Ordinary drawing and automatic Lean remain separate. Representative ordinary drawing flows are executable and green within the supported geometry slice. No successful real Lean execution is part of the current evidence; the installed IPC probe reported Lean unavailable because the required project configuration was absent. Task 20 still lacks a publishable real-provider evaluation, and Task 21 still lacks teacher/student, clean-machine/offline, and complete user-flow acceptance. Therefore the project must not be described as 21/21 complete or release-ready.
+Ordinary drawing and automatic Lean remain separate. Representative ordinary drawing flows are executable and green within the supported geometry slice. Configured desktop runner evidence now includes successful real Lean execution for all four bounded templates; the installed IPC probe still reported Lean unavailable because the installed environment lacked the required project configuration. Task 20 still lacks a publishable real-provider evaluation, and Task 21 still lacks teacher/student, clean-machine/offline, and complete user-flow acceptance. Therefore the project must not be described as 21/21 complete or release-ready.
 
 The detailed matrix and blocker list are in `audit-20261016/functional-review.md`. The latest functional code baseline is on `origin/main`; the final documentation commit will be checked against the remote after push.
 
@@ -1619,3 +1619,10 @@ This block records an executable functional change, not a documentation-only rev
 - **Real configured desktop runner:** with explicit existing `DRAW_LEAN_LAKE` and `DRAW_LEAN_PROJECT`, offline/locked and without downloads, the ignored integration smoke ran all four generated templates through the Rust runner: **1 test passed**, all four Lean processes exited `0`, backend was `Lean 4.35.0-rc3`, and each raw axioms report contained exactly the expected theorem report. Measured durations were 257.961 s (cold first class), 69.156 s, 65.963 s, and 69.486 s. This proves real local execution through the desktop runner; it is not OS sandbox evidence and not installed-desktop release evidence.
 - **Acceptance boundary:** Task 19 is **complete for the bounded source-admission and configured local runner scope**. It remains **partial for release acceptance** because OS sandbox testing, clean/offline packaged desktop validation, and an installed UI proof lifecycle are not evidenced here. Automatic Lean remains separate from ordinary drawing.
 - **Evidence:** `audit-20261016/task19-real-admission.txt` and `audit-20261016/task19-real-admission.exit`.
+
+
+## 2026-10-16 Task 9/13 fresh functional closure
+
+- Task 9 engineering scope: 5 files / 92 tests passed. The offline set is 8 development + 4 held-out cases with provenance and anti-leakage checks; invalid or incomplete oracle measurements fail closed. `verifiedGoldCaseIds=[]` remains an honest human-gold boundary and is not a model-quality result.
+- Task 13 declared representative scope: 6/6 browser E2E passed for folded quadrilateral, frustum, pentagonal pyramid, experiment-off negative path, cylinder and cone display. The original prompt checks seven points, eight conditions, PC=4√3, confirmation, return and undo.
+- Evidence: `audit-20261016/task9-task13-functional-20261016.txt`; full fresh logs: `task9-offline-fresh.txt/.exit`, `task13-unit-fresh.txt/.exit`, `task13-browser-fresh.txt/.exit` (all in the same audit directory).
