@@ -1546,3 +1546,13 @@ GitHub 调研：`docs/research/2026-10-04-github-project-survey.md`。
 ??? HostBridge ?????????????????????/??/??/????????? fail-closed?????? commit ?????no-op draft ????????????? 71/71????? 12/12?Web typecheck exit 0?lint exit 0?13 ??? warning??
 
 ????? Task 16 ???`structured_only` ????????????????????? WebView/IPC/???????????????
+
+## 2026-10-16 Functional audit: Task 9 gold cases and oracle evidence
+
+This block records runtime evidence. Research summaries, structured fixtures, and documentation are not treated as independent human gold labels.
+
+- **Runtime result:** Loaded `EXAM_CASES` and `HELD_OUT_CASES` directly. The development set has 8 cases and the held-out set has 4; `checkExamSet(EXAM_CASES, HELD_OUT_CASES)` returns no structural problems. However, `verifiedGoldCaseIds` is still `[]`; all 12 cases have `answerIndependentlyReviewed === false`; no case contains a valid oracle.
+- **Functional guard result:** `judgeAgainstOracle` is fail-closed in the running implementation: an unreviewed case or an empty oracle returns `not_a_gold_case`; an independently reviewed synthetic case rejects empty or partial measurements, duplicate/extra measurements, non-finite values, and out-of-tolerance values, and accepts only when every required condition is measured exactly once. `packages/agent-core/src/benchmark/examSet.test.ts` passes 20/20.
+- **Acceptance result:** Task 9 is **not complete**. The executable qualification rules and anti-false-pass oracle behavior are verified, but the repository has no real gold case with independent human answer review, usage permission, input hash, and expected figure evidence.
+- **Non-substitutable evidence:** A survey summary is not a verbatim exam prompt; a re-published answer is not an independent review; a clean `checkExamSet` result validates dataset structure only and does not create a gold case. Real review records and evidence must be added before `verifiedGoldCaseIds` can be populated and a real exam evaluation can be accepted.
+- **Boundary:** This block does not promote offline synthetic oracle checks, unit tests, or documentation into human acceptance. Real provider evaluation (Task 20) and desktop/manual acceptance (Task 21) remain open.
