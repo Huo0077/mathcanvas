@@ -1,0 +1,16 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+(node:47616) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30608) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  4 passed (4)
+      Tests  56 passed (56)
+   Start at  09:05:40
+   Duration  12.08s (transform 15.09s, setup 269ms, import 33.32s, tests 1.05s, environment 9.56s)

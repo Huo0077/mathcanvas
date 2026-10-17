@@ -1,0 +1,82 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+(node:17336) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/agent/fixtures/examRunCoordinated.test.ts (6 tests | 4 failed) 80ms
+     × repairs invalid envelopes through the product coordinator with schema hints 28ms
+     × uses real worker compilation failure diagnostics in the repair request 7ms
+     × does not infer success from a valid plan when required facts were never observed 28ms
+     × charges coordinator repair and provider retry against the same outer cap 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCoordinated.test.ts > coordinator-driven exam adapter (zero provider network) > repairs invalid envelopes through the product coordinator with schema hints
+AssertionError: 编译未通过（transport/schema_version_mismatch: expected 'mathcanvas.plan.v1'）。: expected 'rejected' to be 'planned_after_repair' // Object.is equality
+
+Expected: "planned_after_repair"
+Received: "rejected"
+
+ ❯ apps/web/src/agent/fixtures/examRunCoordinated.test.ts:41:43
+     39|     const { planner, requests } = scripted([{ ...CUBE, schemaVersion: …
+     40|     const result = await runWith(planner)(CASE, 1)
+     41|     expect(result.outcome, result.detail).toBe("planned_after_repair")
+       |                                           ^
+     42|     expect(requests).toHaveLength(2)
+     43|     expect(requests[1]!.repair?.reason).toBe("schema_invalid")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCoordinated.test.ts > coordinator-driven exam adapter (zero provider network) > uses real worker compilation failure diagnostics in the repair request
+AssertionError: 编译未通过（geometry_validation/degenerate_prism: 棱柱的拉伸向量必须非零。）。: expected 'rejected' to be 'planned_after_repair' // Object.is equality
+
+Expected: "planned_after_repair"
+Received: "rejected"
+
+ ❯ apps/web/src/agent/fixtures/examRunCoordinated.test.ts:51:43
+     49|     const { planner, requests } = scripted([DEGENERATE, CUBE])
+     50|     const result = await runWith(planner)(CASE, 1)
+     51|     expect(result.outcome, result.detail).toBe("planned_after_repair")
+       |                                           ^
+     52|     expect(requests).toHaveLength(2)
+     53|     expect(requests[1]!.repair?.diagnostics?.some((entry) => entry.sta…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCoordinated.test.ts > coordinator-driven exam adapter (zero provider network) > does not infer success from a valid plan when required facts were never observed
+AssertionError: 编译通过；题设核验：（这一轮没有核验报告）。: expected 'planned' to be 'rejected' // Object.is equality
+
+Expected: "rejected"
+Received: "planned"
+
+ ❯ apps/web/src/agent/fixtures/examRunCoordinated.test.ts:59:43
+     57|     const { planner } = scripted([{ ...CUBE, factIds: ["not-in-this-sc…
+     58|     const result = await runWith(planner)(CASE, 1)
+     59|     expect(result.outcome, result.detail).toBe("rejected")
+       |                                           ^
+     60|     expect(result.failureLayer).toBe("plan")
+     61|     expect(result.detail).toContain("not-in-this-scene")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCoordinated.test.ts > coordinator-driven exam adapter (zero provider network) > charges coordinator repair and provider retry against the same outer cap
+AssertionError: 编译未通过（geometry_validation/degenerate_prism: 棱柱的拉伸向量必须非零。）。: expected 'rejected' to be 'error' // Object.is equality
+
+Expected: "error"
+Received: "rejected"
+
+ ❯ apps/web/src/agent/fixtures/examRunCoordinated.test.ts:86:43
+     84|     const budget = { consumeRequest(amount = 1) { if (spent + amount >…
+     85|     const result = await runWith(planner)(CASE, 1, budget)
+     86|     expect(result.outcome, result.detail).toBe("error")
+       |                                           ^
+     87|     expect(transports).toBe(1)
+     88|     expect(spent).toBe(1)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  08:43:11
+   Duration  12.17s (transform 4.26s, setup 77ms, import 9.49s, tests 80ms, environment 1.80s)

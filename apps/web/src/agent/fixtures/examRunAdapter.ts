@@ -3,20 +3,18 @@ import {
   errorDiagnostics,
   examTrialVerdictOf,
   type ExamCase,
-  type ExamFamily,
   type ExamRunCaseResult,
   type ExamRunBudget,
-  type Budget,
-  type BudgetKind,
-  type BudgetDecision,
-  type PlannerPort,
-  type PlanOutcome,
-  type WorkspaceId
+  type PlanOutcome
 } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 
 import { planWorkspaceFor } from "../agentRunner"
 import { planRequestFor } from "./benchmarkPlanningEval"
+import { budgetWithProviderRequestCap } from "./examRequestBudget"
+import { createCoordinatedExamRunCase } from "./examRunCoordinated"
+import { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
+export { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
 
 /**
  * **把一次试验接到 Task 20 的记账上**（授权到了就是"跑一条命令"里的那一步）。
@@ -52,75 +50,11 @@ import { planRequestFor } from "./benchmarkPlanningEval"
  *    （不许读成"产品没有修复过"，也不许把"修了一次才成"记成一次成功）。
  */
 
-export interface ExamRunAdapterDeps {
-  planner: PlannerPort
-  /**
-   * 这一次请求花了多少钱（由 provider 侧按真实用量给）。
-   *
-   * **可以返回 `null`**（2026-10-16）：仓里没有价目表时，能拿到的只有用量、拿不到钱 ——
-   * 那时如实返回 `null`。返回 0 会让费用那条阈值凭空通过（见 core 的 `examEvaluation`）。
-   */
-  costOf: (request: { examCase: ExamCase; trial: number; outcome: PlanOutcome | null; error: unknown }) => number | null
-  /** 墙钟（测试里注入固定值）。 */
-  now?: () => number
-  /** **这道题从哪个工作区开始**（缺省按族取，见 `workspaceForFamily`）。 */
-  workspaceOf?: (examCase: ExamCase) => WorkspaceId
-  /**
-   * 编译开关。缺省 = 两个都不开，与**生产缺省**一致
-   * （`apps/web/src/agent/featureFlags.ts`：两个实验开关默认关）。
-   */
-  compileFlags?: { diagramObligationIR?: boolean; diagramWitnessSearch?: boolean }
-}
 
-/**
- * **这一族题目从哪个工作区开始**。
- *
- * 判据与产品那一侧同源（`agentRunner.planWorkspaces`）：`planar.*` / `function.*` 归
- * `conics`（平面几何是这两族共同的家），`solid.*` / `section.*` 归 `geometry3d`。
- * 这里按**族**取初始值，是因为"模型看到哪个工作区"必须在请求发出**之前**定下来；
- * 计划真的要求另一个工作区时，编译前会按 `planWorkspaceFor` 换过去（见下）。
- */
-export function workspaceForFamily(family: ExamFamily): WorkspaceId {
-  return family === "solid" ? "geometry3d" : "conics"
-}
 
 /** 一次试验的适配器（`runExamEvaluation` 的 `runCase` 就是它）。 */
-type CappedBudget = Budget & {
-  beforeProviderRequest: (amount?: number) => boolean
-}
-
-function budgetWithProviderRequestCap(inner: Budget, outer: ExamRunBudget): CappedBudget {
-  // Retry/tool-continuation paths pre-reserve network budget through `consume`.
-  // The guard consumes only requests that reach the actual transport boundary.
-  let preReservedRequests = 0
-  return {
-    consume(kind: BudgetKind, amount = 1): BudgetDecision {
-      const internal = inner.consume(kind, amount)
-      if (!internal.ok || kind !== "network") return internal
-      if (outer.consumeRequest(amount)) {
-        preReservedRequests += amount
-        return internal
-      }
-      return { ok: false, kind, requested: amount, remaining: outer.remainingRequests(), reason: "exceeds_limit" }
-    },
-    beforeProviderRequest(amount = 1) {
-      if (!Number.isInteger(amount) || amount <= 0) return false
-      if (preReservedRequests >= amount) {
-        preReservedRequests -= amount
-        return true
-      }
-      return outer.consumeRequest(amount)
-    },
-    beginStage: () => inner.beginStage(),
-    remaining(kind) {
-      return kind === "network" ? Math.min(inner.remaining(kind), outer.remainingRequests()) : inner.remaining(kind)
-    },
-    snapshot: () => inner.snapshot(),
-    exhausted: () => inner.exhausted() || outer.remainingRequests() <= 0
-  }
-}
-
 export function createExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase, trial: number, budget?: ExamRunBudget) => Promise<ExamRunCaseResult> {
+  if (deps.repairPath === "coordinator-driven") return createCoordinatedExamRunCase(deps)
   const now = deps.now ?? (() => Date.now())
   return async (examCase, trial, budget) => {
     const started = now()

@@ -71,9 +71,11 @@ async function runFrozenExam(target: string): Promise<Record<string, unknown>> {
   const authorization = FROZEN_THRESHOLDS.authorization
   const plan = examRequestPlan(FROZEN_THRESHOLDS)
   const resolution = await resolveActiveProvider()
+  const repairPath = "coordinator-driven" as const
   const runCase = createExamRunCase({
     planner: createModelPlanner(),
-    costOf: () => null
+    costOf: () => null,
+    repairPath
   })
   const evaluation = await runExamEvaluation({
     plan: FROZEN_THRESHOLDS,
@@ -84,11 +86,8 @@ async function runFrozenExam(target: string): Promise<Record<string, unknown>> {
       estimatedCostUsd: plan.worstCaseCostUsd,
       grantedBy: authorization.grantedBy ?? "",
       grantedOn: authorization.grantedOn ?? "",
-      /**
-       * 这一层驱动不了修复回路（修复在协调器的编译回路里）⇒ 如实 `not-driven`，
-       * 于是报告里的 `repairedCount === 0` 只有一个含义：**这一轮没走协调器**。
-       */
-      repairPath: "not-driven"
+      // Repair and tool continuations share the unchanged frozen request cap.
+      repairPath
     },
     runCase
   })

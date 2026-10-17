@@ -1,0 +1,27 @@
+
+> multimodal-math-engine@0.1.0 typecheck
+> npm run typecheck --workspaces && tsc -p e2e/tsconfig.json && tsc -p scripts/tsconfig.json
+
+
+> @draw/desktop@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @draw/web@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @draw/agent-core@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @draw/dsl@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @draw/geometry-kernel@0.1.0 typecheck
+> tsc -p tsconfig.json
+
+
+> @draw/scene-graph@0.1.0 typecheck
+> tsc -p tsconfig.json

@@ -7,6 +7,8 @@ import {
   MAX_DERIVED_STATUS_LIMIT,
   SKILL_MANIFESTS,
   type AgentCoordinator,
+  type Budget,
+  type CommitterPort,
   type CommitOutcome,
   type CommitterAdapter,
   type ConversationContextSource,
@@ -64,6 +66,10 @@ export interface AgentRuntimeDependencies {
    */
   writeDocument(candidate: GeometryDocument): void
   planner: PlannerPort
+  /** One shared run budget, including provider retries and coordinator repairs. */
+  budget?: Budget
+  /** Read-only diagnostics: reports the actual product stage result without recompilation. */
+  onStageOutcome?: (outcome: Awaited<ReturnType<CommitterPort["stage"]>>) => void
   observer?: ObserverPort
   /** 导出预检：由 app 侧用真实的 `buildExportPlan` 实现（它需要投影结果，只有 app 知道怎么取）。 */
   exportPreflight: ExportPreflightPort
@@ -117,7 +123,7 @@ export interface AgentRuntimeDependencies {
    *
    * 可选：不传时协调器照常跑（工作区不匹配的动作会被编译器拒 —— 那是**如实**的失败）。
    */
-  prepare?: (plan: PlanEnvelope) => { ok: true } | { ok: false; detail: string }
+  prepare?: (plan: PlanEnvelope) => { ok: true; switched?: boolean } | { ok: false; detail: string }
   /**
    * **观察层的诊断出口**（可选）。
    *
@@ -405,7 +411,15 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   const coordinator = createCoordinator({
     planner: dependencies.planner,
     observer,
-    committer,
+    committer: dependencies.onStageOutcome === undefined ? committer : {
+      async stage(request) {
+        const outcome = await committer.stage(request)
+        dependencies.onStageOutcome?.(outcome)
+        return outcome
+      },
+      commit: (request) => committer.commit(request)
+    },
+    ...(dependencies.budget === undefined ? {} : { budget: dependencies.budget }),
     tools: {
       async call({ toolId, input, signal }) {
         if (signal.aborted) throw new Error("tool call cancelled")

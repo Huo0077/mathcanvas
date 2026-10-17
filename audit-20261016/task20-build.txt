@@ -1,0 +1,91 @@
+
+> multimodal-math-engine@0.1.0 build
+> npm run build --workspaces
+
+
+> @draw/desktop@0.1.0 build
+> node ../../scripts/toolchain.mjs tauri build --no-bundle
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build --workspace @draw/web`
+
+> @draw/web@0.1.0 build
+> vite build --configLoader runner --outDir ../../build-check/mathcanvas-current --emptyOutDir
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 580 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../../build-check/mathcanvas-current/index.html                                   0.42 kB │ gzip:   0.31 kB
+../../build-check/mathcanvas-current/assets/geometry.worker-DzL-UjVA.js         535.52 kB
+../../build-check/mathcanvas-current/assets/index-BHV1ho07.css                  106.15 kB │ gzip:  16.75 kB
+../../build-check/mathcanvas-current/assets/engineeringExporters-BlII_Rr2.js    433.81 kB │ gzip: 179.75 kB
+../../build-check/mathcanvas-current/assets/index-DnG7LHe0.js                 2,121.67 kB │ gzip: 633.44 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 19.46s
+   Compiling mathcanvas-desktop v3.3.14 (D:\draw\draw\apps\desktop\src-tauri)
+warning: linker stdout: 正在创建库 D:\draw\draw\apps\desktop\src-tauri\target\release\deps\mathcanvas_desktop_lib.dll.lib 和对象 D:\draw\draw\apps\desktop\src-tauri\target\release\deps\mathcanvas_desktop_lib.dll.exp
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `mathcanvas-desktop` (lib) generated 1 warning
+error: failed to remove file `D:\draw\draw\apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe`
+
+Caused by:
+  拒绝访问。 (os error 5)
+failed to build app: failed to build app
+       Error failed to build app: failed to build app
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path D:\draw\draw\apps\desktop
+npm error workspace @draw/desktop@0.1.0
+npm error location D:\draw\draw\apps\desktop
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c node ../../scripts/toolchain.mjs tauri build --no-bundle
+
+
+> @draw/web@0.1.0 build
+> vite build --configLoader runner --outDir ../../build-check/mathcanvas-current --emptyOutDir
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 580 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../../build-check/mathcanvas-current/index.html                                   0.42 kB │ gzip:   0.31 kB
+../../build-check/mathcanvas-current/assets/geometry.worker-DzL-UjVA.js         535.52 kB
+../../build-check/mathcanvas-current/assets/index-BHV1ho07.css                  106.15 kB │ gzip:  16.75 kB
+../../build-check/mathcanvas-current/assets/engineeringExporters-BlII_Rr2.js    433.81 kB │ gzip: 179.75 kB
+../../build-check/mathcanvas-current/assets/index-DnG7LHe0.js                 2,121.67 kB │ gzip: 633.44 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 19.86s
+
+> @draw/agent-core@0.1.0 build
+> tsc -p tsconfig.json
+
+
+> @draw/dsl@0.1.0 build
+> tsc -p tsconfig.json
+
+
+> @draw/geometry-kernel@0.1.0 build
+> tsc -p tsconfig.json
+
+
+> @draw/scene-graph@0.1.0 build
+> tsc -p tsconfig.json

@@ -1,0 +1,51 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+(node:39244) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/agent/fixtures/examRunCli.test.ts (4 tests | 2 failed) 122ms
+     × returns a coordinator-driven report without inventing readability or dollar costs 82ms
+     × counts schema repair inside, not beyond, the frozen 36-request authorization 31ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCli.test.ts > shell exam integration (synthetic transport, no paid provider) > returns a coordinator-driven report without inventing readability or dollar costs
+AssertionError: expected 'not-driven' to be 'coordinator-driven' // Object.is equality
+
+Expected: "coordinator-driven"
+Received: "not-driven"
+
+ ❯ apps/web/src/agent/fixtures/examRunCli.test.ts:47:49
+     45|     expect(report?.evaluation.ok).toBe(true)
+     46|     if (!report?.evaluation.ok) throw new Error("missing smoke report")
+     47|     expect(report.evaluation.report.repairPath).toBe("coordinator-driv…
+       |                                                 ^
+     48|     expect(report.evaluation.report.totals).toMatchObject({ requests: …
+     49|     expect(report.evaluation.report.verdicts.filter((verdict) => verdi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/agent/fixtures/examRunCli.test.ts > shell exam integration (synthetic transport, no paid provider) > counts schema repair inside, not beyond, the frozen 36-request authorization
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ apps/web/src/agent/fixtures/examRunCli.test.ts:55:35
+     53|     expect(await maybeRunExamFromShell()).toBe(true)
+     54|     expect(boundary.runModel).toHaveBeenCalledTimes(36)
+     55|     expect(report?.evaluation.ok).toBe(false)
+       |                                   ^
+     56|     if (report?.evaluation.ok !== false) throw new Error("repair must …
+     57|     expect(report.evaluation.reason).toContain("provider")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+   Start at  08:53:17
+   Duration  11.60s (transform 4.19s, setup 54ms, import 8.95s, tests 122ms, environment 1.80s)

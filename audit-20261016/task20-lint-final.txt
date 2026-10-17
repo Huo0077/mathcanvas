@@ -1,0 +1,37 @@
+
+> multimodal-math-engine@0.1.0 lint
+> eslint .
+
+
+D:\draw\draw\apps\web\src\App.tsx
+  299:9  warning  'slopeLine' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+D:\draw\draw\apps\web\src\components\inspectorModel.ts
+  245:6  warning  React Hook useEffect has a missing dependency: 'selectedPrimitive'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+D:\draw\draw\packages\dsl\src\schema.ts
+  1:15  warning  'GeometryDocument' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  1:33  warning  'PrimitiveSpec' is defined but never used. Allowed unused vars must match /^_/u     @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\constraints3d.ts
+  1:47  warning  'Line3Primitive' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\dynamic-points.ts
+  96:11  warning  'bounds' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\measurements3d.ts
+  1:31   warning  'Line3Primitive' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  1:61   warning  'Plane3Primitive' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  1:115  warning  'Point3Primitive' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\planar-constraints.test.ts
+  28:7  warning  'parabola' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\polynomial.ts
+   93:7   warning  'qZero' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  100:10  warning  'qSub' is defined but never used. Allowed unused vars must match /^_/u            @typescript-eslint/no-unused-vars
+
+D:\draw\draw\packages\geometry-kernel\src\sections3d.ts
+  62:10  warning  'polygonPerimeter' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 13 problems (0 errors, 13 warnings)
