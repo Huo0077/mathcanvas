@@ -1,0 +1,427 @@
+
+> multimodal-math-engine@0.1.0 test:e2e
+> playwright test --workers=4
+
+[plugin vite:reporter]
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into another chunk.
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 239 tests using 4 workers
+
+  ok   2 e2e\agent-apex-angle.spec.ts:60:5 › an angle whose leg is the apex is solved for the height, verified in the panel, and measures 60° after commit (3.2s)
+  ok   1 e2e\agent-base-angle.spec.ts:73:5 › a named 60° angle on a quadrilateral base is drawn, verified in the panel, and really measures 60° after commit (3.2s)
+  ok   4 e2e\agent-conic-invariant.spec.ts:30:5 › keeps the symbolic parameter, labels the invariant as numeric sampling, and waits for the user (2.4s)
+  ok   7 e2e\agent-conic-invariant.spec.ts:82:5 › refuses to touch the document when the user discards the draft (1.6s)
+  x    3 e2e\agent-conic-ellipse.spec.ts:52:5 › draws the ellipse from the equation and re-derives its foci from the committed semi-axes (7.4s)
+  ok   8 e2e\agent-constrained-drag.spec.ts:174:5 › 关着开关（默认）：拖动 A 会改变 |AB| —— 这是原来那条路径 (3.1s)
+  x    5 e2e\agent-conic-kinds.spec.ts:65:5 › draws the hyperbola from its equation and re-derives the foci on the real axis (7.0s)
+  x    6 e2e\agent-conic-kinds.spec.ts:78:5 › draws the parabola from its equation and puts the focus at (p/2, 0) (7.0s)
+  ok   9 e2e\agent-constrained-drag.spec.ts:212:5 › 过约束拒绝：同一条线段被赋两个长度，拖动 A 被拒绝并点名冲突的约束 id (3.4s)
+  ok  10 e2e\agent-constrained-drag.spec.ts:184:5 › 打开开关：同样的拖动之后 |AB| 仍然是 1 —— 它沿约束走 (3.6s)
+  ok  13 e2e\agent-constrained-drag.spec.ts:304:5 › 一步撤销：约束拖动只占一步历史，一次 Ctrl+Z 回到拖动前，再按没有第二步 (3.5s)
+  ok  11 e2e\agent-constrained-drag.spec.ts:244:5 › 未核验的 3D 线重合约束：拒绝拖动，不改文档也不占撤销历史 (3.8s)
+  ok  14 e2e\agent-derived-sphere.spec.ts:92:5 › a named solid's derived circumsphere is created, rendered, and follows its host (4.3s)
+  ok  12 e2e\agent-constrained-drag.spec.ts:260:5 › 冲突恢复：拒绝不写文档也不占历史；修掉冲突之后同样的拖动正常提交 (5.3s)
+  ok  15 e2e\agent-diagram-free-apex.spec.ts:33:5 › when enabled, a free-height tetrahedral diagram has real scene objects, verified premises, confirmation and one-step undo (2.9s)
+  ok  16 e2e\agent-diagram-free-apex.spec.ts:59:5 › when disabled, the same previously unsupported prompt does not create a point or a draft (2.3s)
+  ok  17 e2e\agent-diagram-free-apex.spec.ts:67:5 › the experimental route does not silently discard an unsupported above-the-base condition (2.3s)
+  ok  18 e2e\agent-diagram-free-apex.spec.ts:88:5 › accepts a bounded explicit-coordinate sentence and lists the stated coordinate as a verified premise (2.2s)
+  ok  19 e2e\agent-diagram-free-apex.spec.ts:111:5 › refuses the same sentence when the stated coordinate contradicts the figure (2.4s)
+  ok  20 e2e\agent-diagram-free-apex.spec.ts:183:5 › re-verifies the committed tetrahedron from the document's own coordinates, independently of the panel (3.1s)
+  ok  22 e2e\agent-exam-conic.spec.ts:102:5 › fails closed when the statement asks for the y = 1 chord but the figure draws the y = 0 one (1.9s)
+  ok  21 e2e\agent-exam-conic.spec.ts:63:5 › draws both intersections of a chord, and both re-derive from the committed coordinates (2.3s)
+  ok  23 e2e\agent-exam-function.spec.ts:46:5 › keeps the two branches of 1/x apart and says where the curve breaks (2.3s)
+  ok  24 e2e\agent-exam-function.spec.ts:99:5 › fails closed at a corner: |x| has no tangent at x = 0 (1.9s)
+  ok  25 e2e\agent-exam-solid.spec.ts:59:5 › draws the user's folded quadrilateral from the sentence alone, and PC=4√3 holds on the committed figure (3.1s)
+  ok  26 e2e\agent-exam-triangle.spec.ts:55:5 › solves the exam triangle from side + angle + area, verifies it, and undoes in one step (3.1s)
+  ok  27 e2e\agent-exam-visual-and-stale.spec.ts:161:5 › the 2D canvas reports the version it is drawing, and the test re-derives that hash itself (2.4s)
+  ok  28 e2e\agent-exam-visual-and-stale.spec.ts:185:5 › undoing the commit changes the canvas version, so the old figure evidence goes stale (2.1s)
+  ok  29 e2e\agent-exam-visual-and-stale.spec.ts:204:5 › changing the statement draws a different figure, and the previous reading is no longer about it (2.7s)
+  ok  30 e2e\agent-exam-visual-and-stale.spec.ts:232:5 › the 3D canvas reports its version and its point labels, and says which readings it cannot take (2.8s)
+  ok  31 e2e\agent-exam-visual-and-stale.spec.ts:270:5 › the triangle family draws on the canvas the same version that was committed (2.8s)
+  ok  32 e2e\agent-exam-visual-and-stale.spec.ts:289:5 › a view-only change does not invalidate the figure evidence (3.1s)
+  ok  34 e2e\agent-flow.spec.ts:24:5 › turns one sentence into a confirmed commit, then undoes it in one step (2.6s)
+  ok  33 e2e\agent-exam-visual-and-stale.spec.ts:314:5 › 3D camera evidence excludes retained hidden labels and recovers after fit (3.1s)
+  ok  36 e2e\agent-flow.spec.ts:121:5 › still drafts after a reload restored and migrated the document (2.6s)
+  ok  35 e2e\agent-flow.spec.ts:66:5 › adds a second object to a canvas that already holds one (3.3s)
+  ok  38 e2e\agent-flow.spec.ts:171:5 › asks for information instead of inventing an answer (1.4s)
+  ok  37 e2e\agent-flow.spec.ts:157:5 › refuses to keep a draft when the user discards it (1.8s)
+  ok  39 e2e\agent-function-tangent.spec.ts:69:5 › draws the curve and its tangent, and re-derives the slope from the committed curve (2.4s)
+  ok  40 e2e\agent-oblique-prism-from-sentence.spec.ts:55:5 › an oblique prism from a sentence commits a translated top ring that really is oblique (2.8s)
+  ok  42 e2e\agent-oblique-prism.spec.ts:72:5 › the committed prism is oblique, and the batch is one undo step (2.4s)
+  ok  41 e2e\agent-oblique-prism.spec.ts:35:5 › drafts the oblique prism with its section, then commits and undoes in one step (3.0s)
+  ok  43 e2e\agent-planar-triangle.spec.ts:55:5 › draws the planar right triangle and verifies AB ⊥ AC from the committed coordinates (2.3s)
+  ok  44 e2e\agent-oblique-prism.spec.ts:97:5 › its section is cut through the midpoints and shows up as its own object (2.7s)
+  ok  47 e2e\agent-proof-lifecycle.spec.ts:80:5 › with the flag off there is no proof section at all, and the figure still goes through (1.8s)
+  ok  45 e2e\agent-prism-path.spec.ts:87:5 › a right prism from a sentence commits coordinates whose lateral edges really are perpendicular to the base (2.8s)
+  ok  46 e2e\agent-proof-lifecycle.spec.ts:44:5 › browser has no proof backend: the section says so, shows the scope, and still lets the figure through (3.0s)
+  ok  48 e2e\agent-rhombus-base.spec.ts:57:5 › a rhombus base commits four equal sides that are not a square, with lateral edges perpendicular to it (2.8s)
+  ok  50 e2e\agent-solid-family-path.spec.ts:141:5 › a named frustum produces a verified draft whose committed coordinates really are a frustum (2.8s)
+  ok  49 e2e\agent-round-frustum.spec.ts:66:5 › a round frustum arrives on the canvas as its polygon approximation, and says so (3.1s)
+  ok  51 e2e\agent-solid-family-path.spec.ts:192:5 › a named pentagonal pyramid commits a five-sided base with a base-perpendicular lateral edge (2.8s)
+  ok  52 e2e\agent-solid-family-path.spec.ts:247:5 › with the experiment off the same frustum sentence produces no draft and no undo history (2.2s)
+  ok  54 e2e\agent-underdetermined-diagram.spec.ts:35:5 › an additional unsupported condition is visible and cannot be committed (2.2s)
+  ok  55 e2e\agent-unreadable-prompt.spec.ts:46:7 › asks the user instead of drawing anything: 分析题（问读数） (2.3s)
+  ok  53 e2e\agent-underdetermined-diagram.spec.ts:8:5 › an underdetermined pyramid is verified, presented as an example, confirmed and undone (3.0s)
+  ok  56 e2e\agent-unreadable-prompt.spec.ts:46:7 › asks the user instead of drawing anything: 非立体题（函数图像） (2.2s)
+  ok  57 e2e\agent-unreadable-prompt.spec.ts:46:7 › asks the user instead of drawing anything: 说法对不上（数词与环长不一致） (2.2s)
+  ok  59 e2e\app-modules.spec.ts:78:5 › keeps the agent conversation while switching modules back and forth (1.6s)
+  ok  58 e2e\app-modules.spec.ts:12:5 › switches between the canvas module and the agent module from the left rail (2.4s)
+  ok  62 e2e\engineering-drawing.spec.ts:3:5 › opens the CAD workspace with four accessible engineering views (1.3s)
+  ok  61 e2e\engineering-drawing-hit.spec.ts:8:5 › draft geometry is visible and has a forgiving hit band (2.0s)
+  ok  60 e2e\conversation-isolation.spec.ts:52:5 › keeps two conversations' transcripts, facts and object references apart (3.7s)
+  ok  63 e2e\engineering-drawing.spec.ts:17:5 › links CAD views with temporary projection lines and shared source selection (1.7s)
+  ok  64 e2e\engineering-drawing.spec.ts:38:5 › creates a linear engineering annotation from selected CAD sources (1.8s)
+  ok  65 e2e\engineering-drawing.spec.ts:53:5 › exports CAD views as SVG, DXF, and PDF (1.8s)
+  ok  66 e2e\engineering-drawing.spec.ts:72:5 › projects a sphere as an outline in all four CAD views and exports it (1.8s)
+  ok  67 e2e\engineering-workbench.spec.ts:5:5 › drafts on a new layer, hides it, and keeps the layout after a refresh (3.3s)
+  ok  68 e2e\engineering-workbench.spec.ts:48:5 › drafts with a fixed window, live preview and object snap (2.5s)
+  ok  69 e2e\engineering-workbench.spec.ts:87:5 › edits a draft primitive by dragging its grip (2.4s)
+  ok  70 e2e\engineering-workbench.spec.ts:119:5 › box-selects draft geometry with the drag direction deciding the mode (2.4s)
+  ok  71 e2e\engineering-workbench.spec.ts:152:5 › places drafting points from typed coordinates (2.1s)
+  ok  73 e2e\engineering-workbench.spec.ts:249:5 › undoes and redoes from both the buttons and the keyboard (2.1s)
+  ok  74 e2e\engineering-workbench.spec.ts:284:5 › keeps hidden views out of the exported SVG (2.1s)
+  ok  72 e2e\engineering-workbench.spec.ts:182:5 › offsets, trims and extends selected draft geometry (3.9s)
+  ok  76 e2e\engineering-workbench.spec.ts:340:5 › supports keyboard selection, command entry, cancellation and inspector tabs (2.1s)
+  ok  77 e2e\engineering-workbench.spec.ts:366:5 › fills the drafting area with the sheet and keeps an explicit display scale (2.1s)
+  ok  75 e2e\engineering-workbench.spec.ts:309:5 › exports the switched projection source instead of the drawing's own document (3.8s)
+  ok  78 e2e\engineering-workbench.spec.ts:434:5 › projects the spatial workspace model instead of claiming there is nothing to project (3.0s)
+  ok  79 e2e\engineering-workbench.spec.ts:458:5 › keeps the 2D drafting commands on the toolbar, off the drawing surface (2.1s)
+  ok  80 e2e\exact-forms.spec.ts:11:5 › no longer shows the exact-form panel, while measuring still works (2.1s)
+  ok  81 e2e\geometry3d-autofit.spec.ts:14:5 › brings a point set to x = 20 back inside the view (3.3s)
+  ok  84 e2e\geometry3d-creation.spec.ts:25:5 › can cancel an unfinished face without changing the document (2.2s)
+  ok  83 e2e\geometry3d-creation.spec.ts:5:5 › draws a spatial segment directly on the canvas and undoes it in one step (3.1s)
+  ok  82 e2e\geometry3d-camera-memory.spec.ts:10:5 › returns to the 3D workspace with the camera the user left (4.4s)
+  ok  87 e2e\geometry3d-creation.spec.ts:70:5 › keeps camera modes and drawing modes mutually exclusive (1.9s)
+  ok  85 e2e\geometry3d-creation.spec.ts:37:5 › places a point on the chosen XZ work plane and reuses it in a line (3.5s)
+  ok  86 e2e\geometry3d-creation.spec.ts:57:5 › finishes a three-vertex spatial face with Enter (3.6s)
+  ok  88 e2e\geometry3d-creation.spec.ts:121:5 › cancels an unfinished drawing when the workspace is switched (2.6s)
+  ok  90 e2e\geometry3d-creation.spec.ts:175:5 › leaves the drawing session through the select tool (2.7s)
+  ok  89 e2e\geometry3d-creation.spec.ts:148:5 › lets the drawing session win over a preview click (3.6s)
+  ok  91 e2e\geometry3d-creation.spec.ts:209:5 › does not snap to a locked point, and snaps again once it is unlocked (2.9s)
+  ok  92 e2e\geometry3d-creation.spec.ts:248:5 › tells what the next click would land on, without writing anything (3.0s)
+  ok  93 e2e\geometry3d-drag.spec.ts:10:5 › drags a solid freely without turning the camera (3.5s)
+  ok  94 e2e\geometry3d-drag.spec.ts:41:5 › undoes one free drag in a single step (3.6s)
+  ok  95 e2e\geometry3d-drag.spec.ts:60:5 › returns left-drag to orbiting when the toggle is off (3.2s)
+  ok  96 e2e\geometry3d-drag.spec.ts:103:5 › stops an in-flight auto-fit as soon as the user starts dragging (3.3s)
+  ok  98 e2e\geometry3d-drag.spec.ts:223:5 › keeps pan mode and drag mode from being on at once (1.8s)
+  ok  99 e2e\geometry3d-drag.spec.ts:245:5 › keeps a round solid's rim circles glued to it while dragging (3.9s)
+  ok  97 e2e\geometry3d-drag.spec.ts:176:5 › drags only the solid under the pointer (4.4s)
+  ok 100 e2e\geometry3d-drag.spec.ts:281:5 › carries the point labels along while a solid is being dragged (4.6s)
+  ok 101 e2e\geometry3d-drag.spec.ts:321:5 › repaints the scene while a solid is being dragged (4.1s)
+  ok 102 e2e\geometry3d-host-drag.spec.ts:13:5 › drags a host-bound point along its host (4.2s)
+  ok 103 e2e\geometry3d-scene-lifecycle.spec.ts:23:5 › keeps one renderer alive across edits, selection and unfold (5.0s)
+  ok 105 e2e\geometry3d-scene-lifecycle.spec.ts:91:5 › rebuilds only the object whose selection changed (3.3s)
+  ok 104 e2e\geometry3d-scene-lifecycle.spec.ts:60:5 › does not rebuild or resync while a solid is being dragged (4.1s)
+  ok 107 e2e\geometry3d-scene-lifecycle.spec.ts:141:5 › exposes the auto-fit toggle and remembers it across reloads (1.9s)
+  ok 106 e2e\geometry3d-scene-lifecycle.spec.ts:123:5 › keeps the rest of the scene while the unfold animation runs (4.6s)
+  ok 108 e2e\geometry3d-section.spec.ts:42:5 › explains the section preview and creates a section when it is clicked (3.9s)
+  ok 109 e2e\geometry3d-section.spec.ts:76:5 › moves the cutting plane with the arrow keys while free dragging is on (4.2s)
+  ok 110 e2e\geometry3d-section.spec.ts:107:5 › tilts the cutting plane from the properties panel (3.9s)
+  ok 112 e2e\geometry3d-section.spec.ts:177:7 › cuts the default section of a 立方体 and survives a 45° tilt (3.2s)
+  ok 113 e2e\geometry3d-section.spec.ts:177:7 › cuts the default section of a 棱锥 and survives a 45° tilt (3.1s)
+  ok 111 e2e\geometry3d-section.spec.ts:137:5 › uses a face of the solid as the cutting plane (4.2s)
+  ok 114 e2e\geometry3d-section.spec.ts:177:7 › cuts the default section of a 圆柱 and survives a 45° tilt (3.9s)
+  ok 115 e2e\geometry3d-section.spec.ts:177:7 › cuts the default section of a 圆锥 and survives a 45° tilt (3.7s)
+  ok 117 e2e\geometry3d-solid-wizard.spec.ts:5:5 › previews a rectangular box without saving it, then confirms exact dimensions in one undo step (3.3s)
+  ok 116 e2e\geometry3d-section.spec.ts:199:5 › moves the drawing section when dragged while free dragging is on (4.7s)
+  ok 118 e2e\geometry3d-solid-wizard.spec.ts:33:5 › creates an oblique triangular prism and a quadrilateral pyramid from the classroom palette (3.1s)
+  ok 120 e2e\geometry3d-solid-wizard.spec.ts:65:5 › opens the solid form on a narrow screen instead of hiding it in the inspector dock (1.8s)
+  ok 119 e2e\geometry3d-solid-wizard.spec.ts:48:5 › can reuse a hand-drawn face as an independent prism base (4.3s)
+  ok 122 e2e\geometry3d-sphere.spec.ts:136:5 › creates a sphere from the common-solid wizard: preview first, one commit on confirm (2.7s)
+  ok 121 e2e\geometry3d-sphere.spec.ts:66:5 › keeps an analytic sphere through reload and a camera orbit, and names it in the inspector (3.7s)
+  ok 123 e2e\geometry3d-sphere.spec.ts:177:5 › edits a sphere's centre and radius from the inspector, one undo step (3.7s)
+  ok 124 e2e\geometry3d-sphere.spec.ts:222:5 › cuts the selected sphere from the toolbar and records an exact circle (3.7s)
+  x  125 e2e\geometry3d-sphere.spec.ts:265:5 › offers no Boolean intersection preview when a sphere is involved, but does for two solids (3.8s)
+  ok 127 e2e\geometry3d-sphere.spec.ts:359:5 › walks a sphere section from an exact circle to a tangent point and then to empty (5.2s)
+  ok 128 e2e\geometry3d-teaching-lines.spec.ts:5:5 › keeps a teacher's dashed spatial segment separate from view-only hidden edges (3.1s)
+  x  126 e2e\geometry3d-sphere.spec.ts:305:5 › drafts a sphere from one sentence and commits it in one undo step (7.5s)
+  ok 130 e2e\geometry3d.spec.ts:48:5 › picks spatial points and turns them into a teaching measurement (2.5s)
+  ok 129 e2e\geometry3d.spec.ts:5:5 › opens the 3D workspace and adds a parameterized cube (5.8s)
+  ok 132 e2e\geometry3d.spec.ts:82:5 › cuts point-driven topology into a visible section (4.4s)
+  ok 133 e2e\geometry3d.spec.ts:67:5 › nests spatial topology under an expandable algebra row (2.7s)
+  ok 134 e2e\geometry3d.spec.ts:102:5 › selects a solid by clicking its body and recolours it repeatedly (3.3s)
+  ok 135 e2e\geometry3d.spec.ts:128:5 › picks the vertex the cursor is over, whether or not the solid hides it (4.2s)
+  ok 136 e2e\geometry3d.spec.ts:162:5 › deletes a solid together with the topology it generated (3.0s)
+  ok 137 e2e\geometry3d.spec.ts:188:5 › deletes a solid together with the section that cuts it (2.9s)
+  ok 131 e2e\geometry3d-teaching-lines.spec.ts:34:5 › keeps every vertex label on its own vertex after the camera rotates (10.7s)
+  ok 138 e2e\geometry3d.spec.ts:205:5 › builds a visible plane from three selected points (3.2s)
+  ok 139 e2e\geometry3d.spec.ts:234:5 › creates a spatial line from two Shift-selected points (2.6s)
+  ok 140 e2e\geometry3d.spec.ts:262:5 › clears the selection with Escape without touching the document (2.6s)
+  ok 144 e2e\geometry3d.spec.ts:419:5 › keeps a template face reachable with Alt instead of always taking the whole solid (2.8s)
+  ok 142 e2e\geometry3d.spec.ts:365:5 › takes over left drag in pan mode and documents every view gesture (3.1s)
+  ok 143 e2e\geometry3d.spec.ts:393:5 › reorients a cone from the property inspector with precise angles (4.6s)
+  ok 141 e2e\geometry3d.spec.ts:283:5 › pans the 3D view along the camera axes within a bounded range (7.4s)
+  ok 146 e2e\geometry3d.spec.ts:486:5 › frames an opened figure instead of leaving it a speck (2.9s)
+  ok 145 e2e\geometry3d.spec.ts:438:5 › resizes a plane patch by hand from the property inspector (3.5s)
+  ok 148 e2e\geometry3d.spec.ts:552:5 › explains a dihedral angle with its common edge and canvas markers (3.2s)
+  ok 149 e2e\geometry3d.spec.ts:573:5 › explains the normal and sample-angle controls in the status bar (3.5s)
+  ok 147 e2e\geometry3d.spec.ts:533:5 › unfolds point-driven topology into a flat net and folds it back (5.1s)
+  ok 151 e2e\geometry3d.spec.ts:642:5 › previews the section of a selected solid as a dashed overlay (2.3s)
+  ok 150 e2e\geometry3d.spec.ts:600:5 › creates an intersection line by clicking the dashed preview (5.2s)
+  ok 152 e2e\geometry3d.spec.ts:657:5 › labels 3D points with their classroom names inside the scene (2.2s)
+  ok 153 e2e\geometry3d.spec.ts:679:5 › shows a small bottom-left guide only after a feature button is clicked (3.7s)
+  ok 154 e2e\high-school-geometry-tasks.spec.ts:151:5 › 三棱锥：底面三点与法向高度精确，拓扑可展开，一步撤销不留残留 (3.7s)
+  ok 155 e2e\high-school-geometry-tasks.spec.ts:186:5 › 四棱锥：顶点偏移精确，保存后重新打开几何逐点不变 (3.1s)
+  ok 156 e2e\high-school-geometry-tasks.spec.ts:211:5 › 斜三棱柱：底面三点沿拉伸向量精确平移，一步撤销 (3.1s)
+  ok 157 e2e\high-school-geometry-tasks.spec.ts:233:5 › 异长长方体：三边尺寸与原点精确落盘，保存往返后尺寸不变 (3.6s)
+  ok 161 e2e\html-export.spec.ts:13:5 › exports a self-contained HTML snapshot of a planar figure (1.6s)
+  ok 160 e2e\high-school-geometry-tasks.spec.ts:411:5 › 已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后逐 id 恢复，撤销只撤新工作 (4.3s)
+  ok 158 e2e\high-school-geometry-tasks.spec.ts:258:5 › 圆锥截面：水平切得圆（半径按锥面算出），斜切按 e = sinθ / cosα 判椭圆与双曲线 (4.9s)
+  ok 162 e2e\html-export.spec.ts:38:5 › exports the four CAD views as a self-contained HTML snapshot (1.8s)
+  ok 163 e2e\html-export.spec.ts:63:5 › refuses HTML export in the 3D workspace instead of writing an empty file (1.5s)
+  ok 159 e2e\high-school-geometry-tasks.spec.ts:308:5 › 空间直线与平面的关系：线在面内与平行不共面由平面方程判定，点到平面距离测得 3.000 (7.3s)
+PERF frame-gap load frames=15 max=516.6ms p95=516.6ms
+PERF frame-gap drag frames=74 max=100.0ms p95=33.4ms
+PERF frame-gap page frames=89 max=516.6ms p95=50.0ms
+PERF frame-gap deliberate-block frames=14 max=216.7ms p95=216.7ms
+  ok 164 e2e\main-thread-responsiveness.spec.ts:28:5 › reports main-thread frame gaps while loading and dragging (3.5s)
+  ok 165 e2e\measurement-labels.spec.ts:22:5 › keeps a planar measurement number on the canvas without any selection (2.9s)
+  ok 166 e2e\measurement-labels.spec.ts:94:5 › keeps a spatial measurement number on the 3D canvas without any selection (2.8s)
+  ok 168 e2e\next-phase-flag-entry.spec.ts:63:5 › 仅切约束拖动时，偏好里没有见证搜索及其它未启用能力 (1.4s)
+  ok 169 e2e\next-phase-flag-entry.spec.ts:37:5 › 顶栏「设置」能到设置模块，那里有约束拖动的实验性开关 (1.4s)
+  ok 167 e2e\measurement-labels.spec.ts:130:5 › reads a spatial angle in radians, the same unit the planar canvas uses (3.2s)
+  ok 170 e2e\next-phase-flag-entry.spec.ts:49:5 › 打开之后刷新仍然是开（偏好跨会话保留） (1.7s)
+  ok 171 e2e\next-phase-flag-entry.spec.ts:74:5 › 见证搜索**默认开**、可以关掉、刷新保留，且不会连带打开其它能力 (1.8s)
+  ok 172 e2e\next-phase-flag-entry.spec.ts:109:5 › 形式证明导出：默认关、能打开、刷新保留，且只开它自己 (1.8s)
+  ok 173 e2e\next-phase-flag-entry.spec.ts:130:5 › 开关关着时确认面板上没有形式证明那一段（默认路径逐字不变） (1.7s)
+  ok 174 e2e\next-phase-flag-entry.spec.ts:142:5 › 打开之后，同一句话的确认面板上真的出现形式证明那一段 (2.0s)
+  ok 175 e2e\planar-connected-point-drag.spec.ts:17:5 › keeps the connected fixed point put while the track moves the dynamic point (2.3s)
+  ok 177 e2e\planar-drag-performance.spec.ts:9:5 › recomputes only the affected intersection pairs while dragging a dynamic point (2.2s)
+  ok 176 e2e\planar-derived-intersections.spec.ts:15:5 › intersects a tangent with a line and measures the angle and the circle's area (2.9s)
+  ok 178 e2e\planar-drag-performance.spec.ts:49:5 › still refreshes the intersections that involve the dragged object (2.0s)
+  ok 179 e2e\planar-grid-cell.spec.ts:12:5 › keeps the planar grid at one world unit per cell while zooming (2.0s)
+  ok 180 e2e\planar-rotation-anchor.spec.ts:21:5 › creates a moving circle from the selected point, without a centre marker, and takes it away with the point (2.0s)
+  ok 182 e2e\planar-rotation-anchor.spec.ts:182:5 › drags the fixed point itself and the curve follows, still passing through it (1.9s)
+  ok 183 e2e\project-package.spec.ts:15:5 › opens the project package panel from the file commands (1.4s)
+  ok 184 e2e\project-package.spec.ts:32:5 › says the export needs the desktop build instead of failing vaguely (1.3s)
+  ok 185 e2e\project-package.spec.ts:45:5 › does not pretend an attachment was stored when there is no project library (1.2s)
+  ok 186 e2e\reactive-dynamic-objects.spec.ts:59:5 › refreshes downstream objects from the reactive graph while a dynamic point is dragged (2.5s)
+  ok 187 e2e\reactive-dynamic-objects.spec.ts:107:5 › moves a triangle-derived circle when one of its vertices is dragged (2.4s)
+  ok 188 e2e\reactive-dynamic-objects.spec.ts:180:5 › refreshes a solid section when one of its vertices is moved (2.5s)
+  ok 181 e2e\planar-rotation-anchor.spec.ts:89:5 › anchors a circle on a selected point and keeps it there while rotating (6.1s)
+  ok 189 e2e\ribbon-ui.spec.ts:3:5 › keeps workspace navigation in the tab bar and supports Ribbon fold, popup and pin (2.0s)
+  ok 190 e2e\ribbon-ui.spec.ts:34:5 › keeps the workbench content within the viewport at desktop, tablet and phone widths (2.1s)
+  ok 191 e2e\solid-derived-readings.spec.ts:66:5 › shows a solid's exact and undefined derived readings side by side in the property inspector (2.4s)
+  ok 193 e2e\solid-prism.spec.ts:75:5 › creates an oblique prism from one sentence and confirms only after the user says so (3.0s)
+  ok 192 e2e\solid-derived-readings.spec.ts:96:5 › shows an oblique prism's undefined readings with their reasons, and carries them into the Agent's observation (4.3s)
+  ok 194 e2e\solid-prism.spec.ts:115:5 › moves the whole prism when it is dragged (4.0s)
+  ok 196 e2e\solid-prism.spec.ts:233:5 › refuses an unreadable .mgeo instead of pretending it loaded (1.5s)
+  ok 197 e2e\solid-prism.spec.ts:255:5 › cuts a section through the oblique prism (3.9s)
+  ok 198 e2e\solid-prism.spec.ts:325:5 › measures the oblique prism by volume and reopens it with identical geometry (3.6s)
+  ok 195 e2e\solid-prism.spec.ts:170:5 › opens every shipped .mgeo fixture and actually loads it (7.5s)
+  ok 201 e2e\three-canvas-size.spec.ts:17:5 › fills the canvas row instead of a viewport-height guess (1.4s)
+  ok 199 e2e\solid-prism.spec.ts:375:5 › edits one prism vertex through the inspector, undoes, and reopens the triangulated solid (5.3s)
+  ok 202 e2e\three-canvas-size.spec.ts:41:5 › keeps filling the row after a viewport resize (1.4s)
+  ok 200 e2e\solid-prism.spec.ts:422:5 › edits one template cube vertex and restores its explicit faces from mgeo (3.6s)
+  ok 206 e2e\three-grid-coverage.spec.ts:13:5 › background grid reaches a point placed far from the origin (1.9s)
+  ok 203 e2e\three-canvas-size.spec.ts:72:5 › keeps the canvas size when the status text changes (3.8s)
+  ok 205 e2e\three-exact-circle.spec.ts:14:5 › draws a section of a cylinder as an exact circle that gains detail when zooming in (3.9s)
+  ok 207 e2e\three-grid-coverage.spec.ts:36:5 › keeps the coordinate plane covering the view when zoomed out (2.5s)
+  ok 204 e2e\three-canvas-size.spec.ts:117:5 › keeps a usable canvas height at tablet widths (5.8s)
+  ok 208 e2e\three-grid-coverage.spec.ts:60:5 › holds the grid at one world unit per cell while zooming (2.9s)
+  ok 209 e2e\three-grid-fade.spec.ts:17:5 › fades the grid out beyond the visible ground, and its shader compiles (3.3s)
+  ok 212 e2e\three-intersection-previews.spec.ts:66:5 › marks every overlapping pair without selecting anything (2.6s)
+  ok 210 e2e\three-intersection-band.spec.ts:30:5 › merges 圆柱 ∩ 立方体 into one band patch, and draws its boundary as true circles (4.0s)
+  ok 211 e2e\three-intersection-cone.spec.ts:15:5 › turns 圆柱 ∩ 圆锥 into one 圆锥面 plus its base, instead of 48 triangle patches (5.6s)
+  ok 213 e2e\three-intersection-previews.spec.ts:85:5 › creates one 交面 from the face patch under the pointer, and its fill colour can be changed (3.9s)
+  ok 214 e2e\three-intersection-previews.spec.ts:112:5 › creates a 交点 from the corner marker, and a 交线 from the crossing line (4.1s)
+  ok 215 e2e\three-intersection-previews.spec.ts:149:5 › recomputes the hover readout when the content changes under a still pointer (3.5s)
+  ok 218 e2e\three-orbit-track-handles.spec.ts:167:5 › leaves the radius alone when the pointer is not on the handle (3.3s)
+  ok 217 e2e\three-orbit-track-handles.spec.ts:108:5 › turns the track with the world-axis rings, keeping its centre (5.2s)
+  ok 216 e2e\three-orbit-track-handles.spec.ts:15:5 › scales the track by dragging its radius handle, keeping bound points on the rim (6.1s)
+  ok 219 e2e\three-orbit-track-independent.spec.ts:14:5 › moves the track by itself and leaves the construction points alone (5.0s)
+  ok 220 e2e\three-orbit-track-independent.spec.ts:58:5 › lets the point that used to define the centre be deleted, and keeps the editable centre (3.2s)
+  ok 221 e2e\three-orbit-tracks.spec.ts:15:5 › creates a circle track and slides a bound point along it (4.6s)
+  ok 223 e2e\three-orbit-tracks.spec.ts:137:5 › connects a point that rides the track with a fixed point by a line (3.4s)
+  ok 222 e2e\three-orbit-tracks.spec.ts:74:5 › shows the bound point moving while the pointer is still down (4.2s)
+  ok 224 e2e\three-origin-marker.spec.ts:14:5 › keeps the origin marker at the world origin while the grid follows the content (2.9s)
+  ok 227 e2e\three-rotation-handle.spec.ts:157:5 › does not start a rotation when the pointer is off the rings (3.2s)
+  ok 226 e2e\three-rotation-handle.spec.ts:110:5 › follows the pointer exactly while Alt is held (4.8s)
+  ok 228 e2e\three-rotation-handle.spec.ts:178:5 › offers no rings when more than one object is selected (3.9s)
+  ok 225 e2e\three-rotation-handle.spec.ts:15:5 › rotates a solid by dragging the X ring, in one undoable step (5.2s)
+  ok 229 e2e\three-rotation-handle.spec.ts:201:5 › keeps the rings off the canvas until the view switch is turned on (3.6s)
+  ok 232 e2e\three-ui-tokens.spec.ts:12:5 › dresses the 3D canvas in the planar paper tokens (2.2s)
+  ok 231 e2e\three-round-solid-points.spec.ts:34:5 › shows only the four quadrant points plus the apex on a cone (2.5s)
+  ok 230 e2e\three-round-solid-points.spec.ts:12:5 › shows only the four quadrant points per circle on a cylinder (2.7s)
+  ok 233 e2e\workbench.spec.ts:5:5 › workbench updates the intersection and adds a point (1.7s)
+  ok 234 e2e\workbench.spec.ts:22:5 › opens and restores an mgeo document through the file input (1.5s)
+  ok 236 e2e\workbench.spec.ts:78:5 › keeps constraint data in the document without a constraint panel (1.5s)
+  ok 235 e2e\workbench.spec.ts:50:5 › switches workspaces and exports SVG and CSV files (2.0s)
+  ok 238 e2e\workbench.spec.ts:125:5 › zooms the conics canvas and keeps every crossing of a line and a curve (2.5s)
+  ok 237 e2e\workbench.spec.ts:115:5 › restores the latest workspace draft after reload (4.7s)
+  ok 239 e2e\workspace-persistence.spec.ts:26:5 › restores active and inactive drawings across reloads without replacing later edits (10.9s)
+
+
+  1) e2e\agent-conic-ellipse.spec.ts:52:5 › draws the ellipse from the equation and re-derives its foci from the committed semi-axes
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('已提交')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('已提交') with timeout 5000ms
+      - waiting for getByText('已提交')
+
+
+      65 |
+      66 |   await panel.getByRole("button", { name: "确认并提交" }).click()
+    > 67 |   await expect(page.getByText("已提交")).toBeVisible()
+         |                                       ^
+      68 |   await page.getByRole("button", { name: "返回画布" }).click()
+      69 |   await expect.poll(async () => page.evaluate(() => window.localStorage.getItem("mathcanvas:draft:conics"))).not.toBeNull()
+      70 |
+        at D:\draw\draw\e2e\agent-conic-ellipse.spec.ts:67:39
+
+    Error Context: test-results\agent-conic-ellipse-draws--d9f96-rom-the-committed-semi-axes\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\agent-conic-ellipse-draws--d9f96-rom-the-committed-semi-axes\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\agent-conic-ellipse-draws--d9f96-rom-the-committed-semi-axes\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) e2e\agent-conic-kinds.spec.ts:65:5 › draws the hyperbola from its equation and re-derives the foci on the real axis
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('已提交')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('已提交') with timeout 5000ms
+      - waiting for getByText('已提交')
+
+
+      43 |   await expect(check).toContainText(label)
+      44 |   await panel.getByRole("button", { name: "确认并提交" }).click()
+    > 45 |   await expect(page.getByText("已提交")).toBeVisible()
+         |                                       ^
+      46 |   await page.getByRole("button", { name: "返回画布" }).click()
+      47 |   await expect.poll(async () => page.evaluate(() => window.localStorage.getItem("mathcanvas:draft:conics"))).not.toBeNull()
+      48 |   return page.evaluate(() => {
+        at commitAndReadConic (D:\draw\draw\e2e\agent-conic-kinds.spec.ts:45:39)
+        at D:\draw\draw\e2e\agent-conic-kinds.spec.ts:66:17
+
+    Error Context: test-results\agent-conic-kinds-draws-th-57dd2-s-the-foci-on-the-real-axis\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\agent-conic-kinds-draws-th-57dd2-s-the-foci-on-the-real-axis\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\agent-conic-kinds-draws-th-57dd2-s-the-foci-on-the-real-axis\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) e2e\agent-conic-kinds.spec.ts:78:5 › draws the parabola from its equation and puts the focus at (p/2, 0)
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('已提交')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('已提交') with timeout 5000ms
+      - waiting for getByText('已提交')
+
+
+      43 |   await expect(check).toContainText(label)
+      44 |   await panel.getByRole("button", { name: "确认并提交" }).click()
+    > 45 |   await expect(page.getByText("已提交")).toBeVisible()
+         |                                       ^
+      46 |   await page.getByRole("button", { name: "返回画布" }).click()
+      47 |   await expect.poll(async () => page.evaluate(() => window.localStorage.getItem("mathcanvas:draft:conics"))).not.toBeNull()
+      48 |   return page.evaluate(() => {
+        at commitAndReadConic (D:\draw\draw\e2e\agent-conic-kinds.spec.ts:45:39)
+        at D:\draw\draw\e2e\agent-conic-kinds.spec.ts:79:17
+
+    Error Context: test-results\agent-conic-kinds-draws-th-d575c-nd-puts-the-focus-at-p-2-0-\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\agent-conic-kinds-draws-th-d575c-nd-puts-the-focus-at-p-2-0-\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\agent-conic-kinds-draws-th-d575c-nd-puts-the-focus-at-p-2-0-\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) e2e\geometry3d-sphere.spec.ts:265:5 › offers no Boolean intersection preview when a sphere is involved, but does for two solids
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 29
+
+      293 |   await expect(scene).toHaveAttribute("data-preview-count", "0")
+      294 |   // 文档也没被改动：还是那两个图元（建模失败不留半成品）。
+    > 295 |   expect(await readPrimitiveCount(page)).toBe(2)
+          |                                          ^
+      296 | })
+      297 |
+      298 | /**
+        at D:\draw\draw\e2e\geometry3d-sphere.spec.ts:295:42
+
+    Error Context: test-results\geometry3d-sphere-offers-n-27b15-ved-but-does-for-two-solids\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\geometry3d-sphere-offers-n-27b15-ved-but-does-for-two-solids\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\geometry3d-sphere-offers-n-27b15-ved-but-does-for-two-solids\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) e2e\geometry3d-sphere.spec.ts:305:5 › drafts a sphere from one sentence and commits it in one undo step
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('已提交')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByText('已提交') with timeout 5000ms
+      - waiting for getByText('已提交')
+
+
+      324 |   await page.getByRole("button", { name: "Agent 工作区" }).click()
+      325 |   await draft.getByRole("button", { name: "确认并提交" }).click()
+    > 326 |   await expect(page.getByText("已提交")).toBeVisible()
+          |                                       ^
+      327 |   await page.getByRole("button", { name: "返回画布" }).click()
+      328 |   // 按**行数**断言而不是按显示名：这条链路和棱柱那条一样**不写 label**（那是手工入口的习惯），
+      329 |   // 所以对象行显示的是 id 而不是"球体" —— 拿名字断言会把"名字从哪来"这件事无关地绑进来。
+        at D:\draw\draw\e2e\geometry3d-sphere.spec.ts:326:39
+
+    Error Context: test-results\geometry3d-sphere-drafts-a-501e9-commits-it-in-one-undo-step\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\geometry3d-sphere-drafts-a-501e9-commits-it-in-one-undo-step\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\geometry3d-sphere-drafts-a-501e9-commits-it-in-one-undo-step\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    e2e\agent-conic-ellipse.spec.ts:52:5 › draws the ellipse from the equation and re-derives its foci from the committed semi-axes
+    e2e\agent-conic-kinds.spec.ts:65:5 › draws the hyperbola from its equation and re-derives the foci on the real axis
+    e2e\agent-conic-kinds.spec.ts:78:5 › draws the parabola from its equation and puts the focus at (p/2, 0)
+    e2e\geometry3d-sphere.spec.ts:265:5 › offers no Boolean intersection preview when a sphere is involved, but does for two solids
+    e2e\geometry3d-sphere.spec.ts:305:5 › drafts a sphere from one sentence and commits it in one undo step
+  234 passed (4.1m)

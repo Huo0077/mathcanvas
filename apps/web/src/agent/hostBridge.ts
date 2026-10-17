@@ -189,6 +189,11 @@ function verifyCandidateRender(
   const identityProblem = evidenceIdentityProblem(evidence)
   if (identityProblem !== null) return { status: "unverified", mode: evidence.mode, diagnostics: [], detail: identityProblem }
 
+  // Matching content is not permission to reuse an artifact from another run.
+  if (evidence.runId !== input.runId) {
+    return { status: "stale", mode: evidence.mode, diagnostics: [], detail: "candidate render evidence belongs to another run" }
+  }
+
   const staleness = renderEvidenceStaleness(evidence, { draftId: input.draftId, documentHash: input.documentHash })
   if (staleness.stale) return { status: "stale", mode: evidence.mode, diagnostics: [], detail: staleness.detail }
 

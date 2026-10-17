@@ -1,0 +1,1498 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+(node:53032) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34284) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34996) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9460) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12392) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50024) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45088) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17164) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12652) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5156) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27852) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17200) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36764) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42024) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19348) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5708) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35796) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13296) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29672) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22792) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18080) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36488) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39328) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42204) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18076) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36220) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34496) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7992) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45072) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44924) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37312) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48564) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2232) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38528) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41604) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51936) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18416) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26732) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:30664) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49560) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6792) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21584) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2176) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14676) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31688) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50524) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36508) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52168) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33752) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29228) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15592) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30704) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18448) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55880) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11316) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2708) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41736) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6204) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33988) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40272) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32012) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35436) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47448) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41188) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56000) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3472) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13124) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41692) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:9684) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:23004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:14264) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:20028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31672) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32748) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:3152) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27860) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22080) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:50540) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6912) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20640) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15056) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23072) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42700) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55716) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:14092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48948) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31536) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46120) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6984) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27132) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21276) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12276) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9192) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30800) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25116) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20508) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34380) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39184) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25204) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54944) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51836) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22416) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4016) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41836) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32284) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33440) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6768) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22996) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17852) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31592) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54500) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13448) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12232) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45612) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54628) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20108) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34496) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53724) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39072) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41404) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40040) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45380) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29552) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38180) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41616) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42024) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:14156) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30948) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24308) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36764) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54468) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27668) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54016) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46764) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15460) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12180) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51520) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18480) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10284) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28736) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45968) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26008) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39688) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39304) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27560) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35860) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11808) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30660) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48164) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54604) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54972) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34432) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37812) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51440) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49912) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54352) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22364) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23540) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6336) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52256) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48876) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6996) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40988) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31900) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:23784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46100) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6648) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44388) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:11208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3680) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17244) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15496) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43848) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53116) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:616) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54876) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54540) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35232) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45124) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30460) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51312) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9700) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27752) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34912) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:50856) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55088) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30708) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55932) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31440) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17992) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13744) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55388) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:38704) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4532) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24236) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:12144) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:34692) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:49592) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35892) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23120) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:51904) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:35164) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25772) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:41504) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48696) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:33036) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22592) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9228) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21388) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:47760) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2776) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53396) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27012) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45984) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39660) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3812) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6420) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20688) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41884) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42900) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46716) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28780) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10600) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14308) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48976) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39132) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32624) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31764) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43772) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16448:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+Error: Not implemented: HTMLCanvasElement.prototype.getContext (without installing the canvas npm package)
+    at module.exports (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\browser\not-implemented.js:9:17)
+    at HTMLCanvasElementImpl.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\nodes\HTMLCanvasElement-impl.js:42:5)
+    at HTMLCanvasElement.getContext (D:\draw\draw\node_modules\.pnpm\jsdom@26.1.0\node_modules\jsdom\lib\jsdom\living\generated\HTMLCanvasElement.js:131:58)
+    at getContext (file:///D:/draw/draw/node_modules/three/build/three.module.js:16411:18)
+    at new WebGLRenderer (file:///D:/draw/draw/node_modules/three/build/three.module.js:16452:11)
+    at D:/draw/draw/apps/web/src/threeSceneEffect.ts:250:18
+    at Object.react_stack_bottom_frame (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:28656:20)
+    at runWithFiberInDEV (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:1048:13)
+    at commitHookEffectListMount (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13748:29)
+    at commitHookPassiveMountEffects (D:\draw\draw\node_modules\react-dom\cjs\react-dom-client.development.js:13835:11) undefined
+(node:23928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16860) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47220) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53200) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18244) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14156) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47244) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4232) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12044) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33312) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49824) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49620) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48140) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53708) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54008) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40048) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34452) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:42272) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28368) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26028) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31776) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2568) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21000) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45476) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14420) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6436) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55368) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33804) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39320) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11532) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44356) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40088) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31488) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27688) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25040) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45180) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30044) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55880) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8876) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6336) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11324) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6896) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15116) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12536) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23492) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47836) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:33144) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:19584) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13492) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:32320) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23812) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25556) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52644) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:46784) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55288) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45788) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40956) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:55044) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:9052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30156) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27824) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51168) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26612) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45300) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27608) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3808) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5724) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:23004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17336) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:53760) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24732) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10980) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12068) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45952) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12820) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43020) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17132) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35796) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51004) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28968) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:4532) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39504) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14424) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:34488) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:25716) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39868) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26676) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35892) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36544) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28024) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20100) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22416) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47760) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:43832) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54696) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51652) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18080) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26032) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31252) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:8252) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13992) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:52260) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49368) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2776) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:51832) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:48444) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26644) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49068) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:30824) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:56252) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37680) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41268) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38064) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2916) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:31348) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17024) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17428) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:3512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47624) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49568) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41580) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:6532) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29032) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17476) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2884) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21324) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12660) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15176) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41372) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:47052) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:54704) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:38876) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13852) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10308) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15064) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:18740) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ Test Files  404 passed (404)
+      Tests  4712 passed | 1 todo (4713)
+   Start at  09:23:07
+   Duration  149.17s (transform 84.24s, setup 7.51s, import 377.69s, tests 163.48s, environment 3489.78s)

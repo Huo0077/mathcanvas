@@ -1,0 +1,59 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+(node:35388) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/agent/hostBridge.test.ts (18 tests | 2 failed) 156ms
+     × refuses another run's candidate evidence even when its draft and content match 12ms
+     × rechecks the render run at commit instead of trusting evidence from consent time 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/agent/hostBridge.test.ts > candidate render evidence gate > refuses another run's candidate evidence even when its draft and content match
+AssertionError: expected 'passed' to be 'stale' // Object.is equality
+
+Expected: "stale"
+Received: "passed"
+
+ ❯ apps/web/src/agent/hostBridge.test.ts:367:82
+    365|     const preview = harness.bridge.preview(record.draftId)
+    366|     expect(preview.ok).toBe(true)
+    367|     if (preview.ok) expect(preview.artifact.candidateRenderVerificatio…
+       |                                                                                  ^
+    368|     expect(harness.bridge.requestConsent(record.draftId)).toEqual({
+    369|       ok: false, reason: "stale_render", detail: "candidate render evi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/agent/hostBridge.test.ts > candidate render evidence gate > rechecks the render run at commit instead of trusting evidence from consent time
+AssertionError: expected { ok: true, receipt: { …(2) } } to deeply equal { ok: false, …(2) }
+
+- Expected
++ Received
+
+  {
+-   "detail": "candidate render evidence belongs to another run",
+-   "ok": false,
+-   "reason": "stale_render",
++   "ok": true,
++   "receipt": {
++     "changed": true,
++     "draftId": "draft_15",
++   },
+  }
+
+ ❯ apps/web/src/agent/hostBridge.test.ts:388:67
+    386|
+    387|     evidenceRun = "previous-run"
+    388|     expect(harness.bridge.commit(record.draftId, consent.record)).toEq…
+       |                                                                   ^
+    389|       ok: false, reason: "stale_render", detail: "candidate render evi…
+    390|     })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  09:17:48
+   Duration  12.15s (transform 4.41s, setup 79ms, import 8.89s, tests 156ms, environment 2.20s)

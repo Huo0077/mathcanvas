@@ -354,6 +354,44 @@ describe("consent handles", () => {
 
 
 describe("candidate render evidence gate", () => {
+  it("refuses another run's candidate evidence even when its draft and content match", async () => {
+    const harness = makeBridge({
+      runId: "current-run",
+      candidateRenderEvidence: (input) => ({ ...structuredRenderEvidence(input), runId: "previous-run" })
+    })
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    expect((await stagePoint(harness.drafts, record.draftId, record.draftVersion)).ok).toBe(true)
+
+    const preview = harness.bridge.preview(record.draftId)
+    expect(preview.ok).toBe(true)
+    if (preview.ok) expect(preview.artifact.candidateRenderVerification?.status).toBe("stale")
+    expect(harness.bridge.requestConsent(record.draftId)).toEqual({
+      ok: false, reason: "stale_render", detail: "candidate render evidence belongs to another run"
+    })
+    expect(harness.replaced).toHaveLength(0)
+    expect(harness.getDocument().primitives).toHaveLength(0)
+  })
+
+  it("rechecks the render run at commit instead of trusting evidence from consent time", async () => {
+    let evidenceRun = "current-run"
+    const harness = makeBridge({
+      runId: "current-run",
+      candidateRenderEvidence: (input) => ({ ...structuredRenderEvidence(input), runId: evidenceRun })
+    })
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    expect((await stagePoint(harness.drafts, record.draftId, record.draftVersion)).ok).toBe(true)
+    const consent = harness.bridge.requestConsent(record.draftId)
+    expect(consent.ok).toBe(true)
+    if (!consent.ok) return
+
+    evidenceRun = "previous-run"
+    expect(harness.bridge.commit(record.draftId, consent.record)).toEqual({
+      ok: false, reason: "stale_render", detail: "candidate render evidence belongs to another run"
+    })
+    expect(harness.replaced).toHaveLength(0)
+    expect(harness.getDocument().primitives).toHaveLength(0)
+  })
+
   it("refuses consent when a real operation has no candidate renderer", async () => {
     const harness = makeBridge({ candidateRenderEvidence: null })
     const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
