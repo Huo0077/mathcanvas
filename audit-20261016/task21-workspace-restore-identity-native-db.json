@@ -1,0 +1,44 @@
+[
+  {
+    "id": "doc-77c84ba2-4bf3-43e5-9808-9376c202d0e8",
+    "generation": 3,
+    "workspace": "geometry3d",
+    "objects": [
+      "point3-1",
+      "point3-2"
+    ]
+  },
+  {
+    "id": "doc-7ff603f7-3256-4f75-94e4-8cebd9ccb966",
+    "generation": 1,
+    "workspace": "conics",
+    "objects": []
+  },
+  {
+    "id": "doc-887beec3-c347-43f1-a705-11697688f8e6",
+    "generation": 2,
+    "workspace": "geometry3d",
+    "objects": [
+      "point3-1",
+      "point3-2"
+    ]
+  },
+  {
+    "id": "doc-925cd576-ce8f-41d3-9259-8f1ea5f190b3",
+    "generation": 3,
+    "workspace": "conics",
+    "objects": [
+      "point-1",
+      "point-2"
+    ]
+  },
+  {
+    "id": "doc-ca6c6894-3fb8-404e-9640-b8ecb13a9885",
+    "generation": 3,
+    "workspace": "conics",
+    "objects": [
+      "point-1",
+      "point-2"
+    ]
+  }
+]

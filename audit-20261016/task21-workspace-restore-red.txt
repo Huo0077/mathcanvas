@@ -1,0 +1,48 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:40388) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:51 char:1
++ node node_modules/vitest/vitest.mjs run apps/web/src/services/documen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:40388) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/services/documentPersistence.test.ts (26 tests | 2 failed) 49ms
+     × restores an inactive workspace from its repository head even without browser memory 8ms
+     × rejects a remembered document belonging to another workspace 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > restores an in
+active workspace from its repository head even without browser memory
+TypeError: adapter.restoreWorkspace is not a function
+ ❯ apps/web/src/services/documentPersistence.test.ts:535:34
+    533|     repository.readLatestHead = async (_project, workspace) => ({ ok: …
+    534|     const adapter = persistence(repository)
+    535|     const result = await adapter.restoreWorkspace("conics")
+       |                                  ^
+    536|     expect(result.created).toBe(false)
+    537|     expect(result.document.metadata.id).toBe(planar.metadata.id)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > rejects a reme
+mbered document belonging to another workspace
+TypeError: persistence(...).restoreWorkspace is not a function
+ ❯ apps/web/src/services/documentPersistence.test.ts:548:50
+    546|     rows.set(solid.metadata.id, snapshot(solid))
+    547|     repository.readLatestHead = async (_project, workspace) => ({ ok: …
+    548|     const result = await persistence(repository).restoreWorkspace("con…
+       |                                                  ^
+    549|     expect(result.created).toBe(true)
+    550|     expect(result.document.workspace).toBe("conics")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 24 passed (26)
+   Start at  07:41:51
+   Duration  6.96s (transform 2.19s, setup 55ms, import 4.30s, tests 49ms, environment 1.81s)

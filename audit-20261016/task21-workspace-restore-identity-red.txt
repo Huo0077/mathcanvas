@@ -1,0 +1,94 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:41208) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:53 char:16
++ ... | python -; node node_modules/vitest/vitest.mjs run apps/web/src/serv ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:41208) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+··························xxxx··
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > allocates a di
+stinct startup id when remembered id belongs to an otherwise-only foreign workspace
+AssertionError: expected { ok: false, code: 'stale_head', …(1) } to be undefined
+
+- Expected:
+undefined
+
++ Received:
+{
+  "code": "stale_head",
+  "detail": "already exists",
+  "ok": false,
+}
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:547:30
+    545|     const adapter = persistence(repository, foreign.metadata.id)
+    546|     const restored = await adapter.restore()
+    547|     expect(restored.failure).toBeUndefined()
+       |                              ^
+    548|     expect(restored.document.metadata.id).not.toBe(foreign.metadata.id)
+    549|     expect(restored.document.workspace).toBe("conics")
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > rejects foreig
+n-workspace id reuse during save (cached head=false)
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > rejects foreig
+n-workspace id reuse during save (cached head=true)
+AssertionError: expected { ok: true, generation: 9 } to match object { ok: false, code: 'stale_head' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": "stale_head",
+-   "ok": false,
++   "ok": true,
+  }
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:565:20
+    563|     const reused = { ...createEmptyDocument("conics"), metadata: { ...…
+    564|     const result = await adapter.save(reused, 1)
+    565|     expect(result).toMatchObject({ ok: false, code: "stale_head" })
+       |                    ^
+    566|     expect(rows.get(foreign.metadata.id)).toEqual(before)
+    567|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > saving across workspace document identities > rejects import
+ing a document whose id belongs to another workspace
+AssertionError: expected { ok: true, generation: 9 } to match object { ok: false, code: 'stale_head' }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "code": "stale_head",
+-   "ok": false,
++   "ok": true,
+  }
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:580:57
+    578|     })
+    579|     const reused = { ...createEmptyDocument("conics"), metadata: { ...…
+    580|     expect(await persistence(repository).reset(reused)).toMatchObject(…
+       |                                                         ^
+    581|     expect(repository.replaceEpoch).not.toHaveBeenCalled()
+    582|     expect(rows.get(foreign.metadata.id)).toEqual(before)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 28 passed (32)
+   Start at  08:17:04
+   Duration  29.85s (transform 3.72s, setup 85ms, import 6.14s, tests 61ms, environment 21.67s)

@@ -1,0 +1,47 @@
+node :    Compiling mathcanvas-desktop v3.3.14 (D:\draw\draw\apps\desktop\src-tauri)
+At line:52 char:32
++ ... INE='true'; node scripts/toolchain.mjs cargo test --manifest-path app ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling ma...ktop\src-tauri):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+error[E0599]: no method named `read_latest_workspace_head` found for struct `ProjectRepository` in the current scope
+   --> tests\project_repository.rs:548:27
+    |
+548 |     assert_eq!(repository.read_latest_workspace_head("p1", "conics").expect("read planar").expect("exists").docum
+ent_id, "planar");
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `read_latest_head` with a similar name, but with different arguments
+   --> src\repository\projects.rs:213:5
+    |
+213 |     pub fn read_latest_head(&self, project_id: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `read_latest_workspace_head` found for struct `ProjectRepository` in the current scope
+   --> tests\project_repository.rs:549:27
+    |
+549 |     assert_eq!(repository.read_latest_workspace_head("p1", "geometry3d").expect("read solid").expect("exists").do
+cument_id, "solid");
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `read_latest_head` with a similar name, but with different arguments
+   --> src\repository\projects.rs:213:5
+    |
+213 |     pub fn read_latest_head(&self, project_id: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `read_latest_workspace_head` found for struct `ProjectRepository` in the current scope
+   --> tests\project_repository.rs:550:24
+    |
+550 |     assert!(repository.read_latest_workspace_head("p1", "cad").expect("read absent").is_none());
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `read_latest_head` with a similar name, but with different arguments
+   --> src\repository\projects.rs:213:5
+    |
+213 |     pub fn read_latest_head(&self, project_id: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `mathcanvas-desktop` (test "project_repository") due to 3 previous errors

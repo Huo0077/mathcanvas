@@ -211,10 +211,19 @@ impl ProjectRepository {
     /// 排序用 `updated_at DESC`，并以 `document_id ASC` 作为**确定性**的次级键
     /// （同一毫秒写入两份文档时，"最新"不能随 SQLite 的返回顺序漂移）。
     pub fn read_latest_head(&self, project_id: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+        self.read_latest_head_filtered(project_id, None)
+    }
+
+    /// Recover an inactive workspace without borrowing another workspace's latest document.
+    pub fn read_latest_workspace_head(&self, project_id: &str, workspace: &str) -> Result<Option<DocumentSnapshot>, RepositoryError> {
+        self.read_latest_head_filtered(project_id, Some(workspace))
+    }
+
+    fn read_latest_head_filtered(&self, project_id: &str, workspace: Option<&str>) -> Result<Option<DocumentSnapshot>, RepositoryError> {
         self.connection
             .query_row(
-                "SELECT project_id, document_id, epoch, generation, content_hash, content, updated_at FROM documents WHERE project_id = ?1 ORDER BY updated_at DESC, document_id ASC LIMIT 1",
-                (project_id,),
+                "SELECT project_id, document_id, epoch, generation, content_hash, content, updated_at FROM documents WHERE project_id = ?1 AND (?2 IS NULL OR CASE WHEN json_valid(content) THEN json_extract(content, '$.workspace') END = ?2) ORDER BY updated_at DESC, document_id ASC LIMIT 1",
+                (project_id, workspace),
                 |row| {
                     Ok(DocumentSnapshot {
                         project_id: row.get(0)?,

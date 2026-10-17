@@ -97,6 +97,18 @@ function persistence(repository: DocumentRepository, documentId = "doc-session")
 }
 
 describe("restoring on startup", () => {
+  it.each(["missing", "other-workspace"])("keeps startup scoped when the remembered id is %s", async (mode) => {
+    const planar = createEmptyDocument("conics")
+    const spatial = createEmptyDocument("geometry3d")
+    const { repository } = makeRepository({ stored: snapshot(spatial, 5) })
+    vi.mocked(repository.readLatestHead).mockImplementation(async (_project, workspace) => ({ ok: true, value: snapshot(workspace === "conics" ? planar : spatial, 6) }))
+    const outcome = await persistence(repository, mode === "missing" ? "forgotten" : spatial.metadata.id).restore()
+    expect(outcome.document.metadata.id).toBe(planar.metadata.id)
+    expect(outcome.document.workspace).toBe("conics")
+    expect(repository.readLatestHead).toHaveBeenCalledWith("p1", "conics")
+    expect(repository.create).not.toHaveBeenCalled()
+  })
+
   it("brings back the stored document instead of a blank one", async () => {
     const stored = createEmptyDocument("conics")
     stored.primitives.push({ id: "point-1", type: "point", x: 3, y: 4 } as never)
@@ -350,7 +362,7 @@ describe("changing era (import / open file)", () => {
     expect(result.ok).toBe(true)
     // `reset` 走的是 `replaceEpoch`（**换一世**），而不是把内容当成一次普通改动提交 ——
     // 后者改不了 epoch，于是在途的旧保存仍然能写进来。
-    expect(calls).toEqual(["replaceEpoch"])
+    expect(calls).toEqual(["readHead", "replaceEpoch"])
   })
 })
 
@@ -522,6 +534,79 @@ describe("saving across workspace document identities", () => {
     expect((await finalSave).ok).toBe(true)
     expect(JSON.parse(rows.get(original.metadata.id)!.content).primitives.map((p: { id: string }) => p.id)).toEqual(["first", "last"])
     expect(rows.get(other.metadata.id)?.epoch).toBe("new-workspace-epoch")
+  })
+
+  it("allocates a distinct startup id when remembered id belongs to an otherwise-only foreign workspace", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const foreign = createEmptyDocument("geometry3d")
+    const before = snapshot(foreign, 8, "foreign-epoch")
+    rows.set(foreign.metadata.id, before)
+    repository.readLatestHead = async () => ({ ok: true, value: null })
+    const adapter = persistence(repository, foreign.metadata.id)
+    const restored = await adapter.restore()
+    expect(restored.failure).toBeUndefined()
+    expect(restored.document.metadata.id).not.toBe(foreign.metadata.id)
+    expect(restored.document.workspace).toBe("conics")
+    const edited = { ...restored.document, primitives: [{ id: "P", type: "point" as const, x: 1, y: 2 }] }
+    expect((await adapter.save(edited, 1)).ok).toBe(true)
+    expect(rows.get(foreign.metadata.id)).toEqual(before)
+    expect(rows.size).toBe(2)
+  })
+
+  it.each([false, true])("rejects foreign-workspace id reuse during save (cached head=%s)", async (cached) => {
+    const { repository, rows } = multiDocumentRepository()
+    const foreign = createEmptyDocument("geometry3d")
+    const before = snapshot(foreign, 8, "foreign-epoch")
+    rows.set(foreign.metadata.id, before)
+    const adapter = persistence(repository)
+    if (cached) await adapter.restoreWorkspace("geometry3d", foreign.metadata.id)
+    const reused = { ...createEmptyDocument("conics"), metadata: { ...foreign.metadata } }
+    const result = await adapter.save(reused, 1)
+    expect(result).toMatchObject({ ok: false, code: "stale_head" })
+    expect(rows.get(foreign.metadata.id)).toEqual(before)
+  })
+
+  it("rejects importing a document whose id belongs to another workspace", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const foreign = createEmptyDocument("geometry3d")
+    const before = snapshot(foreign, 8, "foreign-epoch")
+    rows.set(foreign.metadata.id, before)
+    repository.replaceEpoch = vi.fn(async (_project, document) => {
+      const value = snapshot(document, 9, "replaced")
+      rows.set(document.metadata.id, value)
+      return { ok: true as const, value }
+    })
+    const reused = { ...createEmptyDocument("conics"), metadata: { ...foreign.metadata } }
+    expect(await persistence(repository).reset(reused)).toMatchObject({ ok: false, code: "stale_head" })
+    expect(repository.replaceEpoch).not.toHaveBeenCalled()
+    expect(rows.get(foreign.metadata.id)).toEqual(before)
+  })
+
+  it("restores an inactive workspace from its repository head even without browser memory", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const planar = createEmptyDocument("conics")
+    const solid = createEmptyDocument("geometry3d")
+    rows.set(planar.metadata.id, snapshot(planar, 3, "planar"))
+    rows.set(solid.metadata.id, snapshot(solid, 5, "solid"))
+    repository.readLatestHead = async (_project, workspace) => ({ ok: true, value: [...rows.values()].filter((row) => !workspace || JSON.parse(row.content).workspace === workspace).at(-1) ?? null })
+    const adapter = persistence(repository)
+    const result = await adapter.restoreWorkspace("conics")
+    expect(result.created).toBe(false)
+    expect(result.document.metadata.id).toBe(planar.metadata.id)
+    expect(result.document.primitives).toEqual([])
+    expect(adapter.handle()?.epoch).toBe("planar")
+    expect(rows.size).toBe(2)
+  })
+
+  it("rejects a remembered document belonging to another workspace", async () => {
+    const { repository, rows } = multiDocumentRepository()
+    const solid = createEmptyDocument("geometry3d")
+    rows.set(solid.metadata.id, snapshot(solid))
+    repository.readLatestHead = async (_project, workspace) => ({ ok: true, value: [...rows.values()].find((row) => JSON.parse(row.content).workspace === workspace) ?? null })
+    const result = await persistence(repository).restoreWorkspace("conics", solid.metadata.id)
+    expect(result.created).toBe(true)
+    expect(result.document.workspace).toBe("conics")
+    expect(rows.size).toBe(1)
   })
 
 })

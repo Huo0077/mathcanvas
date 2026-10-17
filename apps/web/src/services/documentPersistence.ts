@@ -29,7 +29,7 @@
  * 现在分成 `save`（内容变了）与 `reset`（换了一世）。
  */
 
-import type { GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument, type Workspace, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DocumentRepository, DocumentSnapshot, RepositoryFailure } from "./documentRepository"
@@ -46,6 +46,8 @@ export interface RestoreOutcome {
 export interface DocumentPersistence {
   /** 打开时调一次：恢复上次的文档，或新建一份。**总会给出一份可用文档。** */
   restore(): Promise<RestoreOutcome>
+  /** Read-only recovery of a workspace; never creates an empty row during hydration. */
+  restoreWorkspace(workspace: Workspace, documentId?: string): Promise<RestoreOutcome>
   /**
    * 保存当前的 head。
    *
@@ -122,58 +124,42 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
      * 空文档也用同一个 id 造出来，于是"库里没有"时的 `create` 写下的行与文档对得上。
      */
     const fresh = withDocumentId(dependencies.emptyDocument(), dependencies.documentId())
-    const found = await repository.readHead(projectId, fresh.metadata.id)
-    if (found.ok) {
-      const document = documentFromSnapshot(found.value)
-      if (document) {
-        remember(found.value)
-        return { document, created: false }
+    // Startup and lazy hydration share the same workspace-scoped lookup. A lost
+    // browser id must never adopt another workspace's globally newest document.
+    const restored = await restoreWorkspace(fresh.workspace, fresh.metadata.id)
+    if (!restored.created) return restored
+    if (restored.failure) return restored
+    const created = await repository.create(projectId, restored.document)
+    if (!created.ok) return { ...restored, failure: created }
+    remember(created.value)
+    return restored
+  }
+
+  async function restoreWorkspace(workspace: Workspace, documentId?: string): Promise<RestoreOutcome> {
+    let fresh = createEmptyDocument(workspace)
+    if (documentId) fresh = withDocumentId(fresh, documentId)
+    const decode = (snapshot: DocumentSnapshot): RestoreOutcome => {
+      const document = documentFromSnapshot(snapshot)
+      if (!document || document.workspace !== workspace) {
+        return { document: fresh, created: true, failure: { ok: false, code: "io", detail: "stored workspace document could not be parsed" } }
       }
-      // 快照里存的不是文档：**如实说**，但给出一份可用的空文档（不能让用户卡在启动上）。
-      return { document: fresh, created: true, failure: { ok: false, code: "io", detail: "the stored document could not be parsed; starting from an empty one" } }
+      remember(snapshot)
+      return { document, created: false }
     }
-    /**
-     * **没有桌面外壳时不再尝试 `create`**。
-     *
-     * 第一版把 `not_a_desktop_shell` 与 `not_found` 合并处理，于是浏览器里会再发一次
-     * `create_document` —— 一次注定失败的 IPC。更糟的是：真实实现里那次调用会走到
-     * "文档已存在"或"没有原生侧"两条不同的错误上，**报出来的原因会变成另一个**，
-     * 用户看到的就不再是"需要桌面版"。
-     *
-     * 这一条必须排在下面两个分支**之前**：网页版的行为要与加这个功能之前完全一样
-     * （不能因为新增了"读最新一份"的回退，就在浏览器里多发一次注定失败的 IPC）。
-     */
-    if (found.code === "not_a_desktop_shell") {
-      return { document: fresh, created: true, failure: found }
+    if (documentId) {
+      const found = await repository.readHead(projectId, documentId)
+      if (found.ok) {
+        const document = documentFromSnapshot(found.value)
+        if (!document) return decode(found.value)
+        if (document.workspace === workspace) return decode(found.value)
+        // The remembered id is already owned by a different workspace. Never
+        // create or subsequently autosave a fresh document under that identity.
+        fresh = createEmptyDocument(workspace)
+      } else if (found.code !== "not_found") return { document: fresh, created: true, failure: found }
     }
-    if (found.code === "not_found") {
-      /**
-       * **本地记不住 id ≠ 库里没有这份文档**（2026-09-22 修 / 外部审查 X1 的第二半）。
-       *
-       * localStorage 被清掉、换了台机器、或者旧版本已经把 id 弄丢过 —— 这些都只说明
-       * "本地没记住用哪份文档"，而仓储里那份内容还在。设计里"仓储是权威那一层"
-       * 要求这里回退到**项目里最新的那一份**，而不是立刻当作用户第一次运行。
-       *
-       * 只有项目里真的一份文档都没有时，`not_found` 才是"首次启动"。
-       */
-      const latest = await repository.readLatestHead(projectId)
-      if (latest.ok && latest.value !== null) {
-        const document = documentFromSnapshot(latest.value)
-        if (document) {
-          remember(latest.value)
-          return { document, created: false }
-        }
-      }
-      // `not_found` 且项目里空无一物：**首次启动的正常状态**，还没保存过任何东西。
-      const created = await repository.create(projectId, fresh)
-      if (created.ok) {
-        remember(created.value)
-        return { document: fresh, created: true }
-      }
-      return { document: fresh, created: true, failure: created }
-    }
-    // 别的失败（IO / 权限）：仍然给出一份可用的文档，并如实带出原因。
-    return { document: fresh, created: true, failure: found }
+    const latest = await repository.readLatestHead(projectId, workspace)
+    if (!latest.ok) return { document: fresh, created: true, failure: latest }
+    return latest.value ? decode(latest.value) : { document: fresh, created: true }
   }
 
   function superseded(documentId: string): SaveResult {
@@ -188,8 +174,11 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
       // A new workspace may be new to this adapter but already present on disk.
       const found = await repository.readHead(projectId, document.metadata.id)
       if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
-      if (found.ok) expected = remember(found.value)
-      else if (found.code === "not_found") {
+      if (found.ok) {
+        const stored = documentFromSnapshot(found.value)
+        if (!stored || stored.workspace !== document.workspace) return workspaceConflict()
+        expected = remember(found.value)
+      } else if (found.code === "not_found") {
         const created = await repository.create(projectId, document)
         if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
         if (!created.ok) return created
@@ -197,6 +186,7 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
         return { ok: true, generation: created.value.generation }
       } else return found
     }
+    if (expected.workspace !== document.workspace) return workspaceConflict()
     if (fingerprint === expected.contentHash) {
       head = expected
       return { ok: true, generation: expected.generation }
@@ -252,7 +242,17 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
     return pending
   }
 
+  function workspaceConflict(): RepositoryFailure {
+    return { ok: false, code: "stale_head", detail: "document id belongs to another workspace; refusing to overwrite it" }
+  }
+
   async function resetNow(document: GeometryDocument, epochAtStart: number): Promise<SaveResult> {
+    const existing = await repository.readHead(projectId, document.metadata.id)
+    if (epochAtStart !== eraOf(document.metadata.id)) return superseded(document.metadata.id)
+    if (existing.ok) {
+      const stored = documentFromSnapshot(existing.value)
+      if (!stored || stored.workspace !== document.workspace) return workspaceConflict()
+    } else if (existing.code !== "not_found") return existing
     /**
      * **走 `replaceEpoch` 而不是"删掉再建"或"当成一次普通提交"。**
      *
@@ -280,6 +280,7 @@ export function createDocumentPersistence(dependencies: PersistenceDependencies)
 
   return {
     restore,
+    restoreWorkspace,
     save,
     reset,
     handle: () => head

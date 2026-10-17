@@ -17,6 +17,15 @@ function document(workspace: "conics" | "geometry3d" = "conics") {
 }
 
 describe("the repository client", () => {
+  it("scopes latest-head lookup to the requested workspace while preserving the legacy call", async () => {
+    const invoke = vi.fn(async () => null)
+    const repository = createDocumentRepository(invoke)
+    await repository.readLatestHead("local", "geometry3d")
+    expect(invoke).toHaveBeenLastCalledWith("read_latest_document_head", { projectId: "local", workspace: "geometry3d" })
+    await repository.readLatestHead("local")
+    expect(invoke).toHaveBeenLastCalledWith("read_latest_document_head", { projectId: "local" })
+  })
+
   it("sends the content and the fingerprint the scene-graph computed", async () => {
     const calls: { command: string; args: Record<string, unknown> }[] = []
     const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {

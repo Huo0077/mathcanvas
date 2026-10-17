@@ -1,0 +1,106 @@
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎
+ControlType.Pane |
+ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Document | MathCanvas · 交互绘图引擎
+ControlType.Group | 全局模块
+ControlType.List |
+ControlType.ListItem | 画布与制图
+ControlType.Button | 传统工作区
+ControlType.Text | 画布与制图
+ControlType.ListItem | 对话式作图
+ControlType.Button | Agent 工作区
+ControlType.Text | 对话式作图
+ControlType.ListItem | provider 与密钥
+ControlType.Button | 模型服务
+ControlType.Text | provider 与密钥
+ControlType.Group | 工作区
+ControlType.List |
+ControlType.ListItem |
+ControlType.Button | 跳转到平面几何
+ControlType.ListItem |
+ControlType.Button | 跳转到立体几何
+ControlType.ListItem |
+ControlType.Button | 跳转到工程制图
+ControlType.Group |
+ControlType.Group | MathCanvas
+ControlType.Group | 工作模式
+ControlType.Group | 工作区标签
+ControlType.Button | 文件
+ControlType.Button | 平面几何
+ControlType.Button | 立体几何
+ControlType.Button | 工程制图
+ControlType.Edit | 搜索
+ControlType.Group | 文件与历史
+ControlType.Button | 打开 .mgeo
+ControlType.Button | 保存 .mgeo
+ControlType.Button | 项目包…
+ControlType.Button | 撤销
+ControlType.Button | 重做
+ControlType.Button | 设置
+ControlType.Group | 功能区控制
+ControlType.Button | 收起功能区
+ControlType.Button | 固定功能区
+ControlType.Group | 功能区
+ControlType.Button | 收起基础与图元
+ControlType.Button | 选择工具
+ControlType.Button | 添加点
+ControlType.Button | 添加直线
+ControlType.Button | 添加线段
+ControlType.Button | 添加射线
+ControlType.Button | 添加折线
+ControlType.Button | 添加圆
+ControlType.Button | 添加圆弧
+ControlType.Button | 添加抛物线
+ControlType.Button | 添加椭圆
+ControlType.Button | 添加双曲线
+ControlType.Button | 添加函数
+ControlType.Button | 收起多模态输入
+ControlType.Button | 文字转换
+ControlType.Button | 图片转换
+ControlType.Button | 收起作业操作
+ControlType.Button | 删除对象
+ControlType.Button | 锁定对象
+ControlType.Button | 绕定点旋转
+ControlType.Button | 收起文件输出
+ControlType.Button | 导出 SVG
+ControlType.Button | 导出 HTML
+ControlType.Button | 导出 CSV
+ControlType.Button | 导出 PNG
+ControlType.Button | 保存 .mgeo
+ControlType.Group |
+ControlType.Text | 对象管理
+ControlType.Text | π代数区
+ControlType.Text | 2
+ControlType.Text | A
+ControlType.Button | 隐藏 A
+ControlType.Text | B
+ControlType.Button | 隐藏 B
+ControlType.Text | 参数
+ControlType.Text | 还没有参数。拖动一个绑定到曲线上的点会自动生成它的驱动参数。
+ControlType.Button | 新建参数
+ControlType.Group |
+ControlType.Group | 画布缩放
+ControlType.Button | 缩小画布
+ControlType.Text | 100%
+ControlType.Button | 放大画布
+ControlType.Button | 重置视图
+ControlType.Image | 几何画布
+ControlType.Group |
+ControlType.Group | 属性检查器
+ControlType.Text | 选中对象
+ControlType.Text | π属性面板
+ControlType.Text | 未选择任何图元
+ControlType.Text | 在画布中点击点、直线或椭圆即可配置几何参数与外观参数
+ControlType.StatusBar | 操作提示
+ControlType.Text | 点击图元查看属性，或在画布中拖拽框选多个对象
+ControlType.Text | 坐标 —
+ControlType.Text | 对象
+ControlType.Text | 2
+ControlType.Text | 工作区
+ControlType.Text | conics
+ControlType.Pane |

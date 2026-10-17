@@ -7,7 +7,7 @@ At line:11 char:1
 + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: ((node:6792) Exp...s not provided.:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
 (Use `node --trace-warnings ...` to show where the warning was created)
 (node:54540) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
 (Use `node --trace-warnings ...` to show where the warning was created)
@@ -18,4 +18,3 @@ At line:11 char:1
       Tests  43 passed (43)
    Start at  07:33:09
    Duration  7.46s (transform 5.72s, setup 136ms, import 12.50s, tests 167ms, environment 6.81s)
-

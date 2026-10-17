@@ -31,10 +31,13 @@ pub fn read_document_head(app: tauri::AppHandle, project_id: String, document_id
 /// "本地没记住 id"（仓储里有内容 → 读回来）与"真正的首次启动"（项目里空无一物 → 建一份）。
 /// 没有它，记忆一丢就把已存的文档当成不存在。
 #[tauri::command]
-pub fn read_latest_document_head(app: tauri::AppHandle, project_id: String) -> Result<Option<DocumentSnapshot>, String> {
+pub fn read_latest_document_head(app: tauri::AppHandle, project_id: String, workspace: Option<String>) -> Result<Option<DocumentSnapshot>, String> {
     let state = app.try_state::<RepositoryState>().ok_or("the project repository is not initialised")?;
     let repository = state.repository.lock().map_err(|_| "the project repository is poisoned".to_string())?;
-    repository.read_latest_head(&project_id).map_err(|error| error.to_string())
+    match workspace {
+        Some(workspace) => repository.read_latest_workspace_head(&project_id, &workspace),
+        None => repository.read_latest_head(&project_id),
+    }.map_err(|error| error.to_string())
 }
 
 /// **建一份文档**（首次写入）。

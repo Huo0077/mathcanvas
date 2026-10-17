@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { createEmptyDocument, type GeometryDocument, type Workspace } from "@draw/dsl"
+import { contentFingerprint } from "@draw/scene-graph"
 import { loadActiveWorkspace, loadDraft, loadLastDocumentId, saveDraft } from "./persistence/draftStorage"
 import { createDocumentRepository } from "./services/documentRepository"
 import { createDocumentPersistence, type DocumentPersistence } from "./services/documentPersistence"
@@ -54,6 +55,10 @@ export interface DraftPersistenceHandle {
 
 export function useDraftPersistence({ document, replace, switchWorkspace, setFileError, persistence, readLive = () => useSceneStore.getState() }: DraftPersistenceDeps): DraftPersistenceHandle {
   const draftLoadedRef = useRef(false)
+  const hydratedWorkspacesRef = useRef(new Set<Workspace>())
+  const restoringWorkspacesRef = useRef(new Set<Workspace>())
+  const [startupReady, setStartupReady] = useState(false)
+  const [workspaceRestoreTick, setWorkspaceRestoreTick] = useState(0)
   const skipNextDraftSaveRef = useRef(false)
   /**
    * 启动恢复**是否已经结束**。
@@ -106,7 +111,7 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
       if (!persistenceRef.current) persistenceRef.current = persistence ?? createDocumentPersistence({
         repository: createDocumentRepository(invokeDesktop),
         projectId: "local",
-        emptyDocument: () => createEmptyDocument("conics"),
+        emptyDocument: () => createEmptyDocument(workspaceAtStartup),
         /**
          * **探测要用"这一世真正会用的那个 documentId"**（2026-09-22 修 / 外部审查 X1）。
          *
@@ -130,10 +135,12 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
        * 前者保证不丢用户的工作，后者保证不会把 B 工作区的文档盖到 A 工作区上。
        */
       if (actedSinceStartup() || !stillOnTheSameWorkspace()) return
-      if (!restored.created && restored.document.primitives.length > 0) {
+      if (!restored.created) {
         // 仓储里有东西：用它，并跳过下一次自动保存（刚恢复的内容不该立刻回写一遍）。
         skipNextDraftSaveRef.current = true
-        replace(migrateLegacySolids(restored.document))
+        const recovered = migrateLegacySolids(restored.document)
+        replace(recovered)
+        try { saveDraft(recovered) } catch (error) { setFileError(error instanceof Error ? error.message : "无法记住恢复的文档") }
         return
       }
       // 仓储里没有（网页版就是这样）：退回 localStorage 草稿。
@@ -150,6 +157,7 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
           if (!actedSinceStartup() && readLive().document.workspace === (workspace ?? document.workspace)) {
             skipNextDraftSaveRef.current = true
             replace(restoredDraft)
+            saveDraft(restoredDraft)
           }
         }
       } catch (error) {
@@ -177,8 +185,49 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
        * 否则用户之后的改动一次都存不下去 —— 那是比覆盖更糟的失败。
        */
       restoreSettledRef.current = true
+      if (stillOnTheSameWorkspace()) hydratedWorkspacesRef.current.add(workspaceAtStartup)
+      setStartupReady(true)
     })
   }, [document.workspace, replace, switchWorkspace, persistence, readLive, setFileError])
+
+  // First visits after restart must hydrate before an empty placeholder can be saved.
+  // This is read-only until the result is admitted against the still-current document.
+  useEffect(() => {
+    const workspace = document.workspace
+    if (!startupReady || hydratedWorkspacesRef.current.has(workspace) || restoringWorkspacesRef.current.has(workspace)) return
+    const baseline = readLive().document
+    if (baseline.workspace !== workspace) return
+    // Edits made before startup settled already belong to the user, not to recovery.
+    if (baseline.revision > 0 || baseline.primitives.length > 0) {
+      hydratedWorkspacesRef.current.add(workspace)
+      setWorkspaceRestoreTick((tick) => tick + 1)
+      return
+    }
+    restoringWorkspacesRef.current.add(workspace)
+    const baselineContent = contentFingerprint(baseline)
+    void (async () => {
+      let fallback: GeometryDocument | null = null
+      try { fallback = loadDraft(workspace) } catch (error) {
+        setFileError(error instanceof Error ? error.message : "无法恢复工作区草稿")
+      }
+      const restored = await persistenceRef.current!.restoreWorkspace(workspace, fallback?.metadata.id)
+      const live = readLive().document
+      if (live.workspace !== workspace) return
+      // Import, editing, undo or navigation may have changed this document while IO waited.
+      if (live.metadata.id !== baseline.metadata.id || live.revision !== baseline.revision || contentFingerprint(live) !== baselineContent) return
+      const recovered = restored.created ? fallback : restored.document
+      if (recovered && recovered.workspace === workspace) replace(migrateLegacySolids(recovered))
+      if (restored.failure && restored.failure.code !== "not_a_desktop_shell") {
+        setFileError(`本地项目库不可用，改动只保留在会话内：${restored.failure.detail}`)
+      }
+    })().catch((error: unknown) => {
+      setFileError(error instanceof Error ? error.message : "无法恢复工作区")
+    }).finally(() => {
+      restoringWorkspacesRef.current.delete(workspace)
+      if (readLive().document.workspace === workspace) hydratedWorkspacesRef.current.add(workspace)
+      setWorkspaceRestoreTick((tick) => tick + 1)
+    })
+  }, [document.workspace, startupReady, workspaceRestoreTick, readLive, replace, setFileError])
 
   useEffect(() => {
     /**
@@ -198,6 +247,12 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
      */
     if (skipNextDraftSaveRef.current) { skipNextDraftSaveRef.current = false; return }
     if (!restoreSettledRef.current) return
+    if (!hydratedWorkspacesRef.current.has(document.workspace)) {
+      // Block untouched placeholders, not an actual edit followed by navigation.
+      // The late recovery admission check will reject this edited document.
+      if (document.revision === 0 && document.primitives.length === 0) return
+      hydratedWorkspacesRef.current.add(document.workspace)
+    }
     // localStorage 那一份照旧：它是网页版的**唯一**持久化，也是桌面版的兜底。
     try { saveDraft(document) } catch (error) { setFileError(error instanceof Error ? error.message : "无法自动保存草稿") }
     /**
@@ -213,7 +268,7 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
         setFileError(`本地项目库保存失败，改动只保留在会话内：${result.detail}`)
       }
     })
-  }, [document, setFileError])
+  }, [document, setFileError, workspaceRestoreTick])
 
   /** 打开文件那一侧要用的"换一世"入口（见 `DraftPersistenceHandle`）。 */
   return { reset: (next) => { void persistenceRef.current?.reset(next) } }

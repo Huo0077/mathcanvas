@@ -1,0 +1,43 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:24084) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:22 char:1
++ node node_modules/vitest/vitest.mjs run apps/web/src/useDraftPersiste ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:24084) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/useDraftPersistence.test.tsx (15 tests | 1 failed) 399ms
+     × saves edits made during pending recovery even if the user navigates away before it settles 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/useDraftPersistence.test.tsx > inactive workspace restart recovery with the real scene store > save
+s edits made during pending recovery even if the user navigates away before it settles
+AssertionError: expected undefined to deeply equal [ 'edited-before-navigation' ]
+
+- Expected:
+[
+  "edited-before-navigation",
+]
+
++ Received:
+undefined
+
+ ❯ apps/web/src/useDraftPersistence.test.tsx:357:62
+    355|     act(() => { useSceneStore.getState().switchWorkspace("geometry3d")…
+    356|     await act(async () => { gate.resolve(restoredOutcome()); await gat…
+    357|     expect(loadDraft("conics")?.primitives.map((p) => p.id)).toEqual([…
+       |                                                              ^
+    358|     expect(save.mock.calls.some(([document]) => document.workspace ===…
+    359|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed (15)
+   Start at  07:47:48
+   Duration  8.16s (transform 2.24s, setup 57ms, import 5.09s, tests 399ms, environment 1.90s)

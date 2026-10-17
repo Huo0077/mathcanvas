@@ -1,0 +1,46 @@
+node : warning: linker stdout: 正在创建库 D:\draw\draw\apps\desktop\src-tauri\target\debug\deps\mathcanvas_desktop_lib.dll.l
+ib 和对象 D:\draw\draw\apps\desktop\src-tauri\target\debug\deps\mathcanvas_desktop_lib.dll.exp
+At line:2 char:500
++ ... INE='true'; node scripts/toolchain.mjs cargo test --manifest-path app ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: linker...top_lib.dll.exp:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  |
+  = note: `#[warn(linker_messages)]` on by default
+
+warning: `mathcanvas-desktop` (lib) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.35s
+     Running tests\project_repository.rs (apps\desktop\src-tauri\target\debug\deps\project_repository-ce975c19c99250f1.
+exe)
+
+running 27 tests
+test refuses_a_database_from_a_newer_schema_instead_of_resetting_it ... ok
+test migrates_an_empty_database_and_records_the_version ... ok
+test migrating_again_is_a_no_op ... ok
+test a_failed_migration_is_reported_and_leaves_the_database_usable ... ok
+test read_latest_head_finds_the_document_the_local_memory_forgot ... ok
+test an_import_reports_the_generation_each_document_landed_on ... ok
+test a_blob_referenced_by_an_older_snapshot_survives_a_newer_one_dropping_it ... ok
+test refuses_a_commit_built_on_a_stale_generation ... ok
+test replacing_the_epoch_keeps_the_history ... ok
+test a_lost_response_can_be_recovered_by_looking_up_the_key ... ok
+test read_latest_head_reports_none_when_the_project_has_no_documents ... ok
+test creating_the_same_document_twice_is_refused ... ok
+test read_latest_head_does_not_leak_across_projects ... ok
+test a_commit_that_changes_nothing_does_not_advance_the_generation ... ok
+test reports_a_missing_document_instead_of_returning_an_empty_one ... ok
+test refuses_a_commit_whose_expected_hash_does_not_match_the_stored_content ... ok
+test the_same_request_twice_returns_the_same_receipt_instead_of_writing_twice ... ok
+test refuses_the_same_idempotency_key_carrying_a_different_candidate ... ok
+test commits_advance_the_generation_and_write_history ... ok
+test latest_workspace_head_survives_reopen_and_does_not_cross_workspaces_or_projects ... ok
+test refuses_a_commit_built_on_a_stale_epoch_even_when_the_generation_matches ... ok
+test recording_an_attachment_does_not_by_itself_make_it_referenced ... ok
+test read_latest_head_prefers_the_most_recently_updated_document ... ok
+test the_head_survives_a_restart ... ok
+test an_attachment_is_only_orphaned_once_no_snapshot_references_it ... ok
+test an_import_writes_every_document_or_none_of_them ... ok
+test a_locked_database_is_reported_as_io_not_as_already_exists ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.76s

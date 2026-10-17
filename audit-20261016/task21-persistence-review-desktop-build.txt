@@ -4,7 +4,7 @@ At line:2 char:32
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (        Info Lo...hed versions...:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
      Running beforeBuildCommand `npm run build --workspace @draw/web`
 
 > @draw/web@0.1.0 build
@@ -14,7 +14,7 @@ At line:2 char:32
 transforming...
 [32m✓[39m 577 modules transformed.
 rendering chunks...
-[33m[plugin vite:reporter] 
+[33m[plugin vite:reporter]
 (!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/
 settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported
  by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into anothe

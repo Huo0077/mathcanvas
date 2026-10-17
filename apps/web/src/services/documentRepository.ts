@@ -1,3 +1,4 @@
+import type { Workspace } from "@draw/dsl"
 /**
  * **项目仓储客户端**（Task 1.6 的前端那一半）。
  *
@@ -89,7 +90,7 @@ export interface DocumentRepository {
    * 记忆（localStorage 里的草稿 / 上次的 id）丢得起，仓储里的文档丢不起。
    * 恢复路径在按 id 探测未命中之后用它兜底，而不是直接当作用户第一次运行。
    */
-  readLatestHead(projectId: string): Promise<RepositoryResult<DocumentSnapshot | null>>
+  readLatestHead(projectId: string, workspace?: Workspace): Promise<RepositoryResult<DocumentSnapshot | null>>
   /** 首次写入。 */
   create(projectId: string, document: GeometryDocument): Promise<RepositoryResult<DocumentSnapshot>>
   /**
@@ -129,7 +130,7 @@ export function createDocumentRepository(invoke: Invoke): DocumentRepository {
   return {
     readHead: (projectId, documentId) => call<DocumentSnapshot>("read_document_head", { projectId, documentId }),
 
-    readLatestHead: (projectId) => call<DocumentSnapshot | null>("read_latest_document_head", { projectId }),
+    readLatestHead: (projectId, workspace) => call<DocumentSnapshot | null>("read_latest_document_head", workspace ? { projectId, workspace } : { projectId }),
 
     create: (projectId, document) =>
       call<DocumentSnapshot>("create_document", {

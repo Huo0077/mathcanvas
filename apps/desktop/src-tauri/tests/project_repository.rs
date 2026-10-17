@@ -532,3 +532,20 @@ fn a_blob_referenced_by_an_older_snapshot_survives_a_newer_one_dropping_it() {
     assert!(repository.referenced_blobs().expect("referenced").contains("hash-a"), "the older snapshot still references it");
 }
 
+
+
+#[test]
+fn latest_workspace_head_survives_reopen_and_does_not_cross_workspaces_or_projects() {
+    let temp = TempDir::new("workspace-restore");
+    let db = temp.db("projects.db");
+    {
+        let mut repository = ProjectRepository::open(&db).expect("open");
+        repository.create("p1", "planar", "e1", r#"{"workspace":"conics","primitives":[{"id":"A"}]}"#, "h1").expect("create planar");
+        repository.create("p1", "solid", "e2", r#"{"workspace":"geometry3d","primitives":[]}"#, "h2").expect("create solid");
+        repository.create("other", "other-planar", "e3", r#"{"workspace":"conics"}"#, "h3").expect("create other");
+    }
+    let repository = ProjectRepository::open(&db).expect("reopen");
+    assert_eq!(repository.read_latest_workspace_head("p1", "conics").expect("read planar").expect("exists").document_id, "planar");
+    assert_eq!(repository.read_latest_workspace_head("p1", "geometry3d").expect("read solid").expect("exists").document_id, "solid");
+    assert!(repository.read_latest_workspace_head("p1", "cad").expect("read absent").is_none());
+}

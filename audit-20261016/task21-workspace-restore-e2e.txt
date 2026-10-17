@@ -1,0 +1,24 @@
+node : [33m[plugin vite:reporter]
+At line:2 char:1
++ node node_modules/@playwright/test/cli.js test e2e/workspace-persiste ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([33m[plugin vite:reporter] :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(!) D:/draw/draw/apps/web/src/services/secretClient.ts is dynamically imported by D:/draw/draw/apps/web/src/components/
+settings/ProviderSettings.tsx, D:/draw/draw/apps/web/src/services/providerProfileClient.ts but also statically imported
+ by D:/draw/draw/apps/web/src/components/settings/ProviderSettings.tsx, dynamic import will not move module into anothe
+r chunk.
+[39m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-m
+anualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+
+Running 1 test using 1 worker
+
+  ok 1 e2e\workspace-persistence.spec.ts:26:5 › restores active and inactive drawings across reloads without replacing later edits (5.3s)
+
+  1 passed (28.9s)

@@ -1,0 +1,58 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:43648) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:18 char:1
++ node node_modules/vitest/vitest.mjs run apps/web/src/services/documen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:43648) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/services/documentPersistence.test.ts (28 tests | 2 failed) 52ms
+     × keeps startup scoped when the remembered id is missing 19ms
+     × keeps startup scoped when the remembered id is other-workspace 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > restoring on startup > keeps startup scoped when the remembe
+red id is missing
+AssertionError: expected 'doc-80d4c5b4-4f6f-414d-b737-02516e364…' to be 'doc-d12bbb7e-4e96-4f23-ad6d-e39f312ae…' // Obj
+ect.is equality
+
+Expected: "doc-d12bbb7e-4e96-4f23-ad6d-e39f312aeac8"
+Received: "doc-80d4c5b4-4f6f-414d-b737-02516e364576"
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:106:42
+    104|     vi.mocked(repository.readLatestHead).mockImplementation(async (_pr…
+    105|     const outcome = await persistence(repository, mode === "missing" ?…
+    106|     expect(outcome.document.metadata.id).toBe(planar.metadata.id)
+       |                                          ^
+    107|     expect(outcome.document.workspace).toBe("conics")
+    108|     expect(repository.readLatestHead).toHaveBeenCalledWith("p1", "coni…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/web/src/services/documentPersistence.test.ts > restoring on startup > keeps startup scoped when the remembe
+red id is other-workspace
+AssertionError: expected 'doc-6a77a4e0-ec56-4fab-b3e6-371480a1b…' to be 'doc-f34f61ec-a02f-4339-bf29-a045972f8…' // Obj
+ect.is equality
+
+Expected: "doc-f34f61ec-a02f-4339-bf29-a045972f8bb5"
+Received: "doc-6a77a4e0-ec56-4fab-b3e6-371480a1b26d"
+
+ ❯ apps/web/src/services/documentPersistence.test.ts:106:42
+    104|     vi.mocked(repository.readLatestHead).mockImplementation(async (_pr…
+    105|     const outcome = await persistence(repository, mode === "missing" ?…
+    106|     expect(outcome.document.metadata.id).toBe(planar.metadata.id)
+       |                                          ^
+    107|     expect(outcome.document.workspace).toBe("conics")
+    108|     expect(repository.readLatestHead).toHaveBeenCalledWith("p1", "coni…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 26 passed (28)
+   Start at  07:59:39
+   Duration  6.98s (transform 2.17s, setup 61ms, import 4.31s, tests 52ms, environment 1.90s)

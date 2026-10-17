@@ -1,15 +1,15 @@
-ControlType.Pane | 
+ControlType.Pane |
 ControlType.Pane | MathCanvas · 交互绘图引擎
-ControlType.Pane | 
+ControlType.Pane |
 ControlType.Pane | MathCanvas · 交互绘图引擎 - Web 内容
-ControlType.Pane | 
-ControlType.Pane | 
-ControlType.Pane | 
-ControlType.Pane | 
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
+ControlType.Pane |
 ControlType.Document | MathCanvas · 交互绘图引擎
-ControlType.Group | 
+ControlType.Group |
 ControlType.Group | 全局模块
-ControlType.List | 
+ControlType.List |
 ControlType.ListItem | 画布与制图
 ControlType.Button | 传统工作区
 ControlType.Text | 画布与制图
@@ -20,14 +20,14 @@ ControlType.ListItem | provider 与密钥
 ControlType.Button | 模型服务
 ControlType.Text | provider 与密钥
 ControlType.Group | 工作区
-ControlType.List | 
-ControlType.ListItem | 
+ControlType.List |
+ControlType.ListItem |
 ControlType.Button | 跳转到平面几何
-ControlType.ListItem | 
+ControlType.ListItem |
 ControlType.Button | 跳转到立体几何
-ControlType.ListItem | 
+ControlType.ListItem |
 ControlType.Button | 跳转到工程制图
-ControlType.Group | 
+ControlType.Group |
 ControlType.Group | MathCanvas
 ControlType.Group | 工作模式
 ControlType.Group | 工作区标签
@@ -80,11 +80,11 @@ ControlType.Button | 导出 HTML
 ControlType.Button | 导出 CSV
 ControlType.Button | 导出 PNG
 ControlType.Button | 保存 .mgeo
-ControlType.Group | 
+ControlType.Group |
 ControlType.Text | 对象管理
 ControlType.Text | π代数区
 ControlType.Text | 1
-ControlType.Group | 
+ControlType.Group |
 ControlType.Text | A
 ControlType.Button | 隐藏 A
 ControlType.Text | 参数
@@ -112,7 +112,7 @@ ControlType.Button | 适应视图
 ControlType.Button | 重置3D视角
 ControlType.Text | 左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放
 ControlType.Text | ∴
-ControlType.Group | 
+ControlType.Group |
 ControlType.Group | 属性检查器
 ControlType.Text | 选中对象
 ControlType.Text | π属性面板
@@ -144,11 +144,11 @@ ControlType.Button | 添加标记点标注
 ControlType.StatusBar | 操作提示
 ControlType.Text | 已选中A · 拖动控制点调整形态，按 Delete 键删除
 ControlType.Text | 坐标 —
-ControlType.Text | 对象 
+ControlType.Text | 对象
 ControlType.Text | 1
-ControlType.Text | 工作区 
+ControlType.Text | 工作区
 ControlType.Text | geometry3d
 ControlType.StatusBar | 操作指引
 ControlType.Text | 空间点已添加：右侧改 x/y/z；Shift 多选后可创建直线、平面与面
 ControlType.Button | 关闭操作指引
-ControlType.Pane | 
+ControlType.Pane |

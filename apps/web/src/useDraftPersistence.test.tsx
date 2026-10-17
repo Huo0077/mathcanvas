@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
-import { saveDraft } from "./persistence/draftStorage"
+import { loadDraft, saveDraft } from "./persistence/draftStorage"
 import type { RepositoryFailure } from "./services/documentRepository"
 import type { DocumentPersistence, RestoreOutcome } from "./services/documentPersistence"
 import { useSceneStore } from "./store"
@@ -32,10 +32,11 @@ function fakePersistence(restore: () => Promise<RestoreOutcome>) {
    * 保存的返回类型要写成**联合**：有的用例要让它成功、有的要让它失败
    * （只写 `ok: true` 的话，`mockResolvedValue(失败)` 那一行会被类型检查否掉）。
    */
-  const save = vi.fn(async (): Promise<{ ok: true; generation: number } | RepositoryFailure> => ({ ok: true, generation: 1 }))
+  const save = vi.fn(async (_document: GeometryDocument, _actions: number): Promise<{ ok: true; generation: number } | RepositoryFailure> => ({ ok: true, generation: 1 }))
   const reset = vi.fn(async (): Promise<{ ok: true; generation: number } | RepositoryFailure> => ({ ok: true, generation: 1 }))
-  const persistence: DocumentPersistence = { restore, save, reset, handle: () => null }
-  return { persistence, save, reset }
+  const restoreWorkspace = vi.fn(async (workspace: GeometryDocument["workspace"]): Promise<RestoreOutcome> => ({ document: createEmptyDocument(workspace), created: true }))
+  const persistence: DocumentPersistence = { restore, restoreWorkspace, save, reset, handle: () => null }
+  return { persistence, save, reset, restoreWorkspace }
 }
 
 /** 平面点的坐标是**顶层的 `x` / `y`**（不是 `position`）—— 文档校验器按这个形状查。 */
@@ -247,4 +248,114 @@ describe("startup restore and autosave", () => {
 
     expect(reset).toHaveBeenCalledWith(opened)
   })
+})
+
+
+describe("inactive workspace restart recovery with the real scene store", () => {
+  function mountStore(persistence: DocumentPersistence, initial = createEmptyDocument("geometry3d")) {
+    useSceneStore.setState({ document: initial, workspaceDocuments: { [initial.workspace]: initial }, history: [], future: [] })
+    const setFileError = vi.fn()
+    return { ...renderHook(() => {
+      const document = useSceneStore((state) => state.document)
+      const replace = useSceneStore((state) => state.replace)
+      const switchWorkspace = useSceneStore((state) => state.switchWorkspace)
+      const handle = useDraftPersistence({ document, replace, switchWorkspace, setFileError, persistence })
+      return { document, handle }
+    }), setFileError }
+  }
+
+  it("recovers the inactive browser draft on first visit and retains new edits on revisit", async () => {
+    const planar = documentWithPoint()
+    saveDraft(planar)
+    const initial = createEmptyDocument("geometry3d")
+    saveDraft(initial)
+    const { persistence } = fakePersistence(async () => ({ document: initial, created: true }))
+    const view = mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    await waitFor(() => expect(view.result.current.document.primitives).toHaveLength(1))
+    act(() => { useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "new-point", type: "point", x: 3, y: 4 } }) })
+    act(() => { useSceneStore.getState().switchWorkspace("geometry3d") })
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    expect(view.result.current.document.primitives.map((p) => p.id)).toEqual(["point-1", "new-point"])
+    expect(loadDraft("conics")!.primitives).toHaveLength(2)
+  })
+
+  it("waits for the authoritative inactive head without overwriting its browser fallback", async () => {
+    const fallback = documentWithPoint()
+    saveDraft(fallback)
+    const initial = createEmptyDocument("geometry3d")
+    saveDraft(initial)
+    const gate = deferred<RestoreOutcome>()
+    const { persistence, restoreWorkspace } = fakePersistence(async () => ({ document: initial, created: true }))
+    restoreWorkspace.mockImplementation(() => gate.promise)
+    const view = mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    await flush()
+    expect(loadDraft("conics")!.primitives).toHaveLength(1)
+    const authoritative = { ...fallback, primitives: [...fallback.primitives, { id: "db-point", type: "point" as const, x: 7, y: 8 }] }
+    await act(async () => { gate.resolve({ document: authoritative, created: false }); await gate.promise })
+    await waitFor(() => expect(view.result.current.document.primitives.map((p) => p.id)).toEqual(["point-1", "db-point"]))
+  })
+
+  it("does not overwrite an edit made while inactive recovery is pending and saves that edit", async () => {
+    const initial = createEmptyDocument("geometry3d")
+    const gate = deferred<RestoreOutcome>()
+    const { persistence, restoreWorkspace, save } = fakePersistence(async () => ({ document: initial, created: true }))
+    restoreWorkspace.mockImplementation(() => gate.promise)
+    const view = mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    act(() => { useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "user-edit", type: "point", x: 3, y: 4 } }) })
+    await act(async () => { gate.resolve(restoredOutcome()); await gate.promise })
+    expect(view.result.current.document.primitives.map((p) => p.id)).toEqual(["user-edit"])
+    await waitFor(() => expect(loadDraft("conics")!.primitives[0].id).toBe("user-edit"))
+    expect(save.mock.calls.some(([document]) => document.workspace === "conics" && document.primitives.some((p) => p.id === "user-edit"))).toBe(true)
+  })
+
+  it("does not apply a late workspace response after navigation and can recover on revisit", async () => {
+    const initial = createEmptyDocument("geometry3d")
+    const gate = deferred<RestoreOutcome>()
+    const { persistence, restoreWorkspace } = fakePersistence(async () => ({ document: initial, created: true }))
+    restoreWorkspace.mockImplementation(() => gate.promise)
+    const view = mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    act(() => { useSceneStore.getState().switchWorkspace("geometry3d") })
+    await act(async () => { gate.resolve(restoredOutcome()); await gate.promise })
+    expect(view.result.current.document.workspace).toBe("geometry3d")
+    expect(view.result.current.document.primitives).toHaveLength(0)
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    await waitFor(() => expect(view.result.current.document.primitives).toHaveLength(1))
+  })
+
+  it("keeps an authoritative empty workspace rather than resurrecting an older nonempty draft", async () => {
+    saveDraft(documentWithPoint())
+    const initial = createEmptyDocument("geometry3d")
+    saveDraft(initial)
+    const empty = createEmptyDocument("conics")
+    const { persistence, restoreWorkspace } = fakePersistence(async () => ({ document: initial, created: true }))
+    restoreWorkspace.mockResolvedValue({ document: empty, created: false })
+    const view = mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    await waitFor(() => expect(view.result.current.document.metadata.id).toBe(empty.metadata.id))
+    expect(view.result.current.document.primitives).toHaveLength(0)
+  })
+  it("saves edits made during pending recovery even if the user navigates away before it settles", async () => {
+    const initial = createEmptyDocument("geometry3d")
+    const gate = deferred<RestoreOutcome>()
+    const { persistence, restoreWorkspace, save } = fakePersistence(async () => ({ document: initial, created: true }))
+    restoreWorkspace.mockImplementation(() => gate.promise)
+    mountStore(persistence, initial)
+    await flush()
+    act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    act(() => { useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "edited-before-navigation", type: "point", x: 3, y: 4 } }) })
+    act(() => { useSceneStore.getState().switchWorkspace("geometry3d") })
+    await act(async () => { gate.resolve(restoredOutcome()); await gate.promise })
+    expect(loadDraft("conics")?.primitives.map((p) => p.id)).toEqual(["edited-before-navigation"])
+    expect(save.mock.calls.some(([document]) => document.workspace === "conics" && document.primitives.some((p) => p.id === "edited-before-navigation"))).toBe(true)
+  })
+
 })

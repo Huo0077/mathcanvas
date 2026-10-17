@@ -1,0 +1,135 @@
+
+ RUN  v4.1.12 D:/draw/draw
+
+node : (node:52840) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+At line:6 char:1
++ node node_modules/vitest/vitest.mjs run apps/web/src/useDraftPersiste ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:52840) Ex...s not provided.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ apps/web/src/useDraftPersistence.test.tsx (14 tests | 4 failed) 3195ms
+     × recovers the inactive browser draft on first visit and retains new edits on revisit 1039ms
+     × waits for the authoritative inactive head without overwriting its browser fallback 6ms
+     × does not apply a late workspace response after navigation and can recover on revisit 1005ms
+     × keeps an authoritative empty workspace rather than resurrecting an older nonempty draft 1015ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/web/src/useDraftPersistence.test.tsx > inactive workspace restart recovery with the real scene store > reco
+vers the inactive browser draft on first visit and retains new edits on revisit
+AssertionError: expected [] to have a length of 1 but got +0
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div />[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ apps/web/src/useDraftPersistence.test.tsx:276:73
+    274|     await flush()
+    275|     act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    276|     await waitFor(() => expect(view.result.current.document.primitives…
+       |                                                                         ^
+    277|     act(() => { useSceneStore.getState().apply({ op: "addPrimitive", p…
+    278|     act(() => { useSceneStore.getState().switchWorkspace("geometry3d")…
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  apps/web/src/useDraftPersistence.test.tsx > inactive workspace restart recovery with the real scene store > wait
+s for the authoritative inactive head without overwriting its browser fallback
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ apps/web/src/useDraftPersistence.test.tsx:296:45
+    294|     act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    295|     await flush()
+    296|     expect(loadDraft("conics")!.primitives).toHaveLength(1)
+       |                                             ^
+    297|     const authoritative = { ...fallback, primitives: [...fallback.prim…
+    298|     await act(async () => { gate.resolve({ document: authoritative, cr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  apps/web/src/useDraftPersistence.test.tsx > inactive workspace restart recovery with the real scene store > does
+ not apply a late workspace response after navigation and can recover on revisit
+AssertionError: expected [] to have a length of 1 but got +0
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div />[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ apps/web/src/useDraftPersistence.test.tsx:330:73
+    328|     expect(view.result.current.document.primitives).toHaveLength(0)
+    329|     act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    330|     await waitFor(() => expect(view.result.current.document.primitives…
+       |                                                                         ^
+    331|   })
+    332|
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  apps/web/src/useDraftPersistence.test.tsx > inactive workspace restart recovery with the real scene store > keep
+s an authoritative empty workspace rather than resurrecting an older nonempty draft
+AssertionError: expected 'doc-c89a2a58-b2b4-46a6-b967-a4e82a9f3…' to be 'doc-a54e2c11-dfa2-4bed-a09d-c20c4f574…' // Obj
+ect.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div />[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+Expected: "doc-a54e2c11-dfa2-4bed-a09d-c20c4f574628"
+Received: "doc-c89a2a58-b2b4-46a6-b967-a4e82a9f3af8"
+
+ ❯ apps/web/src/useDraftPersistence.test.tsx:343:74
+    341|     await flush()
+    342|     act(() => { useSceneStore.getState().switchWorkspace("conics") })
+    343|     await waitFor(() => expect(view.result.current.document.metadata.i…
+       |                                                                          ^
+    344|     expect(view.result.current.document.primitives).toHaveLength(0)
+    345|   })
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 10 passed (14)
+   Start at  07:44:49
+   Duration  10.81s (transform 2.24s, setup 54ms, import 5.04s, tests 3.20s, environment 1.87s)
