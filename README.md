@@ -1,6 +1,25 @@
 # MathCanvas
 
-> **Agent 升级范围（2026-10-11，设计状态）**：下一阶段只面向高中数学需作图的**三角形、圆锥曲线、函数/导数、立体几何**。已从可回指的高考卷面完成[四家族真题作图需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)，实施步骤及实际进度统一见[四家族 Agent 下一步计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)。这两份文档不是功能发布或真题全覆盖证明；**Task 1–13 已于 2026-10-12 完成，其中那道折面题已在真实浏览器端到端通过**，但真题四族的真实 provider 质量与发布门禁仍以[当前状态](docs/current-status.md)为准。
+<!-- functional-checkpoint-20261016-ci -->
+## 2026-10-16 功能审查与 CI 状态同步
+
+本节为当前口径；下文较早日期的完成声明与测试数量仅为历史快照，不覆盖本节。功能基线提交为 `7efd0ce3b078f652d5c4a7e046a74225a2f36f7e`。
+
+| 当前判定 | 数量 | Task |
+| --- | ---: | --- |
+| 已在声明的支持范围内完成功能验收 | 16 | 1–15、17 |
+| 部分完成 | 3 | 16、18、19 |
+| 未整体完成／未发行验收 | 2 | 20、21 |
+
+- **已落地**：独立条件核验、有界翻折、面上点与受限展开、函数公切线；证明迟到/失效与输入绑定；跨工作区自动保存和重启恢复；候选证据运行身份与椭圆/双曲线/抛物线/球体范围门禁；产品协调流程中的评测请求额度及缺失人评拒绝门禁。
+- **最新已提交的本地验证**：单元测试 404 文件 / 4741 passed / 1 todo；当前源码重新构建后的浏览器测试 239 passed；typecheck exit 0；lint 0 errors / 13 既有 warnings。证据为 `audit-20261016/task16-analytic-final-{unit,e2e,typecheck,lint}.txt/.exit`。这些是本地结果，不等于 GitHub CI 全绿。
+- **GitHub CI 失败与修复记录**：运行 `38994176178` 中 build、rust、e2e 成功，checks 在 Vitest 失败，后续性能与评测步骤被跳过。已查实提交中的六份 `task16-analytic-final-{e2e,lint,typecheck,unit}.txt`、`task16-analytic-invalid-{green,red}.txt` 是 UTF-16 LE（`FF FE`），违反仓库受跟踪文本必须为 UTF-8 的卫生判据。后续提交 `1add886dfa13cd28ae7f346f332862586fbcaac1` 已将六份日志转换为 UTF-8；其远端运行 `38995619547` 已 completed / success。保留原失败历史；本次文档更新不修改产品或日志，新的文档提交仍需单独观察 CI。
+- **暂停前的未提交工程复验**：本地 Rust 263 passed / 4 ignored，独立配置桌面构建 exit 0。原生椭圆待确认状态有记录，但新一轮桌面确认/退出/重启验收未闭环，期间进程退出原因未确认；仅保留本地证据，不作为已上传或完整验收结果。独立测试副本已关闭，其他功能开发暂停。
+- **剩余验收**：Task 16 缺确认前真实候选 DOM/截图、完整 WebGL 对象测量与视觉人评；Task 18/19 缺标准打包/干净环境证明验收、OS 强沙箱与离线分发；Task 20 缺冻结 12×3 独立 gold 真实模型质量、人评及真实美元止损；Task 21 缺干净机器/断网发行和教师/学生签收。已有真实 provider 小样本不达标，不能替代冻结题集验收。
+- **边界**：普通作图、受限自动 Lean、真实模型质量和最终发行分别验收；`structured_only` 不是实际候选截图，受限引理不是整题证明。Goal 保持未完成，本次文档更新不提高任何 Task 的完成状态。
+<!-- /functional-checkpoint-20261016-ci -->
+
+> **当前功能验收（2026-10-16）**：21 项中 16 项在支持范围内完成、3 项部分完成、2 项未整体验收；日志编码修复 `1add886` 的 GitHub CI 已通过（运行 `38995619547`）；本次文档提交需另行验证。真实模型质量、视觉人评与发行门禁未通过，详见下方同步记录和[当前状态](docs/current-status.md)。
 
 MathCanvas 是面向数学学习与工程绘图的交互式工作台。你可以在平面画布上绘制函数和几何图形，在立体画布中构造、观察和测量三维对象，也可以制作工程图纸。项目仍在持续开发；浏览器版本可以本地运行，部分 Agent 和桌面功能仍处于验证阶段。
 
@@ -61,11 +80,9 @@ npm run dev
 
 传统编辑遵循“界面操作 → 几何/场景计算 → 文档事务 → 画布重绘”的路径。Agent 路径会先观察场景、生成计划并编译为**隔离草稿**；只有草稿通过相应校验且用户明确确认后，宿主才会提交到文档。模型不能直接绕过确认修改现场。关于设计取舍，参见 [增量几何与多会话 Agent 设计](docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md) 和 [Agent tool-loop 设计](docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md)。
 
-## 下一步：按 Task 1→21 严格实施（Task 1–19 已完成，下一项 Task 20）
+## 下一步：补齐剩余验收并跟踪 CI
 
-[真题需求调研](docs/research/2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码/测试调研](docs/research/2026-10-11-github-agent-implementation-survey.md)已完成。唯一[实施计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)按数字顺序执行：**Task 1–19 已于 2026-10-12 完成**（兼容基线、动作合同与预算账本、来源意图、安全宿主、Worker 同版、离线真题工件、分点依赖，三角/立体/圆锥/函数四族的纵向交付、目标折角反求，**四族真实画布证据**（从已渲染的 DOM 量盒子/标签、证据绑内容哈希与过期判据，并修掉画布读数抓出的重复标签缺陷），**Lean 那一侧的证明范围分级与迟到产物失效**（`ProofScopeReport` 说清这一次证的是受限引理还是整道题；`proofAttemptStaleness` 按内容哈希判过期），以及 **Lean 工程定义钉住与安全复核**（`proof/lean4` 的 rev/toolchain/README 三者有判据盯着、本机真跑四类目标 8 passed / 1195 s、`test:rust` 250 通过；**那道折面题已端到端通过**）；**Task 20 进行中**：免授权那一半已完成（样本按题号冻结、每族阈值事先写死、`assertPaidRunAllowed` **未授权一律拒**、离线分布实测 12/12 仍需真实 provider），**付费实测等授权 —— 请求 36 个 / 最高 $12**；未获授权不跑真实 provider、也不跳 Task 21。**Task 19 的边界照旧记着**：真桌面发行验收未做 ⇒ **不标"已发布自动证明"**。
-
-**Task n 没有 RED、GREEN、受影响旧能力复跑及退出记录时，Task n+1 不开始；不设并行跳号。** Lean 默认关且已有实验入口，但原题完整前提和干净机发行仍未验收；证明不可用不能阻挡已核验的普通作图。Task 1–13 各轮只改产品/测试与文档，**没有增加模型预算、没有发起付费 provider 请求**；Lean 的读数只对当次运行有效。
+按[四家族执行计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)和[功能补完记录](docs/superpowers/plans/2026-10-16-functional-completion.md)继续，不能沿用此前“Task 1–19 全部完成”的判断。日志编码导致的 CI 失败已由 `1add886` 修复且远端通过；接下来分别验证 Task 16、18、19、20、21 的剩余门槛；未经授权不新增付费调用。
 
 ## 项目进度与能力边界
 
