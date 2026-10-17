@@ -1699,3 +1699,14 @@ Logs: `audit-20261016/task16-camera-{red,green,browser-red,browser-green,typeche
 - **Verification:** focused 6 files / 137 passed; full unit 404 files / 4712 passed / 1 todo, exit 0; typecheck exit 0; lint 0 errors / 13 existing warnings. Independent read-only review found no actionable Critical, Important or Minor issue and separately ran 78 relevant tests successfully. Evidence: `audit-20261016/task16-render-run-{red,green,full-unit,typecheck,lint}.txt/.exit` and `task16-render-run-review.md`.
 - **Browser regression is NOT green:** the full browser run against the preceding `f6bc646` source (started before this run-binding repair) finished **234 passed / 5 failed**, exit 1. Three conic commits and a sphere commit failed at consent; a sphere/solid seeded-document assertion read 29 primitives instead of 2. Original failure output is retained in `audit-20261016/final-e2e.txt/.exit`; traces and page contexts are preserved locally in `final-e2e-preserved/`. Root-cause investigation and repairs are a separate block, not hidden by this safety fix.
 - **Acceptance boundary:** this is an evidence-identity safety repair, not real candidate DOM/screenshot evidence, WebGL object measurement, human readability, or desktop release acceptance. **Task 16 remains partial; matrix stays 16 complete / 3 partial / 2 not complete or not release-accepted.**
+
+## 2026-10-16 功能补完：Task 16 解析图元候选门禁
+
+- **真实故障与根因**：完整浏览器回归中椭圆、双曲线、抛物线、球体在确认提交时失败。候选结构布局缺少这四种图元的范围，空布局被诚实地判成 failed_render。现补入几何采样/球体 XY 范围；开放曲线使用明确的有限观察窗口，不声称全局范围或真实相机测量。
+- **异常参数拒绝**：独立审查发现有效对象能掩盖非法解析图元。新增混合反例先得到 **14 failed / 24 passed**，修复后相关两文件 **96 passed**。非法半径/轴向/旋转、球心深度缺失或非有限、窗口与采样溢出均不能静默跳过或退化成一个假点；每个支持图元的全部采样必须有限。新增独立尺寸检查覆盖旋转、轴向与正负焦参。
+- **完整功能链**：四类本地规划器均验证隔离草稿 → 确认 → 原子写入 → 一步撤销。球体布尔预览旧测试的“两对象”种子不完整：既有恢复逻辑会物化立方体拓扑，不是产品新增半成品。新测试独立检查 8 点/12 棱/6 面/1 体及引用完整，再对持久化 primitives 逐值相等检查零额外写入；两个立方体的正向预览对照保留。
+- **最新最终验证**：全量单元 **404 文件 / 4741 passed / 1 todo**；当前源码重新构建后的全量浏览器 **239 passed**；全仓 typecheck exit 0；lint exit 0，0 errors / 13 条既有 warnings。证据为 `audit-20261016/task16-analytic-final-{unit,e2e,typecheck,lint}.txt/.exit`；异常 RED/GREEN 为 `task16-analytic-invalid-{red,green}.txt/.exit`。
+- **历史不抹除**：此前 `final-e2e.txt/.exit` 的 234 passed / 5 failed 保留为修复前证据；新的 239 passed 才是本区块最终结果。修复异常参数前的 4717 单元/239 浏览器亦仅为中间快照。
+- **验收边界**：候选证据仍明确是 `structured_only`，不是确认前真实 DOM/截图或人眼可读性。完整 WebGL 对象测量、桌面发行、干净/离线环境、教师/学生签收和 frozen 12×3 真实模型质量门禁尚未通过。**Task 16 仍 partial；总矩阵保持 16 complete / 3 partial（16、18、19）/ 2 not complete 或未发行验收（20、21）；Goal 保持 active。**
+
+独立复审：异常参数 P1 已关闭；复审者实际重跑相关 2 文件 / 96 测试通过，未发现新的阻断问题，允许提交。完整范围和执行归属见 `audit-20261016/task16-analytic-render-review.md`。

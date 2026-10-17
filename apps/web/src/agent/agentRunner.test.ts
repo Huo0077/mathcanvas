@@ -141,6 +141,23 @@ describe("the confirm and commit cycle", () => {
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
+  it.each([
+    ["椭圆 x²/9+y²/4=1，画示意图", "ellipse"],
+    ["双曲线 x²/9−y²/4=1，画示意图", "hyperbola"],
+    ["抛物线 y²=4x，画示意图", "parabola"],
+    ["画一个球体，半径 5", "sphere"]
+  ])("commits a drawable analytic candidate: %s", async (prompt, type) => {
+    const runner = createAgentRunner()
+    const result = await runAndWait(runner, prompt)
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    const outcome = runner.confirm()
+    expect(outcome).toMatchObject({ status: "committed" })
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === type)).toBe(true)
+    useSceneStore.getState().undo()
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
   it("stages a draft without touching the document, then commits it on confirmation", async () => {
     const runner = createAgentRunner()
     const before = useSceneStore.getState().document

@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest"
 import { buildLayoutModel, DEFAULT_LAYOUT_MODEL_OPTIONS, LAYOUT_MODEL_LIMITATIONS } from "./layoutModel"
 import { diagnoseLayout } from "./renderEvidence"
 
+
+it("frames analytic conics and spheres instead of treating them as empty", () => {
+  const model = buildLayoutModel({ primitives: [
+    { id: "ellipse", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2 },
+    { id: "hyperbola", type: "hyperbola", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, axis: "x" },
+    { id: "parabola", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 2, axis: "x" },
+    { id: "sphere", type: "sphere", center: { x: 0, y: 0, z: 0 }, radius: 5 }
+  ] })
+  expect(model.viewport.width).toBeGreaterThan(0)
+  expect(model.boxes.filter((box) => box.kind === "object")).toHaveLength(4)
+  expect(model.boxes.every((box) => box.width > 0 && box.height > 0)).toBe(true)
+})
+
 /**
  * **文档 → 屏幕盒子**（Phase 4 / Task 4.2）。
  *
@@ -180,5 +193,55 @@ describe("document to screen boxes", () => {
     expect(LAYOUT_MODEL_LIMITATIONS).toHaveLength(3)
     expect(LAYOUT_MODEL_LIMITATIONS.join(" ")).toContain("orthographic")
     expect(DEFAULT_LAYOUT_MODEL_OPTIONS.pixelsPerUnit).toBeGreaterThan(0)
+  })
+})
+
+describe("analytic bounds", () => {
+  const ellipse = { id: "analytic", type: "ellipse", center: { x: 7, y: -5 }, radiusX: 3, radiusY: 2 }
+  const hyperbola = { ...ellipse, type: "hyperbola", axis: "x" }
+  const parabola = { id: "analytic", type: "parabola", vertex: { x: 7, y: -5 }, focalParameter: 2, axis: "x" }
+  const sphere = { id: "analytic", type: "sphere", center: { x: 7, y: -5, z: 3 }, radius: 5 }
+
+  it.each([
+    ["ellipse", ellipse, 6, 4],
+    ["rotated ellipse", { ...ellipse, rotation: Math.PI / 2 }, 4, 6],
+    ["hyperbola x", hyperbola, 24, 4 * Math.sqrt(15)],
+    ["hyperbola y", { ...hyperbola, axis: "y" }, 6 * Math.sqrt(15), 16],
+    ["positive parabola x", parabola, 16, 16],
+    ["negative parabola x", { ...parabola, focalParameter: -2 }, 16, 16],
+    ["parabola y", { ...parabola, axis: "y" }, 16, 16],
+    ["sphere", sphere, 10, 10]
+  ])("estimates %s dimensions from its declared geometry", (_name, primitive, width, height) => {
+    const model = buildLayoutModel({ primitives: [primitive] }, { ...DEFAULT_LAYOUT_MODEL_OPTIONS, pixelsPerUnit: 1 })
+    const box = model.boxes.find((entry) => entry.id === "analytic")!
+    expect(box).toBeDefined()
+    expect(box.width).toBeCloseTo(width as number, 5)
+    expect(box.height).toBeCloseTo(height as number, 5)
+    expect([box.x, box.y, box.width, box.height].every(Number.isFinite)).toBe(true)
+  })
+
+  it.each([
+    ["zero ellipse radius", { ...ellipse, radiusX: 0 }],
+    ["missing ellipse center", { ...ellipse, center: undefined }],
+    ["NaN rotation", { ...ellipse, rotation: NaN }],
+    ["string rotation", { ...ellipse, rotation: "0" }],
+    ["infinite rotation", { ...parabola, rotation: Infinity }],
+    ["invalid hyperbola axis", { ...hyperbola, axis: "z" }],
+    ["overflowing hyperbola window", { ...hyperbola, radiusX: Number.MAX_VALUE }],
+    ["overflowing hyperbola samples", { ...hyperbola, radiusY: Number.MAX_VALUE }],
+    ["zero parabola focal parameter", { ...parabola, focalParameter: 0 }],
+    ["overflowing parabola window", { ...parabola, focalParameter: Number.MAX_VALUE }],
+    ["overflowing parabola samples", { ...parabola, focalParameter: Number.MIN_VALUE }],
+    ["zero sphere radius", { ...sphere, radius: 0 }],
+    ["infinite sphere radius", { ...sphere, radius: Infinity }],
+    ["invalid sphere depth", { ...sphere, center: { x: 7, y: -5, z: NaN } }],
+    ["missing sphere depth", { ...sphere, center: { x: 7, y: -5 } }],
+    ["overflowing sphere bounds", { ...sphere, center: { x: Number.MAX_VALUE, y: 0, z: 0 }, radius: Number.MAX_VALUE }]
+  ])("rejects %s even beside a readable object", (_name, primitive) => {
+    const model = buildLayoutModel({ primitives: [
+      { id: "valid-point", type: "point", x: 0, y: 0 },
+      { ...primitive, position: { x: 0, y: 0 } }
+    ] })
+    expect(model).toEqual({ viewport: { width: 0, height: 0 }, boxes: [] })
   })
 })

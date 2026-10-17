@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
+import { buildSolidTemplate } from "@draw/geometry-kernel"
+
 import { SPHERE_PROMPT } from "../apps/web/src/agent/localPlanner"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -281,7 +283,7 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
 
   const scene = page.locator("[data-3d-scene]")
   const previewCount = async () => Number(await scene.getAttribute("data-preview-count"))
-  const outerCube = { id: "cube-1", type: "cube", origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
+  const outerCube = { id: "cube-1", type: "cube" as const, origin: { x: -2, y: -2, z: -2 }, size: { x: 4, y: 4, z: 4 } }
   const innerCube = { id: "cube-2", type: "cube", origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
 
   // 反向对照：两个实体相交时**有**预览（证明这条链是通的，不是"功能没开"）。
@@ -289,10 +291,38 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
   await expect.poll(previewCount).toBeGreaterThan(0)
 
   // 球参与时一个都不给 —— 而不是给一个假的。
-  await seed([SPHERE, outerCube])
+  // 恢复契约会物化立方体拓扑；先给出完整合法种子，再逐值检查没有写入半成品。
+  const topology = buildSolidTemplate(outerCube).primitives
+  const vertices = topology.filter((entry) => entry.type === "point3")
+  const edges = topology.filter((entry) => entry.type === "edge3")
+  const faces = topology.filter((entry) => entry.type === "face3")
+  const solids = topology.filter((entry) => entry.type === "polyhedron3")
+  expect(vertices).toHaveLength(8)
+  expect(edges).toHaveLength(12)
+  expect(faces).toHaveLength(6)
+  expect(solids).toHaveLength(1)
+  const solid = solids[0]!
+  expect(solid.construction).toMatchObject({ sourceIds: expect.arrayContaining([outerCube.id]) })
+  expect(new Set(solid.vertexIds)).toEqual(new Set(vertices.map((entry) => entry.id)))
+  expect(new Set(solid.edgeIds)).toEqual(new Set(edges.map((entry) => entry.id)))
+  expect(new Set(solid.faceIds)).toEqual(new Set(faces.map((entry) => entry.id)))
+  for (const edge of edges) {
+    expect(edge.pointIds).toHaveLength(2)
+    expect(edge.pointIds.every((id) => solid.vertexIds.includes(id))).toBe(true)
+  }
+  for (const face of faces) {
+    expect(face.pointIds).toHaveLength(4)
+    expect(face.pointIds.every((id) => solid.vertexIds.includes(id))).toBe(true)
+    expect(face.edgeIds).toHaveLength(4)
+    expect(face.edgeIds!.every((id) => solid.edgeIds.includes(id))).toBe(true)
+  }
+  const expectedPrimitives = JSON.parse(JSON.stringify([SPHERE, outerCube, ...topology])) as unknown[]
+  await seed(expectedPrimitives)
   await expect(scene).toHaveAttribute("data-preview-count", "0")
-  // 文档也没被改动：还是那两个图元（建模失败不留半成品）。
-  expect(await readPrimitiveCount(page)).toBe(2)
+  await expect.poll(() => page.evaluate((key) => {
+    const raw = window.localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as DraftEnvelope).document.primitives : []
+  }, DRAFT_KEY)).toEqual(expectedPrimitives)
 })
 
 /**

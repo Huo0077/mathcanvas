@@ -1,4 +1,5 @@
-import { adaptiveSampleFunctionSegments, evaluateParameterExpression } from "@draw/geometry-kernel"
+import type { EllipsePrimitive, HyperbolaPrimitive, ParabolaPrimitive } from "@draw/dsl"
+import { adaptiveSampleFunctionSegments, evaluateParameterExpression, sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "@draw/geometry-kernel"
 
 import type { LayoutBox, LayoutModel } from "./renderEvidence"
 
@@ -119,7 +120,41 @@ function sampledFunctionSegmentsOf(primitive: Record<string, unknown>): Point[][
   }
 }
 
-function worldBoundsOf(document: { primitives: readonly Record<string, unknown>[] }, primitive: Record<string, unknown>): { minX: number; minY: number; maxX: number; maxY: number } | null {
+/** Pure geometry estimates, not a measurement of the current renderer or camera. */
+function analyticPointsOf(primitive: Record<string, unknown>): Point[] | null {
+  // null means unsupported; [] means a supported analytic primitive is invalid.
+  // Invalid supported geometry must fail closed, even beside readable objects.
+  if (!["sphere", "ellipse", "hyperbola", "parabola"].includes(primitive.type as string)) return null
+  if (primitive.rotation !== undefined && (typeof primitive.rotation !== "number" || !Number.isFinite(primitive.rotation))) return []
+  const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0
+  const center = typeof primitive.center === "object" && primitive.center !== null ? positionOf(primitive.center as Record<string, unknown>) : null
+  if (primitive.type === "sphere" && center && positive(primitive.radius) &&
+      typeof (primitive.center as Record<string, unknown>).z === "number" && Number.isFinite((primitive.center as Record<string, unknown>).z)) {
+    return [
+      { x: center.x - primitive.radius, y: center.y - primitive.radius },
+      { x: center.x + primitive.radius, y: center.y + primitive.radius }
+    ]
+  }
+  if ((primitive.type === "ellipse" || primitive.type === "hyperbola") && center && positive(primitive.radiusX) && positive(primitive.radiusY)) {
+    if (primitive.type === "ellipse") return sampleEllipse(primitive as unknown as EllipsePrimitive, 128)
+    if (primitive.axis !== "x" && primitive.axis !== "y") return []
+    // An open curve has no finite global bounds. Inspect a declared, deterministic
+    // four-semi-axis window using the renderer's geometry sampler, not a fake point.
+    const span = 4 * (primitive.axis === "x" ? primitive.radiusX : primitive.radiusY)
+    if (!Number.isFinite(span)) return []
+    return sampleHyperbolaBranches(primitive as unknown as HyperbolaPrimitive, [-span, span], 128).flat()
+  }
+  if (primitive.type === "parabola" && typeof primitive.vertex === "object" && primitive.vertex !== null &&
+      positionOf(primitive.vertex as Record<string, unknown>) && typeof primitive.focalParameter === "number" &&
+      Number.isFinite(primitive.focalParameter) && primitive.focalParameter !== 0 && (primitive.axis === "x" || primitive.axis === "y")) {
+    const span = Math.max(1, Math.abs(primitive.focalParameter)) * 4
+    if (!Number.isFinite(span)) return []
+    return sampleParabola(primitive as unknown as ParabolaPrimitive, [-span, span], 128)
+  }
+  return []
+}
+
+function worldBoundsOf(document: { primitives: readonly Record<string, unknown>[] }, primitive: Record<string, unknown>, analyticPoints: readonly Point[]): { minX: number; minY: number; maxX: number; maxY: number } | null {
   const points: Point[] = []
   const vertexIds = primitive.vertexIds
   if (Array.isArray(vertexIds)) {
@@ -134,6 +169,7 @@ function worldBoundsOf(document: { primitives: readonly Record<string, unknown>[
   points.push(...coordinatePointsOf(primitive.a))
   points.push(...coordinatePointsOf(primitive.b))
   points.push(...sampledFunctionSegmentsOf(primitive).flat())
+  points.push(...analyticPoints)
   if (points.length === 0) {
     const own = positionOf(primitive)
     if (own) points.push(own)
@@ -165,7 +201,11 @@ export function buildLayoutModel(document: { primitives: readonly Record<string,
     if (primitive.type === "function" && sampledFunctionSegmentsOf(primitive).length === 0) {
       return { viewport: { width: 0, height: 0 }, boxes: [] }
     }
-    const bounds = worldBoundsOf(document, primitive)
+    const analyticPoints = analyticPointsOf(primitive)
+    if (analyticPoints !== null && (analyticPoints.length < 2 || !analyticPoints.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)))) {
+      return { viewport: { width: 0, height: 0 }, boxes: [] }
+    }
+    const bounds = worldBoundsOf(document, primitive, analyticPoints ?? [])
     if (!bounds) continue
     const id = typeof primitive.id === "string" ? primitive.id : null
     if (id === null) continue
