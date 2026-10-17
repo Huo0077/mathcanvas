@@ -131,7 +131,7 @@ describe("verifyDiagramObligations", () => {
       kind: "plan",
       goal: "画示意图",
       factIds: [],
-      actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: { alias: "solid", vertices, faces: [[0, 1, 2]], vertexNames: ["A", "B", "C", "D"] } }]
+      actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: { alias: "solid", vertices, faces: [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]], vertexNames: ["A", "B", "C", "D"] } }]
     } as unknown as PlanEnvelope
     const candidate = () => {
       const document = createEmptyDocument("geometry3d")

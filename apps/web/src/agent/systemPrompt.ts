@@ -290,7 +290,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 那段规则本身会点名 `solid.create_face`，而它并不在本轮菜单里。
        */
       ...(input.actionIds.some((actionId) => actionId.startsWith("solid."))
-        ? ["**面分三种，别混**：**开放的面**（四边形、三角形片、翻折片这类不围出体积的平面图形）用 `solid.create_face`（每张给 `vertices` 与 `vertexNames`，它**自带面、也自带边**）；**闭合实体**（要围出体积的多面体）用 `solid.create_polyhedron`；沿折痕**折**用 `solid.fold`（折后坐标由内核算，不要手写）。**立体里两点连成一条线段**用 `solid.create_segment`：**只给两个点名**（`vertexNames`）—— 两端必须是图上**已经建出来**的点（题面点名的顶点、棱上的分点、折出来的点），坐标由前面几笔决定，**不要再写一遍坐标**；点名对不上会被当场拒。**平面的**线段才叫 `planar.create_segment`（它落在 `z=0` 上）。**不要自己造动作名**。"]
+        ? ["**面分三种，别混**：**开放的面**（四边形、三角形片、翻折片这类不围出体积的平面图形）用 `solid.create_face`（每张给 `vertices` 与 `vertexNames`，它**自带面、也自带边**）；**只给一个面环的 `solid.create_polyhedron` 也等同于一张平面多边形**（兼容写法，物化结果相同，环必须用上每一个顶点）；**闭合实体**（要围出体积的多面体）用 `solid.create_polyhedron`（至少四个面）；沿折痕**折**用 `solid.fold`（折后坐标由内核算，不要手写）。**立体里两点连成一条线段**用 `solid.create_segment`：**只给两个点名**（`vertexNames`）—— 两端必须是图上**已经建出来**的点（题面点名的顶点、棱上的分点、折出来的点），坐标由前面几笔决定，**不要再写一遍坐标**；点名对不上会被当场拒。**平面的**线段才叫 `planar.create_segment`（它落在 `z=0` 上；在三维工作区里，`planar.*` 会物化成 z = 0 的**可见三维图元**，所以用它们画 z = 0 上的平面图形是允许的）。**题面说「画立体图形」不等于必须闭合**：如果图形本身是平面片 + 翻折片（例如平面四边形沿 EF 折起），按开放曲面画（`solid.create_face` + `solid.fold`）就是三维显示，**不要为了“立体”把它封成闭合多面体**（内核会因共面 / 棱不成对 / 零体积拒绝）。**不要自己造动作名**。"]
         : []),
       "## 本轮允许的动作（`actionId` 只能从这里选）",
       ...(input.actionIds.length > 0 ? input.actionIds.map((action) => `- ${action}`) : ["（这一轮没有任何可用动作：只能提问或作答）"]),

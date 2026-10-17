@@ -135,7 +135,20 @@ type CandidatePointMap =
   | { readonly ok: false; readonly reason: string }
 
 function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): CandidatePointMap {  if (plan.kind !== "plan") return { ok: false, reason: "计划信封不是一份计划（`kind` 不是 `plan`）" }
-  const actions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
+  const polyhedronActions = plan.actions.filter((action) => action.actionId === "solid.create_polyhedron")
+  /**
+   * **单面的 `solid.create_polyhedron` 是平面多边形，不是闭合体**（2026-10-17 用户现场）。
+   *
+   * 兼容 1 个面之后，同一个动作名有两种物化结果：1 个面环 → `face3`，≥4 个面 → `polyhedron3`。
+   * 判据必须按**面数**分流，不能按动作名 —— 否则单面计划会被要求“恰好一只新多面体”，
+   * 而候选图里只有一只面，点名表当场判成不可靠，题设一条都核不了。
+   */
+  const faceCountOf = (action: (typeof polyhedronActions)[number]): number => {
+    const inputs = action.inputs as unknown as Record<string, unknown> | null
+    const faces = inputs?.faces
+    return Array.isArray(faces) ? faces.length : 0
+  }
+  const closedActions = polyhedronActions.filter((action) => faceCountOf(action) !== 1)
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "polyhedron3" }> => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
   const points = new Map<string, Vector3>()
@@ -148,12 +161,12 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * `null` 的含义是"这份候选图没有可靠的点名映射"，与"点名表恰好是空的"是两件事，
    * 混起来会让失败的**理由**变味（前者是映射不可靠，后者是图上没这个点）。
    */
-  if (actions.length > 0) {
+  if (closedActions.length > 0) {
     // Without a unique solid there is no reliable alias → candidate solid mapping.
-    if (actions.length !== 1 || solids.length !== 1) {
-      return { ok: false, reason: `计划里有 ${actions.length} 笔 \`solid.create_polyhedron\`，候选图里有 ${solids.length} 只新多面体 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
+    if (closedActions.length !== 1 || solids.length !== 1) {
+      return { ok: false, reason: `计划里有 ${closedActions.length} 笔闭合 \`solid.create_polyhedron\`，候选图里有 ${solids.length} 只新多面体 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
     }
-    const input = actions[0].inputs
+    const input = closedActions[0].inputs
     if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
       return { ok: false, reason: "这一笔多面体**没有带点名**（`vertexNames`）：图上的顶点只有模板编号（`P1`…），题面里的点名对不上它" }
     }
@@ -186,7 +199,26 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * 用户看到的是八条题设**全部**报「候选图缺少唯一、可靠的顶点名映射」，
    * 而题面明明每条都读懂了、图也画出来了。**那句话与真实原因无关**。
    */
-  const faceActions = plan.actions.filter((action) => action.actionId === "solid.create_face" || action.actionId === "solid.fold")
+  const faceActions = plan.actions.flatMap((action) => {
+    if (action.actionId === "solid.create_face" || action.actionId === "solid.fold") {
+      const input = action.inputs as unknown as Record<string, unknown>
+      return [{ input, names: action.actionId === "solid.fold" ? foldedNamesOf(input) : input.vertexNames }]
+    }
+    /**
+     * **单面的 `solid.create_polyhedron` 也是"建面"**（2026-10-17）：它物化出 `face3`，
+     * 与 `create_face` 同一口径。但 `vertexNames` 是按**顶点数组**给的，而图上的 `pointIds`
+     * 按**面环**排 —— 所以进点名表前必须先按环取下标，否则名字会整体错位（那比缺名字更糟：
+     * 它会静默把 A 的坐标说成 B 的）。
+     */
+    if (action.actionId === "solid.create_polyhedron" && faceCountOf(action) === 1) {
+      const input = action.inputs as unknown as Record<string, unknown>
+      const declared = input.vertexNames
+      const ring = Array.isArray(input.faces) && Array.isArray(input.faces[0]) ? (input.faces[0] as unknown[]) : null
+      const names = ring === null ? declared : ring.map((index) => (Array.isArray(declared) ? declared[index as number] : undefined))
+      return [{ input, names }]
+    }
+    return []
+  })
   if (faceActions.length > 0) {
     /**
      * **多面体自己的那些面不算**（2026-10-15 用户现场，四棱柱/四棱锥那道题）。
@@ -203,8 +235,8 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
     if (faces.length !== faceActions.length) {
       return { ok: false, reason: `计划里有 ${faceActions.length} 笔建面/折，候选图里有 ${faces.length} 只新面片 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
     }
-    for (const [faceIndex, action] of faceActions.entries()) {
-      const input = action.inputs as unknown as Record<string, unknown>
+    for (const [faceIndex, entry] of faceActions.entries()) {
+      const input = entry.input
       if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
         return { ok: false, reason: "这一笔面片**没有带点名**（`vertexNames`）：图上的顶点只有模板编号，题面里的点名对不上它" }
       }
@@ -213,7 +245,7 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
        * 所以表里该出现的是**折后**那个名字。换算用编译器**同一份**规则（`foldVertexNames`）——
        * 在这里另写一遍就是本仓最忌讳的"同一件事两个口径"。
        */
-      const names = action.actionId === "solid.fold" ? foldedNamesOf(input) : input.vertexNames
+      const names = entry.names
       const face = faces[faceIndex]!
       if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
         return { ok: false, reason: `这一笔面片的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, face.pointIds.length, "面")}` }

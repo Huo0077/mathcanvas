@@ -35,6 +35,8 @@ export interface KeyboardShortcutDeps {
   onCancelSpatialCreation?: () => void
   onFinishSpatialCreation?: () => void
   onRemoveSpatialAnchor?: () => void
+  /** 全选（Ctrl/Cmd+A）：画布上没有框选时，这是"把 Agent 画的整张图删掉"的唯一入口。 */
+  onSelectAll?: () => void
   undo: () => void
   redo: () => void
   deleteSelected: () => void
@@ -44,7 +46,7 @@ export interface KeyboardShortcutDeps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
-export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
+export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcut = historyShortcut(event)
@@ -52,6 +54,18 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
         event.preventDefault()
         if (shortcut === "undo") undo()
         else redo()
+        return
+      }
+      /**
+       * **Ctrl/Cmd+A = 全选**（2026-10-17 用户现场："旧的图删不掉"）。
+       *
+       * 删除的并集校验要求"互相引用的对象一起选中"；Agent 画的一张图里有面、点、线段，
+       * 点中一张面再按 Delete 会被 `AF` 这类线段挡住。全选之后一次删干净。
+       * 输入框里不抢这个组合（那里是文本框自己的全选）。
+       */
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "a" && !isTextEditingTarget(event.target)) {
+        event.preventDefault()
+        onSelectAll?.()
         return
       }
       if (event.key === "Escape" && solidWizardOpen) { event.preventDefault(); onCancelSolidWizard?.(); return }
@@ -74,5 +88,5 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
+  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
 }

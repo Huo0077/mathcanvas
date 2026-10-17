@@ -787,16 +787,21 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       /**
        * 任意多面体：`vertices` 是一串空间点、`faces` 是**二层整数数组**（顶点下标，0 起）。
        *
-       * 这里只挡**形状**：点少于 4 个、面少于 4 个、环里不是整数 / 越界 / 重复。
+       * 这里只挡**形状**：点少于 3 个、面少于 1 个、环里不是整数 / 越界 / 重复。
        * **几何语义**留给内核（见登记表那条注释）—— 那条边界是刻意的，不要往这里搬。
+       *
+       * **1 个面 = 平面多边形**（2026-10-17 用户裁定）：模型现场两轮都拿这个动作去套平面四边形，
+       * 而旧下限是“至少 4 个顶点 / 4 个面”，于是信封当场拒、修复机会用完就整轮停。
+       * 现在 1 个面环按平面多边形收下（编译层物化成 `face3`）；2–3 个面既不是平面多边形、
+       * 也围不出闭合体，**留给编译层报 unsupported_face_count**（形状本身合法，不是信封该拒的畸形）。
        */
       const out: Record<string, unknown> = withAlias({})
       if (!Array.isArray(value.vertices)) {
         errors.push(fail("invalid_type", `${path}.vertices`, "expected an array of spatial points"))
         return null
       }
-      if (value.vertices.length < 4) {
-        errors.push(fail("invalid_type", `${path}.vertices`, "a polyhedron needs at least four vertices"))
+      if (value.vertices.length < 3) {
+        errors.push(fail("invalid_type", `${path}.vertices`, "a polyhedron needs at least three vertices"))
         return null
       }
       const vertices: { x: number; y: number; z: number }[] = []
@@ -843,8 +848,8 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         errors.push(fail("invalid_type", `${path}.faces`, "expected an array of face rings"))
         return null
       }
-      if (value.faces.length < 4) {
-        errors.push(fail("invalid_type", `${path}.faces`, "a polyhedron needs at least four faces"))
+      if (value.faces.length < 1) {
+        errors.push(fail("invalid_type", `${path}.faces`, "a polyhedron needs at least one face"))
         return null
       }
       const faces: number[][] = []
@@ -868,6 +873,15 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         faces.push(indexes)
       }
       out.faces = faces
+      /**
+       * **单面 = 平面多边形**：环必须用上每一个顶点（下标互异且都在范围内，上面已判）。
+       * 漏掉一个顶点时，"这只多边形"与 `vertices` 声明的点集就不是同一件事 ——
+       * 那是最容易静默画错的形状（未用的点不会出现在图上），所以在传输层直接拒。
+       */
+      if (faces.length === 1 && faces[0]!.length !== vertices.length) {
+        errors.push(fail("invalid_type", `${path}.faces[0]`, `a single-face polyhedron must use every vertex exactly once (got ${faces[0]!.length} corners for ${vertices.length} vertices)`))
+        return null
+      }
       const label = boundLabel(value.label, `${path}.label`, errors)
       if (label !== undefined) out.label = label
       return out

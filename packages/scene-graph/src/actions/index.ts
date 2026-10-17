@@ -98,6 +98,18 @@ type PlanarCreateActionId =
   | "planar.create_arc"
 
 function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActionId }>, context: ActionContext): CompileResult {
+  /**
+   * **三维工作区里的平面动作 → z = 0 的三维图元**（2026-10-17 用户现场）。
+   *
+   * 模型在 `geometry3d` 草稿里用 `planar.create_point` 画平面四边形的 A–D，再用
+   * `solid.fold` 折出 P/E/F。二维点编译成功，但三维画布**不画它们**、核验器也不收
+   * ⇒ 四条边与四个角的题设全部报“点名缺失”，而折片明明在。
+   *
+   * 用户裁定：**适配**。平面动作在三维工作区里物化成 **z = 0** 的三维图元
+   *（点 / 线段 / 直线 / 射线 / 折线 / 圆），几何不变、但画得出来也进得了点名表。
+   * 二维工作区**逐字保持原行为**（下面的分支一行没动）。
+   */
+  if (context.targetWorkspace === "geometry3d") return compilePlanarInSolidWorkspace(action, context)
   const { actionKey, actionId } = action
   const inputs = action.inputs
   const pointKind = actionId === "planar.create_point" ? "point" : undefined
@@ -162,6 +174,127 @@ function compilePlanar(action: Extract<DraftAction, { actionId: PlanarCreateActi
   const type = actionId === "planar.create_line" ? "line" : actionId === "planar.create_ray" ? "ray" : "segment"
   const id = context.idAllocator.allocate(type, inputs.alias)
   return { operations: [{ op: "addPrimitive", primitive: { id, type, a, b, ...label } }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
+/**
+ * **平面动作在三维工作区里的物化**（2026-10-17 用户现场，见调用处那段说明）。
+ *
+ * 形状映射（几何口径不变，仍全部落在 z = 0 平面上）：
+ * - `planar.create_point` → `point3`
+ * - `planar.create_segment` → `segment3`（端点 z = 0）
+ * - `planar.create_line` → `line3`（过两点）
+ * - `planar.create_ray` → `ray3`
+ * - `planar.create_polyline` → 一串 `segment3`
+ * - `planar.create_circle` → `circle3`（法向 +z）
+ *
+ * 两条工程细节：
+ * 1. **端点复用已有点**：平面动作只给坐标，而图上往往已有同名点（A、B…）。
+ *    坐标逐位相同（1e-9）且 z = 0 的 `point3` 直接拿来用 —— 否则一条 AB 会在图上多出
+ *    两个无名点，标签与拾取都会变乱。找不到才新建一个**无名**的 `point3`。
+ * 2. **`planar.create_arc` 明确拒绝**：三维侧没有圆弧图元，硬折成折线会悄悄改掉用户
+ *    要的形状。拒的时候说清该用什么（`segment3` 链或 `solid.*`）。
+ */
+function compilePlanarInSolidWorkspace(
+  action: Extract<DraftAction, { actionId: PlanarCreateActionId }>,
+  context: ActionContext
+): CompileResult {
+  const { actionKey, actionId, inputs } = action
+  const label = inputs.label === undefined ? {} : { label: inputs.label }
+  const created: PrimitiveSpec[] = []
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+
+  /** 图上已有的 z = 0 同名位置点（只按坐标认，不猜点名）。 */
+  const existingPointAt = (x: number, y: number): string | undefined => context.targetDocument.primitives.find(
+    (primitive) => primitive.type === "point3"
+      && Math.abs(primitive.position.x - x) <= 1e-9
+      && Math.abs(primitive.position.y - y) <= 1e-9
+      && Math.abs(primitive.position.z) <= 1e-9
+  )?.id
+
+  const pointIdFor = (point: { x: number; y: number }, key: string): string => {
+    const reused = existingPointAt(point.x, point.y)
+    if (reused !== undefined) return reused
+    const id = context.idAllocator.allocate("point3", key)
+    created.push({ id, type: "point3", position: { x: point.x, y: point.y, z: 0 }, binding: { kind: "free" } })
+    return id
+  }
+
+  if (actionId === "planar.create_point") {
+    const first = inputs.points?.[0]
+    if (!isFinitePoint(first)) return refuse("missing_point", "a point needs finite x and y")
+    const id = context.idAllocator.allocate("point3", inputs.alias)
+    return {
+      operations: [{ op: "addPrimitives", primitives: [{ id, type: "point3", position: { x: first.x, y: first.y, z: 0 }, binding: { kind: "free" }, ...label }] }],
+      diagnostics: [],
+      aliasToId: { [inputs.alias]: id }
+    }
+  }
+
+  if (actionId === "planar.create_circle") {
+    const center = inputs.center
+    const radius = inputs.radius
+    if (!isFinitePoint(center)) return refuse("missing_point", "a circle needs a finite centre")
+    if (radius === undefined || !Number.isFinite(radius) || radius <= 0) return refuse("invalid_radius", "radius must be a positive finite number")
+    const id = context.idAllocator.allocate("circle3", inputs.alias)
+    return {
+      operations: [{ op: "addPrimitives", primitives: [{ id, type: "circle3", center: { x: center.x, y: center.y, z: 0 }, normal: { x: 0, y: 0, z: 1 }, radius, ...label }] }],
+      diagnostics: [],
+      aliasToId: { [inputs.alias]: id }
+    }
+  }
+
+  /**
+   * 圆弧没有三维对应图元：**不近似**（近似会改变形状，而模型以为画的是弧）。
+   * 说清两条出路，让它下一轮能改对。
+   */
+  if (actionId === "planar.create_arc") {
+    return refuse("unsupported_planar_in_solid", "三维工作区没有圆弧图元：`planar.create_arc` 只能画在平面工作区。要画空间里的弧，请用一串 `solid.create_segment`（或 `planar.create_polyline`，它会在三维里物化成可见线段）近似。")
+  }
+
+  const points = inputs.points ?? []
+  if (points.some((point) => !isFinitePoint(point))) return refuse("missing_point", "every vertex needs finite x and y")
+
+  if (actionId === "planar.create_polyline") {
+    if (points.length < 2) return refuse("too_few_points", "a polyline needs at least two points")
+    const segments: PrimitiveSpec[] = []
+    let previous = pointIdFor(points[0]!, `${inputs.alias}:p0`)
+    for (let index = 1; index < points.length; index += 1) {
+      const current = pointIdFor(points[index]!, `${inputs.alias}:p${index}`)
+      const before = points[index - 1]!
+      const after = points[index]!
+      // 重合的相邻顶点不产生零长度线段（三维文档会把它判成退化）。
+      if (before.x !== after.x || before.y !== after.y) {
+        const id = context.idAllocator.allocate("segment3", `${inputs.alias}:s${index - 1}`)
+        segments.push({ id, type: "segment3", pointIds: [previous, current], ...(segments.length === 0 ? label : {}) })
+      }
+      previous = current
+    }
+    if (segments.length === 0) return refuse("degenerate_line", "the polyline's points must not all coincide")
+    return {
+      operations: [{ op: "addPrimitives", primitives: [...created, ...segments] }],
+      diagnostics: [],
+      aliasToId: { [inputs.alias]: segments[0]!.id }
+    }
+  }
+
+  // line / segment / ray：两个端点，且不能重合（与二维那一支同一套判据）。
+  if (points.length < 2) return refuse("too_few_points", "this object needs two points")
+  const [a, b] = points
+  if (a.x === b.x && a.y === b.y) return refuse("degenerate_line", "the two endpoints must differ")
+  const firstId = pointIdFor(a, `${inputs.alias}:p0`)
+  const secondId = pointIdFor(b, `${inputs.alias}:p1`)
+  let id: string
+  if (actionId === "planar.create_line") {
+    id = context.idAllocator.allocate("line3", inputs.alias)
+    created.push({ id, type: "line3", definition: { kind: "throughPoints", pointIds: [firstId, secondId] }, ...label })
+  } else if (actionId === "planar.create_ray") {
+    id = context.idAllocator.allocate("ray3", inputs.alias)
+    created.push({ id, type: "ray3", originId: firstId, throughId: secondId, ...label })
+  } else {
+    id = context.idAllocator.allocate("segment3", inputs.alias)
+    created.push({ id, type: "segment3", pointIds: [firstId, secondId], ...label })
+  }
+  return { operations: [{ op: "addPrimitives", primitives: created }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
 
 /**
@@ -606,6 +739,29 @@ function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionI
  * 而不是一份画不出来的文档。
  */
 export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][]; vertexNames?: readonly string[] }, label?: string): ActionSolidBuildResult {
+  /**
+   * **1 个面 = 平面多边形**（2026-10-17 用户现场）。
+   *
+   * 模型现场两轮都用 `solid.create_polyhedron` 去表达平面四边形 / 三角形片，而内核的
+   * `buildFromPoints` 只建闭合体（“至少四个面环”），于是整轮停在信封上。用户裁定：
+   * **让这个动作兼容 1 个面**，而不是再换一个动作名 —— 1 个面环物化成 `face3` 与它的顶点 / 棱，
+   * 与 `solid.create_face` 走**同一个** `compileSolidFace`（三条校验一处，不另写一份）。
+   */
+  if (input.faces.length === 1) return compileSingleFacePolyhedron(solidId, input, label)
+  /**
+   * 2–3 个面是**开放壳**：既不是平面多边形（1 个面），也围不出闭合体（≥4 个面）。
+   * 内核只会回一句笼统的“至少四个面环”，这里明确说清两条合法形态，模型下一轮能改对。
+   */
+  if (input.faces.length > 1 && input.faces.length < 4) {
+    return {
+      primitives: [],
+      vertexIds: [],
+      edgeIds: [],
+      faceIds: [],
+      solidId,
+      diagnostics: [diagnostic(solidId, "unsupported_face_count", `多面体只有两种合法形态：**1 个面**（平面多边形，例如四边形 / 三角形片）或**至少 4 个面**（闭合多面体）；收到 ${input.faces.length} 个面。`)]
+    }
+  }
   const built = buildFromPoints({ vertices: input.vertices, faces: input.faces }, solidChildIds(solidId))
   if (built.diagnostics.length === 0) {
     return { primitives: labelSolidChildren(built.primitives, label, input.vertexNames), vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
@@ -632,6 +788,56 @@ export function compileSolidPolyhedron(solidId: string, input: { vertices: Vecto
   }
 
   return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_polyhedron", entry.message)) }
+}
+
+/**
+ * **单面多面体 → 一只平面多边形**（2026-10-17）。
+ *
+ * `faces.length === 1` 时，那个面环就是多边形本身：顶点、棱、面都由
+ * `compileSolidFace` 物化（与 `solid.create_face` **同一个**实现，三条几何校验只有一处）。
+ *
+ * 两条形状判据（几何仍交给 `compileSolidFace`）：
+ * 1. **环必须用上每一个顶点** —— 漏掉的顶点不会出现在图上，"vertices 声明的点集"
+ *    与"这只多边形"就不是同一件事；
+ * 2. `vertexNames` 与 `vertices` 等长（与闭合体同一口径）。
+ *
+ * 环序 = 画布上的落点顺序：`vertices` 是"名字 → 坐标"的表，环才决定多边形怎么走。
+ */
+function compileSingleFacePolyhedron(
+  solidId: string,
+  input: { vertices: Vector3[]; faces: number[][]; vertexNames?: readonly string[] },
+  label?: string
+): ActionSolidBuildResult {
+  const refuse = (message: string): ActionSolidBuildResult => ({
+    primitives: [],
+    vertexIds: [],
+    edgeIds: [],
+    faceIds: [],
+    solidId,
+    diagnostics: [diagnostic(solidId, "degenerate_face", message)]
+  })
+  const ring = input.faces[0]!
+  if (ring.length !== input.vertices.length) {
+    return refuse(`一个面环的多面体就是平面多边形：这个环必须用上每一个顶点（环上有 ${ring.length} 个下标，顶点有 ${input.vertices.length} 个）。`)
+  }
+  const seen = new Set<number>()
+  for (const index of ring) {
+    if (!Number.isInteger(index) || index < 0 || index >= input.vertices.length) {
+      return refuse(`一个面环的多面体就是平面多边形：环里的下标必须是 0..${input.vertices.length - 1} 的整数（收到 ${String(index)}）。`)
+    }
+    if (seen.has(index)) return refuse(`一个面环的多面体就是平面多边形：环里不许重复同一个顶点（下标 ${index} 出现了两次）。`)
+    seen.add(index)
+  }
+  if (input.vertexNames !== undefined && input.vertexNames.length !== input.vertices.length) {
+    return refuse(`vertexNames 必须与 vertices 一一对应：收到 ${input.vertexNames.length} 个名字、${input.vertices.length} 个顶点。`)
+  }
+  const orderedVertices = ring.map((index) => input.vertices[index]!)
+  const orderedNames = input.vertexNames === undefined ? undefined : ring.map((index) => input.vertexNames![index]!)
+  const built = compileSolidFace(solidId, orderedVertices, label, orderedNames)
+  if (built.diagnostics.length > 0) {
+    return { primitives: [], vertexIds: built.pointIds, edgeIds: built.edgeIds, faceIds: [], solidId, diagnostics: built.diagnostics }
+  }
+  return { primitives: built.primitives, vertexIds: built.pointIds, edgeIds: built.edgeIds, faceIds: [solidId], solidId, diagnostics: [] }
 }
 
 /**

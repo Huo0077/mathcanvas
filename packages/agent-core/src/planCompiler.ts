@@ -337,6 +337,31 @@ function describeError(error: unknown): string {
  */
 export function compilePlan(input: unknown, context: PlanCompileContext): PlanCompileResult {
   const first = compileOnce(input, context)
+  /**
+   * **折角剪裁**（2026-10-17 用户截图）：模型坐标已经通过核验时，默认路径不会再走救援。
+   * 但 `solid.fold` 只追加折片、不会把折走的角从宿主面上拿走 —— 画面于是同时有平放的 AEF
+   * 和折起来的 PEF。这里把宿主面重写成五边形（A 保留为参考点），再编一遍；**只改可见拓扑**，
+   * 题设仍由同一个核验器按最终坐标复核。
+   */
+  if (first.plan !== null && first.result.diagramVerification?.status === "passed") {
+    const cut = cutFoldedCorner(first.plan)
+    if (cut !== first.plan) {
+      const cutCompiled = compileOnce(cut, context)
+      if (cutCompiled.result.ok && cutCompiled.result.draftDocument !== null && cutCompiled.result.diagramVerification?.status === "passed") {
+        /**
+         * 草稿层会拿 **materialisedActions** 对着候选图再核一遍。剪角之后动作已经变成
+         * “五边形面 + A 参考点 + 折片”，不回写就会被原始 A–D 面核验，面数与点名对不上。
+         */
+        return { ...cutCompiled.result, materialisedActions: cutCompiled.result.actions }
+      }
+    }
+  }
+  /**
+   * **线段引用了还没建出来的点**（2026-10-17 评测现场）：模型把 `EF` 排在了
+   * `bound E/F` 之前。移动它到末尾重编一次 —— 只动顺序，不改字段。
+   */
+  const reordered = rescueWithSegmentOrder(context, first)
+  if (reordered !== null) return reordered
   const materialised = rescueWithMaterialisedPoints(context, first)
   if (materialised !== null) return materialised
   /**
@@ -846,6 +871,212 @@ function withWitnessCoordinates(plan: Extract<PlanEnvelope, { kind: "plan" }>, c
 }
 
 /**
+ * **折一个角时，把那个角从宿主面上剪掉**（2026-10-17 用户截图）。
+ *
+ * 现场：四边形 ABCD 是一整张面，`solid.fold` 只**追加**了折片 PEF，没有把 AEF 从底面上拿走。
+ * 于是画面同时有“平放的 AEF”和“折起来的 PEF”——看起来像四边形旁边多挂了一个尖片，
+ * 不是折角。核验只看点坐标，所以它一路通过。
+ *
+ * 这条变换做三件事（只在“折片三角形正好是宿主面的一个角”时触发）：
+ * 1. 宿主面 `[A,B,C,D]` → 五边形 `[B,C,D,E,F]`（A 角剪掉）；
+ * 2. E/F 由 `dynamic.create_bound_point` 固化成五边形的两个顶点（删掉那两笔 bound point）；
+ * 3. A 单独保留成一个点（折前位置），供**折前题设**（AB / AD / ∠BAD / AE 比…）继续核验。
+ *
+ * 折片动作不动；它的 `vertices` 会被去掉，按点名从文档取 A/E/F（五边形顶点 + A 参考点）。
+ */
+function cutFoldedCorner(plan: Extract<PlanEnvelope, { kind: "plan" }>): Extract<PlanEnvelope, { kind: "plan" }> {
+  const fold = plan.actions.find((action) => action.actionId === "solid.fold")
+  if (!fold) return plan
+  const foldInputs = fold.inputs as { vertexNames?: unknown; apex?: unknown }
+  const apex = foldInputs.apex
+  const names = foldInputs.vertexNames
+  if (typeof apex !== "string" || !Array.isArray(names)) return plan
+  const hingeNames = names.filter((name): name is string => typeof name === "string" && name !== apex)
+  if (hingeNames.length !== 2) return plan
+
+  const hostIndex = plan.actions.findIndex((action) => action.actionId === "solid.create_face")
+  if (hostIndex < 0) return plan
+  const host = plan.actions[hostIndex]!
+  const hostInputs = host.inputs as { vertexNames?: unknown; vertices?: unknown }
+  if (!Array.isArray(hostInputs.vertexNames) || !Array.isArray(hostInputs.vertices)) return plan
+  const ring = hostInputs.vertexNames.filter((name): name is string => typeof name === "string")
+  const positions = hostInputs.vertices as { x: number; y: number; z: number }[]
+  if (ring.length !== positions.length) return plan
+  const apexIndex = ring.indexOf(apex)
+  if (apexIndex < 0) return plan
+  const count = ring.length
+  const previous = ring[(apexIndex - 1 + count) % count]!
+  const next = ring[(apexIndex + 1) % count]!
+
+  /** E/F 目前由 `dynamic.create_bound_point` 建在宿主面的两条邻边上；取它们的坐标。 */
+  const bound = (name: string): { from: string; to: string; position: { x: number; y: number; z: number } } | null => {
+    const action = plan.actions.find((candidate) => {
+      if (candidate.actionId !== "dynamic.create_bound_point") return false
+      const inputs = candidate.inputs as { label?: unknown; alias?: unknown }
+      return inputs.label === name || inputs.alias === name
+    })
+    if (!action) return null
+    const inputs = action.inputs as { hostEdge?: { from?: unknown; to?: unknown }; parameter?: unknown }
+    if (inputs.hostEdge === undefined || typeof inputs.hostEdge.from !== "string" || typeof inputs.hostEdge.to !== "string") return null
+    if (typeof inputs.parameter !== "number" || !Number.isFinite(inputs.parameter)) return null
+    const fromIndex = ring.indexOf(inputs.hostEdge.from)
+    const toIndex = ring.indexOf(inputs.hostEdge.to)
+    if (fromIndex < 0 || toIndex < 0) return null
+    const from = positions[fromIndex]!
+    const to = positions[toIndex]!
+    const t = inputs.parameter
+    return { from: inputs.hostEdge.from, to: inputs.hostEdge.to, position: { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, z: from.z + (to.z - from.z) * t } }
+  }
+  const edgesApex = (entry: { from: string; to: string }, other: string): boolean =>
+    (entry.from === apex && entry.to === other) || (entry.from === other && entry.to === apex)
+  const entries = hingeNames.map((name) => ({ name, entry: bound(name) }))
+  if (entries.some((item) => item.entry === null)) return plan
+  const previousEntry = entries.find((item) => edgesApex(item.entry!, previous))
+  const nextEntry = entries.find((item) => item !== previousEntry && edgesApex(item.entry!, next))
+  if (previousEntry === undefined || nextEntry === undefined) return plan
+
+  const apexPosition = positions[apexIndex]!
+  const rotated = [...ring.slice(apexIndex + 1), ...ring.slice(0, apexIndex)]
+  const rotatedPositions = [
+    ...positions.slice(apexIndex + 1),
+    ...positions.slice(0, apexIndex)
+  ]
+  const pentagonNames = [...rotated, previousEntry.name, nextEntry.name]
+  const pentagonPositions = [...rotatedPositions, previousEntry.entry!.position, nextEntry.entry!.position]
+
+  const rewrittenHost = {
+    ...host,
+    inputs: { ...(host.inputs as Record<string, unknown>), vertices: pentagonPositions, vertexNames: pentagonNames }
+  }
+  const anchor = {
+    actionId: "planar.create_point",
+    actionKey: `cut-anchor-${apex}`,
+    factIds: [],
+    inputs: { alias: `${apex}-ref`, label: apex, points: [{ x: apexPosition.x, y: apexPosition.y }] }
+  } as unknown as (typeof plan.actions)[number]
+  const boundNames = new Set(hingeNames)
+  const actions: (typeof plan.actions)[number][] = []
+  for (const action of plan.actions) {
+    if (action.actionId === "dynamic.create_bound_point") {
+      const inputs = action.inputs as { label?: unknown; alias?: unknown }
+      if (boundNames.has(String(inputs.label)) || boundNames.has(String(inputs.alias))) continue
+    }
+    if (action === fold) {
+      actions.push(anchor)
+      const inputs = action.inputs as Record<string, unknown>
+      const { vertices: _stale, ...rest } = inputs
+      actions.push({ ...action, inputs: rest } as typeof action)
+      continue
+    }
+    actions.push(action === host ? rewrittenHost as typeof action : action)
+  }
+  return { ...plan, actions }
+}
+
+/**
+ * **把引用折后点（P）的动作移到折之后**（2026-10-17 用户现场）。
+ *
+ * 计划里已经有 `solid.fold`，但线段（如 `PC`）排在它**前面** ⇒ 编译按顺序执行，
+ * 找不到 `P`。折叠这一笔不能动（它的 A/E/F 依赖在前），所以只把**引用 P 的动作**后移。
+ * 只动顺序、不改任何字段 —— 与"同一批按顺序执行"的语义一致。
+ */
+function moveFoldedPointReferencesAfterFold(plan: Extract<PlanEnvelope, { kind: "plan" }>): Extract<PlanEnvelope, { kind: "plan" }> {
+  const foldIndex = plan.actions.findIndex((action) => action.actionId === "solid.fold")
+  if (foldIndex < 0) return plan
+  const fold = plan.actions[foldIndex]!
+  const apexAs = (fold.inputs as { apexAs?: unknown }).apexAs
+  if (typeof apexAs !== "string") return plan
+  const references = (action: (typeof plan.actions)[number]): boolean => {
+    const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
+    return Array.isArray(inputs?.vertexNames) && inputs.vertexNames.includes(apexAs)
+  }
+  const actions = [...plan.actions]
+  const moved: (typeof plan.actions)[number][] = []
+  for (let index = 0; index < actions.length; index += 1) {
+    if (index !== foldIndex && index < foldIndex && references(actions[index]!)) {
+      moved.push(actions[index]!)
+      actions.splice(index, 1)
+      index -= 1
+    }
+  }
+  if (moved.length === 0) return plan
+  const shiftedFoldIndex = actions.indexOf(fold)
+  actions.splice(shiftedFoldIndex + 1, 0, ...moved)
+  return { ...plan, actions }
+}
+
+/**
+ * **把见证搜索给的坐标接进折片动作**（2026-10-17 用户现场，最后一块拼图）。
+ *
+ * 见证救援只替换**宿主动作**（平面片 / 多面体）的 `vertices`，而 `solid.fold` 里
+ * 模型往往还手写了一份 A/E/F 的坐标、以及一个自己猜的折角。两份坐标不一致时：
+ * 四边形是新的、折片还是旧的 ⇒ 第二遍核验必然失败（PE≠AE、PC≠4√3），救援被丢弃。
+ *
+ * 两档处理：
+ * 1. **所有点名都能从“折之前”的文档里取到**（A 来自平面片、E/F 来自 bound point）
+ *    ⇒ 去掉 `vertices`，让 `compileSolidFoldAction` 按点名取最新坐标（Task 13 的既有路径）；
+ * 2. 取不全时，至少把与四边形同名的那几个顶点换成求解器给的坐标（E/F 保持原样）。
+ *
+ * 折角不在这里猜：替换完坐标后交给 `rescueWithSolvedFoldAngle` 按题面距离反求。
+ */
+function adoptWitnessCoordinatesInFold(
+  plan: Extract<PlanEnvelope, { kind: "plan" }>,
+  candidate: PolyhedronWitness,
+  context: PlanCompileContext
+): Extract<PlanEnvelope, { kind: "plan" }> {
+  const folds = plan.actions.filter((action) => action.actionId === "solid.fold")
+  if (folds.length === 0) return plan
+
+  const apexNames = new Set(folds
+    .map((entry) => (entry.inputs as { apexAs?: unknown }).apexAs)
+    .filter((name): name is string => typeof name === "string"))
+  const beforeFold: Extract<PlanEnvelope, { kind: "plan" }> = {
+    ...plan,
+    actions: plan.actions.filter((action) => {
+      if (action.actionId === "solid.fold") return false
+      /**
+       * **引用折后点（P）的动作也要摘掉**：它们本来就会在“折之前”编不过，
+       * 而这一遍只是拿来取 A/E/F 的坐标。留着它们会让文档变成 `null`，
+       * 于是“全部点名可解析 ⇒ 去掉 vertices”这条最理想的路永远走不到。
+       */
+      const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
+      return !(Array.isArray(inputs?.vertexNames) && inputs.vertexNames.some((name) => apexNames.has(name)))
+    }) as typeof plan.actions
+  }
+  const before = compileOnce(beforeFold, context).result.draftDocument
+  const labelled = new Set(
+    (before?.primitives ?? [])
+      .filter((primitive) => primitive.type === "point3")
+      .map((primitive) => (primitive as { label?: unknown }).label)
+      .filter((label): label is string => typeof label === "string")
+  )
+  const positions = new Map(candidate.names.map((name, index) => [name, candidate.vertices[index]!]))
+
+  return {
+    ...plan,
+    actions: plan.actions.map((action) => {
+      if (action.actionId !== "solid.fold") return action
+      const inputs = action.inputs as Record<string, unknown>
+      const names = Array.isArray(inputs.vertexNames) ? inputs.vertexNames.filter((name): name is string => typeof name === "string") : []
+      if (names.length === 0) return action
+      // 全部点名都能从折前文档里取到 ⇒ 去掉过期的 vertices，按点名取最新坐标。
+      if (names.every((name) => labelled.has(name))) {
+        const { vertices: _stale, ...rest } = inputs
+        return { ...action, inputs: rest } as typeof action
+      }
+      if (!Array.isArray(inputs.vertices)) return action
+      // 取不全时，至少把四边形那几个同名顶点换成求解器给的坐标。
+      const rewritten = inputs.vertices.map((vertex, index) => {
+        const name = names[index]
+        const found = name === undefined ? undefined : positions.get(name)
+        return found === undefined ? vertex : { ...found }
+      })
+      return { ...action, inputs: { ...inputs, vertices: rewritten } } as typeof action
+    }) as typeof plan.actions
+  }
+}
+
+/**
  * **救回路径的对外证据**（R35 条件 ③ + 设计 §1 验收判据 4：系统自选的值必须看得见）。
  *
  * 两句话分开写，因为它们是两件事：
@@ -1265,7 +1496,20 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
    */
   const flap = [...fold.face]
   if (flap.length !== 3 || !flap.includes(fold.apex) || !flap.includes(fold.hinge.from) || !flap.includes(fold.hinge.to)) return null
-  const document = first.result.draftDocument
+  /**
+   * **折片只能建出 `P`，所以它必须排在任何引用 `P` 的动作之前**（2026-10-17 用户现场）。
+   *
+   * 现场最后那版计划是「四边形 → `PC` 线段 → …」：线段先引用 `P`、折却排在后面（或根本没有），
+   * 于是整份计划在 `segment_reference_missing: P` 上编不过 —— 而这一遍也正是**取 A/E/F 坐标**要用
+   * 的那一遍。原先它直接读 `first.result.draftDocument`，那份是 `null`，补折救援连门都进不去。
+   * 现在先摘掉“引用 P 的动作”编一次（四边形 + E/F 都在），拿到点名；插好折之后再整体编。
+   */
+  const referencesFoldedPoint = (action: (typeof plan.actions)[number]): boolean => {
+    const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
+    return Array.isArray(inputs?.vertexNames) && inputs.vertexNames.includes(fold.apexAs)
+  }
+  const preFold = compileOnce({ ...plan, actions: plan.actions.filter((action) => !referencesFoldedPoint(action)) }, context).result.draftDocument
+  const document = preFold ?? first.result.draftDocument
   if (document === null) return null
   const labelled = new Set(
     document.primitives
@@ -1275,25 +1519,33 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
   )
   if (!flap.every((name) => labelled.has(name))) return null
 
+  /**
+   * **插在“第一个引用折后点（P）的动作”之前**：N 个引用点取最靠前的那个。
+   */
+  const firstReference = plan.actions.findIndex(referencesFoldedPoint)
+  const insertAt = firstReference >= 0 ? firstReference : plan.actions.length
+  const foldAction = {
+    actionId: "solid.fold",
+    actionKey: "synthesised-fold",
+    factIds: [],
+    inputs: {
+      alias: "synthesised-fold",
+      vertexNames: flap,
+      hinge: { from: fold.hinge.from, to: fold.hinge.to },
+      apex: fold.apex,
+      apexAs: fold.apexAs,
+      /** 先取 90°：题面没直接给折角时，由下面那条反求（或核验）说了算。 */
+      angle: 90,
+      label: `${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 折到 ${fold.apexAs}`
+    }
+  } as (typeof plan.actions)[number]
+
   const patched: Extract<PlanEnvelope, { kind: "plan" }> = {
     ...plan,
     actions: [
-      ...plan.actions,
-      {
-        actionId: "solid.fold",
-        actionKey: "synthesised-fold",
-        factIds: [],
-        inputs: {
-          alias: "synthesised-fold",
-          vertexNames: flap,
-          hinge: { from: fold.hinge.from, to: fold.hinge.to },
-          apex: fold.apex,
-          apexAs: fold.apexAs,
-          /** 先取 90°：题面没直接给折角时，由下面那条反求（或核验）说了算。 */
-          angle: 90,
-          label: `${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 折到 ${fold.apexAs}`
-        }
-      }
+      ...plan.actions.slice(0, insertAt),
+      foldAction,
+      ...plan.actions.slice(insertAt)
     ] as typeof plan.actions
   }
   const disclosure = {
@@ -1302,15 +1554,15 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
     kind: "witness" as const,
     value: { apex: fold.apex, apexAs: fold.apexAs, hingeFrom: fold.hinge.from, hingeTo: fold.hinge.to },
     overridable: true,
-    path: `envelope.actions[${plan.actions.length}].inputs`
+    path: `envelope.actions[${insertAt}].inputs`
   }
 
-  const withFold = compileOnce(patched, context)
+  const withFold = compileOnce(cutFoldedCorner(patched), context)
   const solved = rescueWithSolvedFoldAngle(context, withFold)
-  if (solved !== null) return { ...solved, assumptions: [disclosure, ...solved.assumptions] }
+  if (solved !== null) return { ...solved, assumptions: [disclosure, ...solved.assumptions], materialisedActions: solved.actions }
   /** 题面若直接给了折角（不需要反求），就走普通那一关：第二遍必须 `ok` + 有草稿 + 核验通过。 */
   if (!withFold.result.ok || withFold.result.draftDocument === null || withFold.result.diagramVerification?.status !== "passed") return null
-  return { ...withFold.result, assumptions: [disclosure, ...withFold.result.assumptions] }
+  return { ...withFold.result, assumptions: [disclosure, ...withFold.result.assumptions], materialisedActions: withFold.result.actions }
 }
 
 function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
@@ -1400,9 +1652,23 @@ function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: Compile
    * 复用 `compileOnce` 而不是自己再写一遍"点在棱上的位置怎么算"：那套判据只有一份
    *（宿主棱的朝向、平面路径的弧长），抄第二份必然分叉 —— 本轮刚因为"两边各翻一次"栽过。
    */
+  const apexNames = new Set(plan.actions
+    .filter((action) => action.actionId === "solid.fold")
+    .map((action) => (action.inputs as { apexAs?: unknown }).apexAs)
+    .filter((name): name is string => typeof name === "string"))
   const withoutFold: Extract<PlanEnvelope, { kind: "plan" }> = {
     ...plan,
-    actions: plan.actions.filter((action) => action.actionId !== "solid.fold") as typeof plan.actions
+    actions: plan.actions.filter((action) => {
+      if (action.actionId === "solid.fold") return false
+      /**
+       * **引用 P 的动作也摘掉**（2026-10-17）：线段 `PC` 排在折之前时，
+       * 这一遍“折之前”的编译会因 `segment_reference_missing: P` 变成 `null`，
+       * 而 `at()` 随后只能退回到计划里的 `vertices`（见证替换后已经删掉了）——
+       * 于是折角反求连 A/E/F 都拿不到。摘掉引用方，拿 A/E/F 的那一遍才是干净的。
+       */
+      const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
+      return !(Array.isArray(inputs?.vertexNames) && inputs.vertexNames.some((name) => apexNames.has(name)))
+    }) as typeof plan.actions
   }
   const beforeFold = compileOnce(withoutFold, context).result.draftDocument
   const fromDocument = (label: string): { x: number; y: number; z: number } | null => {
@@ -1516,6 +1782,43 @@ function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: Compile
           ]
         }
       }
+    }
+  }
+  return null
+}
+
+/**
+ * **线段排在建点之前 ⇒ 自动后移**（2026-10-17 评测现场）。
+ *
+ * 模型经常把 `solid.create_segment`（如 `EF`、`PC`）写在建 E/F/P 的那几笔之前。
+ * 同一份计划按顺序执行，于是 `segment_reference_missing`。这只动**顺序**：
+ * 把出错的那一笔移到末尾再编一次；仍然要求第二遍核验真的 `passed`。
+ */
+function rescueWithSegmentOrder(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.ok || first.plan === null) return null
+  let plan = first.plan
+  let compiled = first.result
+  for (let round = 0; round < 4; round += 1) {
+    const diagnostic = compiled.diagnostics.find((entry) => entry.code === "segment_reference_missing")
+    if (diagnostic === undefined) return null
+    const index = Number(/envelope\.actions\[(\d+)\]/.exec(diagnostic.path)?.[1])
+    if (!Number.isInteger(index) || index < 0) return null
+    const actions = [...plan.actions]
+    const [moved] = actions.splice(index, 1)
+    if (moved === undefined) return null
+    actions.push(moved)
+    plan = { ...plan, actions }
+    compiled = compileOnce(plan, context).result
+    if (compiled.ok && compiled.draftDocument !== null && compiled.diagramVerification?.status === "passed") {
+      /** 顺序修好之后，折角剪裁也要照样生效（否则“画面还是四边形 + 尖片”）。 */
+      const cut = cutFoldedCorner(plan)
+      if (cut !== plan) {
+        const cutCompiled = compileOnce(cut, context).result
+        if (cutCompiled.ok && cutCompiled.draftDocument !== null && cutCompiled.diagramVerification?.status === "passed") {
+          return { ...cutCompiled, materialisedActions: cutCompiled.actions }
+        }
+      }
+      return { ...compiled, materialisedActions: compiled.actions }
     }
   }
   return null
@@ -1640,7 +1943,27 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
     return { status: "declined", reason: "这一轮没有拿到可用的题面或计划，无法按题面条件构造坐标。" }
   }
 
-  const found = searchWitness(witnessSearchInput(first.obligations.ir, context.prompt))
+  /**
+   * **搜索只看这份平面图形能核验的那几条题设**（2026-10-17）。
+   *
+   * 这道题的题面里还有 `AE=2/5 AD`（E/F）与 `PC=4√3`（P）—— 平面图形候选里**没有** E/F/P，
+   * 拿全量题设去搜，候选永远因为“点名缺失”落成 `unverified_instance`，于是一条都救不回来。
+   * 折片那几条由后续的 `rescueWithSolvedFoldAngle` 在**补齐 E/F、解出折角之后**用同一份
+   * 全量题设核验；这里只负责把 A–D 构造对。
+   */
+  const hostNames = (() => {
+    const host = first.plan.actions.find((action) => action.actionId === "solid.create_face" || action.actionId === "solid.create_polyhedron")
+    const inputs = host?.inputs as { vertexNames?: unknown } | undefined
+    if (!Array.isArray(inputs?.vertexNames) || !inputs.vertexNames.every((name) => typeof name === "string")) return null
+    return new Set(inputs.vertexNames as string[])
+  })()
+  const searchIr = hostNames === null
+    ? first.obligations.ir
+    : {
+        ...first.obligations.ir,
+        obligations: first.obligations.ir.obligations.filter((obligation) => obligation.targets.every((name) => hostNames.has(name)))
+      }
+  const found = searchWitness(witnessSearchInput(searchIr, context.prompt))
 
   if (found.status !== "verified_instance") {
     const why = found.status === "no_witness" ? found.failures : found.reasons
@@ -1668,7 +1991,41 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
     return { status: "declined", reason: "构造出了坐标，但这份计划里没有能承接它的那一笔动作（既不是唯一的多面体，也不是唯一的平面片，或顶点个数 / 点名对不上）。" }
   }
 
-  const second = compileOnce(candidatePlan, context)
+  /**
+   * **两块拼图在这里接上**（2026-10-17）：见证搜索给的是四边形的坐标，折片的坐标与折角
+   * 还是模型手写的那一份。先把坐标接进折片，再让**现有的**折角反求按题面距离解一次。
+   * 没有这一步，"正确的四边形 + 正确的折角"永远不会同时成立，救援每次都在第二遍核验失败。
+   */
+  const prepared = moveFoldedPointReferencesAfterFold(cutFoldedCorner(adoptWitnessCoordinatesInFold(candidatePlan, found.candidate, context)))
+  const preparedFirst: CompileOnceOutcome = { ...first, plan: prepared, result: compileOnce(prepared, context).result }
+  /**
+   * 计划里**根本没有折那一笔**时（模型直接手写了 P），也要在替换完坐标之后按题面补上 ——
+   * `rescueWithSynthesisedFold` 自己会再调折角反求；放在这里，它拿到的就是新的四边形坐标。
+   */
+  const synthesisedFold = rescueWithSynthesisedFold(context, preparedFirst)
+  if (synthesisedFold !== null) {
+    return {
+      status: "rescued",
+      result: {
+        ...synthesisedFold,
+        assumptions: [...synthesisedFold.assumptions, ...witnessAssumptions(found)],
+        materialisedActions: synthesisedFold.actions
+      }
+    }
+  }
+  const solvedFold = rescueWithSolvedFoldAngle(context, preparedFirst)
+  if (solvedFold !== null) {
+    return {
+      status: "rescued",
+      result: {
+        ...solvedFold,
+        assumptions: [...solvedFold.assumptions, ...witnessAssumptions(found)],
+        materialisedActions: solvedFold.actions
+      }
+    }
+  }
+
+  const second = { result: preparedFirst.result }
   if (!second.result.ok || second.result.draftDocument === null || second.result.diagramVerification?.status !== "passed") {
     return { status: "declined", reason: "构造出的坐标替换进去之后，第二遍核验没有通过 —— 按纪律丢弃，不产出半份草稿。" }
   }
@@ -2050,6 +2407,15 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (answerInPlan) {
     advice.push("提醒：`kind` 为 `plan` 时顶层**只能有** `schemaVersion`、`kind`、`goal`、`factIds`、`assumptions`、`relations`、`actions`。`answer` / `toolResultRefs` / `questions` 属于别的分支，**不要混进来**。")
   }
+  /**
+   * **引用没写作用域**（2026-10-17 评测现场）：模型把 `dynamic.create_bound_point.host`
+   * 写成了裸别名 `"quad"`，传输层回 `a reference must declare scope`。修复必须给出
+   * **完整形状**，否则模型下一轮还会写字符串。
+   */
+  const unscoped = errors.some((error) => error.code === "unscoped_reference")
+  if (unscoped) {
+    advice.push('提醒：`host` / `target` 这类引用必须是**作用域对象**，不能写裸别名：同一份计划里刚建的用 `{"scope":"draft","alias":"quad"}`，场景里已有的用 `{"scope":"scene","ref":{"documentId":"…","entityId":"…"}}`。')
+  }
   const envelopeFailure = errors.some((error) => error.path.startsWith("envelope")) && !answerInPlan
   if (envelopeFailure) {
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
@@ -2086,6 +2452,20 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   const segmentNamesWrong = errors.some((error) => /\.inputs\.vertexNames$/.test(error.path) && /segment connects exactly two named points|two point names this segment connects/.test(error.detail))
   if (segmentNamesWrong) {
     advice.push('提醒：`solid.create_segment` 的 `vertexNames` 必须是**恰好两个点名**、写成数组，例如 `["E","F"]`（就是你要连的那两个点）—— 不能留空、也不收坐标。这两个点由**前面几笔**建出来（同一份计划按顺序执行）。')
+  }
+  /**
+   * **开放曲面被强行“封口”成闭合体**（2026-10-17 用户现场）。
+   *
+   * 用户加了一句「画立体图形」，模型就把「平面四边形 + 翻折片」拿
+   * `solid.create_polyhedron` 去封成体，内核逐条回：顶点共面 / 每条棱不在恰好两个面里 /
+   * 体积为零。它需要知道的是**题面本身是开放曲面**，不是再补一个面。
+   *
+   * 判据只认内核这三句真几何诊断（`degenerate_polyhedron`）—— 别的拒因不往这条上引。
+   */
+  const flatOpenFigure = errors.some((error) => error.code === "degenerate_polyhedron"
+    && /must not be coplanar|exactly two face rings|non-zero volume/.test(error.detail))
+  if (flatOpenFigure) {
+    advice.push("提醒：这是**平面四边形 + 翻折片**的**开放曲面**，不是闭合多面体 —— 不要用 `solid.create_polyhedron` 把平面片强行封成体（内核会因共面 / 棱不成对 / 体积为零拒绝）。正确结构是：`solid.create_face` 建平面四边形（给 `vertices` 与 `vertexNames`）、`dynamic.create_bound_point` 建 E / F、`solid.fold` 沿 EF 折出 P，`solid.create_segment` 只给两个点名连线段。「画立体图形」指在三维工作区显示这个折后形状，**不要求闭合体**；如果上一版已经是这个结构，只改坐标，不要再换形状。")
   }
   /**
    * **面片点数不够**（2026-10-15 用户现场，四棱锥那道题）：模型想给「线段 EF」建一笔面片，

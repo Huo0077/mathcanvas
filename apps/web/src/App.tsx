@@ -682,7 +682,7 @@ export function App() {
    * 键盘快捷键（Esc 分级 / Delete / 撤销重做）在 `./useKeyboardShortcuts`：
    * 搬动时顺手修掉两处依赖问题（多余的 `document`、漏掉的 `deleteSelected`），见那个文件的头注释。
    */
-  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard: closeSolidWizard, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
+  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, onSelectAll: () => setSelectedIds(document.primitives.filter((primitive) => primitive.visible !== false).map((primitive) => primitive.id)), setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard: closeSolidWizard, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
 
   // 优先级：创建步骤 > 3D 显示开关提示（法向量/二面角示例）> 交线预览 > 默认选择提示。
   // 显示开关是用户刚刚按下按钮触发的，必须盖过"选择带来的预览"，否则状态栏会像没反应。

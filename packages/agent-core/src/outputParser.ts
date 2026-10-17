@@ -172,25 +172,29 @@ export function describeRepairPrompt(failure: EnvelopeParseFailure): string {
 }
 
 /**
- * **按错误签名补一句"下一步怎么改"**（2026-10-11 用户现场）。
+ * **按错误签名补一句"下一步怎么改"**（2026-10-11 用户现场；2026-10-17 更新）。
  *
  * 现场：同一条题连做四次，**三次**死在同一个签名上 —— 模型拿 `solid.create_polyhedron`
- * 去画"平面四边形 + 翻折片"这种**开放曲面**，而多面体要求至少四个面、围出体积。
+ * 去画"平面四边形 + 翻折片"这种**开放曲面**，而当时的多面体要求至少四个面、围出体积。
  * 引擎只回一句 `a polyhedron needs at least four faces`，那句话**没告诉它正确答案**
  *（我们其实有 `solid.create_face`，能力表里就有），于是下一轮它照样拿多面体去套，
  * 第三次还是同一堵墙 —— 而每一轮只有一次修复机会。
  *
+ * **2026-10-17 用户裁定之后**：`solid.create_polyhedron` 本身兼容 **1 个面环**（平面多边形），
+ * 所以"四边形 / 三角形片"不再被那条旧下限拒掉；仍然会触发这条提醒的只剩
+ * "一个面环都没给"（`faces: []`）—— 那时它要么补一个环，要么改用 `solid.create_face`。
+ *
  * 与 `planCompiler` 的 `targetedRepairAdvice` 同一条思路：**只按真实出现过的签名**给提醒，
- * 不做通用泛谈。判据里两个数都收（面 / 顶点）：它们不够的根因是同一个 —— 那只图形没围起来。
+ * 不做通用泛谈。
  */
 /** 各动作族的**正确出口**：模型造了一个不存在的动作名时，这就是它真正该用的那一个。 */
 const SOLID_EXITS = "要画**开放的平面图形**（四边形、三角形片、翻折片）请用 `solid.create_face` —— 它**自带面、也自带边**，所以不需要再找一个 3D 线段动作去补边；闭合实体用 `solid.create_polyhedron`；沿折痕翻折用 `solid.fold`。"
 
 function targetedTransportAdvice(errors: readonly ParseError[]): string[] {
   const advice: string[] = []
-  const openFigure = errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least four (faces|vertices)/.test(error.detail))
-  if (openFigure) {
-    advice.push("提醒：`solid.create_polyhedron` 建的是**闭合多面体**（至少四个面、要围出体积）。要画**开放的平面图形**（四边形、三角形片、翻折片）请改用 `solid.create_face`：给 `vertices`（至少三个**共面**、互不共线的点）与 `vertexNames` 就行，它**不收 `faces`**。一张平面的四边形或三角形片，用多面体是套不上的。")
+  const emptyFaces = errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least (three vertices|one face)/.test(error.detail))
+  if (emptyFaces) {
+    advice.push("提醒：`solid.create_polyhedron` 现在也接受**一个面环**的平面多边形（例如 `faces: [[0,1,2,3]]`，物化成一张面）。你这次连一个面环都没给；如果你要画的是开放的平面图形（四边形、三角形片、翻折片），也可以直接用 `solid.create_face`：给 `vertices`（至少三个**共面**、互不共线的点）与 `vertexNames` 就行，它**不收 `faces`**。只有闭合实体才需要至少四个面。")
   }
   /**
    * **模型自己造了一个动作名**（Task 2，2026-10-12）。

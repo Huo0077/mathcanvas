@@ -340,10 +340,14 @@ describe("draft action parsing", () => {
    * **任意多面体**（第 2 层）的传输层校验：只挡**形状**，几何留给内核。
    *
    * `faces` 是这份契约里**第一个二层整数数组**字段，所以单独钉一条：
-   * 收下合法的（顶点 ≥4、面 ≥4、环 ≥3 且下标互异且在范围内），拒掉明显畸形的。
+   * 收下合法的（闭合体：顶点 ≥4、面 ≥4；单面多边形：顶点 ≥3、面 = 1，环 ≥3 且下标互异且在范围内），
+   * 拒掉明显畸形的。
    * 「共面 / 自交 / 非零体积 / 绕向一致」**不在这里**判 —— 那些是内核的诊断（见登记表那条注释）。
+   *
+   * **两个面的开放壳仍然能过这一层**（形状本身合法），它会在动作编译器里被明确拒掉：
+   * 那不是平面多边形（1 个面），也围不出闭合体（≥4 个面）。
    */
-  it("accepts a well-formed polyhedron and rejects malformed face rings", () => {
+  it("accepts a closed polyhedron and a single-face planar polygon, and rejects malformed face rings", () => {
     const base = {
       actionId: "solid.create_polyhedron",
       actionKey: "octa",
@@ -357,10 +361,20 @@ describe("draft action parsing", () => {
     const accepted = parseDraftAction(base)
     expect(accepted.ok, accepted.ok ? "" : accepted.errors.map((error) => `${error.code}@${error.path}`).join(", ")).toBe(true)
 
-    // 顶点少于 4 个。
-    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, vertices: base.inputs.vertices.slice(0, 3) } }), "invalid_type")
-    // 面少于 4 个。
-    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 4], [2, 1, 4]] } }), "invalid_type")
+    // **单面多边形**：3 个顶点 + 1 个面环就是合法的平面三角形（2026-10-17 用户裁定）。
+    const planar = parseDraftAction({
+      ...base,
+      inputs: { ...base.inputs, alias: "tri", vertices: base.inputs.vertices.slice(0, 3), faces: [[0, 1, 2]] }
+    })
+    expect(planar.ok, planar.ok ? "" : planar.errors.map((error) => `${error.code}@${error.path}`).join(", ")).toBe(true)
+
+    // 顶点少于 3 个。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, vertices: base.inputs.vertices.slice(0, 2) } }), "invalid_type")
+    // 面少于 1 个。
+    expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [] } }), "invalid_type")
+    // 2 个面的开放壳：形状合法（编译层会拒），这一层收下。
+    const openShell = parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 4], [2, 1, 4]] } })
+    expect(openShell.ok, openShell.ok ? "" : openShell.errors.map((error) => `${error.code}@${error.path}`).join(", ")).toBe(true)
     // 环里只有两个下标。
     expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "invalid_type")
     // 下标越界 / 不是整数。
@@ -368,6 +382,11 @@ describe("draft action parsing", () => {
     expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 1.5], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "invalid_type")
     // 同一个环里重复一个顶点。
     expectRejected(parseDraftAction({ ...base, inputs: { ...base.inputs, faces: [[0, 2, 0], [2, 1, 4], [1, 3, 4], [3, 0, 4]] } }), "duplicate_index")
+    // 单个面漏掉一个顶点：那不是这只多边形的环。
+    expectRejected(parseDraftAction({
+      ...base,
+      inputs: { ...base.inputs, vertices: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 0 }, { x: 0, y: 1, z: 0 }], faces: [[0, 1, 2]] }
+    }), "invalid_type")
   })
 })
 

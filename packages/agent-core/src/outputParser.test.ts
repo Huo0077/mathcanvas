@@ -282,19 +282,54 @@ describe("repair prompt", () => {
   })
 
   /**
-   * **开放曲面不要拿多面体去套**（2026-10-11 用户现场，实测四次尝试里三次死在这一堵）。
+   * **一个面环都没给时，提示要说出两条出路**（2026-10-11 用户现场；2026-10-17 更新）。
    *
    * 用户那道题是"平面四边形 + 翻折片"——**开放的**平面图形。模型每次都拿
-   * `solid.create_polyhedron` 去表达，而它要求至少四个面、围出体积，于是每次都收到
+   * `solid.create_polyhedron` 去表达；当时它要求至少四个面，于是每次都收到
    * 同一句 `a polyhedron needs at least four faces`。**那句话没告诉它正确答案**：
    * 我们其实有 `solid.create_face`（能力表里就有）。修复提示是唯一能让下一轮不同的东西，
    * 所以它必须在这里说出那个动作的名字。
+   *
+   * 2026-10-17 用户裁定"让现有 action 兼容 1 个面"之后，单面四边形本身**不再报错**；
+   * 仍然会撞这条提示的是"连一个面环都没给"（模型现场的第一稿就是 `faces: []`）。
+   * 这时两句都要说：**补一个面环**（平面多边形），或者**改用 `solid.create_face`**。
    */
-  it("names solid.create_face when the failure is an open figure forced into a polyhedron", () => {
+  it("names solid.create_face when a polyhedron is given no face ring at all", () => {
     const openFigure = JSON.stringify({
       schemaVersion: "mathcanvas.plan.v1",
       kind: "plan",
       goal: "平面四边形 ABCD 与翻折片",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_polyhedron",
+        actionKey: "quad",
+        factIds: [],
+        inputs: {
+          alias: "quad",
+          faces: [],
+          vertexNames: ["A", "B", "C", "D"],
+          vertices: [{ x: 0, y: 0, z: 0 }, { x: 8, y: 0, z: 0 }, { x: 9, y: Math.sqrt(3), z: 0 }, { x: 7.5, y: 2.5 * Math.sqrt(3), z: 0 }]
+        }
+      }]
+    })
+    const result = parseStrictJsonEnvelope(openFigure)
+    if (result.ok) throw new Error("expected a failure")
+
+    const prompt = describeRepairPrompt(result)
+
+    expect(prompt).toContain("solid.create_face")
+    expect(prompt).toContain("平面多边形")
+  })
+
+  it("accepts the single-face planar polygon the old repair was written for", () => {
+    /**
+     * 同一个动作、同样的四个顶点，**只给一个面环**现在是合法的平面四边形
+     * （物化成 `face3`）—— 这正是用户裁定要的兼容形态。
+     */
+    const planarQuad = JSON.stringify({
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "平面四边形 ABCD",
       factIds: [],
       actions: [{
         actionId: "solid.create_polyhedron",
@@ -308,13 +343,9 @@ describe("repair prompt", () => {
         }
       }]
     })
-    const result = parseStrictJsonEnvelope(openFigure)
-    if (result.ok) throw new Error("expected a failure")
+    const result = parseStrictJsonEnvelope(planarQuad)
 
-    const prompt = describeRepairPrompt(result)
-
-    expect(prompt).toContain("solid.create_face")
-    expect(prompt).toContain("闭合多面体")
+    expect(result.ok, result.ok ? "" : result.errors.map((error) => `${error.code}@${error.path}`).join(", ")).toBe(true)
   })
 
   /**

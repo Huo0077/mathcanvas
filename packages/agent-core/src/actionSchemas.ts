@@ -157,6 +157,12 @@ const FIELD_MIN_ITEMS: Record<string, number> = {
   // 面片可以是三角形（`平面 PAD` 就是），通用 `vertexList` 的 4 是**闭合多面体**的下限。
   "solid.create_face.vertices": 3,
   "solid.fold.vertices": 3,
+  /**
+   * **`solid.create_polyhedron` 兼容 1 个面**（2026-10-17 用户裁定）：1 个面环 = 平面多边形，
+   * 3 个顶点就够；`faces` 的下限因此是 1（闭合体仍要求 ≥4，那条由编译层按面数分流）。
+   */
+  "solid.create_polyhedron.vertices": 3,
+  "solid.create_polyhedron.faces": 1,
   // 棱柱：底环 n + 顶环 n ⇒ 至少 6 个（校验器原话：an even number of at least six names）。
   "solid.create_prism.vertexNames": 6
 }

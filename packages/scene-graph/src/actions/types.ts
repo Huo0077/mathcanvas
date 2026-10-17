@@ -49,6 +49,14 @@ export interface ActionBase {
 
 // ---------------------------------------------------------------- 动作判别联合（按动作族分组）
 
+/**
+ * **平面创建动作**（坐标只有 x/y）。
+ *
+ * **三维工作区里走另一条物化**（2026-10-17 用户现场）：点 / 线段 / 直线 / 射线 / 折线 / 圆
+ * 会变成 z = 0 的 `point3` / `segment3` / `line3` / `ray3` / 线段链 / `circle3` ——
+ * 画得出来、也进得了题设核验的点名表。`planar.create_arc` 在三维侧**明确拒绝**
+ *（三维图元里没有圆弧，硬折成折线会悄悄改掉形状）。
+ */
 export interface PlanarCreateAction extends ActionBase {
   actionId:
     | "planar.create_point"
@@ -252,9 +260,14 @@ export interface SolidCreatePolyhedronAction extends ActionBase {
   actionId: "solid.create_polyhedron"
   inputs: {
     alias: DraftAlias
-    /** 顶点（世界坐标），至少 4 个。 */
+    /** 顶点（世界坐标）：闭合体至少 4 个；**单面平面多边形**至少 3 个。 */
     vertices: Array<{ x: number; y: number; z: number }>
-    /** 面环：每个面是**至少 3 个顶点下标**（0 起、互异；同一面共面、整只实体绕向一致）—— 由内核校验。 */
+    /**
+     * 面环：每个面是**至少 3 个顶点下标**（0 起、互异；同一面共面、整只实体绕向一致）—— 由内核校验。
+     *
+     * **1 个面环 = 平面多边形**（2026-10-17 用户裁定）：物化成 `face3`，与 `solid.create_face` 同一出口；
+     * 环必须用上每一个顶点。2–3 个面是开放壳、明确拒绝；≥4 个面才走内核的闭合体构造。
+     */
     faces: number[][]
     /**
      * **可选的点名**，与 `vertices` 一一对应（例如 `["P","A","B","C","D"]`）。

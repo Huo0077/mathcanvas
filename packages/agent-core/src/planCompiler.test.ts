@@ -639,6 +639,25 @@ describe("compile repair advice", () => {
     expect(hint).toContain("不要再用 `planar.*` 去补立体的边")
   })
 
+  it("explains that a flat/open figure must not be forced into a closed polyhedron", () => {
+    /**
+     * 现场（2026-10-17，用户加了「画立体图形」）：平面四边形 + 折片被模型拿
+     * `solid.create_polyhedron` 去“封口”，内核回三句 —— 顶点共面 / 每条棱不在恰好两个面里 /
+     * 体积为零。它需要的不是再试一次，而是知道**这道题本来就是开放曲面**：
+     * 平面片用 `solid.create_face`、折用 `solid.fold`，不要闭合。
+     */
+    const hint = ask([
+      { code: "degenerate_polyhedron", path: "envelope.actions[1]", detail: "solid vertices must not be coplanar" },
+      { code: "degenerate_polyhedron", path: "envelope.actions[1]", detail: "every solid edge must belong to exactly two face rings" },
+      { code: "degenerate_polyhedron", path: "envelope.actions[1]", detail: "solid topology must enclose non-zero volume" }
+    ])
+
+    expect(hint).toContain("solid.create_face")
+    expect(hint).toContain("solid.fold")
+    expect(hint).toContain("开放曲面")
+    expect(hint).toContain("不要")
+  })
+
   it("explains that a plan branch must not carry answer/other-branch fields", () => {
     const hint = ask([{ code: "unknown_field", path: "envelope.answer", detail: "unexpected field 'answer'" }])
 
@@ -658,6 +677,14 @@ describe("compile repair advice", () => {
     expect(hint).toContain("`goal` 与 `actions`")
     expect(hint).not.toContain("schemaVersion")
     expect(hint).not.toContain("factIds")
+  })
+
+  it("gives the scoped shape when a reference forgot its scope", () => {
+    const hint = ask([{ code: "unscoped_reference", path: "envelope.actions[1].inputs.host", detail: "a reference must declare scope: 'draft' (alias) or 'scene' (ref)" }])
+
+    expect(hint).toContain("scope")
+    expect(hint).toContain("draft")
+    expect(hint).toContain("alias")
   })
 
   /**

@@ -49,18 +49,22 @@ describe("发布的 schema 不许隐瞒校验器会执行的规矩", () => {
     }
   })
 
-  it("面片（`solid.create_face` / `solid.fold`）的 `vertices` 是**至少三个**，不是四个", () => {
+  it("面片（`solid.create_face` / `solid.fold` / 单面多面体）的 `vertices` 是**至少三个**，不是四个", () => {
     /**
      * 校验器对面片的要求是 "≥ 3 个点"（`a planar face needs at least three vertices`），
      * 而通用的 `vertexList` 种类发布的是 `minItems: 4`（那是**闭合多面体**的下限）。
      * 面片写成三角形是**合法且常见**的（`平面 PAD` 就是三角形），
      * 发布 4 会让模型以为三角形面片不被接受 —— 于是它要么改用多面体去套、要么凑第四个点
      *（现场第二次那份计划里的重名 `F` 正是"凑点"的形状）。
+     *
+     * 2026-10-17：`solid.create_polyhedron` 兼容 **1 个面**（平面多边形）之后，它也是同一档
+     * —— 3 个顶点 + 1 个面环就是合法的平面三角形；`faces` 的下限随之落到 1。
      */
     expect(actionToolSchema("solid.create_face").inputSchema.properties?.vertices).toMatchObject({ minItems: 3 })
     expect(actionToolSchema("solid.fold").inputSchema.properties?.vertices).toMatchObject({ minItems: 3 })
-    // 闭合多面体的下限**照旧是 4**（三个点围不出体积）——两件事不许互相带跑。
-    expect(actionToolSchema("solid.create_polyhedron").inputSchema.properties?.vertices).toMatchObject({ minItems: 4 })
+    expect(actionToolSchema("solid.create_polyhedron").inputSchema.properties?.vertices).toMatchObject({ minItems: 3 })
+    // 闭合多面体的面数下限**照旧是 4**，但单面多边形是 1 —— 发布 1，让 1 个面能过。
+    expect(actionToolSchema("solid.create_polyhedron").inputSchema.properties?.faces).toMatchObject({ minItems: 1 })
   })
 
   it("棱柱的 `vertexNames` 是**偶数个且至少六个**（底环 n + 顶环 n）", () => {
