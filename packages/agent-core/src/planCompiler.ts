@@ -365,6 +365,13 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     }
   }
   /**
+   * **梯形底直四棱柱**先试：它只匹配 `直四棱柱 + AB⊥AD/AB//CD + 体积`，不依赖前面那些
+   * 顺序/环清洗是否已经救出一个半成品。solid-20 的模型计划经常在面环处就编不过，
+   * 排在结构清洗之后会根本走不到。
+   */
+  const trapezoidPrism = rescueWithTrapezoidPrism(context, first)
+  if (trapezoidPrism !== null) return trapezoidPrism
+  /**
    * **结构清洗**（2026-10-19，任务 P1-3）：先修顺序，再把非法折角按 90° 安全默认回填，
    * 然后才编译。旧路径把“顺序”和“折角”分成两次救援，第一处修好后第二处仍会挡住整轮。
    */
@@ -390,8 +397,6 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (pyramid !== null) return pyramid
   const prism = rescueWithRightPrism(context, first)
   if (prism !== null) return prism
-  const trapezoidPrism = rescueWithTrapezoidPrism(context, first)
-  if (trapezoidPrism !== null) return trapezoidPrism
   const dihedral = rescueWithDihedralTriangle(context, first)
   if (dihedral !== null) return dihedral
   /**
