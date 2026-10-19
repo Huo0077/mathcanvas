@@ -806,3 +806,39 @@ describe("三角形类型与中点：常见写法", () => {
     expect(parseDiagramObligations("AB 与 CD 平行").givens.find((item) => item.kind === "parallel")?.targets).toEqual(["A", "B", "C", "D"])
   })
 })
+
+/**
+ * **链式等号**（2026-10-19 联考 `joint-04` / `joint-05`：`∥FE`、`=AA₁` 那种碎片）。
+ *
+ * 现场读数：`AB=AC=AA₁` 只读出第一对，剩下的 `=AA₁` 在残留里变成一条"未核验的条件"；
+ * 带尾巴时更糟 —— `AB=AC=AA₁=2` 会先被**单段长度读取器**吃掉 `AA₁=2`，留一个孤立的 `=`。
+ * 所以这一条必须排在单段读取器**之前**（与"先长的、再短的"同一条纪律）。
+ */
+describe("链式等号：AB=AC=AA₁", () => {
+  it("`AB=AC=AA₁` ⇒ 两条 equalLength（相邻两段），不留 `=AA₁` 碎片", () => {
+    const parsed = parseDiagramObligations("AB=AC=AA₁")
+    expect(parsed.givens.filter((item) => item.kind === "equalLength").map((item) => item.targets)).toEqual([
+      ["A", "B", "A", "C"],
+      ["A", "C", "A", "A₁"]
+    ])
+    expect(parsed.unverified.map((entry) => entry.sourceText)).toEqual([])
+  })
+
+  it("`AB=AC=AA₁=2` ⇒ 两条 equalLength + 三段 fixedLength=2，不留孤立 `=`", () => {
+    const parsed = parseDiagramObligations("AB=AC=AA₁=2")
+    expect(parsed.givens.filter((item) => item.kind === "equalLength")).toHaveLength(2)
+    expect(
+      parsed.givens.filter((item) => item.kind === "fixedLength").map((item) => [item.targets, item.value])
+    ).toEqual([
+      [["A", "B"], 2],
+      [["A", "C"], 2],
+      [["A", "A₁"], 2]
+    ])
+    expect(parsed.unverified.map((entry) => entry.sourceText)).toEqual([])
+  })
+
+  it("单段与两段写法不受影响：`AB=2` 仍是 fixedLength，`AB=AC` 仍是一条 equalLength", () => {
+    expect(parseDiagramObligations("AB=2").givens.map((item) => item.kind)).toEqual(["fixedLength"])
+    expect(parseDiagramObligations("AB=AC").givens.map((item) => item.kind)).toEqual(["equalLength"])
+  })
+})

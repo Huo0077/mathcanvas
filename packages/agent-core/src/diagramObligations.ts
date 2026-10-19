@@ -1020,6 +1020,32 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     /**
+     * **链式等号**（2026-10-19 联考 `joint-04` / `joint-05`：`∥FE`、`=AA₁` 那种碎片）。
+     *
+     * 此前只读第一对（`AB=AC`），剩下的 `=AA₁` 在残留里变成一条"未核验的条件"；
+     * 带尾巴时更糟 —— `AB=AC=AA₁=2` 会先被**单段长度读取器**吃掉 `AA₁=2`，留一个孤立的 `=`。
+     * 所以这一条必须排在单段读取器**之前**（与"先长的、再短的"同一条纪律）。
+     *
+     * 语义：相邻两段各一条 `equalLength`；链上带数值时，**每一段**都记一条 `fixedLength`
+     * —— `AB=AC=AA₁=2` 说的是三段都等于 2，不是只有最后一段。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME}(?:\\s*=\\s*${SEGMENT_NAME})+)(?:\\s*=\\s*${RADICAL_NUMBER_SOURCE})?`, "g"),
+    read: (m) => {
+      const segments = [...m[1].matchAll(new RegExp(SEGMENT_NAME, "g"))]
+        .map((entry) => names(entry[0]))
+        .filter((pair) => pair.length === 2)
+      if (segments.length < 2) return null
+      const drafts: ObligationDraft[] = []
+      for (let index = 0; index + 1 < segments.length; index += 1) {
+        drafts.push({ kind: "equalLength", targets: [...segments[index]!, ...segments[index + 1]!] })
+      }
+      const value = m[2] === undefined ? null : radicalValue(m[2])
+      if (value !== null) for (const segment of segments) drafts.push({ kind: "fixedLength", targets: segment, value })
+      return drafts
+    }
+  },
+  {
+    /**
      * **`AD=2AB=2`：倍数 + 后置长度，一次给两条判据**（2026-10-10 用户现场）。
      *
      * 用户把同一件事写全时会带上长度（`设 AD=2AB=2（即 AB=BC=1, AD=2）`）。原先只认前半截的
