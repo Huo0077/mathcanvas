@@ -29,8 +29,11 @@ import { describe, expect, it } from "vitest"
 const ALLOWED = (file: string): boolean => {
   const normalized = path.normalize(file).replace(/\\/g, "/")
   if (normalized === "docs/current-status.md") return true
-  // 审查取证目录：`audit-20261016/functional-review.md` 这类保存的是**当时**的快照，属于证据。
-  return normalized.split("/").some((segment) => segment.startsWith("audit-"))
+  // 审查取证目录：`audit-20261016/functional-review.md` 这类保存的是**当时**的快照，属于证据；
+  // `docs/audit/` 里的审查报告会**引用**检查点块的原文（作为证据引用），同样不该判红。
+  return normalized
+    .split("/")
+    .some((segment) => segment === "audit" || segment.startsWith("audit-"))
 }
 
 function trackedMarkdown(): string[] {

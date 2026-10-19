@@ -1,6 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-Updated: 2026-10-11 (**四家族真题驱动升级仅调研与文档设计**；默认 Agent/自动 Lean 仍未放行)。[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)本轮已完成；[下一步 Agent 实施/进度](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列合同/预算、图形意图、四族构造、旧能力兼容、Lean 证明边界及现存 bug 的独立验收，不把旧 8×3/3 条 provider 小样本当四族真题 pass@k。最新 22:36 用户原题仍因开放面/未知动作修复失败；逐项现状和证据看[当前状态](../current-status.md)。
+Updated: 2026-10-11 (**四家族真题驱动升级仅调研与文档设计**；默认 Agent/自动 Lean 仍未放行)。**2026-10-20 勘误：下面"Task 1→21 的现行计分镜像"那张表的"现在"列已按[发布门禁](agent-release-gate.md)更新（Task 1–19 已完成、20 免授权部分完成、21 未放行）；本行日期只表示当时那份快照，不代表表里还是 10-11 的判定。**[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)本轮已完成；[下一步 Agent 实施/进度](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列合同/预算、图形意图、四族构造、旧能力兼容、Lean 证明边界及现存 bug 的独立验收，不把旧 8×3/3 条 provider 小样本当四族真题 pass@k。最新 22:36 用户原题仍因开放面/未知动作修复失败；逐项现状和证据看[当前状态](../current-status.md)。
 
 > **这张表只列"门槛与能力对照"。** 具体读数与各阶段做到哪一步，**以
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
