@@ -198,10 +198,10 @@ describe("tool inputs reuse the actual plan parser", () => {
     expect(scene.ok).toBe(true)
     if (scene.ok) expect(scene.value).toMatchObject({ inputs: { solidId: { documentId: "doc-1", entityId: "solid-1" } } })
 
-    // 裸字符串 / 不带作用域的对象都不是合法引用 —— 拒绝的理由要说得出是"引用没作用域"。
+    // 裸字符串按 draft 别名收下；不带作用域的对象仍拒绝（下一支）。
     const bare = parseActionToolInput("derived.create_circumsphere", { alias: "O", solidId: "solid-1" }, "step-sphere-der3")
-    expect(bare.ok).toBe(false)
-    if (!bare.ok) expect(bare.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: "tool.inputs.solidId" })]))
+    expect(bare.ok).toBe(true)
+    if (bare.ok) expect(bare.value.inputs).toMatchObject({ solidId: { scope: "draft", alias: "solid-1" } })
   })
 
   it("rejects an unscoped object reference before staging a draft", () => {

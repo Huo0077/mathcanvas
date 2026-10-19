@@ -22,7 +22,7 @@
 | ID | Part | 问题 / 目标 | 优先级 | 状态 | 验收 |
 |---|---|---|---|---|---|
 | P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | open | 12 道样本中题设全过 ≥ 3；坐标类失败不再是首因 |
-| P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | partial | scoped 提示、线段后移、0° 安全默认已落地；其余契约错误仍 open |
+| P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认已落地；对象缺 scope 仍拒绝 |
 | P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | partial | 顺序 + 0° 已能一次清洗；坐标与其他多缺陷组合仍 open |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | open | 格式修复或原生工具通道；12 道格式失败 ≤ 1 |
 | P1-5 | 1 | 模型路由：`deepseek-chat` 实际是 flash；v4-pro 可用但慢 | P0 | open | 完成 A/B 并定默认档位；记录延迟/成本 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：411 文件 / 4772 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：412 文件 / 4774 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -68,8 +68,14 @@
 
 - 新增纯函数 `normalizeGeometryPrompt`（`latexNormalisation.ts`）：处理 `$`、`\triangle`、`\angle`、`\sqrt`、`\frac`、`\perp`、`\parallel`、`\circ`、`\overrightarrow`、上下标与数据集 OCR 错字（`棱雉→棱锥`）。
 - 解析入口 `parseObligationWithLegacy` / `parseObligationIR` 统一先归一化；`planCompiler` 的 `verifyExplicitCubeRequest` / `validateRelations` 也读归一化题面，模型改写与 span 仍走原文。
-- 回归：`latexNormalisation.test.ts` 4 条 + `planCompiler.witnessFold.test.ts` 的原始 LaTeX 端到端 1 条；全量 411 文件 / 4772 通过 + 1 todo。
+- 回归：`latexNormalisation.test.ts` 4 条 + `planCompiler.witnessFold.test.ts` 的原始 LaTeX 端到端 1 条；全量 412 文件 / 4774 通过 + 1 todo。
 - **边界**：只做确定性替换，不猜题意；OCR 的更广泛错字仍归 P5-2；尚未用 12 道原始 LaTeX 重跑 parse rate。
+
+## 2026-10-19 P1-2 进展
+
+- `readScopedReference` 接受**裸字符串**并补成 `{scope:"draft",alias}`；场景引用仍然必须带 `documentId`/`entityId`，只给 `{entityId}` 的对象继续按 `unscoped_reference` 拒绝。
+- 回归：`schemas.test.ts` 的 draft action 解析、`planCompiler.bareAlias.test.ts` 的端到端绑定；全量 412 文件 / 4774 通过 + 1 todo。
+- **边界**：别名不存在时由编译器报 `alias_missing`；不再把“裸字符串”整轮拒掉，但仍不猜作用域。
 
 ## 建议执行顺序
 

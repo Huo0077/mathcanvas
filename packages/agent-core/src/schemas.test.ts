@@ -236,6 +236,23 @@ describe("draft action parsing", () => {
     if (result.ok) expect(result.value.actionKey).toBe("create-solid")
   })
 
+  /**
+   * **裸别名自动补成 draft 作用域**（2026-10-19，P1-2）。模型反复把 `host` 写成 `"quad"`，
+   * 传输层原先整轮拒绝；裸字符串只可能是草稿别名（场景引用必须带 documentId/entityId），
+   * 这里按 draft 作用域收下，找不到别名时由编译器报 `alias_missing`。
+   */
+  it("scopes a bare draft alias in a reference field", () => {
+    const result = parseDraftAction({
+      actionId: "dynamic.create_bound_point",
+      actionKey: "bound-e",
+      factIds: [],
+      inputs: { alias: "E", label: "E", host: "quad", parameter: 0.5 }
+    })
+
+    expect(result.ok, result.ok ? "" : JSON.stringify(result.errors)).toBe(true)
+    if (result.ok) expect(result.value.inputs).toMatchObject({ host: { scope: "draft", alias: "quad" } })
+  })
+
   it("rejects a raw domain operation masquerading as an action", () => {
     expectRejected(parseDraftAction({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 0, y: 0 } }), "unknown_action")
   })

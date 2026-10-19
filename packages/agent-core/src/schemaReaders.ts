@@ -121,8 +121,9 @@ export function optionalFiniteNumber(value: unknown, path: string, errors: Parse
  *
  * ## 为什么返回值有两种形状（这不是笔误）
  *
- * **输入**只有上面那一种写法 —— 只给 `entityId` 的裸引用一律 `unscoped_reference`，
- * 因为"名字不是 ID"（设计规格 §6）。**输出**必须与**动作层真正读的字段**逐字一致，
+ * **输入**接受两种写法：作用域对象，或**裸字符串**（按 `{scope:"draft",alias}` 收下）。
+ * 只给 `entityId` 的对象仍一律 `unscoped_reference`，因为"名字不是 ID"（设计规格 §6），
+ * 而场景引用必须同时给 `documentId` 与 `entityId`。**输出**必须与**动作层真正读的字段**逐字一致，
  * 而动作层在这两类引用上是不同的：
  *
  * - `scope:"draft"` 的别名不在 `inputs` 里解析，而是由编译器经 `idAllocator` 换成真 id，
@@ -142,6 +143,16 @@ export function optionalFiniteNumber(value: unknown, path: string, errors: Parse
  * 与去重都照旧执行，变的只是"交给下一层时写哪个形状"。
  */
 export function readScopedReference(value: unknown, path: string, errors: ParseError[]): unknown | null {
+  /**
+   * **裸字符串按 draft 别名收下**（2026-10-19，P1-2）。模型反复把 `host` 写成 `"quad"`；
+   * 场景引用必须带 `documentId`/`entityId`，所以裸字符串只可能是草稿别名。这里补成
+   * `{scope:"draft",alias}`；找不到别名时由编译器报 `alias_missing`，不再整轮拒绝。
+   * 只给 `{entityId}` 的对象仍然按 `unscoped_reference` 拒绝（下面那一支）。
+   */
+  if (typeof value === "string") {
+    const alias = boundedString(value, path, errors)
+    return alias === null ? null : { scope: "draft", alias }
+  }
   if (!isPlainObject(value)) {
     errors.push(fail("invalid_type", path, "expected an object"))
     return null
