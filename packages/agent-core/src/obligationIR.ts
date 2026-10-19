@@ -7,6 +7,7 @@ import {
   type DiagramParseOptions
 } from "./diagramObligations"
 import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance } from "./claimEvidence"
+import { normalizeGeometryPrompt } from "./latexNormalisation"
 
 /**
  * **统一数学状态 IR**（设计 2026-10-04 §3；Phase N1）。
@@ -256,13 +257,13 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
 
 /** 一次解析，同时拿到旧结构（核验器要吃它）与新 IR（trace / UI / 后续阶段要吃它）。 */
 export function parseObligationWithLegacy(prompt: string, options: DiagramParseOptions = {}): { legacy: DiagramObligationSet; ir: ObligationIR } {
-  const legacy = parseDiagramObligations(prompt, options)
+  const legacy = parseDiagramObligations(normalizeGeometryPrompt(prompt), options)
   return { legacy, ir: buildObligationIR(legacy) }
 }
 
 /** 只要 IR 的便捷入口（语义与 `buildObligationIR(parseDiagramObligations(prompt))` 完全相同）。 */
 export function parseObligationIR(prompt: string): ObligationIR {
-  return buildObligationIR(parseDiagramObligations(prompt))
+  return buildObligationIR(parseDiagramObligations(normalizeGeometryPrompt(prompt)))
 }
 
 /**

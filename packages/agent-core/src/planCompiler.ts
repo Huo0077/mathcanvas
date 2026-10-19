@@ -22,6 +22,7 @@ import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
+import { normalizeGeometryPrompt } from "./latexNormalisation"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
@@ -605,9 +606,11 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || promptText === undefined
     ? promptText
     : applyNormalisation(promptText, normalisation.accepted)
+  /** 解析/核验只看归一化题面；模型改写与 span 仍走 `effectivePrompt`。 */
+  const parserPrompt = effectivePrompt === undefined ? undefined : normalizeGeometryPrompt(effectivePrompt)
 
-  diagnostics.push(...verifyExplicitCubeRequest(compiledActions, effectivePrompt))
-  diagnostics.push(...validateRelations(plan, effectivePrompt))
+  diagnostics.push(...verifyExplicitCubeRequest(compiledActions, parserPrompt))
+  diagnostics.push(...validateRelations(plan, parserPrompt))
   /**
    * **原话清单的解析入口在这里收成一个**（Phase N1）：`parseObligationWithLegacy` 同时给出
    * 旧结构（核验器要吃它）与统一 IR（trace / UI / N2 要吃它），所以"解析一次、两种形状"
@@ -615,8 +618,8 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    *
    * 这里读的是 `effectivePrompt`（原文，或规范化之后的题面）—— 两处都只有这一个来源。
    */
-  const obligationParse = effectivePrompt && planHasVerifiableFigure(compiledActions)
-    ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
+  const obligationParse = parserPrompt && planHasVerifiableFigure(compiledActions)
+    ? parseObligationWithLegacy(parserPrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
     ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true }) : undefined

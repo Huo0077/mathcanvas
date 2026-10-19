@@ -38,7 +38,7 @@
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | open | 一次清洗 + 多类救援组合；与 P1-3 共用验收 |
 | P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | open | UI 明确标“未核验”；可配置 fail-closed |
 | P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | open | 至少两条渲染判据 + 诊断文案 |
-| P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | open | 归一化管线 + 12 道题 parse rate 可复现 |
+| P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 纯函数 `normalizeGeometryPrompt` 已接入解析入口；待用 12 道原始 LaTeX 复测 parse rate |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | open | 常见错字/符号表 + 回归 |
 | P5-3 | 5 | 欠定题默认特殊值（等边/等腰/整数） | P1 | open | 通用非退化采样或显式“选择一般位置”策略 |
 | P6-1 | 6 | 旧图删除被 `AF` 线段挡住；绑定点按语义降级 | P2 | open | 删除级联或 UI 选择策略；回归覆盖“整图删除” |
@@ -55,14 +55,21 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：410 文件 / 4767 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：411 文件 / 4771 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
 - 新增 `rescueWithStructuralRepairs`：在同一份计划上先移走引用未建点的线段，再把不在 `(0°,180°]` 的折角按安全默认 `90°` 回填，然后才编译；90° 仍会交给折角反求，最终仍由题设核验。
 - 回填会写进 `assumptions`（`default-fold-angle.<apexAs>`，可覆盖），不是静默改值。
-- 回归：`planCompiler.witnessFold.test.ts` 新增“顺序 + 0°”和“0° 无目标角”两例，共 6 条通过；全量 410 文件 / 4767 通过 + 1 todo。
+- 回归：`planCompiler.witnessFold.test.ts` 新增“顺序 + 0°”和“0° 无目标角”两例，共 6 条通过；全量 411 文件 / 4771 通过 + 1 todo。
 - **边界**：真实 provider 的 user-quad-fold 当轮仍因模型坐标错误失败（CD/AD/角度不符），这不是结构清洗器能修的，仍归 P1-1/P5-1。
+
+## 2026-10-19 P5-1 进展
+
+- 新增纯函数 `normalizeGeometryPrompt`（`latexNormalisation.ts`）：处理 `$`、`\triangle`、`\angle`、`\sqrt`、`\frac`、`\perp`、`\parallel`、`\circ`、`\overrightarrow`、上下标与数据集 OCR 错字（`棱雉→棱锥`）。
+- 解析入口 `parseObligationWithLegacy` / `parseObligationIR` 统一先归一化；`planCompiler` 的 `verifyExplicitCubeRequest` / `validateRelations` 也读归一化题面，模型改写与 span 仍走原文。
+- 回归：`latexNormalisation.test.ts` 4 条通过；全量 411 文件 / 4771 通过 + 1 todo。
+- **边界**：只做确定性替换，不猜题意；OCR 的更广泛错字仍归 P5-2；尚未用 12 道原始 LaTeX 重跑 parse rate。
 
 ## 建议执行顺序
 

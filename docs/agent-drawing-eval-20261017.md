@@ -67,7 +67,7 @@
 
 ## 八、门禁
 
-- 全量单测：**410 文件 / 4767 通过 + 1 todo**。
+- 全量单测：**411 文件 / 4771 通过 + 1 todo**。
 - `npm run typecheck`：exit 0。
 - `npm run lint`：**0 error / 15 warning**。
 
