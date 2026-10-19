@@ -54,8 +54,8 @@ const EXPECTED_HASHES: Record<string, string> = {
   /** 2026-10-10 重签：再加 `solid.create_face`（立体工作区里的**平面多边形 / 面片** —— "平面四边形 + 翻折片"这类开放曲面原先没有入口）。 */
   /** 2026-10-11 重签：再加 `solid.fold`（用户现场那句「将三角形AEF沿EF翻折至三角形PEF」连发 7 次都不通；折后的坐标由内核旋转算，模型不再手算）。 */
   /** 2026-10-15 重签：再加 `solid.create_segment`（用户现场：立体里"两点连成一条线段"**没有动作** —— 模型只能拿 `planar.create_segment` 凑，而那条落在 `z=0` 上）。 */
-  /** 2026-10-19 重签：再加 `solid.create_point`（P2-1 自由空间点）。 */
-  "spatial-modeling": "77324beb9c1b5b6c39cdcab6cfe4f9f69962fdcb3c4a6700eac37c1840ece1e5",
+  /** 2026-10-19 重签：再加 `solid.create_point` / `solid.create_reflection`（P2-1 原子算子）。 */
+  "spatial-modeling": "09ffbdbd5029dbc2f9f75ae784caa17238ed6299fab070586797fb9db730290d",
   "sections-intersections": "fd8e09ed0e1cedc332b61391d8c831c8064277eb4979a6d2d61e35c417aea8e9",
   "engineering-drawing": "da543684eba13b401042859ebedb67f1d92296d0dbbe32f248846cbd1a5fd50e",
   "image-evidence": "2808d6bb4d56335a4dc33ea57eaace75d776d7bad27b51dcbaff2a41e0f2fa3d",

@@ -180,7 +180,7 @@
 
 - 新增 `solid.create_point`：自由空间点，输入 `position {x,y,z}` + 可选 `label`，物化为 `point3`。
 - 新增 `solid.create_reflection`：源点 + 平面三个点名（`planePoints`），内核算对称点；字段名避开 `section.create.plane`。
-- 动作总数 38 → 39；CAPABILITY 分类已补，skills actionIds 暂不广告（catalogue 哈希不变）。
+- 动作总数 38 → 39；`solid.create_reflection` 已加入 spatial-modeling 的 actionIds 与摘要，catalogue 哈希重签；runtime 期望列表同步。
 - 回归：`solidPoint.test.ts` 2 条 + `solidReflectionAction.test.ts` 2 条；全量 444 文件 / 4830 通过。
 - 仍 open：旋转、平移、求交、投影。
 
