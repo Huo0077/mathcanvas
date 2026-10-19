@@ -842,3 +842,50 @@ describe("链式等号：AB=AC=AA₁", () => {
     expect(parseDiagramObligations("AB=AC").givens.map((item) => item.kind)).toEqual(["equalLength"])
   })
 })
+
+/**
+ * **没有判据的条件至少要显形**（2026-10-20，探针扫出来的第二类静默丢失）。
+ *
+ * 探针把常见条件家族逐个喂进解析器，发现一批**既不产判据、也不落未核验**的写法：
+ * 不等式（`AB>CD` / `AB≠CD`）、全等/相似（`≌` / `∽`）、直径（`AB 是⊙O 的直径`）、
+ * 交点（`AB 与 CD 交于点 P`）、心（`O 为△ABC 的重心`）、四边形类型（`矩形`）。
+ * 它们今天**没有判据** —— 那没问题，但**不能消失**：用户看不到，门禁也不报。
+ *
+ * 正三角形是另一类：`equilateral` 判据早就有，只是读取器只认"等边三角形"，不认"正三角形"。
+ */
+describe("静默丢失：没有判据的条件至少要显形", () => {
+  const isSilent = (prompt: string): boolean => {
+    const parsed = parseDiagramObligations(prompt)
+    return parsed.givens.length === 0 && parsed.unverified.length === 0
+  }
+
+  it("不等式 `AB>CD` / `AB≠CD` 不许消失", () => {
+    expect(isSilent("AB>CD")).toBe(false)
+    expect(isSilent("AB≠CD")).toBe(false)
+  })
+
+  it("全等 / 相似 `△ABC ≌ △DEF` / `△ABC ∽ △DEF` 不许消失", () => {
+    expect(isSilent("△ABC ≌ △DEF")).toBe(false)
+    expect(isSilent("△ABC ∽ △DEF")).toBe(false)
+  })
+
+  it("直径 `AB 是⊙O 的直径` 不许消失", () => {
+    expect(isSilent("AB 是⊙O 的直径")).toBe(false)
+  })
+
+  it("交点 `AB 与 CD 交于点 P` 不许消失", () => {
+    expect(isSilent("AB 与 CD 交于点 P")).toBe(false)
+  })
+
+  it("心 `O 为△ABC 的重心` 不许消失", () => {
+    expect(isSilent("O 为△ABC 的重心")).toBe(false)
+  })
+
+  it("四边形类型 `四边形 ABCD 是矩形` 不许消失", () => {
+    expect(isSilent("四边形 ABCD 是矩形")).toBe(false)
+  })
+
+  it("**能读的就读出来**：`△ABC 是正三角形` ⇒ equilateral（正三角形 = 等边三角形）", () => {
+    expect(parseDiagramObligations("△ABC 是正三角形").givens.find((item) => item.kind === "equilateral")?.targets).toEqual(["A", "B", "C"])
+  })
+})

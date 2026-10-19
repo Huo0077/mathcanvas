@@ -923,7 +923,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
   {
-    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*等边三角形`, "g"),
+    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*(?:等边|正)三角形`, "g"),
     read: (m) => {
       const targets = names(m[1])
       const side = m[2] === undefined ? null : finitePositive(m[2])
@@ -1189,7 +1189,7 @@ function radicalValue(text: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?|(?:锐角|直角|钝角)三角形/g
+const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?|(?:锐角|直角|钝角)三角形|[A-Z]{2}\s*[>＜<≠≥≤]\s*[A-Z]{2}|直径|[≌∽]|重心|垂心|矩形|交于点/g
 
 /**
  * **曲线方程的形状**：**小写** `x` / `y` 后面跟平方（`x²` / `x^2` / `y²`）。
