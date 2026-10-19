@@ -20,6 +20,7 @@ import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
+import { constructSquarePyramid } from "./solver/pyramid"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
@@ -380,6 +381,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const tetrahedron = rescueWithTetrahedronEdges(context, first)
   if (tetrahedron !== null) return tetrahedron
+  const pyramid = rescueWithSquarePyramid(context, first)
+  if (pyramid !== null) return pyramid
   /**
    * **题面说要折、计划里却没有折**：按题面补上那一笔（选项②，2026-10-15）。
    *
@@ -1915,6 +1918,80 @@ function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileO
       text: "六条棱长由解析构造给出坐标（不是模型心算）；最终仍按题设核验。",
       kind: "witness",
       value: { apex: shape.apex, base: shape.base, measures },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **正方形底四棱锥的解析构造**（2026-10-19，P1-1，solid-10）。
+ *
+ * 题面：四棱锥 P-ABCD，底面正方形，AB=a，PC=PD=r，∠PCA=θ。坐标由
+ * `constructSquarePyramid` 解出；这里只负责识别构型、取参数、重编核验。
+ */
+function rescueWithSquarePyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  if (!prompt.includes("正方形")) return null
+  const shape = /四棱锥\s*([A-Z])\s*-\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
+  if (shape === null) return null
+  const apex = shape[1]!
+  const base = [shape[2]!, shape[3]!, shape[4]!, shape[5]!] as const
+
+  const lengths = new Map<string, number>()
+  for (const obligation of first.obligations.ir.obligations) {
+    if (obligation.kind !== "fixedLength" || obligation.targets.length !== 2 || typeof obligation.expected !== "number") continue
+    lengths.set(pairKey(obligation.targets[0]!, obligation.targets[1]!), obligation.expected)
+  }
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[5]!)
+    if (value === null) continue
+    lengths.set(pairKey(match[1]!, match[2]!), value)
+    lengths.set(pairKey(match[3]!, match[4]!), value)
+  }
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[3]!)
+    if (value !== null) lengths.set(pairKey(match[1]!, match[2]!), value)
+  }
+  const lengthOf = (left: string, right: string): number | undefined => lengths.get(pairKey(left, right))
+  const side = lengthOf(base[0], base[1])
+  const apexToC = lengthOf(apex, base[2])
+  const apexToD = lengthOf(apex, base[3])
+  if (side === undefined || apexToC === undefined || apexToD === undefined) return null
+  const angle = new RegExp(`∠${apex}${base[2]}${base[0]}\\s*=\\s*([0-9.]+)°`).exec(prompt)
+  if (angle === null) return null
+  const anglePcaDegrees = Number(angle[1])
+  const points = constructSquarePyramid({ side, apexToC, apexToD, anglePcaDegrees })
+  if (points === null) return null
+
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由底面正方形与顶点距离/角度构造的四棱锥",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "square-pyramid",
+      factIds: [],
+      inputs: {
+        alias: "square-pyramid",
+        vertexNames: [base[0], base[1], base[2], base[3], apex],
+        vertices: [points.a, points.b, points.c, points.d, points.p],
+        faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.squarePyramid",
+      text: "由底面正方形、PC=PD 与 ∠PCA 解析构造顶点坐标；最终仍按题设核验。",
+      kind: "witness",
+      value: { apex, base, side, apexToC, apexToD, anglePcaDegrees },
       overridable: true,
       path: "envelope.actions[0].inputs.vertices"
     }],
