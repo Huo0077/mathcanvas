@@ -815,6 +815,17 @@ function polygonArea3(points: readonly Vector3[]): number | null {
   return double > 1e-12 ? double : null
 }
 
+/** 点到**线段**的距离（垂足在段外时取到最近端点的距离）—— 内心那条判据就靠这个区别。 */
+function pointToSegment(point: Vector3, from: Vector3, to: Vector3): number {
+  const alongX = to.x - from.x
+  const alongY = to.y - from.y
+  const squared = alongX * alongX + alongY * alongY
+  if (!(squared > 1e-18)) return Math.hypot(point.x - from.x, point.y - from.y)
+  const t = ((point.x - from.x) * alongX + (point.y - from.y) * alongY) / squared
+  const clamped = Math.min(1, Math.max(0, t))
+  return Math.hypot(point.x - (from.x + clamped * alongX), point.y - (from.y + clamped * alongY))
+}
+
 /** 度量的中文名（失败文案要指着它说，用户才知道是哪一条不对）。 */
 const SOLID_DIMENSION_LABEL: Record<NonNullable<DiagramObligation["solid"]>["metric"], string> = {
   radius: "底面半径",
@@ -1402,6 +1413,27 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       detail: `实测半径 ${circle.radius.toPrecision(6)}、两条半径的夹角 ${((radians * 180) / Math.PI).toPrecision(6)}°，劣弧长 ${length.toPrecision(6)}；题设要求弧长 ${numeric}。`
     }
   }
+  if (item.kind === "incenter") {
+    /**
+     * **内心**（2026-10-20）：到**三条边**（线段）等距。
+     *
+     * 量线段而不是量直线，是这条判据的关键：`A`-旁心到三条**直线**的距离同样相等
+     * （都是旁切圆半径），但它的两条垂足落在边的**延长线**上 —— 量线段时这两条距离会变大，
+     * 于是"旁心冒充内心"自然判成不满足，不需要另加一条"点在三角形内"的布尔。
+     */
+    if (item.targets.length !== 4) return null
+    const center = at(0)
+    const distances = [pointToSegment(center, at(1), at(2)), pointToSegment(center, at(2), at(3)), pointToSegment(center, at(3), at(1))]
+    if (distances.some((value) => !Number.isFinite(value))) return null
+    const min = Math.min(...distances)
+    const max = Math.max(...distances)
+    return {
+      actual: max - min,
+      expected: 0,
+      tolerance: distanceTolerance(Math.max(max, 1)),
+      detail: `实测 ${item.targets[0]} 到 ${item.targets[1]}${item.targets[2]}、${item.targets[2]}${item.targets[3]}、${item.targets[3]}${item.targets[1]} 三条边的距离分别是 ${distances.map((value) => value.toPrecision(6)).join("、")}；题设要求它是内心（到三条边等距）。`
+    }
+  }
   if (item.kind === "angleBisector") {
     /**
      * **角平分线**（2026-10-20）：`targets = [D, A, B, C]`，`A` 是顶点、`AD` 是那条平分线。
@@ -1648,6 +1680,14 @@ export function statedOriginNames(set: DiagramObligationSet, drawn: { has(name: 
     if (item.kind === "pointCoordinate" || item.kind === "midpoint") return item.targets[0] === ORIGIN_POINT_NAME
     // 分点那一类：`O` 是不是"被算出来的那个点"由内核那一处判据说了算（不另写一套）。
     if (item.kind === "segmentRatio") return ratioParameterFor(item.targets, ORIGIN_POINT_NAME, item.value).ok
+    /**
+     * **纯几何里被"定义"出来的 `O` 不吃这个约定**（2026-10-20，内心那条判据暴露出来的）：
+     * `O 是 △ABC 的内心` / `AD 平分 ∠BOC` 里的 `O` 是**题面自己定义的一个点**，
+     * 不是解析几何里"坐标为原点的那个 O"。按约定把它补成原点会让"图上没有 O"变成
+     * **一个看起来合理、其实是编出来的坐标** —— 那正好是这条约定最不该伸手的地方。
+     * 这几族一律如实报"点名缺失"。
+     */
+    if (item.kind === "incenter" || item.kind === "angleBisector") return item.targets.includes(ORIGIN_POINT_NAME)
     return false
   })
   return definedByPrompt ? [] : [ORIGIN_POINT_NAME]
