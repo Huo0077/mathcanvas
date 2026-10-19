@@ -770,3 +770,39 @@ describe("函数与直线的交点个数", () => {
     expect(parsed.unverified.some((item) => item.sourceText.includes("相交"))).toBe(true)
   })
 })
+
+/**
+ * **三角形类型与中点：常见写法不能静默消失**（2026-10-20，联考 `joint-19` 那一类）。
+ *
+ * 探针抓到两件事：
+ * 1. `△ABC 为直角三角形` —— ABC 与「为」之间**有一个空格**，三条三角形类型读取器都要求紧贴，
+ *    于是整句**既不产判据、也不落未核验**（残留扫描器的触发词表里没有"直角三角形"）。
+ *    这是本仓最忌讳的"静默丢掉一条题设"。
+ * 2. `M 为线段 AB 的中点` 带「线段」量词、`AB 的中点为 M` 把点写在后面 —— 中点读取器都不收。
+ */
+describe("三角形类型与中点：常见写法", () => {
+  it("`△ABC 为直角三角形`（带空格）⇒ rightTriangle，且**不静默消失**", () => {
+    const parsed = parseDiagramObligations("△ABC 为直角三角形")
+    expect(parsed.givens.find((item) => item.kind === "rightTriangle")?.targets).toEqual(["A", "B", "C"])
+    expect(parsed.unverified.map((entry) => entry.sourceText)).toEqual([])
+  })
+
+  it("钝角 / 锐角三角形的空格写法同样读得出", () => {
+    expect(parseDiagramObligations("△ABC 为钝角三角形").givens.some((item) => item.kind === "obtuseTriangle")).toBe(true)
+    expect(parseDiagramObligations("△ABC 为锐角三角形").givens.some((item) => item.kind === "acuteTriangle")).toBe(true)
+  })
+
+  it("`M 为线段 AB 的中点`（带「线段」量词）⇒ midpoint[M, A, B]", () => {
+    expect(parseDiagramObligations("M 为线段 AB 的中点").givens.find((item) => item.kind === "midpoint")?.targets).toEqual(["M", "A", "B"])
+  })
+
+  it("`AB 的中点为 M`（点写在后面）⇒ midpoint[M, A, B]", () => {
+    expect(parseDiagramObligations("AB 的中点为 M").givens.find((item) => item.kind === "midpoint")?.targets).toEqual(["M", "A", "B"])
+  })
+
+  it("垂直的**文字写法**也读得出：`AC 与 BC 垂直` / `AC 垂直于 BC` / `AB 与 CD 平行`", () => {
+    expect(parseDiagramObligations("AC 与 BC 垂直").givens.find((item) => item.kind === "perpendicular")?.targets).toEqual(["A", "C", "B", "C"])
+    expect(parseDiagramObligations("AC 垂直于 BC").givens.find((item) => item.kind === "perpendicular")?.targets).toEqual(["A", "C", "B", "C"])
+    expect(parseDiagramObligations("AB 与 CD 平行").givens.find((item) => item.kind === "parallel")?.targets).toEqual(["A", "B", "C", "D"])
+  })
+})

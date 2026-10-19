@@ -733,15 +733,15 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return expression === null ? null : { kind: "functionGraph", targets: [], expression }
     }
   },  {
-    pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)锐角三角形/g,
+    pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*锐角三角形/g,
     read: (m) => ({ kind: "acuteTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
-    pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)直角三角形/g,
+    pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*直角三角形/g,
     read: (m) => ({ kind: "rightTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
-    pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)钝角三角形/g,
+    pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*钝角三角形/g,
     read: (m) => ({ kind: "obtuseTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
@@ -955,15 +955,29 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * "尚未被可靠解析" ⇒ E、F 两个点谁也没被点名 ⇒ 补点的入口直接断掉。两种量词都收，
      * 但**只收这两个**（`面 AB` / `对角线 AC` 之类的说法要各自有判据才收，不顺手放行）。
      */
-    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => [
       { kind: "midpoint", targets: [m[1], ...names(m[3])] },
       { kind: "midpoint", targets: [m[2], ...names(m[4])] }
     ]
   },
   {
-    pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(?:棱|边)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
+  },
+  {
+    /**
+     * **点写在后面**：`AB 的中点为 M`（2026-10-20 探针，联考 `joint-19` 那一类）。
+     *
+     * 前置量词同样收「线段 / 边 / 棱」。段名前面加 `(?<![A-Z])`：否则
+     * `△ABC 的中点为 M` 会被读成「BC 的中点 M」—— 那是把一个三角形的重心说成一条边的中点。
+     */
+    pattern: new RegExp(`(?<![A-Z])(?:线段|边|棱)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点\\s*(?:为|是)\\s*(${POINT_NAME})`, "g"),
+    read: (m) => {
+      const segment = names(m[1])
+      if (segment.length !== 2) return null
+      return { kind: "midpoint", targets: [m[2]!, segment[0]!, segment[1]!] }
+    }
   },
   {
     /**
@@ -1125,6 +1139,15 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
+  },
+  {
+    /**
+     * **`AC 与 BC 垂直` / `AB 与 CD 平行`**（2026-10-20 探针，联考 `joint-19` 那一类）：
+     * 文字写法把"与"放在两个线段之间、判断词放在最后。与 `AC⊥BC` 是**同一条判据**，
+     * 只是词序不同 —— 不另造判据，只补读取器。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:互相)?(垂直|平行)`, "g"),
+    read: (m) => ({ kind: m[3] === "平行" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[2])] })
   }
 ]
 
@@ -1140,7 +1163,7 @@ function radicalValue(text: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?/g
+const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?|(?:锐角|直角|钝角)三角形/g
 
 /**
  * **曲线方程的形状**：**小写** `x` / `y` 后面跟平方（`x²` / `x^2` / `y²`）。
