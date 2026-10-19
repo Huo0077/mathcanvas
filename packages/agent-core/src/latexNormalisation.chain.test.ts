@@ -19,4 +19,8 @@ describe("expandExamShorthand with subscript names", () => {
     expect(expandExamShorthand("CD=4.已经证明")).toBe("CD=4，已经证明")
     expect(expandExamShorthand("若二面角C-AB-D为150°")).toBe("二面角C-AB-D为150°")
   })
+
+  it("expands an equilateral triangle with an explicit side", () => {
+    expect(expandExamShorthand("△ABC是边长为3的等边三角形")).toBe("AB=3，AC=3，BC=3")
+  })
 })

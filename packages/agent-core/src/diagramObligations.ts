@@ -700,8 +700,18 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
   {
-    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*等边三角形`, "g"),
-    read: (m) => ({ kind: "equilateral", targets: names(m[1]) })
+    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*等边三角形`, "g"),
+    read: (m) => {
+      const targets = names(m[1])
+      const side = m[2] === undefined ? null : finitePositive(m[2])
+      if (targets.length !== 3 || side === null) return { kind: "equilateral", targets }
+      return [
+        { kind: "equilateral", targets },
+        { kind: "fixedLength", targets: [targets[0]!, targets[1]!], value: side },
+        { kind: "fixedLength", targets: [targets[0]!, targets[2]!], value: side },
+        { kind: "fixedLength", targets: [targets[1]!, targets[2]!], value: side }
+      ]
+    }
   },
   {
     /**
@@ -1152,7 +1162,8 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
      * `弦 AB 的长为 3`、`P 是椭圆上任意一点` 同一种病）。这一条今天还**没有读取器**
      *（"点在线段上"要一条新义务 + 一条判据：共线且落在线段内），但**至少不许消失**。
      */
-    if (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition) {
+    const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(leftover.trim())
+    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)/.test(leftover) || unknownPointCondition)) {
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }

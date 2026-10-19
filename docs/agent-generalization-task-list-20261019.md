@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：433 文件 / 4807 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：434 文件 / 4809 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -98,6 +98,7 @@
 - `expandExamShorthand` 支持带下标点名的链式相等（`AB=AA₁=2`）；核验未通过时只用展开题面复跑一次核验（不改原文/span）。solid-32 三连跑 **3/3 passed**。
 - 句读切分（`CD=4.已经` → `CD=4，已经`）与前导 `若` 归一后：solid-20 三连跑 **3/3 passed**，整批 **7/12 全过、0 失败**。
 - 二面角条件接受“为”写法，并修正解析构造的**二面角内角方向**（旋转角 φ 给内角 180−φ）：trig-23 三连跑 **3/3 passed**。
+- “边长为 N 的等边三角形”直接读出三条边；`则 …=.` 这类答案题不再当成已知条件。solid-3 三连跑 **3/3 passed**；整批最佳达到 **8/12 全过、12/12 可画、0 失败**。
 - 新增 `solver/dihedral.ts` + `rescueWithDihedralTriangle`：等腰直角 + 等边 + 二面角的解析构造；trig-23 从“几何失败”变为“可画、未核验”。
 - 回归：`solver/tetrahedron.test.ts` 3 条 + `solver/pyramid.test.ts` 2 条 + `solver/prism.test.ts` 2 条 + `solver/dihedral.test.ts` 2 条 + 四条编译救援；全量 422 文件 / 4791 通过 + 1 todo。
 - **边界**：只覆盖“六棱四面体”“正方形底 + 等距 + 一个底对角角”“右三棱柱”“等腰直角+等边+二面角”四类；其他多面体、半角/二面角约束仍靠模型或后续求解器。
@@ -111,7 +112,7 @@
 | 未核验 | 4 | 6 | 5（另有 2 道无核验） | 4 | 4 |
 | 失败 | 7 / 12 | 4 / 12 | **1 / 12** | 3 / 12 | **0 / 12** |
 
-- 目前稳定通过 8 道：`solid-1`、`solid-9`、`solid-10`、`solid-13`、`solid-20`、`solid-32`、`trig-23`、`user-quad-fold`；整批最新一次 7/12（solid-9 这轮未核验）。
+- 目前稳定通过 9 道：`solid-1`、`solid-3`、`solid-9`、`solid-10`、`solid-13`、`solid-20`、`solid-32`、`trig-23`、`user-quad-fold`；整批最新一次 7/12（solid-3/9 这一轮模型输出方差）。
 - 最近一次（二面角救援后）：`trig-23` 已从“几何失败”变为“可画、未核验”；但 `solid-9/20/32` 因模型输出结构不同失败，生成数从 11 掉到 9。
 - 最新一次（句读切分 + 链式展开 + 规范折片/面环/棱柱/四棱锥救援）：**12/12 全可画、7/12 全过、0 失败**；`solid-9`、`solid-20`、`solid-32` 都已通过。
 - 同一晚还有一次只用 `materialiseFoldHinges` 的整批：7/12 生成、1/12 全过、5/12 失败。
