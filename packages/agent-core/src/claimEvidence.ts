@@ -113,7 +113,7 @@ export interface ObligationGeometry {
    * 「图上唯一那条圆锥曲线是不是题面说的那一种」（`diagramVerification` 的 `pointOnConic` 支）。
    * **只记种类、不记半轴**：那句话里没写半轴，记了就等于给半轴造出第二个来源。
    */
-  conicKind?: "ellipse" | "hyperbola" | "parabola"
+  conicKind?: "ellipse" | "hyperbola" | "parabola" | "circle"
 }
 
 /**

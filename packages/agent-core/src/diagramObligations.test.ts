@@ -492,6 +492,40 @@ describe("命名圆锥曲线：标签冒号不该把方程挡在外面", () => {
   it("**半径平方不为正的不认**：`x²+y²+2x+2y+8=0` 不是圆（虚圆）", () => {
     expect(conicOf("圆 x²+y²+2x+2y+8=0")).toBeUndefined()
   })
+
+  /**
+   * **"曲线过点"**（2026-10-19 联考 `joint-30`：`双曲线过点 A、B`）。
+   *
+   * 这不是曲线**方程**的写法问题，而是一条**条件**：那两个点必须落在这条曲线上。
+   * 判据层已经有"点到圆锥曲线的残差"（`pointOnConic`），所以这里只需要一个读取器 ——
+   * 每个点名各读成一条 `pointOnConic`（判据只处理一个点，一条义务对一个点最干净）。
+   */
+  it("`椭圆过点 P、Q` ⇒ 两条 pointOnConic（各一个点名、曲线种类是椭圆）", () => {
+    const parsed = parseDiagramObligations("椭圆过点 P、Q")
+    const onConic = parsed.givens.filter((given) => given.kind === "pointOnConic")
+    expect(onConic.map((given) => [given.targets, given.conicKind])).toEqual([
+      [["P"], "ellipse"],
+      [["Q"], "ellipse"]
+    ])
+  })
+
+  it("`双曲线经过点 A 和 B` 同样读得出；`直线过点 A` **不**读成曲线条件（主语不是曲线）", () => {
+    const hyperbola = parseDiagramObligations("双曲线经过点 A 和 B")
+    expect(hyperbola.givens.filter((given) => given.kind === "pointOnConic").map((given) => given.targets)).toEqual([["A"], ["B"]])
+
+    const line = parseDiagramObligations("过点 A 作直线 l")
+    expect(line.givens.some((given) => given.kind === "pointOnConic")).toBe(false)
+  })
+
+  it("曲线名与「过」之间夹着**方程**也读得出；但没有等号的那半句不读（防误读）", () => {
+    // 方程夹在中间：`椭圆 x²/9+y²/4=1 过点 P、Q`
+    const withEquation = parseDiagramObligations("椭圆 x²/9+y²/4=1 过点 P、Q")
+    expect(withEquation.givens.filter((given) => given.kind === "pointOnConic").map((given) => given.targets)).toEqual([["P"], ["Q"]])
+
+    // 同一句里"椭圆内有一点 P"与"过点 P 作直线"是**两件事**，不能读成"P 在椭圆上"。
+    const notOnCurve = parseDiagramObligations("椭圆内有一点 P，过点 P 作直线 l")
+    expect(notOnCurve.givens.some((given) => given.kind === "pointOnConic")).toBe(false)
+  })
 })
 
 /**

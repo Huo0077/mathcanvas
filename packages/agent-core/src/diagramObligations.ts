@@ -125,7 +125,7 @@ export interface DiagramObligation {
    * `pointOnConic` 专用：题面那句里写的**是哪一种**圆锥曲线（`P 是椭圆上一点` ⇒ `"ellipse"`）。
    * 只记种类，不记半轴 —— 那句话里没有半轴，记了就是给半轴造出第二个来源。
    */
-  conicKind?: "ellipse" | "hyperbola" | "parabola"
+  conicKind?: "ellipse" | "hyperbola" | "parabola" | "circle"
   /** `conicChord` 专用：题面写下的那条直线。 */
   line?: DiagramStatedLine
   /** `conicChord` 专用：题面声称的交点情形（**代数重数**那一套，与 `intersectLineWithConic` 的档位同名）。 */
@@ -168,6 +168,14 @@ interface Matcher {
    * 别的读取器照旧被挡住 —— 拆掉整条守卫会让比例写法立刻读错。
    */
   allowAfterLabelColon?: boolean
+  /**
+   * 允许这一条的匹配**跨过别的读取器已经吃掉的字符**（默认不允许）。
+   *
+   * 目前只有"曲线过点"需要它：`椭圆 x²/9+y²/4=1 过点 P、Q` 这一句里，方程那一段已经被
+   * 椭圆读取器用掉，而"过点"条件必须**带着前面的曲线名**才读得出种类 —— 两段天然重叠。
+   * 标记仍然照做（幂等），所以残留扫描不会把这一句再报成未核验。
+   */
+  allowOverlap?: boolean
 }
 
 export interface DiagramParseOptions { spatialPointConditions?: boolean }
@@ -486,6 +494,31 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     pattern: /x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)\s*([^=]*)=\s*(-?\d+(?:\.\d+)?)(?![\d.])/g,
     allowAfterLabelColon: true,
     read: (m) => circleFromGeneralEquation(m[1] ?? "", Number(m[2]))
+  },
+  {
+    /**
+     * **曲线过点**（2026-10-19 联考 `joint-30`：`双曲线过点 A、B`）。
+     *
+     * 这不是曲线**方程**的写法，而是一条**条件**：那几个点必须落在这条曲线上。判据层
+     * 已经有"点到圆锥曲线的残差"（`pointOnConic`，内核 `conicResidualAt`），所以这里只需要
+     * 一个读取器，**不为它新造判据**。
+     *
+     * 一条义务对一个点：`pointOnConic` 的判据只处理 `targets[0]`（读一半比读不出更坏），
+     * 所以两个点名就产出两条义务 —— 哪一点不在曲线上，报告里就红哪一条。
+     *
+     * **不收**"过点 A 作直线"：那句的主语是直线，不是曲线。正则要求**曲线名在前**，
+     * 所以没有主语的祈使句不会被误读成"曲线过点"。
+     */
+    pattern: new RegExp(`(椭圆|双曲线|抛物线|圆)\\s*(?:[A-Z]\\s*)?(?:[^，。；,;]{0,40}?[=＝][^，。；,;]{0,12}?)?(?:经过|过)\\s*(?:点\\s*)?(${POINT_NAME})(?:\\s*[、,，和与]\\s*(?:点\\s*)?(${POINT_NAME}))?`, "g"),
+    allowOverlap: true,
+    read: (m) => {
+      const first = names(m[2] ?? "")
+      const second = m[3] === undefined ? [] : names(m[3])
+      if (first.length !== 1 || second.length > 1) return null
+      const kind: "ellipse" | "hyperbola" | "parabola" | "circle" =
+        m[1] === "椭圆" ? "ellipse" : m[1] === "双曲线" ? "hyperbola" : m[1] === "抛物线" ? "parabola" : "circle"
+      return [...first, ...second].map((name) => ({ kind: "pointOnConic" as const, targets: [name], conicKind: kind }))
+    }
   },
   {
     /**
@@ -1189,7 +1222,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   const used = new Set<number>()
 
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
-  for (const { pattern, read, allowAfterLabelColon } of matchers) {
+  for (const { pattern, read, allowAfterLabelColon, allowOverlap } of matchers) {
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       const end = start + match[0].length
@@ -1200,7 +1233,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       }
       const next = /^\s*(\S)/.exec(givenText.slice(end))?.[1]
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
-      if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
+      if (!allowOverlap && Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
       const result = read(match)
       // 一个句型可以蕴含多条判据（`底面ABCD是菱形` ⇒ 三条等长），所以读取器允许返回数组。
       const drafts = result === null ? [] : Array.isArray(result) ? result : [result]
