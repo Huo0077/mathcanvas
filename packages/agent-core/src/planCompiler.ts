@@ -2896,6 +2896,15 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
    * `solid.create_polyhedron` 去拼一只**开放**的图形（平面四边形 + 翻折片），而拼闭合体时
    * 最容易造出来的就是三点共线的面。所以这里与"多面体面数 / 顶点数不够"那一条说**同一件事**。
    */
+  /**
+   * **折片被画成共线三角面**（2026-10-19 稳定性复跑）。模型有时把 AEF 又平放成一张
+   * 面片，三点共线；如果只让它“改坐标”，修复轮会继续微调。这里直接说结构：
+   * 删掉面片，用 bound point E/F 建在宿主边上，再用 fold 折起来。
+   */
+  const degenerateFoldFace = errors.some((error) => error.code === "degenerate_face" && /共线|collinear/i.test(error.detail))
+  if (degenerateFoldFace) {
+    advice.push("提醒：这张三角面片的三个点共线。如果它就是折片 AEF，**删掉这张平放的面片**，改用 `dynamic.create_bound_point` 在宿主边 A–D / A–B 上建 E/F，再用 `solid.fold` 沿 EF 折出 P。不要继续微调这张面片的坐标。")
+  }
   const collapsedFace = errors.some((error) => /face ring/i.test(error.detail) && /zero area|collinear/i.test(error.detail))
   if (collapsedFace) {
     advice.push("提醒：有一只**面塌了**（三个点共线、面积为零）。要画**开放的**平面图形（四边形、三角形片、翻折片）就**不要**把它们拼成一只闭合多面体 —— 用 `solid.create_face` **一张一张**建（每张给 `vertices` 与 `vertexNames`，它不收 `faces`）。硬拼闭合体时，最容易造出来的就是三点共线的面。")

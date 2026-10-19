@@ -255,6 +255,13 @@ function boundLabel(value: unknown, path: string, errors: ParseError[]): string 
    * 下标在一批之内拿不到（要等这一批走完才看得到观察结果），而猜错会被几何语义校验当场拒绝。
    */
   function normalizeHostEdge(value: unknown, path: string, errors: ParseError[]): { from: string; to: string } | null {
+    if (Array.isArray(value) && value.length === 2) {
+      /** 数组写法 `["A","D"]` 与 `{from,to}` 同义（2026-10-19 稳定性复跑现场）。 */
+      const from = boundedString(value[0], `${path}[0]`, errors)
+      const to = boundedString(value[1], `${path}[1]`, errors)
+      if (from === null || to === null) return null
+      return { from, to }
+    }
     if (!isPlainObject(value)) {
       errors.push(fail("invalid_host_edge", path, "hostEdge must be an object {from, to} holding two vertex names"))
       return null
