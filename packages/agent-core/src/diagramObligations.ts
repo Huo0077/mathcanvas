@@ -313,6 +313,160 @@ function circleFromGeneralEquation(rest: string, rightHand: number): Pick<Diagra
 }
 
 /**
+ * **「焦点 + 离心率 ⇒ 曲线」的三段模式**（2026-10-20，联考「无核验项」审计的 B 类）。
+ *
+ * 它们不是"又一条读取器表项"，而是**同一句里的三块数据**：曲线名 + 焦点坐标 + 离心率，
+ * 缺一块就解不出唯一的曲线。所以读取写在 `resolveFocusEccentricity` 里（放在整句解析之后），
+ * 而不是写成一条正则 —— 一条正则要么漏掉语序差异，要么把隔壁从句一起吃进去。
+ *
+ * 三个模式都**从标签词开始**（`离心率`、`右焦点`）：命中之后整段会被标成"已用"，
+ * 否则残留扫描器会把 `离心率 e=√5` 里的 `=` 当成一条没读出来的条件，同一句报两遍。
+ */
+const CURVE_NAME_PATTERN = /(椭圆|双曲线|抛物线)/g
+const ANY_CURVE_NAME = /椭圆|双曲线|抛物线/g
+const FOCUS_COORDINATE = /(?:左|右|上|下)?焦点(?:的?坐标)?(?:为|是|=)\s*(?:[A-Z]\s*)?[（(]\s*(-?[0-9.√]+)\s*[,，]\s*(-?[0-9.√]+)\s*[）)]/
+const ECCENTRICITY_VALUE = /离心率\s*e?\s*(?:为|是|=)\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/
+const ORIGIN_CENTER = /(?:中心|顶点)[^。；;，,\n]{0,6}?原点/
+
+/**
+ * **离心率的值**：`√5` / `2√5` / `1` / `1/2` / `√3/2` / `0.5`。
+ *
+ * 分式的两端各自求值（分子可以是根号），**整条必须被吃干净** —— `√3/2/2` 这种
+ * 不是离心率，宁可返回 `null` 让它落进未核验。
+ */
+function eccentricityValue(raw: string): number | null {
+  const compact = raw.replace(/\s+/g, "")
+  const fraction = /^([0-9.√]+)\/([0-9.]+)$/.exec(compact)
+  const value = fraction === null
+    ? radicalValue(compact)
+    : (() => {
+      const numerator = radicalValue(fraction[1]!)
+      const denominator = Number(fraction[2])
+      return numerator === null || !Number.isFinite(denominator) || denominator <= 0 ? null : numerator / denominator
+    })()
+  return value !== null && Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** 焦点的那个**非零坐标**（到中心的距离）。`(-2√5, 0)` 与 `(2√5, 0)` 说的是同一个距离。 */
+function focusDistance(raw: string): number | null {
+  const magnitude = raw.replace(/^[+-]/, "")
+  return radicalValue(magnitude)
+}
+
+/**
+ * **「中心（顶点）在原点 + 焦点坐标 + 离心率」⇒ 一条 `conicAxes`**（2026-10-20，联考 `joint-23`）。
+ *
+ * 为什么必须认它：高考圆锥曲线大题**几乎不直接给方程**，给的是这三个参数，方程要自己解出来。
+ * 今天只会从**方程**认曲线，于是 `joint-23` 那类题一条义务都产不出来 —— 图能画，但没有东西被核验。
+ *
+ * **为什么这不违背"不猜"**：中心在原点 + 焦点在一条坐标轴上 + 离心率，把标准位置的椭圆 / 双曲线
+ * **唯一确定**（`a = c/e`，`b² = a² − c²` 或 `c² − a²`；抛物线只需焦点，`p = 2c`），
+ * 推出来的是**等式的结果**，不是从语序里补出来的假设。判据层因此**不需要新东西** ——
+ * 推出来的 `a`、`b`、轴正好是既有 `conicAxes` 判据要量的那三样。
+ *
+ * **四条边界，一条都不许松**（松了就是替题面猜曲线）：
+ * 1. 没说中心（顶点）在原点 ⇒ 曲线摆哪儿定不下来，不推；
+ * 2. 只有离心率 ⇒ 它只管**形状**（a 与 b 的比例），定不出大小，不推；
+ * 3. 只有焦点坐标 ⇒ 椭圆 / 双曲线的 `a` 未知，不推（抛物线不需要离心率，是**唯一**例外）；
+ * 4. 离心率与曲线种类矛盾（椭圆要 `0 < e < 1`、双曲线要 `e > 1`、抛物线要 `e = 1`）⇒ 不推。
+ *
+ * 以上每一条都**落进未核验并给理由**，因为"读不出"必须看得见（本项目的第一条纪律）。
+ * 已经有方程时不再从参数推一遍：窗口里已经有 `conicAxes` 就打住，只留方程那一条。
+ */
+function resolveFocusEccentricity(
+  givens: DiagramObligation[],
+  unverified: DiagramObligationSet["unverified"],
+  givenText: string,
+  used: Set<number>
+): void {
+  /** 同一个从句里只处理第一次出现的曲线名（`椭圆与双曲线交于…` 这种今天不硬解）。 */
+  const handledEnds: number[] = []
+  for (const match of givenText.matchAll(CURVE_NAME_PATTERN)) {
+    const start = match.index
+    const name = match[1]!
+    if (handledEnds.some((end) => start < end)) continue
+    const tail = givenText.slice(start)
+    const delimiter = /[。；;\n]/.exec(tail)
+    const nextName = [...tail.slice(1).matchAll(ANY_CURVE_NAME)][0]
+    const end = start + Math.min(delimiter?.index ?? tail.length, nextName === undefined ? tail.length : (nextName.index ?? tail.length) + 1, 120)
+    handledEnds.push(end)
+    const window = givenText.slice(start, end)
+    /**
+     * 已经有方程覆盖这条曲线时**不重复读**：`双曲线C：x²/4−y²/16=1，其右焦点为(2√5,0)…`
+     * 那句里参数是方程的注脚，再从参数推一遍会得到**第二条**同义义务。
+     */
+    if (givens.some((entry) => entry.kind === "conicAxes" && (entry.start ?? -1) >= start && (entry.start ?? -1) < end)) continue
+    const focus = FOCUS_COORDINATE.exec(window)
+    const eccentricity = ECCENTRICITY_VALUE.exec(window)
+    if (focus === null && eccentricity === null) continue
+    const report = (reason: string): void => {
+      unverified.push({ sourceText: window.trim(), reason })
+    }
+    if (ORIGIN_CENTER.exec(window) === null) {
+      report("题面给了焦点 / 离心率，但**没有说中心（顶点）在原点** —— 曲线摆在哪儿定不下来，不推方程，未核验。")
+      continue
+    }
+    if (focus === null) {
+      report("只给了离心率：离心率只管**形状**（两个半轴的比例），定不出大小 —— 还需要一个焦点坐标才解得出 `a`、`b`，未核验。")
+      continue
+    }
+    const horizontal = focusDistance(focus[1]!)
+    const vertical = focusDistance(focus[2]!)
+    if ((horizontal === null && vertical === null) || (horizontal !== null && vertical !== null)) {
+      report("这个焦点坐标读不出「到中心的距离」，未核验。")
+      continue
+    }
+    const axis: "x" | "y" = horizontal === null ? "y" : "x"
+    const distance = (horizontal ?? vertical)!
+    if (distance <= 0) {
+      report("焦点与中心重合（距离为 0），这不是一个能画出来的椭圆 / 双曲线 / 抛物线，未核验。")
+      continue
+    }
+    const eccentricityNumber = eccentricity === null ? null : eccentricityValue(eccentricity[1]!)
+    if (eccentricity !== null && eccentricityNumber === null) {
+      report("这个离心率的数值读不出来，未核验。")
+      continue
+    }
+    const draft = ((): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null => {
+      if (name === "抛物线") {
+        if (eccentricityNumber !== null && Math.abs(eccentricityNumber - 1) > 1e-9) return null
+        // `parabolaAxis` 收的是 `2p`，而焦点到顶点是 `p/2` ⇒ 系数 = 4c（见 `parabolaAxis` 的注释）。
+        return parabolaAxis(4 * distance, axis)
+      }
+      if (eccentricityNumber === null) return null
+      if (name === "椭圆") {
+        if (!(eccentricityNumber > 0 && eccentricityNumber < 1)) return null
+        const semiMajor = distance / eccentricityNumber
+        const semiMinorSquared = semiMajor * semiMajor - distance * distance
+        if (!(semiMinorSquared > 0)) return null
+        const semiMajorSquared = semiMajor * semiMajor
+        return axis === "x" ? ellipseAxes(semiMajorSquared, semiMinorSquared) : ellipseAxes(semiMinorSquared, semiMajorSquared)
+      }
+      if (!(eccentricityNumber > 1)) return null
+      const semiTransverse = distance / eccentricityNumber
+      const semiConjugateSquared = distance * distance - semiTransverse * semiTransverse
+      if (!(semiConjugateSquared > 0)) return null
+      return hyperbolaAxes(semiTransverse * semiTransverse, semiConjugateSquared, axis)
+    })()
+    if (draft === null) {
+      report(eccentricityNumber === null
+        ? `只给了焦点坐标：${name}的半轴还差离心率才能定下来，未核验。`
+        : `这组焦点与离心率解不出一个${name}（离心率与曲线种类矛盾，或半轴不成实轴），不猜，未核验。`)
+      continue
+    }
+    givens.push({ ...draft, sourceText: window.trim(), start, end })
+    /**
+     * 把读过的两段标成"已用"：`离心率 e=√5` 里那个 `=` 否则会被残留扫描器当成
+     * 一条没读出来的条件，同一句在报告里出现两次。
+     */
+    for (const span of [focus, eccentricity]) {
+      if (span === null) continue
+      for (let offset = span.index; offset < span.index + span[0].length; offset += 1) used.add(start + offset)
+    }
+  }
+}
+
+/**
  * **把题面写的表达式整理成表达式解析器认得的写法**（V0d）。
  *
  * 教科书里写 `x³ − 3x`，而解析器只认 `x^3-3*x`。这一步只做**纯字形替换**，
@@ -1385,6 +1539,11 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   resolveStatedBasePlane(givens, unverified, givenText)
   /** 单字母角同理：顶点有了、两条边要从形状从句的环上取。 */
   resolveStatedVertexAngle(givens, unverified, givenText)
+  /**
+   * **「焦点 + 离心率」⇒ 曲线**（2026-10-20）：放在残留扫描**之前** —— 数据不全时它要能
+   * 如实变成一条"未核验"（而不是消失），读到的那两段也要先标成"已用"。
+   */
+  resolveFocusEccentricity(givens, unverified, givenText, used)
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {
     if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
