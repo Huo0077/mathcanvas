@@ -28,7 +28,7 @@
 | P1-5 | 1 | 模型路由：`deepseek-chat` 实际是 flash；v4-pro 可用但慢 | P0 | partial | v4-pro 前两题 1 passed / 1 unverified，约 2.5 min/题；完整批未跑完，默认档位未改 |
 | P2-1 | 2 | 缺通用原子算子：旋转、反射、平移、求交、投影 | P1 | done | 反射、投影、平移、旋转、线面交点五个指定算子 + 自由点全部落地；动作测试与全量回归通过 |
 | P2-2 | 2 | 任意多面体仍要模型给坐标 | P1 | partial | 通用求解器 fallback；求解结果必须过题设核验 |
-| P2-3 | 2 | 固定动作菜单与字段组合负担（35 个 action） | P1 | partial | 字段复用/组合测试 + 文档；不再靠模型猜字段 |
+| P2-3 | 2 | 固定动作菜单与字段组合负担（35 个 action） | P1 | done | 43 个动作共用 `FIELD_KINDS`；新增 `atomicActionFields.test.ts` 钉住 source/planePoints/label/vector/angle 的复用；registry/schema/parser 由 field-parity 测试对齐 |
 | P2-4 | 2 | 2–3 面开放壳、三维圆弧被明确拒绝 | P2 | done | 明确拒绝 + 修复提示“逐面用 solid.create_face 建开放壳”；3D 圆弧仍走线段近似建议，不误报已画 |
 | P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | partial | 新增六棱四面体、正方形底四棱锥、右三棱柱、二面角四个解析构造；通用求解仍未接 |
 | P3-2 | 3 | 锐角/钝角/点在内部等不等式；非退化与可读性 | P1 | done | 锐角/直角/钝角/点在三角形内部均已解析并核验；内外部、直角反例均有测试 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：449 文件 / 4839 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：450 文件 / 4841 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
