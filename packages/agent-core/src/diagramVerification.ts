@@ -815,6 +815,15 @@ function polygonArea3(points: readonly Vector3[]): number | null {
   return double > 1e-12 ? double : null
 }
 
+/** 点到**高线**的距离（高线 = 过 `vertex` 且垂直于 `sideA→sideB`）。垂足可以在边外，所以量直线。 */
+function distanceToAltitudeLine(point: Vector3, vertex: Vector3, sideA: Vector3, sideB: Vector3): number | null {
+  const alongX = sideB.x - sideA.x
+  const alongY = sideB.y - sideA.y
+  const length = Math.hypot(alongX, alongY)
+  if (!(length > 1e-12)) return null
+  return Math.abs((point.x - vertex.x) * alongX + (point.y - vertex.y) * alongY) / length
+}
+
 /** 点到**线段**的距离（垂足在段外时取到最近端点的距离）—— 内心那条判据就靠这个区别。 */
 function pointToSegment(point: Vector3, from: Vector3, to: Vector3): number {
   const alongX = to.x - from.x
@@ -1411,6 +1420,72 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       expected: numeric,
       tolerance: distanceTolerance(numeric),
       detail: `实测半径 ${circle.radius.toPrecision(6)}、两条半径的夹角 ${((radians * 180) / Math.PI).toPrecision(6)}°，劣弧长 ${length.toPrecision(6)}；题设要求弧长 ${numeric}。`
+    }
+  }
+  if (item.kind === "centroid" || item.kind === "orthocenter" || item.kind === "excenter") {
+    /**
+     * **重心 / 垂心 / 旁心**（2026-10-20）：`targets = [O, A, B, C]`，三个心的判据各不相同。
+     *
+     * 三个都要"从最终坐标自己算"，而且**必须与另外两个分得开**（用例里每个心都拿别的心的位置
+     * 试过）：直角三角形里 `(2,2)` 是内心、`(12,12)` 是 `A`-旁心、`(2, 2)` 还可能落在重心附近 ——
+     * 判据混起来就等于没判。
+     */
+    if (item.targets.length !== 4) return null
+    const [o, a, b, c] = [at(0), at(1), at(2), at(3)]
+    if (item.kind === "centroid") {
+      const target = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 }
+      const gap = Math.hypot(o.x - target.x, o.y - target.y)
+      return {
+        actual: gap,
+        expected: 0,
+        tolerance: distanceTolerance(1),
+        detail: `实测 ${item.targets[0]} 与 (A + B + C) / 3 = (${target.x.toPrecision(6)}, ${target.y.toPrecision(6)}) 相差 ${gap.toPrecision(6)}；题设要求它是重心。`
+      }
+    }
+    if (item.kind === "orthocenter") {
+      // 三条高线：过 A 且垂直 BC、过 B 且垂直 CA、过 C 且垂直 AB。垂足不必在边上，所以量**直线**。
+      const distances = [
+        distanceToAltitudeLine(o, a, b, c),
+        distanceToAltitudeLine(o, b, c, a),
+        distanceToAltitudeLine(o, c, a, b)
+      ]
+      if (distances.some((value) => value === null)) return null
+      const gaps = distances as number[]
+      const worst = Math.max(...gaps)
+      return {
+        actual: worst,
+        expected: 0,
+        tolerance: distanceTolerance(1),
+        detail: `实测 ${item.targets[0]} 到三条高线的距离分别是 ${gaps.map((value) => value.toPrecision(6)).join("、")}；题设要求它是垂心（落在三条高线上）。`
+      }
+    }
+    /**
+     * **旁心**：一个三角形有**三个**旁心，而题面只说"是旁心"、没说哪一个 ——
+     * 所以判据取"到最近那个旁心"的距离，**不挑一个猜**。
+     */
+    const sideA = Math.hypot(b.x - c.x, b.y - c.y)
+    const sideB = Math.hypot(c.x - a.x, c.y - a.y)
+    const sideC = Math.hypot(a.x - b.x, a.y - b.y)
+    const candidates: { x: number; y: number }[] = []
+    const weigh = (weightA: number, weightB: number, weightC: number): void => {
+      const denominator = weightA + weightB + weightC
+      if (Math.abs(denominator) < 1e-12) return
+      candidates.push({
+        x: (weightA * a.x + weightB * b.x + weightC * c.x) / denominator,
+        y: (weightA * a.y + weightB * b.y + weightC * c.y) / denominator
+      })
+    }
+    weigh(-sideA, sideB, sideC)
+    weigh(sideA, -sideB, sideC)
+    weigh(sideA, sideB, -sideC)
+    if (candidates.length === 0) return null
+    const gapsToExcenters = candidates.map((candidate) => Math.hypot(o.x - candidate.x, o.y - candidate.y))
+    const nearest = Math.min(...gapsToExcenters)
+    return {
+      actual: nearest,
+      expected: 0,
+      tolerance: distanceTolerance(1),
+      detail: `实测 ${item.targets[0]} 到三个旁心的距离最近一个是 ${nearest.toPrecision(6)}（${gapsToExcenters.map((value) => value.toPrecision(6)).join("、")}）；题设要求它是旁心（三个旁心之一）。`
     }
   }
   if (item.kind === "incenter") {

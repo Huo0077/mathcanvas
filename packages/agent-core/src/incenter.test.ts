@@ -31,11 +31,15 @@ describe("内心的读取器", () => {
     expect(incenterTargets("点O是△ABC的内心。")).toEqual([["O", "A", "B", "C"]])
   })
 
-  /** **旁心不是内心**：它在三角形外面，是一个**不同**的判定，今天没有判据 ⇒ 不猜、但要显形。 */
-  it("`O为△ABC的旁心` ⇒ 不读，落未核验并点名「旁心」", () => {
+  /**
+   * **旁心不是内心**（2026-10-20 后续批次补上了旁心的判据，这一条按新事实翻转）：
+   * 它读成**另一条**义务 `excenter`，不会被当成内心 —— 两者在几何上是**两个**判定
+   * （内心到三条**线段**等距，旁心到三条**直线**等距）。
+   */
+  it("`O为△ABC的旁心` ⇒ 读成 excenter，**不是** incenter", () => {
     const parsed = parseDiagramObligations("在△ABC中，O为△ABC的旁心。")
     expect(parsed.givens.filter((item) => item.kind === "incenter")).toEqual([])
-    expect(parsed.unverified.map((entry) => entry.reason).join("｜")).toContain("旁心")
+    expect(parsed.givens.filter((item) => item.kind === "excenter").map((item) => item.targets)).toEqual([["O", "A", "B", "C"]])
   })
 })
 
