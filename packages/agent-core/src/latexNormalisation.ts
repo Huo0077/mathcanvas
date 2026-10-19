@@ -27,6 +27,8 @@ export function expandExamShorthand(text: string): string {
         return segments.map((segment) => `${segment}=${value}`).join("，")
       }
     )
+    .replace(/([0-9])\s*[.。]\s*(?=[\u4e00-\u9fff])/g, "$1，")
+    .replace(/(^|[，,；;。.])\s*若/g, "$1")
 }
 
 export function normalizeGeometryPrompt(prompt: string): string {

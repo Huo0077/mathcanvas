@@ -14,4 +14,9 @@ describe("expandExamShorthand with subscript names", () => {
   it("still expands plain chains", () => {
     expect(expandExamShorthand("PA=AB=BC=2")).toBe("PA=2，AB=2，BC=2")
   })
+
+  it("splits a number followed by a Chinese sentence and strips a leading 若", () => {
+    expect(expandExamShorthand("CD=4.已经证明")).toBe("CD=4，已经证明")
+    expect(expandExamShorthand("若二面角C-AB-D为150°")).toBe("二面角C-AB-D为150°")
+  })
 })
