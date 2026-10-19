@@ -352,6 +352,18 @@ type ConicDescription =
 type FigureConic = ConicDescription & { primitive: PlanarConic }
 
 /**
+ * **候选图里那条新画的圆锥 / 圆柱**（2026-10-20，实体标量尺寸）。
+ *
+ * 只留判据真正要用的两个数：`radius` 与 `height`。母线 / 底面积 / 侧面积都是它们的函数
+ * （见 `measureSolid`），所以**不为每个度量各存一份** —— 存三份就是给同一个量造三个来源。
+ */
+interface FigureSolid {
+  shape: "cone" | "cylinder"
+  radius: number
+  height: number
+}
+
+/**
  * **候选图里那条唯一的、新画出来的圆锥曲线**（V0c）。
  *
  * 与多面体那条同一条纪律：**恰好一个**才谈得上"题面说的就是它"。多一条就说不清
@@ -614,6 +626,61 @@ interface FigureContext {
    * 不能问一张按别的图形建的映射表（2026-10-12 实测：拿那张表会把"两条都画对了"判成"丢了两个交点"）。
    */
   planarPoints: readonly { name: string; x: number; y: number }[]
+  /**
+   * **候选图里那条新画的圆锥 / 圆柱**（2026-10-20，实体标量尺寸）。
+   *
+   * 与 `conic` 同一条纪律：问**候选图自己**，不在计划里猜。`solidDimension` 的判据要量的是
+   * "这条实体的这个度量"，而度量全都能从实体自己的 `radius` / `height` 算出来。
+   */
+  solid: FigureSolid | null
+}
+
+/**
+ * 候选图里那条新画的圆锥 / 圆柱（**只有一条**才算数）。
+ *
+ * 为什么不按别名找：别名是计划里的东西，而这条义务说的是"题面上那条圆锥"。与 `candidateConic`
+ * 一样按"**新出现的图元**"认（对 `base` 求差），少了或多了一条都返回 `null` ——
+ * 那时如实落未核验，比挑一条来量好。
+ */
+function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
+  if (plan.kind !== "plan") return null
+  if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const solids = candidate.primitives.filter(
+    (primitive) => (primitive.type === "cone" || primitive.type === "cylinder") && !priorIds.has(primitive.id)
+  )
+  if (solids.length !== 1) return null
+  const [solid] = solids
+  // `filter` 不做类型守卫，这里逐种显式分支（与 `candidateConic` 同一个理由）。
+  if (solid.type === "cone") return { shape: "cone", radius: solid.radius, height: solid.height }
+  if (solid.type === "cylinder") return { shape: "cylinder", radius: solid.radius, height: solid.height }
+  return null
+}
+
+/** 圆锥 / 圆柱量出来的那个度量（`null` = 这个形状没有这个度量）。 */
+function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation["solid"]>["metric"]): number | null {
+  /**
+   * **母线在两种实体上是两件事**：圆锥的母线是斜的（`√(r²+h²)`），圆柱的母线与高**是同一条**。
+   * 这个差别正是"圆锥的侧面展开图为什么是扇形"，写错就会把圆锥的母线量成高。
+   */
+  const slant = solid.shape === "cone" ? Math.hypot(solid.radius, solid.height) : solid.height
+  if (!Number.isFinite(slant)) return null
+  switch (metric) {
+    case "radius": return solid.radius
+    case "height": return solid.height
+    case "slantHeight": return slant
+    case "baseArea": return Math.PI * solid.radius * solid.radius
+    case "lateralArea": return solid.shape === "cone" ? Math.PI * solid.radius * slant : 2 * Math.PI * solid.radius * solid.height
+  }
+}
+
+/** 度量的中文名（失败文案要指着它说，用户才知道是哪一条不对）。 */
+const SOLID_DIMENSION_LABEL: Record<NonNullable<DiagramObligation["solid"]>["metric"], string> = {
+  radius: "底面半径",
+  height: "高",
+  slantHeight: "母线长",
+  baseArea: "底面积",
+  lateralArea: "侧面积"
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string; evidence?: EvidenceGrade } | null {
@@ -624,6 +691,27 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 两个半轴对调会把焦点从 `(±√5, 0)` 挪到 `(0, ±√5)`，那是另一条曲线。
    * 把这两个数一起写进 `detail`，用户才看得出"为什么半轴错了等于焦点错了"。
    */
+  if (item.kind === "solidDimension") {
+    /**
+     * **实体尺寸**（2026-10-20）：题面写的是"这条圆锥的底面半径是 2"，判据量的是
+     * 候选图里那条新画的圆锥自己的 `radius` / `height` 算出来的那个量。
+     *
+     * 形状对不上（题面说的圆柱、图上画的是圆锥）**不硬量** —— 返回 `null` 落未核验，
+     * 因为那时"量的是哪条实体"本身就不成立。
+     */
+    const stated = item.solid
+    const drawn = figures.solid
+    if (stated === undefined || item.value === undefined || drawn === null || drawn.shape !== stated.shape) return null
+    const measured = measureSolid(drawn, stated.metric)
+    if (measured === null || !Number.isFinite(measured)) return null
+    const label = SOLID_DIMENSION_LABEL[stated.metric]
+    return {
+      actual: measured,
+      expected: item.value,
+      tolerance: distanceTolerance(1),
+      detail: `实测 ${drawn.shape === "cone" ? "圆锥" : "圆柱"}的${label} ${measured.toPrecision(6)}（由实体自己的半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)} 算出）；题设要求 ${label} ${item.value}。`
+    }
+  }
   if (item.kind === "conicAxes") {
     const stated = item.conic
     const drawn = figures.conic
@@ -1221,7 +1309,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */
@@ -1344,6 +1432,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     tangent: candidateTangent(plan, candidate, base),
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: candidateCurve(plan, candidate, base),
+    solid: candidateSolid(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
         ? [{ name: primitive.label, x: primitive.x, y: primitive.y }]

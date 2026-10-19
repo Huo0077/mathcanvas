@@ -102,6 +102,28 @@ function prismCarriesVertexNames(inputs: unknown): boolean {
 }
 
 /**
+ * **实体尺寸也能核**（2026-10-20，联考 30 题「无核验项」审计的 A 类）。
+ *
+ * 上面那张白名单回答的是"题面点名的顶点有没有坐标可核"。圆锥 / 圆柱给不了这个 ——
+ * 它们的顶点只有模板自己的编号（`solid.create_template`），于是**整条核验被跳过**，
+ * `joint-01`/`joint-12` 那 5 道题因此连一条义务都没产出来。
+ *
+ * 但它们的度量**量得动**：`radius` 与 `height` 就在图元里，母线 / 底面积 / 侧面积都是这两个数的
+ * 函数。所以这里开一条**窄闸**，两个条件同时成立才放行：
+ *
+ * 1. 计划里有 `solid.create_template`（现在的候选实体就这一族）；
+ * 2. **题面真的读出了实体尺寸**（`solidDimension` 义务非空）。
+ *
+ * 第 2 条是重点：少了它，"画一个圆锥"这种**没有任何尺寸**的题面会凭空多出一份核验报告
+ * （而报告里只有一条"没有可靠识别到可核验的题设"），把本来能确认的草稿拦下来。
+ * 闸门只对这一族开，立方体等其它模板题面**逐字不变**。
+ */
+function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
+  if (!actions.some((action) => action.actionId === "solid.create_template")) return false
+  return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension")
+}
+
+/**
  * **自己写坐标的动作**：这两笔的 `vertices` 是**模型给的自由坐标**（不是模板 / 内核算出来的）。
  *
  * 设计 §6 的"坐标来源标注"只对它们有意义 —— 别的动作根本没有坐标可以被"构造"替换，
@@ -736,7 +758,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    *
    * 这里读的是 `effectivePrompt`（原文，或规范化之后的题面）—— 两处都只有这一个来源。
    */
-  const obligationParse = parserPrompt && planHasVerifiableFigure(compiledActions)
+  const obligationParse = parserPrompt && (planHasVerifiableFigure(compiledActions) || solidDimensionGate(parserPrompt, compiledActions))
     ? parseObligationWithLegacy(parserPrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)

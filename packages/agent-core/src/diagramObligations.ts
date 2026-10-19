@@ -21,6 +21,18 @@ export type DiagramObligationKind =
   | "area"
   | "conicAxes"
   /**
+   * **实体的标量尺寸**（2026-10-20，联考「无核验项」审计的 A 类）：`圆锥的底面半径为2`、
+   * `母线长为3`、`底面积为π`、`侧面积为2π`、`高为4`。
+   *
+   * 为什么它必须是一种**义务**而不是"画的时候顺手用一下"：这一族条件的**判据与点名无关** ——
+   * 它问的是"这条实体的这个度量是不是题面说的那个数"，而度量可以从实体自己的
+   * `radius` / `height` 算出来（母线 / 底面积 / 侧面积都是这两个数的函数）。
+   *
+   * **它也是 `planHasVerifiableFigure` 之外的那条窄闸**（`planCompiler` 里 `solidDimensionGate`）：
+   * 圆锥 / 圆柱**不带题面点名**，所以此前这三个字面量根本没进过核验。
+   */
+  | "solidDimension"
+  /**
    * **直线与这条圆锥曲线的交点**（Task 14）。
    *
    * 为什么单开一种、而不是并进 `conicAxes`：`conicAxes` 比的是**曲线自己的参数**，
@@ -134,6 +146,13 @@ export interface DiagramObligation {
   expression?: string
   /** `commonTangent` 专用：题面写下的两条函数表达式。 */
   expressions?: [string, string]
+  /**
+   * `solidDimension` 专用：**哪一个实体的哪一个度量**（`value` 是题面写下的那个数）。
+   *
+   * 只记形状与度量名，不记实体 id —— 这条义务说的是"图上那条圆锥"，而具体是哪一条，
+   * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
+   */
+  solid?: { shape: "cone" | "cylinder"; metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" }
 }
 
 export interface DiagramSourceSpan {
@@ -462,6 +481,80 @@ function resolveFocusEccentricity(
     for (const span of [focus, eccentricity]) {
       if (span === null) continue
       for (let offset = span.index; offset < span.index + span[0].length; offset += 1) used.add(start + offset)
+    }
+  }
+}
+
+/**
+ * **实体的标量尺寸**（2026-10-20，联考「无核验项」审计的 A 类）。
+ *
+ * 这一族在卷面上就是一句话：`圆锥的底面半径为2，母线长为3`、`圆柱的底面半径为1，高为2`、
+ * `圆锥的底面积为π，侧面积为2π`。它们此前**一个义务都产不出来** —— 而且主因不在读取器：
+ * `planCompiler.planHasVerifiableFigure` 只认"能让题面点名拿到坐标"的动作，圆锥 / 圆柱
+ * 用的是 `solid.create_template`（顶点只有模板编号），因此连解析都没发生。
+ *
+ * ## 归属：谁先说谁管
+ *
+ * 度量名（`底面半径` / `母线` / `高` / `底面积` / `侧面积`）自己**不带实体名**，所以归属靠
+ * "**前面最近的那个 `圆锥` / `圆柱`**"，而且：① 距离不超过 80 字（跨段落就不再是同一句）；
+ * ② 两者之间**不许再出现另一个形状名**（`圆柱和圆锥的底面半径分别为…` 这种今天不硬解）。
+ *
+ * ## 两条守卫
+ *
+ * - **只收 `底面半径`，不收裸 `半径`**：`圆锥的侧面展开图是半径为3的半圆` 里的半径属于**展开图**
+ *   （扇形），读成圆锥的半径就是替题面改题。裸 `半径` 一律留给未核验。
+ * - **展开图 / 内切球 / 外接球 出现在两者之间时也不收**：那些对象有自己的半径与高。
+ *
+ * ## 为什么这不算"拿模型自报的数给自己盖章"
+ *
+ * 半径确实是模型填进 `radius` 的那个数，但**母线 / 底面积 / 侧面积不是** —— 它们由 `radius` 与
+ * `height` 共同决定。模型随手填个高度，母线就对不上（`joint-01` 的"半径 2、母线 3"要求 `h = √5`）。
+ */
+const SOLID_SHAPE_TERM = /圆锥|圆柱/g
+/** 尺寸的字面量：`2`、`√5`、`2√5`、`π`、`2π`（面积类会带 π，裸 π 也是合法的数）。 */
+const SOLID_SIZE_LITERAL = String.raw`(\d+(?:\.\d+)?\s*[π√]\s*\d*(?:\.\d+)?|√\s*\d+(?:\.\d+)?|π|\d+(?:\.\d+)?)`
+const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["solid"]>["metric"]; pattern: RegExp }[] = [
+  { metric: "radius", pattern: new RegExp(String.raw`底面(?:圆)?的?半径\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "slantHeight", pattern: new RegExp(String.raw`母线(?:长)?\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "baseArea", pattern: new RegExp(String.raw`底面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "lateralArea", pattern: new RegExp(String.raw`侧面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "height", pattern: new RegExp(String.raw`高\s*(?:为|是|=)\s*${SOLID_SIZE_LITERAL}`, "g") }
+]
+
+/** 这些词出现在形状名与度量名之间时，说的**是另一个对象的半径 / 高**。 */
+const NOT_THIS_SOLID_TERM = /展开图|内切球|外接球/
+
+/** 尺寸的数值：`2`、`√5`、`2√5`、`π`、`2π`（面积类会带 π）。 */
+function solidSizeValue(raw: string): number | null {
+  const compact = raw.replace(/\s+/g, "")
+  const pi = /^(\d+(?:\.\d+)?)?π$/.exec(compact)
+  if (pi !== null) {
+    const coefficient = pi[1] === undefined ? 1 : Number(pi[1])
+    return Number.isFinite(coefficient) && coefficient > 0 ? coefficient * Math.PI : null
+  }
+  return radicalValue(compact)
+}
+
+function resolveSolidDimensions(
+  givens: DiagramObligation[],
+  givenText: string,
+  used: Set<number>
+): void {
+  const anchors = [...givenText.matchAll(SOLID_SHAPE_TERM)].map((match) => ({ start: match.index, shape: (match[0] === "圆锥" ? "cone" : "cylinder") as "cone" | "cylinder" }))
+  if (anchors.length === 0) return
+  for (const { metric, pattern } of SOLID_METRIC_READERS) {
+    for (const match of givenText.matchAll(pattern)) {
+      const start = match.index
+      if ([...match[0]].some((_, offset) => used.has(start + offset))) continue
+      const anchor = [...anchors].reverse().find((entry) => entry.start < start && start - entry.start <= 80)
+      if (anchor === undefined) continue
+      const between = givenText.slice(anchor.start + 2, start)
+      // 中间又出现了另一个形状名 ⇒ 不知道这句说的是哪一个，不猜。
+      if (SOLID_SHAPE_TERM.test(between) || NOT_THIS_SOLID_TERM.test(between)) continue
+      const value = solidSizeValue(match[1]!)
+      if (value === null) continue
+      givens.push({ kind: "solidDimension", targets: [], value, solid: { shape: anchor.shape, metric }, sourceText: match[0], start, end: start + match[0].length })
+      for (let at = start; at < start + match[0].length; at += 1) used.add(at)
     }
   }
 }
@@ -1570,6 +1663,12 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
    * 如实变成一条"未核验"（而不是消失），读到的那两段也要先标成"已用"。
    */
   resolveFocusEccentricity(givens, unverified, givenText, used)
+  /**
+   * **实体的标量尺寸**（2026-10-20）：`圆锥的底面半径为2，母线长为3`。
+   * 同样排在残留扫描之前 —— 读到的那几段要标成"已用"，否则 `母线` 这个触发词会让
+   * 同一句在报告里出现两次（一次核过、一次"未核验"）。
+   */
+  resolveSolidDimensions(givens, givenText, used)
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {
     if ([...match[0]].some((_, offset) => used.has(match.index + offset))) continue
