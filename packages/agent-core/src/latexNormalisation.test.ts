@@ -23,6 +23,11 @@ describe("normalizeGeometryPrompt", () => {
     expect(normalizeGeometryPrompt("三棱雉 $P-ABC$。圆雉的体积")).toBe("三棱锥P-ABC。圆锥的体积")
   })
 
+  it("expands chained equalities and equilateral wording for the parser", () => {
+    expect(normalizeGeometryPrompt("$PA=PB=2$")).toBe("PA=2，PB=2")
+    expect(normalizeGeometryPrompt("$△ABC是边长为2的等边三角形$")).toBe("AB=2，AC=2，BC=2")
+  })
+
   it("leaves a plain prompt byte-for-byte unchanged", () => {
     const plain = "平面四边形 ABCD 中，AB=8，CD=3，AD=5√3，∠ADC=90°。"
     expect(normalizeGeometryPrompt(plain)).toBe(plain)

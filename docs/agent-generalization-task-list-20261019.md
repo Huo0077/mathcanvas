@@ -21,7 +21,7 @@
 
 | ID | Part | 问题 / 目标 | 优先级 | 状态 | 验收 |
 |---|---|---|---|---|---|
-| P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | open | 12 道样本中题设全过 ≥ 3；坐标类失败不再是首因 |
+| P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | partial | 四面体六棱解析构造已落地；其余形状仍靠模型坐标 |
 | P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认已落地；对象缺 scope 仍拒绝 |
 | P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | partial | 顺序 + 0° 已能一次清洗；坐标与其他多缺陷组合仍 open |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | open | 格式修复或原生工具通道；12 道格式失败 ≤ 1 |
@@ -30,7 +30,7 @@
 | P2-2 | 2 | 任意多面体仍要模型给坐标 | P1 | partial | 通用求解器 fallback；求解结果必须过题设核验 |
 | P2-3 | 2 | 固定动作菜单与字段组合负担（35 个 action） | P1 | partial | 字段复用/组合测试 + 文档；不再靠模型猜字段 |
 | P2-4 | 2 | 2–3 面开放壳、三维圆弧被明确拒绝 | P2 | open | 给出可解释降级或支持；至少不误报“已画” |
-| P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | open | 扩展族或接通用求解；不把固定网格结果当唯一解 |
+| P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | partial | 新增六棱四面体解析构造；通用求解仍未接 |
 | P3-2 | 3 | 锐角/钝角/点在内部等不等式；非退化与可读性 | P1 | open | 不等式约束/目标 + 反例测试（等腰、退化成杆） |
 | P3-3 | 3 | 无 LM/BFGS 通用约束求解；`constraints3d` 只有残差/投影 | P1 | open | 数值 fallback + 超时/确定性；最终由 `verifyDiagramObligations` 判定 |
 | P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | open | 至少覆盖向量点积与二面角各一例；不再落成“未核验” |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：412 文件 / 4774 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：414 文件 / 4779 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -77,6 +77,14 @@
 - `readScopedReference` 接受**裸字符串**并补成 `{scope:"draft",alias}`；场景引用仍然必须带 `documentId`/`entityId`，只给 `{entityId}` 的对象继续按 `unscoped_reference` 拒绝。
 - 回归：`schemas.test.ts` 的 draft action 解析、`planCompiler.bareAlias.test.ts` 的端到端绑定；全量 412 文件 / 4774 通过 + 1 todo。
 - **边界**：别名不存在时由编译器报 `alias_missing`；不再把“裸字符串”整轮拒掉，但仍不猜作用域。
+
+## 2026-10-19 P1-1 进展
+
+- 新增 `solver/tetrahedron.ts`：六条棱长 → 四面体坐标（A 在原点、B 在 x 轴、C 在 xy 平面、P 由三个距离方程解出）；不可行/退化返回 `null`，并在返回前回代六条距离。
+- 新增 `rescueWithTetrahedronEdges`：识别 `三棱锥 P-ABC` / `四面体 ABCD`，从题设和 `PA=PB=2`、`△ABC 是边长为 2 的等边三角形` 提取六条棱，构造 `solid.create_polyhedron` 并重编；成功时写 `witness.tetrahedron` 假设。
+- 为避免改动原文 span，等边/链式展开只在**核验内部**用 `expandExamShorthand`；`parseObligationWithLegacy` 仍按原题面保持可追溯。
+- 回归：`solver/tetrahedron.test.ts` 3 条 + `planCompiler.tetrahedron.test.ts` 1 条；全量 414 文件 / 4779 通过 + 1 todo。
+- **边界**：只覆盖“六条棱都明确给出（或底面等边）”的四面体；其他多面体、半角/二面角约束仍靠模型或后续求解器。
 
 ## 建议执行顺序
 

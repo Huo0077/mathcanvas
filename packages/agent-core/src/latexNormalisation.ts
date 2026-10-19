@@ -13,6 +13,16 @@ const LATEX_MARKER = /[$\\]/
 
 const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉"
 
+/**
+ * 把“等边三角形边长为 N”展开成三条边，把 `PA=PB=2` 展开成两条独立条件。
+ * 这是**语法展开**，不猜题意；只在解析/核验内部用，原文与 span 保持不变时不要调用。
+ */
+export function expandExamShorthand(text: string): string {
+  return text
+    .replace(/△?([A-Z])([A-Z])([A-Z])是边长为([0-9.]+)的等边三角形/g, "$1$2=$4，$1$3=$4，$2$3=$4")
+    .replace(/([A-Z])([A-Z])=([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g, "$1$2=$5，$3$4=$5")
+}
+
 export function normalizeGeometryPrompt(prompt: string): string {
   if (!LATEX_MARKER.test(prompt)) return prompt
 
@@ -52,6 +62,9 @@ export function normalizeGeometryPrompt(prompt: string): string {
 
   // 数据集里的 OCR 错字。
   text = text.replace(/棱雉/g, "棱锥").replace(/圆雉/g, "圆锥")
+
+  // 等边三角形的“边长为 N”展开成三条边；链式相等展开成两条独立条件。
+  text = expandExamShorthand(text)
 
   // 数学点名的空格不影响语义；中文本身不需要空格。
   return text.replace(/\s+/g, "").trim()

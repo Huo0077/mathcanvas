@@ -4,6 +4,7 @@ import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEG
 
 import {
   MAX_REPAIR_ATTEMPTS,
+  PLAN_SCHEMA_VERSION,
   type ClarificationQuestion,
   type PlanDiagnostic,
   type PlanEnvelope,
@@ -17,12 +18,13 @@ import { DRAFT_ID_PREFIX } from "./schemaReaders"
 import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
+import { constructTetrahedron } from "./solver/tetrahedron"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
-import { normalizeGeometryPrompt } from "./latexNormalisation"
+import { normalizeGeometryPrompt, expandExamShorthand } from "./latexNormalisation"
 import { verifyRelations, type RelationLookup } from "./relations"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 /**
@@ -371,6 +373,12 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (reordered !== null) return reordered
   const materialised = rescueWithMaterialisedPoints(context, first)
   if (materialised !== null) return materialised
+  /**
+   * **六条棱都给了的四面体**（2026-10-19，P1-1）：坐标由解析构造，不再让模型心算。
+   * 排在补折之前：它是纯坐标构造，不依赖折片。
+   */
+  const tetrahedron = rescueWithTetrahedronEdges(context, first)
+  if (tetrahedron !== null) return tetrahedron
   /**
    * **题面说要折、计划里却没有折**：按题面补上那一笔（选项②，2026-10-15）。
    *
@@ -1803,6 +1811,116 @@ function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: Compile
  * 同一份计划按顺序执行，于是 `segment_reference_missing`。这只动**顺序**：
  * 把出错的那一笔移到末尾再编一次；仍然要求第二遍核验真的 `passed`。
  */
+/**
+ * **六条棱长 → 四面体坐标**（2026-10-19，P1-1）。
+ *
+ * 现场：三棱锥 P-ABC，底面等边 2，PA=PB=2，PC=√6；模型坐标算错，核验失败。
+ * 六条棱都给了，坐标应由解析构造给出。这里是救援：只在模型计划失败时用题面重新构造，
+ * 最终仍由同一个核验器按八条/六条题设判定。
+ */
+function pairKey(first: string, second: string): string {
+  return [first, second].sort().join("-")
+}
+
+function parseLengthLiteral(literal: string): number | null {
+  if (literal.startsWith("√")) {
+    const value = Number(literal.slice(1))
+    return Number.isFinite(value) && value > 0 ? Math.sqrt(value) : null
+  }
+  const value = Number(literal)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+function readTetrahedronShape(prompt: string): { apex: string; base: [string, string, string] } | null {
+  const pyramid = /三棱锥\s*([A-Z])\s*-\s*([A-Z])([A-Z])([A-Z])/.exec(prompt)
+  if (pyramid !== null) return { apex: pyramid[1]!, base: [pyramid[2]!, pyramid[3]!, pyramid[4]!] }
+  const tetrahedron = /四面体\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
+  if (tetrahedron !== null) return { apex: tetrahedron[1]!, base: [tetrahedron[2]!, tetrahedron[3]!, tetrahedron[4]!] }
+  return null
+}
+
+function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.ok || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const shape = readTetrahedronShape(prompt)
+  if (shape === null) return null
+
+  const lengths = new Map<string, number>()
+  for (const obligation of first.obligations.ir.obligations) {
+    if (obligation.kind !== "fixedLength" || obligation.targets.length !== 2 || typeof obligation.expected !== "number") continue
+    lengths.set(pairKey(obligation.targets[0]!, obligation.targets[1]!), obligation.expected)
+  }
+  // `PA=PB=2` 这类链式写法解析器只读到后一段，这里补前一段。
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[5]!)
+    if (value === null) continue
+    lengths.set(pairKey(match[1]!, match[2]!), value)
+    lengths.set(pairKey(match[3]!, match[4]!), value)
+  }
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[3]!)
+    if (value !== null) lengths.set(pairKey(match[1]!, match[2]!), value)
+  }
+
+  const equilateral = /△?([A-Z])([A-Z])([A-Z])是边长为([0-9.]+)的等边三角形/.exec(prompt)
+  if (equilateral !== null) {
+    const names = [equilateral[1]!, equilateral[2]!, equilateral[3]!]
+    const value = Number(equilateral[4])
+    if (Number.isFinite(value) && value > 0 && names.every((name) => shape.base.includes(name))) {
+      for (const [left, right] of [[names[0], names[1]], [names[1], names[2]], [names[0], names[2]]] as const) {
+        lengths.set(pairKey(left!, right!), value)
+      }
+    }
+  }
+
+  const get = (left: string, right: string): number | undefined => lengths.get(pairKey(left, right))
+  const [baseA, baseB, baseC] = shape.base
+  const measures = {
+    ab: get(baseA, baseB),
+    ac: get(baseA, baseC),
+    bc: get(baseB, baseC),
+    pa: get(shape.apex, baseA),
+    pb: get(shape.apex, baseB),
+    pc: get(shape.apex, baseC)
+  }
+  if (Object.values(measures).some((value) => value === undefined)) return null
+  const points = constructTetrahedron(measures as { ab: number; ac: number; bc: number; pa: number; pb: number; pc: number })
+  if (points === null) return null
+
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由六条棱长构造的四面体",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "tetrahedron",
+      factIds: [],
+      inputs: {
+        alias: "tetrahedron",
+        vertexNames: [baseA, baseB, baseC, shape.apex],
+        vertices: [points.a, points.b, points.c, points.p],
+        faces: [[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
+      }
+    }]
+  }
+
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.tetrahedron",
+      text: "六条棱长由解析构造给出坐标（不是模型心算）；最终仍按题设核验。",
+      kind: "witness",
+      value: { apex: shape.apex, base: shape.base, measures },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
 /**
  * **结构清洗：顺序 + 非法折角**（2026-10-19，P1-3）。
  *

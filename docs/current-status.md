@@ -6,8 +6,9 @@
 - P1-3 进展：新增 `rescueWithStructuralRepairs`，同一轮清洗“线段顺序 + 非法折角（0° → 安全默认 90°，可覆盖）”，再走折角反求与题设核验；两条回归在 `planCompiler.witnessFold.test.ts`，提交 `16ca1cc`。
 - P5-1 进展：新增 `normalizeGeometryPrompt`（LaTeX 命令与 OCR 错字 → 解析器可读文本），接入 `parseObligationWithLegacy` / `parseObligationIR` 与 `planCompiler` 的解析/关系核验；11 道 HighMATH 原始 LaTeX 的 given **0→29**、unverified **26→13**，8/11 能读出条件；`latexNormalisation.test.ts` 4 条 + 原始 LaTeX 端到端 1 条通过。
 - P1-2 进展：`readScopedReference` 接受裸字符串并补成 `{scope:"draft",alias}`；对象缺 scope 仍拒绝；`schemas.test.ts` 与 `planCompiler.bareAlias.test.ts` 覆盖解析到绑定。
+- P1-1 进展：新增六棱四面体解析构造 `solver/tetrahedron.ts` 与救援 `rescueWithTetrahedronEdges`；等边/链式展开只在核验内部用，原文 span 不变；3 条纯数学 + 1 条编译回归通过。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
-- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及 P1-2 提交为准；门禁：412 文件 / 4774 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：414 文件 / 4779 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-17 真实 provider 画图评测（12 道）
 
