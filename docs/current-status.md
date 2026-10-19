@@ -7,6 +7,7 @@
 - P5-1 进展：新增 `normalizeGeometryPrompt`（LaTeX 命令与 OCR 错字 → 解析器可读文本），接入 `parseObligationWithLegacy` / `parseObligationIR` 与 `planCompiler` 的解析/关系核验；11 道 HighMATH 原始 LaTeX 的 given **0→29**、unverified **26→13**，8/11 能读出条件；`latexNormalisation.test.ts` 4 条 + 原始 LaTeX 端到端 1 条通过。
 - P1-2 进展：`readScopedReference` 接受裸字符串并补成 `{scope:"draft",alias}`；对象缺 scope 仍拒绝；`schemas.test.ts` 与 `planCompiler.bareAlias.test.ts` 覆盖解析到绑定。
 - P1-1 进展：新增六棱四面体解析构造 `solver/tetrahedron.ts` 与救援 `rescueWithTetrahedronEdges`；等边/链式展开只在核验内部用，原文 span 不变；3 条纯数学 + 1 条编译回归通过；真实 provider 的 solid-1 已 `verification=passed`（`witness.tetrahedron`）。
+- 12 道复跑（flash）：生成 **5→8**、题设全过 **0→1**、失败 **7→4**；`solid-1` 通过，`solid-9/32` 可编译但未核验；`solid-10/13`、`trig-23`、用户翻折题仍失败。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
 - 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：414 文件 / 4779 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
