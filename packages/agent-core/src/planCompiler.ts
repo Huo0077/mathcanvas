@@ -466,6 +466,48 @@ interface CompileOnceOutcome {
  * 抽出来是为了让救回路径能"再走一遍**同一段**代码"，而不是另写一条物化路径 ——
  * 后者一定会与这条分叉（这个项目在"同一个判断写两遍"上已经吃过好几次亏）。
  */
+/**
+ * **渲染级退化提示**（2026-10-19，P4-4）：标记点近重合、全部共线。
+ * 只发警告，不阻止出图；标签碰撞要等真正的渲染证据，暂不在这里猜。
+ */
+function renderDegeneracyWarnings(document: GeometryDocument): PlanDiagnostic[] {
+  const points = document.primitives
+    .filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3")
+    .map((primitive) => ({ label: (primitive as { label?: unknown }).label, position: (primitive as unknown as { position: { x: number; y: number; z: number } }).position }))
+    .filter((point): point is { label: string; position: { x: number; y: number; z: number } } => typeof point.label === "string" && point.position !== undefined)
+  const warnings: PlanDiagnostic[] = []
+  const tolerance = 1e-6
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) {
+      const a = points[first]!
+      const b = points[second]!
+      const distance = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y, a.position.z - b.position.z)
+      if (distance <= tolerance) {
+        warnings.push(planDiagnostic("geometry_validation", "render_near_coincident_points", "envelope.actions", `${a.label} 与 ${b.label} 的距离 ${distance.toExponential(2)} 近重合，渲染时可能无法分辨。`, "warning"))
+      }
+    }
+  }
+  if (points.length >= 3) {
+    const origin = points[0]!.position
+    const direction = points[1]!.position
+    const axis = { x: direction.x - origin.x, y: direction.y - origin.y, z: direction.z - origin.z }
+    const axisLength = Math.hypot(axis.x, axis.y, axis.z)
+    if (axisLength > tolerance) {
+      const collinear = points.slice(2).every((point) => {
+        const vector = { x: point.position.x - origin.x, y: point.position.y - origin.y, z: point.position.z - origin.z }
+        const cross = {
+          x: axis.y * vector.z - axis.z * vector.y,
+          y: axis.z * vector.x - axis.x * vector.z,
+          z: axis.x * vector.y - axis.y * vector.x
+        }
+        return Math.hypot(cross.x, cross.y, cross.z) / axisLength <= tolerance
+      })
+      if (collinear) warnings.push(planDiagnostic("geometry_validation", "render_collinear_points", "envelope.actions", "所有标记点共线，渲染视角会退化成一条线。", "warning"))
+    }
+  }
+  return warnings
+}
+
 function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOutcome {
   // ---- 1. 传输解析 ------------------------------------------------------
   const parsed = parsePlanEnvelope(input)
@@ -695,6 +737,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   if (effectivePrompt !== undefined && obligationParse !== null) {
     diagnostics.push(...foldRigidityDiagnostics(effectivePrompt, obligationParse.ir, working))
   }
+  diagnostics.push(...renderDegeneracyWarnings(working))
   const failed = diagnostics.some((entry) => entry.severity === "error")
   if (failed) {
     const errors = toParseErrors(diagnostics)

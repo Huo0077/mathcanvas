@@ -37,7 +37,7 @@
 | P4-1 | 4 | 只有结构化反馈，无渲染图像；无重叠/遮挡/标签碰撞 | P1 | open | 结构化 render evidence 进入修复；含包围盒重叠与标签碰撞 |
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | done | 同一计划“线段顺序错 + 0° 折角 + 坐标错”可一次串起结构清洗、补折/折角反求并通过核验；`planCompiler.combinedRescue.test.ts` 钉住 |
 | P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | done | 确认面板显示通过/失败/未核验数量与逐条原因；未 `passed` 时隐藏“确认并提交”；3 个 UI 测试 38 条通过 |
-| P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | open | 至少两条渲染判据 + 诊断文案 |
+| P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | partial | 已加近重合点、全部点共线两条渲染警告；相机退化与标签碰撞仍 open |
 | P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 已接入；11 道 HighMATH 原始 LaTeX 的 given 0→29、unverified 26→13，8/11 能读出条件 |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | done | 棱雉/棱椎/圆雉/圆椎等长替换 + `\vec{}` 归一；`latexNormalisation.ocr.test.ts` 覆盖纯文本与 LaTeX |
 | P5-3 | 5 | 欠定题默认特殊值（等边/等腰/整数） | P1 | open | 通用非退化采样或显式“选择一般位置”策略 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：441 文件 / 4823 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：442 文件 / 4826 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -181,6 +181,14 @@
 - 动作总数 37 → 38；skills manifest / catalogue 哈希已重签；动作计数、catalogue、runtime 期望列表全部同步。
 - 回归：`solidPoint.test.ts` 2 条；全量 441 文件 / 4823 通过。
 - 仍 open：旋转、反射、平移、求交、投影（验收要求至少 3 个动作）。
+
+## 2026-10-19 P4-4 进展
+
+- 编译成功后检查带标签的 `point3`：
+  - 两两距离 ≤1e-6 → `render_near_coincident_points` 警告
+  - 所有标记点共线 → `render_collinear_points` 警告
+- 只发警告、不阻止出图；回归：`renderDegeneracy.test.ts` 3 条。
+- 仍 open：相机退化、标签碰撞（需要真正的渲染证据）。
 
 ## 建议执行顺序
 
