@@ -148,7 +148,7 @@
 - 已按当前源码重建 `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`。
 - 安装包：`bundle/msi/MathCanvas_3.3.14_x64_en-US.msi`、`bundle/nsis/MathCanvas_3.3.14_x64-setup.exe`。
 - 启动 smoke：exe 启动后持续运行 10 秒（进程 `mathcanvas-desktop`），通过。
-- 最新源码（P2-1 原子动作、P2-4 开放壳提示、P4-4 渲染警告等）已再次重建；2026-10-19 22:17 的 exe 启动 10 秒 smoke 通过（pid 37532）。
+- 最新源码（P2-1 原子动作、P2-4 开放壳提示、P4-4 渲染警告等）已再次重建；2026-10-19 22:51 的 exe 启动 10 秒 smoke 通过（pid 22872）。
 
 ## 2026-10-19 P1-4 完成
 
