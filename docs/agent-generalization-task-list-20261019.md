@@ -55,14 +55,15 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：414 文件 / 4780 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：416 文件 / 4782 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
 - 新增 `rescueWithStructuralRepairs`：在同一份计划上先移走引用未建点的线段，再把不在 `(0°,180°]` 的折角按安全默认 `90°` 回填，然后才编译；90° 仍会交给折角反求，最终仍由题设核验。
 - 回填会写进 `assumptions`（`default-fold-angle.<apexAs>`，可覆盖），不是静默改值。
 - 回归：`planCompiler.witnessFold.test.ts` 新增“顺序 + 0°”和“0° 无目标角”两例，共 6 条通过；全量 411 文件 / 4771 通过 + 1 todo。
-- **边界**：真实 provider 的 user-quad-fold 当轮仍因模型坐标错误失败（CD/AD/角度不符），这不是结构清洗器能修的，仍归 P1-1/P5-1。
+- 追加 `materialiseFoldHinges`：删与折片同名的冗余 AEF 面，从折片顶点反推 E/F 在宿主边上的参数并物化为 bound point；单独复跑 user-quad-fold 时**八条题设全部 passed**。
+- **边界**：整批 12 道复跑该题仍可能因模型输出结构不同失败（最新一次 `verification=none`）；单题修复有效，但整体读数受模型方差影响。其余坐标错误归 P1-1/P5-1。
 
 ## 2026-10-19 P5-1 进展
 
@@ -96,6 +97,8 @@
 | 题设全过 | 0 / 12 | **1 / 12** |
 | 未核验 | 4 | 6 |
 | 失败 | 7 / 12 | **4 / 12** |
+
+- 同一晚的第二次整批复跑（`materialiseFoldHinges` 后）：**7 / 12 生成、1 / 12 全过、5 / 12 失败**；user-quad-fold 单独复跑是 **8/8 passed**，但整批这次模型输出结构不同而失败。两次读数说明单题修复有效，整体仍受模型方差影响。
 
 - `solid-1` 由六棱四面体救援通过（`witness.tetrahedron`）。
 - `solid-9` / `solid-32` 因裸别名补 scope 从“传输拒绝”变为“可编译、未核验”。

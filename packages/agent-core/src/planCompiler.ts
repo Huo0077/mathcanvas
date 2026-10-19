@@ -19,6 +19,7 @@ import { auditPlan, type FieldCompletion } from "./parameterAudit"
 import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { constructTetrahedron } from "./solver/tetrahedron"
+import { materialiseFoldHinges } from "./solver/foldHinges"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
@@ -2169,7 +2170,8 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
     return { status: "declined", reason: `没能按题面条件构造出坐标（${found.status}）：${(why[0] ?? "").slice(0, 300)}` }
   }
 
-  let candidatePlan = withWitnessCoordinates(first.plan, found.candidate)
+  const cleanedPlan = materialiseFoldHinges(first.plan)
+  let candidatePlan = withWitnessCoordinates(cleanedPlan, found.candidate)
   /**
    * **宿主缺席时补一个**（Task 7，2026-10-12）。
    *
@@ -2183,7 +2185,7 @@ function rescuedByWitnessSearch(context: PlanCompileContext, first: CompileOnceO
    * - 补出来的那一笔**坐标取内核构造的那一份**，本处一个数字都不算。
    */
   if (candidatePlan === null) {
-    const withHost = synthesisedHostPlan(first.plan, context.prompt, first.obligations.ir, found.candidate)
+    const withHost = synthesisedHostPlan(cleanedPlan, context.prompt, first.obligations.ir, found.candidate)
     if (withHost !== null) candidatePlan = withWitnessCoordinates(withHost, found.candidate)
   }
   if (candidatePlan === null) {
