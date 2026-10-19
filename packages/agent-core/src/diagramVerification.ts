@@ -162,25 +162,41 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * 混起来会让失败的**理由**变味（前者是映射不可靠，后者是图上没这个点）。
    */
   if (closedActions.length > 0) {
-    // Without a unique solid there is no reliable alias → candidate solid mapping.
-    if (closedActions.length !== 1 || solids.length !== 1) {
-      return { ok: false, reason: `计划里有 ${closedActions.length} 笔闭合 \`solid.create_polyhedron\`，候选图里有 ${solids.length} 只新多面体 —— 说不清题面说的是哪一只，题面的点名因此对不上图上的顶点` }
+    /**
+     * **多只闭合多面体按执行顺序配对**（2026-10-20，联考 `joint-02`）。
+     *
+     * 原先的守卫是"闭合动作恰好一个、新多面体恰好一只"，多一只就判"说不清题面说的是哪一只"。
+     * 现场读数是：两只多面体**都带点名、也都画出来了**（30 个图元），却因为"数量不是一"整题停在未核验。
+     *
+     * 为什么这里按序配对**不算**"按题面顺序猜坐标"：配的是**计划动作**与它自己物化出来的图元，
+     * 而"同一份计划按顺序执行"是本仓一以贯之的规则（`solid.create_segment` 的"先把点建出来"
+     * 就是同一条）。题面与图元之间**没有**任何按序猜测：点名仍然只从动作的 `vertexNames` 来。
+     *
+     * 数量必须相等：任何一笔没物化出来、或额外多出一只，配对就没有依据 —— 照样拒绝。
+     * 两张表合并时，**同一个点名指两个顶点**也拒绝（那是题面/计划自己冲突，不能靠合并掩盖）。
+     */
+    if (closedActions.length !== solids.length) {
+      return { ok: false, reason: `计划里有 ${closedActions.length} 笔闭合 \`solid.create_polyhedron\`，候选图里有 ${solids.length} 只新多面体 —— 数量对不上，题面的点名因此对不上图上的顶点` }
     }
-    const input = closedActions[0].inputs
-    if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
-      return { ok: false, reason: "这一笔多面体**没有带点名**（`vertexNames`）：图上的顶点只有模板编号（`P1`…），题面里的点名对不上它" }
-    }
-    const names = input.vertexNames
-    const solid = solids[0]
-    if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
-      return { ok: false, reason: `这一笔多面体的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, solid.vertexIds.length, "体")}` }
-    }
-    for (const [index, name] of names.entries()) {
-      const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
-      if (vertex?.type !== "point3") return { ok: false, reason: `多面体的第 ${index + 1} 个顶点（\`${solid.vertexIds[index]}\`）不是空间点` }
-      const position = vertex.position
-      if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `多面体的顶点 ${name} 坐标不是有限数` }
-      points.set(name as string, position)
+    for (const [solidIndex, action] of closedActions.entries()) {
+      const solid = solids[solidIndex]!
+      const input = action.inputs
+      const which = closedActions.length === 1 ? "这一笔多面体" : `第 ${solidIndex + 1} 笔多面体`
+      if (typeof input !== "object" || input === null || !("vertexNames" in input)) {
+        return { ok: false, reason: `${which}**没有带点名**（\`vertexNames\`）：图上的顶点只有模板编号（\`P1\`…），题面里的点名对不上它` }
+      }
+      const names = input.vertexNames
+      if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
+        return { ok: false, reason: `${which}的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, solid.vertexIds.length, "体")}` }
+      }
+      for (const [index, name] of names.entries()) {
+        const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
+        if (vertex?.type !== "point3") return { ok: false, reason: `多面体的第 ${index + 1} 个顶点（\`${solid.vertexIds[index]}\`）不是空间点` }
+        const position = vertex.position
+        if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `多面体的顶点 ${name} 坐标不是有限数` }
+        if (points.has(name as string)) return { ok: false, reason: `${which}的点名 ${name} 与前面那只多面体重复 —— 同一个点名不能指两个顶点` }
+        points.set(name as string, position)
+      }
     }
   }
 
