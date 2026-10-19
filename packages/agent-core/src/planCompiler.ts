@@ -405,8 +405,16 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (solvedFold !== null) return solvedFold
   if (context.diagramWitnessSearch !== true) return first.result
   const rescue = rescuedByWitnessSearch(context, first)
+  if (rescue.status === "rescued") return rescue.result
+  /**
+   * **规范折片重建**放在最后**（2026-10-19 稳定性复跑）：前面的补折/折角反求/见证救援
+   * 都能救时优先用它们；都救不回来时，再按题面比例 + 平面见证坐标从头重建折片。
+   * 这样既有测试断言的 `synthesised-fold` / `witness.polyhedron` 路径不会被抢走。
+   */
+  const foldConstruction = rescueWithFoldConstruction(context, first)
+  if (foldConstruction !== null) return foldConstruction
   /** 第 ③ 条纪律的**另一半**：救不回来时不但原样交回第一遍，还要**说清这组坐标是谁给的**。 */
-  return rescue.status === "rescued" ? rescue.result : rescue.status === "not-needed" ? first.result : labelModelCoordinates(first, rescue.reason)
+  return rescue.status === "not-needed" ? first.result : labelModelCoordinates(first, rescue.reason)
 }
 
 /**
@@ -2126,6 +2134,109 @@ function rescueWithDihedralTriangle(context: PlanCompileContext, first: CompileO
       path: "envelope.actions"
     }],
     materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **折片题的规范重建**（2026-10-19，稳定性复跑）：不再依赖模型把“四边形 + E/F + fold”
+ * 写对，而是用平面见证搜索构造 A–D，再按题面比例建 E/F、按题面补折、剪角、反求折角。
+ *
+ * 只处理“四边形 + 一个折片”这一族；别的结构仍走原有救援。
+ */
+function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const fold = readFoldTransformations(prompt)[0]
+  if (fold === undefined) return null
+  const quad = /四边形\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
+  if (quad === null) return null
+  const hostNames = new Set([quad[1]!, quad[2]!, quad[3]!, quad[4]!])
+  const searchIr = {
+    ...first.obligations.ir,
+    obligations: first.obligations.ir.obligations.filter((obligation) => obligation.targets.every((name) => hostNames.has(name)))
+  }
+  const found = searchWitness(witnessSearchInput(searchIr, prompt))
+  if (found.status !== "verified_instance") return null
+  const candidate = found.candidate
+  if (candidate.names.length !== 4 || !candidate.names.includes(fold.apex)) return null
+
+  const ratios = new Map<string, { from: string; to: string; parameter: number }>()
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([0-9]+(?:\.[0-9]+)?)\/([0-9]+)\s*([A-Z])([A-Z])/g)) {
+    const numerator = Number(match[3])
+    const denominator = Number(match[4])
+    if (!(denominator > 0) || !Number.isFinite(numerator)) continue
+    ratios.set(match[2]!, {
+      from: match[1]!,
+      to: match[6]!,
+      parameter: Math.max(0, Math.min(1, numerator / denominator))
+    })
+  }
+  const hingeNames = [...fold.face].filter((name) => name !== fold.apex)
+  if (hingeNames.length !== 2 || hingeNames.some((name) => !ratios.has(name))) return null
+
+  const hostAlias = "fold-host"
+  const host = {
+    actionId: "solid.create_face",
+    actionKey: hostAlias,
+    factIds: [],
+    inputs: { alias: hostAlias, vertexNames: [...candidate.names], vertices: candidate.vertices }
+  } as unknown as (typeof first.plan.actions)[number]
+  const bounds = hingeNames.map((name) => {
+    const ratio = ratios.get(name)!
+    return {
+      actionId: "dynamic.create_bound_point",
+      actionKey: `fold-hinge-${name}`,
+      factIds: [],
+      inputs: {
+        alias: name,
+        label: name,
+        host: { scope: "draft", alias: hostAlias },
+        hostEdge: { from: ratio.from, to: ratio.to },
+        parameter: ratio.parameter
+      }
+    } as unknown as (typeof first.plan.actions)[number]
+  })
+  const foldAction = {
+    actionId: "solid.fold",
+    actionKey: "fold-flap",
+    factIds: [],
+    inputs: {
+      alias: "fold-flap",
+      vertexNames: [...fold.face],
+      hinge: { from: fold.hinge.from, to: fold.hinge.to },
+      apex: fold.apex,
+      apexAs: fold.apexAs,
+      angle: 90
+    }
+  } as unknown as (typeof first.plan.actions)[number]
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由平面见证坐标 + 题面比例 + 折角反求构造的折片",
+    factIds: [],
+    actions: [host, ...bounds, foldAction]
+  }
+  const prepared = cutFoldedCorner(plan)
+  const verificationContext = { ...context, prompt: expandExamShorthand(prompt) }
+  const compiled = compileOnce(prepared, verificationContext)
+  let result = compiled.result
+  if (result.diagramVerification?.status !== "passed" || !result.ok || result.draftDocument === null) {
+    const solved = rescueWithSolvedFoldAngle(context, { ...first, plan: prepared, result })
+    if (solved === null) return null
+    result = solved
+  }
+  if (!result.ok || result.draftDocument === null || result.diagramVerification?.status !== "passed") return null
+  return {
+    ...result,
+    assumptions: [...result.assumptions, {
+      id: "witness.foldConstruction",
+      text: "折片由平面见证坐标 + 题面比例 + 折角反求规范重建；最终仍按题设核验。",
+      kind: "witness",
+      value: { candidate: candidate.names, hinge: fold.hinge, apex: fold.apex, apexAs: fold.apexAs },
+      overridable: true,
+      path: "envelope.actions"
+    }],
+    materialisedActions: result.actions
   }
 }
 
