@@ -83,6 +83,8 @@ export interface Point3ProjectionOptions {
   maxIterations?: number
   /** 残差容差；缺省 `1e-6`（与 `diagnoseConstraint3` 的默认值同源）。 */
   tolerance?: number
+  /** 墙钟预算（毫秒）；到点停止，返回半成品并标 `timedOut`。缺省不限。 */
+  deadlineMs?: number
 }
 
 export interface Point3ProjectionResult {
@@ -108,6 +110,8 @@ export interface Point3ProjectionResult {
   exhausted: boolean
   /** 实际跑了几轮（`exhausted` 为 `true` 时等于上限）。 */
   iterations: number
+  /** 墙钟预算到点（`deadlineMs`）；此时结果是半成品，与 `exhausted` 分开报。 */
+  timedOut: boolean
   /** 拖动门禁要的那两个读数：还剩多少自由度（欠约束）、有没有冗余约束（过约束）。 */
   analysis: Point3ConstraintAnalysis
 }
@@ -575,8 +579,14 @@ export function projectPoint3Constraints(
   let satisfied = false
   let exhausted = true
   let iterations = 0
+  let timedOut = false
+  const startedAt = Date.now()
 
   for (let pass = 0; pass < maxIterations; pass += 1) {
+    if (options.deadlineMs !== undefined && Date.now() - startedAt >= options.deadlineMs) {
+      timedOut = true
+      break
+    }
     iterations = pass + 1
     /**
      * 每一趟重新收集 `skipped`：上一趟修不了的约束，这一趟可能已经被**别的**约束顺手带满足了
@@ -631,6 +641,7 @@ export function projectPoint3Constraints(
     satisfied,
     exhausted,
     iterations,
+    timedOut,
     analysis
   }
 }

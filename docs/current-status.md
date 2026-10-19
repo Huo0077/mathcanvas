@@ -27,13 +27,14 @@
 - P2-1 完成：自由点、反射、投影、平移、旋转、线面交点六个原子动作全部落地并加入 spatial-modeling。
 - P2-4 完成：2–3 面开放壳明确拒绝，并提示逐面用 `solid.create_face`；3D 圆弧继续用线段近似，不误报已画。
 - P4-4 完成：近重合点、标签碰撞风险、全部点共线三条渲染警告；相机参数不在编译期，明确不在此判。
+- P3-3 完成：`projectPoint3Constraints` 迭代投影求解 7 类空间约束；新增 `deadlineMs` 预算，到点即停、`timedOut` 不冒充满足。
 - P2-3 完成：43 个动作共用字段种类表；source/planePoints/label/vector/angle 的复用由 `atomicActionFields.test.ts` 钉住。
 - P5-3 完成：生产提示词要求欠定题选“一般位置”，不默认等边/等腰/直角/整数，取值写进 assumptions。
 - P3-2 完成：锐角/直角/钝角三角形与“点在三角形内部”均已解析并核验，内外部反例通过。
 - P6-1 完成：Ctrl/Cmd+A 全选删除；模板实体/派生对象级联注销；宿主删除后绑定点降级为自由点并保留位置（`deletion-cascade` / `boundPointFollow` 回归）。
 - P1-5 部分 A/B：`deepseek-v4-pro` 前两题 1 passed / 1 unverified，约 2.5 分钟/题；完整批未跑，默认档位未改。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
-- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：450 文件 / 4841 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：451 文件 / 4843 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-17 真实 provider 画图评测（12 道）
 
