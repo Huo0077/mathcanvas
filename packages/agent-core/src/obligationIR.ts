@@ -97,6 +97,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "incenter") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   /** **重心 / 垂心 / 旁心比的都是"点差多少"**（2026-10-20）：长度量，同一把尺子。 */
   if (kind === "centroid" || kind === "orthocenter" || kind === "excenter") return { kind: "absolute", value: distanceTolerance(1) }
+  /** **外心比的是"到三个顶点的距离差"**（2026-10-20）：长度量，同一把尺子。 */
+  if (kind === "circumcenter") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。

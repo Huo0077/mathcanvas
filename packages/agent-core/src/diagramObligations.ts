@@ -48,6 +48,14 @@ export type DiagramObligationKind =
    */
   | "centroid" | "orthocenter" | "excenter"
   /**
+   * **外心**（2026-10-20）：`O 是 △ABC 的外心` ⇔ **到三个顶点等距**（都等于外接圆半径）。
+   *
+   * 与 `incenter` / `angleBisector` / 三个心同一条纪律：判据从**最终坐标**自己算。
+   * **注意它与"外心救援"的分工**：那条救援吃的是两条点积条件（`2AB·AO=|AB|²` 那一族）
+   * 并自己把点重建出来；这里判的是**题面明写"外心"**的那种说法。
+   */
+  | "circumcenter"
+  /**
    * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
    */
@@ -1617,6 +1625,17 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       kind: m[5] === "重心" ? "centroid" : m[5] === "垂心" ? "orthocenter" : "excenter",
       targets: [m[1]!, m[2]!, m[3]!, m[4]!]
     })
+  },
+  {
+    /**
+     * **外心**（2026-10-20）：`O 是 / 为 △ABC 的外心` ⇔ 到三个顶点等距。
+     *
+     * **只认"明写点名"的这一种语序**：`则点O为该三角形的外心` 那种**指代**写法不读 ——
+     * 那是外心救援自己的题面，读它会把救援的复核从 `passed` 打成 `unverified`
+     *（第十三批记下的同一条教训：触发词 / 读取器都不要伸手到救援路径里）。
+     */
+    pattern: /(?:点\s*)?([A-Z])\s*(?:是|为)\s*△?\s*([A-Z])([A-Z])([A-Z])\s*的\s*外心/g,
+    read: (m) => ({ kind: "circumcenter", targets: [m[1]!, m[2]!, m[3]!, m[4]!] })
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),

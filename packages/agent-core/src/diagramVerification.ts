@@ -1422,6 +1422,22 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       detail: `实测半径 ${circle.radius.toPrecision(6)}、两条半径的夹角 ${((radians * 180) / Math.PI).toPrecision(6)}°，劣弧长 ${length.toPrecision(6)}；题设要求弧长 ${numeric}。`
     }
   }
+  if (item.kind === "circumcenter") {
+    /**
+     * **外心**（2026-10-20）：到**三个顶点**等距。残余取"最远减最近" ——
+     * 一个数就说清了，失败文案也自然（`|OA|`、`|OB|`、`|OC|` 三个数摆出来）。
+     */
+    if (item.targets.length !== 4) return null
+    const distances = [length(at(0), at(1)), length(at(0), at(2)), length(at(0), at(3))]
+    if (distances.some((value) => !Number.isFinite(value))) return null
+    const spread = Math.max(...distances) - Math.min(...distances)
+    return {
+      actual: spread,
+      expected: 0,
+      tolerance: distanceTolerance(Math.max(...distances, 1)),
+      detail: `实测 ${item.targets[0]} 到三个顶点的距离分别是 ${distances.map((value) => value.toPrecision(6)).join("、")}；题设要求它是外心（到三个顶点等距）。`
+    }
+  }
   if (item.kind === "centroid" || item.kind === "orthocenter" || item.kind === "excenter") {
     /**
      * **重心 / 垂心 / 旁心**（2026-10-20）：`targets = [O, A, B, C]`，三个心的判据各不相同。
@@ -1762,7 +1778,7 @@ export function statedOriginNames(set: DiagramObligationSet, drawn: { has(name: 
      * **一个看起来合理、其实是编出来的坐标** —— 那正好是这条约定最不该伸手的地方。
      * 这几族一律如实报"点名缺失"。
      */
-    if (item.kind === "incenter" || item.kind === "angleBisector") return item.targets.includes(ORIGIN_POINT_NAME)
+    if (item.kind === "incenter" || item.kind === "angleBisector" || item.kind === "circumcenter" || item.kind === "centroid" || item.kind === "orthocenter" || item.kind === "excenter") return item.targets.includes(ORIGIN_POINT_NAME)
     return false
   })
   return definedByPrompt ? [] : [ORIGIN_POINT_NAME]
