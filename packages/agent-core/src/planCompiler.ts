@@ -22,6 +22,7 @@ import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRightPrism } from "./solver/prism"
+import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
 import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
@@ -389,6 +390,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (pyramid !== null) return pyramid
   const prism = rescueWithRightPrism(context, first)
   if (prism !== null) return prism
+  const trapezoidPrism = rescueWithTrapezoidPrism(context, first)
+  if (trapezoidPrism !== null) return trapezoidPrism
   const dihedral = rescueWithDihedralTriangle(context, first)
   if (dihedral !== null) return dihedral
   /**
@@ -2253,14 +2256,49 @@ function rescueWithSortedFaceRings(context: PlanCompileContext, first: CompileOn
   if (first.result.ok || first.plan === null) return null
   const indexes = new Set<number>()
   for (const diagnostic of first.result.diagnostics) {
-    if (diagnostic.code !== "degenerate_polyhedron" || !/self-intersects/i.test(diagnostic.detail)) continue
+    if (!["degenerate_polyhedron", "degenerate_prism"].includes(diagnostic.code) || !/(self-intersects|自交)/i.test(diagnostic.detail)) continue
     const index = Number(/envelope\.actions\[(\d+)\]/.exec(diagnostic.path)?.[1])
     if (Number.isInteger(index) && index >= 0) indexes.add(index)
   }
   if (indexes.size === 0) return null
 
   const actions = first.plan.actions.map((action, index) => {
-    if (!indexes.has(index) || action.actionId !== "solid.create_polyhedron") return action
+    if (!indexes.has(index)) return action
+    if (action.actionId === "solid.create_prism") {
+      const inputs = action.inputs as { basePolygon?: unknown }
+      if (!Array.isArray(inputs.basePolygon)) return action
+      const points = inputs.basePolygon as { x: number; y: number; z: number }[]
+      if (points.length < 3) return action
+      const center = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
+      const edgeA = { x: points[1]!.x - points[0]!.x, y: points[1]!.y - points[0]!.y, z: points[1]!.z - points[0]!.z }
+      let normal: { x: number; y: number; z: number } | null = null
+      for (let cursor = 2; cursor < points.length; cursor += 1) {
+        const edgeB = { x: points[cursor]!.x - points[0]!.x, y: points[cursor]!.y - points[0]!.y, z: points[cursor]!.z - points[0]!.z }
+        const cross = {
+          x: edgeA.y * edgeB.z - edgeA.z * edgeB.y,
+          y: edgeA.z * edgeB.x - edgeA.x * edgeB.z,
+          z: edgeA.x * edgeB.y - edgeA.y * edgeB.x
+        }
+        if (Math.hypot(cross.x, cross.y, cross.z) > 1e-12) { normal = cross; break }
+      }
+      if (normal === null) return action
+      const length = Math.hypot(normal.x, normal.y, normal.z)
+      const unitNormal = { x: normal.x / length, y: normal.y / length, z: normal.z / length }
+      const firstVector = { x: points[0]!.x - center.x, y: points[0]!.y - center.y, z: points[0]!.z - center.z }
+      const firstLength = Math.hypot(firstVector.x, firstVector.y, firstVector.z) || 1
+      const u = { x: firstVector.x / firstLength, y: firstVector.y / firstLength, z: firstVector.z / firstLength }
+      const v = {
+        x: unitNormal.y * u.z - unitNormal.z * u.y,
+        y: unitNormal.z * u.x - unitNormal.x * u.z,
+        z: unitNormal.x * u.y - unitNormal.y * u.x
+      }
+      const sortedBase = points.map((point) => {
+        const relative = { x: point.x - center.x, y: point.y - center.y, z: point.z - center.z }
+        return { point, angle: Math.atan2(relative.x * v.x + relative.y * v.y + relative.z * v.z, relative.x * u.x + relative.y * u.y + relative.z * u.z) }
+      }).sort((left, right) => left.angle - right.angle).map((entry) => entry.point)
+      return { ...action, inputs: { ...(action.inputs as Record<string, unknown>), basePolygon: sortedBase } }
+    }
+    if (action.actionId !== "solid.create_polyhedron") return action
     const inputs = action.inputs as { vertices?: unknown; faces?: unknown }
     if (!Array.isArray(inputs.vertices) || !Array.isArray(inputs.faces)) return action
     const vertices = inputs.vertices as { x: number; y: number; z: number }[]
@@ -2314,6 +2352,65 @@ function rescueWithSortedFaceRings(context: PlanCompileContext, first: CompileOn
       value: { actions: [...indexes] },
       overridable: true,
       path: "envelope.actions"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **直四棱柱 + 梯形底**（2026-10-19，P1-1，solid-20）。由 AB、AD、CD 与体积解出高，
+ * 再用 `solid.create_prism` 建底面 + 拉伸；垂直/平行条件仍交给题设核验。
+ */
+function rescueWithTrapezoidPrism(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const shape = /直四棱柱\s*([A-Z])([A-Z])([A-Z])([A-Z])\s*-\s*([A-Z])₁([A-Z])₁([A-Z])₁([A-Z])₁/.exec(prompt)
+  if (shape === null || !/AB\s*⊥\s*AD/.test(prompt) || !/AB\s*\/\/\s*CD/.test(prompt)) return null
+  const base = [shape[1]!, shape[2]!, shape[3]!, shape[4]!] as const
+  const top = [`${shape[5]!}₁`, `${shape[6]!}₁`, `${shape[7]!}₁`, `${shape[8]!}₁`] as const
+  const lengths = new Map<string, number>()
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])\s*=\s*([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[3]!)
+    if (value !== null) lengths.set(pairKey(match[1]!, match[2]!), value)
+  }
+  const ab = lengths.get(pairKey(base[0], base[1]))
+  const ad = lengths.get(pairKey(base[0], base[3]))
+  const cd = lengths.get(pairKey(base[2], base[3]))
+  const volumeMatch = /体积为([0-9.]+)/.exec(prompt)
+  if (ab === undefined || ad === undefined || cd === undefined || volumeMatch === null) return null
+  const points = constructRightTrapezoidPrism({ ab, ad, cd, volume: Number(volumeMatch[1]) })
+  if (points === null) return null
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由梯形底与体积构造的直四棱柱",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_prism",
+      actionKey: "trapezoid-prism",
+      factIds: [],
+      inputs: {
+        alias: "trapezoid-prism",
+        basePolygon: [points.a, points.b, points.c, points.d],
+        vector: { x: 0, y: 0, z: points.a1.z },
+        vertexNames: [base[0], base[1], base[2], base[3], top[0], top[1], top[2], top[3]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status === "failed") return null
+  const verified = compiled.result.diagramVerification?.status === "passed"
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.trapezoidPrism",
+      text: verified
+        ? "由梯形底与体积解出高的直四棱柱；已按题设核验。"
+        : "由梯形底与体积解出高的直四棱柱；部分条件未解析，仍标未核验。",
+      kind: "witness",
+      value: { ab, ad, cd, volume: Number(volumeMatch[1]) },
+      overridable: true,
+      path: "envelope.actions[0].inputs.basePolygon"
     }],
     materialisedActions: compiled.result.actions
   }

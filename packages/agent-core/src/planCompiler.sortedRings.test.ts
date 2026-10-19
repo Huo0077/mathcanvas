@@ -33,11 +33,43 @@ function bowTieCube(): Extract<PlanEnvelope, { kind: "plan" }> {
   }
 }
 
+function bowTiePrism(): Extract<PlanEnvelope, { kind: "plan" }> {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "棱柱底面环顺序错",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_prism",
+      actionKey: "prism",
+      factIds: [],
+      inputs: {
+        alias: "prism",
+        // A–C–B–D 是蝴蝶结；正确顺序应为 A–B–C–D。
+        basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 4, y: 3, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 3, z: 0 }],
+        vector: { x: 0, y: 0, z: 4 },
+        vertexNames: ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"]
+      }
+    }]
+  }
+}
+
 describe("face ring sorting rescue", () => {
   it("reorders a self-intersecting ring into angular order", () => {
     const compiled = compilePlan(bowTieCube(), {
       document: createEmptyDocument("geometry3d"),
       conversationId: "bow-tie-ring",
+      documentGeneration: 0
+    })
+
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
+    expect(compiled.assumptions.some((assumption) => assumption.id === "witness.sortedFaceRings")).toBe(true)
+  })
+
+  it("also reorders a prism base ring", () => {
+    const compiled = compilePlan(bowTiePrism(), {
+      document: createEmptyDocument("geometry3d"),
+      conversationId: "bow-tie-prism",
       documentGeneration: 0
     })
 
