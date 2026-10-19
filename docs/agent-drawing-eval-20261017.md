@@ -91,3 +91,15 @@
 - 两次整批都通过 `solid-1`（六棱四面体）、`solid-10`（正方形底四棱锥）、`solid-13`（右三棱柱）、`user-quad-fold`（折痕物化）。
 - 最近一次（二面角救援后）：`trig-23` 从几何失败变为可画/未核验；但 `solid-9/20/32` 因模型输出不同失败，生成数从 11 掉到 9。
 - 未核验：`solid-3/9/20/24/32`、`trig-23/60/89`；读数来自 flash 单次运行，方差明显。全量门禁：422 文件 / 4791 通过 + 1 todo。
+
+## 十一、稳定性复跑（4 道 × 3 次，flash）
+
+| 题 | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| solid-1 | passed | passed | passed |
+| solid-10 | passed | passed | passed |
+| solid-13 | passed | passed | passed |
+| user-quad-fold | failed | unverified | unverified |
+
+- 三个解析构造 **3/3 稳定**；`user-quad-fold` **0/3**，三轮模型分别交了共线 AEF 面、线段顺序错等不同结构，`materialiseFoldHinges` 只在“AEF 平面片 + fold”结构上生效。
+- 结论：坐标求解已经稳定，下一层瓶颈是**模型输出结构的稳定性**与更早的结构清洗。
