@@ -889,3 +889,29 @@ describe("静默丢失：没有判据的条件至少要显形", () => {
     expect(parseDiagramObligations("△ABC 是正三角形").givens.find((item) => item.kind === "equilateral")?.targets).toEqual(["A", "B", "C"])
   })
 })
+
+/**
+ * **立体几何里的静默丢失**（2026-10-20，第二轮探针）。
+ *
+ * 两类分开处理：
+ * - `点 E 在棱 AB 上` —— 这里的「棱」**已经排除了"直线"的歧义**（棱是线段），
+ *   所以不必靠"一点"那截尾巴也能读；没有「棱 / 边」量词的 `E 在 AB 上` 仍然不收。
+ * - 异面直线所成角、点到平面的距离、体积 —— 今天**没有判据**，但**不能消失**。
+ */
+describe("立体几何：能读的读，没判据的显形", () => {
+  it("`点E在棱AB上` ⇒ pointOnSegment[E, A, B]（「棱」排除了歧义）", () => {
+    expect(parseDiagramObligations("点E在棱AB上").givens.find((item) => item.kind === "pointOnSegment")?.targets).toEqual(["E", "A", "B"])
+    expect(parseDiagramObligations("E在棱AB上").givens.find((item) => item.kind === "pointOnSegment")?.targets).toEqual(["E", "A", "B"])
+  })
+
+  it("**没有「棱」量词的 `E 在 AB 上` 仍然不收**（可能是线段、也可能是直线）", () => {
+    expect(parseDiagramObligations("E 在 AB 上").givens.some((item) => item.kind === "pointOnSegment")).toBe(false)
+  })
+
+  it("异面直线所成角、点到平面的距离、体积：没有判据，但**不许消失**", () => {
+    for (const prompt of ["直线AB与CD所成角为60°", "点P到平面ABCD的距离为2", "三棱锥P-ABC的体积为4"]) {
+      const parsed = parseDiagramObligations(prompt)
+      expect(parsed.unverified.length, `${prompt} 应当落进未核验，而不是消失`).toBeGreaterThan(0)
+    }
+  })
+})

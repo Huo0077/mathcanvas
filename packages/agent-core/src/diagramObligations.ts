@@ -619,6 +619,22 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return { kind: "pointOnSegment", targets: [...point, ...segment] }
     }
   },
+  {
+    /**
+     * **`点 E 在棱 AB 上`**（2026-10-20 立体系探针）。
+     *
+     * 与上一条的差别只有一个词：这里的「棱 / 边」**已经排除了"直线"的歧义** ——
+     * 棱是线段，所以这一句**不必**靠"一点"那截尾巴也能读。没有量词的 `E 在 AB 上`
+     * 仍然交给未核验（那可能是线段、也可能是直线，猜不得）。
+     */
+    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:在|是|为)\\s*(?:棱|边)\\s*(${SEGMENT_NAME})\\s*上`, "g"),
+    read: (m) => {
+      const point = names(m[1])
+      const segment = names(m[2])
+      if (point.length !== 1 || segment.length !== 2) return null
+      return { kind: "pointOnSegment", targets: [...point, ...segment] }
+    }
+  },
   /**
    * **直线与圆锥曲线的交点**（Task 14）：`…与直线 y = x + 1 相交于 A、B 两点` / `…与直线 x = 3 相切`。
    *
@@ -1189,7 +1205,7 @@ function radicalValue(text: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null
 }
 
-const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?|(?:锐角|直角|钝角)三角形|[A-Z]{2}\s*[>＜<≠≥≤]\s*[A-Z]{2}|直径|[≌∽]|重心|垂心|矩形|交于点/g
+const UNREAD_CONDITION = /∠\s*[A-Z]{3}\s*=\s*\d+(?:\.\d+)?\s*°|[A-Z]{2}\s*[:：]\s*[A-Z]{2}\s*=\s*\d+(?:\.\d+)?|[A-Z]{2}\s*=\s*-?\d+(?:\.\d+)?|(?:锐角|直角|钝角)三角形|[A-Z]{2}\s*[>＜<≠≥≤]\s*[A-Z]{2}|直径|[≌∽]|重心|垂心|矩形|交于点|所成角(?:为|是)?\s*[√\d]|体积(?:为|是)\s*[√\d]|距离(?:为|是)\s*[√\d]/g
 
 /**
  * **曲线方程的形状**：**小写** `x` / `y` 后面跟平方（`x²` / `x^2` / `y²`）。
