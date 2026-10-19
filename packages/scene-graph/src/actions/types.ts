@@ -326,6 +326,16 @@ export interface SolidCreateReflectionAction extends ActionBase {
   }
 }
 
+export interface SolidCreateProjectionAction extends ActionBase {
+  actionId: "solid.create_projection"
+  inputs: {
+    alias: DraftAlias
+    source: string
+    planePoints: string[]
+    label?: string
+  }
+}
+
 /**
  * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场）。
  *
@@ -618,6 +628,7 @@ export type DraftAction =
   | SolidCreateFaceAction
   | SolidCreatePointAction
   | SolidCreateReflectionAction
+  | SolidCreateProjectionAction
   | SolidCreateSegmentAction
   | SolidFoldAction
   | SolidUnfoldAction

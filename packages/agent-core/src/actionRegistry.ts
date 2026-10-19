@@ -509,6 +509,13 @@ export const ACTIONS = {
     required: ["source", "planePoints"],
     defaults: {}
   },
+  "solid.create_projection": {
+    inputFields: ["alias", "source", "planePoints", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["source", "planePoints"],
+    defaults: {}
+  },
   "solid.create_segment": {
     inputFields: ["alias", "vertexNames", "label"],
     requiresAlias: true,

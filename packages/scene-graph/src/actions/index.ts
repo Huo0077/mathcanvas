@@ -1023,6 +1023,41 @@ function compileSolidReflectionAction(action: Extract<DraftAction, { actionId: "
   }
 }
 
+function compileSolidProjectionAction(action: Extract<DraftAction, { actionId: "solid.create_projection" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+  if (context.targetWorkspace !== "geometry3d") return refuse("workspace_mismatch", "a projected spatial point can only be created in the solid workspace")
+  if (inputs.planePoints.length !== 3) return refuse("projection_plane_count", `一个投影平面要恰好三个点名，这里给了 ${inputs.planePoints.length} 个。`)
+  const at = (name: string) => context.targetDocument.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === name)
+  const source = at(inputs.source)
+  const planePoints = inputs.planePoints.map((name) => at(name))
+  const missing = [inputs.source, ...inputs.planePoints].filter((name) => at(name) === undefined)
+  if (source === undefined || planePoints.some((point) => point === undefined) || missing.length > 0) {
+    return refuse("projection_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")}。投影点必须排在建出源点与平面三点的动作之后。`)
+  }
+  const positionOf = (point: (typeof planePoints)[number]): { x: number; y: number; z: number } => (point as unknown as { position: { x: number; y: number; z: number } }).position
+  const first = positionOf(planePoints[0]!)
+  const second = positionOf(planePoints[1]!)
+  const third = positionOf(planePoints[2]!)
+  const sourcePosition = positionOf(source)
+  const normal = {
+    x: (second.y - first.y) * (third.z - first.z) - (second.z - first.z) * (third.y - first.y),
+    y: (second.z - first.z) * (third.x - first.x) - (second.x - first.x) * (third.z - first.z),
+    z: (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x)
+  }
+  const normalSquared = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z
+  if (!(normalSquared > 1e-18)) return refuse("projection_plane_degenerate", "投影平面的三个点共线，无法确定平面。")
+  const offset = { x: sourcePosition.x - first.x, y: sourcePosition.y - first.y, z: sourcePosition.z - first.z }
+  const factor = (offset.x * normal.x + offset.y * normal.y + offset.z * normal.z) / normalSquared
+  const position = { x: sourcePosition.x - factor * normal.x, y: sourcePosition.y - factor * normal.y, z: sourcePosition.z - factor * normal.z }
+  const id = context.idAllocator.allocate("point", inputs.alias)
+  return {
+    operations: [{ op: "addPrimitives", primitives: [{ id, type: "point3", position, binding: { kind: "free" }, ...(inputs.label === undefined ? {} : { label: inputs.label }) }] }],
+    diagnostics: [],
+    aliasToId: { [inputs.alias]: id }
+  }
+}
+
 function compileSolidPointAction(action: Extract<DraftAction, { actionId: "solid.create_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1908,6 +1943,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_projection":
+      return compileSolidProjectionAction(action, context)
     case "solid.create_reflection":
       return compileSolidReflectionAction(action, context)
     case "solid.create_point":
