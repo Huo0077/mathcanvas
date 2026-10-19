@@ -757,18 +757,28 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       }
       out.vertexNames = names
       const hingeRaw = value.hinge
-      if (typeof hingeRaw !== "object" || hingeRaw === null || Array.isArray(hingeRaw)) {
+      if (Array.isArray(hingeRaw) && hingeRaw.length === 2) {
+        /**
+         * **数组写法 `["E","F"]` 也收**（2026-10-19 用户现场）：模型把折痕端点写成数组，
+         * 与 `{from,to}` 语义相同（两个点名、顺序无关）。
+         */
+        const from = boundedString(hingeRaw[0], `${path}.hinge[0]`, errors)
+        const to = boundedString(hingeRaw[1], `${path}.hinge[1]`, errors)
+        if (from === null || to === null) return null
+        out.hinge = { from: canonicalPointName(from), to: canonicalPointName(to) }
+      } else if (typeof hingeRaw !== "object" || hingeRaw === null || Array.isArray(hingeRaw)) {
         errors.push(fail("invalid_type", `${path}.hinge`, "expected the two hinge endpoints as { from, to }"))
         return null
+      } else {
+        const hingeFields = hingeRaw as Record<string, unknown>
+        const hinge: Record<string, string> = {}
+        for (const endpoint of ["from", "to"] as const) {
+          const read = boundedString(hingeFields[endpoint], `${path}.hinge.${endpoint}`, errors)
+          if (read === null) return null
+          hinge[endpoint] = canonicalPointName(read)
+        }
+        out.hinge = hinge
       }
-      const hingeFields = hingeRaw as Record<string, unknown>
-      const hinge: Record<string, string> = {}
-      for (const endpoint of ["from", "to"] as const) {
-        const read = boundedString(hingeFields[endpoint], `${path}.hinge.${endpoint}`, errors)
-        if (read === null) return null
-        hinge[endpoint] = canonicalPointName(read)
-      }
-      out.hinge = hinge
       for (const field of ["apex", "apexAs"] as const) {
         const read = boundedString(value[field], `${path}.${field}`, errors)
         if (read === null) return null

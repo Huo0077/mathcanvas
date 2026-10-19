@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：414 文件 / 4779 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：414 文件 / 4780 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -75,7 +75,8 @@
 ## 2026-10-19 P1-2 进展
 
 - `readScopedReference` 接受**裸字符串**并补成 `{scope:"draft",alias}`；场景引用仍然必须带 `documentId`/`entityId`，只给 `{entityId}` 的对象继续按 `unscoped_reference` 拒绝。
-- 回归：`schemas.test.ts` 的 draft action 解析、`planCompiler.bareAlias.test.ts` 的端到端绑定；全量 412 文件 / 4774 通过 + 1 todo。
+- 回归：`schemas.test.ts` 的 draft action 解析、`planCompiler.bareAlias.test.ts` 的端到端绑定；全量 414 文件 / 4780 通过 + 1 todo。
+- 追加：`solid.fold` 的折痕也接受数组 `["E","F"]`（归一成 `{from,to}`）；用户翻折题从“传输层拒绝”推进到几何核验，剩余 CD=3 / ∠ADC=90° / PC=4√3 不符。
 - **边界**：别名不存在时由编译器报 `alias_missing`；不再把“裸字符串”整轮拒掉，但仍不猜作用域。
 
 ## 2026-10-19 P1-1 进展

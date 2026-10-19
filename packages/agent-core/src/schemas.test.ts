@@ -253,6 +253,26 @@ describe("draft action parsing", () => {
     if (result.ok) expect(result.value.inputs).toMatchObject({ host: { scope: "draft", alias: "quad" } })
   })
 
+  it("accepts the two hinge endpoints as an array", () => {
+    const result = parseDraftAction({
+      actionId: "solid.fold",
+      actionKey: "fold",
+      factIds: [],
+      inputs: {
+        alias: "PEF",
+        vertices: [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }],
+        vertexNames: ["A", "E", "F"],
+        hinge: ["E", "F"],
+        apex: "A",
+        apexAs: "P",
+        angle: 120
+      }
+    })
+
+    expect(result.ok, result.ok ? "" : JSON.stringify(result.errors)).toBe(true)
+    if (result.ok) expect(result.value.inputs).toMatchObject({ hinge: { from: "E", to: "F" } })
+  })
+
   it("rejects a raw domain operation masquerading as an action", () => {
     expectRejected(parseDraftAction({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 0, y: 0 } }), "unknown_action")
   })

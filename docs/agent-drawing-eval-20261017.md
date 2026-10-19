@@ -69,7 +69,7 @@
 
 ## 八、门禁
 
-- 全量单测：**414 文件 / 4779 通过 + 1 todo**。
+- 全量单测：**414 文件 / 4780 通过 + 1 todo**。
 - `npm run typecheck`：exit 0。
 - `npm run lint`：**0 error / 15 warning**。
 
@@ -90,5 +90,5 @@
 
 - `solid-1` 由六棱四面体救援通过（`witness.tetrahedron`）。
 - `solid-9` / `solid-32` 由裸别名补 scope 变为可编译；因部分条件未解析，仍记 `unverified`。
-- 仍失败：`solid-10`（PD=3.16、∠PCA=26.6°）、`solid-13`（坐标）、`trig-23`（几何）、用户翻折题（模型输出 `hinge` 不是 `{from,to}`）。
-- 这是单次 flash 运行；模型有方差，不能当稳定通过率。全量门禁：414 文件 / 4779 通过 + 1 todo。
+- 仍失败：`solid-10`（PD=3.16、∠PCA=26.6°）、`solid-13`（坐标）、`trig-23`（几何）、用户翻折题（hinge 数组已可解析；剩余 CD=3 / ∠ADC=90° / PC=4√3 不符）。
+- 这是单次 flash 运行；模型有方差，不能当稳定通过率。全量门禁：414 文件 / 4780 通过 + 1 todo。
