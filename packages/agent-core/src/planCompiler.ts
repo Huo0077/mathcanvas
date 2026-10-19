@@ -369,6 +369,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const structural = rescueWithStructuralRepairs(context, first)
   if (structural !== null) return structural
+  const sortedRings = rescueWithSortedFaceRings(context, first)
+  if (sortedRings !== null) return sortedRings
   /**
    * **线段引用了还没建出来的点**（2026-10-17 评测现场）：模型把 `EF` 排在了
    * `bound E/F` 之前。移动它到末尾重编一次 —— 只动顺序，不改字段。
@@ -2237,6 +2239,83 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
       path: "envelope.actions"
     }],
     materialisedActions: result.actions
+  }
+}
+
+/**
+ * **面环自交 → 按平面角序重排**（2026-10-19，solid-9/20 现场）。
+ *
+ * 模型给了正确的顶点，但面环顺序写成蝴蝶结（`[0,2,1,3]`），内核报
+ * `face ring … self-intersects`。这里只重排**被点名的那些多面体的面环**：
+ * 以面中心为原点、面法向为轴，按 atan2 排序；顶点数组与点名顺序不动。
+ */
+function rescueWithSortedFaceRings(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.ok || first.plan === null) return null
+  const indexes = new Set<number>()
+  for (const diagnostic of first.result.diagnostics) {
+    if (diagnostic.code !== "degenerate_polyhedron" || !/self-intersects/i.test(diagnostic.detail)) continue
+    const index = Number(/envelope\.actions\[(\d+)\]/.exec(diagnostic.path)?.[1])
+    if (Number.isInteger(index) && index >= 0) indexes.add(index)
+  }
+  if (indexes.size === 0) return null
+
+  const actions = first.plan.actions.map((action, index) => {
+    if (!indexes.has(index) || action.actionId !== "solid.create_polyhedron") return action
+    const inputs = action.inputs as { vertices?: unknown; faces?: unknown }
+    if (!Array.isArray(inputs.vertices) || !Array.isArray(inputs.faces)) return action
+    const vertices = inputs.vertices as { x: number; y: number; z: number }[]
+    const sortRing = (ring: number[]): number[] => {
+      if (ring.length < 3) return ring
+      const points = ring.map((vertexIndex) => vertices[vertexIndex]).filter((point): point is { x: number; y: number; z: number } => point !== undefined)
+      if (points.length !== ring.length) return ring
+      const center = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
+      const edgeA = { x: points[1]!.x - points[0]!.x, y: points[1]!.y - points[0]!.y, z: points[1]!.z - points[0]!.z }
+      let normal: { x: number; y: number; z: number } | null = null
+      for (let cursor = 2; cursor < points.length; cursor += 1) {
+        const edgeB = { x: points[cursor]!.x - points[0]!.x, y: points[cursor]!.y - points[0]!.y, z: points[cursor]!.z - points[0]!.z }
+        const cross = {
+          x: edgeA.y * edgeB.z - edgeA.z * edgeB.y,
+          y: edgeA.z * edgeB.x - edgeA.x * edgeB.z,
+          z: edgeA.x * edgeB.y - edgeA.y * edgeB.x
+        }
+        if (Math.hypot(cross.x, cross.y, cross.z) > 1e-12) { normal = cross; break }
+      }
+      if (normal === null) return ring
+      const length = Math.hypot(normal.x, normal.y, normal.z)
+      const unitNormal = { x: normal.x / length, y: normal.y / length, z: normal.z / length }
+      const firstVector = { x: points[0]!.x - center.x, y: points[0]!.y - center.y, z: points[0]!.z - center.z }
+      const firstLength = Math.hypot(firstVector.x, firstVector.y, firstVector.z) || 1
+      const u = { x: firstVector.x / firstLength, y: firstVector.y / firstLength, z: firstVector.z / firstLength }
+      const v = {
+        x: unitNormal.y * u.z - unitNormal.z * u.y,
+        y: unitNormal.z * u.x - unitNormal.x * u.z,
+        z: unitNormal.x * u.y - unitNormal.y * u.x
+      }
+      return ring.map((vertexIndex, position) => {
+        const point = points[position]!
+        const relative = { x: point.x - center.x, y: point.y - center.y, z: point.z - center.z }
+        return { vertexIndex, angle: Math.atan2(relative.x * v.x + relative.y * v.y + relative.z * v.z, relative.x * u.x + relative.y * u.y + relative.z * u.z) }
+      }).sort((left, right) => left.angle - right.angle).map((entry) => entry.vertexIndex)
+    }
+    return {
+      ...action,
+      inputs: { ...(action.inputs as Record<string, unknown>), faces: (inputs.faces as unknown[]).map((ring) => Array.isArray(ring) ? sortRing(ring as number[]) : ring) }
+    }
+  })
+  const sorted = { ...first.plan, actions }
+  const compiled = compileOnce(sorted, context)
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status === "failed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.sortedFaceRings",
+      text: "面环原先自交：按面内角序重排了环，顶点与点名顺序未动；最终仍按题设核验。",
+      kind: "inferred",
+      value: { actions: [...indexes] },
+      overridable: true,
+      path: "envelope.actions"
+    }],
+    materialisedActions: compiled.result.actions
   }
 }
 
