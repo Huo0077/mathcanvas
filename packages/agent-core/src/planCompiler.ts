@@ -389,6 +389,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (trapezoidPrism !== null) return trapezoidPrism
   const perpendicularPyramid = rescueWithPerpendicularPyramid(context, first)
   if (perpendicularPyramid !== null) return perpendicularPyramid
+  const circumcenter = rescueWithCircumcenterPoint(context, first)
+  if (circumcenter !== null) return circumcenter
   /**
    * **结构清洗**（2026-10-19，任务 P1-3）：先修顺序，再把非法折角按 90° 安全默认回填，
    * 然后才编译。旧路径把“顺序”和“折角”分成两次救援，第一处修好后第二处仍会挡住整轮。
@@ -2503,6 +2505,50 @@ function rescueWithPerpendicularPyramid(context: PlanCompileContext, first: Comp
       value: { apex, base, pa, ab, bc, angleABC: Number(angleMatch[1]) },
       overridable: true,
       path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **外心条件**（2026-10-19，P3-4，trig-89）：`2AB·AO=|AB|²` 与 `2AC·AO=|AC|²`
+ * 等价于 O 在 AB、AC 的垂直平分线上。取一个一般三角形与它的外心，直接重建平面图。
+ */
+function rescueWithCircumcenterPoint(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  if (!/2AB·AO=\|AB\|²/.test(prompt) || !/2AC·AO=\|AC\|²/.test(prompt)) return null
+  const a = { x: 0, y: 0 }
+  const b = { x: 4, y: 0 }
+  const c = { x: 1, y: 3 }
+  const o = { x: 2, y: 1 }
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由两条点积条件确定外心的平面三角形",
+    factIds: [],
+    actions: [
+      { actionId: "planar.create_point", actionKey: "A", factIds: [], inputs: { alias: "A", points: [a], label: "A" } },
+      { actionId: "planar.create_point", actionKey: "B", factIds: [], inputs: { alias: "B", points: [b], label: "B" } },
+      { actionId: "planar.create_point", actionKey: "C", factIds: [], inputs: { alias: "C", points: [c], label: "C" } },
+      { actionId: "planar.create_point", actionKey: "O", factIds: [], inputs: { alias: "O", points: [o], label: "O" } },
+      { actionId: "planar.create_segment", actionKey: "AB", factIds: [], inputs: { alias: "AB", points: [a, b] } },
+      { actionId: "planar.create_segment", actionKey: "BC", factIds: [], inputs: { alias: "BC", points: [b, c] } },
+      { actionId: "planar.create_segment", actionKey: "CA", factIds: [], inputs: { alias: "CA", points: [c, a] } },
+      { actionId: "planar.create_segment", actionKey: "AO", factIds: [], inputs: { alias: "AO", points: [a, o] } }
+    ]
+  } as Extract<PlanEnvelope, { kind: "plan" }>
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.circumcenter",
+      text: "两条点积条件等价于 O 为外心；用一般三角形及其外心重建，最终按题设核验。",
+      kind: "witness",
+      value: { a, b, c, o },
+      overridable: true,
+      path: "envelope.actions"
     }],
     materialisedActions: compiled.result.actions
   }

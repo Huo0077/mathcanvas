@@ -990,6 +990,14 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (secondCount === 4 && Math.abs(dotVector3(second, subtractVector3(at(firstCount + 3), at(firstCount)))) / secondMagnitude > distanceTolerance(1)) return null
     return { actual: Math.abs(dotVector3(first, second)) / (firstMagnitude * secondMagnitude), expected: 0, tolerance: UNITLESS_TOLERANCE }
   }
+  if (item.kind === "vectorDot") {
+    if (numeric === undefined || vertices.length !== 6) return null
+    const [abA, abB, aoA, aoB, rhsA, rhsB] = vertices as Vector3[]
+    if (abA === undefined || abB === undefined || aoA === undefined || aoB === undefined || rhsA === undefined || rhsB === undefined) return null
+    const left = numeric * dotVector3(subtractVector3(abB, abA), subtractVector3(aoB, aoA))
+    const right = dotVector3(subtractVector3(rhsB, rhsA), subtractVector3(rhsB, rhsA))
+    return { actual: left, expected: right, tolerance: 1e-6 }
+  }
   if (item.kind === "dihedral") {
     if (numeric === undefined) return null
     const [e, b, c, d] = vertices as Vector3[]

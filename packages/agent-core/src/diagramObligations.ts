@@ -5,7 +5,7 @@ import { parseShapeClause } from "./solver/shapeGrammar"
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
-  | "planePerpendicular" | "dihedral" | "perpendicular" | "parallel" | "pointCoordinate"
+  | "planePerpendicular" | "dihedral" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
   /**
    * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
@@ -548,6 +548,14 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return expression === null ? null : { kind: "functionGraph", targets: [], expression }
     }
   },  {
+    pattern: /(\d+(?:\.\d+)?)\s*([A-Z]{2})\s*[·*]\s*([A-Z]{2})\s*=\s*\|([A-Z]{2})\|²/g,
+    read: (m) => {
+      const scalar = finitePositive(m[1])
+      if (scalar === null) return null
+      return { kind: "vectorDot", targets: [...names(m[2]), ...names(m[3]), ...names(m[4])], value: scalar }
+    }
+  },
+  {
     pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*(?:=|[为為])\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
   },

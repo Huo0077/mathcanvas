@@ -33,7 +33,7 @@
 | P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | partial | 新增六棱四面体、正方形底四棱锥、右三棱柱、二面角四个解析构造；通用求解仍未接 |
 | P3-2 | 3 | 锐角/钝角/点在内部等不等式；非退化与可读性 | P1 | open | 不等式约束/目标 + 反例测试（等腰、退化成杆） |
 | P3-3 | 3 | 无 LM/BFGS 通用约束求解；`constraints3d` 只有残差/投影 | P1 | open | 数值 fallback + 超时/确定性；最终由 `verifyDiagramObligations` 判定 |
-| P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | partial | 二面角“为”写法与纯文本 `\vec` 已覆盖；向量点积（trig-89）仍 open |
+| P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | done | 二面角“为”写法 + 向量点积 `2AB·AO=|AB|²` 都已解析并核验；trig-23、trig-89 均 3/3 passed |
 | P4-1 | 4 | 只有结构化反馈，无渲染图像；无重叠/遮挡/标签碰撞 | P1 | open | 结构化 render evidence 进入修复；含包围盒重叠与标签碰撞 |
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | open | 一次清洗 + 多类救援组合；与 P1-3 共用验收 |
 | P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | open | UI 明确标“未核验”；可配置 fail-closed |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：434 文件 / 4809 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：436 文件 / 4811 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -99,6 +99,7 @@
 - 句读切分（`CD=4.已经` → `CD=4，已经`）与前导 `若` 归一后：solid-20 三连跑 **3/3 passed**，整批 **7/12 全过、0 失败**。
 - 二面角条件接受“为”写法，并修正解析构造的**二面角内角方向**（旋转角 φ 给内角 180−φ）：trig-23 三连跑 **3/3 passed**。
 - “边长为 N 的等边三角形”直接读出三条边；`则 …=.` 这类答案题不再当成已知条件。solid-3 三连跑 **3/3 passed**；整批最佳达到 **8/12 全过、12/12 可画、0 失败**。
+- 新增 `vectorDot` 条件与“外心”构造：`2AB·AO=|AB|²` 可解析、可核验；trig-89 三连跑 **3/3 passed**。P3-4 完成。
 - 新增 `solver/dihedral.ts` + `rescueWithDihedralTriangle`：等腰直角 + 等边 + 二面角的解析构造；trig-23 从“几何失败”变为“可画、未核验”。
 - 回归：`solver/tetrahedron.test.ts` 3 条 + `solver/pyramid.test.ts` 2 条 + `solver/prism.test.ts` 2 条 + `solver/dihedral.test.ts` 2 条 + 四条编译救援；全量 422 文件 / 4791 通过 + 1 todo。
 - **边界**：只覆盖“六棱四面体”“正方形底 + 等距 + 一个底对角角”“右三棱柱”“等腰直角+等边+二面角”四类；其他多面体、半角/二面角约束仍靠模型或后续求解器。
