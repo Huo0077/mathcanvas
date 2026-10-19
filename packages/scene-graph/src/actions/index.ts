@@ -1058,6 +1058,22 @@ function compileSolidProjectionAction(action: Extract<DraftAction, { actionId: "
   }
 }
 
+function compileSolidTranslationAction(action: Extract<DraftAction, { actionId: "solid.create_translation" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+  if (context.targetWorkspace !== "geometry3d") return refuse("workspace_mismatch", "a translated spatial point can only be created in the solid workspace")
+  const source = context.targetDocument.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === inputs.source)
+  if (source === undefined) return refuse("translation_reference_missing", `找不到源点 ${inputs.source}；平移点必须排在建出源点的动作之后。`)
+  const sourcePosition = (source as unknown as { position: { x: number; y: number; z: number } }).position
+  const position = { x: sourcePosition.x + inputs.vector.x, y: sourcePosition.y + inputs.vector.y, z: sourcePosition.z + inputs.vector.z }
+  const id = context.idAllocator.allocate("point", inputs.alias)
+  return {
+    operations: [{ op: "addPrimitives", primitives: [{ id, type: "point3", position, binding: { kind: "free" }, ...(inputs.label === undefined ? {} : { label: inputs.label }) }] }],
+    diagnostics: [],
+    aliasToId: { [inputs.alias]: id }
+  }
+}
+
 function compileSolidPointAction(action: Extract<DraftAction, { actionId: "solid.create_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1943,6 +1959,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_translation":
+      return compileSolidTranslationAction(action, context)
     case "solid.create_projection":
       return compileSolidProjectionAction(action, context)
     case "solid.create_reflection":

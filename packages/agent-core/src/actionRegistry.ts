@@ -246,6 +246,8 @@ export interface RawFieldTypes {
   center?: "point" | "vector"
   /** `solid.create_point` 的自由点坐标。 */
   position?: "vector"
+  /** `solid.create_translation` 的平移向量。 */
+  vector?: "vector"
   /** `section.create` 的 `origin` 是"点 + 法向"里的那个点，与模板实体的 3D 位置同形。 */
   origin?: "vector"
   /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
@@ -514,6 +516,13 @@ export const ACTIONS = {
     requiresAlias: true,
     rawFieldTypes: {},
     required: ["source", "planePoints"],
+    defaults: {}
+  },
+  "solid.create_translation": {
+    inputFields: ["alias", "source", "vector", "label"],
+    requiresAlias: true,
+    rawFieldTypes: { vector: "vector" },
+    required: ["source", "vector"],
     defaults: {}
   },
   "solid.create_segment": {

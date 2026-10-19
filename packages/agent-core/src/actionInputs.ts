@@ -695,6 +695,22 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "solid.create_translation": {
+      const out: Record<string, unknown> = withAlias({})
+      const source = boundedString(value.source, `${path}.source`, errors)
+      if (source === null) return null
+      out.source = canonicalPointName(source)
+      const vector = readVector3(value.vector, `${path}.vector`, errors)
+      if (vector === null) return null
+      out.vector = vector
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_segment": {
       /**
        * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。
