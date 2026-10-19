@@ -1325,6 +1325,44 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 判据**自己算**（`acos` 两条边的方向向量），不读任何构造过程留下的量 —— 与二面角那条同一条纪律。
    * 三点里有重合（方向向量退化为 0）时返回 `null`（如实"未核验"，而不是把一个 0/0 说成一个角）。
    */
+  if (item.kind === "angleBisector") {
+    /**
+     * **角平分线**（2026-10-20）：`targets = [D, A, B, C]`，`A` 是顶点、`AD` 是那条平分线。
+     *
+     * 判两件事，**必须一起判**：
+     * 1. `∠BAD = ∠DAC` —— 两个角相等；
+     * 2. `∠BAD + ∠DAC = ∠BAC` —— `D` 在角**内部**。
+     *
+     * 只判第 1 条的话，`D` 落在平分线的**反方向**上时两个角同样相等（`A(0,0)、B(4,0)、
+     * C(0,4)、D(-2,-2)` ⇒ 两个 135°，而 `∠BAC` 只有 90°），可那条射线根本不在角里 ——
+     * 那就把一句"平分这个角"读成了"在这条直线上"。残余取两者较大者。
+     */
+    if (item.targets.length !== 4) return null
+    const point = at(0)
+    const vertex = at(1)
+    const angleAt = (first: Vector3, third: Vector3): number | null => {
+      const alongFirst = subtractVector3(first, vertex)
+      const alongThird = subtractVector3(third, vertex)
+      const magnitudes = lengthVector3(alongFirst) * lengthVector3(alongThird)
+      if (!(magnitudes > 1e-12)) return null
+      const cosine = dotVector3(alongFirst, alongThird) / magnitudes
+      return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    }
+    const betweenFirst = angleAt(at(2), point)
+    const betweenSecond = angleAt(point, at(3))
+    const whole = angleAt(at(2), at(3))
+    if (betweenFirst === null || betweenSecond === null || whole === null) return null
+    const imbalance = Math.abs(betweenFirst - betweenSecond)
+    const outside = Math.abs(betweenFirst + betweenSecond - whole)
+    return {
+      actual: Math.max(imbalance, outside),
+      expected: 0,
+      tolerance: ANGLE_TOLERANCE_DEGREES,
+      detail: outside > ANGLE_TOLERANCE_DEGREES
+        ? `实测 ∠BAD = ${betweenFirst.toPrecision(6)}°、∠DAC = ${betweenSecond.toPrecision(6)}°，而 ∠BAC = ${whole.toPrecision(6)}° —— 这个点不在角**内部**（平分线的反方向上，两个角碰巧也相等）；题设要求 AD 平分 ∠BAC。`
+        : `实测 ∠BAD = ${betweenFirst.toPrecision(6)}°、∠DAC = ${betweenSecond.toPrecision(6)}°（∠BAC = ${whole.toPrecision(6)}°）；题设要求 AD 平分 ∠BAC。`
+    }
+  }
   if (item.kind === "planarAngle") {
     if (numeric === undefined) return null
     const [first, vertex, third] = vertices as Vector3[]

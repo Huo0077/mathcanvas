@@ -8,6 +8,15 @@ export type DiagramObligationKind =
   | "planePerpendicular" | "dihedral" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
   | "acuteTriangle" | "rightTriangle" | "obtuseTriangle" | "pointInsideTriangle"
   /**
+   * **角平分线**（2026-10-20）：`AD 平分 ∠BAC` ⇒ `targets: ["D", "A", "B", "C"]`
+   * （点在先、顶点其次、两边端点在后，与 `midpoint` 同一条约定）。
+   *
+   * 判据判**两件事，必须一起**：① `∠BAD = ∠DAC`（两个角相等）；② `∠BAD + ∠DAC = ∠BAC`
+   * （点在角**内部**）。少了第②条，`D` 落在平分线的**反方向**上时两个角照样相等 ——
+   * 而那条射线根本不在角里（实测反例见 `angleBisector.test.ts`）。
+   */
+  | "angleBisector"
+  /**
    * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
    */
@@ -1083,6 +1092,33 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: /点?\s*([A-Z])\s*在\s*△?\s*([A-Z])([A-Z])([A-Z])\s*(?:内部|内)/g,
     read: (m) => ({ kind: "pointInsideTriangle", targets: [m[1]!, m[2]!, m[3]!, m[4]!] })
+  },
+  {
+    /**
+     * **角平分线**（2026-10-20，探针里"没有判据的家族"中常见的一族）。
+     *
+     * 三种写法共用的约定：`targets = [点, 顶点, 一边端点, 另一边端点]`（与 `midpoint` /
+     * `pointOnSegment` 一样"被约束的对象在先"）。判据见 `diagramVerification` 的
+     * `angleBisector` 分支：**两个角相等**且**点在角内部**。
+     *
+     * 只收**带角名**的写法：`AD 是角平分线` 没说哪个角，`D` 可能在任何一条平分线上 ⇒ 不猜
+     *（残留扫描器照旧接住它，理由里点名"角平分线"）。
+     *
+     * `AD 是 ∠BAC 的平分线`：线段 AD 的**首字母必须是角的顶点**（`A`），否则它说的就不是
+     * 同一个角 —— 那是另一件事，读一半比读不出更坏。
+     */
+    pattern: /([A-Z])([A-Z])\s*(?:是|为)\s*∠\s*([A-Z])([A-Z])([A-Z])\s*的?\s*(?:角)?平分线/g,
+    read: (m) => (m[1] !== m[4] ? null : { kind: "angleBisector", targets: [m[2]!, m[4]!, m[3]!, m[5]!] })
+  },
+  {
+    /** `AD 平分 ∠BAC`（与上一条同一个判据，只是词序不同）。 */
+    pattern: /([A-Z])([A-Z])\s*平分\s*∠\s*([A-Z])([A-Z])([A-Z])/g,
+    read: (m) => (m[1] !== m[4] ? null : { kind: "angleBisector", targets: [m[2]!, m[4]!, m[3]!, m[5]!] })
+  },
+  {
+    /** `∠BAC 的平分线交 BC 于点 D`（点写在后面）：同一条义务。 */
+    pattern: /∠\s*([A-Z])([A-Z])([A-Z])\s*的\s*(?:角)?平分线\s*交\s*([A-Z])([A-Z])\s*于点\s*([A-Z])/g,
+    read: (m) => ({ kind: "angleBisector", targets: [m[6]!, m[2]!, m[1]!, m[3]!] })
   },
   {
     pattern: /(\d+(?:\.\d+)?)\s*([A-Z]{2})\s*[·*]\s*([A-Z]{2})\s*=\s*\|([A-Z]{2})\|²/g,

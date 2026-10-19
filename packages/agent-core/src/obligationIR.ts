@@ -85,6 +85,12 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）；线面角是同一族的第三个数。
   if (kind === "planarAngle" || kind === "linePlaneAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  /**
+   * **角平分线量的也是"度"**（2026-10-20）：残余是"两个角之差"与"内外之和差"，两把都是角度尺，
+   * 与平面角同一把 —— 不写这一行它会掉进下面的 `undefined`，而核验器那边给的是角度容差，
+   * 同一件事就出现了两种说法。
+   */
+  if (kind === "angleBisector") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。
@@ -274,3 +280,4 @@ export interface ObligationIR {
   obligations: GeometryObligation[]
   unverified: { sourceText: string; reason: string }[]
 }
+
