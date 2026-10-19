@@ -13,6 +13,13 @@ const LATEX_MARKER = /[$\\]/
 
 const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉"
 
+/** 等长替换：只修字形，不移动 span（P5-2）。 */
+function fixOcrText(text: string): string {
+  return text
+    .replace(/棱雉|棱椎/g, "棱锥")
+    .replace(/圆雉|圆椎/g, "圆锥")
+}
+
 /**
  * 把“等边三角形边长为 N”展开成三条边，把 `PA=PB=2` 展开成两条独立条件。
  * 这是**语法展开**，不猜题意；只在解析/核验内部用，原文与 span 保持不变时不要调用。
@@ -32,7 +39,7 @@ export function expandExamShorthand(text: string): string {
 }
 
 export function normalizeGeometryPrompt(prompt: string): string {
-  if (!LATEX_MARKER.test(prompt)) return prompt
+  if (!LATEX_MARKER.test(prompt)) return fixOcrText(prompt)
 
   let text = prompt.replace(/\$/g, "")
 
@@ -60,6 +67,7 @@ export function normalizeGeometryPrompt(prompt: string): string {
   text = text.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "$1/$2")
   text = text.replace(/\\(?:mathrm|text|mathbf|operatorname)\s*\{([^{}]+)\}/g, "$1")
   text = text.replace(/\\overrightarrow\s*\{([^{}]+)\}/g, "$1")
+  text = text.replace(/\\vec\s*\{([^{}]+)\}/g, "$1")
   text = text.replace(/\\arctan\b/g, "arctan")
 
   // 上标/下标：只处理数字与常见 2 次方。
@@ -69,7 +77,7 @@ export function normalizeGeometryPrompt(prompt: string): string {
     [...digits].map((digit) => SUBSCRIPTS[Number(digit)] ?? digit).join(""))
 
   // 数据集里的 OCR 错字。
-  text = text.replace(/棱雉/g, "棱锥").replace(/圆雉/g, "圆锥")
+  text = fixOcrText(text)
 
   // 等边三角形的“边长为 N”展开成三条边；链式相等展开成两条独立条件。
   text = expandExamShorthand(text)
