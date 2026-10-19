@@ -3349,6 +3349,10 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
    *
    * 判据只认内核这三句真几何诊断（`degenerate_polyhedron`）—— 别的拒因不往这条上引。
    */
+  const unsupportedFaceCount = errors.some((error) => error.code === "unsupported_face_count")
+  if (unsupportedFaceCount) {
+    advice.push("提醒：内核只收**1 个面**（平面片）或**至少 4 个面**（闭合多面体）。2–3 个面是**开放壳** —— 请拆成多笔 `solid.create_face` **逐面建**（每笔给 vertices 与 vertexNames），不要再用 `solid.create_polyhedron` 的闭合形态去套，也不要为了凑 4 面硬加一个不存在的面。")
+  }
   const flatOpenFigure = errors.some((error) => error.code === "degenerate_polyhedron"
     && /must not be coplanar|exactly two face rings|non-zero volume/.test(error.detail))
   if (flatOpenFigure) {
