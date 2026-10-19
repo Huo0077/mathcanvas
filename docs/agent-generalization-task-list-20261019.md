@@ -36,7 +36,7 @@
 | P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | done | 二面角“为”写法 + 向量点积 `2AB·AO=|AB|²` 都已解析并核验；trig-23、trig-89 均 3/3 passed |
 | P4-1 | 4 | 只有结构化反馈，无渲染图像；无重叠/遮挡/标签碰撞 | P1 | open | 结构化 render evidence 进入修复；含包围盒重叠与标签碰撞 |
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | open | 一次清洗 + 多类救援组合；与 P1-3 共用验收 |
-| P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | open | UI 明确标“未核验”；可配置 fail-closed |
+| P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | done | 确认面板显示通过/失败/未核验数量与逐条原因；未 `passed` 时隐藏“确认并提交”；3 个 UI 测试 38 条通过 |
 | P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | open | 至少两条渲染判据 + 诊断文案 |
 | P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 已接入；11 道 HighMATH 原始 LaTeX 的 given 0→29、unverified 26→13，8/11 能读出条件 |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | open | 常见错字/符号表 + 回归 |
@@ -149,6 +149,12 @@
 
 - 当前 flash 整批 12 道全部解析成功、0 道格式失败；schema 修复链路已覆盖类型/字段错误。
 - v4-pro 仍慢（约 2.5 分钟/题），但不再作为格式阻塞项；P1-5 的档位 A/B 仍 open。
+
+## 2026-10-19 P4-3 完成
+
+- 确认面板逐条显示 `通过 / 不满足 / 未核验` 与原因，并显示三类计数。
+- 只有 `diagramVerification.status === "passed"` 才出现“确认并提交”；未核验/失败时按钮隐藏（fail-closed）。
+- 回归：`diagramConfirmation.test.tsx`、`proofLevel.test.tsx`、`ConfirmationPanel.test.tsx` 共 38 条通过。
 
 ## 建议执行顺序
 
