@@ -419,14 +419,43 @@ describe("Task 14：直线与圆锥曲线的交点义务", () => {
     expect(chordOf("椭圆 x²/9+y²/4=1 与直线 3x+4y+15=1 相交于 A、B 两点")).toBeUndefined()
   })
 
+  /**
+   * **直线写在曲线前面**（`joint-21` 的另一半）。
+   *
+   * 此前的匹配器要求"直线 + 情形"紧挨着，所以 `直线 … 与椭圆 … 相交于 A、B` 走不到。
+   * 这一批让"直线"与"情形"之间可以夹一个**带曲线名的从句**；曲线名必须真的出现在那里，
+   * 所以 `直线 y=x 与三角形 ABC 相交于 P、Q` 不会被读成"与圆锥曲线相交"。
+   */
+  it("**直线在先**：`直线 3x+4y+15=0 与椭圆 … 相交于 A、B` 也读得出", () => {
+    const parsed = parseDiagramObligations("直线 3x+4y+15=0 与椭圆 x²/9+y²/4=1 相交于 A、B 两点")
+    const chord = parsed.givens.find((item) => item.kind === "conicChord")
+    expect(chord?.line).toEqual({ kind: "slope", slope: -3 / 4, intercept: -15 / 4 })
+    expect(chord?.expectation).toBe("secant")
+    expect(chord?.targets).toEqual(["A", "B"])
+    // 曲线那条义务**照样并存**：桥接的那一段允许重叠，但不能把方程那条吃掉。
+    expect(parsed.givens.some((item) => item.kind === "conicAxes")).toBe(true)
+  })
+
+  it("斜截式写在前面同样收：`直线 y=x+1 与椭圆 … 相切`", () => {
+    const chord = chordOf("直线 y=x+1 与椭圆 x²/9+y²/4=1 相切")
+    expect(chord?.line).toEqual({ kind: "slope", slope: 1, intercept: 1 })
+    expect(chord?.expectation).toBe("tangent")
+  })
+
+  it("**与三角形相交不算**：桥接那段必须带曲线名", () => {
+    expect(chordOf("直线 y=x 与三角形 ABC 相交于 P、Q 两点")).toBeUndefined()
+  })
+
   it("「没有交点」也读得出来", () => {
     expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=3 没有交点")?.expectation).toBe("none")
   })
 
-  it("直线写在曲线前面 ⇒ 这条认不出来，如实落进未核验（不猜）", () => {
+  it("直线写在曲线前面**现在能读**（旧断言是「不猜」，2026-10-20 起由「必须带曲线名的桥」取代）", () => {
     const parsed = parseDiagramObligations("直线 y=x+1 与椭圆 x²/9+y²/4=1 相交于 A、B 两点")
-    expect(parsed.givens.some((item) => item.kind === "conicChord")).toBe(false)
-    // 曲线那条照样读得出来：两条义务各是各的模式，谁也不该因为另一条认不出而消失。
+    const chord = parsed.givens.find((item) => item.kind === "conicChord")
+    expect(chord?.line).toEqual({ kind: "slope", slope: 1, intercept: 1 })
+    expect(chord?.targets).toEqual(["A", "B"])
+    // 曲线那条照样读得出来：桥接允许重叠，但没有把方程那条吃掉。
     expect(parsed.givens.some((item) => item.kind === "conicAxes")).toBe(true)
   })
 })

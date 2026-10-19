@@ -350,6 +350,19 @@ const CHORD_NAMES = `(?:${POINT_NAME_SOURCE}(?:\\s*[、,，]\\s*${POINT_NAME_SOU
 const CHORD_CLAIM = `(相切[^，,。；;\\n]{0,6}|相交于\\s*(${CHORD_NAMES})\\s*两点|交于\\s*(${CHORD_NAMES})\\s*两点|相交于一点|交于一点|没有交点|无交点)`
 
 /**
+ * **直线在先时的桥**（2026-10-20，联考 `joint-21` 的另一半）：
+ * `直线 … 与椭圆 … 相交于 A、B`。
+ *
+ * 此前"直线 + 情形"必须**紧挨着**，所以这种语序整条落进未核验 —— 当时是有意的"不猜"：
+ * 中间夹着什么完全不知道，猜"说的就是图上那条曲线"没有依据。现在允许夹一个
+ * **必须带曲线名**（椭圆 / 双曲线 / 抛物线 / 圆）的从句：曲线名不在场就不匹配，
+ * 所以 `与三角形 ABC 相交` 不会被误读成"与圆锥曲线相交"。
+ *
+ * 用到它的匹配器要开 `allowOverlap`：从句里那一段方程已经被曲线读取器用掉了。
+ */
+const LINE_FIRST_BRIDGE = `(?:\\s*(?:与|和)\\s*(?:椭圆|双曲线|抛物线|圆)[^，,。；;]{0,60}?)?`
+
+/**
  * 斜截式里的斜率：`y = kx + m` 的 `k` 可以**整个省略**（`y = x` ⇒ 1），也可以只写一个符号
  *（`y = −x` ⇒ −1）。`Number("")` 是 0 —— 直接用它会把 `y = x` 读成水平线。
  */
@@ -622,7 +635,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 与内核 `intersectLineWithConic` 的返回同名 —— 判据才有东西可对。
    */
   {
-    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\s*\\d*(?:\\.\\d+)?)\\s*\\*?\\s*x\\s*(?:([+-])\\s*(\\d+(?:\\.\\d+)?))?\\s*${CHORD_CLAIM}`, "g"),
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\s*\\d*(?:\\.\\d+)?)\\s*\\*?\\s*x\\s*(?:([+-])\\s*(\\d+(?:\\.\\d+)?))?${LINE_FIRST_BRIDGE}\\s*${CHORD_CLAIM}`, "g"),
+    allowOverlap: true,
     read: (m) => {
       const slope = statedSlope(m[1])
       if (slope === null) return null
@@ -632,7 +646,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     // 水平线：数字后面**不能**再跟 `x`（否则 `y = 2x + 1` 会被读成 `y = 2`）。
-    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)(?!\\s*\\*?\\s*x)\\s*${CHORD_CLAIM}`, "g"),
+    pattern: new RegExp(`直线\\s*y\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)(?!\\s*\\*?\\s*x)${LINE_FIRST_BRIDGE}\\s*${CHORD_CLAIM}`, "g"),
+    allowOverlap: true,
     read: (m) => {
       const intercept = Number(m[1])
       if (!Number.isFinite(intercept)) return null
@@ -640,7 +655,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: new RegExp(`直线\\s*x\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*${CHORD_CLAIM}`, "g"),
+    pattern: new RegExp(`直线\\s*x\\s*=\\s*([+-]?\\d+(?:\\.\\d+)?)${LINE_FIRST_BRIDGE}\\s*${CHORD_CLAIM}`, "g"),
+    allowOverlap: true,
     read: (m) => {
       const x = Number(m[1])
       if (!Number.isFinite(x)) return null
@@ -655,7 +671,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 读取器**不替题面移项**（移错一项就是另一条线，而模型只有一次修复机会）。
      * 标签（`直线l：` / `直线 L:`）可有可无。
      */
-    pattern: new RegExp(`直线\\s*(?:[a-z]\\s*[:：]\\s*)?([-−–+]?)\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*x\\s*([-−–+])\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*y\\s*(?:([-−–+])\\s*(\\d+(?:\\.\\d+)?))?\\s*=\\s*0\\s*${CHORD_CLAIM}`, "g"),
+    pattern: new RegExp(`直线\\s*(?:[a-z]\\s*[:：]\\s*)?([-−–+]?)\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*x\\s*([-−–+])\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*y\\s*(?:([-−–+])\\s*(\\d+(?:\\.\\d+)?))?\\s*=\\s*0${LINE_FIRST_BRIDGE}\\s*${CHORD_CLAIM}`, "g"),
+    allowOverlap: true,
     read: (m) => {
       const a = (isMinus(m[1]) ? -1 : 1) * (m[2] === undefined ? 1 : Number(m[2]))
       const b = (isMinus(m[3]) ? -1 : 1) * (m[4] === undefined ? 1 : Number(m[4]))
