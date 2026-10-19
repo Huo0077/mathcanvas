@@ -23,6 +23,7 @@ import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRegularSquarePyramid } from "./solver/regularPyramid"
 import { constructRegularTriangularPyramid } from "./solver/regularTriangularPyramid"
+import { constructCuboid } from "./solver/cuboid"
 import { constructRightPrism } from "./solver/prism"
 import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
 import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
@@ -415,6 +416,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const tetrahedron = rescueWithTetrahedronEdges(context, first)
   if (tetrahedron !== null) return tetrahedron
+  const cuboid = rescueWithCuboid(context, first)
+  if (cuboid !== null) return cuboid
   const regularTriangularPyramid = rescueWithRegularTriangularPyramid(context, first)
   if (regularTriangularPyramid !== null) return regularTriangularPyramid
   const regularPyramid = rescueWithRegularSquarePyramid(context, first)
@@ -2043,6 +2046,59 @@ function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileO
  * **正三棱锥（只给底边与侧棱）**（2026-10-19，P1-1）：
  * 顶点在底面正三角形中心正上方，h²=l²−a²/3；默认名 A、B、C、P。
  */
+/**
+ * **长方体（长、宽、高）**（2026-10-19，P1-1）：题面给 AB、AD、AA₁ 时直接解析构造。
+ */
+function rescueWithCuboid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  if (!prompt.includes("长方体")) return null
+  const read = (pattern: RegExp): number | null => {
+    const match = pattern.exec(prompt)
+    return match === null ? null : parseLengthLiteral(match[1]!)
+  }
+  const length = read(/AB\s*=\s*([0-9.]+|√[0-9.]+)/)
+  const width = read(/AD\s*=\s*([0-9.]+|√[0-9.]+)/)
+  const height = read(/AA₁\s*=\s*([0-9.]+|√[0-9.]+)/)
+  if (length === null || width === null || height === null) return null
+  const points = constructCuboid(length, width, height)
+  if (points === null) return null
+  const shape = /长方体\s*([A-Z])([A-Z])([A-Z])([A-Z])\s*-\s*([A-Z])₁([A-Z])₁([A-Z])₁([A-Z])₁/.exec(prompt)
+  const names = shape === null ? ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"] : [shape[1]!, shape[2]!, shape[3]!, shape[4]!, `${shape[5]!}₁`, `${shape[6]!}₁`, `${shape[7]!}₁`, `${shape[8]!}₁`]
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由长、宽、高解析构造的长方体",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "cuboid",
+      factIds: [],
+      inputs: {
+        alias: "cuboid",
+        vertexNames: names,
+        vertices: [points.a, points.b, points.c, points.d, points.a1, points.b1, points.c1, points.d1],
+        faces: [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null) return null
+  if (compiled.result.diagramVerification !== undefined && compiled.result.diagramVerification.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.cuboid",
+      text: "长方体按 AB、AD、AA₁ 解析构造：底面矩形 + 竖直高。",
+      kind: "witness",
+      value: { length, width, height },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
 function rescueWithRegularTriangularPyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)

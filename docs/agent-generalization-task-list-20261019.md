@@ -21,7 +21,7 @@
 
 | ID | Part | 问题 / 目标 | 优先级 | 状态 | 验收 |
 |---|---|---|---|---|---|
-| P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | partial | 六棱四面体、正方形底四棱锥、正四棱锥、正三棱锥、右三棱柱、直四棱柱梯形底、垂直平面四棱锥、等腰直角+等边+二面角等解析构造已落地；其余形状仍靠模型坐标 |
+| P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | partial | 六棱四面体、正方形底四棱锥、正四棱锥、正三棱锥、长方体、右三棱柱、直四棱柱梯形底、垂直平面四棱锥、等腰直角+等边+二面角等解析构造已落地；其余形状仍靠模型坐标 |
 | P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认、数组折痕/数组 hostEdge、重复顶点提示已落地；对象缺 scope 仍拒绝 |
 | P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | done | 顺序 + 0° 一次清洗；AEF 平面片 + fold 物化 E/F；`planCompiler.combinedRescue.test.ts` 钉住“顺序 + 0° + 坐标错”组合 |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | done | 当前 flash 整批 12/12 解析、0 格式失败；v4-pro 仍慢但不再是阻塞项 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：455 文件 / 4849 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：457 文件 / 4852 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -100,6 +100,7 @@
 - 句读切分（`CD=4.已经` → `CD=4，已经`）与前导 `若` 归一后：solid-20 三连跑 **3/3 passed**，整批 **7/12 全过、0 失败**。
 - 新增 `solver/regularPyramid.ts` + `rescueWithRegularSquarePyramid`：正四棱锥只给底边 a 与侧棱 l 时，h²=l²−a²/2 解析构造顶点；solid-24 不再依赖模型手算坐标；回归 3 条，全量 453 文件 / 4846 通过。
 - 新增 `solver/regularTriangularPyramid.ts` + `rescueWithRegularTriangularPyramid`：正三棱锥只给底边 a 与侧棱 l 时，h²=l²−a²/3 解析构造顶点；回归 3 条，全量 455 文件 / 4849 通过。
+- 新增 `solver/cuboid.ts` + `rescueWithCuboid`：长方体给 AB/AD/AA₁ 时解析构造八个顶点；回归 3 条，全量 457 文件 / 4852 通过。
 - 二面角条件接受“为”写法，并修正解析构造的**二面角内角方向**（旋转角 φ 给内角 180−φ）：trig-23 三连跑 **3/3 passed**。
 - “边长为 N 的等边三角形”直接读出三条边；`则 …=.` 这类答案题不再当成已知条件。solid-3 三连跑 **3/3 passed**；整批最佳达到 **8/12 全过、12/12 可画、0 失败**。
 - 新增 `vectorDot` 条件与“外心”构造：`2AB·AO=|AB|²` 可解析、可核验；trig-89 三连跑 **3/3 passed**。P3-4 完成。
