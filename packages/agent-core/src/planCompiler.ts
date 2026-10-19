@@ -2370,7 +2370,7 @@ function rescueWithSortedFaceRings(context: PlanCompileContext, first: CompileOn
  * 再用 `solid.create_prism` 建底面 + 拉伸；垂直/平行条件仍交给题设核验。
  */
 function rescueWithTrapezoidPrism(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
-  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  if (first.result.diagramVerification?.status === "passed" || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
   const shape = /直四棱柱\s*([A-Z])([A-Z])([A-Z])([A-Z])\s*-\s*([A-Z])₁([A-Z])₁([A-Z])₁([A-Z])₁/.exec(prompt)
   if (shape === null || !/AB\s*⊥\s*AD/.test(prompt) || !/AB\s*\/\/\s*CD/.test(prompt)) return null
@@ -2429,7 +2429,7 @@ function rescueWithTrapezoidPrism(context: PlanCompileContext, first: CompileOnc
  * 解析构造出 A/B/C/D/P；平面垂直条件仍交给题设核验。
  */
 function rescueWithPerpendicularPyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
-  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  if (first.result.diagramVerification?.status === "passed" || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
   const shape = /四棱锥\s*([A-Z])\s*-\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
   if (shape === null) return null
