@@ -202,6 +202,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   targets: "idList",
   // 反射（2026-10-19）：源点名 + 平面上的三个点名。
   source: "string", planePoints: "stringList",
+  axisFrom: "string", axisTo: "string",
   // 结构族
   plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
 }
@@ -523,6 +524,13 @@ export const ACTIONS = {
     requiresAlias: true,
     rawFieldTypes: { vector: "vector" },
     required: ["source", "vector"],
+    defaults: {}
+  },
+  "solid.create_rotation": {
+    inputFields: ["alias", "source", "axisFrom", "axisTo", "angle", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["source", "axisFrom", "axisTo", "angle"],
     defaults: {}
   },
   "solid.create_segment": {

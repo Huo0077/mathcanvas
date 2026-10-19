@@ -346,6 +346,18 @@ export interface SolidCreateTranslationAction extends ActionBase {
   }
 }
 
+export interface SolidCreateRotationAction extends ActionBase {
+  actionId: "solid.create_rotation"
+  inputs: {
+    alias: DraftAlias
+    source: string
+    axisFrom: string
+    axisTo: string
+    angle: number
+    label?: string
+  }
+}
+
 /**
  * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场）。
  *
@@ -640,6 +652,7 @@ export type DraftAction =
   | SolidCreateReflectionAction
   | SolidCreateProjectionAction
   | SolidCreateTranslationAction
+  | SolidCreateRotationAction
   | SolidCreateSegmentAction
   | SolidFoldAction
   | SolidUnfoldAction

@@ -711,6 +711,30 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "solid.create_rotation": {
+      const out: Record<string, unknown> = withAlias({})
+      const source = boundedString(value.source, `${path}.source`, errors)
+      const axisFrom = boundedString(value.axisFrom, `${path}.axisFrom`, errors)
+      const axisTo = boundedString(value.axisTo, `${path}.axisTo`, errors)
+      if (source === null || axisFrom === null || axisTo === null) return null
+      const angle = finiteNumber(value.angle, `${path}.angle`, errors)
+      if (angle === null) return null
+      if (axisFrom === axisTo) {
+        errors.push(fail("degenerate_axis", `${path}.axisFrom`, "rotation axis endpoints must differ"))
+        return null
+      }
+      out.source = canonicalPointName(source)
+      out.axisFrom = canonicalPointName(axisFrom)
+      out.axisTo = canonicalPointName(axisTo)
+      out.angle = angle
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_segment": {
       /**
        * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。

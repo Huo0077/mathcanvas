@@ -1074,6 +1074,45 @@ function compileSolidTranslationAction(action: Extract<DraftAction, { actionId: 
   }
 }
 
+function compileSolidRotationAction(action: Extract<DraftAction, { actionId: "solid.create_rotation" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+  if (context.targetWorkspace !== "geometry3d") return refuse("workspace_mismatch", "a rotated spatial point can only be created in the solid workspace")
+  const at = (name: string) => context.targetDocument.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === name)
+  const source = at(inputs.source)
+  const axisFrom = at(inputs.axisFrom)
+  const axisTo = at(inputs.axisTo)
+  const missing = [inputs.source, inputs.axisFrom, inputs.axisTo].filter((name) => at(name) === undefined)
+  if (source === undefined || axisFrom === undefined || axisTo === undefined || missing.length > 0) {
+    return refuse("rotation_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")}。旋转点必须排在建出源点与轴端点的动作之后。`)
+  }
+  const positionOf = (point: unknown): { x: number; y: number; z: number } => (point as { position: { x: number; y: number; z: number } }).position
+  const pivot = positionOf(axisFrom)
+  const axisEnd = positionOf(axisTo)
+  const axis = { x: axisEnd.x - pivot.x, y: axisEnd.y - pivot.y, z: axisEnd.z - pivot.z }
+  const axisLength = Math.hypot(axis.x, axis.y, axis.z)
+  if (!(axisLength > 1e-12)) return refuse("rotation_axis_degenerate", "旋转轴的两个端点重合，无法确定轴。")
+  const k = { x: axis.x / axisLength, y: axis.y / axisLength, z: axis.z / axisLength }
+  const radians = (inputs.angle * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const sourcePosition = positionOf(source)
+  const v = { x: sourcePosition.x - pivot.x, y: sourcePosition.y - pivot.y, z: sourcePosition.z - pivot.z }
+  const cross = { x: k.y * v.z - k.z * v.y, y: k.z * v.x - k.x * v.z, z: k.x * v.y - k.y * v.x }
+  const dot = k.x * v.x + k.y * v.y + k.z * v.z
+  const position = {
+    x: pivot.x + v.x * cos + cross.x * sin + k.x * dot * (1 - cos),
+    y: pivot.y + v.y * cos + cross.y * sin + k.y * dot * (1 - cos),
+    z: pivot.z + v.z * cos + cross.z * sin + k.z * dot * (1 - cos)
+  }
+  const id = context.idAllocator.allocate("point", inputs.alias)
+  return {
+    operations: [{ op: "addPrimitives", primitives: [{ id, type: "point3", position, binding: { kind: "free" }, ...(inputs.label === undefined ? {} : { label: inputs.label }) }] }],
+    diagnostics: [],
+    aliasToId: { [inputs.alias]: id }
+  }
+}
+
 function compileSolidPointAction(action: Extract<DraftAction, { actionId: "solid.create_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1959,6 +1998,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_rotation":
+      return compileSolidRotationAction(action, context)
     case "solid.create_translation":
       return compileSolidTranslationAction(action, context)
     case "solid.create_projection":
