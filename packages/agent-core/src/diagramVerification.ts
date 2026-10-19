@@ -746,6 +746,25 @@ function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation[
     }
   }
   if (solid.shape === "pyramid") {
+    /**
+     * **正 N 棱锥的两个派生球**（2026-10-20）—— 都是底环 + 锥顶的函数：
+     * - **外接球**：球心在轴上 ⇒ `R = (h² + R_base²) / (2h)`，`R_base = a / (2·sin(π/n))`；
+     * - **内切球**：`3V / S`，`V = ⅓·S_base·h`、`S = S_base + n·(½·a·斜高)`。
+     *   `3V/S` 是"存在内切球"时的**必要条件**（`V = ⅓·r·S`）—— 球心是否真的到每个面等距，
+     *   今天不验（那是下一步）。
+     */
+    const baseCircumradius = solid.baseEdge / (2 * Math.sin(Math.PI / solid.sides))
+    if (metric === "circumradius") {
+      return solid.height > 0 ? (solid.height * solid.height + baseCircumradius * baseCircumradius) / (2 * solid.height) : null
+    }
+    if (metric === "inradius") {
+      const apothem = solid.baseEdge / (2 * Math.tan(Math.PI / solid.sides))
+      const faceSlant = Math.hypot(solid.height, apothem)
+      const lateralArea = (solid.sides * solid.baseEdge * faceSlant) / 2
+      const volume = (solid.baseArea * solid.height) / 3
+      const total = solid.baseArea + lateralArea
+      return total > 0 ? (3 * volume) / total : null
+    }
     switch (metric) {
       case "baseEdge": return solid.baseEdge
       case "lateralEdge": return solid.lateralEdge

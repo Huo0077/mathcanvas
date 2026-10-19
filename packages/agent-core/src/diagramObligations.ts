@@ -1620,10 +1620,13 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * **必须带形状名**（可以带 `该 / 其`）：没有形状名的 `外接球半径为 3` 不知道该问哪个实体，
      * 不猜（留给未核验）。
      */
-    pattern: new RegExp(`(?:该|其)?\\s*(正方体|长方体)\\s*的?\\s*(外接球|内切球)\\s*的?\\s*半径\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    pattern: new RegExp(`(?:该|其)?\\s*(正方体|长方体|正([三四五六七八九十]|\\d+)\\s*棱锥)\\s*的?\\s*(外接球|内切球)\\s*的?\\s*半径\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
     read: (m) => {
-      const value = measureValue(m[3]!)
-      return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "cuboid", metric: m[2] === "外接球" ? "circumradius" : "inradius" } }
+      const value = measureValue(m[4]!)
+      if (value === null) return null
+      // 正 N 棱锥走 `pyramid`（判据从底环 + 锥顶量），正方体 / 长方体走 `cuboid`（三条棱）。
+      if (m[2] !== undefined) return { kind: "solidDimension", targets: [], value, solid: { shape: "pyramid", metric: m[3] === "外接球" ? "circumradius" : "inradius" } }
+      return { kind: "solidDimension", targets: [], value, solid: { shape: "cuboid", metric: m[3] === "外接球" ? "circumradius" : "inradius" } }
     }
   },
   {
