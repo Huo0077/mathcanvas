@@ -32,7 +32,7 @@
 
 - 单测 **457 文件 / 4852 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 15 warning；`docs-consistency` 12 通过。
 - 免安装 exe 启动实测：窗口标题 `MathCanvas`、`Responding=True`、存活 T+12s。
-- **全量 e2e 本版未跑** —— v3.2.0 那次的 184 通过不能引用到本版。
+- **全量 e2e（2026-10-20 补跑）**：`npx playwright test --workers=3` → **239 通过 / 0 失败**（4.5 min，exit 0）。默认并发下首轮 1 条 `net::ERR_NO_BUFFER_SPACE`（Windows 套接字缓冲耗尽），单条复跑通过 —— 环境抖动，不是产品失败。
 - **边界**：MSI 的"装 → 启动 → 卸载"未验（本环境非管理员）；教师 / 学生走查未做。
 
 完整发布说明见 [`docs/release/v4.0.md`](docs/release/v4.0.md)。
