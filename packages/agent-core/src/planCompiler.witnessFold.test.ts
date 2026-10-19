@@ -199,4 +199,78 @@ describe("见证坐标 + 折角反求（2026-10-17）", () => {
     expect(compiled.diagramVerification?.status).toBe("passed")
     expectCornerWasCut(compiled)
   })
+
+  /**
+   * **多缺陷组合**（2026-10-19，任务 P1-3）：修复稿同时把 `EF` 排在建点之前、又把折角写成 `0°`。
+   * 旧路径只消掉顺序，第二遍仍死在 `invalid_fold_angle`，整轮失败；这里要求一次结构清洗
+   * 把两处都修掉：0° 不是合法折角，按安全默认 90° 回填并明确写进 `assumptions`。
+   */
+  it("折角写成 0° 且线段顺序错时，一次结构清洗把两处都修掉", () => {
+    const A = { x: 0, y: 0, z: 0 }
+    const B = { x: 8, y: 0, z: 0 }
+    const C = { x: 9, y: Math.sqrt(3), z: 0 }
+    const D = { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "顺序与折角同时错",
+      factIds: [],
+      actions: [
+        { actionId: "solid.create_face", actionKey: "quad", factIds: [], inputs: { alias: "quad", vertexNames: ["A", "B", "C", "D"], vertices: [A, B, C, D] } },
+        { actionId: "solid.create_segment", actionKey: "segEF", factIds: [], inputs: { alias: "EF", vertexNames: ["E", "F"] } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptE", factIds: [], inputs: { alias: "E", label: "E", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "D" }, parameter: 2 / 5 } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptF", factIds: [], inputs: { alias: "F", label: "F", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "B" }, parameter: 0.5 } },
+        { actionId: "solid.fold", actionKey: "fold", factIds: [], inputs: { alias: "flap", vertexNames: ["A", "E", "F"], hinge: { from: "E", to: "F" }, apex: "A", apexAs: "P", angle: 0 } }
+      ]
+    } as unknown as Extract<PlanEnvelope, { kind: "plan" }>
+
+    const compiled = compilePlan(plan, {
+      document: createEmptyDocument("geometry3d"),
+      prompt: PROMPT,
+      conversationId: "reorder-and-default-angle",
+      documentGeneration: 0,
+      diagramWitnessSearch: true
+    })
+
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.assumptions.some((assumption) => assumption.id === "default-fold-angle.P")).toBe(true)
+    expectCornerWasCut(compiled)
+  })
+
+  /**
+   * **0° 折角 + 题面没有可反求的目标**：不能靠折角反求兜底，必须按安全默认 90° 回填，
+   * 并明确写进 `assumptions`。这是 P1-3 里“多缺陷清洗”的另一半。
+   */
+  it("折角写成 0° 且题面没有目标角/距离时，按 90° 安全默认回填", () => {
+    const A = { x: 0, y: 0, z: 0 }
+    const B = { x: 8, y: 0, z: 0 }
+    const C = { x: 9, y: Math.sqrt(3), z: 0 }
+    const D = { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "折角写成 0°",
+      factIds: [],
+      actions: [
+        { actionId: "solid.create_face", actionKey: "quad", factIds: [], inputs: { alias: "quad", vertexNames: ["A", "B", "C", "D"], vertices: [A, B, C, D] } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptE", factIds: [], inputs: { alias: "E", label: "E", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "D" }, parameter: 2 / 5 } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptF", factIds: [], inputs: { alias: "F", label: "F", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "B" }, parameter: 0.5 } },
+        { actionId: "solid.fold", actionKey: "fold", factIds: [], inputs: { alias: "flap", vertexNames: ["A", "E", "F"], hinge: { from: "E", to: "F" }, apex: "A", apexAs: "P", angle: 0 } }
+      ]
+    } as unknown as Extract<PlanEnvelope, { kind: "plan" }>
+
+    const compiled = compilePlan(plan, {
+      document: createEmptyDocument("geometry3d"),
+      prompt: "平面四边形 ABCD 中，AB=8，CD=3，AD=5√3，∠ADC=90°，∠BAD=30°。点 E,F 满足 AE=2/5 AD，AF=1/2 AB。将 △AEF 沿 EF 翻折至 △PEF，画出图形。",
+      conversationId: "default-fold-angle",
+      documentGeneration: 0,
+      diagramWitnessSearch: true
+    })
+
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.assumptions.some((assumption) => assumption.id === "default-fold-angle.P")).toBe(true)
+    expectCornerWasCut(compiled)
+  })
 })

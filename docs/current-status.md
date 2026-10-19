@@ -2,9 +2,10 @@
 
 ## 2026-10-19 泛化问题任务表
 
-- 新增 [几何 Agent 泛化问题任务表](agent-generalization-task-list-20261019.md)：6 个 Part、24 项任务，逐项带优先级、状态与验收口径；本轮只落任务与文档，未改产品代码。
+- 新增 [几何 Agent 泛化问题任务表](agent-generalization-task-list-20261019.md)：6 个 Part、24 项任务，逐项带优先级、状态与验收口径；任务表落档后先做 P1-3。
+- P1-3 进展：新增 `rescueWithStructuralRepairs`，同一轮清洗“线段顺序 + 非法折角（0° → 安全默认 90°，可覆盖）”，再走折角反求与题设核验；两条回归在 `planCompiler.witnessFold.test.ts`。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
-- 已完成项仍以 `97dde4b` 为准；门禁读数沿用 2026-10-17 的 410 文件 / 4765 通过 + 1 todo。
+- 已完成项仍以 `97dde4b` 为准；门禁：410 文件 / 4767 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-17 真实 provider 画图评测（12 道）
 

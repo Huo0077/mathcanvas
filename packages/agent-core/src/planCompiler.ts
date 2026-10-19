@@ -357,6 +357,12 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     }
   }
   /**
+   * **结构清洗**（2026-10-19，任务 P1-3）：先修顺序，再把非法折角按 90° 安全默认回填，
+   * 然后才编译。旧路径把“顺序”和“折角”分成两次救援，第一处修好后第二处仍会挡住整轮。
+   */
+  const structural = rescueWithStructuralRepairs(context, first)
+  if (structural !== null) return structural
+  /**
    * **线段引用了还没建出来的点**（2026-10-17 评测现场）：模型把 `EF` 排在了
    * `bound E/F` 之前。移动它到末尾重编一次 —— 只动顺序，不改字段。
    */
@@ -1794,6 +1800,78 @@ function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: Compile
  * 同一份计划按顺序执行，于是 `segment_reference_missing`。这只动**顺序**：
  * 把出错的那一笔移到末尾再编一次；仍然要求第二遍核验真的 `passed`。
  */
+/**
+ * **结构清洗：顺序 + 非法折角**（2026-10-19，P1-3）。
+ *
+ * 修复稿经常一次带两个独立缺陷：`EF` 排在建点之前、折角写成 `0°`。原先是两次独立救援，
+ * 第一处修好后第二处仍会挡住编译。这里在**同一份计划**上依次清洗，再走正常核验/折角反求。
+ * 0° 不是合法折角，按安全默认 90° 回填并写进 `assumptions`（可覆盖），不静默。
+ */
+function rescueWithStructuralRepairs(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.ok || first.plan === null) return null
+  let plan = first.plan
+  let compiled = first.result
+  let changed = false
+  for (let round = 0; round < 4; round += 1) {
+    const diagnostic = compiled.diagnostics.find((entry) => entry.code === "segment_reference_missing")
+    if (diagnostic === undefined) break
+    const index = Number(/envelope\.actions\[(\d+)\]/.exec(diagnostic.path)?.[1])
+    if (!Number.isInteger(index) || index < 0) return null
+    const actions = [...plan.actions]
+    const [moved] = actions.splice(index, 1)
+    if (moved === undefined) return null
+    actions.push(moved)
+    plan = { ...plan, actions }
+    changed = true
+    compiled = compileOnce(plan, context).result
+  }
+
+  const defaults: { id: string; text: string; kind: "safe_default"; value: unknown; overridable: boolean; path: string }[] = []
+  const patchedActions = plan.actions.map((action, index) => {
+    if (action.actionId !== "solid.fold") return action
+    const inputs = action.inputs as Record<string, unknown>
+    const angle = inputs.angle
+    if (typeof angle === "number" && Number.isFinite(angle) && angle > 0 && angle <= 180) return action
+    const apexAs = typeof inputs.apexAs === "string" ? inputs.apexAs : "P"
+    defaults.push({
+      id: `default-fold-angle.${apexAs}`,
+      text: `折角写成了 ${String(angle)}（不在 (0°,180°] 内）：按安全默认 90° 回填，最终仍由题设核验；可在面板改回。`,
+      kind: "safe_default",
+      value: { apexAs, angleDegrees: 90, reason: "invalid_fold_angle" },
+      overridable: true,
+      path: `envelope.actions[${index}].inputs.angle`
+    })
+    return { ...action, inputs: { ...inputs, angle: 90 } }
+  })
+  if (defaults.length > 0) {
+    plan = { ...plan, actions: patchedActions as typeof plan.actions }
+    changed = true
+    compiled = compileOnce(plan, context).result
+  }
+  if (!changed) return null
+
+  const withDefaults = (result: PlanCompileResult): PlanCompileResult => ({
+    ...result,
+    assumptions: [...result.assumptions, ...defaults],
+    materialisedActions: result.actions
+  })
+
+  if (compiled.ok && compiled.draftDocument !== null && compiled.diagramVerification?.status === "passed") {
+    const cut = cutFoldedCorner(plan)
+    if (cut !== plan) {
+      const cutCompiled = compileOnce(cut, context).result
+      if (cutCompiled.ok && cutCompiled.draftDocument !== null && cutCompiled.diagramVerification?.status === "passed") {
+        return withDefaults(cutCompiled)
+      }
+    }
+    return withDefaults(compiled)
+  }
+
+  /** 90° 只是默认，题面若有目标角/距离，仍交给折角反求把它解出来。 */
+  const solved = rescueWithSolvedFoldAngle(context, { ...first, plan, result: compiled })
+  return solved === null ? null : withDefaults(solved)
+}
+
 function rescueWithSegmentOrder(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.ok || first.plan === null) return null
   let plan = first.plan
