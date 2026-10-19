@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：411 文件 / 4771 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：411 文件 / 4772 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -68,7 +68,7 @@
 
 - 新增纯函数 `normalizeGeometryPrompt`（`latexNormalisation.ts`）：处理 `$`、`\triangle`、`\angle`、`\sqrt`、`\frac`、`\perp`、`\parallel`、`\circ`、`\overrightarrow`、上下标与数据集 OCR 错字（`棱雉→棱锥`）。
 - 解析入口 `parseObligationWithLegacy` / `parseObligationIR` 统一先归一化；`planCompiler` 的 `verifyExplicitCubeRequest` / `validateRelations` 也读归一化题面，模型改写与 span 仍走原文。
-- 回归：`latexNormalisation.test.ts` 4 条通过；全量 411 文件 / 4771 通过 + 1 todo。
+- 回归：`latexNormalisation.test.ts` 4 条 + `planCompiler.witnessFold.test.ts` 的原始 LaTeX 端到端 1 条；全量 411 文件 / 4772 通过 + 1 todo。
 - **边界**：只做确定性替换，不猜题意；OCR 的更广泛错字仍归 P5-2；尚未用 12 道原始 LaTeX 重跑 parse rate。
 
 ## 建议执行顺序

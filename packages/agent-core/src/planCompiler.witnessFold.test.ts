@@ -273,4 +273,41 @@ describe("见证坐标 + 折角反求（2026-10-17）", () => {
     expect(compiled.assumptions.some((assumption) => assumption.id === "default-fold-angle.P")).toBe(true)
     expectCornerWasCut(compiled)
   })
+
+  /**
+   * **原始 LaTeX 题面走同一份核验**（P5-1）：题面保留 `$`、`\sqrt`、`\frac`、`\triangle`，
+   * 解析入口归一化后，八条题设应当与纯文本题面给出同样的 `passed`。
+   */
+  it("原始 LaTeX 题面也能通过题设核验", () => {
+    const A = { x: 0, y: 0, z: 0 }
+    const B = { x: 8, y: 0, z: 0 }
+    const C = { x: 9, y: Math.sqrt(3), z: 0 }
+    const D = { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }
+    const E = { x: 3, y: Math.sqrt(3), z: 0 }
+    const F = { x: 4, y: 0, z: 0 }
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "LaTeX 题面 + 正确坐标",
+      factIds: [],
+      actions: [
+        { actionId: "solid.create_face", actionKey: "quad", factIds: [], inputs: { alias: "quad", vertexNames: ["A", "B", "C", "D"], vertices: [A, B, C, D] } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptE", factIds: [], inputs: { alias: "E", label: "E", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "D" }, parameter: 2 / 5 } },
+        { actionId: "dynamic.create_bound_point", actionKey: "ptF", factIds: [], inputs: { alias: "F", label: "F", host: { scope: "draft", alias: "quad" }, hostEdge: { from: "A", to: "B" }, parameter: 0.5 } },
+        { actionId: "solid.fold", actionKey: "fold", factIds: [], inputs: { alias: "flap", vertexNames: ["A", "E", "F"], vertices: [A, E, F], hinge: { from: "E", to: "F" }, apex: "A", apexAs: "P", angle: 90 } }
+      ]
+    } as unknown as Extract<PlanEnvelope, { kind: "plan" }>
+
+    const compiled = compilePlan(plan, {
+      document: createEmptyDocument("geometry3d"),
+      prompt: "平面四边形 $ABCD$ 中，$AB=8$，$CD=3$，$AD=5\\sqrt{3}$，$\\angle ADC=90^\\circ$，$\\angle BAD=30^\\circ$。点 $E,F$ 满足 $AE=\\frac{2}{5}AD$，$AF=\\frac{1}{2}AB$。将 $\\triangle AEF$ 沿 $EF$ 翻折至 $\\triangle PEF$，使得 $PC=4\\sqrt{3}$。",
+      conversationId: "latex-prompt",
+      documentGeneration: 0,
+      diagramWitnessSearch: true
+    })
+
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expectCornerWasCut(compiled)
+  })
 })
