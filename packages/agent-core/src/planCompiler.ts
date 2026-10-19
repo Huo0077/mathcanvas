@@ -21,6 +21,7 @@ import { parseObligationWithLegacy } from "./obligationIR"
 import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
+import { constructRightPrism } from "./solver/prism"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
@@ -383,6 +384,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (tetrahedron !== null) return tetrahedron
   const pyramid = rescueWithSquarePyramid(context, first)
   if (pyramid !== null) return pyramid
+  const prism = rescueWithRightPrism(context, first)
+  if (prism !== null) return prism
   /**
    * **题面说要折、计划里却没有折**：按题面补上那一笔（选项②，2026-10-15）。
    *
@@ -1994,6 +1997,69 @@ function rescueWithSquarePyramid(context: PlanCompileContext, first: CompileOnce
       value: { apex, base, side, apexToC, apexToD, anglePcaDegrees },
       overridable: true,
       path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **右三棱柱的解析构造**（2026-10-19，P1-1，solid-13）。
+ *
+ * 题面：三棱柱 ABC-A₁B₁C₁，AA₁=L，A₁C⊥底面，∠ACB=90°，
+ * A₁ 到平面 BCC₁B₁ 的距离 d1，直线 AA₁ 与 BB₁ 的距离 d2。
+ * 距离类条件目前解析器读不出，所以这里允许 **unverified** 结果，但绝不把 failed 当成功。
+ */
+function rescueWithRightPrism(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const shape = /三棱柱\s*([A-Z])([A-Z])([A-Z])\s*-\s*([A-Z])₁([A-Z])₁([A-Z])₁/.exec(prompt)
+  if (shape === null) return null
+  const base = [shape[1]!, shape[2]!, shape[3]!] as const
+  const top = [`${shape[4]!}₁`, `${shape[5]!}₁`, `${shape[6]!}₁`] as const
+  const rightAngle = new RegExp(`∠${base[0]}${base[2]}${base[1]}\\s*=\\s*90°`).test(prompt)
+  if (!rightAngle) return null
+  const lateral = new RegExp(`${base[0]}${top[0]}\\s*=\\s*([0-9.]+|√[0-9.]+)`).exec(prompt)
+  const toPlane = new RegExp(`${top[0]}到平面[^，。]+?距离为([0-9.]+)`).exec(prompt)
+  const lineDistance = /直线[^，。]+?距离为([0-9.]+)/.exec(prompt)
+  if (lateral === null || toPlane === null || lineDistance === null) return null
+  const lateralLength = parseLengthLiteral(lateral[1]!)
+  const apexToPlane = Number(toPlane[1])
+  const lateralLineDistance = Number(lineDistance[1])
+  if (lateralLength === null || !Number.isFinite(apexToPlane) || !Number.isFinite(lateralLineDistance)) return null
+  const points = constructRightPrism({ lateralLength, apexToPlane, lateralLineDistance })
+  if (points === null) return null
+
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由侧棱长与两个距离构造的右三棱柱",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_prism",
+      actionKey: "right-prism",
+      factIds: [],
+      inputs: {
+        alias: "right-prism",
+        basePolygon: [points.a, points.b, points.c],
+        vector: { x: points.a1.x - points.a.x, y: points.a1.y - points.a.y, z: points.a1.z - points.a.z },
+        vertexNames: [base[0], base[1], base[2], top[0], top[1], top[2]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status === "failed") return null
+  const verified = compiled.result.diagramVerification?.status === "passed"
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.rightPrism",
+      text: verified
+        ? "由侧棱长与两个距离解析构造右三棱柱；最终已按题设核验。"
+        : "由侧棱长与两个距离解析构造右三棱柱；距离类条件尚未被解析器读出，因此仍标未核验。",
+      kind: "witness",
+      value: { lateralLength, apexToPlane, lateralLineDistance },
+      overridable: true,
+      path: "envelope.actions[0].inputs.basePolygon"
     }],
     materialisedActions: compiled.result.actions
   }
