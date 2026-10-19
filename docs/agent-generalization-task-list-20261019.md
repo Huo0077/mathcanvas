@@ -32,7 +32,7 @@
 | P2-4 | 2 | 2–3 面开放壳、三维圆弧被明确拒绝 | P2 | done | 明确拒绝 + 修复提示“逐面用 solid.create_face 建开放壳”；3D 圆弧仍走线段近似建议，不误报已画 |
 | P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | partial | 新增六棱四面体、正方形底四棱锥、右三棱柱、二面角四个解析构造；通用求解仍未接 |
 | P3-2 | 3 | 锐角/钝角/点在内部等不等式；非退化与可读性 | P1 | done | 锐角/直角/钝角/点在三角形内部均已解析并核验；内外部、直角反例均有测试 |
-| P3-3 | 3 | 无 LM/BFGS 通用约束求解；`constraints3d` 只有残差/投影 | P1 | open | 数值 fallback + 超时/确定性；最终由 `verifyDiagramObligations` 判定 |
+| P3-3 | 3 | 无 LM/BFGS 通用约束求解；`constraints3d` 只有残差/投影 | P1 | partial | 已有迭代顺序投影求解（`projectPoint3Constraints`，确定性轮数/容差/矛盾报告），但不是任意约束的数值 fallback；尚未接入编译救援 |
 | P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | done | 二面角“为”写法 + 向量点积 `2AB·AO=|AB|²` 都已解析并核验；trig-23、trig-89 均 3/3 passed |
 | P4-1 | 4 | 只有结构化反馈，无渲染图像；无重叠/遮挡/标签碰撞 | P1 | open | 结构化 render evidence 进入修复；含包围盒重叠与标签碰撞 |
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | done | 同一计划“线段顺序错 + 0° 折角 + 坐标错”可一次串起结构清洗、补折/折角反求并通过核验；`planCompiler.combinedRescue.test.ts` 钉住 |
