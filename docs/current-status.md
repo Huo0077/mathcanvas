@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-10-20 v4.0 发布
+
+- **版本真值 `3.3.14` → `4.0.0`**（跨大版本）。注解 tag **`v4.0`** → 提交 **`339d373`**；Release **id `417498043`**（**https://github.com/Huo0077/mathcanvas/releases/tag/v4.0**），`draft=false`、`assets=3`，**三个资产重新下载核 SHA-256 全部 MATCH**。完整说明见 [`docs/release/v4.0.md`](release/v4.0.md)。
+- **门禁读数（本版实跑）**：`typecheck` **exit 0**；`lint` **exit 0（0 error / 15 warning）**；单测 **457 文件 / 4852 通过 + 1 todo / 0 失败**（174.86 s）；`docs-consistency` **12 通过**。**全量 e2e 本版未跑** —— v3.2.0 那次的 184 通过不能引用到本版。
+- **桌面产物按当前源码重建**：`MathCanvas_4.0.0_x64.exe`（17,595,392 B）/ `MathCanvas_4.0.0_x64_en-US.msi`（7,102,464 B）/ `MathCanvas_4.0.0_x64-setup.exe`（5,267,037 B）；免安装 exe 启动 smoke 通过（真窗口句柄 `1376356`、`Responding=True`、存活 T+12s）。
+- **如实记的边界**：MSI 的"装 → 启动 → 卸载"仍未验（本环境非管理员）；上一条 2026-10-19 记录里写的安装包名是 `3.3.14`，**已被本版取代**。
+
 ## 2026-10-19 泛化问题任务表
 
 - 桌面端已按当前源码重建并通过 10 秒启动 smoke：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`，安装包 `MathCanvas_3.3.14_x64_en-US.msi` / `MathCanvas_3.3.14_x64-setup.exe`（最近重建 2026-10-19 22:51，P6-2 done）。
