@@ -624,6 +624,19 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
      * **几何语义**（互异 / 不共线 / 共面）留给内核 —— 与 `solid.create_polyhedron` 那条边界同源，
      * 不在传输层抄第二遍。
      */
+    case "solid.create_point": {
+      const out: Record<string, unknown> = withAlias({})
+      const position = readVector3(value.position, `${path}.position`, errors)
+      if (position === null) return null
+      out.position = position
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_segment": {
       /**
        * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。

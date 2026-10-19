@@ -242,6 +242,8 @@ export interface RawFieldTypes {
   uv?: "uv"
   /** 平面动作里 `center` 是 2D 点、正棱锥里是 3D 底面中心 —— 同一个名字两种形状。 */
   center?: "point" | "vector"
+  /** `solid.create_point` 的自由点坐标。 */
+  position?: "vector"
   /** `section.create` 的 `origin` 是"点 + 法向"里的那个点，与模板实体的 3D 位置同形。 */
   origin?: "vector"
   /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
@@ -491,6 +493,13 @@ export const ACTIONS = {
    * **只收点名**（`vertexNames`，恰好两个）：两端必须是文档里已经建出来的点，
    * 坐标由那几笔决定 —— 再让模型写一遍坐标就是第二个真源（现场为这件事栽过很多次）。
    */
+  "solid.create_point": {
+    inputFields: ["alias", "position", "label"],
+    requiresAlias: true,
+    rawFieldTypes: { position: "vector" },
+    required: ["position"],
+    defaults: {}
+  },
   "solid.create_segment": {
     inputFields: ["alias", "vertexNames", "label"],
     requiresAlias: true,

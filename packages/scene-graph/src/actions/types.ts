@@ -307,6 +307,15 @@ export interface SolidCreateFaceAction extends ActionBase {
   }
 }
 
+export interface SolidCreatePointAction extends ActionBase {
+  actionId: "solid.create_point"
+  inputs: {
+    alias: DraftAlias
+    position: { x: number; y: number; z: number }
+    label?: string
+  }
+}
+
 /**
  * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场）。
  *
@@ -597,6 +606,7 @@ export type DraftAction =
   | SolidCreateRegularPyramidAction
   | SolidCreatePolyhedronAction
   | SolidCreateFaceAction
+  | SolidCreatePointAction
   | SolidCreateSegmentAction
   | SolidFoldAction
   | SolidUnfoldAction

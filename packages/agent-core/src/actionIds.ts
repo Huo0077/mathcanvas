@@ -48,6 +48,11 @@ export const DRAFT_ACTION_IDS = [
   "solid.create_polyhedron",
   "solid.create_face",
   /**
+   * **立体里的自由点**（2026-10-19，P2-1）：题面点名的点若不由实体/折片/绑点产生，
+   * 需要一笔显式坐标；它也是后续旋转/反射/投影等原子算子的落点。
+   */
+  "solid.create_point",
+  /**
    * **立体里"两点连成一条线段"**（2026-10-15 用户现场，四棱锥那道题的 `EF`）。
    *
    * 此前没有这个动作：模型只能拿 `planar.create_segment` 去凑，而那条落在 `z=0` 上 ——

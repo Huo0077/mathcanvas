@@ -35,8 +35,8 @@ describe("draft action catalogue", () => {
     // **35** 鏄姞涓?`solid.create_segment`锛?026-10-15 鐢ㄦ埛鐜板満锛氱珛浣撻噷"涓ょ偣杩炴垚涓€鏉＄嚎娈?**娌℃湁鍔ㄤ綔** 鈥斺€?
     // 妯″瀷瑕佺敾 `EF`銆乣BD` 鍙兘鎷?`planar.create_segment` 鍑戯紝鑰岄偅鏉¤惤鍦?`z=0` 涓婏紝`planCompiler`
     // 鐢氳嚦涓撻棬鍔濆畠鍒繖涔堝共 鈬?妯″瀷鏃犲鍙幓锛変箣鍚庣殑瀹炴祴鍊笺€?
-    expect(DRAFT_ACTION_IDS).toHaveLength(37)
-    expect(new Set(DRAFT_ACTION_IDS).size).toBe(37)
+    expect(DRAFT_ACTION_IDS).toHaveLength(38)
+    expect(new Set(DRAFT_ACTION_IDS).size).toBe(38)
   })
 
   it("recognises every catalogue action instead of calling it unknown", () => {

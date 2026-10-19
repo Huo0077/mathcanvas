@@ -988,6 +988,22 @@ export function compileSolidFace(
  * 物化出来的是 `segment3`（**自由线段**）：`edge3` 是实体面上的棱（带 `faceIds`），
  * 拿它来表达"两点连成的线"会把一条自由线段伪装成某个面的一部分。
  */
+function compileSolidPointAction(action: Extract<DraftAction, { actionId: "solid.create_point" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  if (context.targetWorkspace !== "geometry3d") {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a free spatial point can only be created in the solid workspace")], aliasToId: {} }
+  }
+  const id = context.idAllocator.allocate("point", inputs.alias)
+  const primitive: PrimitiveSpec = {
+    id,
+    type: "point3",
+    position: inputs.position,
+    binding: { kind: "free" },
+    ...(inputs.label === undefined ? {} : { label: inputs.label })
+  }
+  return { operations: [{ op: "addPrimitives", primitives: [primitive] }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
+}
+
 function compileSolidSegmentAction(action: Extract<DraftAction, { actionId: "solid.create_segment" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
@@ -1857,6 +1873,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_point":
+      return compileSolidPointAction(action, context)
     case "solid.create_segment":
       return compileSolidSegmentAction(action, context)
     case "solid.fold":
