@@ -3571,6 +3571,27 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
     advice.push("提醒：有一只**面塌了**（三个点共线、面积为零）。要画**开放的**平面图形（四边形、三角形片、翻折片）就**不要**把它们拼成一只闭合多面体 —— 用 `solid.create_face` **一张一张**建（每张给 `vertices` 与 `vertexNames`，它不收 `faces`）。硬拼闭合体时，最容易造出来的就是三点共线的面。")
   }
   /**
+   * **面环不共面**（2026-10-19 联考 `joint-13`）：`face ring [0,1,4,3] is not coplanar: deviation 1.73`。
+   *
+   * 内核拒得对 —— 四个顶点根本不在同一个平面上。但只回这一句，模型下一轮还会按同样的坐标再拼一次
+   * （它只有一次修复机会）。所以这支提示不说读数，只说**改哪里**：每个面环必须是**同一平面**上的
+   * 那几个顶点；拼组合体时不要把两只立体的点混进同一圈。
+   */
+  const nonPlanarFaceRing = errors.some((error) => error.code === "degenerate_polyhedron" && /is not coplanar/i.test(error.detail))
+  if (nonPlanarFaceRing) {
+    advice.push("提醒：有一张面环的顶点**不在同一个平面**里（内核给了最大偏差）。一只多面体的**每一圈面环都必须共面** —— 拼组合体时不要把两只不同立体的顶点混进同一圈；每一圈只写**同一个平面上的那几个顶点**，并按绕行顺序排。如果这一笔本来就是**平面片**，用 `solid.create_face`（它按平面片物化），不要用 `solid.create_polyhedron` 的闭合形态去套。改坐标时只动**这一圈**用到的顶点，别为了凑共面去移动已经建好的实体。")
+  }
+  /**
+   * **面环自交**（2026-10-19 联考 `joint-11`）：`face ring [0,1,5,4] self-intersects`。
+   *
+   * 这是**顺序**问题，不是坐标问题：四个点可能都在同一平面上，但这一圈的下标顺序交叉了。
+   * 修复提示必须把"沿边界顺序绕一圈"说成一个动作，否则模型会去挪坐标（越挪越坏）。
+   */
+  const selfIntersectingFaceRing = errors.some((error) => error.code === "degenerate_polyhedron" && /self-intersects/i.test(error.detail))
+  if (selfIntersectingFaceRing) {
+    advice.push("提醒：有一张面环的**绕行顺序交叉了**（自交）。这是**顺序**问题，不是坐标问题 —— 把这一圈的下标改成沿边界**顺序绕一圈**：相邻两个下标在图上必须是相邻顶点；两个面共用一条棱时，那条棱的两个端点在同一圈里也必须是相邻的。不要靠挪坐标去「解开」交叉。")
+  }
+  /**
    * **关系 / 题设核验没过**（2026-10-15 用户第三现场，四棱锥那道题）。
    *
    * 这一次**合同全过了**（信封、字段、名字都对），死在几何上：模型把顶点放在了**底面中心上方**，
