@@ -200,6 +200,8 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   // 语义不同，共用一个名字只会让两边都不敢改。
   angle: "number",
   targets: "idList",
+  // 反射（2026-10-19）：源点名 + 平面上的三个点名。
+  source: "string", planePoints: "stringList",
   // 结构族
   plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
 }
@@ -498,6 +500,13 @@ export const ACTIONS = {
     requiresAlias: true,
     rawFieldTypes: { position: "vector" },
     required: ["position"],
+    defaults: {}
+  },
+  "solid.create_reflection": {
+    inputFields: ["alias", "source", "planePoints", "label"],
+    requiresAlias: true,
+    rawFieldTypes: {},
+    required: ["source", "planePoints"],
     defaults: {}
   },
   "solid.create_segment": {

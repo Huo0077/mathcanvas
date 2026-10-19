@@ -181,6 +181,7 @@ export const CAPABILITY_FOR_ACTION: Record<DraftActionIdName, string> = {
   "solid.create_polyhedron": "create-primitive",
   "solid.create_face": "create-primitive",
   "solid.create_point": "create-primitive",
+  "solid.create_reflection": "create-primitive",
   "solid.create_segment": "create-primitive",
   /**
    * **折**（2026-10-11）归哪一类：它**造出一只新面片**（折后的那一只），所以与 `create_face` 同类，

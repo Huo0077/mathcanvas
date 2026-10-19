@@ -637,6 +637,35 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "solid.create_reflection": {
+      const out: Record<string, unknown> = withAlias({})
+      const source = boundedString(value.source, `${path}.source`, errors)
+      if (source === null) return null
+      out.source = canonicalPointName(source)
+      if (!Array.isArray(value.planePoints) || value.planePoints.length !== 3) {
+        errors.push(fail("invalid_type", `${path}.planePoints`, "a reflection plane needs exactly three named points"))
+        return null
+      }
+      const planePoints: string[] = []
+      for (const [index, name] of value.planePoints.entries()) {
+        const raw = boundedString(name, `${path}.planePoints[${index}]`, errors)
+        if (raw === null) return null
+        const read = canonicalPointName(raw)
+        if (planePoints.includes(read)) {
+          errors.push(fail("duplicate_name", `${path}.planePoints[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+          return null
+        }
+        planePoints.push(read)
+      }
+      out.planePoints = planePoints
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_segment": {
       /**
        * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。
