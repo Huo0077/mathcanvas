@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|
 | P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | partial | 六棱四面体、正方形底四棱锥、右三棱柱、直四棱柱梯形底、垂直平面四棱锥、等腰直角+等边+二面角等解析构造已落地；其余形状仍靠模型坐标 |
 | P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认、数组折痕/数组 hostEdge、重复顶点提示已落地；对象缺 scope 仍拒绝 |
-| P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | partial | 顺序 + 0° 已能一次清洗；AEF 平面片 + fold 结构已能物化 E/F；坐标与其他组合仍 open |
+| P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | done | 顺序 + 0° 一次清洗；AEF 平面片 + fold 物化 E/F；`planCompiler.combinedRescue.test.ts` 钉住“顺序 + 0° + 坐标错”组合 |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | done | 当前 flash 整批 12/12 解析、0 格式失败；v4-pro 仍慢但不再是阻塞项 |
 | P1-5 | 1 | 模型路由：`deepseek-chat` 实际是 flash；v4-pro 可用但慢 | P0 | partial | v4-pro 前两题 1 passed / 1 unverified，约 2.5 min/题；完整批未跑完，默认档位未改 |
 | P2-1 | 2 | 缺通用原子算子：旋转、反射、平移、求交、投影 | P1 | partial | 已新增 `solid.create_point` 自由空间点（P2-1 第一块）；旋转/反射/平移/求交/投影仍 open |
@@ -64,6 +64,7 @@
 - 回归：`planCompiler.witnessFold.test.ts` 新增“顺序 + 0°”和“0° 无目标角”两例，共 6 条通过；全量 411 文件 / 4771 通过 + 1 todo。
 - 追加 `materialiseFoldHinges`：删与折片同名的冗余 AEF 面，从折片顶点反推 E/F 在宿主边上的参数并物化为 bound point；单独复跑 user-quad-fold 时**八条题设全部 passed**。
 - 追加修复提示：共线三角面直接说“删面、用 bound point + fold”；`hostEdge` 也接受数组 `["A","D"]`；面顶点重复时提示“`vertexNames` 与 `vertices` 按下标互异”。
+- **P1-3 完成**：组合用例（线段顺序 + 0° 折角 + 坐标错）已通过；结构清洗、补折/反求、见证坐标可串行。
 - 追加 `rescueWithFoldConstruction`（放在所有救援之后）：用平面见证坐标 + 题面比例 + 折角反求从头重建折片，不再依赖模型结构。user-quad-fold 三连跑 **3/3 passed**，整批复跑也 passed。
 - 追加 `rescueWithSortedFaceRings`：多面体面环或棱柱底面自交时按面内角序重排（顶点/点名不动）。solid-9/solid-20 从“自交编译失败”变为可画，但整批仍受模型方差影响。
 - **边界**：折片结构仍受模型输出影响；单题修复有效，但整批读数方差明显。其余坐标错误归 P1-1/P5-1。
