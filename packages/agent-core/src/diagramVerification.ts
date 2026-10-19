@@ -1025,6 +1025,30 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     }
     return { actual: Math.max(...values) > 90 ? 0 : 1, expected: 0, tolerance: 1e-9 }
   }
+  if (item.kind === "pointInsideTriangle") {
+    if (vertices.length !== 4) return null
+    const [p, a, b, c] = vertices as Vector3[]
+    if (p === undefined || a === undefined || b === undefined || c === undefined) return null
+    const ab = subtractVector3(b, a)
+    const ac = subtractVector3(c, a)
+    const normal = crossVector3(ab, ac)
+    const normalLength = lengthVector3(normal)
+    if (!(normalLength > 1e-12)) return null
+    const distance = Math.abs(dotVector3(subtractVector3(p, a), normal)) / normalLength
+    if (distance > 1e-6) return { actual: 1, expected: 0, tolerance: 1e-9 }
+    const project = (value: Vector3): [number, number] =>
+      Math.abs(normal.x) >= Math.abs(normal.y) && Math.abs(normal.x) >= Math.abs(normal.z)
+        ? [value.y, value.z]
+        : Math.abs(normal.y) >= Math.abs(normal.z) ? [value.x, value.z] : [value.x, value.y]
+    const [ax, ay] = project(a)
+    const [bx, by] = project(b)
+    const [cx, cy] = project(c)
+    const [px, py] = project(p)
+    const side = (x1: number, y1: number, x2: number, y2: number): number => (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
+    const sides = [side(ax, ay, bx, by), side(bx, by, cx, cy), side(cx, cy, ax, ay)]
+    const inside = sides.every((value) => value >= -1e-9) || sides.every((value) => value <= 1e-9)
+    return { actual: inside ? 0 : 1, expected: 0, tolerance: 1e-9 }
+  }
   if (item.kind === "vectorDot") {
     if (numeric === undefined || vertices.length !== 6) return null
     const [abA, abB, aoA, aoB, rhsA, rhsB] = vertices as Vector3[]
