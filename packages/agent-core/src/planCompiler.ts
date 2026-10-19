@@ -1840,7 +1840,7 @@ function readTetrahedronShape(prompt: string): { apex: string; base: [string, st
 }
 
 function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
-  if (first.result.ok || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
   const shape = readTetrahedronShape(prompt)
   if (shape === null) return null

@@ -51,6 +51,8 @@
 | 欠定/欠画 | trig-60 | 题面欠定，模型只给一个点 |
 | 解析残留 | 各题的“未核验” | 向量、二面角、部分 LaTeX 条件未被可靠解析 |
 
+> 2026-10-19 后续：`solid-1` 已由六棱四面体解析构造救援，真实 provider 复核 `verification=passed`；`solid-9` / `solid-32` 的裸别名已自动补 scope。
+
 ## 六、本轮由评测驱动的落地
 
 - `planCompiler`：`segment_reference_missing` 时把出错线段自动后移到末尾再编（含剪角），回归在 `planCompiler.witnessFold.test.ts`。

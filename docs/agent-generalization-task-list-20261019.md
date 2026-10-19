@@ -84,6 +84,7 @@
 - 新增 `rescueWithTetrahedronEdges`：识别 `三棱锥 P-ABC` / `四面体 ABCD`，从题设和 `PA=PB=2`、`△ABC 是边长为 2 的等边三角形` 提取六条棱，构造 `solid.create_polyhedron` 并重编；成功时写 `witness.tetrahedron` 假设。
 - 为避免改动原文 span，等边/链式展开只在**核验内部**用 `expandExamShorthand`；`parseObligationWithLegacy` 仍按原题面保持可追溯。
 - 回归：`solver/tetrahedron.test.ts` 3 条 + `planCompiler.tetrahedron.test.ts` 1 条；全量 414 文件 / 4779 通过 + 1 todo。
+- 真实 provider 复核：solid-1（三棱锥 P-ABC）flash 从坐标失败变为 `ok=true` / `verification=passed`，`assumptions=['witness.tetrahedron']`。
 - **边界**：只覆盖“六条棱都明确给出（或底面等边）”的四面体；其他多面体、半角/二面角约束仍靠模型或后续求解器。
 
 ## 建议执行顺序
