@@ -23,6 +23,7 @@ import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRightPrism } from "./solver/prism"
 import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
+import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
 import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
@@ -371,6 +372,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const trapezoidPrism = rescueWithTrapezoidPrism(context, first)
   if (trapezoidPrism !== null) return trapezoidPrism
+  const perpendicularPyramid = rescueWithPerpendicularPyramid(context, first)
+  if (perpendicularPyramid !== null) return perpendicularPyramid
   /**
    * **结构清洗**（2026-10-19，任务 P1-3）：先修顺序，再把非法折角按 90° 安全默认回填，
    * 然后才编译。旧路径把“顺序”和“折角”分成两次救援，第一处修好后第二处仍会挡住整轮。
@@ -2416,6 +2419,75 @@ function rescueWithTrapezoidPrism(context: PlanCompileContext, first: CompileOnc
       value: { ab, ad, cd, volume: Number(volumeMatch[1]) },
       overridable: true,
       path: "envelope.actions[0].inputs.basePolygon"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **PA⊥底面 + AD=CD + 平面 PAC⊥平面 PBD**（2026-10-19，P1-1，solid-9）。
+ * 解析构造出 A/B/C/D/P；平面垂直条件仍交给题设核验。
+ */
+function rescueWithPerpendicularPyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const shape = /四棱锥\s*([A-Z])\s*-\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
+  if (shape === null) return null
+  const apex = shape[1]!
+  const base = [shape[2]!, shape[3]!, shape[4]!, shape[5]!] as const
+  if (!new RegExp(`${apex}${base[0]}\\s*⊥\\s*平面`).test(prompt)) return null
+  if (!new RegExp(`${base[0]}${base[3]}\\s*=\\s*${base[2]}${base[3]}`).test(prompt)) return null
+  if (!prompt.includes("平面PAC⊥平面PBD")) return null
+
+  const lengths = new Map<string, number>()
+  for (const match of prompt.matchAll(/((?:[A-Z]{2}=)+)([0-9.]+|√[0-9.]+)/g)) {
+    const value = parseLengthLiteral(match[2]!)
+    if (value === null) continue
+    for (const pair of match[1]!.matchAll(/([A-Z])([A-Z])=/g)) lengths.set(pairKey(pair[1]!, pair[2]!), value)
+  }
+  for (const match of prompt.matchAll(/(?<!∠)([A-Z])([A-Z])\s*=\s*([0-9.]+|√[0-9.]+)(?![\d.°])/g)) {
+    const value = parseLengthLiteral(match[3]!)
+    if (value !== null) lengths.set(pairKey(match[1]!, match[2]!), value)
+  }
+  const pa = lengths.get(pairKey(apex, base[0]))
+  const ab = lengths.get(pairKey(base[0], base[1]))
+  const bc = lengths.get(pairKey(base[1], base[2]))
+  const angleMatch = new RegExp(`∠${base[0]}${base[1]}${base[2]}\\s*=\\s*([0-9.]+)°`).exec(prompt)
+  if (pa === undefined || ab === undefined || bc === undefined || angleMatch === null) return null
+  const points = constructPerpendicularPyramid({ ab, bc, angleABC: Number(angleMatch[1]), pa })
+  if (points === null) return null
+
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "PA⊥底面且平面 PAC⊥平面 PBD 的四棱锥",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "perpendicular-pyramid",
+      factIds: [],
+      inputs: {
+        alias: "perpendicular-pyramid",
+        vertexNames: [base[0], base[1], base[2], base[3], apex],
+        vertices: [points.a, points.b, points.c, points.d, points.p],
+        faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status === "failed") return null
+  const verified = compiled.result.diagramVerification?.status === "passed"
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.perpendicularPyramid",
+      text: verified
+        ? "由 PA、AB、BC、∠ABC 与垂直平面条件解析构造四棱锥；已按题设核验。"
+        : "由 PA、AB、BC、∠ABC 与垂直平面条件解析构造四棱锥；部分条件未解析，仍标未核验。",
+      kind: "witness",
+      value: { apex, base, pa, ab, bc, angleABC: Number(angleMatch[1]) },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
     }],
     materialisedActions: compiled.result.actions
   }
