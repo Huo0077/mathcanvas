@@ -362,6 +362,24 @@ function statedSlope(raw: string | undefined): number | null {
 }
 
 /**
+ * **直线的一般式** `Ax + By + C = 0` ⇒ 斜截式或竖直线。
+ *
+ * 卷面上一般式与斜截式一样常见（`直线l：3x+4y+15=0`），而读取器此前只收斜截式与 `x = c`。
+ * `B = 0` 时它本来就是竖直线 `x = −C/A`；`A`、`B` 同时为 0 不是直线，返回 `null`。
+ * 系数由按字符占位的正则给，这里只做"一般式 → 判据用的那一组数"的换算，不另写一条判据。
+ */
+function lineFromGeneralForm(a: number, b: number, c: number): DiagramStatedLine | null {
+  if (![a, b, c].every(Number.isFinite) || (a === 0 && b === 0)) return null
+  if (b === 0) return { kind: "vertical", x: -c / a }
+  return { kind: "slope", slope: -a / b, intercept: -c / b }
+}
+
+/** 题面里的减号有三种字形（ASCII `-`、U+2212 `−`、en dash `–`）—— 一般式里都会出现。 */
+function isMinus(sign: string | undefined): boolean {
+  return sign === "-" || sign === "−" || sign === "–"
+}
+
+/**
  * `functionLineIntersections` 用的"有几个交点"那一段（Task 15 边界，2026-10-14）。
  *
  * 个数**中文与阿拉伯数字都收**（卷面与前缀两种写法都常见：`有三个交点` / `恰有 2 个交点`），
@@ -629,6 +647,23 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return chordDraft({ kind: "vertical", x }, m[2] ?? "", m[3] ?? m[4])
     }
   },
+  {
+    /**
+     * **直线的一般式**（2026-10-19 联考 `joint-21`：`直线l：3x+4y+15=0`）。
+     *
+     * 只收 `= 0` 这一种写法：`3x+4y+15=1` 当然是另一条直线，但它不是一般式的形态，
+     * 读取器**不替题面移项**（移错一项就是另一条线，而模型只有一次修复机会）。
+     * 标签（`直线l：` / `直线 L:`）可有可无。
+     */
+    pattern: new RegExp(`直线\\s*(?:[a-z]\\s*[:：]\\s*)?([-−–+]?)\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*x\\s*([-−–+])\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*y\\s*(?:([-−–+])\\s*(\\d+(?:\\.\\d+)?))?\\s*=\\s*0\\s*${CHORD_CLAIM}`, "g"),
+    read: (m) => {
+      const a = (isMinus(m[1]) ? -1 : 1) * (m[2] === undefined ? 1 : Number(m[2]))
+      const b = (isMinus(m[3]) ? -1 : 1) * (m[4] === undefined ? 1 : Number(m[4]))
+      const c = m[5] === undefined ? 0 : (isMinus(m[5]) ? -1 : 1) * Number(m[6])
+      const line = lineFromGeneralForm(a, b, c)
+      return line === null ? null : chordDraft(line, m[7] ?? "", m[8] ?? m[9])
+    }
+  },
   /**
    * **两条函数的公切线**：`f(x)=x² 与 g(x)=−(x−2)²+1 的两条公切线`。
    *
@@ -808,6 +843,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const x = Number(m[1])
       if (!Number.isFinite(x)) return null
       return intersectionCountDraft({ kind: "vertical", x }, m[2] ?? "")
+    }
+  },
+  {
+    /**
+     * **直线一般式**（与 `conicChord` 那一支同一个换算：`lineFromGeneralForm`）。
+     * 交点个数这一支此前只认斜截式与竖直线，`2x−y+1=0` 会整条丢掉。
+     */
+    pattern: new RegExp(`直线\\s*(?:[a-z]\\s*[:：]\\s*)?([-−–+]?)\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*x\\s*([-−–+])\\s*(\\d+(?:\\.\\d+)?)?\\s*\\*?\\s*y\\s*(?:([-−–+])\\s*(\\d+(?:\\.\\d+)?))?\\s*=\\s*0(?=[^，,。；;]{0,30}?${INTERSECTION_COUNT_CLAIM})`, "g"),
+    read: (m) => {
+      const a = (isMinus(m[1]) ? -1 : 1) * (m[2] === undefined ? 1 : Number(m[2]))
+      const b = (isMinus(m[3]) ? -1 : 1) * (m[4] === undefined ? 1 : Number(m[4]))
+      const c = m[5] === undefined ? 0 : (isMinus(m[5]) ? -1 : 1) * Number(m[6])
+      const line = lineFromGeneralForm(a, b, c)
+      return line === null ? null : intersectionCountDraft(line, m[7] ?? "")
     }
   },
   {

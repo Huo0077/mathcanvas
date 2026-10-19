@@ -401,6 +401,24 @@ describe("Task 14：直线与圆锥曲线的交点义务", () => {
     expect(chord?.targets).toEqual([])
   })
 
+  /**
+   * **直线的一般式**（2026-10-19 联考 `joint-21`：`直线l：3x+4y+15=0`）。
+   *
+   * 卷面上"一般式"和斜截式一样常见，而读取器此前只收斜截式与竖直线。换成
+   * `Ax + By + C = 0` ⇒ 斜率 `−A/B`、截距 `−C/B`；`B = 0` 时它就是竖直线。
+   * **右端不是 0 不认**：`3x+4y+15=1` 是另一条直线，但写成一般式以外的形态，猜不得。
+   */
+  it("`直线l：3x+4y+15=0` ⇒ 斜率 −3/4、截距 −15/4", () => {
+    const chord = chordOf("椭圆 x²/9+y²/4=1 与直线l：3x+4y+15=0 相交于 A、B 两点")
+    expect(chord?.line).toEqual({ kind: "slope", slope: -3 / 4, intercept: -15 / 4 })
+    expect(chord?.expectation).toBe("secant")
+    expect(chord?.targets).toEqual(["A", "B"])
+  })
+
+  it("一般式右端**不是 0** ⇒ 不认（不猜）", () => {
+    expect(chordOf("椭圆 x²/9+y²/4=1 与直线 3x+4y+15=1 相交于 A、B 两点")).toBeUndefined()
+  })
+
   it("「没有交点」也读得出来", () => {
     expect(chordOf("椭圆 x²/9+y²/4=1 与直线 y=3 没有交点")?.expectation).toBe("none")
   })
@@ -709,6 +727,12 @@ describe("函数与直线的交点个数", () => {
   it("斜线与竖线两种写法都收", () => {
     expect(intersectionsOf("直线 y=x+1 与 f(x)=x^3-3*x 的图像有两个交点")?.line).toEqual({ kind: "slope", slope: 1, intercept: 1 })
     expect(intersectionsOf("直线 x=2 与 f(x)=x^3-3*x 的图像有一个交点")?.line).toEqual({ kind: "vertical", x: 2 })
+  })
+
+  it("**直线一般式**也认：`2x−y+1=0` ⇒ `y = 2x + 1`", () => {
+    const item = intersectionsOf("直线 2x−y+1=0 与 f(x)=x² 的图像有两个交点")
+    expect(item?.line).toEqual({ kind: "slope", slope: 2, intercept: 1 })
+    expect(item?.value).toBe(2)
   })
 
   it("**没写个数就不产这条**：如实落进未核验，不拿「相交」当个数", () => {
