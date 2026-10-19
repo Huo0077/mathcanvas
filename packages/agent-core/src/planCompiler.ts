@@ -22,6 +22,7 @@ import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRegularSquarePyramid } from "./solver/regularPyramid"
+import { constructRegularTriangularPyramid } from "./solver/regularTriangularPyramid"
 import { constructRightPrism } from "./solver/prism"
 import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
 import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
@@ -414,6 +415,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const tetrahedron = rescueWithTetrahedronEdges(context, first)
   if (tetrahedron !== null) return tetrahedron
+  const regularTriangularPyramid = rescueWithRegularTriangularPyramid(context, first)
+  if (regularTriangularPyramid !== null) return regularTriangularPyramid
   const regularPyramid = rescueWithRegularSquarePyramid(context, first)
   if (regularPyramid !== null) return regularPyramid
   const pyramid = rescueWithSquarePyramid(context, first)
@@ -2036,6 +2039,56 @@ function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileO
  * **正四棱锥（只给底边与侧棱）**（2026-10-19，P1-1，solid-24）：
  * 顶点在底面中心正上方，h²=l²−a²/2；不依赖点名，图上的默认名是 A–D、P。
  */
+/**
+ * **正三棱锥（只给底边与侧棱）**（2026-10-19，P1-1）：
+ * 顶点在底面正三角形中心正上方，h²=l²−a²/3；默认名 A、B、C、P。
+ */
+function rescueWithRegularTriangularPyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  if (!prompt.includes("正三棱锥")) return null
+  const sideMatch = /底面边长(?:为)?\s*([0-9.]+|√[0-9.]+)/.exec(prompt)
+  const lateralMatch = /侧棱长(?:为)?\s*([0-9.]+|√[0-9.]+)/.exec(prompt)
+  if (sideMatch === null || lateralMatch === null) return null
+  const side = parseLengthLiteral(sideMatch[1]!)
+  const lateral = parseLengthLiteral(lateralMatch[1]!)
+  if (side === null || lateral === null) return null
+  const points = constructRegularTriangularPyramid(side, lateral)
+  if (points === null) return null
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由底面边长与侧棱长解析构造的正三棱锥",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "regular-triangular-pyramid",
+      factIds: [],
+      inputs: {
+        alias: "regular-triangular-pyramid",
+        vertexNames: ["A", "B", "C", "P"],
+        vertices: [points.a, points.b, points.c, points.p],
+        faces: [[0, 1, 2], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null) return null
+  if (compiled.result.diagramVerification !== undefined && compiled.result.diagramVerification.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.regularTriangularPyramid",
+      text: "正三棱锥按底边 a 与侧棱 l 解析构造：顶点在底面中心正上方，h²=l²−a²/3。",
+      kind: "witness",
+      value: { side, lateral },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
 function rescueWithRegularSquarePyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)

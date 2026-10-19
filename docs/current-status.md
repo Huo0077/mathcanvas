@@ -8,7 +8,7 @@
 - P1-3 进展：新增 `rescueWithStructuralRepairs`，同一轮清洗“线段顺序 + 非法折角（0° → 安全默认 90°，可覆盖）”，再走折角反求与题设核验；两条回归在 `planCompiler.witnessFold.test.ts`，提交 `16ca1cc`。
 - P5-1 进展：新增 `normalizeGeometryPrompt`（LaTeX 命令与 OCR 错字 → 解析器可读文本），接入 `parseObligationWithLegacy` / `parseObligationIR` 与 `planCompiler` 的解析/关系核验；11 道 HighMATH 原始 LaTeX 的 given **0→29**、unverified **26→13**，8/11 能读出条件；`latexNormalisation.test.ts` 4 条 + 原始 LaTeX 端到端 1 条通过。
 - P1-2 进展：`readScopedReference` 接受裸字符串并补成 `{scope:"draft",alias}`；`solid.fold` 的折痕也接受数组 `["E","F"]`；对象缺 scope 仍拒绝；`schemas.test.ts` 与 `planCompiler.bareAlias.test.ts` 覆盖解析到绑定。
-- P1-1 进展：新增六棱四面体、正方形底四棱锥、正四棱锥、右三棱柱、直四棱柱梯形底、垂直平面四棱锥、等腰直角+等边+二面角等解析构造及救援；真实 provider 的 solid-1、solid-10、solid-13 均已 `verification=passed`，solid-9/20/trig-23 可画。
+- P1-1 进展：新增六棱四面体、正方形底四棱锥、正四棱锥、正三棱锥、右三棱柱、直四棱柱梯形底、垂直平面四棱锥、等腰直角+等边+二面角等解析构造及救援；真实 provider 的 solid-1、solid-10、solid-13 均已 `verification=passed`，solid-9/20/trig-23 可画。
 - 12 道复跑（flash）：最佳/最新 **12/12 可画、8/12 全过、0 失败**（最新一次 11/12 可画、8/12 全过、1/12 失败，solid-32 方差）。单题稳定通过 10 道：solid-1、solid-3、solid-9、solid-10、solid-13、solid-20、solid-32、trig-23、trig-89、user-quad-fold。M1 已达成。
 - 稳定性 4 道 ×3：solid-1 / solid-10 / solid-13 均 **3/3 passed**；user-quad-fold 原 **0/3**，加“共线面 + hostEdge 数组 + 重复顶点提示”后 2/3，再加 `rescueWithFoldConstruction` 后 **3/3 passed**。
 - 追加 `rescueWithSortedFaceRings`：多面体面环或棱柱底面自交时按面内角序重排，顶点/点名不动；solid-9/solid-20 单题可画。
@@ -34,7 +34,7 @@
 - P6-1 完成：Ctrl/Cmd+A 全选删除；模板实体/派生对象级联注销；宿主删除后绑定点降级为自由点并保留位置（`deletion-cascade` / `boundPointFollow` 回归）。
 - P1-5 部分 A/B：`deepseek-v4-pro` 前两题 1 passed / 1 unverified，约 2.5 分钟/题；完整批未跑，默认档位未改。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
-- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：453 文件 / 4846 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：455 文件 / 4849 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-17 真实 provider 画图评测（12 道）
 
