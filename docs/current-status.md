@@ -2,7 +2,7 @@
 
 ## 2026-10-19 泛化问题任务表
 
-- 桌面端已按当前源码重建：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`，安装包 `bundle/msi/MathCanvas_3.3.14_x64_en-US.msi` 与 `bundle/nsis/MathCanvas_3.3.14_x64-setup.exe`。
+- 桌面端已按当前源码重建并通过 10 秒启动 smoke：`apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`，安装包 `MathCanvas_3.3.14_x64_en-US.msi` / `MathCanvas_3.3.14_x64-setup.exe`（P6-2 done）。
 
 - 新增 [几何 Agent 泛化问题任务表](agent-generalization-task-list-20261019.md)：6 个 Part、24 项任务，逐项带优先级、状态与验收口径；任务表落档后先做 P1-3、P5-1。
 - P1-3 进展：新增 `rescueWithStructuralRepairs`，同一轮清洗“线段顺序 + 非法折角（0° → 安全默认 90°，可覆盖）”，再走折角反求与题设核验；两条回归在 `planCompiler.witnessFold.test.ts`，提交 `16ca1cc`。
