@@ -21,6 +21,7 @@ import { parseObligationWithLegacy } from "./obligationIR"
 import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
+import { constructRegularSquarePyramid } from "./solver/regularPyramid"
 import { constructRightPrism } from "./solver/prism"
 import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
 import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
@@ -413,6 +414,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const tetrahedron = rescueWithTetrahedronEdges(context, first)
   if (tetrahedron !== null) return tetrahedron
+  const regularPyramid = rescueWithRegularSquarePyramid(context, first)
+  if (regularPyramid !== null) return regularPyramid
   const pyramid = rescueWithSquarePyramid(context, first)
   if (pyramid !== null) return pyramid
   const prism = rescueWithRightPrism(context, first)
@@ -2029,6 +2032,56 @@ function rescueWithTetrahedronEdges(context: PlanCompileContext, first: CompileO
  * 题面：四棱锥 P-ABCD，底面正方形，AB=a，PC=PD=r，∠PCA=θ。坐标由
  * `constructSquarePyramid` 解出；这里只负责识别构型、取参数、重编核验。
  */
+/**
+ * **正四棱锥（只给底边与侧棱）**（2026-10-19，P1-1，solid-24）：
+ * 顶点在底面中心正上方，h²=l²−a²/2；不依赖点名，图上的默认名是 A–D、P。
+ */
+function rescueWithRegularSquarePyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  if (!prompt.includes("正四棱锥")) return null
+  const sideMatch = /底面边长(?:为)?\s*([0-9.]+|√[0-9.]+)/.exec(prompt)
+  const lateralMatch = /侧棱长(?:为)?\s*([0-9.]+|√[0-9.]+)/.exec(prompt)
+  if (sideMatch === null || lateralMatch === null) return null
+  const side = parseLengthLiteral(sideMatch[1]!)
+  const lateral = parseLengthLiteral(lateralMatch[1]!)
+  if (side === null || lateral === null) return null
+  const points = constructRegularSquarePyramid(side, lateral)
+  if (points === null) return null
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由底面边长与侧棱长解析构造的正四棱锥",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_polyhedron",
+      actionKey: "regular-square-pyramid",
+      factIds: [],
+      inputs: {
+        alias: "regular-square-pyramid",
+        vertexNames: ["A", "B", "C", "D", "P"],
+        vertices: [points.a, points.b, points.c, points.d, points.p],
+        faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]
+      }
+    }]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null) return null
+  if (compiled.result.diagramVerification !== undefined && compiled.result.diagramVerification.status !== "passed") return null
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.regularSquarePyramid",
+      text: "正四棱锥按底边 a 与侧棱 l 解析构造：顶点在底面中心正上方，h²=l²−a²/2。",
+      kind: "witness",
+      value: { side, lateral },
+      overridable: true,
+      path: "envelope.actions[0].inputs.vertices"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
 function rescueWithSquarePyramid(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
