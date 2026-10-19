@@ -150,6 +150,16 @@ type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "p
 interface Matcher {
   pattern: RegExp
   read: (match: RegExpExecArray) => ObligationDraft | ObligationDraft[] | null
+  /**
+   * 允许这一条在**标签冒号**之后匹配（`椭圆C：x²/16+y²/4=1`）。
+   *
+   * 默认的"后缀守卫"要挡住比例写法（`AE:AD=2:5` 里的 `AD=2` 不是一条长度）与
+   * `∠ABC=60°` 的后缀，所以匹配前面是 `[A-Z∠:：]` 时一律跳过。但**曲线方程**是例外：
+   * 题面常写成「曲线名 + 标签 + 全角冒号 + 标准方程」，冒号前面那个字母是曲线的名字，
+   * 不是点名的尾巴。只有把开关打开的这几条（椭圆/双曲线/抛物线）能穿过守卫，
+   * 别的读取器照旧被挡住 —— 拆掉整条守卫会让比例写法立刻读错。
+   */
+  allowAfterLabelColon?: boolean
 }
 
 export interface DiagramParseOptions { spatialPointConditions?: boolean }
@@ -355,10 +365,12 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    */
   {
     pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    allowAfterLabelColon: true,
     read: (m) => ellipseAxes(Number(m[1]), Number(m[2]))
   },
   {
     pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    allowAfterLabelColon: true,
     read: (m) => ellipseAxes(Number(m[2]), Number(m[1]))
   },
   /**
@@ -369,10 +381,12 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    */
   {
     pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    allowAfterLabelColon: true,
     read: (m) => hyperbolaAxes(Number(m[1]), Number(m[2]), "x")
   },
   {
     pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    allowAfterLabelColon: true,
     read: (m) => hyperbolaAxes(Number(m[2]), Number(m[1]), "y")
   },
   /**
@@ -382,11 +396,44 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    */
   {
     pattern: /y\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*x(?![a-zA-Z])/g,
+    allowAfterLabelColon: true,
     read: (m) => parabolaAxis(Number(m[1]), "x")
   },
   {
     pattern: /x\s*(?:\^2|²)\s*=\s*(-?\d+(?:\.\d+)?)\s*y(?![a-zA-Z])/g,
+    allowAfterLabelColon: true,
     read: (m) => parabolaAxis(Number(m[1]), "y")
+  },
+  /**
+   * **函数式写法的抛物线**：`y = x²/4` 与 `y = 2x²`（2026-10-19 联考 `joint-28` 那一类）。
+   *
+   * 标准式是 `x² = 2py`，题面常把 y 解出来写成 `y = kx²` 或 `y = x²/k`：
+   * - `y = x²/4` ⇔ `x² = 4y` ⇒ `2p = 4` ⇒ `p = 2`；
+   * - `y = 2x²` ⇔ `x² = y/2` ⇒ `2p = 0.5` ⇒ `p = 0.25`。
+   *
+   * **只收顶点在原点、对称轴是坐标轴的那一类**：`y = x²/4 + 1` / `− 1` 是被平移过的，
+   * 焦点与准线都变了 —— 按标准式核验会得到一条错的判据，所以那两种写法一律不认
+   *（尾部 `(?!\s*[-+−])` 就是干这个的），留给未核验。
+   */
+  {
+    pattern: /y\s*=\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)(?!\s*[-+−])(?![\dxX])/g,
+    allowAfterLabelColon: true,
+    read: (m) => parabolaAxis(Number(m[1]), "y")
+  },
+  {
+    pattern: /y\s*=\s*(\d+(?:\.\d+)?)\s*\*?\s*x\s*(?:\^2|²)(?!\s*[-+−])(?![\dxX])/g,
+    allowAfterLabelColon: true,
+    read: (m) => parabolaAxis(1 / Number(m[1]), "y")
+  },
+  {
+    pattern: /x\s*=\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)(?!\s*[-+−])(?![\dxY])/g,
+    allowAfterLabelColon: true,
+    read: (m) => parabolaAxis(Number(m[1]), "x")
+  },
+  {
+    pattern: /x\s*=\s*(\d+(?:\.\d+)?)\s*\*?\s*y\s*(?:\^2|²)(?!\s*[-+−])(?![\dxY])/g,
+    allowAfterLabelColon: true,
+    read: (m) => parabolaAxis(1 / Number(m[1]), "x")
   },
   {
     /**
@@ -1090,12 +1137,15 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   const used = new Set<number>()
 
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
-  for (const { pattern, read } of matchers) {
+  for (const { pattern, read, allowAfterLabelColon } of matchers) {
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       const end = start + match[0].length
       // A suffix of ∠ABC=60° is not the segment condition BC=60.
-      if (start > 0 && /[A-Z∠:：]/.test(givenText[start - 1])) continue
+      if (start > 0 && /[A-Z∠:：]/.test(givenText[start - 1])) {
+        const afterLabelColon = allowAfterLabelColon === true && /[：:]/.test(givenText[start - 1])
+        if (!afterLabelColon) continue
+      }
       const next = /^\s*(\S)/.exec(givenText.slice(end))?.[1]
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue
       if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue

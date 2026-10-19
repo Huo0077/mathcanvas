@@ -414,6 +414,68 @@ describe("Task 14：直线与圆锥曲线的交点义务", () => {
 })
 
 /**
+ * **命名圆锥曲线：`椭圆C：…` 这种带标签的写法**（2026-10-19 联考评测的最大一类未核验）。
+ *
+ * 现场读数：30 道联考新卷里 **8 次**报"这条曲线方程没有被归入本仓支持的三类标准圆锥曲线"，
+ * 而其中一部分**方程本身完全标准**，只是前面多了一个曲线名 + 标签 + 全角冒号
+ *（`椭圆C：x²/16+y²/4=1`、`抛物线C：y²=4x`）。根因是 `parseDiagramObligations` 里那条
+ * "后缀守卫"（防止把 `∠ABC=60°` 的后缀当成 `BC=60`）连**标签冒号**也一起挡了。
+ *
+ * 判据两条、方向相反：
+ * - 标签冒号后面的标准方程**必须读得出**（否则图都画了、读数停在"未核验"）；
+ * - 比例写法 `AE:AD=2:5` 里的 `AD=2` **仍然不许**被当成一条长度（守卫不能整体拆掉）。
+ */
+describe("命名圆锥曲线：标签冒号不该把方程挡在外面", () => {
+  const conicOf = (prompt: string) => parseDiagramObligations(prompt).givens.find((item) => item.kind === "conicAxes")?.conic
+
+  it("`椭圆C：x²/16+y²/4=1` ⇒ 半轴 4 / 2", () => {
+    expect(conicOf("椭圆C：x²/16+y²/4=1")).toEqual({ kind: "ellipse", radiusX: 4, radiusY: 2 })
+  })
+
+  it("`抛物线C：y²=4x` ⇒ 焦点参数 2、轴沿 x", () => {
+    expect(conicOf("抛物线C：y²=4x")).toEqual({ kind: "parabola", focalParameter: 2, axis: "x" })
+  })
+
+  it("`双曲线C：x²/4−y²/9=1` ⇒ 半轴 2 / 3、实轴沿 x", () => {
+    expect(conicOf("双曲线C：x²/4−y²/9=1")).toEqual({ kind: "hyperbola", radiusX: 2, radiusY: 3, axis: "x" })
+  })
+
+  it("**比例冒号不受影响**：`AE:AD=2:5` 仍不许被读成一条长度", () => {
+    const parsed = parseDiagramObligations("点E在AD上，且AE:AD=2:5")
+    expect(parsed.givens.some((item) => item.kind === "fixedLength")).toBe(false)
+  })
+
+  /**
+   * **函数式写法的抛物线**：`y=x²/4`（2026-10-19 联考 `joint-28`）。
+   *
+   * 标准式是 `x² = 2py`，题面却常写成 `y = x²/4` —— 同一条曲线，只是把 y 解出来了。
+   * `y = x²/4` ⇔ `x² = 4y` ⇒ `2p = 4` ⇒ `p = 2`；`y = 2x²` ⇔ `x² = y/2` ⇒ `2p = 0.5`。
+   * **只收"顶点在原点、对称轴是坐标轴"的那一类**：`y = x²/4 + 1` 是被平移过的抛物线，
+   * 它的焦点与准线都变了，不能按标准式核验 —— 那种一律不认，留在未核验。
+   */
+  it("`曲线 y=x²/4` ⇒ 抛物线 `p=2`、轴沿 y", () => {
+    expect(conicOf("曲线 y=x²/4")).toEqual({ kind: "parabola", focalParameter: 2, axis: "y" })
+  })
+
+  it("`y = x^2/4`（脱字符写法）同样读得出", () => {
+    expect(conicOf("已知 y = x^2/4")).toEqual({ kind: "parabola", focalParameter: 2, axis: "y" })
+  })
+
+  it("`y = 2x²` ⇒ `x² = y/2` ⇒ `p=0.25`", () => {
+    expect(conicOf("曲线 y = 2x²")).toEqual({ kind: "parabola", focalParameter: 0.25, axis: "y" })
+  })
+
+  it("`x = y²/4` ⇒ 抛物线 `p=2`、轴沿 x", () => {
+    expect(conicOf("曲线 x = y²/4")).toEqual({ kind: "parabola", focalParameter: 2, axis: "x" })
+  })
+
+  it("**被平移过的抛物线不收**：`y = x²/4 + 1` 与 `y = x²/4 − 1` 都不许按标准式读", () => {
+    expect(conicOf("曲线 y = x²/4 + 1")).toBeUndefined()
+    expect(conicOf("曲线 y = x²/4 − 1")).toBeUndefined()
+  })
+})
+
+/**
  * **非标准曲线的「明确不归类」**（Task 14 的边界，2026-10-14 收口）。
  *
  * 调研 §C 原文：`2024 新课标Ⅰ卷第 11 题`是**非标准曲线**，"暂记范围外/跨家族候选，
