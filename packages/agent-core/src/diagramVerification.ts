@@ -990,6 +990,22 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (secondCount === 4 && Math.abs(dotVector3(second, subtractVector3(at(firstCount + 3), at(firstCount)))) / secondMagnitude > distanceTolerance(1)) return null
     return { actual: Math.abs(dotVector3(first, second)) / (firstMagnitude * secondMagnitude), expected: 0, tolerance: UNITLESS_TOLERANCE }
   }
+  if (item.kind === "acuteTriangle") {
+    if (vertices.length !== 3) return null
+    const [a, b, c] = vertices as Vector3[]
+    if (a === undefined || b === undefined || c === undefined) return null
+    const angleAt = (vertex: Vector3, first: Vector3, second: Vector3): number | null => {
+      const u = subtractVector3(first, vertex)
+      const v = subtractVector3(second, vertex)
+      const denominator = lengthVector3(u) * lengthVector3(v)
+      if (!(denominator > 1e-12)) return null
+      return (Math.acos(Math.min(1, Math.max(-1, dotVector3(u, v) / denominator))) * 180) / Math.PI
+    }
+    const angles = [angleAt(a, b, c), angleAt(b, a, c), angleAt(c, a, b)]
+    if (angles.some((angle) => angle === null)) return null
+    const maximum = Math.max(...(angles as number[]))
+    return { actual: maximum >= 90 ? maximum - 90 + 1 : 0, expected: 0, tolerance: 1e-9 }
+  }
   if (item.kind === "vectorDot") {
     if (numeric === undefined || vertices.length !== 6) return null
     const [abA, abB, aoA, aoB, rhsA, rhsB] = vertices as Vector3[]
