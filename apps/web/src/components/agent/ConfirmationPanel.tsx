@@ -152,6 +152,24 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       </ul>
     </section>}
 
+    {/*
+      **没有核验报告也要摆出来**（2026-10-20，联考 30 题里"无核验项"那 7 道的审计）。
+
+      `diagramVerification === undefined` 有两条来路，而两条都意味着**没有任何一条题设被核验过**：
+      ① 这份计划里没有一笔动作能让题面点名的顶点拿到坐标（`solid.create_template` 的模板 / 圆柱 /
+      圆锥、`solid.create_regular_pyramid` 的正 N 棱锥，顶点只有模板自己的顺序编号）；
+      ② 题面本来就没有可核的条件。
+
+      此前这一档**什么都不显示**，而"确认并提交"照旧出现（下面的判据是 `undefined || passed`）——
+      于是"系统没有核"被读成了"系统核过了"。这里只把话说清楚，**不改确认的闸门**：
+      "画一个正方体"这类题面本来就没有题设要核，把它一刀切成不许确认是另一件事。
+    */}
+    {draft.diagramVerification === undefined && <section className="agent-diagram-verification" aria-label="题设核验" data-status="not-run">
+      <h4>这一轮没有题设核验报告</h4>
+      <p>这份图里<strong>没有任何一条题设被核验过</strong>：要么计划用的是不带题面点名的实体（模板、圆锥、正 N 棱锥这类，顶点只有模板自己的编号，题面的 A、B、C 对不上），要么题面本来就没有可核的条件。</p>
+      <p role="note">确认之后图会照原样画出来 —— 但核对这一步<strong>没有发生</strong>，系统没有替你核。请自己看一眼它是否符合题设。</p>
+    </section>}
+
     {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status} data-proof-scope={draft.diagramVerification.proofScope} data-universal-claims={draft.diagramVerification.universalClaims}>
       <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
       <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
