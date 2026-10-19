@@ -352,16 +352,24 @@ type ConicDescription =
 type FigureConic = ConicDescription & { primitive: PlanarConic }
 
 /**
- * **候选图里那条新画的圆锥 / 圆柱**（2026-10-20，实体标量尺寸）。
+ * **候选图里那条新画的圆锥 / 圆柱 / 正 N 棱锥**（2026-10-20，实体标量尺寸）。
  *
- * 只留判据真正要用的两个数：`radius` 与 `height`。母线 / 底面积 / 侧面积都是它们的函数
- * （见 `measureSolid`），所以**不为每个度量各存一份** —— 存三份就是给同一个量造三个来源。
+ * 只留判据真正要用的那几个数。圆锥 / 圆柱给 `radius` 与 `height`（图元里就有）；正 N 棱锥
+ * 图元里**没有**这两个数（物化成一整组点 + 棱 + 面），所以它的度量是**从坐标量出来的**：
+ * 底边长 / 底面周长 / 底面积 / 侧棱长 / 高。
  */
-interface FigureSolid {
-  shape: "cone" | "cylinder"
-  radius: number
-  height: number
-}
+type FigureSolid =
+  | { shape: "cone" | "cylinder"; radius: number; height: number }
+  | {
+    shape: "pyramid"
+    /** 底面边数（从底环上数出来，不读动作参数）。 */
+    sides: number
+    baseEdge: number
+    basePerimeter: number
+    baseArea: number
+    lateralEdge: number
+    height: number
+  }
 
 /**
  * **候选图里那条唯一的、新画出来的圆锥曲线**（V0c）。
@@ -644,6 +652,7 @@ interface FigureContext {
  */
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
   if (plan.kind !== "plan") return null
+  if (plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) return candidatePyramid(candidate, base)
   if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter(
@@ -659,6 +668,17 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
 
 /** 圆锥 / 圆柱量出来的那个度量（`null` = 这个形状没有这个度量）。 */
 function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation["solid"]>["metric"]): number | null {
+  if (solid.shape === "pyramid") {
+    switch (metric) {
+      case "baseEdge": return solid.baseEdge
+      case "lateralEdge": return solid.lateralEdge
+      case "basePerimeter": return solid.basePerimeter
+      case "baseArea": return solid.baseArea
+      case "height": return solid.height
+      // 母线 / 半径 / 侧面积不是棱锥的度量（侧面积还要斜高面，今天不算）。
+      default: return null
+    }
+  }
   /**
    * **母线在两种实体上是两件事**：圆锥的母线是斜的（`√(r²+h²)`），圆柱的母线与高**是同一条**。
    * 这个差别正是"圆锥的侧面展开图为什么是扇形"，写错就会把圆锥的母线量成高。
@@ -671,7 +691,102 @@ function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation[
     case "slantHeight": return slant
     case "baseArea": return Math.PI * solid.radius * solid.radius
     case "lateralArea": return solid.shape === "cone" ? Math.PI * solid.radius * slant : 2 * Math.PI * solid.radius * solid.height
+    default: return null
   }
+}
+
+/**
+ * **正 N 棱锥：从坐标把底环认出来，再量。**
+ *
+ * `solid.create_regular_pyramid` 物化成一整组点 / 棱 / 面 + 一个 `polyhedron3`，
+ * 图元里**没有** `radius` / `height`（那两个数只在动作里）—— 所以这里不读动作参数，**量坐标**。
+ *
+ * 认底面的办法只用一条几何事实：**非底面的侧面全是三角形**，底面是 N 边形（N ≥ 4），
+ * 于是 `face3` 里**点最多的那张**就是底环。剩下那个顶点是锥顶。
+ *
+ * **N = 3 时这张表不成立**（四张面全是三角形）⇒ 返回 `null`，报告里落"未核验"。
+ * 按题面顺序挑一张当底面就是"替题面猜图形"，这条判据不做。
+ *
+ * 底面**不是正多边形**时也返回 `null`：那时"底边长 / 侧棱长"没有唯一的数。
+ */
+function candidatePyramid(candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const solids = candidate.primitives.filter((primitive) => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
+  if (solids.length !== 1) return null
+  const [polyhedron] = solids
+  const solid = polyhedron as unknown as { vertexIds?: string[]; faceIds?: string[] }
+  if (!Array.isArray(solid.vertexIds) || !Array.isArray(solid.faceIds)) return null
+  const byId = new Map(candidate.primitives.map((primitive) => [primitive.id, primitive]))
+  const positionOf = (id: string): Vector3 | null => {
+    const primitive = byId.get(id)
+    if (primitive === undefined || primitive.type !== "point3") return null
+    return primitive.position
+  }
+  const faces = solid.faceIds
+    .map((id) => byId.get(id))
+    .filter((primitive): primitive is Extract<typeof candidate.primitives[number], { type: "face3" }> => primitive?.type === "face3")
+  if (faces.length === 0) return null
+  const counts = faces.map((face) => face.pointIds.length)
+  const widest = Math.max(...counts)
+  // 三角形底（N = 3）分不出哪一张是底面；两张一样宽的也说不清。
+  if (widest <= 3) return null
+  if (counts.filter((count) => count === widest).length !== 1) return null
+  const ringIds = faces[counts.indexOf(widest)]!.pointIds
+  const ring = ringIds.map(positionOf)
+  if (ring.some((position) => position === null)) return null
+  const ringPoints = ring as Vector3[]
+  const apexId = solid.vertexIds.find((id) => !ringIds.includes(id))
+  const apex = apexId === undefined ? null : positionOf(apexId)
+  if (apex === null) return null
+  const sides = ringPoints.length
+  const edges = ringPoints.map((point, index) => euclid(point, ringPoints[(index + 1) % sides]!))
+  const meanEdge = edges.reduce((sum, value) => sum + value, 0) / sides
+  if (!(meanEdge > 0) || edges.some((edge) => Math.abs(edge - meanEdge) > 1e-6 * Math.max(1, meanEdge))) return null
+  const laterals = ringPoints.map((point) => euclid(apex, point))
+  const meanLateral = laterals.reduce((sum, value) => sum + value, 0) / sides
+  if (laterals.some((value) => Math.abs(value - meanLateral) > 1e-6 * Math.max(1, meanLateral))) return null
+  const area = polygonArea3(ringPoints)
+  if (area === null) return null
+  const centroid = ringPoints.reduce((sum, point) => ({ x: sum.x + point.x / sides, y: sum.y + point.y / sides, z: sum.z + point.z / sides }), { x: 0, y: 0, z: 0 })
+  const height = polygonNormal(ringPoints) === null ? null : Math.abs(dot(subtract(apex, centroid), polygonNormal(ringPoints)!))
+  if (height === null || !Number.isFinite(height) || height <= 0) return null
+  return { shape: "pyramid", sides, baseEdge: meanEdge, basePerimeter: edges.reduce((sum, value) => sum + value, 0), baseArea: area, lateralEdge: meanLateral, height }
+}
+
+const euclid = (a: Vector3, b: Vector3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+const subtract = (a: Vector3, b: Vector3): Vector3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
+const dot = (a: Vector3, b: Vector3): number => a.x * b.x + a.y * b.y + a.z * b.z
+
+/** 平面多边形的单位法向（Newell）；退化（面积 0）返回 `null`。 */
+function polygonNormal(points: readonly Vector3[]): Vector3 | null {
+  let x = 0
+  let y = 0
+  let z = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!
+    const next = points[(index + 1) % points.length]!
+    x += (current.y - next.y) * (current.z + next.z)
+    y += (current.z - next.z) * (current.x + next.x)
+    z += (current.x - next.x) * (current.y + next.y)
+  }
+  const length = Math.hypot(x, y, z)
+  return length > 1e-12 ? { x: x / length, y: y / length, z: z / length } : null
+}
+
+/** 平面多边形的面积（Newell 法向的一半模长）；退化返回 `null`。 */
+function polygonArea3(points: readonly Vector3[]): number | null {
+  let x = 0
+  let y = 0
+  let z = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index]!
+    const next = points[(index + 1) % points.length]!
+    x += (current.y - next.y) * (current.z + next.z)
+    y += (current.z - next.z) * (current.x + next.x)
+    z += (current.x - next.x) * (current.y + next.y)
+  }
+  const double = Math.hypot(x, y, z) / 2
+  return double > 1e-12 ? double : null
 }
 
 /** 度量的中文名（失败文案要指着它说，用户才知道是哪一条不对）。 */
@@ -680,7 +795,10 @@ const SOLID_DIMENSION_LABEL: Record<NonNullable<DiagramObligation["solid"]>["met
   height: "高",
   slantHeight: "母线长",
   baseArea: "底面积",
-  lateralArea: "侧面积"
+  lateralArea: "侧面积",
+  baseEdge: "底面边长",
+  lateralEdge: "侧棱长",
+  basePerimeter: "底面周长"
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string; evidence?: EvidenceGrade } | null {
@@ -705,11 +823,15 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const measured = measureSolid(drawn, stated.metric)
     if (measured === null || !Number.isFinite(measured)) return null
     const label = SOLID_DIMENSION_LABEL[stated.metric]
+    /** 底下那两个数**各形状不一样**，所以这段说明也按形状写（说错一个数就是假话）。 */
+    const basis = drawn.shape === "pyramid"
+      ? `正 ${drawn.sides} 棱锥，底面边长 ${drawn.baseEdge.toPrecision(6)}、侧棱长 ${drawn.lateralEdge.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
+      : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
     return {
       actual: measured,
       expected: item.value,
       tolerance: distanceTolerance(1),
-      detail: `实测 ${drawn.shape === "cone" ? "圆锥" : "圆柱"}的${label} ${measured.toPrecision(6)}（由实体自己的半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)} 算出）；题设要求 ${label} ${item.value}。`
+      detail: `实测${basis}，${label} ${measured.toPrecision(6)}；题设要求 ${label} ${item.value}。`
     }
   }
   if (item.kind === "conicAxes") {
@@ -1476,6 +1598,13 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
                 ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。"
                 : item.kind === "functionGraph"
                 ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
+              : item.kind === "solidDimension"
+                /**
+                 * **实体尺寸量不出来的四种来路**（说清是哪一种，用户才知道下一步该改什么）：
+                 * 候选图里没有那条实体 / 形状对不上 / 底面是三角形（N = 3 分不出哪一张是底面）/
+                 * 底面不是正多边形（"底边长"没有唯一的数）。
+                 */
+                ? "候选图里没有唯一、可量的这条实体（少了或多了一条），或这个形状量不出这个尺寸（例如正三棱锥的底面分不出是哪三张面、底面不是正多边形），未核验。"
                 : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }

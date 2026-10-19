@@ -152,7 +152,10 @@ export interface DiagramObligation {
    * 只记形状与度量名，不记实体 id —— 这条义务说的是"图上那条圆锥"，而具体是哪一条，
    * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
    */
-  solid?: { shape: "cone" | "cylinder"; metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" }
+  solid?: {
+    shape: "cone" | "cylinder" | "pyramid"
+    metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter"
+  }
 }
 
 export interface DiagramSourceSpan {
@@ -516,10 +519,46 @@ const SOLID_SIZE_LITERAL = String.raw`(\d+(?:\.\d+)?\s*[π√]\s*\d*(?:\.\d+)?|�
 const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["solid"]>["metric"]; pattern: RegExp }[] = [
   { metric: "radius", pattern: new RegExp(String.raw`底面(?:圆)?的?半径\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
   { metric: "slantHeight", pattern: new RegExp(String.raw`母线(?:长)?\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
-  { metric: "baseArea", pattern: new RegExp(String.raw`底面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
-  { metric: "lateralArea", pattern: new RegExp(String.raw`侧面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  /**
+   * **`底面积` 与 `底面面积` 都收**（2026-10-20 实测）：联考 `joint-07` 的原文是
+   * "正六棱锥的**底面面积**为 6√3"，只写 `底面积` 会整句读不出 —— 而这不是罕见写法，
+   * 卷面上两种都在用。
+   */
+  { metric: "baseArea", pattern: new RegExp(String.raw`底(?:面)?面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "lateralArea", pattern: new RegExp(String.raw`侧(?:面)?面积\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "lateralEdge", pattern: new RegExp(String.raw`侧棱(?:长)?\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "basePerimeter", pattern: new RegExp(String.raw`底面周长\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
   { metric: "height", pattern: new RegExp(String.raw`高\s*(?:为|是|=)\s*${SOLID_SIZE_LITERAL}`, "g") }
 ]
+
+/** 哪种实体有哪个度量（圆柱没有「半径以外的底面量」，棱锥没有母线 / 半径）。 */
+const SOLID_METRICS: Record<NonNullable<DiagramObligation["solid"]>["shape"], ReadonlySet<NonNullable<DiagramObligation["solid"]>["metric"]>> = {
+  cone: new Set(["radius", "height", "slantHeight", "baseArea", "lateralArea"]),
+  cylinder: new Set(["radius", "height", "slantHeight", "baseArea", "lateralArea"]),
+  pyramid: new Set(["height", "baseArea", "basePerimeter", "lateralEdge"])
+}
+
+/** 中文数字的底面边数（`正六棱锥` ⇒ 6）。 */
+const CHINESE_SIDES: Record<string, number> = { 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
+
+interface SolidAnchor {
+  start: number
+  shape: NonNullable<DiagramObligation["solid"]>["shape"]
+  /** 正 N 棱锥的 N（题面写出来的那个数）。 */
+  sides?: number
+}
+
+/** 题面里出现过的实体**形状名**（"谁先说谁管"的锚点）。 */
+function solidAnchors(text: string): SolidAnchor[] {
+  const anchors: SolidAnchor[] = []
+  for (const match of text.matchAll(SOLID_SHAPE_TERM)) anchors.push({ start: match.index, shape: match[0] === "圆锥" ? "cone" : "cylinder" })
+  for (const match of text.matchAll(/正\s*([三四五六七八九十]|\d+)\s*棱锥/g)) {
+    const sides = CHINESE_SIDES[match[1]!] ?? Number(match[1])
+    // 只收**正**棱锥：`solid.create_regular_pyramid` 造的就是这一种，别的棱锥没有可量的正则底。
+    if (Number.isFinite(sides) && sides >= 3) anchors.push({ start: match.index, shape: "pyramid", sides })
+  }
+  return anchors.sort((left, right) => left.start - right.start)
+}
 
 /** 这些词出现在形状名与度量名之间时，说的**是另一个对象的半径 / 高**。 */
 const NOT_THIS_SOLID_TERM = /展开图|内切球|外接球/
@@ -540,7 +579,7 @@ function resolveSolidDimensions(
   givenText: string,
   used: Set<number>
 ): void {
-  const anchors = [...givenText.matchAll(SOLID_SHAPE_TERM)].map((match) => ({ start: match.index, shape: (match[0] === "圆锥" ? "cone" : "cylinder") as "cone" | "cylinder" }))
+  const anchors = solidAnchors(givenText)
   if (anchors.length === 0) return
   for (const { metric, pattern } of SOLID_METRIC_READERS) {
     for (const match of givenText.matchAll(pattern)) {
@@ -548,9 +587,17 @@ function resolveSolidDimensions(
       if ([...match[0]].some((_, offset) => used.has(start + offset))) continue
       const anchor = [...anchors].reverse().find((entry) => entry.start < start && start - entry.start <= 80)
       if (anchor === undefined) continue
+      // 中间又出现了**另一个**形状名 ⇒ 不知道这句说的是哪一个，不猜。
+      if (anchors.some((entry) => entry.start > anchor.start && entry.start < start)) continue
+      if (!SOLID_METRICS[anchor.shape].has(metric)) continue
       const between = givenText.slice(anchor.start + 2, start)
-      // 中间又出现了另一个形状名 ⇒ 不知道这句说的是哪一个，不猜。
-      if (SOLID_SHAPE_TERM.test(between) || NOT_THIS_SOLID_TERM.test(between)) continue
+      /**
+       * **正三 / 正四棱锥的「底面边长 + 侧棱长」归解析救援**：那一组数已经把坐标构造出来了
+       * （`rescueWithRegularTriangularPyramid` / `rescueWithRegularSquarePyramid`），同一句再发
+       * 一条标量义务只会把救援挡掉（救援要求复核 `passed`）。有底面边长时**不重复读**。
+       */
+      if (anchor.shape === "pyramid" && (anchor.sides === 3 || anchor.sides === 4) && /底面边长/.test(givenText.slice(anchor.start, anchor.start + 120))) continue
+      if (NOT_THIS_SOLID_TERM.test(between)) continue
       const value = solidSizeValue(match[1]!)
       if (value === null) continue
       givens.push({ kind: "solidDimension", targets: [], value, solid: { shape: anchor.shape, metric }, sourceText: match[0], start, end: start + match[0].length })

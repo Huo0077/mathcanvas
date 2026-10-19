@@ -119,7 +119,7 @@ function prismCarriesVertexNames(inputs: unknown): boolean {
  * 闸门只对这一族开，立方体等其它模板题面**逐字不变**。
  */
 function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
-  if (!actions.some((action) => action.actionId === "solid.create_template")) return false
+  if (!actions.some((action) => action.actionId === "solid.create_template" || action.actionId === "solid.create_regular_pyramid")) return false
   return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension")
 }
 
