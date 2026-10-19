@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 
+import { dihedralAngleDetail3 } from "@draw/geometry-kernel"
+
 import { constructDihedralTriangle } from "./dihedral"
 
 /**
@@ -24,6 +26,9 @@ describe("constructDihedralTriangle", () => {
     expect(distance(points.b, points.d)).toBeCloseTo(2, 12)
     expect(points.c.z).toBeCloseTo(0, 12)
     expect(points.d.z).toBeLessThan(0)
+    const detail = dihedralAngleDetail3([points.a, points.b, points.c], [points.a, points.b, points.d], points.a, points.b)
+    expect(detail).not.toBeNull()
+    expect(detail?.interiorDegrees).toBeCloseTo(150, 6)
   })
 
   it("refuses a non-positive side or a dihedral outside (0,180)", () => {

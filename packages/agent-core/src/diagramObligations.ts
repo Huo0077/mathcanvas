@@ -548,7 +548,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return expression === null ? null : { kind: "functionGraph", targets: [], expression }
     }
   },  {
-    pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*=\s*(\d+(?:\.\d+)?)\s*°/g,
+    pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*(?:=|[为為])\s*(\d+(?:\.\d+)?)\s*°/g,
     read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
   },
   {

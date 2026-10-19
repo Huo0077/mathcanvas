@@ -29,7 +29,8 @@ export function constructDihedralTriangle(measures: DihedralTriangleMeasures): D
   if (!Number.isFinite(dihedralDegrees) || dihedralDegrees <= 0 || dihedralDegrees >= 180) return null
   const half = ab / 2
   const height = (Math.sqrt(3) / 2) * ab
-  const angle = (dihedralDegrees * Math.PI) / 180
+  // 该构造里“绕 AB 的旋转角 φ”给出的二面角内角是 180-φ；要内角 θ 就旋转 180-θ。
+  const angle = ((180 - dihedralDegrees) * Math.PI) / 180
   return {
     a: { x: -half, y: 0, z: 0 },
     b: { x: half, y: 0, z: 0 },
