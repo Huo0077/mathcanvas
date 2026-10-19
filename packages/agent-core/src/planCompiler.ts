@@ -2905,6 +2905,10 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (degenerateFoldFace) {
     advice.push("提醒：这张三角面片的三个点共线。如果它就是折片 AEF，**删掉这张平放的面片**，改用 `dynamic.create_bound_point` 在宿主边 A–D / A–B 上建 E/F，再用 `solid.fold` 沿 EF 折出 P。不要继续微调这张面片的坐标。")
   }
+  const duplicateFaceVertex = errors.some((error) => error.code === "degenerate_face" && /互异|distinct/i.test(error.detail))
+  if (duplicateFaceVertex) {
+    advice.push("提醒：这张面片的**顶点重复了**（同一个点出现两次，或两个顶点坐标重合）。`vertexNames` 与 `vertices` 必须**按下标一一对应且互不相同**；如果这是四边形 ABCD，就给四个不同顶点，不要用重复点凑数，也不要只改坐标继续试。")
+  }
   const collapsedFace = errors.some((error) => /face ring/i.test(error.detail) && /zero area|collinear/i.test(error.detail))
   if (collapsedFace) {
     advice.push("提醒：有一只**面塌了**（三个点共线、面积为零）。要画**开放的**平面图形（四边形、三角形片、翻折片）就**不要**把它们拼成一只闭合多面体 —— 用 `solid.create_face` **一张一张**建（每张给 `vertices` 与 `vertexNames`，它不收 `faces`）。硬拼闭合体时，最容易造出来的就是三点共线的面。")

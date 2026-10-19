@@ -8,10 +8,10 @@
 - P1-2 进展：`readScopedReference` 接受裸字符串并补成 `{scope:"draft",alias}`；`solid.fold` 的折痕也接受数组 `["E","F"]`；对象缺 scope 仍拒绝；`schemas.test.ts` 与 `planCompiler.bareAlias.test.ts` 覆盖解析到绑定。
 - P1-1 进展：新增六棱四面体、正方形底四棱锥、右三棱柱、等腰直角+等边+二面角四个解析构造及救援；真实 provider 的 solid-1、solid-10、solid-13 均已 `verification=passed`，trig-23 变为可画/未核验。
 - 12 道复跑（flash）：最佳 **11/12 生成、4/12 全过、1/12 失败**；最近一次（二面角救援后）**9/12 生成、4/12 全过、3/12 失败**。两次都通过 solid-1、solid-10、solid-13、user-quad-fold；整批方差明显。
-- 稳定性 4 道 ×3：solid-1 / solid-10 / solid-13 均 **3/3 passed**；user-quad-fold 原 **0/3**，加“共线面提示 + hostEdge 数组”后重跑 **2/3 passed**（另一轮重复顶点仍失败）。解析构造稳定，折片仍受模型输出影响。
+- 稳定性 4 道 ×3：solid-1 / solid-10 / solid-13 均 **3/3 passed**；user-quad-fold 原 **0/3**，加“共线面 + hostEdge 数组 + 重复顶点提示”后重跑 **2/3 passed**（另一轮坐标错）。解析构造稳定，折片仍受模型输出影响。
 - P1-5 部分 A/B：`deepseek-v4-pro` 前两题 1 passed / 1 unverified，约 2.5 分钟/题；完整批未跑，默认档位未改。
 - P0 三件套：模型/通道（P1-4/P1-5）、计划清洗与救援组合（P1-2/P1-3）、LaTeX/OCR 归一化（P5-1）。
-- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：424 文件 / 4793 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 已完成项以 `97dde4b`、`16ca1cc`、`b4cf68e` 及后续提交为准；门禁：425 文件 / 4794 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-17 真实 provider 画图评测（12 道）
 

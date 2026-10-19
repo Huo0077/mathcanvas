@@ -22,7 +22,7 @@
 | ID | Part | 问题 / 目标 | 优先级 | 状态 | 验收 |
 |---|---|---|---|---|---|
 | P1-1 | 1 | 坐标与度量心算错误（PB、∠PCA、AA₁ 等） | P0 | partial | 六棱四面体、正方形底四棱锥、右三棱柱、等腰直角+等边+二面角四个解析构造已落地；其余形状仍靠模型坐标 |
-| P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认、数组折痕/数组 hostEdge 已落地；对象缺 scope 仍拒绝 |
+| P1-2 | 1 | 动作契约：裸别名引用、线段顺序、0° 折角 | P0 | done | 裸字符串按 draft 别名收下；线段后移、0° 安全默认、数组折痕/数组 hostEdge、重复顶点提示已落地；对象缺 scope 仍拒绝 |
 | P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | partial | 顺序 + 0° 已能一次清洗；AEF 平面片 + fold 结构已能物化 E/F；坐标与其他组合仍 open |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | open | 格式修复或原生工具通道；12 道格式失败 ≤ 1 |
 | P1-5 | 1 | 模型路由：`deepseek-chat` 实际是 flash；v4-pro 可用但慢 | P0 | partial | v4-pro 前两题 1 passed / 1 unverified，约 2.5 min/题；完整批未跑完，默认档位未改 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：424 文件 / 4793 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：425 文件 / 4794 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -63,7 +63,7 @@
 - 回填会写进 `assumptions`（`default-fold-angle.<apexAs>`，可覆盖），不是静默改值。
 - 回归：`planCompiler.witnessFold.test.ts` 新增“顺序 + 0°”和“0° 无目标角”两例，共 6 条通过；全量 411 文件 / 4771 通过 + 1 todo。
 - 追加 `materialiseFoldHinges`：删与折片同名的冗余 AEF 面，从折片顶点反推 E/F 在宿主边上的参数并物化为 bound point；单独复跑 user-quad-fold 时**八条题设全部 passed**。
-- 追加修复提示：共线三角面直接说“删面、用 bound point + fold”；`hostEdge` 也接受数组 `["A","D"]`。三连跑 user-quad-fold **2/3 passed**，另一轮模型给了重复顶点导致面退化。
+- 追加修复提示：共线三角面直接说“删面、用 bound point + fold”；`hostEdge` 也接受数组 `["A","D"]`；面顶点重复时提示“`vertexNames` 与 `vertices` 按下标互异”。三连跑 user-quad-fold **2/3 passed**，另一轮模型仍然坐标错。
 - **边界**：折片结构仍受模型输出影响；单题修复有效，但整批读数方差明显。其余坐标错误归 P1-1/P5-1。
 
 ## 2026-10-19 P5-1 进展
@@ -119,7 +119,7 @@
 
 - **三个解析构造 3/3 稳定**：坐标由纯数学层给出，不依赖模型手气。
 - **user-quad-fold 0/3**：这三轮模型分别交了“共线 AEF 面”“线段排在建点前”等不同结构，`materialiseFoldHinges` 只对“AEF 平面片 + fold”这一种结构生效；结构不对时救援进不去。
-- 加“共线面提示 + `hostEdge` 数组”后重跑 3 次：**2/3 passed**（另一轮模型给了重复顶点，面退化）；仍不稳定的根因是模型输出结构。
+- 加“共线面提示 + `hostEdge` 数组 + 重复顶点提示”后重跑 3 次：**2/3 passed**（另一轮模型坐标错，CD/AD/角度不符）；仍不稳定的根因是模型输出结构/坐标。
 - 下一步不是再加一个几何公式，而是**在编译入口做更早的结构清洗/识别**（或让模型稳定输出折片结构）。
 
 ## 2026-10-19 P1-5 部分 A/B
