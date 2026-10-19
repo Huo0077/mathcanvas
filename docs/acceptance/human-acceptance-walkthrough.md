@@ -10,11 +10,11 @@
 | 方式 | 怎么做 | 需要管理员吗 |
 |---|---|---|
 | **A. 直接开（最快）** | 双击 `apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe` | 不用 |
-| **B. 装 MSI（任务 B 用它）** | 双击 `apps\desktop\src-tauri\target\release\bundle\msi\MathCanvas_3.2.0_x64_en-US.msi` | **要**（会弹 UAC） |
-| **C. 免安装安装器** | 双击 `...\bundle\nsis\MathCanvas_3.2.0_x64-setup.exe` | 不用（可选） |
+| **B. 装 MSI（任务 B 用它）** | 双击 `apps\desktop\src-tauri\target\release\bundle\msi\MathCanvas_4.0.0_x64_en-US.msi` | **要**（会弹 UAC） |
+| **C. 免安装安装器** | 双击 `...\bundle\nsis\MathCanvas_4.0.0_x64-setup.exe` | 不用（可选） |
 | **D. 开发模式** | 仓库根跑 `npm run dev`（浏览器版）或 `npm --workspace @draw/desktop run dev`（桌面版，热更新） | 不用 |
 
-**这一版是什么**：2026-10-10 **当天重建过两次**，最后一次（`04:49:58`）是在"底面点名数值角（阶段 B / B1）"落地之后用**当前源码**构建的（`npm --workspace @draw/desktop run build`，即 web 产物 + Rust release）。**⚠️ 版本号仍是 `3.2.0`**，与 GitHub Release 上那个 v3.2.0 **不是同一份内容**（那个是 2026-10-02 构建的）；`bundle/` 下的 MSI/NSIS 也**比源码旧**（那是 3.3.10 批次）。要正式分发，得先定版号（见"还剩什么"）。
+**这一版是什么**：对应 **4.0.0**（tag `v4.0` → `339d373`，2026-10-20 发布）。`bundle/` 下的 `MathCanvas_4.0.0_x64_en-US.msi` / `MathCanvas_4.0.0_x64-setup.exe` 与免安装 `MathCanvas_4.0.0_x64.exe` 都由**当前源码**构建（`npm --workspace @draw/desktop run bundle`），并与 GitHub Release 上的 v4.0 资产逐一核对过 SHA-256。目录里仍留着的 `3.2.0` / `3.3.14` 安装包是更早批次，**不要用来走查**。
 
 **命令行的自证**（想确认你开的是哪一份）：
 
@@ -76,7 +76,7 @@ Get-Item apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe | Select-O
 
 这两句**不在 V0 出口的六道题里**，但都在今天这一版里，看一眼就知道新能力是不是真的：
 
-1. 先在 **设置 → 实验性功能** 里打开 **「示意图见证搜索」**（默认关，这是那条路线的开关）；
+1. **核对** **设置 → 实验性功能** 里的 **「示意图见证搜索」** 是**勾上**的（**自 2026-10-15 起默认开**；点一下才是关掉 —— 这一步只核对，不要去点它）；
 2. 贴这一句：`在四棱锥P-ABCD中，PA⊥平面ABCD，AB⊥AD，∠PBA=60°，画出这个四棱锥` ——
    这是**顶点参与**的数值角（阶段 B / B1）：系统要**按那个角反解出顶点的高**。看一眼：题设核验里
    `∠PBA=60°` 是不是 `passed`；提交后用鼠标比一比 `PB` 与 `BA` 的夹角**像不像 60°**（不像 60° 就是 bug）。
@@ -94,7 +94,7 @@ Get-Item apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe | Select-O
 
 > NSIS 那半此前已在本机走完一圈；**MSI 这一半必须管理员**，所以我做不了。
 
-1. 右键 `...\bundle\msi\MathCanvas_3.2.0_x64_en-US.msi` → **以管理员身份运行**（或在 UAC 弹窗点"是"）；
+1. 右键 `...\bundle\msi\MathCanvas_4.0.0_x64_en-US.msi` → **以管理员身份运行**（或在 UAC 弹窗点"是"）；
 2. 按向导装完（默认路径即可）→ 记下它报的安装目录；
 3. **开始菜单**里找 `MathCanvas` → 点开 → 应用能起来（这是"装完能启动"）；
 4. 关掉应用 → **设置 → 应用 → 已安装的应用** 里找到 `MathCanvas` → **卸载**；
@@ -170,7 +170,6 @@ Get-Item apps\desktop\src-tauri\target\release\mathcanvas-desktop.exe | Select-O
 
 ## 还剩什么（做完上面四项之后）
 
-1. **定版号再发布**：现在源码构建仍叫 `3.2.0`（与已发布的 v3.2.0 同名不同内容）。正式分发前要
-   改 `apps/desktop/src-tauri/Cargo.toml` + `tauri.conf.json` 的版本、重新构建、写哈希与 Release；
+1. ~~**定版号再发布**~~ **已完成（2026-10-20）**：版号定为 `4.0.0`，`MathCanvas_4.0.0_*` 三件产物已构建并作为 `v4.0` 发布（Release id `417498043`，三个资产哈希已复核）；剩下的是下面两项与本手册的装/启/卸走查；
 2. **V2 的曲线性质那一族**：已查实 mathlib 没有圆锥曲线的形式化 —— 要做先得自己形式化；
 3. 其余立体关系（如线∥线的内积刻画）仍未做。

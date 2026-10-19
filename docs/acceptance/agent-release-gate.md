@@ -16,6 +16,8 @@
 计划条目：`docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md` 的 **Task 6.3**
 本文件是门禁的**当前读数**；机器判据在 `packages/agent-core/src/agentReleaseGate.test.ts`。
 
+> **2026-10-20 发布记录（不改变放行结论）**：`v4.0` 已正式发布（tag `v4.0` → `339d373`，Release id `417498043`，3 个资产）。**发布 ≠ 放行**：本门禁管的是"Agent / 自动 Lean 是否默认启用"，这一条**仍未通过**（Task 19 的真桌面发行验收、Task 20–21 未达）；v4.0 的发布说明也没有声称"已发布自动证明"。判定表的最近一次逐项复核仍是 **2026-10-14**，本次只补发布事实。
+
 > **这份文件回答的问题是"能不能放行"，不是"做到哪一步了"。**
 > 做到哪一步看 [`docs/current-status.md`](../current-status.md)（**V0–V3 / S1–S6 现状在这里**）与 [`docs/research/2026-09-28-agent-tool-loop-progress.md`](../research/2026-09-28-agent-tool-loop-progress.md) —— **后者只覆盖上一版"六阶段清单"以及它 2026-10-04 追加的那段 N1–N6 路线图，其余内容截至 2026-09-29**（它是快照，不是现况）。
 
@@ -161,6 +163,8 @@
 
 ```
 npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
 npm.cmd test
 npm.cmd run test:lean
 npm.cmd run test:rust

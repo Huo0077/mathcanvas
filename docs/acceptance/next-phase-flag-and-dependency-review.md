@@ -7,13 +7,13 @@
 
 ## 一、五个开关的覆盖矩阵（N6 点名的核对项）
 
-五个开关由 N1 创建于 `apps/web/src/agent/featureFlags.ts`（缺省全关；用户可在实验页独立开启 `constrainedDrag` 或 `witnessSearch`）。
+五个开关由 N1 创建于 `apps/web/src/agent/featureFlags.ts`。**（2026-10-20 勘误）** 现在不是"缺省全关"了：`witnessSearch`（设置页「示意图见证搜索」）自 **2026-10-15** 起**默认开**，只有显式存成 `false` 才算关；其余开关仍缺省关。用户可在实验页独立开关 `constrainedDrag` 或「示意图见证搜索」。
 N6 只核对"每个 flag 有单元 / 浏览器 / 回退用例"，**不重复创建**。
 
 | 开关 | 读它的地方 | 单元用例 | 关闭回退的证据 | 浏览器用例 | 缺什么 |
 | --- | --- | --- | --- | --- | --- |
 | `obligationIR` | `agentRuntime.ts:240`（缺省取应用层那一份）→ `:271`/`:283` 传进 `drafts.stage`；`draftStore.ts:287` → 编译期 `diagramObligationIR`；Worker 链 `workerContracts.ts:51` / `workerRuntime.ts:82` / `geometryWorkerClient.ts:202` / `geometryWorkerHost.ts:111` / `geometryCompileStrategy.ts:106`；产出处 `diagramVerification.ts:176`；`committerAdapter.ts:154` | `featureFlags.test.ts`、`agentRuntime.test.ts:363`、`workerRuntime.test.ts:306`、`geometryWorkerHost.obligationIR.test.ts:101`、`draftStore.test.ts:373`、`planCompiler.test.ts:177`、`obligationIR.test.ts` | ✅ 三条：`planCompiler.test.ts:195`（关时不生成 IR）、`workerRuntime.test.ts:317`（畸形/缺省**不许**当 true）、`committerAdapter.test.ts:314`（不传 → `undefined`） | ❌ 无 | 浏览器端专测 |
-| `witnessSearch` | 设置页独立偏好 → `agentNextPhaseFlags()` → 本地规划器/草稿/编译期/Worker，默认关 | 偏好、开关、草稿/Worker 和搜索器定向测试 | ✅ `planCompiler.offPath.golden.test.ts` 关旗逐字节黄金样本 | ✅ 入口 `e2e/next-phase-flag-entry.spec.ts` + V0a 受限自由顶点 `e2e/agent-diagram-free-apex.spec.ts` 定向 3 条（开/关与未知“上方”不确认） | V0a 还缺浏览器坐标独立回代/图形目检与全量回归；真实 provider 成功救援开放题尚未测，不能宣称通用作图。 |
+| `witnessSearch` | 设置页独立偏好 → `agentNextPhaseFlags()` → 本地规划器/草稿/编译期/Worker，**默认开**（2026-10-15 起；只有显式 `false` 才关） | 偏好、开关、草稿/Worker 和搜索器定向测试 | ✅ `planCompiler.offPath.golden.test.ts` 关旗逐字节黄金样本 | ✅ 入口 `e2e/next-phase-flag-entry.spec.ts` + V0a 受限自由顶点 `e2e/agent-diagram-free-apex.spec.ts` 定向 3 条（开/关与未知“上方”不确认） | V0a 还缺浏览器坐标独立回代/图形目检与全量回归；真实 provider 成功救援开放题尚未测，不能宣称通用作图。 |
 | `constrainedDrag` | `App.tsx` 使用独立实验开关（默认关） | `featureFlags.test.ts`、`constrainedDrag3.test.ts`、场景/事务相关测试 | ✅ 旧自由拖动路径有结构与浏览器回归 | ✅ 仓内 `e2e/agent-constrained-drag.spec.ts` 现有 6 条和 `e2e/next-phase-flag-entry.spec.ts` 现有 4 条（仅文件内声明数量，**本轮未单独重跑这些 spec**） | 已有过约束拒绝、冲突恢复与一步撤销；空间线 `coincident` 缺 3D 判据仅安全拒绝，其它空间关系与真实题集成功率未验。 |
 | `openProblemCompiler` | 目前无普通 Agent 产品读取点 | 只守默认全关及名称等集 | 不适用（无产品行为） | 无产品行为可测 | 旧 N4 评测面板不读此开关；现行 V3 作图题质量与开关启用另行设计，不能标已放行。 |
 | `proofExport` | 目前无普通 Agent 产品读取点 | 只守默认全关及名称等集 | 不适用（无产品行为） | 无产品行为可测 | 旧 N5 仅独立 Lean 条件引理，现行 V2 自动证明尚未接入产品；不可写“证明出口已可用”。 |

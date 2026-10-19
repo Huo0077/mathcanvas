@@ -1,6 +1,6 @@
-> **2026-10-16 状态同步（当前口径）**：四家族 21 Task 为 **16 完成（1–15、17）/ 3 部分完成（16、18、19）/ 2 未完成或未发行验收（20、21）**。本文件下文保留专题/历史范围，不代表全部任务或发行完成。历史提交 `7efd0ce` 的 GitHub CI checks 在 Vitest 失败，六份日志的 UTF-16 编码违反 UTF-8 判据；后续 `1add886` 已修复，其远端运行 `38995619547` 已成功。本次文档提交的 CI 需另行验证；真实模型、人评、完整视觉与干净/离线发行验收仍缺。统一读数与剩余项见[当前状态](../../docs/current-status.md)。本次仅更新文档。
-
 # `proof/lean4/` —— 形式证明后端用的那个**仓内 Lean 小工程**（N5b）
+
+> **当前状态**：见 [当前状态](../../docs/current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
 
 本目录除本 README 外的工程文件共有**五个**（`lakefile.toml` / `lake-manifest.json` / `lean-toolchain` / `.gitignore` / `DrawProof.lean`）；`lake-manifest.json` 与钉住的 mathlib revision 共同固定依赖闭包。
 **7 GB 的 mathlib 不在仓库里**：它展开在 `.lake/`，而这一层被上面那份 `.gitignore`（一行 `/.lake`）挡住。
