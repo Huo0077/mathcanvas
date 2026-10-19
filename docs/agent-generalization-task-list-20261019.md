@@ -30,7 +30,7 @@
 | P2-2 | 2 | 任意多面体仍要模型给坐标 | P1 | partial | 通用求解器 fallback；求解结果必须过题设核验 |
 | P2-3 | 2 | 固定动作菜单与字段组合负担（35 个 action） | P1 | done | 43 个动作共用 `FIELD_KINDS`；新增 `atomicActionFields.test.ts` 钉住 source/planePoints/label/vector/angle 的复用；registry/schema/parser 由 field-parity 测试对齐 |
 | P2-4 | 2 | 2–3 面开放壳、三维圆弧被明确拒绝 | P2 | done | 明确拒绝 + 修复提示“逐面用 solid.create_face 建开放壳”；3D 圆弧仍走线段近似建议，不误报已画 |
-| P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | partial | 新增六棱四面体、正方形底四棱锥、右三棱柱、二面角四个解析构造；通用求解仍未接 |
+| P3-1 | 3 | 见证搜索只覆盖棱锥/棱柱/棱台/平面图形，固定小整数网格 | P1 | done | 六棱四面体、正方形底四棱锥、右三棱柱、二面角四个解析构造已落地；通用投影求解在 P3-3 收口 |
 | P3-2 | 3 | 锐角/钝角/点在内部等不等式；非退化与可读性 | P1 | done | 锐角/直角/钝角/点在三角形内部均已解析并核验；内外部、直角反例均有测试 |
 | P3-3 | 3 | 无 LM/BFGS 通用约束求解；`constraints3d` 只有残差/投影 | P1 | done | 迭代顺序投影求解器（`projectPoint3Constraints`）已支持 7 类空间约束，确定性轮数/容差/矛盾报告；新增墙钟预算 `deadlineMs` → `timedOut`，到点即停不冒充满足 |
 | P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | done | 二面角“为”写法 + 向量点积 `2AB·AO=|AB|²` 都已解析并核验；trig-23、trig-89 均 3/3 passed |
