@@ -70,14 +70,27 @@ describe("没判据的家族要显形（而且说清是哪一族）", () => {
     ["在△ABC中，DE是△ABC的中位线", "中位线"],
     ["在△ABC中，O为△ABC的内心", "内心"],
     ["在△ABC中，O为△ABC的旁心", "旁心"],
-    ["AB是⊙O的弦，弦心距为2", "弦心距"],
-    ["弧AB的长为π", "弧"],
     ["圆柱的轴截面是正方形", "轴截面"],
     ["圆锥的侧面展开图是半径为3的半圆", "展开图"],
     ["球的表面积为16π", "球"],
     ["仰角为60°，俯角为30°", "仰角"],
     ["已知斜面坡度为1:2", "坡度"]
   ]
+
+  /**
+   * **两条已经"毕业"了**（2026-10-20 后续批次）：`弦心距` 与 `弧长` 原先只在这里当"没判据"的
+   * 样例，现在它们**有真判据了**（`chordCenterDistance` / `arcLength`，见 `circleChordAndArc.test.ts`），
+   * 所以它们不再落未核验 —— 按本仓的规矩，旧断言按新事实翻转，而不是留着让人以为它们还读不出。
+   */
+  it("弦心距与弧长已经读成义务，不再落未核验", () => {
+    const chord = parseDiagramObligations("AB是⊙O的弦，弦心距为2")
+    expect(chord.givens.filter((item) => item.kind === "chordCenterDistance").length).toBe(1)
+    expect(chord.unverified).toEqual([])
+
+    const arc = parseDiagramObligations("弧AB的长为π")
+    expect(arc.givens.filter((item) => item.kind === "arcLength").length).toBe(1)
+    expect(arc.unverified).toEqual([])
+  })
 
   it.each(cases)("`%s` ⇒ 落未核验，理由点名 %s", (prompt, keyword) => {
     const text = unverified(prompt)

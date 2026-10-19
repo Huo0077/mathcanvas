@@ -91,6 +91,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
    * 同一件事就出现了两种说法。
    */
   if (kind === "angleBisector") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  /** **弦心距与弧长都是长度量**（2026-10-20）：与 `fixedLength` 同一把尺子。 */
+  if (kind === "chordCenterDistance" || kind === "arcLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。

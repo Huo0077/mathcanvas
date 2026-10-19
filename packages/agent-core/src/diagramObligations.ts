@@ -17,6 +17,21 @@ export type DiagramObligationKind =
    */
   | "angleBisector"
   /**
+   * **弦心距**（2026-10-20）：`弦 AB 的弦心距为 2` ⇒ `targets: ["A", "B"]`、`value` 是距离。
+   *
+   * 判据问的是**图上那个圆**：圆心到弦 `AB` 那条直线的距离。圆心与半径都在圆图元里
+   *（`planar.create_circle` 物化成 `circle`），所以这条义务**不带圆心名** —— 带了就等于
+   * 要求模型把 ⊙O 的 O 也建成点名，而那件事题面并没有要求。
+   */
+  | "chordCenterDistance"
+  /**
+   * **弧长**（2026-10-20）：`弧 AB 的长为 π` ⇒ `targets: ["A", "B"]`、`value` 是弧长。
+   *
+   * **只按劣弧算**（夹角取 `[0, π]`）：题面写「优弧」时今天**不读** —— 那是另一条弧，
+   * 默认取劣的就是替题面选了一条。
+   */
+  | "arcLength"
+  /**
    * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
    */
@@ -523,8 +538,14 @@ function resolveFocusEccentricity(
  * `height` 共同决定。模型随手填个高度，母线就对不上（`joint-01` 的"半径 2、母线 3"要求 `h = √5`）。
  */
 const SOLID_SHAPE_TERM = /圆锥|圆柱/g
-/** 尺寸的字面量：`2`、`√5`、`2√5`、`π`、`2π`（面积类会带 π，裸 π 也是合法的数）。 */
-const SOLID_SIZE_LITERAL = String.raw`(\d+(?:\.\d+)?\s*[π√]\s*\d*(?:\.\d+)?|√\s*\d+(?:\.\d+)?|π|\d+(?:\.\d+)?)`
+/**
+ * **尺寸的字面量**：`2`、`√5`、`2√5`、`π`、`2π`。
+ *
+ * 实体尺寸与圆上的度量（弦心距、弧长）**共用同一个词法** —— 作业本上它们就是同一批写法，
+ * 分成两份正则只会在某一天分叉（本仓已经吃过好几次"同一个判断写两遍"的亏）。
+ */
+const NUMERIC_MEASURE_LITERAL = String.raw`(\d+(?:\.\d+)?\s*[π√]\s*\d*(?:\.\d+)?|√\s*\d+(?:\.\d+)?|π|\d+(?:\.\d+)?)`
+const SOLID_SIZE_LITERAL = NUMERIC_MEASURE_LITERAL
 const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["solid"]>["metric"]; pattern: RegExp }[] = [
   { metric: "radius", pattern: new RegExp(String.raw`底面(?:圆)?的?半径\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
   { metric: "slantHeight", pattern: new RegExp(String.raw`母线(?:长)?\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
@@ -573,7 +594,7 @@ function solidAnchors(text: string): SolidAnchor[] {
 const NOT_THIS_SOLID_TERM = /展开图|内切球|外接球/
 
 /** 尺寸的数值：`2`、`√5`、`2√5`、`π`、`2π`（面积类会带 π）。 */
-function solidSizeValue(raw: string): number | null {
+function measureValue(raw: string): number | null {
   const compact = raw.replace(/\s+/g, "")
   const pi = /^(\d+(?:\.\d+)?)?π$/.exec(compact)
   if (pi !== null) {
@@ -607,7 +628,7 @@ function resolveSolidDimensions(
        */
       if (anchor.shape === "pyramid" && (anchor.sides === 3 || anchor.sides === 4) && /底面边长/.test(givenText.slice(anchor.start, anchor.start + 120))) continue
       if (NOT_THIS_SOLID_TERM.test(between)) continue
-      const value = solidSizeValue(match[1]!)
+      const value = measureValue(match[1]!)
       if (value === null) continue
       givens.push({ kind: "solidDimension", targets: [], value, solid: { shape: anchor.shape, metric }, sourceText: match[0], start, end: start + match[0].length })
       for (let at = start; at < start + match[0].length; at += 1) used.add(at)
@@ -1530,6 +1551,34 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => { const value = radicalValue(m[2]); return value === null ? null : { kind: "fixedLength", targets: names(m[1]), value } }
   },
   {
+    /**
+     * **弦心距**（2026-10-20）：`弦 AB 的弦心距为 2`。
+     *
+     * 判据问**图上那个圆**（圆心到弦 `AB` 那条直线的距离），所以 `targets` 只要两个端点 ——
+     * 带上圆心名就等于要求模型把 `⊙O` 的 `O` 也建成点名，而题面并没有这样要求。
+     */
+    pattern: new RegExp(String.raw`弦\s*(${SEGMENT_NAME})\s*的?\s*弦心距\s*(?:为|是|=)?\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[2]!); return value === null ? null : { kind: "chordCenterDistance", targets: names(m[1]), value } }
+  },
+  {
+    /**
+     * **弦心距（弦名在前一句）**：`AB 是 ⊙O 的弦，弦心距为 2` —— 同一件事，前一句给弦名。
+     * 中间不许跨句号：那是另一段话。
+     */
+    pattern: new RegExp(String.raw`(${SEGMENT_NAME})\s*是\s*⊙\s*(?:${POINT_NAME})\s*的弦[^。；;\n]{0,12}?弦心距\s*(?:为|是|=)?\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[2]!); return value === null ? null : { kind: "chordCenterDistance", targets: names(m[1]), value } }
+  },
+  {
+    /**
+     * **弧长**（2026-10-20）：`弧 AB 的长为 π`。
+     *
+     * `(?<!优)` 是**必须的**：`优弧 AB 的长` 说的是**另一条弧**，而判据只按劣弧算 ——
+     * 默认取劣弧就是替题面选了一条。劣弧那种写法与不带前缀的说法是一回事，照读。
+     */
+    pattern: new RegExp(`(?<!优)弧\\s*(${SEGMENT_NAME})\\s*的?\\s*长\\s*(?:为|是|＝|=)\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[2]!); return value === null ? null : { kind: "arcLength", targets: names(m[1]), value } }
+  },
+  {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),
     read: (m) => ({ kind: "equalLength", targets: [...names(m[1]), ...names(m[2])] })
   },  {
@@ -1662,12 +1711,12 @@ function unverifiedReasonFor(leftover: string): string {
  * 顺序有意义：越具体的放前面（`弧…的长` 要先于更泛的匹配；`球的表面积` 要先于 `球`）。
  */
 const UNSUPPORTED_FAMILIES: readonly [RegExp, string][] = [
-  [/弧.{0,3}的长|弧长/, "「弧长」今天没有判据 —— 弧的度量与「线段的长度」不是一回事（它要先有圆心与半径）。如实未核验。"],
+  [/弧.{0,3}的长|弧长/, "「弧长」**已经有判据了**（按图上那个圆的半径与圆心角算），但它**只按劣弧算**、也要求弧的两个端点在图上有点名 —— 这一句没读出来（例如写的是「优弧」，或端点没点名）。如实未核验。"],
   [/角平分线|平分线/, "「角平分线」今天没有判据（要新造一条：角的内部一条射线，两边到这个点的距离相等）。这句不会被读成任何一条义务，如实未核验。"],
   [/中位线/, "「三角形的中位线」今天没有判据（它同时意味着两个中点、平行于第三边、长度是第三边的一半 —— 那是一条**复合**义务）。如实未核验。"],
   [/中线/, "「中线」只说了 AD 是中线、**没说是哪条边**上的 ⇒ 定不出这个点是哪个线段的中点，不猜，如实未核验。"],
   [/内心|旁心/, "「内心 / 旁心」今天没有判据（要新造「到三边距离相等」的圆心求解）。如实未核验。"],
-  [/弦心距|弦心/, "「弦心距」今天没有判据。如实未核验。"],
+  [/弦心距|弦心/, "「弦心距」**已经有判据了**（圆心到弦的距离），但要求图上有一条**唯一**的圆、且弦的两个端点在图上有点名 —— 这一句没读出来。如实未核验。"],
   [/轴截面|展开图/, "「轴截面 / 侧面展开图」是**另一个对象**（截面多边形 / 扇形），不是这个实体本身 —— 它上面那些尺寸今天没有判据。如实未核验。"],
   [/球的?(?:半径|表面积|面积)|(?:内切|外接)球/, "球的半径 / 表面积今天没有判据（要按球的图元量，而不是按某个截面）。如实未核验。"],
   [/棱数|棱的条数|顶点数|面的个数/, "「棱数 / 顶点数 / 面的个数」是组合量，今天没有判据。如实未核验。"],

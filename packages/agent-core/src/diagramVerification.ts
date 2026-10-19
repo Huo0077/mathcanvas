@@ -641,6 +641,32 @@ interface FigureContext {
    * "这条实体的这个度量"，而度量全都能从实体自己的 `radius` / `height` 算出来。
    */
   solid: FigureSolid | null
+  /**
+   * **候选图里那条新画的圆**（2026-10-20，弦心距 / 弧长）。
+   *
+   * 弦心距与弧长问的都是"**这个圆**"：圆心到弦的距离、半径与圆心角。圆心与半径都在圆图元里
+   *（`planar.create_circle` 物化成 `circle`），所以判据不必要求题面把 `⊙O` 的 `O` 建成点名。
+   */
+  circle: FigureCircle | null
+}
+
+/** 候选图里那条新画的圆（**恰好一条**才谈得上"题面说的是它"）。 */
+interface FigureCircle {
+  centerX: number
+  centerY: number
+  radius: number
+}
+
+function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureCircle | null {
+  if (plan.kind !== "plan") return null
+  if (!plan.actions.some((action) => action.actionId === "planar.create_circle")) return null
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const circles = candidate.primitives.filter((primitive) => primitive.type === "circle" && !priorIds.has(primitive.id))
+  if (circles.length !== 1) return null
+  const [circle] = circles
+  if (circle.type !== "circle") return null
+  if (!Number.isFinite(circle.center.x) || !Number.isFinite(circle.center.y) || !(circle.radius > 0)) return null
+  return { centerX: circle.center.x, centerY: circle.center.y, radius: circle.radius }
 }
 
 /**
@@ -1325,6 +1351,57 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 判据**自己算**（`acos` 两条边的方向向量），不读任何构造过程留下的量 —— 与二面角那条同一条纪律。
    * 三点里有重合（方向向量退化为 0）时返回 `null`（如实"未核验"，而不是把一个 0/0 说成一个角）。
    */
+  if (item.kind === "chordCenterDistance") {
+    /**
+     * **弦心距**（2026-10-20）：圆心到弦 `AB` 那条**直线**的距离。
+     *
+     * 用的是图上那个圆的圆心（`figures.circle`），不是题面里可能出现的 `O` ——
+     * 那条义务的 `targets` 只有弦的两个端点，圆心是"问图"得来的。
+     */
+    const circle = figures.circle
+    if (circle === null || numeric === undefined || item.targets.length !== 2) return null
+    const [first, second] = [at(0), at(1)]
+    const alongX = second.x - first.x
+    const alongY = second.y - first.y
+    const chordLength = Math.hypot(alongX, alongY)
+    if (!(chordLength > 1e-12)) return null
+    // 点到直线的距离：|叉积| / |AB|（二维，取 x–y 平面上那一段）。
+    const distance = Math.abs(alongX * (circle.centerY - first.y) - alongY * (circle.centerX - first.x)) / chordLength
+    return {
+      actual: distance,
+      expected: numeric,
+      tolerance: distanceTolerance(numeric),
+      detail: `实测圆心 (${circle.centerX.toPrecision(6)}, ${circle.centerY.toPrecision(6)}) 到弦 AB 的距离 ${distance.toPrecision(6)}，弦长 ${chordLength.toPrecision(6)}；题设要求弦心距 ${numeric}。`
+    }
+  }
+  if (item.kind === "arcLength") {
+    /**
+     * **弧长**（2026-10-20）：`r · θ`，`θ` 是两条半径之间的夹角。
+     *
+     * **取劣弧**（`θ ∈ [0, π]`）：题面写「优弧」时读取器就不收（`(?<!优)`），
+     * 所以这里没有"选哪条弧"的余地 —— 一条义务只对应一条弧。
+     */
+    const circle = figures.circle
+    if (circle === null || numeric === undefined || item.targets.length !== 2) return null
+    const [first, second] = [at(0), at(1)]
+    const firstX = first.x - circle.centerX
+    const firstY = first.y - circle.centerY
+    const secondX = second.x - circle.centerX
+    const secondY = second.y - circle.centerY
+    const firstRadius = Math.hypot(firstX, firstY)
+    const secondRadius = Math.hypot(secondX, secondY)
+    if (!(firstRadius > 1e-12) || !(secondRadius > 1e-12)) return null
+    const cosine = (firstX * secondX + firstY * secondY) / (firstRadius * secondRadius)
+    const radians = Math.acos(Math.min(1, Math.max(-1, cosine)))
+    const length = circle.radius * radians
+    if (!Number.isFinite(length)) return null
+    return {
+      actual: length,
+      expected: numeric,
+      tolerance: distanceTolerance(numeric),
+      detail: `实测半径 ${circle.radius.toPrecision(6)}、两条半径的夹角 ${((radians * 180) / Math.PI).toPrecision(6)}°，劣弧长 ${length.toPrecision(6)}；题设要求弧长 ${numeric}。`
+    }
+  }
   if (item.kind === "angleBisector") {
     /**
      * **角平分线**（2026-10-20）：`targets = [D, A, B, C]`，`A` 是顶点、`AD` 是那条平分线。
@@ -1593,6 +1670,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: candidateCurve(plan, candidate, base),
     solid: candidateSolid(plan, candidate, base),
+    circle: candidateCircle(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
         ? [{ name: primitive.label, x: primitive.x, y: primitive.y }]
@@ -1636,7 +1714,11 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
                 ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。"
                 : item.kind === "functionGraph"
                 ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
-              : item.kind === "solidDimension"
+              : item.kind === "chordCenterDistance"
+                ? "候选图里没有唯一、可读的圆（少了或多了一条），或弦的两个端点在图上没有点名，未核验。"
+                : item.kind === "arcLength"
+                  ? "候选图里没有唯一、可读的圆（少了或多了一条），或弧的两个端点在图上没有点名，未核验。"
+                  : item.kind === "solidDimension"
                 /**
                  * **实体尺寸量不出来的四种来路**（说清是哪一种，用户才知道下一步该改什么）：
                  * 候选图里没有那条实体 / 形状对不上 / 底面是三角形（N = 3 分不出哪一张是底面）/
