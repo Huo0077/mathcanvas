@@ -6,7 +6,7 @@ import { parseShapeClause } from "./solver/shapeGrammar"
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
   | "planePerpendicular" | "dihedral" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
-  | "acuteTriangle"
+  | "acuteTriangle" | "rightTriangle" | "obtuseTriangle"
   /**
    * **平面上的数值角**（§3-F，2026-10-10）：`∠ABC=60°` ⇒ `targets: ["A","B","C"]`（中间是顶点）、
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
@@ -551,6 +551,14 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },  {
     pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)锐角三角形/g,
     read: (m) => ({ kind: "acuteTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
+    pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)直角三角形/g,
+    read: (m) => ({ kind: "rightTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
+    pattern: /△?([A-Z])([A-Z])([A-Z])(?:是|为)钝角三角形/g,
+    read: (m) => ({ kind: "obtuseTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
     pattern: /(\d+(?:\.\d+)?)\s*([A-Z]{2})\s*[·*]\s*([A-Z]{2})\s*=\s*\|([A-Z]{2})\|²/g,

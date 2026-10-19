@@ -57,4 +57,24 @@ describe("acute triangle verification", () => {
     })
     expect(compiled.diagramVerification?.status).toBe("failed")
   })
+
+  it("accepts a right triangle for the right-triangle condition", () => {
+    const compiled = compilePlan(triangle({ x: 0, y: 3 }), {
+      document: createEmptyDocument("conics"),
+      prompt: "△ABC是直角三角形",
+      conversationId: "right-ok",
+      documentGeneration: 0
+    })
+    expect(compiled.diagramVerification?.status).toBe("passed")
+  })
+
+  it("accepts an obtuse triangle for the obtuse-triangle condition", () => {
+    const compiled = compilePlan(triangle({ x: -1, y: 1 }), {
+      document: createEmptyDocument("conics"),
+      prompt: "△ABC是钝角三角形",
+      conversationId: "obtuse-ok",
+      documentGeneration: 0
+    })
+    expect(compiled.diagramVerification?.status).toBe("passed")
+  })
 })

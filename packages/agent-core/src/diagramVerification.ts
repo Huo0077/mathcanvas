@@ -1006,6 +1006,25 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const maximum = Math.max(...(angles as number[]))
     return { actual: maximum >= 90 ? maximum - 90 + 1 : 0, expected: 0, tolerance: 1e-9 }
   }
+  if (item.kind === "rightTriangle" || item.kind === "obtuseTriangle") {
+    if (vertices.length !== 3) return null
+    const [a, b, c] = vertices as Vector3[]
+    if (a === undefined || b === undefined || c === undefined) return null
+    const angleAt = (vertex: Vector3, first: Vector3, second: Vector3): number | null => {
+      const u = subtractVector3(first, vertex)
+      const v = subtractVector3(second, vertex)
+      const denominator = lengthVector3(u) * lengthVector3(v)
+      if (!(denominator > 1e-12)) return null
+      return (Math.acos(Math.min(1, Math.max(-1, dotVector3(u, v) / denominator))) * 180) / Math.PI
+    }
+    const angles = [angleAt(a, b, c), angleAt(b, a, c), angleAt(c, a, b)]
+    if (angles.some((angle) => angle === null)) return null
+    const values = angles as number[]
+    if (item.kind === "rightTriangle") {
+      return { actual: Math.min(...values.map((angle) => Math.abs(angle - 90))), expected: 0, tolerance: 1e-6 }
+    }
+    return { actual: Math.max(...values) > 90 ? 0 : 1, expected: 0, tolerance: 1e-9 }
+  }
   if (item.kind === "vectorDot") {
     if (numeric === undefined || vertices.length !== 6) return null
     const [abA, abB, aoA, aoB, rhsA, rhsB] = vertices as Vector3[]
