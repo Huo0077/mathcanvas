@@ -201,8 +201,8 @@ export interface DiagramObligation {
    * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
    */
   solid?: {
-    shape: "cone" | "cylinder" | "pyramid" | "sphere"
-    metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume"
+    shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid"
+    metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume" | "circumradius" | "inradius"
   }
 }
 
@@ -595,7 +595,9 @@ const SOLID_METRICS: Record<NonNullable<DiagramObligation["solid"]>["shape"], Re
    * 不经过"就近归属"那套锚点，所以这张表里它其实**用不到** —— 但它必须齐：
    * 少一项就是一张会骗人的表（`Record` 的类型检查当场抓住过一次）。
    */
-  sphere: new Set(["radius", "surfaceArea", "volume"])
+  sphere: new Set(["radius", "surfaceArea", "volume"]),
+  /** 长方体的两个派生球半径（外接球 / 内切球）—— 同样走专用句型。 */
+  cuboid: new Set(["circumradius", "inradius"])
 }
 
 /** 中文数字的底面边数（`正六棱锥` ⇒ 6）。 */
@@ -1607,6 +1609,22 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      */
     pattern: new RegExp(`(?<!优)弧\\s*(${SEGMENT_NAME})\\s*的?\\s*长\\s*(?:为|是|＝|=)\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
     read: (m) => { const value = measureValue(m[2]!); return value === null ? null : { kind: "arcLength", targets: names(m[1]), value } }
+  },
+  {
+    /**
+     * **长方体的外接球 / 内切球半径**（2026-10-20）：`正方体的外接球半径为 3`。
+     *
+     * 这两个是**派生对象**的度量，但判据不必去找那个球 —— 两条都是长方体三条棱的函数
+     * （外接球 = 体对角线的一半 `√(a²+b²+c²)/2`；内切球 = 最短棱的一半 `a/2`）。
+     *
+     * **必须带形状名**（可以带 `该 / 其`）：没有形状名的 `外接球半径为 3` 不知道该问哪个实体，
+     * 不猜（留给未核验）。
+     */
+    pattern: new RegExp(`(?:该|其)?\\s*(正方体|长方体)\\s*的?\\s*(外接球|内切球)\\s*的?\\s*半径\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => {
+      const value = measureValue(m[3]!)
+      return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "cuboid", metric: m[2] === "外接球" ? "circumradius" : "inradius" } }
+    }
   },
   {
     /**

@@ -361,6 +361,8 @@ type FigureConic = ConicDescription & { primitive: PlanarConic }
 type FigureSolid =
   | { shape: "cone" | "cylinder"; radius: number; height: number }
   | { shape: "sphere"; radius: number }
+  /** 长方体的**三条棱**（外接球 / 内切球半径是它们的函数）。 */
+  | { shape: "cuboid"; sizeX: number; sizeY: number; sizeZ: number }
   | {
     shape: "pyramid"
     /** 底面边数（从底环上数出来，不读动作参数）。 */
@@ -694,6 +696,18 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
   }
   if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  /**
+   * **长方体先认**（2026-10-20）：`cube` 图元带 `size`（三条棱），而外接球 / 内切球半径就是
+   * 它的函数。与圆锥 / 圆柱同一个"恰好一条新画的"纪律。
+   */
+  const cubes = candidate.primitives.filter((primitive) => primitive.type === "cube" && !priorIds.has(primitive.id))
+  if (cubes.length === 1) {
+    const [cube] = cubes
+    if (cube.type === "cube" && [cube.size.x, cube.size.y, cube.size.z].every((value) => Number.isFinite(value) && value > 0)) {
+      return { shape: "cuboid", sizeX: cube.size.x, sizeY: cube.size.y, sizeZ: cube.size.z }
+    }
+    return null
+  }
   const solids = candidate.primitives.filter(
     (primitive) => (primitive.type === "cone" || primitive.type === "cylinder") && !priorIds.has(primitive.id)
   )
@@ -707,6 +721,18 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
 
 /** 圆锥 / 圆柱量出来的那个度量（`null` = 这个形状没有这个度量）。 */
 function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation["solid"]>["metric"]): number | null {
+  if (solid.shape === "cuboid") {
+    /**
+     * **外接球 = 体对角线的一半**（`√(a²+b²+c²)/2`，三个顶点都在球面上）。
+     * **内切球 = 最短棱的一半**（`min(a,b,c)/2`）—— 只有正方体才与三条棱都相切；
+     * 长方体上球在另外两条方向会"悬空"，这条公式量的是内切球半径的严格定义（到最近的面）。
+     */
+    switch (metric) {
+      case "circumradius": return Math.hypot(solid.sizeX, solid.sizeY, solid.sizeZ) / 2
+      case "inradius": return Math.min(solid.sizeX, solid.sizeY, solid.sizeZ) / 2
+      default: return null
+    }
+  }
   if (solid.shape === "sphere") {
     /**
      * **球只有三个常用度量，全是半径的函数**：表面积 `4πr²`、体积 `4/3·πr³`。
@@ -871,7 +897,9 @@ const SOLID_DIMENSION_LABEL: Record<NonNullable<DiagramObligation["solid"]>["met
   lateralEdge: "侧棱长",
   basePerimeter: "底面周长",
   surfaceArea: "表面积",
-  volume: "体积"
+  volume: "体积",
+  circumradius: "外接球半径",
+  inradius: "内切球半径"
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string; evidence?: EvidenceGrade } | null {
@@ -901,7 +929,9 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       ? `正 ${drawn.sides} 棱锥，底面边长 ${drawn.baseEdge.toPrecision(6)}、侧棱长 ${drawn.lateralEdge.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
       : drawn.shape === "sphere"
         ? `球的半径 ${drawn.radius.toPrecision(6)}`
-        : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
+        : drawn.shape === "cuboid"
+          ? `长方体的三条棱 ${drawn.sizeX.toPrecision(6)}、${drawn.sizeY.toPrecision(6)}、${drawn.sizeZ.toPrecision(6)}`
+          : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
     return {
       actual: measured,
       expected: item.value,
