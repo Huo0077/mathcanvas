@@ -3,7 +3,7 @@
 ## 2026-10-20 v4.0 发布
 
 - **版本真值 `3.3.14` → `4.0.0`**（跨大版本）。注解 tag **`v4.0`** → 提交 **`339d373`**；Release **id `417498043`**（**https://github.com/Huo0077/mathcanvas/releases/tag/v4.0**），`draft=false`、`assets=3`，**三个资产重新下载核 SHA-256 全部 MATCH**。完整说明见 [`docs/release/v4.0.md`](release/v4.0.md)。
-- **门禁读数（本版实跑）**：`typecheck` **exit 0**；`lint` **exit 0（0 error / 15 warning）**；单测 **457 文件 / 4852 通过 + 1 todo / 0 失败**（174.86 s）；`docs-consistency` **7 条判据 / 18 项**通过（2026-10-20 第二轮由 4 条扩到 7 条）。**全量 e2e 已于 2026-10-20 补跑**：`--workers=3` → **239 通过 / 0 失败**（4.5 min，exit 0）；默认并发首轮 1 条 `ERR_NO_BUFFER_SPACE`（环境抖动），单条复跑通过。
+- **门禁读数（本版实跑）**：`typecheck` **exit 0**；`lint` **exit 0（0 error / 15 warning）**；单测 **457 文件 / 4852 通过 + 1 todo / 0 失败**（174.86 s）；`docs-consistency` **7 条判据 / 18 项**通过（2026-10-20 第二轮由 4 条扩到 7 条）。**全量 e2e 已于 2026-10-20 补跑**：`--workers=3` → **239 通过 / 0 失败**（4.5 min，exit 0）；默认并发首轮 1 条 `ERR_NO_BUFFER_SPACE`（环境抖动），单条复跑通过。**Rust 同日补跑**：17 个测试二进制 **263 通过 / 0 失败 / 4 ignored**（exit 0）。
 - **桌面产物按当前源码重建**：`MathCanvas_4.0.0_x64.exe`（17,595,392 B）/ `MathCanvas_4.0.0_x64_en-US.msi`（7,102,464 B）/ `MathCanvas_4.0.0_x64-setup.exe`（5,267,037 B）；免安装 exe 启动 smoke 通过（真窗口句柄 `1376356`、`Responding=True`、存活 T+12s）。
 - **推送状态已结案**：全部提交已推送（`HEAD == origin/main`，`behind/ahead = 0/0`；不再写死某个 SHA，免得每天都要改一次）。此前各文档里写的"待推 / `git push` 仍被网络重置 / 远端仍是 `c1f109f`"都是当时的历史记录，**不再是现状**。
 - **文档门禁补齐（2026-10-20 第二轮）**：`docs-consistency` 由 **4 条扩到 7 条**，新增三条机器判据 —— ① 版本真值三处一致（`tauri.conf.json` / `Cargo.toml` / 最新发布说明）；② 状态快照唯一（检查点块与"本节为当前口径"只许出现在本文件或 `audit-*` 取证目录）；③ CHANGELOG 不得落后于最新发布说明的发布日期。三条都做过**变异验证**：把版号退回 `3.3.14`、让 `feature-catalog` 自称当前口径、把 v4.0 条目日期改回 10-12，对应判据各自变红；还原后 7 文件 / 18 项全绿。
