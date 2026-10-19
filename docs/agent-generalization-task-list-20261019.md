@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：431 文件 / 4803 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：432 文件 / 4805 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -95,6 +95,7 @@
 - 新增 `solver/trapezoidPrism.ts` + `rescueWithTrapezoidPrism`：直四棱柱梯形底（AB/AD/CD + 体积）解析构造；solid-20 单题可画，整批仍受模型输出方差影响。
 - 新增 `solver/perpendicularPyramid.ts` + `rescueWithPerpendicularPyramid`：PA⊥底面 + AD=CD + 平面 PAC⊥平面 PBD 的四棱锥；solid-9 三连跑 **3/3 可画**。
 - 梯形底棱柱与垂直平面四棱锥救援不再要求模型先给出 `plan`：即使模型计划在面环/格式处失败，也能从题面直接构造。solid-20 三连跑 **3/3 可画**，整批 **12/12 可画、0 失败**。
+- `expandExamShorthand` 支持带下标点名的链式相等（`AB=AA₁=2`）；核验未通过时只用展开题面复跑一次核验（不改原文/span）。solid-32 三连跑 **3/3 passed**。
 - 新增 `solver/dihedral.ts` + `rescueWithDihedralTriangle`：等腰直角 + 等边 + 二面角的解析构造；trig-23 从“几何失败”变为“可画、未核验”。
 - 回归：`solver/tetrahedron.test.ts` 3 条 + `solver/pyramid.test.ts` 2 条 + `solver/prism.test.ts` 2 条 + `solver/dihedral.test.ts` 2 条 + 四条编译救援；全量 422 文件 / 4791 通过 + 1 todo。
 - **边界**：只覆盖“六棱四面体”“正方形底 + 等距 + 一个底对角角”“右三棱柱”“等腰直角+等边+二面角”四类；其他多面体、半角/二面角约束仍靠模型或后续求解器。
@@ -108,9 +109,10 @@
 | 未核验 | 4 | 6 | 5（另有 2 道无核验） | 4 | 7 |
 | 失败 | 7 / 12 | 4 / 12 | **1 / 12** | 3 / 12 | **0 / 12** |
 
-- 所有整批都通过 4 道：`solid-1`（六棱四面体）、`solid-10`（正方形底四棱锥）、`solid-13`（右三棱柱）、`user-quad-fold`（规范折片重建）。
+- 目前稳定通过 5 道：`solid-1`（六棱四面体）、`solid-10`（正方形底四棱锥）、`solid-13`（右三棱柱）、`solid-32`（链式相等 + 仅核验展开）、`user-quad-fold`（规范折片重建）。
 - 最近一次（二面角救援后）：`trig-23` 已从“几何失败”变为“可画、未核验”；但 `solid-9/20/32` 因模型输出结构不同失败，生成数从 11 掉到 9。
 - 最新一次（规范折片 + 面环排序 + 梯形底棱柱 + 垂直平面四棱锥，且救援不再要求模型先给 plan）：**12/12 全可画、4/12 全过、0 失败**；`solid-9`、`solid-20` 都稳定可画。
+- 链式相等展开 + 仅对核验复跑后：`solid-32` 单题 **3/3 passed**；整批最新一次为 **11/12 生成、4/12 全过、1/12 失败**（solid-32 模型输出方差），最佳仍是 12/12、0 失败。
 - 同一晚还有一次只用 `materialiseFoldHinges` 的整批：7/12 生成、1/12 全过、5/12 失败。
 - 未核验：`solid-3/9/20/24/32`、`trig-23/60/89`；读数只代表 flash 单次运行，方差明显。
 

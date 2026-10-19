@@ -366,6 +366,21 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
     }
   }
   /**
+   * **只对核验复跑一次语法展开**（2026-10-19，solid-32 现场）：`AB=AA₁=2` 这类链式
+   * 相等、`△ABC是边长为3的等边三角形` 这类缩写，解析器本身不展开；模型坐标可能是对的，
+   * 却因为条件没读全而显示“未核验”。这里用展开后的题面重新编译/核验一次，
+   * 只接受 `passed`，不改变原文与 span。
+   */
+  if (first.plan !== null && first.result.diagramVerification?.status === "unverified" && context.prompt !== undefined) {
+    const expanded = expandExamShorthand(normalizeGeometryPrompt(context.prompt))
+    if (expanded !== context.prompt && expanded !== normalizeGeometryPrompt(context.prompt)) {
+      const recheck = compileOnce(first.plan, { ...context, prompt: expanded })
+      if (recheck.result.ok && recheck.result.draftDocument !== null && recheck.result.diagramVerification?.status === "passed") {
+        return { ...recheck.result, materialisedActions: recheck.result.actions }
+      }
+    }
+  }
+  /**
    * **梯形底直四棱柱**先试：它只匹配 `直四棱柱 + AB⊥AD/AB//CD + 体积`，不依赖前面那些
    * 顺序/环清洗是否已经救出一个半成品。solid-20 的模型计划经常在面环处就编不过，
    * 排在结构清洗之后会根本走不到。

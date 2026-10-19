@@ -20,7 +20,13 @@ const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉"
 export function expandExamShorthand(text: string): string {
   return text
     .replace(/△?([A-Z])([A-Z])([A-Z])是边长为([0-9.]+)的等边三角形/g, "$1$2=$4，$1$3=$4，$2$3=$4")
-    .replace(/([A-Z])([A-Z])=([A-Z])([A-Z])=([0-9.]+|√[0-9.]+)/g, "$1$2=$5，$3$4=$5")
+    .replace(
+      /((?:[A-Z][₀₁₂₃₄₅₆₇₈₉]?[A-Z][₀₁₂₃₄₅₆₇₈₉]?=)+)([0-9.]+|√[0-9.]+)/g,
+      (_match, chain: string, value: string) => {
+        const segments = [...chain.matchAll(/([A-Z][₀₁₂₃₄₅₆₇₈₉]?[A-Z][₀₁₂₃₄₅₆₇₈₉]?)=/g)].map((match) => match[1]!)
+        return segments.map((segment) => `${segment}=${value}`).join("，")
+      }
+    )
 }
 
 export function normalizeGeometryPrompt(prompt: string): string {
