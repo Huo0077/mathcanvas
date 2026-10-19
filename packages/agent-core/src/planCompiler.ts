@@ -467,8 +467,8 @@ interface CompileOnceOutcome {
  * 后者一定会与这条分叉（这个项目在"同一个判断写两遍"上已经吃过好几次亏）。
  */
 /**
- * **渲染级退化提示**（2026-10-19，P4-4）：标记点近重合、全部共线。
- * 只发警告，不阻止出图；标签碰撞要等真正的渲染证据，暂不在这里猜。
+ * **渲染级退化提示**（2026-10-19，P4-4）：标记点近重合、标签碰撞风险、全部共线。
+ * 只发警告，不阻止出图；相机参数不在编译期，暂不判断。
  */
 function renderDegeneracyWarnings(document: GeometryDocument): PlanDiagnostic[] {
   const points = document.primitives
@@ -477,6 +477,15 @@ function renderDegeneracyWarnings(document: GeometryDocument): PlanDiagnostic[] 
     .filter((point): point is { label: string; position: { x: number; y: number; z: number } } => typeof point.label === "string" && point.position !== undefined)
   const warnings: PlanDiagnostic[] = []
   const tolerance = 1e-6
+  let extent = 0
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) {
+      const a = points[first]!
+      const b = points[second]!
+      extent = Math.max(extent, Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y, a.position.z - b.position.z))
+    }
+  }
+  const labelThreshold = extent * 0.02
   for (let first = 0; first < points.length; first += 1) {
     for (let second = first + 1; second < points.length; second += 1) {
       const a = points[first]!
@@ -484,6 +493,8 @@ function renderDegeneracyWarnings(document: GeometryDocument): PlanDiagnostic[] 
       const distance = Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y, a.position.z - b.position.z)
       if (distance <= tolerance) {
         warnings.push(planDiagnostic("geometry_validation", "render_near_coincident_points", "envelope.actions", `${a.label} 与 ${b.label} 的距离 ${distance.toExponential(2)} 近重合，渲染时可能无法分辨。`, "warning"))
+      } else if (extent > tolerance && distance <= labelThreshold) {
+        warnings.push(planDiagnostic("geometry_validation", "render_label_collision_risk", "envelope.actions", `${a.label} 与 ${b.label} 仅相距 ${distance.toPrecision(3)}（图幅跨度 ${extent.toPrecision(3)}），标签可能重叠。`, "warning"))
       }
     }
   }

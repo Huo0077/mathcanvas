@@ -39,6 +39,16 @@ describe("render degeneracy warnings", () => {
     expect(compiled.diagnostics.some((entry) => entry.code === "render_collinear_points")).toBe(true)
   })
 
+  it("warns when two labels sit very close relative to the figure", () => {
+    const compiled = compilePlan(planWith([point("A", 0, 0, 0), point("B", 0.01, 0, 0), point("C", 10, 10, 0)]), {
+      document: createEmptyDocument("geometry3d"),
+      conversationId: "label-collision",
+      documentGeneration: 0
+    })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagnostics.some((entry) => entry.code === "render_label_collision_risk")).toBe(true)
+  })
+
   it("stays quiet for a non-degenerate triangle", () => {
     const compiled = compilePlan(planWith([point("A", 0, 0, 0), point("B", 4, 0, 0), point("C", 1, 3, 0)]), {
       document: createEmptyDocument("geometry3d"),
