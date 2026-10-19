@@ -38,7 +38,7 @@
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | open | 一次清洗 + 多类救援组合；与 P1-3 共用验收 |
 | P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | open | UI 明确标“未核验”；可配置 fail-closed |
 | P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | open | 至少两条渲染判据 + 诊断文案 |
-| P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 纯函数 `normalizeGeometryPrompt` 已接入解析入口；待用 12 道原始 LaTeX 复测 parse rate |
+| P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 已接入；11 道 HighMATH 原始 LaTeX 的 given 0→29、unverified 26→13，8/11 能读出条件 |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | open | 常见错字/符号表 + 回归 |
 | P5-3 | 5 | 欠定题默认特殊值（等边/等腰/整数） | P1 | open | 通用非退化采样或显式“选择一般位置”策略 |
 | P6-1 | 6 | 旧图删除被 `AF` 线段挡住；绑定点按语义降级 | P2 | open | 删除级联或 UI 选择策略；回归覆盖“整图删除” |
@@ -69,7 +69,8 @@
 - 新增纯函数 `normalizeGeometryPrompt`（`latexNormalisation.ts`）：处理 `$`、`\triangle`、`\angle`、`\sqrt`、`\frac`、`\perp`、`\parallel`、`\circ`、`\overrightarrow`、上下标与数据集 OCR 错字（`棱雉→棱锥`）。
 - 解析入口 `parseObligationWithLegacy` / `parseObligationIR` 统一先归一化；`planCompiler` 的 `verifyExplicitCubeRequest` / `validateRelations` 也读归一化题面，模型改写与 span 仍走原文。
 - 回归：`latexNormalisation.test.ts` 4 条 + `planCompiler.witnessFold.test.ts` 的原始 LaTeX 端到端 1 条；全量 412 文件 / 4774 通过 + 1 todo。
-- **边界**：只做确定性替换，不猜题意；OCR 的更广泛错字仍归 P5-2；尚未用 12 道原始 LaTeX 重跑 parse rate。
+- **parse rate 读数**（11 道 HighMATH 原始 LaTeX，`parseDiagramObligations` 直接跑）：原始 given **0** / unverified **26**；归一化后 given **29** / unverified **13**；8/11 至少读出一条，2 道完全干净（solid-13、solid-24）。
+- **边界**：只做确定性替换，不猜题意；`trig-60` / `trig-89` 的向量条件仍读不出（归 P3-4/P5-2），`solid-1` 的 `PA=` 尾部与部分二面角仍残留。
 
 ## 2026-10-19 P1-2 进展
 
