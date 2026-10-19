@@ -201,8 +201,8 @@ export interface DiagramObligation {
    * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
    */
   solid?: {
-    shape: "cone" | "cylinder" | "pyramid"
-    metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter"
+    shape: "cone" | "cylinder" | "pyramid" | "sphere"
+    metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume"
   }
 }
 
@@ -589,7 +589,13 @@ const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["so
 const SOLID_METRICS: Record<NonNullable<DiagramObligation["solid"]>["shape"], ReadonlySet<NonNullable<DiagramObligation["solid"]>["metric"]>> = {
   cone: new Set(["radius", "height", "slantHeight", "baseArea", "lateralArea"]),
   cylinder: new Set(["radius", "height", "slantHeight", "baseArea", "lateralArea"]),
-  pyramid: new Set(["height", "baseArea", "basePerimeter", "lateralEdge"])
+  pyramid: new Set(["height", "baseArea", "basePerimeter", "lateralEdge"]),
+  /**
+   * 球只有三个常用度量（其余在球上没有定义）。**球自己走专用句型**（`球…的半径`），
+   * 不经过"就近归属"那套锚点，所以这张表里它其实**用不到** —— 但它必须齐：
+   * 少一项就是一张会骗人的表（`Record` 的类型检查当场抓住过一次）。
+   */
+  sphere: new Set(["radius", "surfaceArea", "volume"])
 }
 
 /** 中文数字的底面边数（`正六棱锥` ⇒ 6）。 */
@@ -1604,6 +1610,28 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     /**
+     * **球的三个度量**（2026-10-20）：半径 / 表面积 / 体积。
+     *
+     * **它们走自带锚点的专用句型，不进"就近归属"那套**：`球` 这个字会出现在 `内切球` / `外接球`
+     * 里，而那两个是**挂在别的实体上的派生对象**（不是图上单独画的那条球）。`(?<![切接])`
+     * 把它们挡在外面 —— `正方体的外接球半径为 3` 说的是那个正方体的外接球。
+     *
+     * 球心可以带点名（`球O的半径`），也可以不带（`球的半径`）：点名是**画图用的**，
+     * 不参与这条义务的判据（判据只问半径）。
+     */
+    pattern: new RegExp(`(?<![切接])球\\s*(?:O|[A-Z])?\\s*的?\\s*半径\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[1]!); return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "sphere", metric: "radius" } } }
+  },
+  {
+    pattern: new RegExp(`(?<![切接])球\\s*(?:O|[A-Z])?\\s*的?\\s*表面积\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[1]!); return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "sphere", metric: "surfaceArea" } } }
+  },
+  {
+    pattern: new RegExp(`(?<![切接])球\\s*(?:O|[A-Z])?\\s*的?\\s*体积\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => { const value = measureValue(m[1]!); return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "sphere", metric: "volume" } } }
+  },
+  {
+    /**
      * **内心**（2026-10-20）：`O 是 / 为 △ABC 的内心`。
      *
      * 与角平分线同一个"到边的距离"家族：内心 ⇔ 到**三条边等距**。这条义务与 `angleBisector`
@@ -1893,7 +1921,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)

@@ -70,18 +70,18 @@ describe("没判据的家族要显形（而且说清是哪一族）", () => {
     ["在△ABC中，DE是△ABC的中位线", "中位线"],
     ["圆柱的轴截面是正方形", "轴截面"],
     ["圆锥的侧面展开图是半径为3的半圆", "展开图"],
-    ["球的表面积为16π", "球"],
     ["仰角为60°，俯角为30°", "仰角"],
     ["已知斜面坡度为1:2", "坡度"]
   ]
 
   /**
-   * **四条已经"毕业"了**（2026-10-20 后续批次）：`弦心距`、`弧长`、`内心`、`旁心` 原先只在这里
-   * 当"没判据"的样例，现在它们**有真判据了**（`chordCenterDistance` / `arcLength` / `incenter` /
-   * `excenter`，见 `circleChordAndArc.test.ts` / `incenter.test.ts` / `triangleCenters.test.ts`），
-   * 所以不再落未核验 —— 按本仓的规矩，旧断言按新事实翻转，而不是留着让人以为它们还读不出。
+   * **五条已经"毕业"了**（2026-10-20 后续批次）：`弦心距`、`弧长`、`内心`、`旁心`、`球的尺寸`
+   * 原先只在这里当"没判据"的样例，现在它们**有真判据了**（`chordCenterDistance` / `arcLength` /
+   * `incenter` / `excenter` / `solidDimension`，见 `circleChordAndArc.test.ts` / `incenter.test.ts` /
+   * `triangleCenters.test.ts` / `sphereDimension.test.ts`），所以不再落未核验 ——
+   * 按本仓的规矩，旧断言按新事实翻转，而不是留着让人以为它们还读不出。
    */
-  it("弦心距、弧长、内心、旁心已经读成义务，不再落未核验", () => {
+  it("弦心距、弧长、内心、旁心、球的尺寸已经读成义务，不再落未核验", () => {
     const chord = parseDiagramObligations("AB是⊙O的弦，弦心距为2")
     expect(chord.givens.filter((item) => item.kind === "chordCenterDistance").length).toBe(1)
     expect(chord.unverified).toEqual([])
@@ -97,6 +97,10 @@ describe("没判据的家族要显形（而且说清是哪一族）", () => {
     const excenter = parseDiagramObligations("在△ABC中，O为△ABC的旁心")
     expect(excenter.givens.filter((item) => item.kind === "excenter").length).toBe(1)
     expect(excenter.unverified).toEqual([])
+
+    const sphere = parseDiagramObligations("球的表面积为16π")
+    expect(sphere.givens.filter((item) => item.kind === "solidDimension").length).toBe(1)
+    expect(sphere.unverified).toEqual([])
   })
 
   it.each(cases)("`%s` ⇒ 落未核验，理由点名 %s", (prompt, keyword) => {

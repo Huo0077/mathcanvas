@@ -360,6 +360,7 @@ type FigureConic = ConicDescription & { primitive: PlanarConic }
  */
 type FigureSolid =
   | { shape: "cone" | "cylinder"; radius: number; height: number }
+  | { shape: "sphere"; radius: number }
   | {
     shape: "pyramid"
     /** 底面边数（从底环上数出来，不读动作参数）。 */
@@ -679,6 +680,18 @@ function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?:
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
   if (plan.kind !== "plan") return null
   if (plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) return candidatePyramid(candidate, base)
+  if (plan.actions.some((action) => action.actionId === "solid.create_sphere")) {
+    /**
+     * **球**（2026-10-20）：图元只有 `radius`，三个常用度量（半径 / 表面积 / 体积）都是它的函数。
+     * 与别处同一条纪律：候选图里**恰好一条**新画的球才算数。
+     */
+    const priorSphereIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+    const spheres = candidate.primitives.filter((primitive) => primitive.type === "sphere" && !priorSphereIds.has(primitive.id))
+    if (spheres.length !== 1) return null
+    const [sphere] = spheres
+    if (sphere.type !== "sphere" || !Number.isFinite(sphere.radius) || !(sphere.radius > 0)) return null
+    return { shape: "sphere", radius: sphere.radius }
+  }
   if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const solids = candidate.primitives.filter(
@@ -694,6 +707,18 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
 
 /** 圆锥 / 圆柱量出来的那个度量（`null` = 这个形状没有这个度量）。 */
 function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation["solid"]>["metric"]): number | null {
+  if (solid.shape === "sphere") {
+    /**
+     * **球只有三个常用度量，全是半径的函数**：表面积 `4πr²`、体积 `4/3·πr³`。
+     * 别的度量（母线、底面积……）在球上没有定义 ⇒ 返回 `null`（落未核验，而不是给一个假数）。
+     */
+    switch (metric) {
+      case "radius": return solid.radius
+      case "surfaceArea": return 4 * Math.PI * solid.radius * solid.radius
+      case "volume": return (4 / 3) * Math.PI * solid.radius ** 3
+      default: return null
+    }
+  }
   if (solid.shape === "pyramid") {
     switch (metric) {
       case "baseEdge": return solid.baseEdge
@@ -844,7 +869,9 @@ const SOLID_DIMENSION_LABEL: Record<NonNullable<DiagramObligation["solid"]>["met
   lateralArea: "侧面积",
   baseEdge: "底面边长",
   lateralEdge: "侧棱长",
-  basePerimeter: "底面周长"
+  basePerimeter: "底面周长",
+  surfaceArea: "表面积",
+  volume: "体积"
 }
 
 function calculate(item: DiagramObligation, points: Map<string, Vector3>, figures: FigureContext): { actual: number; expected: number; tolerance: number; detail?: string; evidence?: EvidenceGrade } | null {
@@ -872,11 +899,14 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     /** 底下那两个数**各形状不一样**，所以这段说明也按形状写（说错一个数就是假话）。 */
     const basis = drawn.shape === "pyramid"
       ? `正 ${drawn.sides} 棱锥，底面边长 ${drawn.baseEdge.toPrecision(6)}、侧棱长 ${drawn.lateralEdge.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
-      : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
+      : drawn.shape === "sphere"
+        ? `球的半径 ${drawn.radius.toPrecision(6)}`
+        : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
     return {
       actual: measured,
       expected: item.value,
-      tolerance: distanceTolerance(1),
+      // 容差随**量级**走：面积是 L²、体积是 L³，与半径同一把 1e-6 的尺子会让大数永远过、小数永远不过。
+      tolerance: distanceTolerance(Math.max(Math.abs(item.value), Math.abs(measured), 1)),
       detail: `实测${basis}，${label} ${measured.toPrecision(6)}；题设要求 ${label} ${item.value}。`
     }
   }
