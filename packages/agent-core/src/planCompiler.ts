@@ -3465,6 +3465,18 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (unscoped) {
     advice.push('提醒：`host` / `target` 这类引用必须是**作用域对象**，不能写裸别名：同一份计划里刚建的用 `{"scope":"draft","alias":"quad"}`，场景里已有的用 `{"scope":"scene","ref":{"documentId":"…","entityId":"…"}}`。')
   }
+  /**
+   * **宿主引用指向不存在的实体**（2026-10-19 联考 `joint-06`）。
+   *
+   * 现场读数：计划后两笔引用了 `solid-1:e0` —— 一个**不存在的别名**，编译期报 `host_not_found`，
+   * 整题 0 图元。这是**计划侧**错误（模型凭空拼了一个 id），不是几何能力不足；只把读数的
+   * `no host …` 回给它，下一轮它大概率还会拼一个新的 id。所以修复提示要说清**别名从哪来**：
+   * 必须是**前面某一笔真的给出的**名字；找不到就补"建出那个宿主"的那一笔，或换成已有点名。
+   */
+  const hostNotFound = errors.some((error) => error.code === "host_not_found")
+  if (hostNotFound) {
+    advice.push('提醒：`host` / `hostId` 指向的实体必须**真的存在**：同一份计划里刚建的用 `{"scope":"draft","alias":"…"}`，那个别名必须是**前面某一笔真的给出的**名字（不要自己拼 `solid-1:e0` 这种）；场景里已有的用 `{"scope":"scene","ref":{"documentId":"…","entityId":"…"}}`。找不到宿主时，补**建出那个宿主**的那一笔，或换成图上已有的点名走 `solid.create_segment` / `solid.create_point`。')
+  }
   const envelopeFailure = errors.some((error) => error.path.startsWith("envelope")) && !answerInPlan
   if (envelopeFailure) {
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
