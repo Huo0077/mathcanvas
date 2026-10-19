@@ -41,7 +41,7 @@
 | P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 已接入；11 道 HighMATH 原始 LaTeX 的 given 0→29、unverified 26→13，8/11 能读出条件 |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | done | 棱雉/棱椎/圆雉/圆椎等长替换 + `\vec{}` 归一；`latexNormalisation.ocr.test.ts` 覆盖纯文本与 LaTeX |
 | P5-3 | 5 | 欠定题默认特殊值（等边/等腰/整数） | P1 | done | 生产提示词加入“一般位置”策略：不默认等边/等腰/直角/整数，取值写进 assumptions；`underdeterminedPolicy.test.ts` 钉住 |
-| P6-1 | 6 | 旧图删除被 `AF` 线段挡住；绑定点按语义降级 | P2 | partial | 已加 Ctrl/Cmd+A 全选后删除整图；删除级联与绑定点降级仍未做 |
+| P6-1 | 6 | 旧图删除被 `AF` 线段挡住；绑定点按语义降级 | P2 | done | Ctrl/Cmd+A 全选删除；模板实体/派生对象级联注销；宿主删除后绑定点降级为自由点并保留位置（`deletion-cascade` / `boundPointFollow` 回归） |
 | P6-2 | 6 | 桌面端未重建，最新源码不在安装包 | P2 | done | 已重建 3.3.14 exe + MSI + NSIS；exe 启动 10 秒 smoke 通过 |
 | P6-3 | 6 | 12 道 harness 单次计划 + 一次修复，样本小 | P2 | open | 30–50 道冻结题 + 完整协调器路径 |
 | P6-4 | 6 | 无冻结 gold / 真实模型验收 | P2 | open | 冻结题集 + 人评/真实模型读数 |
