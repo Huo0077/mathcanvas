@@ -473,6 +473,25 @@ describe("命名圆锥曲线：标签冒号不该把方程挡在外面", () => {
     expect(conicOf("曲线 y = x²/4 + 1")).toBeUndefined()
     expect(conicOf("曲线 y = x²/4 − 1")).toBeUndefined()
   })
+
+  /**
+   * **圆的一般方程**：`圆M：x²+y²−4x+2y−4=0`（2026-10-19 联考 `joint-27`）。
+   *
+   * 圆不在"三类标准圆锥曲线"里 —— 它需要**圆心**，而椭圆/双曲线/抛物线那三档假定
+   * 曲线以原点为中心。`x²+y²+Dx+Ey+F=0` ⇒ 圆心 `(−D/2, −E/2)`、半径 `√((D²+E²)/4 − F)`。
+   * 半径平方不为正就不是圆（一个点或虚圆），一律不认。
+   */
+  it("`圆M：x²+y²−4x+2y−4=0` ⇒ 圆心 (2, −1)、半径 3", () => {
+    expect(conicOf("圆M：x²+y²−4x+2y−4=0")).toEqual({ kind: "circle", centerX: 2, centerY: -1, radius: 3 })
+  })
+
+  it("`圆 x²+y²=4` ⇒ 圆心在原点、半径 2", () => {
+    expect(conicOf("圆 x²+y²=4")).toEqual({ kind: "circle", centerX: 0, centerY: 0, radius: 2 })
+  })
+
+  it("**半径平方不为正的不认**：`x²+y²+2x+2y+8=0` 不是圆（虚圆）", () => {
+    expect(conicOf("圆 x²+y²+2x+2y+8=0")).toBeUndefined()
+  })
 })
 
 /**

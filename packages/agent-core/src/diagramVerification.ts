@@ -329,6 +329,8 @@ type ConicDescription =
   | { kind: "ellipse"; radiusX: number; radiusY: number }
   | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
   | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
+  /** 圆带着**圆心** —— 那三档标准曲线都以原点为中心，所以圆不能并进椭圆。 */
+  | { kind: "circle"; centerX: number; centerY: number; radius: number }
 
 /** 候选图里那条圆锥曲线。**不含"是否满足题设"的结论** —— 那是 `calculate` 的事。 */
 type FigureConic = ConicDescription & { primitive: PlanarConic }
@@ -346,16 +348,34 @@ type FigureConic = ConicDescription & { primitive: PlanarConic }
  */
 function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureConic | null {
   if (plan.kind !== "plan") return null
-  if (!plan.actions.some((action) => action.actionId === "planar.create_conic")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
-  const conics = candidate.primitives.filter((primitive) => (primitive.type === "ellipse" || primitive.type === "hyperbola" || primitive.type === "parabola") && !priorIds.has(primitive.id))
-  if (conics.length !== 1) return null
-  const [conic] = conics
-  // 逐种显式分支，而不是靠"剩下的一定是抛物线" —— 上面那个 `filter` 没有做类型守卫，
-  // 兜底分支拿不到窄化，`focalParameter` / `axis` 会报"不存在于联合类型上"。
-  if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY, primitive: conic }
-  if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis, primitive: conic }
-  if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis, primitive: conic }
+  /**
+   * **圆单独一支**（2026-10-20，联考 `joint-27`）：它走 `planar.create_circle`、图元类型是
+   * `circle`，而且带着**圆心** —— 那三档标准圆锥曲线都以原点为中心，不能互相冒充。
+   * 只有"没有新画的圆锥曲线、且有恰好一个新圆"时才认它：同一次里既画椭圆又画辅助圆时，
+   * 不能悄悄把辅助圆当成题面说的那条曲线。
+   */
+  if (plan.actions.some((action) => action.actionId === "planar.create_conic")) {
+    const conics = candidate.primitives.filter((primitive) => (primitive.type === "ellipse" || primitive.type === "hyperbola" || primitive.type === "parabola") && !priorIds.has(primitive.id))
+    if (conics.length === 1) {
+      const [conic] = conics
+      // 逐种显式分支，而不是靠"剩下的一定是抛物线" —— 上面那个 `filter` 没有做类型守卫，
+      // 兜底分支拿不到窄化，`focalParameter` / `axis` 会报"不存在于联合类型上"。
+      if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY, primitive: conic }
+      if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis, primitive: conic }
+      if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis, primitive: conic }
+    }
+  }
+  if (plan.actions.some((action) => action.actionId === "planar.create_circle")) {
+    // 图元是 `PrimitiveSpec` 的联合，`filter` 不会自己窄化 —— 这里显式断言成圆那一支。
+    const circles = candidate.primitives.filter(
+      (primitive) => primitive.type === "circle" && !priorIds.has(primitive.id)
+    ) as Extract<PlanarConic, { type: "circle" }>[]
+    if (circles.length === 1) {
+      const [circle] = circles
+      return { kind: "circle", centerX: circle.center.x, centerY: circle.center.y, radius: circle.radius, primitive: circle }
+    }
+  }
   return null
 }
 
@@ -376,8 +396,8 @@ function describeChordExpectation(kind: "secant" | "tangent" | "single" | "none"
  * 曲线种类的人话（判据文案用）。与 `describeConic` 分开：那一份给的是**参数**，
  * 这一份给的是**名字**，而 `pointOnConic` 要问的恰恰是"图上是哪一种、题面说的是哪一种"。
  */
-function conicKindName(kind: "ellipse" | "hyperbola" | "parabola"): string {
-  return kind === "ellipse" ? "椭圆" : kind === "hyperbola" ? "双曲线" : "抛物线"
+function conicKindName(kind: "ellipse" | "hyperbola" | "parabola" | "circle"): string {
+  return kind === "ellipse" ? "椭圆" : kind === "hyperbola" ? "双曲线" : kind === "circle" ? "圆" : "抛物线"
 }
 
 /** 数字的可读写法：整数不带小数点，其余最多六位。 */
@@ -560,6 +580,7 @@ function describeEllipse(radiusX: number, radiusY: number): string {
 function describeConic(conic: ConicDescription): string {
   if (conic.kind === "ellipse") return describeEllipse(conic.radiusX, conic.radiusY)
   if (conic.kind === "hyperbola") return `半轴 (${formatNumber(conic.radiusX)}, ${formatNumber(conic.radiusY)})、实轴沿 ${conic.axis} 轴`
+  if (conic.kind === "circle") return `圆心 (${formatNumber(conic.centerX)}, ${formatNumber(conic.centerY)})、半径 ${formatNumber(conic.radius)}`
   return `焦准距 p = ${formatNumber(conic.focalParameter)}、对称轴为 ${conic.axis} 轴`
 }
 
@@ -613,6 +634,15 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       }
       const gap = Math.abs(drawn.focalParameter - stated.focalParameter)
       return { actual: gap, expected: 0, tolerance, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)}。` }
+    }
+    /**
+     * **圆**：圆心与半径**各自**比。只比半径的话，一个"半径对、位置挪了三格"的圆会被判通过 ——
+     * 那是错的图，只是看起来很像。残差取两者的较大值（与"点在线段上"那条同一口径）。
+     */
+    if (stated.kind === "circle" && drawn.kind === "circle") {
+      const centerGap = Math.hypot(drawn.centerX - stated.centerX, drawn.centerY - stated.centerY)
+      const radiusGap = Math.abs(drawn.radius - stated.radius)
+      return { actual: Math.max(centerGap, radiusGap), expected: 0, tolerance, detail: `实测 ${describeConic(drawn)}；题设要求 ${describeConic(stated)}。` }
     }
     // 种类不同 ⇒ 图上根本不是题面说的那种曲线。
     return null

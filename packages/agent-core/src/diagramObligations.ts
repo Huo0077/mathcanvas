@@ -102,6 +102,14 @@ export type DiagramConicStated =
   | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
   /** 抛物线：焦准距 `p`（`y² = 2px` 里的 `p`，所以 `y² = 4x` 的 `p = 2`）与对称轴。 */
   | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
+  /**
+   * **圆**：它需要**圆心**，所以不能并进椭圆 —— 椭圆那一档假定曲线以原点为中心，
+   * 把一个平移过的圆塞进去只会得到一条"位置错了的椭圆"。
+   *
+   * 从一般方程 `x²+y²+Dx+Ey+F=0` 读：圆心 `(−D/2, −E/2)`、半径 `√((D²+E²)/4 − F)`；
+   * 半径平方不为正（一个点 / 虚圆）就**不是圆**，读取器返回 `null`。
+   */
+  | { kind: "circle"; centerX: number; centerY: number; radius: number }
 
 export interface DiagramObligation {
   kind: DiagramObligationKind
@@ -261,6 +269,39 @@ function hyperbolaAxes(denominatorX: number, denominatorY: number, axis: "x" | "
 function parabolaAxis(coefficient: number, axis: "x" | "y"): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
   if (!Number.isFinite(coefficient) || coefficient === 0) return null
   return { kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: coefficient / 2, axis } }
+}
+
+/**
+ * **圆的一般方程**：`x²+y²+Dx+Ey+F=0`（也可写成 `x²+y²=4` 这种右端非零的形式）。
+ *
+ * 只收**严格的这一种顺序**（x²、y² 相邻，然后可选的 `x` 项、可选的 `y` 项、可选的常数项）：
+ * 换顺序的写法（`x²−4x+y²+2y−4=0`）让"系数到底属于谁"变成第二个判断，宁可留给未核验。
+ *
+ * `rightHand` 是等号右边的数：`x²+y²=4` ⇔ `x²+y²−4=0`，所以常数项是 `0 − 4`。
+ */
+function circleFromGeneralEquation(rest: string, rightHand: number): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
+  const compact = rest.replace(/\s+/g, "").replace(/[−–]/g, "-")
+  const form = /^(?:([+-])(\d+(?:\.\d+)?)?x)?(?:([+-])(\d+(?:\.\d+)?)?y)?(?:([+-])(\d+(?:\.\d+)?))?$/.exec(compact)
+  if (form === null) return null
+  const coefficient = (sign: string | undefined, magnitude: string | undefined): number => {
+    if (sign === undefined) return 0
+    const size = magnitude === undefined ? 1 : Number(magnitude)
+    return sign === "-" ? -size : size
+  }
+  const d = coefficient(form[1], form[2])
+  const e = coefficient(form[3], form[4])
+  const constant = coefficient(form[5], form[6])
+  const f = constant - rightHand
+  const squaredRadius = (d * d + e * e) / 4 - f
+  if (!Number.isFinite(squaredRadius) || squaredRadius <= 0) return null
+  // `-0` 会让"圆心在原点"与 `0` 比较失败（`Object.is(-0, 0) === false`），统一成 `0`。
+  const centerX = d === 0 ? 0 : -d / 2
+  const centerY = e === 0 ? 0 : -e / 2
+  return {
+    kind: "conicAxes",
+    targets: [],
+    conic: { kind: "circle", centerX, centerY, radius: Math.sqrt(squaredRadius) }
+  }
 }
 
 /**
@@ -434,6 +475,17 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     pattern: /x\s*=\s*(\d+(?:\.\d+)?)\s*\*?\s*y\s*(?:\^2|²)(?!\s*[-+−])(?![\dxY])/g,
     allowAfterLabelColon: true,
     read: (m) => parabolaAxis(1 / Number(m[1]), "x")
+  },
+  /**
+   * **圆的一般方程**：`圆M：x²+y²−4x+2y−4=0`（2026-10-19 联考 `joint-27`）。
+   *
+   * 与"三类标准圆锥曲线"分开，是因为它多一维**圆心**（那三档都以原点为中心）。
+   * 右端写成 `=4` 也收（`x²+y²=4` 就是半径 2 的圆），常数项按 `多出来的数` 扣掉。
+   */
+  {
+    pattern: /x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)\s*([^=]*)=\s*(-?\d+(?:\.\d+)?)(?![\d.])/g,
+    allowAfterLabelColon: true,
+    read: (m) => circleFromGeneralEquation(m[1] ?? "", Number(m[2]))
   },
   {
     /**

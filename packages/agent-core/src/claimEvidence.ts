@@ -96,6 +96,8 @@ export interface ObligationGeometry {
     | { kind: "ellipse"; radiusX: number; radiusY: number }
     | { kind: "hyperbola"; radiusX: number; radiusY: number; axis: "x" | "y" }
     | { kind: "parabola"; focalParameter: number; axis: "x" | "y" }
+    /** 圆带**圆心** —— 那三档标准曲线都以原点为中心，所以它不能并进椭圆。 */
+    | { kind: "circle"; centerX: number; centerY: number; radius: number }
   /**
    * 题面写下的函数表达式（**已规范化**：上标转 `^`、`4x` 补成 `4*x`）。
    *

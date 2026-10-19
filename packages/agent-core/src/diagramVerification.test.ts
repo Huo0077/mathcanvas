@@ -411,6 +411,49 @@ describe("V0c: hyperbola and parabola premises", () => {
 })
 
 /**
+ * **圆的一般方程**（2026-10-19 联考 `joint-27`）。
+ *
+ * 圆不在"三类标准圆锥曲线"里：椭圆/双曲线/抛物线那三档都以**原点**为中心，而圆的一般方程
+ * `x²+y²+Dx+Ey+F=0` 带着一个**圆心**。若只比半径、不比圆心，一个"半径对、位置挪了三格"的圆
+ * 会被判通过 —— 那是错的图。所以判据是**圆心与半径各自比**，取两者的较大残差。
+ */
+describe("V0c: circle from its general equation", () => {
+  /** 圆走 `planar.create_circle`（不是 `planar.create_conic`），图元类型是 `circle`。 */
+  function circleFixture(primitive: Record<string, unknown>, prompt: string) {
+    const plan: PlanEnvelope = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画圆",
+      factIds: [],
+      actions: [{ actionId: "planar.create_circle", actionKey: "c", factIds: [], inputs: { alias: "c", ...primitive } }] as never
+    }
+    const candidate = createEmptyDocument("conics")
+    candidate.primitives.push({ id: "c", ...primitive } as never)
+    return verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+  }
+
+  const CIRCLE_PROMPT = "圆M：x²+y²−4x+2y−4=0，画出这个圆"
+
+  it("verifies the center and the radius read from the general equation", () => {
+    // `D=−4、E=2、F=−4` ⇒ 圆心 (2, −1)、半径 √((16+4)/4 + 4) = 3。
+    const report = circleFixture({ type: "circle", center: { x: 2, y: -1 }, radius: 3 }, CIRCLE_PROMPT)
+    expect(report.checks.map((check) => `${check.sourceText}:${check.status}`)).toEqual(["x²+y²−4x+2y−4=0:passed"])
+    expect(report.status).toBe("passed")
+  })
+
+  it("fails when the circle is drawn somewhere else", () => {
+    // 半径一模一样、圆心挪到原点 —— 这是**另一条**曲线，不能因为半径对就放行。
+    const report = circleFixture({ type: "circle", center: { x: 0, y: 0 }, radius: 3 }, CIRCLE_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+
+  it("fails when the radius is off", () => {
+    const report = circleFixture({ type: "circle", center: { x: 2, y: -1 }, radius: 2 }, CIRCLE_PROMPT)
+    expect(report.status).toBe("failed")
+  })
+})
+
+/**
  * **带撇 / 带下标的顶点名**（S1.3）。
  *
  * 核验器的两处点名判断此前都写死 `/^[A-Z]$/`：`candidatePoints` 里对 `vertexNames` 的检查，
