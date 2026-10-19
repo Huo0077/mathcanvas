@@ -358,6 +358,17 @@ export interface SolidCreateRotationAction extends ActionBase {
   }
 }
 
+export interface SolidCreateIntersectionAction extends ActionBase {
+  actionId: "solid.create_intersection"
+  inputs: {
+    alias: DraftAlias
+    lineFrom: string
+    lineTo: string
+    planePoints: string[]
+    label?: string
+  }
+}
+
 /**
  * **把两个已经建出来的点连成一条线段**（2026-10-15 用户现场）。
  *
@@ -653,6 +664,7 @@ export type DraftAction =
   | SolidCreateProjectionAction
   | SolidCreateTranslationAction
   | SolidCreateRotationAction
+  | SolidCreateIntersectionAction
   | SolidCreateSegmentAction
   | SolidFoldAction
   | SolidUnfoldAction

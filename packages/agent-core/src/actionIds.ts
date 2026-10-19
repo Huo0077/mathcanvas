@@ -69,6 +69,10 @@ export const DRAFT_ACTION_IDS = [
    */
   "solid.create_rotation",
   /**
+   * **直线与平面的交点**（2026-10-19，P2-1）：线两点 + 平面三点。
+   */
+  "solid.create_intersection",
+  /**
    * **立体里"两点连成一条线段"**（2026-10-15 用户现场，四棱锥那道题的 `EF`）。
    *
    * 此前没有这个动作：模型只能拿 `planar.create_segment` 去凑，而那条落在 `z=0` 上 ——

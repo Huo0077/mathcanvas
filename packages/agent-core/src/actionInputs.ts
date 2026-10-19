@@ -735,6 +735,41 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       return out
     }
 
+    case "solid.create_intersection": {
+      const out: Record<string, unknown> = withAlias({})
+      const lineFrom = boundedString(value.lineFrom, `${path}.lineFrom`, errors)
+      const lineTo = boundedString(value.lineTo, `${path}.lineTo`, errors)
+      if (lineFrom === null || lineTo === null) return null
+      if (lineFrom === lineTo) {
+        errors.push(fail("degenerate_line", `${path}.lineFrom`, "intersection line endpoints must differ"))
+        return null
+      }
+      out.lineFrom = canonicalPointName(lineFrom)
+      out.lineTo = canonicalPointName(lineTo)
+      if (!Array.isArray(value.planePoints) || value.planePoints.length !== 3) {
+        errors.push(fail("invalid_type", `${path}.planePoints`, "an intersection plane needs exactly three named points"))
+        return null
+      }
+      const planePoints: string[] = []
+      for (const [index, name] of value.planePoints.entries()) {
+        const raw = boundedString(name, `${path}.planePoints[${index}]`, errors)
+        if (raw === null) return null
+        const read = canonicalPointName(raw)
+        if (planePoints.includes(read)) {
+          errors.push(fail("duplicate_name", `${path}.planePoints[${index}]`, `vertex name ${quotedName(read)} is used twice`))
+          return null
+        }
+        planePoints.push(read)
+      }
+      out.planePoints = planePoints
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
+      return out
+    }
+
     case "solid.create_segment": {
       /**
        * **立体里"两点连成一条线段"**（2026-10-15 用户现场）：**只给点名，不给坐标**。

@@ -1113,6 +1113,45 @@ function compileSolidRotationAction(action: Extract<DraftAction, { actionId: "so
   }
 }
 
+function compileSolidIntersectionAction(action: Extract<DraftAction, { actionId: "solid.create_intersection" }>, context: ActionContext): CompileResult {
+  const { actionKey, inputs } = action
+  const refuse = (code: string, message: string): CompileResult => ({ operations: [], diagnostics: [diagnostic(actionKey, code, message)], aliasToId: {} })
+  if (context.targetWorkspace !== "geometry3d") return refuse("workspace_mismatch", "a line-plane intersection can only be created in the solid workspace")
+  if (inputs.planePoints.length !== 3) return refuse("intersection_plane_count", `一个相交平面要恰好三个点名，这里给了 ${inputs.planePoints.length} 个。`)
+  const at = (name: string) => context.targetDocument.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === name)
+  const lineFrom = at(inputs.lineFrom)
+  const lineTo = at(inputs.lineTo)
+  const planePoints = inputs.planePoints.map((name) => at(name))
+  const missing = [inputs.lineFrom, inputs.lineTo, ...inputs.planePoints].filter((name) => at(name) === undefined)
+  if (lineFrom === undefined || lineTo === undefined || planePoints.some((point) => point === undefined) || missing.length > 0) {
+    return refuse("intersection_reference_missing", `这些点名在这份文档里找不到对应的点：${missing.join("、")}。交点必须排在建出直线端点与平面三点的动作之后。`)
+  }
+  const positionOf = (point: unknown): { x: number; y: number; z: number } => (point as { position: { x: number; y: number; z: number } }).position
+  const from = positionOf(lineFrom)
+  const to = positionOf(lineTo)
+  const first = positionOf(planePoints[0])
+  const second = positionOf(planePoints[1])
+  const third = positionOf(planePoints[2])
+  const direction = { x: to.x - from.x, y: to.y - from.y, z: to.z - from.z }
+  const normal = {
+    x: (second.y - first.y) * (third.z - first.z) - (second.z - first.z) * (third.y - first.y),
+    y: (second.z - first.z) * (third.x - first.x) - (second.x - first.x) * (third.z - first.z),
+    z: (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x)
+  }
+  const normalSquared = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z
+  if (!(normalSquared > 1e-18)) return refuse("intersection_plane_degenerate", "相交平面的三个点共线，无法确定平面。")
+  const denominator = direction.x * normal.x + direction.y * normal.y + direction.z * normal.z
+  if (Math.abs(denominator) <= 1e-12) return refuse("intersection_parallel", "直线与平面平行或落在平面内，没有唯一交点。")
+  const t = ((first.x - from.x) * normal.x + (first.y - from.y) * normal.y + (first.z - from.z) * normal.z) / denominator
+  const position = { x: from.x + t * direction.x, y: from.y + t * direction.y, z: from.z + t * direction.z }
+  const id = context.idAllocator.allocate("point", inputs.alias)
+  return {
+    operations: [{ op: "addPrimitives", primitives: [{ id, type: "point3", position, binding: { kind: "free" }, ...(inputs.label === undefined ? {} : { label: inputs.label }) }] }],
+    diagnostics: [],
+    aliasToId: { [inputs.alias]: id }
+  }
+}
+
 function compileSolidPointAction(action: Extract<DraftAction, { actionId: "solid.create_point" }>, context: ActionContext): CompileResult {
   const { actionKey, inputs } = action
   if (context.targetWorkspace !== "geometry3d") {
@@ -1998,6 +2037,8 @@ export function compileAction(action: DraftAction, context: ActionContext): Comp
       return compileSolidPolyhedronAction(action, context)
     case "solid.create_face":
       return compileSolidFaceAction(action, context)
+    case "solid.create_intersection":
+      return compileSolidIntersectionAction(action, context)
     case "solid.create_rotation":
       return compileSolidRotationAction(action, context)
     case "solid.create_translation":

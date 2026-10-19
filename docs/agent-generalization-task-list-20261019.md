@@ -26,7 +26,7 @@
 | P1-3 | 1 | 多缺陷计划 + 1 次信封 / 2 次编译预算 | P0 | done | 顺序 + 0° 一次清洗；AEF 平面片 + fold 物化 E/F；`planCompiler.combinedRescue.test.ts` 钉住“顺序 + 0° + 坐标错”组合 |
 | P1-4 | 1 | 推理模型不返回 JSON（v4-pro 5/12） | P0 | done | 当前 flash 整批 12/12 解析、0 格式失败；v4-pro 仍慢但不再是阻塞项 |
 | P1-5 | 1 | 模型路由：`deepseek-chat` 实际是 flash；v4-pro 可用但慢 | P0 | partial | v4-pro 前两题 1 passed / 1 unverified，约 2.5 min/题；完整批未跑完，默认档位未改 |
-| P2-1 | 2 | 缺通用原子算子：旋转、反射、平移、求交、投影 | P1 | done | 已落地自由点、反射、投影、平移、旋转五个原子动作；对称/投影/平移/旋转各一例，超过“至少 3 个动作”验收线；求交仍未做 |
+| P2-1 | 2 | 缺通用原子算子：旋转、反射、平移、求交、投影 | P1 | done | 反射、投影、平移、旋转、线面交点五个指定算子 + 自由点全部落地；动作测试与全量回归通过 |
 | P2-2 | 2 | 任意多面体仍要模型给坐标 | P1 | partial | 通用求解器 fallback；求解结果必须过题设核验 |
 | P2-3 | 2 | 固定动作菜单与字段组合负担（35 个 action） | P1 | partial | 字段复用/组合测试 + 文档；不再靠模型猜字段 |
 | P2-4 | 2 | 2–3 面开放壳、三维圆弧被明确拒绝 | P2 | done | 明确拒绝 + 修复提示“逐面用 solid.create_face 建开放壳”；3D 圆弧仍走线段近似建议，不误报已画 |
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：447 文件 / 4836 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁：448 文件 / 4838 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 
@@ -183,9 +183,10 @@
 - 新增 `solid.create_projection`：同一组字段，内核算垂足；已加入 spatial-modeling actionIds 与摘要。
 - 新增 `solid.create_translation`：源点 + `vector`，内核算平移点；已加入 spatial-modeling actionIds 与摘要。
 - 新增 `solid.create_rotation`：源点 + 轴两点 + `angle`（度），内核用 Rodrigues 公式；已加入 spatial-modeling actionIds 与摘要。
-- 动作总数 39 → 42；catalogue 哈希重签；runtime 期望列表同步。
-- 回归：point/reflection/projection/translation/rotation 各 2 条；全量 447 文件 / 4836 通过。
-- P2-1 完成（验收线≥3 个动作，实际 5 个）；求交仍未做，后续可补。
+- 新增 `solid.create_intersection`：线两点 + 平面三点，内核求线面交点；平行/共面拒绝；已加入 spatial-modeling。
+- 动作总数 39 → 43；catalogue 哈希重签；runtime 期望列表同步。
+- 回归：point/reflection/projection/translation/rotation/intersection 各 2 条；全量 448 文件 / 4838 通过。
+- P2-1 完成：五个指定算子（反射/投影/平移/旋转/求交）+ 自由点全部落地。
 
 ## 2026-10-19 P4-4 进展
 
