@@ -22,6 +22,7 @@ import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRightPrism } from "./solver/prism"
+import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
@@ -386,6 +387,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
   if (pyramid !== null) return pyramid
   const prism = rescueWithRightPrism(context, first)
   if (prism !== null) return prism
+  const dihedral = rescueWithDihedralTriangle(context, first)
+  if (dihedral !== null) return dihedral
   /**
    * **题面说要折、计划里却没有折**：按题面补上那一笔（选项②，2026-10-15）。
    *
@@ -2060,6 +2063,67 @@ function rescueWithRightPrism(context: PlanCompileContext, first: CompileOnceOut
       value: { lateralLength, apexToPlane, lateralLineDistance },
       overridable: true,
       path: "envelope.actions[0].inputs.basePolygon"
+    }],
+    materialisedActions: compiled.result.actions
+  }
+}
+
+/**
+ * **等腰直角 + 等边 + 二面角**的解析构造（2026-10-19，P1-1，trig-23）。
+ *
+ * AB 为等腰直角三角形 ABC 的斜边，△ABD 为等边三角形，二面角 C-AB-D=θ。
+ * 由 `constructDihedralTriangle` 给出两张共享 AB 的面；AB 长度不参与角度条件，
+ * 取 2。二面角/等边能否核验取决于解析器，因此允许 `unverified`，不允许 `failed`。
+ */
+function rescueWithDihedralTriangle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const prompt = normalizeGeometryPrompt(context.prompt)
+  const right = /△([A-Z])([A-Z])([A-Z])为等腰直角三角形/.exec(prompt)
+  const equilateral = /△([A-Z])([A-Z])([A-Z])为等边三角形/.exec(prompt)
+  const dihedral = /二面角([A-Z])-([A-Z])([A-Z])-([A-Z])为([0-9.]+)°/.exec(prompt)
+  if (right === null || equilateral === null || dihedral === null) return null
+  const [a, b, c] = [right[1]!, right[2]!, right[3]!]
+  const d = equilateral[3]!
+  if (![equilateral[1], equilateral[2]].every((name) => name === a || name === b)) return null
+  if (dihedral[1] !== c || ![dihedral[2], dihedral[3]].includes(a) || ![dihedral[2], dihedral[3]].includes(b) || dihedral[4] !== d) return null
+  const dihedralDegrees = Number(dihedral[5])
+  const points = constructDihedralTriangle({ ab: 2, dihedralDegrees })
+  if (points === null) return null
+
+  const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "由等腰直角、等边与二面角构造的两张面",
+    factIds: [],
+    actions: [
+      {
+        actionId: "solid.create_face",
+        actionKey: "triangle-abc",
+        factIds: [],
+        inputs: { alias: "ABC", vertexNames: [a, b, c], vertices: [points.a, points.b, points.c] }
+      },
+      {
+        actionId: "solid.create_face",
+        actionKey: "triangle-abd",
+        factIds: [],
+        inputs: { alias: "ABD", vertexNames: [a, b, d], vertices: [points.a, points.b, points.d] }
+      }
+    ]
+  }
+  const compiled = compileOnce(plan, { ...context, prompt: expandExamShorthand(prompt) })
+  if (!compiled.result.ok || compiled.result.draftDocument === null || compiled.result.diagramVerification?.status === "failed") return null
+  const verified = compiled.result.diagramVerification?.status === "passed"
+  return {
+    ...compiled.result,
+    assumptions: [...compiled.result.assumptions, {
+      id: "witness.dihedral",
+      text: verified
+        ? "由等腰直角、等边与二面角解析构造两张共享 AB 的面；已按题设核验。"
+        : "由等腰直角、等边与二面角解析构造两张共享 AB 的面；部分角度条件未解析，仍标未核验。",
+      kind: "witness",
+      value: { a, b, c, d, ab: 2, dihedralDegrees },
+      overridable: true,
+      path: "envelope.actions"
     }],
     materialisedActions: compiled.result.actions
   }
