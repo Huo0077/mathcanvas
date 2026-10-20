@@ -28,7 +28,7 @@ Log on as administrator and then retry this installation.
 ```
 
 `msiexec /i MathCanvas_4.0.0_x64_en-US.msi /qn` 的进程退出码 **1603**。
-完整日志留在仓库外：`D:\draw\_msi-install.log`。
+完整日志当时留在仓库外的 `D:\draw\_msi-install.log`；**该文件已在 2026-10-20 的本地清理里随其它一次性日志一起删掉**（本文件上面引的就是那份日志里的原文，结论不依赖日志文件本身）。
 
 ## 三、MSI 载荷：能解开、能启动（这一步是有意义的）
 
