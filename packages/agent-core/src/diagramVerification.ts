@@ -363,6 +363,18 @@ type FigureSolid =
   | { shape: "sphere"; radius: number }
   /** 长方体的**三条棱**（外接球 / 内切球半径是它们的函数）。 */
   | { shape: "cuboid"; sizeX: number; sizeY: number; sizeZ: number }
+  /**
+   * **一般多面体**（2026-10-20）：判据从**网格**算 —— `volume` / `surfaceArea` 由散度定理与
+   * 面面积求和得到，`circumsphere` 是"到所有顶点等距"的最小二乘解（附带**残差**：
+   * 顶点是不是真的共球）。
+   */
+  | {
+    shape: "polyhedron"
+    vertices: Vector3[]
+    volume: number
+    surfaceArea: number
+    circumsphere: { radius: number; residual: number } | null
+  }
   | {
     shape: "pyramid"
     /** 底面边数（从底环上数出来，不读动作参数）。 */
@@ -682,6 +694,10 @@ function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?:
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
   if (plan.kind !== "plan") return null
   if (plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) return candidatePyramid(candidate, base)
+  if (plan.actions.some((action) => action.actionId === "solid.create_polyhedron")) {
+    const general = candidatePolyhedron(candidate, base)
+    if (general !== null) return general
+  }
   if (plan.actions.some((action) => action.actionId === "solid.create_sphere")) {
     /**
      * **球**（2026-10-20）：图元只有 `radius`，三个常用度量（半径 / 表面积 / 体积）都是它的函数。
@@ -721,6 +737,17 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
 
 /** 圆锥 / 圆柱量出来的那个度量（`null` = 这个形状没有这个度量）。 */
 function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation["solid"]>["metric"]): number | null {
+  if (solid.shape === "polyhedron") {
+    /**
+     * **一般多面体**：`3V/S`（内切球存在时 `V = ⅓·r·S`）与外接球半径。外接球那条的"顶点是否
+     * 真的共球"由 `calculate` 那支一起判（这里只给半径）。
+     */
+    switch (metric) {
+      case "inradius": return (3 * solid.volume) / solid.surfaceArea
+      case "circumradius": return solid.circumsphere === null ? null : solid.circumsphere.radius
+      default: return null
+    }
+  }
   if (solid.shape === "cuboid") {
     /**
      * **外接球 = 体对角线的一半**（`√(a²+b²+c²)/2`，三个顶点都在球面上）。
@@ -894,6 +921,103 @@ function distanceToAltitudeLine(point: Vector3, vertex: Vector3, sideA: Vector3,
   return Math.abs((point.x - vertex.x) * alongX + (point.y - vertex.y) * alongY) / length
 }
 
+/**
+ * **一般多面体：从网格算体积、表面积、外接球**（2026-10-20，"派生球"的通用路径）。
+ *
+ * 三条都只依赖**顶点 + 面环**（`polyhedron3` 的 `vertexIds` / `faceIds`），所以它对**任意**
+ * 闭合多面体都成立，不要求形状正规：
+ *
+ * - **体积**：散度定理 `V = |Σ a·(b × c)| / 6`（对每个三角面片，原点任取）；
+ * - **表面积**：`Σ` 三角面片面积（叉积模长的一半）；
+ * - **外接球**：解"到所有顶点等距"的最小二乘（4 个未知量 `c` 与 `k = R² − |c|²`），
+ *   并**把残差一起交出来** —— 顶点根本不在一个球面上时，最小二乘照样能凑出一个 `R`。
+ */
+function candidatePolyhedron(candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const solids = candidate.primitives.filter((primitive) => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
+  if (solids.length !== 1) return null
+  const [polyhedron] = solids
+  const solid = polyhedron as unknown as { vertexIds?: string[]; faceIds?: string[] }
+  if (!Array.isArray(solid.vertexIds) || !Array.isArray(solid.faceIds) || solid.vertexIds.length < 4) return null
+  const byId = new Map(candidate.primitives.map((primitive) => [primitive.id, primitive]))
+  const positionOf = (id: string): Vector3 | null => {
+    const primitive = byId.get(id)
+    return primitive !== undefined && primitive.type === "point3" ? primitive.position : null
+  }
+  const vertices = solid.vertexIds.map(positionOf)
+  if (vertices.some((vertex) => vertex === null)) return null
+  const points = vertices as Vector3[]
+  const rings = solid.faceIds
+    .map((id) => byId.get(id))
+    .filter((primitive): primitive is Extract<typeof candidate.primitives[number], { type: "face3" }> => primitive?.type === "face3")
+    .map((face) => face.pointIds.map(positionOf))
+    .filter((ring): ring is Vector3[] => ring.length >= 3 && ring.every((point) => point !== null))
+  if (rings.length === 0) return null
+  let volumeAccumulator = { x: 0, y: 0, z: 0 }
+  let surfaceArea = 0
+  for (const ring of rings) {
+    for (let index = 1; index + 1 < ring.length; index += 1) {
+      const a = ring[0]!
+      const b = ring[index]!
+      const c = ring[index + 1]!
+      const cross = {
+        x: b.y * c.z - b.z * c.y,
+        y: b.z * c.x - b.x * c.z,
+        z: b.x * c.y - b.y * c.x
+      }
+      volumeAccumulator = { x: volumeAccumulator.x + cross.x * a.x, y: volumeAccumulator.y + cross.y * a.y, z: volumeAccumulator.z + cross.z * a.z }
+      surfaceArea += Math.hypot(cross.x, cross.y, cross.z) / 2
+    }
+  }
+  const volume = Math.abs(volumeAccumulator.x + volumeAccumulator.y + volumeAccumulator.z) / 6
+  if (!(volume > 1e-12) || !(surfaceArea > 1e-12)) return null
+  return { shape: "polyhedron", vertices: points, volume, surfaceArea, circumsphere: fitCircumsphere(points) }
+}
+
+/** 到所有顶点等距的球（最小二乘）：解 `2v·c + k = |v|²`，`R = √(|c|² + k)`，同时给残差。 */
+function fitCircumsphere(points: readonly Vector3[]): { radius: number; residual: number } | null {
+  if (points.length < 4) return null
+  // 正规方程 AᵀA·x = Aᵀb（A 的每一行是 [2vx, 2vy, 2vz, 1]）。
+  const normal = Array.from({ length: 4 }, () => [0, 0, 0, 0])
+  const right = [0, 0, 0, 0]
+  for (const point of points) {
+    const row = [2 * point.x, 2 * point.y, 2 * point.z, 1]
+    for (let rowIndex = 0; rowIndex < 4; rowIndex += 1) {
+      for (let column = 0; column < 4; column += 1) normal[rowIndex]![column]! += row[rowIndex]! * row[column]!
+      right[rowIndex]! += row[rowIndex]! * (point.x * point.x + point.y * point.y + point.z * point.z)
+    }
+  }
+  const solution = solveLinearSystem(normal as number[][], right)
+  if (solution === null) return null
+  const [x, y, z, k] = solution
+  const squared = x! * x! + y! * y! + z! * z! + k!
+  if (!Number.isFinite(squared) || squared <= 0) return null
+  const radius = Math.sqrt(squared)
+  const residual = Math.max(...points.map((point) => Math.abs(Math.hypot(point.x - x!, point.y - y!, point.z - z!) - radius)))
+  return { radius, residual }
+}
+
+/** 4×4 线性方程组（高斯消元 + 部分主元）。退化（主元近 0）返回 `null` —— 不猜一个解出来。 */
+function solveLinearSystem(matrix: number[][], right: number[]): number[] | null {
+  const size = right.length
+  const rows = matrix.map((row, index) => [...row, right[index]!])
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(rows[row]![column]!) > Math.abs(rows[pivot]![column]!)) pivot = row
+    }
+    if (Math.abs(rows[pivot]![column]!) < 1e-12) return null
+    ;[rows[column], rows[pivot]] = [rows[pivot]!, rows[column]!]
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue
+      const factor = rows[row]![column]! / rows[column]![column]!
+      if (factor === 0) continue
+      for (let at = column; at <= size; at += 1) rows[row]![at]! -= factor * rows[column]![at]!
+    }
+  }
+  return rows.map((row, index) => row[size]! / row[index]!)
+}
+
 /** 点到**线段**的距离（垂足在段外时取到最近端点的距离）—— 内心那条判据就靠这个区别。 */
 function pointToSegment(point: Vector3, from: Vector3, to: Vector3): number {
   const alongX = to.x - from.x
@@ -939,6 +1063,20 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      */
     const stated = item.solid
     const drawn = figures.solid
+    /**
+     * **一般多面体的外接球要一起判两件事**（2026-10-20）：① 顶点**是不是真的在同一个球面上**
+     * （最小二乘的残差）；② 这个球的半径与题面写的数差多少。两个都是长度量，残余取较大者。
+     * 少了①的话，"顶点根本不共球"的图会被最小二乘凑出一个像模像样的半径混过去。
+     */
+    if (stated?.shape === "polyhedron" && stated.metric === "circumradius") {
+      if (item.value === undefined || drawn === null || drawn.shape !== "polyhedron" || drawn.circumsphere === null) return null
+      return {
+        actual: Math.max(drawn.circumsphere.residual, Math.abs(drawn.circumsphere.radius - item.value)),
+        expected: 0,
+        tolerance: distanceTolerance(Math.max(Math.abs(item.value), 1)),
+        detail: `实测外接球半径 ${drawn.circumsphere.radius.toPrecision(6)}、顶点到球心的最大偏差 ${drawn.circumsphere.residual.toPrecision(3)}（共 ${drawn.vertices.length} 个顶点；偏差不为 0 就说明这些顶点**不在同一个球面上**）；题设要求外接球半径 ${item.value}。`
+      }
+    }
     if (stated === undefined || item.value === undefined || drawn === null || drawn.shape !== stated.shape) return null
     const measured = measureSolid(drawn, stated.metric)
     if (measured === null || !Number.isFinite(measured)) return null
@@ -950,7 +1088,9 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
         ? `球的半径 ${drawn.radius.toPrecision(6)}`
         : drawn.shape === "cuboid"
           ? `长方体的三条棱 ${drawn.sizeX.toPrecision(6)}、${drawn.sizeY.toPrecision(6)}、${drawn.sizeZ.toPrecision(6)}`
-          : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
+          : drawn.shape === "polyhedron"
+            ? `多面体的体积 ${drawn.volume.toPrecision(6)}、表面积 ${drawn.surfaceArea.toPrecision(6)}`
+            : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
     return {
       actual: measured,
       expected: item.value,

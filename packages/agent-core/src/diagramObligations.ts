@@ -201,7 +201,7 @@ export interface DiagramObligation {
    * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
    */
   solid?: {
-    shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid"
+    shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid" | "polyhedron"
     metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume" | "circumradius" | "inradius"
   }
 }
@@ -597,7 +597,9 @@ const SOLID_METRICS: Record<NonNullable<DiagramObligation["solid"]>["shape"], Re
    */
   sphere: new Set(["radius", "surfaceArea", "volume"]),
   /** 长方体的两个派生球半径（外接球 / 内切球）—— 同样走专用句型。 */
-  cuboid: new Set(["circumradius", "inradius"])
+  cuboid: new Set(["circumradius", "inradius"]),
+  /** 一般多面体（`polyhedron3`）：判据从网格算，不收别的度量。 */
+  polyhedron: new Set(["circumradius", "inradius"])
 }
 
 /** 中文数字的底面边数（`正六棱锥` ⇒ 6）。 */
@@ -1627,6 +1629,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       // 正 N 棱锥走 `pyramid`（判据从底环 + 锥顶量），正方体 / 长方体走 `cuboid`（三条棱）。
       if (m[2] !== undefined) return { kind: "solidDimension", targets: [], value, solid: { shape: "pyramid", metric: m[3] === "外接球" ? "circumradius" : "inradius" } }
       return { kind: "solidDimension", targets: [], value, solid: { shape: "cuboid", metric: m[3] === "外接球" ? "circumradius" : "inradius" } }
+    }
+  },
+  {
+    /**
+     * **一般多面体的派生球半径**（2026-10-20）：`三棱锥的内切球半径为 1`、`四面体的外接球半径为 2`。
+     *
+     * 与上面那条（正方体 / 长方体 / 正 N 棱锥）分开写，是因为**`正`N 棱锥要走闭式子**那条
+     * （`pyramid`）、而这里收的是**没有正规形状的**多面体（`polyhedron3`，判据从网格算）。
+     * `(?<!正)` 就是那条分界线：`正三棱锥` 归 `pyramid`，`三棱锥` 归 `polyhedron`。
+     */
+    pattern: new RegExp(`(?:该|其)?\\s*(?:(?<!正)[三四五六七八九十\\d]+\\s*棱锥|四面体|多面体)\\s*的?\\s*(外接球|内切球)\\s*的?\\s*半径\\s*(?:为|是|=)?\\s*${NUMERIC_MEASURE_LITERAL}`, "g"),
+    read: (m) => {
+      const value = measureValue(m[2]!)
+      return value === null ? null : { kind: "solidDimension", targets: [], value, solid: { shape: "polyhedron", metric: m[1] === "外接球" ? "circumradius" : "inradius" } }
     }
   },
   {
