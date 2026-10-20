@@ -42,9 +42,9 @@
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | done | 棱雉/棱椎/圆雉/圆椎等长替换 + `\vec{}` 归一；`latexNormalisation.ocr.test.ts` 覆盖纯文本与 LaTeX |
 | P5-3 | 5 | 欠定题默认特殊值（等边/等腰/整数） | P1 | done | 生产提示词加入“一般位置”策略：不默认等边/等腰/直角/整数，取值写进 assumptions；`underdeterminedPolicy.test.ts` 钉住 |
 | P6-1 | 6 | 旧图删除被 `AF` 线段挡住；绑定点按语义降级 | P2 | done | Ctrl/Cmd+A 全选删除；模板实体/派生对象级联注销；宿主删除后绑定点降级为自由点并保留位置（`deletion-cascade` / `boundPointFollow` 回归） |
-| P6-2 | 6 | 桌面端未重建，最新源码不在安装包 | P2 | done | 已重建 3.3.14 exe + MSI + NSIS；exe 启动 10 秒 smoke 通过（**2026-10-20 起为 `4.0.0`**：`MathCanvas_4.0.0_*` 已构建并发布为 `v4.0`） |
-| P6-3 | 6 | 12 道 harness 单次计划 + 一次修复，样本小 | P2 | open | 30–50 道冻结题 + 完整协调器路径 |
-| P6-4 | 6 | 无冻结 gold / 真实模型验收 | P2 | open | 冻结题集 + 人评/真实模型读数 |
+| P6-2 | 6 | 桌面端未重建，最新源码不在安装包 | P2 | done | 已重建 3.3.14 exe + MSI + NSIS；exe 启动 10 秒 smoke 通过（**2026-10-20 起为 `4.0.0`**：`MathCanvas_4.0.0_*` 已构建并发布为 `v4.0`）。**2026-10-20 补测**：NSIS「装 → 启动 → 卸载」用 4.0.0 包重新走完（卸载退出码 0、目录与注册项都清掉）；MSI 载荷用管理安装验证与发布资产同尺寸、断网可启动；**MSI 的 per-machine 安装本机装不上**（`Error 1925`，非管理员），见 [`docs/audit/2026-10-20-install-offline-evidence.md`](audit/2026-10-20-install-offline-evidence.md) |
+| P6-3 | 6 | 12 道 harness 单次计划 + 一次修复，样本小 | P2 | open（**用户 2026-10-20 决定先不做**） | 30–50 道冻结题 + 完整协调器路径。**手里的事实**：`bench:agent --mode=real_provider` 这条 CLI 路径**没有接任何适配器**（整批如实 `not_measured`）；真跑要走桌面壳 `--exam-run`，而那需要先用 UI 配好 provider（key 走系统凭据库）—— 本机三处都没有 key |
+| P6-4 | 6 | 无冻结 gold / 真实模型验收 | P2 | open（**用户 2026-10-20 决定先不做**） | 冻结题集 + 人评/真实模型读数。冻结表在 `packages/agent-core/src/benchmark/frozenThresholds.ts`（`authorization` 默认 `pending` ⇒ `assertPaidRunAllowed` 一律拒；预算 36 次请求 / $12）；`verifiedGoldCaseIds` 为空，**人评与美元止损都仍未测** |
 | P6-5 | 6 | v4-pro 821 秒 vs flash 39 秒的成本/延迟 | P2 | open | 按题型路由或缓存；给出预算 |
 
 ## 本轮已完成（`97dde4b`）
@@ -146,7 +146,7 @@
 ## 2026-10-19 P6-2 完成
 
 - 已按当前源码重建 `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe`。
-- 安装包：`bundle/msi/MathCanvas_3.3.14_x64_en-US.msi`、`bundle/nsis/MathCanvas_3.3.14_x64-setup.exe`。
+- 安装包：**2026-10-20 起为 `MathCanvas_4.0.0_*`**（历史：`bundle/msi/MathCanvas_3.3.14_x64_en-US.msi`、`bundle/nsis/MathCanvas_3.3.14_x64-setup.exe`）。
 - 启动 smoke：exe 启动后持续运行 10 秒（进程 `mathcanvas-desktop`），通过。
 - 最新源码（P2-1 原子动作、P2-4 开放壳提示、P4-4 渲染警告等）已再次重建；2026-10-19 22:51 的 exe 启动 10 秒 smoke 通过（pid 22872）。
 
