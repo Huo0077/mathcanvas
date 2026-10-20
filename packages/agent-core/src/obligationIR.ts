@@ -99,6 +99,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "centroid" || kind === "orthocenter" || kind === "excenter") return { kind: "absolute", value: distanceTolerance(1) }
   /** **外心比的是"到三个顶点的距离差"**（2026-10-20）：长度量，同一把尺子。 */
   if (kind === "circumcenter") return { kind: "absolute", value: distanceTolerance(1) }
+  /** **中位线比的是"端点到中点的偏差"**（2026-10-20）：长度量，按边长缩放。 */
+  if (kind === "midline") return { kind: "absolute", value: distanceTolerance(1) }
   /**
    * **实体标量尺寸**（2026-10-20 补）：半径 / 高 / 母线 / 底边长这些是长度，面积与体积随量级走 ——
    * 核验器那边用的是同一把 `distanceTolerance(量级)`，这里按题面写的那个数取量级。

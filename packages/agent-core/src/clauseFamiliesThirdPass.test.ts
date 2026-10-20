@@ -67,7 +67,6 @@ describe("中线：能唯一确定的就读成中点", () => {
 describe("没判据的家族要显形（而且说清是哪一族）", () => {
   const cases: [string, string][] = [
     ["在△ABC中，AD是角平分线", "角平分线"],
-    ["在△ABC中，DE是△ABC的中位线", "中位线"],
     ["圆柱的轴截面是正方形", "轴截面"],
     ["圆锥的侧面展开图是半径为3的半圆", "展开图"],
     ["仰角为60°，俯角为30°", "仰角"],
@@ -75,13 +74,12 @@ describe("没判据的家族要显形（而且说清是哪一族）", () => {
   ]
 
   /**
-   * **五条已经"毕业"了**（2026-10-20 后续批次）：`弦心距`、`弧长`、`内心`、`旁心`、`球的尺寸`
-   * 原先只在这里当"没判据"的样例，现在它们**有真判据了**（`chordCenterDistance` / `arcLength` /
-   * `incenter` / `excenter` / `solidDimension`，见 `circleChordAndArc.test.ts` / `incenter.test.ts` /
-   * `triangleCenters.test.ts` / `sphereDimension.test.ts`），所以不再落未核验 ——
+   * **六条已经"毕业"了**（2026-10-20 后续批次）：`弦心距`、`弧长`、`内心`、`旁心`、`球的尺寸`、
+   * `中位线` 原先只在这里当"没判据"的样例，现在它们**有真判据了**（`chordCenterDistance` /
+   * `arcLength` / `incenter` / `excenter` / `solidDimension` / `midline`），所以不再落未核验 ——
    * 按本仓的规矩，旧断言按新事实翻转，而不是留着让人以为它们还读不出。
    */
-  it("弦心距、弧长、内心、旁心、球的尺寸已经读成义务，不再落未核验", () => {
+  it("弦心距、弧长、内心、旁心、球的尺寸、中位线已经读成义务，不再落未核验", () => {
     const chord = parseDiagramObligations("AB是⊙O的弦，弦心距为2")
     expect(chord.givens.filter((item) => item.kind === "chordCenterDistance").length).toBe(1)
     expect(chord.unverified).toEqual([])
@@ -101,6 +99,10 @@ describe("没判据的家族要显形（而且说清是哪一族）", () => {
     const sphere = parseDiagramObligations("球的表面积为16π")
     expect(sphere.givens.filter((item) => item.kind === "solidDimension").length).toBe(1)
     expect(sphere.unverified).toEqual([])
+
+    const midline = parseDiagramObligations("在△ABC中，DE是△ABC的中位线")
+    expect(midline.givens.filter((item) => item.kind === "midline").length).toBe(1)
+    expect(midline.unverified).toEqual([])
   })
 
   it.each(cases)("`%s` ⇒ 落未核验，理由点名 %s", (prompt, keyword) => {

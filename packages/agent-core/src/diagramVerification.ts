@@ -1695,6 +1695,39 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       detail: `实测半径 ${circle.radius.toPrecision(6)}、两条半径的夹角 ${((radians * 180) / Math.PI).toPrecision(6)}°，劣弧长 ${length.toPrecision(6)}；题设要求弧长 ${numeric}。`
     }
   }
+  if (item.kind === "midline") {
+    /**
+     * **中位线**（2026-10-20）：题面不说"哪两条边"，所以判据**不猜** —— 三条边各算一个中点，
+     * 问 `D`、`E` 是不是**恰好落在两个不同的中点**上（存在性，与"旁心是三个之一"同一种读法）。
+     *
+     * 残余取"最近的那一对"里较大的那个偏差；两端落在**同一个**中点时不算（那不是中位线）。
+     */
+    if (item.targets.length !== 5) return null
+    const [first, second, a, b, c] = [at(0), at(1), at(2), at(3), at(4)]
+    const midpointOf = (from: Vector3, to: Vector3): Vector3 => ({ x: (from.x + to.x) / 2, y: (from.y + to.y) / 2, z: (from.z + to.z) / 2 })
+    const midpoints = [midpointOf(a, b), midpointOf(b, c), midpointOf(c, a)]
+    const sides = [item.targets[2]! + item.targets[3]!, item.targets[3]! + item.targets[4]!, item.targets[4]! + item.targets[2]!]
+    let best = Number.POSITIVE_INFINITY
+    let bestPair = ""
+    for (let firstSide = 0; firstSide < 3; firstSide += 1) {
+      for (let secondSide = 0; secondSide < 3; secondSide += 1) {
+        if (firstSide === secondSide) continue
+        const gap = Math.max(length(first, midpoints[firstSide]!), length(second, midpoints[secondSide]!))
+        if (gap < best) {
+          best = gap
+          bestPair = `${sides[firstSide]}、${sides[secondSide]}`
+        }
+      }
+    }
+    if (!Number.isFinite(best)) return null
+    const scale = Math.max(length(a, b), length(b, c), length(c, a), 1)
+    return {
+      actual: best,
+      expected: 0,
+      tolerance: distanceTolerance(scale),
+      detail: `实测 ${item.targets[0]}、${item.targets[1]} 与三条边的中点最近的一对是 ${bestPair} 的中点（偏差 ${best.toPrecision(6)}）；题设要求它是中位线（两端各是某两条边的中点）。`
+    }
+  }
   if (item.kind === "circumcenter") {
     /**
      * **外心**（2026-10-20）：到**三个顶点**等距。残余取"最远减最近" ——
