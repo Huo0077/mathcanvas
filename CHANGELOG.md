@@ -7,7 +7,9 @@
 
 
 
-## 2026-10-20（v4.0 之后的维护批次）—— 题面读取与核验判据的补齐
+## 2026-10-20 —— 发布 v4.0.1：题面读取与核验判据的补齐
+
+**版本真值 `4.0.0` → `4.0.1`**（补丁版：**不改契约、纯增量**）。注解 tag **`v4.0.1`**；三个资产见发布说明。完整说明见 [`docs/release/v4.0.1.md`](docs/release/v4.0.1.md)。
 
 这一节只记**改了什么**。逐条的 RED→GREEN、被推翻的判断与门禁读数在 [`docs/project-progress.md`](docs/project-progress.md)，当前口径在 [`docs/current-status.md`](docs/current-status.md)。
 
