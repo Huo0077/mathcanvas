@@ -111,3 +111,60 @@ describe("一般多面体的派生球半径量得出来", () => {
     expect(result.diagramVerification?.status, describeChecks(result as ReturnType<typeof run>)).toBe("failed")
   })
 })
+
+/**
+ * **内切球从"必要条件"升级成真判据**（2026-10-20，这条线的最后一步）。
+ *
+ * 上一批量的是 `3V/S` —— 它在"内切球存在"时是恒等式，所以**不会放过错的**，但它**也没验过
+ * 球心是不是真的到每个面都等距**。这一批改成**解**：把每个面写成单位法向 `nᵢ` 与偏移 `dᵢ`
+ * （法向统一朝外 —— 用多面体自己的质心定朝向），球心 `c` 与半径 `r` 满足 `nᵢ·c + r = dᵢ`，
+ * 四个未知量的最小二乘，**残差就是"这些面是否都与这个球相切"**。
+ *
+ * 于是残余与外表球那条同构：取 ① 相切残差与 ② 半径与题面的差，两者较大者。
+ */
+describe("内切球：球心真的到每个面等距", () => {
+  const VERTICES = [
+    { x: 0, y: 0, z: 0 },
+    { x: 2, y: 0, z: 0 },
+    { x: 1, y: Math.sqrt(3), z: 0 },
+    { x: 1, y: Math.sqrt(3) / 3, z: (2 * Math.sqrt(6)) / 3 }
+  ]
+  const FACES = [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]]
+  const INNER = Math.sqrt(6) / 6
+
+  const run = (vertices: readonly { x: number; y: number; z: number }[], prompt: string) => {
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "四面体",
+      factIds: [],
+      actions: [{ actionId: "solid.create_polyhedron", actionKey: "tetrahedron", factIds: [], inputs: { alias: "tetrahedron", vertices, faces: FACES, vertexNames: ["A", "B", "C", "D"] } }]
+    } as unknown as PlanEnvelope
+    return compilePlan(plan, { document: createEmptyDocument("geometry3d"), prompt, conversationId: "polyhedron-insphere", documentGeneration: 0 })
+  }
+
+  const describeChecks = (result: ReturnType<typeof run>) =>
+    (result.diagramVerification?.checks ?? []).map((check) => `${check.kind}:${check.status}:${check.reason}`).join("；")
+
+  it("正四面体 ⇒ 四个面真的与那个球相切 ⇒ passed", () => {
+    const result = run(VERTICES, `三棱锥的内切球半径为${INNER.toPrecision(12)}。`)
+    expect(result.diagramVerification?.status, describeChecks(result)).toBe("passed")
+  })
+
+  it("半径写错 ⇒ failed", () => {
+    expect(run(VERTICES, "三棱锥的内切球半径为0.9。").diagramVerification?.status).toBe("failed")
+  })
+
+  /**
+   * **把顶点挪歪之后，四个面不再与同一个球相切**：这时候残余里那一项（相切偏差）会顶上来，
+   * 理由里能读到"相切"那句。这条钉住的是"残余里确实有相切项"，而不是只比了一个数。
+   */
+  it("顶点挪歪（四个面不再共切一球）⇒ failed，且理由里说得出相切", () => {
+    const skewed = structuredClone(VERTICES)
+    skewed[3]!.x += 0.4
+    const result = run(skewed, `三棱锥的内切球半径为${INNER.toPrecision(12)}。`)
+    const reasons = (result.diagramVerification?.checks ?? []).map((check) => check.reason).join("｜")
+    expect(result.diagramVerification?.status, describeChecks(result as ReturnType<typeof run>)).toBe("failed")
+    expect(reasons).toContain("相切")
+  })
+})

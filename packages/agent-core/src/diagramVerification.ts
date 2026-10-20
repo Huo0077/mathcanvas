@@ -374,6 +374,8 @@ type FigureSolid =
     volume: number
     surfaceArea: number
     circumsphere: { radius: number; residual: number } | null
+    /** 内切球：解出来的球心与半径，外加"各面到球心的偏差"（0 ⇔ 真的与每个面相切）。 */
+    insphere: { radius: number; residual: number } | null
   }
   | {
     shape: "pyramid"
@@ -743,7 +745,7 @@ function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation[
      * 真的共球"由 `calculate` 那支一起判（这里只给半径）。
      */
     switch (metric) {
-      case "inradius": return (3 * solid.volume) / solid.surfaceArea
+      case "inradius": return solid.insphere === null ? null : solid.insphere.radius
       case "circumradius": return solid.circumsphere === null ? null : solid.circumsphere.radius
       default: return null
     }
@@ -971,7 +973,45 @@ function candidatePolyhedron(candidate: GeometryDocument, base?: GeometryDocumen
   }
   const volume = Math.abs(volumeAccumulator.x + volumeAccumulator.y + volumeAccumulator.z) / 6
   if (!(volume > 1e-12) || !(surfaceArea > 1e-12)) return null
-  return { shape: "polyhedron", vertices: points, volume, surfaceArea, circumsphere: fitCircumsphere(points) }
+  return { shape: "polyhedron", vertices: points, volume, surfaceArea, circumsphere: fitCircumsphere(points), insphere: fitInsphere(points, rings) }
+}
+
+/**
+ * **内切球：解"到每个面都相切"的球心**（2026-10-20）。
+ *
+ * 每个面写成单位法向 `nᵢ` 与偏移 `dᵢ`（`nᵢ·x = dᵢ`）。球心 `c`、半径 `r` 满足
+ * `nᵢ·c + r = dᵢ` —— **四个未知量的线性方程组**，最小二乘即可。**残差**
+ * `max |nᵢ·c + r − dᵢ|` 就是"这些面是不是都与这个球相切"，`0` 才叫真的内切球。
+ *
+ * **法向朝外怎么定**：用多面体自己的**质心**当内点（凸多面体成立）—— 质心在某面的
+ * "正侧"就把那条法向翻过来。不定这一步，全反的法向会让 `r` 变成负数。
+ */
+function fitInsphere(points: readonly Vector3[], rings: readonly Vector3[][]): { radius: number; residual: number } | null {
+  if (rings.length < 4) return null
+  const centroid = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
+  const planes: { normal: Vector3; offset: number }[] = []
+  for (const ring of rings) {
+    const normal = polygonNormal(ring)
+    if (normal === null) return null
+    const offset = dot(normal, ring[0]!)
+    // 质心必须在内侧（`n·x − d < 0`）；不在就把这条法向翻过来。
+    planes.push(dot(normal, centroid) - offset > 0 ? { normal: { x: -normal.x, y: -normal.y, z: -normal.z }, offset: -offset } : { normal, offset })
+  }
+  const normal = Array.from({ length: 4 }, () => [0, 0, 0, 0])
+  const right = [0, 0, 0, 0]
+  for (const plane of planes) {
+    const row = [plane.normal.x, plane.normal.y, plane.normal.z, 1]
+    for (let index = 0; index < 4; index += 1) {
+      for (let column = 0; column < 4; column += 1) normal[index]![column]! += row[index]! * row[column]!
+      right[index]! += row[index]! * plane.offset
+    }
+  }
+  const solution = solveLinearSystem(normal as number[][], right)
+  if (solution === null) return null
+  const [x, y, z, radius] = solution
+  if (!Number.isFinite(radius!) || radius! <= 0) return null
+  const residual = Math.max(...planes.map((plane) => Math.abs(dot(plane.normal, { x: x!, y: y!, z: z! }) + radius! - plane.offset)))
+  return { radius: radius!, residual }
 }
 
 /** 到所有顶点等距的球（最小二乘）：解 `2v·c + k = |v|²`，`R = √(|c|² + k)`，同时给残差。 */
@@ -1075,6 +1115,20 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
         expected: 0,
         tolerance: distanceTolerance(Math.max(Math.abs(item.value), 1)),
         detail: `实测外接球半径 ${drawn.circumsphere.radius.toPrecision(6)}、顶点到球心的最大偏差 ${drawn.circumsphere.residual.toPrecision(3)}（共 ${drawn.vertices.length} 个顶点；偏差不为 0 就说明这些顶点**不在同一个球面上**）；题设要求外接球半径 ${item.value}。`
+      }
+    }
+    /**
+     * **内切球同构**（2026-10-20）：① 各面到球心的偏差（是不是真的与每个面**相切**）；
+     * ② 这个半径与题面的差。两个都是长度量，残余取较大者 —— 只比②的话，"四个面根本不共切一球"
+     * 的图会被最小二乘凑出一个半径混过去。
+     */
+    if (stated?.shape === "polyhedron" && stated.metric === "inradius") {
+      if (item.value === undefined || drawn === null || drawn.shape !== "polyhedron" || drawn.insphere === null) return null
+      return {
+        actual: Math.max(drawn.insphere.residual, Math.abs(drawn.insphere.radius - item.value)),
+        expected: 0,
+        tolerance: distanceTolerance(Math.max(Math.abs(item.value), 1)),
+        detail: `实测内切球半径 ${drawn.insphere.radius.toPrecision(6)}、各面到球心的最大偏差 ${drawn.insphere.residual.toPrecision(3)}（偏差不为 0 就说明这些面**不与同一个球相切**；体积 ${drawn.volume.toPrecision(6)}、表面积 ${drawn.surfaceArea.toPrecision(6)}，3V/S = ${((3 * drawn.volume) / drawn.surfaceArea).toPrecision(6)} 可交叉复核）；题设要求内切球半径 ${item.value}。`
       }
     }
     if (stated === undefined || item.value === undefined || drawn === null || drawn.shape !== stated.shape) return null
