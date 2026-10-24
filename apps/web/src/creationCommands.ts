@@ -228,7 +228,7 @@ export function createCreationCommands({ document, apply, setSelectedIds, setGui
      * 这里以前直接调内核的 `buildSolidTemplate`，而 `solid.create_template` 走的是动作层另一条分支 ——
      * 于是 Agent 造出来的模板没有物化拓扑，渲染落到"直接画模板"的分支，而那条分支**不读 `rotation`**：
      * 用户把朝向从 0 改到 45°，文档值变了、画面不动
-     *（现场见 `docs/project-progress.md` 的「Agent 造的实体改「朝向」画布不动」一节）。
+     *（现场见 `docs/project-progress-early.md` 的「Agent 造的实体改「朝向」画布不动」一节）。
      * 现在两边都从 `compileTemplateSolid` 拿结果，物化拓扑与子对象命名（`<id>-point-1` 一类）
      * 都只有一份定义，`operations.ts` 的 `syncTemplateTopology` 才能按 id 回填坐标。
      */

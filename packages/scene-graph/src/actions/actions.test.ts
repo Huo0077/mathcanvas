@@ -380,7 +380,7 @@ describe("solid family", () => {
 
   /**
    * **Agent 造的模板实体必须与手工造的是同一种东西**
-   *（用户现场：`docs/project-progress.md` 的「Agent 造的实体改「朝向」画布不动」一节）。
+   *（用户现场：`docs/project-progress-early.md` 的「Agent 造的实体改「朝向」画布不动」一节）。
    *
    * 现场是：Agent 建了立方体，属性栏把 `rotation.x` 从 0 改到 45°，文档值确实变成 ≈0.785398，
    * 而三维画面逐字节不变；改尺寸却能看到变化。根因是模板实体的**两条构造路径**：

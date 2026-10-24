@@ -306,7 +306,7 @@ function compilePlanarInSolidWorkspace(
  * 以及由它物化出来的一整族拓扑（点 / 棱 / 面 / `polyhedron3`）。两条路径曾经各写一半：
  * 手工按钮调 `buildSolidTemplate` 一次落盘整族；`solid.create_template` 只落盘模板图元自己。
  *
- * 后果是**用户看得见的**（现场见 `docs/project-progress.md` 的「Agent 造的实体改「朝向」画布不动」一节，
+ * 后果是**用户看得见的**（现场见 `docs/project-progress-early.md` 的「Agent 造的实体改「朝向」画布不动」一节，
  * 2026-09-24 用户原话："agent构建的元素无法修改方向、大小等数值。并且可以修改的无法在画布上改变"）：
  * Agent 造的立方体在文档里没有拓扑，
  * 渲染于是落到"直接画模板"的分支，而那条分支读尺寸与位置、**不读 `rotation`** ——
