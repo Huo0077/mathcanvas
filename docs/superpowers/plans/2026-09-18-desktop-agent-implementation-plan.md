@@ -12,7 +12,7 @@
 > | --- | --- |
 > | G0（Task 0.1–0.5） | ✅ 完成，Gate 满足 |
 > | G0.5（Task 0.6–0.8） | ✅ 完成，Gate 满足（浏览器里的取消 / 切工作区两条路径仍由单测覆盖） |
-> | G1（Task 1.1–1.6） | ✅ **全部落地** —— 本机曾因缺 Rust 工具链而未开始，**2026-09-21 工具链装好并复核**（`rustup 1.29.1` / `cargo` / `rustc` 1.98.1 + MSVC BuildTools 2022；`npm run test:rust` **179 例 + 1 ignored**、clippy 零警告、release exe 真的启动过）。进度以 `docs/project-progress.md` 的「G1 阶段状态」表为唯一真源 |
+> | G1（Task 1.1–1.6） | ✅ **全部落地** —— 本机曾因缺 Rust 工具链而未开始，**2026-09-21 工具链装好并复核**（`rustup 1.29.1` / `cargo` / `rustc` 1.98.1 + MSVC BuildTools 2022；`npm run test:rust` **179 例 + 1 ignored**、clippy 零警告、release exe 真的启动过）。进度以 `docs/project-progress-early.md` 的「G1 阶段状态」表为唯一真源 |
 > | G2（Task 2.1–2.6） | 🟡 **主体已落地**：协调器、预算、观察、上下文、技能、工具、解析、恢复、网关通道、草稿/确认/提交/撤销、确认面板、遥测脱敏全部有实现与测试；**仍未接线**的是 `ToolPort`、`buildContext` 与 `createToolRegistry` 的生产调用方、两个 worker 的 diff/check/artifact 信封；`AssumptionList.tsx` / `ToolTracePanel.tsx` 未写 |
 > | P5（Task 3.x / 4.x） | ⛔ 未开始（依赖 G1 的真实多模态 provider） |
 > | G5（Task 5.1–5.5） | ⛔ 未开始（依赖 G1 的打包与仓库） |
@@ -262,7 +262,7 @@ Stop here for review. Do not start Tauri or model work if any G0 condition fails
 
 ### G0.5 Gate
 
-> **状态（2026-09-19 复核）：四条 Gate 条件全部满足**，逐条证据见 `docs/project-progress.md` 的「G0.5 Gate 对账」（每条都有用例名与读数）。其中第 4 条的"不能由助手文本生成"是**结构性**保证而不是行为测试：`ConsentRecord` 全仓库只出现在 `hostBridge.ts` 与其测试里，`requestConsent` 需真实例且实例只由宿主代码产出，`@draw/agent-core` 依赖只有 `@draw/dsl` 与 `@draw/scene-graph`。
+> **状态（2026-09-19 复核）：四条 Gate 条件全部满足**，逐条证据见 `docs/project-progress-early.md` 的「G0.5 Gate 对账」（每条都有用例名与读数）。其中第 4 条的"不能由助手文本生成"是**结构性**保证而不是行为测试：`ConsentRecord` 全仓库只出现在 `hostBridge.ts` 与其测试里，`requestConsent` 需真实例且实例只由宿主代码产出，`@draw/agent-core` 依赖只有 `@draw/dsl` 与 `@draw/scene-graph`。
 >
 > **本阶段尚未交付完毕的部分**（Gate 通过 ≠ 阶段收尾）：`agent.worker.ts` / `geometry.worker.ts` 与 `DraftPreview.tsx` 仍未实现（依赖 G1 的 Tauri 运行时形态），因此 Task 0.8 Step 5 的"在 Playwright 里手工走一遍取消 / 编辑真文档 / 切工作区 / 确认预览"**只走完了 store 级的那条路径**，浏览器里还没有可点的预览面板。
 

@@ -1,6 +1,6 @@
 # 3D 渲染管道去重建化 实施计划（切片 1A-1）
 
-> **状态（2026-09-17 复核）**：**已完成**（含紧随其后的 1A-1b）——渲染器在一次挂载内只建一次、内容同步签名抽成纯函数、`data-scene-builds` / `data-scene-syncs` 读数都在产品里；本片计划末尾列出的"D 组仍未做"三项（按图元增量同步、相机跨工作区保留、`threeScene.tsx` 按职责拆分）随后也逐项做完（见 `docs/project-progress.md` 的「场景增量同步与相机记忆」与「threeScene 按职责拆成独立模块」两节）。同方向最新进展：预览内容签名会带 `label` / `focused`，`cameraDragMode` 让 Shift 中途按下也能平移。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
+> **状态（2026-09-17 复核）**：**已完成**（含紧随其后的 1A-1b）——渲染器在一次挂载内只建一次、内容同步签名抽成纯函数、`data-scene-builds` / `data-scene-syncs` 读数都在产品里；本片计划末尾列出的"D 组仍未做"三项（按图元增量同步、相机跨工作区保留、`threeScene.tsx` 按职责拆分）随后也逐项做完（见 `docs/project-progress-early.md` 的「场景增量同步与相机记忆」与「threeScene 按职责拆成独立模块」两节）。同方向最新进展：预览内容签名会带 `label` / `focused`，`cameraDragMode` 让 Shift 中途按下也能平移。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -431,7 +431,7 @@ Expected: 全绿；把实测数字（单测文件/用例数、e2e 用例数、li
 
 - [x] **Step 5: Update docs and commit**
 
-在 `docs/project-progress.md` 新增小节「3D 渲染管道去重建化（切片 1A-1，已完成）」，写明：需求、根因（`threeScene.tsx:1543` 依赖含 `onSelect` 与 `document`，重建会 `renderer.dispose()` + `new WebGLRenderer`）、RED→GREEN 证据、门禁数字、边界（内容对象仍是"清空后重建"，按 `primitiveId` 的增量 diff 留给切片 1A-1b）。
+在 `docs/project-progress-early.md` 新增小节「3D 渲染管道去重建化（切片 1A-1，已完成）」，写明：需求、根因（`threeScene.tsx:1543` 依赖含 `onSelect` 与 `document`，重建会 `renderer.dispose()` + `new WebGLRenderer`）、RED→GREEN 证据、门禁数字、边界（内容对象仍是"清空后重建"，按 `primitiveId` 的增量 diff 留给切片 1A-1b）。
 
 ```bash
 git add docs/project-progress.md e2e/geometry3d-scene-lifecycle.spec.ts e2e/geometry3d-drag.spec.ts

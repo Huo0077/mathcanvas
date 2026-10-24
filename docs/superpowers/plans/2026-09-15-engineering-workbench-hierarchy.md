@@ -358,7 +358,7 @@ Expected: all commands exit successfully; lint may retain only the documented ex
 
 ## Follow-up: CAD usability fixes (Task 15-18, added 2026-09-16)
 
-Task 7 交付后用户反馈三条可用性问题，逐条定位根因后实现。完整的测量数据、证据与提交映射见 `docs/project-progress.md` 的「工程制图可用性修复（Task 15-18）」小节。
+Task 7 交付后用户反馈三条可用性问题，逐条定位根因后实现。完整的测量数据、证据与提交映射见 `docs/project-progress-early.md` 的「工程制图可用性修复（Task 15-18）」小节。
 
 **触发反馈（原话）**：「工程制图的 2d 绘图 ui 表现堪比灾难性，中间的画布内容十分混乱，而且工程绘图这个功能很难用，让人不知所云，3d 投影的模块一直显示暂无可投影的空间对象，根本不知道怎么用，立体几何的模块，我希望能够获取截面，截线图元，就像平面板块获取交点图元一样，当相交时，会显示虚线的截面和截线，点击获取图元」。
 

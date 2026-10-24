@@ -322,7 +322,7 @@ activeSheetId?: string
 
 ## Amendments (2026-09-16, Task 15-18)
 
-Task 1-7 交付后，三条用户反馈暴露出本设计里的三处不足。以下修订**不改变**上面的文档模型与组件边界，只修正交互归属与来源语义；实现与验证证据见 `docs/project-progress.md` 的「工程制图可用性修复（Task 15-18）」，截线的详细决策见 `docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`。
+Task 1-7 交付后，三条用户反馈暴露出本设计里的三处不足。以下修订**不改变**上面的文档模型与组件边界，只修正交互归属与来源语义；实现与验证证据见 `docs/project-progress-early.md` 的「工程制图可用性修复（Task 15-18）」，截线的详细决策见 `docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md`。
 
 1. **2D 绘图命令的归属**（原文只在「Direct 2D Drafting」流程里描述步骤，没有说明控件画在哪）：绘图命令（坐标输入、长度/角度、角度约束与栅格捕捉开关、偏移/修剪/延伸）属于**图纸之外**的那一行工具条（`DraftControlsRow` 通过 `DrawingSheetView` 的 `draftControlsSlot` 出现在图纸工具条上，与缩放控件同一行），画布内部不再有第二套控件。原来的"视口工具栏"是造成「中间的画布内容十分混乱」的直接原因——图框、视图框、命令按钮和读数挤在同一层。
 2. **工具条单行是硬约束**：新增命令组必须塞进同一行（`--drawing-toolbar-height`）。实测工具条一旦换行会把纸张从 128% 压到 64%。

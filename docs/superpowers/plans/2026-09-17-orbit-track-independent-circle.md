@@ -261,7 +261,7 @@ Expected: 全绿
 Run: `npm.cmd run typecheck` / `npm.cmd test` / `npm.cmd run lint` / `npm run build --workspace @draw/web` / `npx playwright test`
 Expected: typecheck 0 error；单测全绿；lint 0 error / 14 warning（基线）；构建通过；Playwright 比上一轮 **+1**
 
-更新 `docs/project-progress.md`（新一节「轨道圆改成独立对象」）+ `docs/feature-catalog.md`（「约束轨道」条目改写：圆自带圆心、点只沿圆滑动）+ README 对应条目，然后：
+更新 `docs/project-progress-early.md`（新一节「轨道圆改成独立对象」）+ `docs/feature-catalog.md`（「约束轨道」条目改写：圆自带圆心、点只沿圆滑动）+ README 对应条目，然后：
 
 ```bash
 git add -A
