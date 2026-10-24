@@ -19,7 +19,7 @@
 
 use mathcanvas_desktop_lib::providers::events::{classify_http_failure, FailureKind, ModelEvent};
 use mathcanvas_desktop_lib::providers::normalize::{normalize_response, normalize_to_json};
-use mathcanvas_desktop_lib::providers::request::{build_request, ChatMessage, RequestOptions};
+use mathcanvas_desktop_lib::providers::request::{build_request, ChatMessage, OutputMode, RequestOptions};
 use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
 
 fn fixture(name: &str) -> String {
@@ -274,7 +274,7 @@ fn the_caller_decides_whether_tool_schemas_are_sent_and_the_dialect_only_decides
     // 这一关静默丢掉，于是发出去的是一条普通文本请求，模型只能回话，而工具探针把"回了文本"
     // 记成 `unknown` —— 用户看到"工具徽章永远不亮"，真实原因却是**我们没把工具表发出去**。
     // "不知道这家支不支持"正是要试的理由，不是不试的理由。
-    let tools = || RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: false, tool_choice_field: None };
+    let tools = || RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: false, tool_choice_field: None, ..RequestOptions::default() };
     let generic = build_request(&profile("openai_compatible", "generic_compatible", "https://x/v1"), vec![], false, tools());
     let native = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, tools());
 
@@ -294,7 +294,7 @@ fn the_caller_decides_whether_tool_schemas_are_sent_and_the_dialect_only_decides
 fn forcing_a_tool_uses_the_word_each_dialect_actually_accepts() {
     // 写错这一个词的后果是 400，而 400 会被读成"这家不支持工具" ——
     // 正是能力探针最容易误报的地方。
-    let tools = RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: true, tool_choice_field: None };
+    let tools = RequestOptions { allow_tools: true, tools: vec![serde_json::json!({ "type": "function", "function": { "name": "t" } })], force_tool: true, tool_choice_field: None, ..RequestOptions::default() };
     let openai = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, tools.clone());
     let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), vec![], false, tools);
 
@@ -356,4 +356,57 @@ fn events_carry_the_attempt_identity_when_serialised_for_the_frontend() {
         assert_eq!(event.get("attemptId").and_then(|value| value.as_str()), Some("attempt-1"));
         assert!(event.get("kind").and_then(|value| value.as_str()).is_some());
     }
+}
+
+
+// ---------------------------------------------------------------- T3：输出模式与上限（2026-10-24）
+
+/// **输出约束只有在明确要求时才发**（E5）：默认 `json_text` 一个字段都不加，
+/// 与接线之前逐字相同；`json_mode` 才有 `response_format`，且只对认这个字段的协议发。
+#[test]
+fn json_mode_reaches_the_wire_only_on_protocols_that_accept_it() {
+    let json_mode = RequestOptions { output_mode: OutputMode::JsonMode, ..RequestOptions::default() };
+    let openai = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, json_mode.clone());
+    assert_eq!(openai.body["response_format"], serde_json::json!({ "type": "json_object" }));
+
+    // 缺省：不发任何输出约束。
+    let text = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, RequestOptions::default());
+    assert!(text.body.get("response_format").is_none(), "json_text must not send a response_format");
+
+    // Anthropic 的 Messages API 没有这个字段：发了会被 400，而 400 会被误读成"不支持"。
+    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), vec![], false, json_mode.clone());
+    assert!(anthropic.body.get("response_format").is_none());
+
+    // Ollama 的原生写法是 `format: "json"`。
+    let ollama = build_request(&profile("ollama", "ollama_native", "http://127.0.0.1:11434/api"), vec![], false, json_mode);
+    assert_eq!(ollama.body["format"], serde_json::json!("json"));
+}
+
+/// **没有 schema 的 `json_schema` 降级成 `json_object`**：空 schema 会被服务端拒，
+/// 而那种 400 看起来像"这家不支持输出约束"。
+#[test]
+fn json_schema_without_a_schema_degrades_to_json_object() {
+    let without = RequestOptions { output_mode: OutputMode::JsonSchema, ..RequestOptions::default() };
+    let request = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, without);
+    assert_eq!(request.body["response_format"], serde_json::json!({ "type": "json_object" }));
+
+    let schema = serde_json::json!({ "type": "object", "properties": { "kind": { "type": "string" } } });
+    let with = RequestOptions { output_mode: OutputMode::JsonSchema, response_schema: Some(schema.clone()), ..RequestOptions::default() };
+    let request = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, with);
+    assert_eq!(request.body["response_format"]["type"], serde_json::json!("json_schema"));
+    assert_eq!(request.body["response_format"]["json_schema"]["schema"], schema);
+}
+
+/// **输出上限在三家各有各的字段名**：写错了要么被忽略（截断率不变），要么 400。
+#[test]
+fn an_output_limit_reaches_each_dialect_field() {
+    let limit = RequestOptions { max_output_tokens: Some(1234), ..RequestOptions::default() };
+    let openai = build_request(&profile("openai_compatible", "openai_native", "https://x/v1"), vec![], false, limit.clone());
+    assert_eq!(openai.body["max_tokens"], serde_json::json!(1234));
+
+    let anthropic = build_request(&profile("anthropic", "anthropic_messages", "https://x/v1"), vec![], false, limit.clone());
+    assert_eq!(anthropic.body["max_tokens"], serde_json::json!(1234));
+
+    let ollama = build_request(&profile("ollama", "ollama_native", "http://127.0.0.1:11434/api"), vec![], false, limit);
+    assert_eq!(ollama.body["options"]["num_predict"], serde_json::json!(1234));
 }

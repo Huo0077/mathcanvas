@@ -5,6 +5,7 @@ import { evaluateAgentTask } from "./agentTaskJudge"
 import { createEmptyDocument } from "@draw/dsl"
 import { compilePlan, type PlanEnvelope } from "@draw/agent-core"
 import { createLocalPlanner } from "../localPlanner"
+import { planOf } from "@draw/agent-core"
 
 describe("agent evaluation task fixtures", () => {
   it("covers every Phase 0 task category exactly at least once", () => {
@@ -47,7 +48,7 @@ describe("deterministic task acceptance", () => {
   it("checks the real tetrahedron topology rather than assuming any edge has the right length", async () => {
     const fixture = AGENT_TASK_FIXTURES.find((entry) => entry.id === "create-tetrahedron")!
     const document = createEmptyDocument("geometry3d")
-    const envelope = (await createLocalPlanner().plan({ userMessage: fixture.prompt } as never)).plan
+    const envelope = planOf((await createLocalPlanner().plan({ userMessage: fixture.prompt } as never)))
     const result = compilePlan(envelope, { document, prompt: fixture.prompt, conversationId: "eval", documentGeneration: document.revision })
     expect(result.ok).toBe(true)
     expect(evaluateAgentTask(fixture, { phase: "awaiting_confirmation", candidate: result.draftDocument }).status).toBe("passed")

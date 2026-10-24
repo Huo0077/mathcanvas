@@ -142,7 +142,8 @@ fn a_tool_request_really_reaches_deepseek_and_the_answer_is_classified() {
             }
         })],
         force_tool: true,
-        tool_choice_field: None
+        tool_choice_field: None,
+        ..RequestOptions::default()
     };
 
     let outcome = adapter.send_with(vec![ChatMessage::text("user", "Call the probe_ping tool with ok=true.")], false, options, &stop).expect("the request must reach the provider");

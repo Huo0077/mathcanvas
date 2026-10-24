@@ -4,6 +4,7 @@ import { createBudget, type BudgetLimits } from "./budget"
 import { createCoordinator } from "./coordinator"
 import type { CommitterPort, ConsentToken, Observation, ObserverPort, PlanOutcome, PlannerPort, PlanRequest } from "./coordinatorPorts"
 import type { DocumentHandle, PlanEnvelope, RepairRequest, RunContext, ToolResult } from "./contracts"
+import { createPlanFailure } from "./outputParser"
 
 /**
  * Task 2.1 Step 1 点名的九个场景，一个不少：
@@ -972,5 +973,87 @@ describe("the completion gate is actually consulted", () => {
 
     expect(harness.coordinator.phase()).toBe("failed")
     expect(events.some((event) => event.phase === "awaiting_confirmation")).toBe(false)
+  })
+})
+
+/**
+ * **T1（2026-10-24）：规划失败的合同**
+ *
+ * 这一组钉住「失败不再伪装成计划」的两条可观察后果：
+ * ① 字段错误（E1）与截断 / 空响应（E2）在账本与修复提示里**按分类**出现，
+ *    而不是一律说成「计划必须是一个 JSON 对象」；
+ * ② 修复名额仍然只有一类一次，用完如实失败。
+ */
+describe("planning failure contract", () => {
+  const fieldFailure = () => createPlanFailure({
+    category: "schema_invalid",
+    channel: "native_tools",
+    decoded: { actions: [{ actionId: "solid.create_template", inputs: { size: { x: "bad" } } }] },
+    errors: [{ code: "non_finite_number", path: "envelope.actions[0].inputs.size.x", detail: "size.x must be a finite number" }],
+    detail: "non_finite_number@envelope.actions[0].inputs.size.x"
+  })
+
+  it("E1：字段错误的分类与路径一路带到账本、修复提示与第二次提问", async () => {
+    let attempt = 0
+    const harness = makeHarness({
+      plan: () => {
+        attempt += 1
+        return attempt === 1
+          ? { failure: fieldFailure(), requestId: "req-1", attemptId: "attempt-1" }
+          : { plan: planEnvelope(), requestId: "req-2", attemptId: "attempt-2" }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)?.phase).toBe("awaiting_confirmation")
+    const recorded = harness.coordinator.ledger().find((event) => event.detail.includes("plan attempt 1 failed"))
+    expect(recorded?.detail).toContain("schema_invalid")
+    const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    expect(secondRequest.repair?.hint).toContain("envelope.actions[0].inputs.size.x")
+    expect(secondRequest.repair?.allowedChanges).toContain("envelope.actions[0].inputs.size.x")
+  })
+
+  it("E2：截断（stopReason=length）说的是「被截断」，不是「不是 JSON 对象」", async () => {
+    const truncated = createPlanFailure({
+      category: "response_incomplete",
+      channel: "strict_json",
+      stopReason: "length",
+      payload: "{\"schemaVersion\":\"mathcanvas.plan.v1\",\"kind\":\"plan\"",
+      detail: "unexpected end of JSON input"
+    })
+    const harness = makeHarness({ plan: () => ({ failure: truncated, requestId: "req-1", attemptId: "attempt-1" }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    const detail = events.at(-1)?.detail ?? ""
+    expect(detail).toContain("cut off before it finished")
+    expect(detail).not.toContain("must be a JSON object")
+    const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    expect(secondRequest.repair?.hint).toContain("截断")
+  })
+
+  it("空输出单独分类：既不是 invalid_json，也不是 schema_invalid", async () => {
+    const empty = createPlanFailure({ category: "empty_output", channel: "fenced_text", payload: "", detail: "no text" })
+    const harness = makeHarness({ plan: () => ({ failure: empty, requestId: "req-1", attemptId: "attempt-1" }) })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.detail).toContain("the plan never arrived:")
+    const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    expect(secondRequest.repair?.hint).toContain("没有返回任何正文")
+  })
+
+  it("修复名额仍只有一次：第二次仍失败就如实停下，不无限重问", async () => {
+    const empty = createPlanFailure({ category: "empty_output", channel: "fenced_text", payload: "" })
+    const harness = makeHarness({ plan: () => ({ failure: empty, requestId: "req-1", attemptId: "attempt-1" }) })
+
+    await drive(harness.coordinator, { run, userMessage: "draw a point" })
+
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(harness.committer.stage).not.toHaveBeenCalled()
   })
 })

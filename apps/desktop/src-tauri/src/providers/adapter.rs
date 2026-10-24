@@ -238,6 +238,12 @@ struct RunStream {
     /// OpenAI 兼容的工具调用参数是**跨帧分片**，必须由一个**活过单帧**的东西攒着。
     tool_calls: super::normalize::ToolCallAccumulator,
     done: bool,
+    /// **这次流里见过结束标记吗**（`[DONE]` / `message_stop` / `finish_reason` / `done:true`）。
+    ///
+    /// T2（2026-10-24）：TCP 的 EOF **不是**"生成正常完成"的证据 —— 连接被掐断与模型说完话
+    /// 在这一层长得一模一样。所以流结束时没见到结束标记，要如实记一条
+    /// `MalformedOutput`（上层据此分类为"断流"，而不是把它当成一份完整回答）。
+    saw_terminal: bool,
 }
 
 impl RunStream {
@@ -250,6 +256,7 @@ impl RunStream {
             events: Vec::new(),
             tool_calls: super::normalize::ToolCallAccumulator::default(),
             done: false,
+            saw_terminal: false,
         }
     }
 
@@ -270,6 +277,7 @@ impl RunStream {
         // SSE 的结束标记：认它才能让界面停下转圈。
         if super::events::parse_sse_line(trimmed) == super::events::SseLine::Done {
             self.done = true;
+            self.saw_terminal = true;
             return;
         }
         // 命名事件（Anthropic 的 `content_block_delta` 等）在 `event:` 行里。
@@ -277,7 +285,13 @@ impl RunStream {
         // 否则 `content_block_delta` 与 `content_block_start` 会被看成同一个东西。
         let name = super::normalize::sse_event_name(trimmed);
         let payload = super::normalize::strip_sse_event_lines(trimmed);
-        self.events.extend(super::normalize::normalize_response_with(&self.protocol, &payload, name.as_deref(), !self.ndjson, &mut self.tool_calls));
+        let decoded = super::normalize::normalize_response_with(&self.protocol, &payload, name.as_deref(), !self.ndjson, &mut self.tool_calls);
+        // Anthropic / Ollama 的结束标记是一个**事件**（`message_stop` / `done:true`），
+        // 不在 SSE 的 `[DONE]` 行里 —— 所以两条路都要记进 `saw_terminal`。
+        if decoded.iter().any(|event| matches!(event, ModelEvent::Completed { .. })) {
+            self.saw_terminal = true;
+        }
+        self.events.extend(decoded);
     }
 
     fn feed(&mut self, chunk: &[u8]) {
@@ -296,23 +310,38 @@ impl RunStream {
         }
     }
 
-    /// 流结束：把攒着的工具调用发出来，再把剩下的半帧交出去（**不丢**）。
+    /// 流结束：**先把剩下的半帧吃进累积器，再发攒好的工具调用**，最后判"有没有收尾"。
     ///
-    /// 工具调用**必须在这里**发：它们的参数是跨帧攒起来的，只有流结束才知道攒完了
-    ///（见 `ToolCallAccumulator`）。`drain` 取空之后可以安全地再调（幂等）。
+    /// ## 顺序是判据（T2，2026-10-24）
+    ///
+    /// 旧实现先 `drain()` 再处理残留缓冲：最后一帧若是**没有尾随空行**的工具参数分片
+    /// （真实网关常见），它进累积器的那一刻累积器已经交出去了 —— 于是那一段参数**静默丢失**，
+    /// 上层看到的是一个"合法但不完整"的工具调用。正确顺序只有一种：
+    /// 残留帧 → 累积器 → `drain`。
+    ///
+    /// ## EOF 不是收尾
+    ///
+    /// `stream` 请求结束时，如果整个流里**一次结束标记都没见过**（`[DONE]` / `message_stop` /
+    /// `finish_reason` / `done:true`），那说明对方是被掐断的：如实记一条 `MalformedOutput`，
+    /// 让上游按"断流"分类，而不是把半截回答当成完整回答。
     fn flush(&mut self) {
+        // ① 残留的半帧先进累积器（`stream: false` 且不是 SSE 形状时，整份正文一次解释）。
+        if !self.buffer.is_empty() {
+            let rest: Vec<u8> = std::mem::take(&mut self.buffer);
+            let text = String::from_utf8_lossy(&rest).to_string();
+            if !self.stream && !text.contains("data:") {
+                let decoded = super::normalize::normalize_response_with(&self.protocol, &text, None, false, &mut self.tool_calls);
+                self.events.extend(decoded);
+            } else {
+                self.absorb(&text);
+            }
+        }
+        // ② 攒完再发：一次调用只出现一次，且参数是**完整**的。
         self.events.extend(self.tool_calls.drain());
-        if self.buffer.is_empty() {
-            return;
+        // ③ 流式请求没有收尾标记 ⇒ 如实报断流（不是"正常完成"）。
+        if self.stream && !self.saw_terminal && !self.done {
+            self.events.push(ModelEvent::failed(FailureKind::MalformedOutput, "the stream ended without a completion marker"));
         }
-        let rest: Vec<u8> = std::mem::take(&mut self.buffer);
-        let text = String::from_utf8_lossy(&rest).to_string();
-        // **非流式的整份正文**：一次解释（`stream: false`），而不是当帧拆。
-        if !self.stream && !text.contains("data:") {
-            self.events.extend(super::normalize::normalize_response(&self.protocol, &text, None, false));
-            return;
-        }
-        self.absorb(&text);
     }
 
     fn take(&mut self) -> Vec<ModelEvent> {

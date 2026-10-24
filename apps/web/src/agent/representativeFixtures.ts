@@ -457,6 +457,44 @@ export function userFoldPlan(): PlanEnvelope {
 }
 
 
+/**
+ * **T6（2026-10-24）：两次顺序折叠的代表题**。
+ *
+ * 与 `USER_FOLD_PROMPT` 同一族底图，但第二次折的是**第一次折后**的 △PEF（折痕 PF）。
+ * 夹具只给四边形：折痕端点与两笔 `solid.fold` 都由 `planCompiler` 的
+ * 连续折叠构造按题面比例与**明确折角**（90° / 60°）生成 —— 浏览器里能通过核验，
+ * 就只可能是因为那条链路真的接上了。
+ */
+export const USER_FOLD_CHAIN_PROMPT = [
+  "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。",
+  "点E在AD上，且AE=2/5 AD；点F在AB上，且AF=1/2 AB。",
+  "先将三角形AEF沿EF翻折90°至三角形PEF，再将三角形PEF沿PF折叠60°至三角形QPF。"
+].join("")
+
+/** 只给四边形：**折痕端点与两笔折都不给**，交给连续折叠构造（T6）。 */
+export function userFoldChainPlan(): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "四边形 ABCD，三角形 AEF 先沿 EF 翻折 90°、再沿 PF 折叠 60°",
+    factIds: [],
+    actions: [
+      {
+        actionId: "solid.create_face",
+        actionKey: "quad",
+        factIds: [],
+        inputs: {
+          alias: "quad",
+          vertexNames: ["A", "B", "C", "D"],
+          vertices: [{ x: 0, y: 0, z: 0 }, { x: 8, y: 0, z: 0 }, { x: 9, y: Math.sqrt(3), z: 0 }, { x: 7.5, y: (5 * Math.sqrt(3)) / 2, z: 0 }],
+          label: "四边形 ABCD"
+        }
+      }
+    ]
+  } as unknown as PlanEnvelope
+}
+
+
 export function examTrianglePlan(): PlanEnvelope {
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,

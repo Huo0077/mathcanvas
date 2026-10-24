@@ -3,7 +3,7 @@ import { buildContext, type ConversationContextSource, type Fact } from "./conte
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
-import { describeRepairPrompt, schemaFailureDetail } from "./outputParser"
+import { describePlanFailureRepair, describeRepairPrompt, planFailureDetail, schemaFailureDetail } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, TOOL_REGISTRY_REVISION, type ToolRegistry } from "./toolRegistry"
 import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunNextPhaseFlags, type RunRevisions, type ToolCallTrace } from "./runState"
@@ -510,6 +510,27 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         for (const event of pendingToolEvents.splice(0)) yield event
         lastAttemptIds = { requestId: outcome.requestId, attemptId: outcome.attemptId }
         ledger.record(`plan attempt ${attempt} returned`, { ...lastAttemptIds, toolCallId: null, toolId: null })
+
+        /**
+         * **失败是结构化的**（T1，2026-10-24）：不再把失败伪装成计划。
+         *
+         * 规划器成功时 `plan` 仍是**不可信**的模型原值，必须在下面过 `parsePlanEnvelope`；
+         * 失败时带着分类、字段错误、结束原因与**解出来的对象**。这里按分类组装修复请求：
+         * 字段错误照旧走 `repairRequestFor`（允许改哪几处仍由同一个算法给），
+         * 而截断 / 空响应 / 非 JSON 的提示是另一种说法（由 `describePlanFailureRepair` 给）。
+         *
+         * 修复名额**仍只有一类、一次**：这些失败都属于"形状"，与几何修复各自计数。
+         */
+        if ("failure" in outcome) {
+          const failure = outcome.failure
+          lastDetail = planFailureDetail(failure)
+          ledger.record(`plan attempt ${attempt} failed (${failure.category}): ${failure.detail}`)
+          const next = repairRequestFor(failure.errors, schemaRepairs + 1, failure.category)
+          if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
+          schemaRepairs += 1
+          repair = { ...next, hint: describePlanFailureRepair(failure) }
+          continue
+        }
 
         const result = parsePlanEnvelope(outcome.plan)
         if (!result.ok) {

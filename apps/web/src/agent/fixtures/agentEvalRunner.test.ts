@@ -6,11 +6,12 @@ import { createLocalPlanner } from "../localPlanner"
 import { AGENT_TASK_FIXTURES } from "./agentTaskFixtures"
 import { evaluateAgentTask } from "./agentTaskJudge"
 import { scoreAgentAttempts } from "./agentEvalRunner"
+import { planOf } from "@draw/agent-core"
 
 async function offlineResult(id: string) {
   const fixture = AGENT_TASK_FIXTURES.find((entry) => entry.id === id)!
   const document = createEmptyDocument("geometry3d")
-  const plan = (await createLocalPlanner().plan({ userMessage: fixture.prompt } as never)).plan
+  const plan = planOf((await createLocalPlanner().plan({ userMessage: fixture.prompt } as never)))
   const compiled = compilePlan(plan, { document, prompt: fixture.prompt, conversationId: "eval", documentGeneration: document.revision })
   return evaluateAgentTask(fixture, { phase: compiled.ok ? "awaiting_confirmation" : "failed", candidate: compiled.draftDocument })
 }

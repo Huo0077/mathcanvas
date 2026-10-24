@@ -31,6 +31,7 @@ export * from "./events"
  * 与既有的 `geometryIntent`（三条立方体专用的原话读取函数）不是同一个东西。
  */
 export * from "./figureIntent"
+export * from "./foldChain"
 export * from "./geometryIntent"
 export * from "./localPlanDefaults"
 export * from "./modelEvents"

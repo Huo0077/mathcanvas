@@ -7,6 +7,7 @@ import { createLocalPlanner, localIntentSkillIds } from "../localPlanner"
 import { AGENT_TASK_FIXTURES } from "./agentTaskFixtures"
 import { evaluateAgentTask } from "./agentTaskJudge"
 import { scoreAgentAttempts, type AgentEvalAttempt, type AgentEvalScorecard } from "./agentEvalRunner"
+import { planOf } from "@draw/agent-core"
 
 export interface OfflineEvalResult {
   mode: "deterministic_local"
@@ -143,7 +144,7 @@ export async function runOneEvalAttempt(
   const started = Date.now()
   const document = createEmptyDocument("geometry3d")
   const request = agentEvalPlanRequest(fixture.prompt, "geometry3d", `agent-eval-${fixture.id}-${trial}`, document, requestedSkillIds(fixture.prompt))
-  const envelope = (await createPlanner().plan(request)).plan
+  const envelope = planOf((await createPlanner().plan(request)))
   const compiled = compilePlan(envelope, { document, prompt: fixture.prompt, conversationId: `eval-${trial}`, documentGeneration: document.revision })
   /**
    * **布局读数来自候选文档本身**（Phase 4）：它是纯本地的，不依赖 provider vision、

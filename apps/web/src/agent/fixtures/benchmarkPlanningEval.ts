@@ -28,6 +28,7 @@ import { MODEL_PLANNER_SKILL_IDS } from "../agentRunner"
 import { createModelPlanner, resolveActiveProvider, type ProviderResolution } from "../modelPlanner"
 import { NOT_MEASURED } from "./agentEvalReport"
 import { availableActionsFor } from "./offlineAgentEval"
+import { planOf } from "@draw/agent-core"
 
 /**
  * **应用内真实 provider 的题集 planning 通道**（子任务 N4b）。
@@ -388,7 +389,7 @@ async function runOneCase(
      * 信封**只在 `try` 里活着**（不再声明到外面）：`catch` 需要的是**已经算好的那段正文**，
      * 不是信封本身 —— 这正是"不许在 `catch` 里再调一次构造"的结构保证。
      */
-    const envelope = (await createPlanner().plan(request)).plan
+    const envelope = planOf((await createPlanner().plan(request)))
     text = readableBody(envelope)
     const compiled = compilePlan(envelope, {
       document,

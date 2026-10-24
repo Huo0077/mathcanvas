@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { FIGURE_INTENT_VERSION, buildFigureIntent } from "./figureIntent"
+import { FIGURE_INTENT_VERSION, buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { parseObligationWithLegacy } from "./obligationIR"
 
 /**
@@ -111,5 +111,78 @@ describe("Task 6 — 来源可追溯的图形意图", () => {
     // 而且**来源追不回原句**的那一条不许被当成"来自原题"。
     expect(withModelRelations.relations[0].sourceClauseId).toBe("made-up")
     expect(plain.clauses.some((clause) => clause.clauseId === "made-up")).toBe(false)
+  })
+})
+
+/**
+ * **T4（2026-10-24）：翻折句式的点名语法**
+ *
+ * 执行任务书 §2 的 E6 给出了六种真实写法，旧读取器只认前两种。这一组钉住：
+ * ① 六种写法里语义明确的都要产出**等价结构**（`fold` / `rotate` 分开记）；
+ * ② 点名支持撇号与下标（`A′`、`A₁`），不再用 `[A-Z]{3}` 当代名；
+ * ③ 折痕对不上、或只说了"翻折"没说折到哪儿的，**不猜**；
+ * ④ 连续两折读成两条，顺序与出现顺序一致（T6 的读取层前提）。
+ */
+describe("T4 — reading fold phrasing", () => {
+  it("reads the delta and word forms identically", () => {
+    const word = readFoldTransformations("将三角形AEF沿EF翻折至三角形PEF")
+    const delta = readFoldTransformations("将△AEF沿EF翻折至△PEF")
+
+    expect(word).toHaveLength(1)
+    // `sourceText` 是逐字片段，两种写法本来就不同；比较的是**结构**。
+    const shape = (fold: { face: string; hinge: { from: string; to: string }; apex: string; apexAs: string }) =>
+      ({ face: fold.face, hinge: fold.hinge, apex: fold.apex, apexAs: fold.apexAs })
+    expect(delta.map(shape)).toEqual(word.map(shape))
+    expect(delta[0]).toMatchObject({ kind: "fold", face: "AEF", hinge: { from: "E", to: "F" }, apex: "A", apexAs: "P" })
+  })
+
+  it("reads 折叠 as the same fold as 翻折", () => {
+    const folds = readFoldTransformations("将△AEF沿EF折叠至△PEF")
+
+    expect(folds).toHaveLength(1)
+    expect(folds[0]).toMatchObject({ face: "AEF", apex: "A", apexAs: "P" })
+  })
+
+  it("reads the 使点 A 到达点 P phrasing", () => {
+    const folds = readFoldTransformations("将△AEF沿EF翻折，使点A到达点P，且PC=4√3")
+
+    expect(folds).toHaveLength(1)
+    expect(folds[0]).toMatchObject({ face: "AEF", hinge: { from: "E", to: "F" }, apex: "A", apexAs: "P" })
+  })
+
+  it("keeps 绕边旋转 as its own motion instead of silently calling it a fold", () => {
+    const rotations = readFoldTransformations("将△ABC绕BC旋转到△PBC")
+
+    expect(rotations).toHaveLength(1)
+    expect(rotations[0]).toMatchObject({ motion: "rotate", face: "ABC", hinge: { from: "B", to: "C" }, apex: "A", apexAs: "P" })
+  })
+
+  it("reads primed point names (A′BC) instead of stopping at [A-Z]{3}", () => {
+    const folds = readFoldTransformations("将△ABC沿BC翻折至△A′BC")
+
+    expect(folds).toHaveLength(1)
+    expect(folds[0]).toMatchObject({ face: "ABC", apex: "A", apexAs: "A′" })
+  })
+
+  it("reads subscript point names and spacing/punctuation variants", () => {
+    const folds = readFoldTransformations("将 △A₁E₁F₁ 沿 E₁F₁ 翻折至 △P₁E₁F₁。")
+
+    expect(folds).toHaveLength(1)
+    expect(folds[0]).toMatchObject({ face: "A₁E₁F₁", apex: "A₁", apexAs: "P₁" })
+  })
+
+  it("refuses when the hinge is not on the moving face, instead of guessing", () => {
+    expect(readFoldTransformations("将△AEF沿BD翻折至△PEF")).toEqual([])
+  })
+
+  it("refuses a fold with no target: the moved point is unknown", () => {
+    expect(readFoldTransformations("将△AEF沿EF翻折，使点A落到平面内")).toEqual([])
+  })
+
+  it("reads two sequential folds in the order they appear", () => {
+    // 第二次折的是**第一次折后的那张面**（△PEF），折痕 PF 在它上面 —— 这是真的连续折叠。
+    const folds = readFoldTransformations("先将△AEF沿EF翻折至△PEF，再将△PEF沿PF折叠至△QPF")
+
+    expect(folds.map((fold) => [fold.face, fold.apex, fold.apexAs])).toEqual([["AEF", "A", "P"], ["PEF", "E", "Q"]])
   })
 })

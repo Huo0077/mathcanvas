@@ -461,7 +461,7 @@ fn plan_tool_schema() -> serde_json::Value {
 }
 
 fn tools_options() -> RequestOptions {
-    RequestOptions { allow_tools: true, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None }
+    RequestOptions { allow_tools: true, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None, ..RequestOptions::default() }
 }
 
 fn anthropic_profile() -> ProviderProfile {
@@ -557,7 +557,7 @@ fn tools_are_left_out_when_the_caller_does_not_allow_them() {
     let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
 
     adapter
-        .send_with(messages(), false, RequestOptions { allow_tools: false, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None }, stop.as_ref())
+        .send_with(messages(), false, RequestOptions { allow_tools: false, tools: vec![plan_tool_schema()], force_tool: false, tool_choice_field: None, ..RequestOptions::default() }, stop.as_ref())
         .expect("the request must be attempted");
 
     assert!(transport.last().request.body.get("tools").is_none(), "an unverified provider must not receive a tool schema");
@@ -572,7 +572,7 @@ fn an_empty_tool_list_never_becomes_a_tool_field() {
     let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
 
     adapter
-        .send_with(messages(), false, RequestOptions { allow_tools: true, tools: Vec::new(), force_tool: false, tool_choice_field: None }, stop.as_ref())
+        .send_with(messages(), false, RequestOptions { allow_tools: true, tools: Vec::new(), force_tool: false, tool_choice_field: None, ..RequestOptions::default() }, stop.as_ref())
         .expect("the request must be attempted");
 
     // `tools: []` 会告诉 provider"我支持工具"却什么都没给 —— 那比不发更糟。
@@ -814,4 +814,175 @@ fn an_http_failure_says_which_peer_answered() {
         message.contains(&format!("[peer 127.0.0.1:{}]", server.address.port())),
         "the answering peer must be named: {message}"
     );
+}
+
+// ---------------------------------------------------------------- T2：流式完整性（2026-10-24）
+
+/// 造一帧 SSE（`event:` 行 + `data:` 行 + 空行）。
+fn sse(event: &str, data: serde_json::Value) -> Vec<u8> {
+    format!("event: {event}\ndata: {data}\n\n").into_bytes()
+}
+
+fn first_tool_call(events: &[ModelEvent]) -> (&str, &serde_json::Value) {
+    events
+        .iter()
+        .find_map(|event| match event {
+            ModelEvent::ToolCall { tool_id, input, .. } => Some((tool_id.as_str(), input)),
+            _ => None,
+        })
+        .expect("expected exactly one complete tool call")
+}
+
+/// **E9 的落点**：Anthropic 的工具参数是 `input_json_delta` 分片，必须在块结束时拼成**完整**参数。
+///
+/// 旧实现把 `content_block_start` 的 `input: {}` 当成完整参数发出去，后续增量全部忽略 ——
+/// 用户看到的是"模型调了工具，但一个参数都没有"。
+#[test]
+fn anthropic_tool_arguments_are_accumulated_from_input_json_deltas() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let mut anthropic = openai_profile();
+    anthropic.protocol = "anthropic".to_string();
+    anthropic.dialect = "anthropic_messages".to_string();
+    anthropic.base_url = "https://api.anthropic.com/v1".to_string();
+    let transport = FakeTransport::streaming(vec![
+        sse("content_block_start", serde_json::json!({
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": { "type": "tool_use", "id": "toolu_1", "name": "plan_set_plan", "input": {} }
+        })),
+        sse("content_block_delta", serde_json::json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": { "type": "input_json_delta", "partial_json": "{\"schemaVersion\":\"mathcanvas.plan.v1\"," }
+        })),
+        // 分片切在 UTF-8 之外也成立；这里再切一次，检验"拼接"而不是"取最后一片"。
+        sse("content_block_delta", serde_json::json!({
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": { "type": "input_json_delta", "partial_json": "\"kind\":\"plan\"}" }
+        })),
+        sse("content_block_stop", serde_json::json!({ "type": "content_block_stop", "index": 0 })),
+        sse("message_stop", serde_json::json!({ "type": "message_stop" })),
+    ]);
+    let adapter = ProviderAdapter::new(&source, &transport, anthropic);
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    let (tool_id, input) = first_tool_call(&events);
+    assert_eq!(tool_id, "plan_set_plan");
+    assert_eq!(input["kind"], "plan", "the deltas must be concatenated into one JSON object");
+    assert_eq!(input["schemaVersion"], "mathcanvas.plan.v1");
+    // 而且**只发一次**：块开始时就发一次、结束时再发一次，会让上层把同一调用执行两遍。
+    assert_eq!(events.iter().filter(|event| matches!(event, ModelEvent::ToolCall { .. })).count(), 1);
+}
+
+/// **非流式的 Anthropic 正文**：`content` 里的 `tool_use` 已经是完整的，同样要读出来。
+#[test]
+fn a_non_streaming_anthropic_body_still_yields_its_tool_call() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let mut anthropic = openai_profile();
+    anthropic.protocol = "anthropic".to_string();
+    anthropic.dialect = "anthropic_messages".to_string();
+    anthropic.base_url = "https://api.anthropic.com/v1".to_string();
+    let body = serde_json::json!({
+        "type": "message",
+        "content": [{ "type": "tool_use", "id": "toolu_2", "name": "plan_set_plan", "input": { "kind": "clarification" } }]
+    });
+    let transport = FakeTransport::streaming(vec![serde_json::to_vec(&body).expect("serialisable")]);
+    let adapter = ProviderAdapter::new(&source, &transport, anthropic);
+    let stop = AtomicStop::new();
+
+    // `stream: false` —— 这一条正是"不能把非流式正文套进流式状态机"的落点。
+    let outcome = adapter.send(messages(), false, stop.as_ref()).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    let (tool_id, input) = first_tool_call(&events);
+    assert_eq!(tool_id, "plan_set_plan");
+    assert_eq!(input["kind"], "clarification");
+}
+
+/// **最后一段没有空行时，分片仍然要进累积器再发**（T2.1 的顺序判据）。
+///
+/// 真实网关经常在最后一个 chunk 之后不再补空行。旧顺序（先 `drain` 再吸收残留）
+/// 会让这一段参数**静默丢失**，得到一个"合法但不完整"的工具调用。
+#[test]
+fn the_last_frame_without_a_blank_line_still_joins_the_same_tool_call() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![
+        format!("data: {}\n\n", serde_json::json!({
+            "choices": [{ "delta": { "tool_calls": [{ "index": 0, "id": "call_1", "function": { "name": "plan_set_plan", "arguments": "{\"kind\":" } }] } }]
+        })).into_bytes(),
+        // 没有尾随空行：留在缓冲区，直到 flush。
+        format!("data: {}", serde_json::json!({
+            "choices": [{ "delta": { "tool_calls": [{ "index": 0, "function": { "arguments": "\"plan\"}" } }] } }]
+        })).into_bytes(),
+    ]);
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    let (_, input) = first_tool_call(&events);
+    assert_eq!(input["kind"], "plan", "the trailing fragment must not be dropped");
+    assert_eq!(events.iter().filter(|event| matches!(event, ModelEvent::ToolCall { .. })).count(), 1);
+}
+
+/// **跨 chunk 切开一个 UTF-8 字符**：拼接必须在字节层面完成，而不是逐块 `from_utf8_lossy`。
+#[test]
+fn a_multibyte_character_split_across_chunks_is_not_corrupted() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let body = "data: {\"choices\":[{\"delta\":{\"content\":\"翻折\"}}]}\n\n".as_bytes().to_vec();
+    // 切在"翻"的第二个字节上（UTF-8 三字节字符）。
+    let cut = body.iter().position(|byte| *byte == 0xE7).expect("the fixture must contain the multibyte character") + 1;
+    let transport = FakeTransport::streaming(vec![body[..cut].to_vec(), body[cut..].to_vec()]);
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    assert_eq!(text_of(&events), "翻折");
+}
+
+/// **TCP 的 EOF 不是结束标记**（T2.6）：流里从没见过收尾，就不能当成"模型说完了"。
+#[test]
+fn a_stream_that_ends_without_a_completion_marker_is_reported_as_broken() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![
+        b"data: {\"choices\":[{\"delta\":{\"content\":\"half\"}}]}".to_vec(),
+    ]);
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    // 正文**不丢**（那是模型真的说过的话），但必须同时留下"断流"这条事实。
+    assert_eq!(text_of(&events), "half");
+    assert!(
+        events.iter().any(|event| matches!(event, ModelEvent::Failed { message, .. } if message.contains("completion marker"))),
+        "a stream without a terminal marker must be reported: {:?}",
+        kinds(&events)
+    );
+}
+
+/// **收尾正常时不许多报一条失败**：`[DONE]` 是结束标记。
+#[test]
+fn a_stream_that_reaches_done_is_not_reported_as_broken() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = FakeTransport::streaming(vec![
+        b"data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n".to_vec(),
+        b"data: [DONE]\n\n".to_vec(),
+    ]);
+    let adapter = ProviderAdapter::new(&source, &transport, openai_profile());
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the gateway must be admitted");
+    let SendOutcome::Completed(events) = outcome else { panic!("expected a completed run, got {outcome:?}") };
+
+    assert_eq!(text_of(&events), "ok");
+    assert!(!events.iter().any(|event| matches!(event, ModelEvent::Failed { .. })), "a completed stream must not carry a failure event");
 }

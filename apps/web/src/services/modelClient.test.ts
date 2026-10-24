@@ -201,3 +201,21 @@ describe("cancelling and reading the proxy session", () => {
     expect(await readProxySession(vi.fn(async () => { throw new Error("ipc closed") }))).toBeNull()
   })
 })
+
+
+describe("T3 — output mode", () => {
+  it("only sends the mode when it is not the default json_text", async () => {
+    const invoke = invokeReturning(events)
+
+    await startModelRun({ runId: "r1", profileId: "openai", profileRevision: 3, messages: [{ role: "user", content: "hi" }], outputMode: "json_mode", maxOutputTokens: 1234 }, { invoke })
+    await startModelRun({ runId: "r1", profileId: "openai", profileRevision: 3, messages: [{ role: "user", content: "hi" }], outputMode: "json_text" }, { invoke })
+
+    const first = invoke.mock.calls[0]![1]!
+    const second = invoke.mock.calls[1]![1]!
+    expect(first.outputMode).toBe("json_mode")
+    expect(first.maxOutputTokens).toBe(1234)
+    // json_text 是缺省：发出去等于多说一句（旧版 Rust 会因此参数校验失败）。
+    expect(second).not.toHaveProperty("outputMode")
+    expect(second).not.toHaveProperty("maxOutputTokens")
+  })
+})

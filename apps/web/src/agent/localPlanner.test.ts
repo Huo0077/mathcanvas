@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 
 import { createLocalPlanner, LOCAL_INTENTS, localIntentSkillIds, matchLocalIntent, ROUND_FRUSTUM_PROMPT, SPHERE_PROMPT } from "./localPlanner"
 import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, PLANAR_TRIANGLE_PROMPT } from "./representativeFixtures"
+import { planOf } from "@draw/agent-core"
 
 /**
  * 本地确定性规划器的性质。
@@ -13,7 +14,7 @@ import { CONIC_ELLIPSE_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABO
  */
 async function plan(prompt: string) {
   const planner = createLocalPlanner()
-  return (await planner.plan({ userMessage: prompt } as never)).plan
+  return planOf((await planner.plan({ userMessage: prompt } as never)))
 }
 
 /**
@@ -383,13 +384,13 @@ describe("V0a opt-in local free-apex diagram intent", () => {
   const prompt = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
   it("does not alter the default local planner when witness search is off", async () => {
     expect(matchLocalIntent(prompt)).toBeNull()
-    const result = (await createLocalPlanner().plan({ userMessage: prompt } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: prompt } as never)))
     expect(result.kind).toBe("clarification")
   })
 
   it("uses named points and verified candidate construction once explicitly enabled", async () => {
     expect(localIntentSkillIds(prompt, { enableFreeApex: true })).toContain("spatial-modeling")
-    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: prompt } as never)).plan
+    const result = planOf((await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: prompt } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     expect(result.actions[0].actionId).toBe("solid.create_polyhedron")
@@ -403,14 +404,14 @@ describe("V0a opt-in local free-apex diagram intent", () => {
 
   it("takes vertex names from a bounded grammar rather than hardcoding D-ABC", async () => {
     const another = "在三棱锥P-XYZ中，PX⊥平面XYZ，自由点P，画示意图"
-    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: another } as never)).plan
+    const result = planOf((await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: another } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind === "plan") expect(result.actions[0].inputs).toMatchObject({ vertexNames: ["X", "Y", "Z", "P"] })
   })
 
   it("does not silently drop an extra length, above-plane condition or pure analysis request", async () => {
     for (const input of [`${prompt}，AB=7`, "在三棱锥D-ABC中，AD⊥平面ABC，D在底面ABC上方，画示意图", "在三棱锥D-ABC中，AD⊥平面ABC，求高是多少"]) {
-      const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: input } as never)).plan
+      const result = planOf((await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: input } as never)))
       expect(result.kind, input).toBe("clarification")
     }
   })
@@ -430,7 +431,7 @@ describe("V0a opt-in local free-apex diagram intent", () => {
 
   it("accepts the bounded explicit-coordinate sentence and honours the stated coordinate", async () => {
     expect(localIntentSkillIds(coordinatePrompt, { enableFreeApex: true })).toContain("spatial-modeling")
-    const built = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: coordinatePrompt } as never)).plan
+    const built = planOf((await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: coordinatePrompt } as never)))
     expect(built.kind).toBe("plan")
     if (built.kind !== "plan") return
     const vertices = (built.actions[0].inputs as unknown as { vertices: { x: number; y: number; z: number }[] }).vertices
@@ -451,7 +452,7 @@ describe("V0a opt-in local free-apex diagram intent", () => {
      * 那条断言就什么都没证明。所以先钉住"它**被认出来了**"，再钉"仍然拒绝"。
      */
     expect(matchLocalIntent(conflicting, { enableFreeApex: true })).not.toBeNull()
-    const result = (await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: conflicting } as never)).plan
+    const result = planOf((await createLocalPlanner({ enableFreeApex: true }).plan({ userMessage: conflicting } as never)))
     expect(result.kind).toBe("clarification")
     // 被认出来之后，拒绝的理由必须是"题设没被核验"，而不是"我又不认识这条指令了"。
     if (result.kind === "clarification") expect(result.questions.join(" ")).toContain("核验")
@@ -555,7 +556,7 @@ describe("V0b local planar right triangle", () => {
   })
 
   it("names the three vertices with planar points so the premise verifier has a name table", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     /**
@@ -580,7 +581,7 @@ describe("V0b local planar right triangle", () => {
 
   it("does not claim a different triangle than the one it draws", async () => {
     // 反向对照：把夹具挪成 C 落在 AB 上（三点共线），同一条题设**必须**不通过。
-    const result = (await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: PLANAR_TRIANGLE_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     const moved = { ...result, actions: result.actions.map((action, index) => index === 2 ? { ...action, inputs: { ...action.inputs, points: [{ x: 3, y: 0 }] } } : action) }
@@ -606,7 +607,7 @@ describe("V0c local ellipse", () => {
   })
 
   it("builds the one ellipse the equation determines, and says it was not a free choice", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     expect(result.actions.map((action) => action.actionId)).toEqual(["planar.create_conic"])
@@ -625,7 +626,7 @@ describe("V0c local ellipse", () => {
   })
 
   it("does not certify an ellipse whose semi-axes were swapped on the way out", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: CONIC_ELLIPSE_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     // 同一条题面、只把两个半轴对调 —— 焦点随之从 x 轴换到 y 轴，那是**另一条曲线**。
@@ -658,7 +659,7 @@ describe("V0d local function graph with its tangent", () => {
   })
 
   it("compiles into a real curve plus its tangent and passes both clauses", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     const document = createEmptyDocument("conics")
@@ -671,7 +672,7 @@ describe("V0d local function graph with its tangent", () => {
   })
 
   it("also accepts a tangent at x = 2, which is where a placeholder slope would show up", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: FUNCTION_TANGENT_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     /**
@@ -709,7 +710,7 @@ describe("V0c local hyperbola and parabola", () => {
   })
 
   it("builds the hyperbola the equation determines, with its stated axis", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     expect(result.actions[0].inputs).toMatchObject({ kind: "hyperbola", radiusX: 3, radiusY: 2, axis: "x" })
@@ -721,7 +722,7 @@ describe("V0c local hyperbola and parabola", () => {
   })
 
   it("refuses a hyperbola whose axis was flipped on the way out", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: HYPERBOLA_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     // 半轴一个没动，只把轴反过来 —— 两条互为镜像的曲线，**不能**因为"两个数都对"就放行。
@@ -733,7 +734,7 @@ describe("V0c local hyperbola and parabola", () => {
   })
 
   it("builds the parabola with p = 2 (the equation's 4 is 2p) and its stated axis", async () => {
-    const result = (await createLocalPlanner().plan({ userMessage: PARABOLA_PROMPT } as never)).plan
+    const result = planOf((await createLocalPlanner().plan({ userMessage: PARABOLA_PROMPT } as never)))
     expect(result.kind).toBe("plan")
     if (result.kind !== "plan") return
     // `y² = 4x` 里的 4 是 **2p** ⇒ p = 2。直接把 4 当 p 会在这里红。

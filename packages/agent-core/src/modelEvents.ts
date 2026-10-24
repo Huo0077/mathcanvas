@@ -28,6 +28,46 @@
 export const FAILURE_KINDS = ["transport", "rate_limited", "server_error", "auth", "permission", "malformed_output", "cancelled", "unknown"] as const
 export type FailureKind = (typeof FAILURE_KINDS)[number]
 
+/**
+ * **结束原因的归一含义**（T2.5，2026-10-24）。
+ *
+ * provider 的 `stop_reason` / `finish_reason` 各有各的拼写（`stop` / `end_turn` / `eos` …），
+ * 而"这一轮到底算不算说完"只应该有一个答案。所以：**原始字符串一路保留**
+ *（`ModelEvent.Completed.stopReason` 不改写，诊断还要用它），同时给一个归一含义供判据使用。
+ *
+ * `unknown` 是**真的未知**：没有结束标记（流被掐断）也在这一档 —— 调用方不许把它
+ * 当成"正常结束"的证据。
+ */
+export const STOP_REASON_KINDS = ["normal", "tool_use", "length", "refusal", "cancelled", "unknown"] as const
+export type StopReasonKind = (typeof STOP_REASON_KINDS)[number]
+
+const STOP_REASON_TABLE: Record<string, StopReasonKind> = {
+  stop: "normal",
+  end_turn: "normal",
+  eos: "normal",
+  complete: "normal",
+  tool_calls: "tool_use",
+  tool_use: "tool_use",
+  function_call: "tool_use",
+  length: "length",
+  max_tokens: "length",
+  max_output_tokens: "length",
+  max_completion_tokens: "length",
+  refusal: "refusal",
+  content_filter: "refusal",
+  safety: "refusal",
+  blocked: "refusal",
+  cancelled: "cancelled",
+  canceled: "cancelled",
+  aborted: "cancelled"
+}
+
+/** 把 provider 的原始结束原因归一到上面那六档。**只有这一处判据**。 */
+export function classifyStopReason(stopReason: string | null | undefined): StopReasonKind {
+  if (stopReason === null || stopReason === undefined) return "unknown"
+  return STOP_REASON_TABLE[stopReason.trim().toLowerCase()] ?? "unknown"
+}
+
 /** 按分类判断能不能自动重试。**唯一的判据**，协调器与恢复策略共用。 */
 export function isRetryable(kind: FailureKind): boolean {
   switch (kind) {

@@ -1,4 +1,5 @@
 import type { DocumentHandle, PlanDiagnostic, PlanEnvelope, PlanRelations, PromptNormalisations, RepairRequest, RunContext, StructuredAssumption, ToolResult, VerificationReport } from "./contracts"
+import type { PlanFailure } from "./outputParser"
 import type { DraftAction } from "@draw/scene-graph"
 import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, conversationLimitsFor, type ConversationContext, type ConversationContextSource, type ModelContext, type ObservationSummary } from "./contextBuilder"
@@ -111,11 +112,29 @@ export interface PlanRequest {
   }
 }
 
-export interface PlanOutcome {
-  plan: PlanEnvelope
-  requestId: string
-  attemptId: string
-}
+/**
+ * **一次规划的结局：成功或失败，判别联合**（T1，2026-10-24）。
+ *
+ * 旧合同只有 `plan: PlanEnvelope`，于是"解析失败"只能**伪装成一份计划**：
+ * 规划器把模型的原值（半截字符串 / 解出来的对象）用 `as PlanEnvelope` 硬塞进来，
+ * 再让协调器 `parsePlanEnvelope` 一遍。两次现场的直接后果写在
+ * `outputParser.ts` 的"规划失败的合同"一节：字段错误退化成 `got a string`，
+ * 截断与空响应被说成"不是 JSON 对象"。
+ *
+ * 现在失败**有自己的形状**：
+ * - 有 `plan` ⇒ 模型说的那个值 —— **仍然不可信**，协调器必须用 `parsePlanEnvelope`
+ *   再校验一次（类型声明不是证据）；
+ * - 有 `failure` ⇒ 带分类、字段错误、结束原因与能解出来的对象，协调器据此选择
+ *   修复方向与用户文案。
+ *
+ * 判别靠**哪个字段存在**（`"failure" in outcome`），而不是再加一个 `ok` 布尔：
+ * 两个字段互斥，这就是判别联合本身；多一个布尔只会让"两个都写"变成可能。
+ *
+ * `requestId` / `attemptId` 两边都有：失败的那一次同样要能对上账本里的记录。
+ */
+export type PlanOutcome =
+  | { plan: PlanEnvelope; requestId: string; attemptId: string }
+  | { failure: PlanFailure; requestId: string; attemptId: string }
 
 /**
  * **一次规划请求里"场景看到什么"**（N4d）。

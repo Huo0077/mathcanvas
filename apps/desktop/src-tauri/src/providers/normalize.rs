@@ -106,6 +106,9 @@ pub fn openai_chunk(payload: &Value) -> Normalized {
 #[derive(Default)]
 pub struct ToolCallAccumulator {
     calls: Vec<PartialToolCall>,
+    /// Anthropic 的 `tool_use` 块。**与 OpenAI 分开两条表**：两家的 `index` 各自从 0 起，
+    /// 混在一条表里会让"第 0 块"与"第 0 个调用"互相覆盖（一次请求只会用其中一家，但混淆的代价不可见）。
+    anthropic: Vec<PartialToolCall>,
 }
 
 #[derive(Default)]
@@ -154,16 +157,90 @@ impl ToolCallAccumulator {
         true
     }
 
+    /// **吃掉一段 Anthropic 数据里的工具调用信息**（T2，2026-10-24；E9）。
+    ///
+    /// ## 旧实现的缺陷
+    ///
+    /// `content_block_start` 里 `tool_use` 块带着名字与 `input`（通常是一个空对象 `{}`），
+    /// 参数其实是后面若干条 `content_block_delta` 的 `input_json_delta.partial_json` 拼起来的。
+    /// 旧代码在 `content_block_start` 就发了一个 `ToolCall`（参数是 `{}`），然后**完全忽略**
+    /// 后续的 `input_json_delta` —— 于是每一次 Anthropic 工具调用都带着空参数到达上层，
+    /// 用户看到的是"模型调了工具，但什么都没给"。
+    ///
+    /// ## 现在的判据
+    ///
+    /// - `content_block_start`（`tool_use`）：记住 `id` / `name`，`input` 若是**非空对象**就当作
+    ///   起手参数（有些非流式或代理实现会这样发）；空对象不算"参数已完整"；
+    /// - `content_block_delta`（`input_json_delta`）：按块下标拼接 `partial_json`；
+    /// - **不在块开始时发事件**：半次调用没有任何可用的形状，整条调用在 `drain` 时一次发出。
+    pub fn absorb_anthropic(&mut self, payload: &Value) {
+        let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
+        match kind {
+            "content_block_start" => {
+                let Some(block) = payload.get("content_block") else { return };
+                if block.get("type").and_then(Value::as_str) != Some("tool_use") {
+                    return;
+                }
+                let index = payload.get("index").and_then(Value::as_u64).unwrap_or(self.anthropic.len() as u64);
+                self.anthropic.push(PartialToolCall {
+                    index,
+                    id: block.get("id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string),
+                    name: block.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                    arguments: match block.get("input") {
+                        Some(Value::Object(map)) if !map.is_empty() => Value::Object(map.clone()).to_string(),
+                        _ => String::new(),
+                    },
+                });
+            }
+            "content_block_delta" => {
+                let Some(delta) = payload.get("delta") else { return };
+                if delta.get("type").and_then(Value::as_str) != Some("input_json_delta") {
+                    return;
+                }
+                let Some(fragment) = delta.get("partial_json").and_then(Value::as_str) else { return };
+                let index = payload.get("index").and_then(Value::as_u64).unwrap_or(0);
+                if let Some(entry) = self.anthropic.iter_mut().find(|entry| entry.index == index) {
+                    entry.arguments.push_str(fragment);
+                }
+            }
+            // **非流式**的 Messages 响应：`content` 是一整张数组，工具调用在里面已经是完整的。
+            "message" => {
+                let Some(blocks) = payload.get("content").and_then(Value::as_array) else { return };
+                for (index, block) in blocks.iter().enumerate() {
+                    if block.get("type").and_then(Value::as_str) != Some("tool_use") {
+                        continue;
+                    }
+                    self.anthropic.push(PartialToolCall {
+                        index: index as u64,
+                        id: block.get("id").and_then(Value::as_str).filter(|id| !id.is_empty()).map(str::to_string),
+                        name: block.get("name").and_then(Value::as_str).unwrap_or_default().to_string(),
+                        arguments: block.get("input").cloned().filter(|input| !input.is_null()).map(|input| input.to_string()).unwrap_or_default(),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// 流结束：把攒好的调用**一次**发出来（参数解析成对象）。
     pub fn drain(&mut self) -> Vec<ModelEvent> {
-        std::mem::take(&mut self.calls)
+        let openai = std::mem::take(&mut self.calls);
+        let anthropic = std::mem::take(&mut self.anthropic);
+        openai
             .into_iter()
+            .chain(anthropic)
             .enumerate()
             .map(|(position, call)| {
                 let id = call.id.unwrap_or_else(|| format!("tool-call-{position}"));
                 // 拼完之后**仍然**不是合法 JSON（流被截断，或者服务本身就发了坏参数）就原样当字符串 ——
                 // 丢掉会让"模型想调工具"变成"模型什么都没说"。
-                let input = serde_json::from_str::<Value>(&call.arguments).unwrap_or(Value::String(call.arguments));
+                // 一个**完全空**的参数（Anthropic 起手就是 `{}`）按空对象处理：那是合法的"无参数工具"，
+                // 不该被当成一段坏 JSON 字符串。
+                let input = if call.arguments.trim().is_empty() {
+                    Value::Object(serde_json::Map::new())
+                } else {
+                    serde_json::from_str::<Value>(&call.arguments).unwrap_or(Value::String(call.arguments))
+                };
                 ModelEvent::ToolCall { tool_call_id: id, tool_id: call.name, input }
             })
             .collect()
@@ -191,13 +268,12 @@ pub fn anthropic_chunk(event: Option<&str>, payload: &Value) -> Normalized {
         }
         "content_block_start" => {
             // 工具调用在 Anthropic 里是"一个 tool_use 块"：名字在这里，参数在后面的增量里。
-            if let Some(block) = payload.get("content_block") {
-                if block.get("type").and_then(Value::as_str) == Some("tool_use") {
-                    let id = block.get("id").and_then(Value::as_str).unwrap_or("tool-use").to_string();
-                    let name = block.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-                    events.push(ModelEvent::ToolCall { tool_call_id: id, tool_id: name, input: block.get("input").cloned().unwrap_or(Value::Null) });
-                }
-            }
+            //
+            // **这里不发 `ToolCall`**（T2，2026-10-24）：`content_block_start` 的 `input` 通常是
+            // 空对象 `{}`，真正的参数要等后面若干条 `input_json_delta` 拼起来。提前发一个空参数的
+            // 调用，再忽略后续增量，等于把每一次工具调用都退化成"模型没给参数"。
+            // 完整的调用由 `ToolCallAccumulator::absorb_anthropic` 攒、在流结束时一次发出。
+            // 这一支什么都不做 —— 留着是为了让"这个名字我们认得"这件事在代码里是显式的。
         }
         "content_block_delta" => {
             if let Some(delta) = payload.get("delta") {
@@ -348,7 +424,11 @@ pub fn normalize_response_with(protocol: &str, body: &str, event: Option<&str>, 
                         }
                     };
                     let normalized = match protocol {
-                        "anthropic" => anthropic_chunk(current_event.as_deref(), &parsed),
+                        "anthropic" => {
+                            // 工具参数是分片的：先交给累积器，再由它在流结束（或整份响应）时一次发出。
+                            tool_calls.absorb_anthropic(&parsed);
+                            anthropic_chunk(current_event.as_deref(), &parsed)
+                        }
                         "ollama" => ollama_line(&parsed),
                         // OpenAI 兼容：工具调用的参数是**跨帧分片**，先攒着（见 `ToolCallAccumulator`）。
                         _ => {
@@ -368,7 +448,11 @@ pub fn normalize_response_with(protocol: &str, body: &str, event: Option<&str>, 
     match serde_json::from_str::<Value>(body) {
         Ok(parsed) => {
             let normalized = match protocol {
-                "anthropic" => anthropic_chunk(event, &parsed),
+                "anthropic" => {
+                    // 非流式：`content` 里可能直接躺着完整的 tool_use 块。
+                    tool_calls.absorb_anthropic(&parsed);
+                    anthropic_chunk(event, &parsed)
+                }
                 "ollama" => ollama_line(&parsed),
                 // 非流式全量里的 `message.tool_calls` 同样交给累加器（整份一次，攒完照样成立）。
                 _ => {

@@ -59,6 +59,8 @@ pub fn provider_run(
     messages: Vec<providers::request::ChatMessage>,
     stream: Option<bool>,
     tools: Option<Vec<serde_json::Value>>,
+    output_mode: Option<String>,
+    max_output_tokens: Option<u32>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
     // 锁**一直持有到这次发送结束**：它保护的是 `ProxyHandle` 的生命周期，
@@ -99,7 +101,9 @@ pub fn provider_run(
     // 而不是在这里，因为那里能测（见 `run_with_profile` 的说明）。
     // `force_tool: false`：真运行里模型**可以不调工具**（它可以只回答问题），
     // 强制它调工具是**探针**才需要的事（不强制就测不出"支持工具"）。
-    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None };
+    // 输出模式只在这里解析一次（未知字符串降级为 json_text，绝不猜）。
+    let output_mode = providers::request::OutputMode::parse(output_mode.as_deref());
+    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None, output_mode, response_schema: None, max_output_tokens };
     let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), options, cancel.as_ref())
         .map_err(|error| error.to_json())?;
     let events: Vec<serde_json::Value> = match outcome {

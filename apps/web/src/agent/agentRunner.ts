@@ -1,5 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -899,13 +899,15 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
          *（最后一条正是这次失败自己的那一句，由 `detail` 带着）。
          */
         const earlierRejections = active.coordinator.ledger()
-          .filter((event) => event.detail.includes("was rejected: "))
-          .map((event) => event.detail.slice(event.detail.indexOf("was rejected: ") + "was rejected: ".length))
+          .filter((event) => event.detail.includes("was rejected: ") || event.detail.includes("plan attempt") && event.detail.includes("failed ("))
+          .map((event) => event.detail.includes("was rejected: ")
+            ? event.detail.slice(event.detail.indexOf("was rejected: ") + "was rejected: ".length)
+            : event.detail)
           .slice(0, -1)
         useAgentStore.getState().failPendingReply({
           code: "run_failed",
           message: incomplete === null
-            ? detail.includes("never matched the schema")
+            ? isPlanFailureDetail(detail)
               /**
                * **"动作名不认识"与"顶层形状不合法"必须说成两句不同的话**（Task 2）。
                *
@@ -913,6 +915,11 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
                * 而当死因是三个不存在的动作名时，那句话把用户与下一次修复一起引到格式上去。
                * 分类与措辞现在住在 `@draw/agent-core` 的 `describeSchemaFailureForUser` 里
                *（与账本那句话的唯一生产方 `schemaFailureDetail` 同一个模块，成对维护）。
+               *
+               * **T1（2026-10-24）**：判据从"detail 里有没有那句话"换成
+               * `isPlanFailureDetail` —— 截断、空输出、非 JSON、未发布工具、拒绝这五种分类
+               * 各有各的文案（它们都不是"信封形状不对"），而分类只认 `planFailureDetail`
+               * 生产的那几个前缀。
                */
               ? describeSchemaFailureForUser(detail, earlierRejections)
               : detail

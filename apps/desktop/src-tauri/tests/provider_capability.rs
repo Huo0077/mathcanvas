@@ -556,3 +556,77 @@ fn a_tool_schema_is_only_allowed_when_the_evidence_is_verified_and_current() {
     // **别的能力验证过不算数**：图像验过了，不代表这家会调工具。
     assert!(!tools_verified(Some(&health(4, "vision", "verified")), 4));
 }
+
+// ---------------------------------------------------------------- T3：严格 JSON 模式（2026-10-24）
+
+/// **参数被拒 ≠ 不会 JSON**：这家不认 `response_format` 时，JSON 能力必须停在 `unknown`。
+///
+/// 旧判据只看"回复能不能 parse"，于是这种服务会被记成 verified，而生产路径随后每次都
+/// 发一个它不认的参数 —— 每一次请求都 400，界面上却显示"JSON 已验证"。
+#[test]
+fn a_provider_that_rejects_strict_json_mode_stays_unknown_instead_of_failed() {
+    let transport = ByShape::new(|shape: Shape, request: &ProviderRequest| -> Result<String, ProviderError> {
+        if request.body.get("response_format").is_some() {
+            return Err(ProviderError::Http { status: 400, failure: FailureKind::Unknown, message: "unknown parameter: response_format".to_string() });
+        }
+        match shape {
+            Shape::Tools => Ok(sse_tool_call()),
+            Shape::Image => Ok(sse("white")),
+            Shape::Text => Ok(sse("pong")),
+        }
+    });
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let stop = NoStop::new();
+
+    let report = Probe::new(&source, &transport, profile(), stop.as_ref()).run().expect("the profile must be probed");
+
+    assert_eq!(report.evidence(Feature::Json), Some(CapabilityStatus::Unknown), "a rejected parameter does not prove the model cannot produce JSON");
+    // 而且它**没有拖累别的能力**：工具探针照旧验过。
+    assert_eq!(report.evidence(Feature::Tools), Some(CapabilityStatus::Verified));
+    assert_eq!(report.evidence(Feature::Streaming), Some(CapabilityStatus::Verified));
+}
+
+/// 参数被接受、回复也是 JSON ⇒ verified（这一条才是"严格 JSON 模式可用"的证据）。
+#[test]
+fn strict_json_mode_that_actually_works_verifies_the_json_capability() {
+    let transport = ByShape::new(|shape: Shape, request: &ProviderRequest| -> Result<String, ProviderError> {
+        if request.body.get("response_format").is_some() {
+            return Ok(sse("{\"ok\": true}"));
+        }
+        match shape {
+            Shape::Tools => Ok(sse_tool_call()),
+            Shape::Image => Ok(sse("white")),
+            Shape::Text => Ok(sse("pong")),
+        }
+    });
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let stop = NoStop::new();
+
+    let report = Probe::new(&source, &transport, profile(), stop.as_ref()).run().expect("the profile must be probed");
+
+    assert_eq!(report.evidence(Feature::Json), Some(CapabilityStatus::Verified));
+    // 请求体里真的带了 `response_format`：判据不是"回复看起来像 JSON"。
+    let json_request = transport.calls().into_iter().find(|(_, request)| request.body.get("response_format").is_some()).expect("the json probe must carry response_format");
+    assert_eq!(json_request.1.body["response_format"], serde_json::json!({ "type": "json_object" }));
+}
+
+/// 参数被接受、但回复不是 JSON ⇒ failed（它真的不按 JSON 说话）。
+#[test]
+fn strict_json_mode_accepted_but_prose_reply_is_failed() {
+    let transport = ByShape::new(|shape: Shape, request: &ProviderRequest| -> Result<String, ProviderError> {
+        if request.body.get("response_format").is_some() {
+            return Ok(sse("Sure, here is a sentence instead."));
+        }
+        match shape {
+            Shape::Tools => Ok(sse_tool_call()),
+            Shape::Image => Ok(sse("white")),
+            Shape::Text => Ok(sse("pong")),
+        }
+    });
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let stop = NoStop::new();
+
+    let report = Probe::new(&source, &transport, profile(), stop.as_ref()).run().expect("the profile must be probed");
+
+    assert_eq!(report.evidence(Feature::Json), Some(CapabilityStatus::Failed));
+}

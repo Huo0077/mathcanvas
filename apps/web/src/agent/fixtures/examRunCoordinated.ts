@@ -11,6 +11,7 @@ import { MODEL_PLANNER_SKILL_IDS, planWorkspaceFor } from "../agentRunner"
 import { planRequestFor } from "./benchmarkPlanningEval"
 import { budgetWithProviderRequestCap } from "./examRequestBudget"
 import { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
+import { planOf } from "@draw/agent-core"
 
 type StageOutcome = Awaited<ReturnType<CommitterPort["stage"]>>
 
@@ -76,7 +77,7 @@ export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCas
     const events: RunEvent[] = []
     for await (const event of runtime.coordinator.start({ run: initial.run, userMessage: examCase.prompt })) events.push(event)
     const outcome = attempts.at(-1) ?? null
-    const parsed = outcome === null ? null : parsePlanEnvelope(outcome.plan)
+    const parsed = outcome === null ? null : parsePlanEnvelope(planOf(outcome))
     const detail = events.at(-1)?.detail ?? "coordinator produced no terminal event"
     let verdict: Pick<ExamRunCaseResult, "outcome" | "failureLayer">
     if (plannerError !== null || budgetDenied) {

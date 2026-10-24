@@ -42,6 +42,23 @@ export interface ModelRunRequest {
    * 证据没验过时 Rust 会**拒绝**这次请求（`ToolsNotVerified`），而不是静默把工具表丢掉。
    */
   tools?: unknown[]
+  /**
+   * **要哪一种输出形状**（T3，2026-10-24）。
+   *
+   * 三种能力**不合并**：`json_text` 只靠提示词，`json_mode` 要求服务端"必须是一个 JSON 对象"，
+   * `json_schema` 要求服务端按给定 schema 校验。调用方只有拿到**已验证**的证据才配得上后者，
+   * 而"能回一个 JSON"这条旧证据**不足以**升级成 schema 能力。
+   *
+   * 缺省 = `json_text`（与接线之前逐字相同）。
+   */
+  outputMode?: "json_text" | "json_mode" | "json_schema"
+  /**
+   * `json_schema` 模式的 schema 本体。**只有 `outputMode: "json_schema"` 用了才有意义**；
+   * 没给 schema 时 Rust 侧降级成 `json_object`（空 schema 会被服务端拒）。
+   */
+  responseSchema?: unknown
+  /** 输出上限（tokens）。缺省 = 各协议自己的缺省（见 Rust `RequestOptions.max_output_tokens`）。 */
+  maxOutputTokens?: number
 }
 
 export type ModelClientFailure = {
@@ -117,7 +134,14 @@ export async function startModelRun(
       messages: request.messages,
       stream: request.stream ?? true,
       // 空数组与"不发工具表"是同一件事（Rust 侧也是这么判的），所以缺省就不带这个字段。
-      ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
+      ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
+      /**
+       * **输出形状与上限只带非缺省值**（T3）。`json_text` 是缺省，发出去等于多说一句
+       * —— 而多说的那句在旧版本 Rust 上会变成一次 IPC 参数校验失败。
+       */
+      ...(request.outputMode !== undefined && request.outputMode !== "json_text" ? { outputMode: request.outputMode } : {}),
+      ...(request.responseSchema === undefined ? {} : { responseSchema: request.responseSchema }),
+      ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens })
     })
     // Rust 侧把"失败"做成一条带分类的事件（见 `provider_run`）：那条**不是**事件，
     // 是错误契约 —— 混进事件列表会让协调器把它当成模型说的话。

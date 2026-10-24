@@ -15,6 +15,7 @@ import { budgetWithProviderRequestCap } from "./examRequestBudget"
 import { createCoordinatedExamRunCase } from "./examRunCoordinated"
 import { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
 export { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
+import { planOf } from "@draw/agent-core"
 
 /**
  * **把一次试验接到 Task 20 的记账上**（授权到了就是"跑一条命令"里的那一步）。
@@ -81,7 +82,7 @@ export function createExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase
       }
     }
 
-    const envelope = outcome.plan
+    const envelope = planOf(outcome)
     if (envelope.kind !== "plan") {
       const verdict = examTrialVerdictOf({ kind: envelope.kind === "clarification" ? "clarification" : "answer" })
       return {

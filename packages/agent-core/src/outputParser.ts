@@ -1,4 +1,6 @@
 import type { ParseError, ParseResult, PlanEnvelope } from "./contracts"
+import type { PlanOutcome } from "./coordinatorPorts"
+import { classifyStopReason } from "./modelEvents"
 import { parsePlanEnvelope } from "./schemas"
 
 /**
@@ -342,9 +344,34 @@ function isOpenFigureForcedIntoPolyhedron(errors: readonly EnvelopeFieldError[])
  *   那正是模型走偏的原因，用户看得见因果才判断得了该不该重试。
  */
 export function describeSchemaFailureForUser(detail: string, earlierDetails: readonly string[] = []): string {
+  /**
+   * **T1（2026-10-24）：先按结构化分类说话，再谈字段。**
+   *
+   * 截断、空输出、非 JSON、调用了未发布的工具这四种失败**都不是**"信封形状不对"，
+   * 而它们在旧实现里一律落到最后那句"计划必须是一个 JSON 对象"上 —— 用户与下一次修复
+   * 都被引向格式，真正的原因（长度上限、空响应、工具名）反而看不见。分类的判据只有
+   * 一处（`planFailureDetail` 的前缀），这里只做分发。
+   */
+  if (isPlanFailureDetail(detail) && !detail.startsWith(SCHEMA_FAILURE_PREFIX)) {
+    return describePlanFailureForUser(detail)
+  }
   const errors = readSchemaFailureDetail(detail)
   const { actionIds, paths } = unregisteredActions(errors)
   if (actionIds.length === 0) {
+    /**
+     * **E3（T1）：一个字段类型错，不该被说成"整个信封不是对象"。**
+     *
+     * 现场：模型把 `size.x` 写成 `"bad"`，用户读到的是"计划必须是一个 JSON 对象" ——
+     * 那句话把可修复的字段错误说成了一次形状灾难。判据是**错误落在哪个路径**：
+     * 有任何一个错误指向 `envelope` 之下的字段，就点名那个字段（最多三处）；
+     * 只有整个信封层面的错误（根路径 `envelope`）才用"必须是一个 JSON 对象"那句。
+     */
+    const fieldErrors = errors.filter((error) => error.path !== "envelope")
+    if (fieldErrors.length > 0) {
+      const named = fieldErrors.slice(0, 3).map((error) => `${error.path}（${error.detail}）`).join("；")
+      const more = fieldErrors.length > 3 ? `，另有 ${fieldErrors.length - 3} 处同类问题` : ""
+      return `模型的回答里**字段不合法**，所以这一轮停下了：${named}${more}。计划的对象形状是对的，问题在具体字段，按字段路径改就行。引擎的原话：${detail}`
+    }
     return `模型的回答不符合计划合同的形状，所以这一轮停下了。计划必须是一个 JSON 对象（schemaVersion / kind / goal，外加 actions 或 questions 或 answer）。引擎的原话：${detail}`
   }
   const named = [...new Set(actionIds)].join("、")
@@ -358,4 +385,232 @@ export function describeSchemaFailureForUser(detail: string, earlierDetails: rea
     ...(earlierOpenFigure ? ["上一轮引擎其实已经给过这句话 —— 这一轮它换了个不存在的动作名，而不是改用它。"] : [])
   ]
   return `${lines.join(" ")} 引擎的原话：${detail}`
+}
+
+/* ------------------------------------------------------------------------- *
+ * **规划失败的合同**（T1，2026-10-24）
+ *
+ * ## 这一节修的是什么
+ *
+ * 旧路径上，规划器解析失败时把**模型的原值**（可能是半截字符串、可能是解出来的对象）
+ * 塞进 `PlanOutcome.plan`（`as PlanEnvelope`），协调器再 `parsePlanEnvelope` 一遍。
+ * 后果有两类，都是现场复现过的：
+ *
+ * 1. **字段错误退化成字符串错误**（E1）：参数是双重编码的字符串，系统解出了对象、
+ *    也认出 `actions[0].inputs.size.x` 不是有限数，但交出去的仍是**那段字符串**，
+ *    于是下一层只报 `got a string` —— 具体的字段错误在这一层被抹掉了；
+ * 2. **截断与空响应被误报成"不是 JSON 对象"**（E2）：`stopReason = "length"` 的信息
+ *    在事件里明明有，规划器却没有把它当成一种**独立的失败**，用户看到的仍是形状错误。
+ *
+ * ## 合同
+ *
+ * 失败不是"一个不合法的计划"，而是**一次带分类、带字段错误、带结束原因的失败**。
+ * `PlanOutcome` 因此是判别联合：成功给 `plan`（仍然不可信，协调器必须再校验一次），
+ * 失败给 `failure`。`decoded` 只在"确实解出了一个对象"时才有 —— 它是让下一层
+ * 能报**字段路径**而不是"got a string"的关键。
+ *
+ * ## 有界
+ *
+ * `payload` 与 `detail` 都截断。`payload` 只给修复提示认"缺了哪个键"与本机诊断，
+ * **不进用户可见文案**；用户看到的是分类 + 字段路径（`describePlanFailureForUser`）。
+ * ------------------------------------------------------------------------- */
+
+export type PlanFailureCategory =
+  | "response_incomplete"
+  | "empty_output"
+  | "invalid_json"
+  | "schema_invalid"
+  | "unexpected_tool_call"
+  | "provider_refusal"
+
+export interface PlanFailure {
+  category: PlanFailureCategory
+  channel: ModelChannel | "unknown"
+  /** 逐条字段错误（`code` + `path` + `detail`）。非解析类失败也至少有一条。 */
+  errors: ParseError[]
+  /**
+   * 能解成对象时**解出来的那个对象**（E1）。
+   *
+   * 它不是"校验通过的计划"：形状仍由协调器校验。它存在的唯一理由是让字段错误
+   * 指得出路径 —— 没有它，双重编码的参数在下一层只能报 `got a string`。
+   */
+  decoded?: unknown
+  /** provider 给的结束原因原文（`length` / `max_tokens` / `refusal` …），不改写、不丢。 */
+  stopReason?: string
+  /** 有界原文。**只**给修复提示与诊断，不进用户文案。 */
+  payload: string
+  /** 有界的一句话（分类 + 首个字段错误的 `code@path`），供账本与失败事件使用。 */
+  detail: string
+}
+
+/** 账本里"计划没通过校验"那一句的前缀（`schemaFailureDetail` 的消费者靠它分类）。 */
+export const SCHEMA_FAILURE_PREFIX = "the plan never matched the schema:"
+const INVALID_JSON_PREFIX = "the plan never arrived as JSON:"
+const EMPTY_OUTPUT_PREFIX = "the plan never arrived:"
+const INCOMPLETE_PREFIX = "the plan was cut off before it finished:"
+const REFUSAL_PREFIX = "the provider refused to generate a plan:"
+const UNEXPECTED_TOOL_PREFIX = "the model called a tool this run did not publish:"
+
+function stopSuffix(stopReason: string | undefined): string {
+  return stopReason === undefined || stopReason.length === 0 ? "" : `（结束原因：${stopReason}）`
+}
+
+/** provider 的"到上限了"与"被拒了"两族结束原因 —— 归一含义只在一处判（`classifyStopReason`）。 */
+function categoryFor(reason: EnvelopeParseFailure["reason"], payload: string, stopReason: string | undefined): PlanFailureCategory {
+  const kind = classifyStopReason(stopReason)
+  if (kind === "refusal") return "provider_refusal"
+  if (kind === "length") return "response_incomplete"
+  if (reason === "schema_invalid") return "schema_invalid"
+  if (payload.trim().length === 0) return "empty_output"
+  return "invalid_json"
+}
+
+/** 造一份失败。**所有分类都从这里过**，否则"哪些字段该有"就会各自分叉。 */
+export function createPlanFailure(input: {
+  category: PlanFailureCategory
+  channel?: ModelChannel | "unknown"
+  errors?: readonly ParseError[]
+  decoded?: unknown
+  stopReason?: string
+  payload?: string
+  detail?: string
+}): PlanFailure {
+  const payload = (input.payload ?? "").slice(0, 4096)
+  const errors = input.errors === undefined || input.errors.length === 0
+    ? [{ code: input.category, path: "envelope", detail: input.detail ?? input.category }]
+    : [...input.errors]
+  const first = errors[0]!
+  const suffix = input.stopReason === undefined ? "" : ` (stopReason=${input.stopReason})`
+  return {
+    category: input.category,
+    channel: input.channel ?? "unknown",
+    errors,
+    payload,
+    ...(input.decoded === undefined ? {} : { decoded: input.decoded }),
+    ...(input.stopReason === undefined ? {} : { stopReason: input.stopReason }),
+    detail: `${first.code}@${first.path}: ${first.detail}${suffix}`.slice(0, 512)
+  }
+}
+
+/**
+ * 解析失败 → 失败合同。
+ *
+ * `decoded` 由调用方给：**模型规划器在"按 JSON 解过一次、解出来是对象"时把它递进来**，
+ * 于是字段错误（`envelope.actions[0].inputs.size.x`）能一路传到修复提示与用户文案里。
+ */
+export function planFailureFromParseFailure(
+  failure: EnvelopeParseFailure,
+  extra: { decoded?: unknown; stopReason?: string } = {}
+): PlanFailure {
+  return createPlanFailure({
+    category: categoryFor(failure.reason, failure.payload, extra.stopReason),
+    channel: failure.channel,
+    errors: failure.errors,
+    payload: failure.payload,
+    ...(extra.decoded === undefined ? {} : { decoded: extra.decoded }),
+    ...(extra.stopReason === undefined ? {} : { stopReason: extra.stopReason })
+  })
+}
+
+/** 账本与失败事件里的那句话。**按分类给前缀**，不与 `schemaFailureDetail` 混用。 */
+export function planFailureDetail(failure: PlanFailure): string {
+  switch (failure.category) {
+    case "schema_invalid": return `${SCHEMA_FAILURE_PREFIX} ${schemaFailureDetail(failure.errors)}`
+    case "invalid_json": return `${INVALID_JSON_PREFIX} ${failure.detail}`
+    case "empty_output": return `${EMPTY_OUTPUT_PREFIX} the model returned no text${stopSuffix(failure.stopReason)}`
+    case "response_incomplete": return `${INCOMPLETE_PREFIX} ${failure.detail}`
+    case "unexpected_tool_call": return `${UNEXPECTED_TOOL_PREFIX} ${failure.detail}`
+    case "provider_refusal": return `${REFUSAL_PREFIX} ${failure.detail}`
+  }
+}
+
+/**
+ * **读一份规划结局里的计划**（测试与评测入口的便捷读法）。
+ *
+ * 失败时**抛**：生产路径必须自己处理 `failure`（选择修复方向或如实失败），
+ * 这里只是让"确实期望成功"的调用方少写一层判别。用 `as` 或可选链绕过它，
+ * 等于把 T1 想消灭的那件事换个地方重演。
+ */
+export function planOf(outcome: PlanOutcome): PlanEnvelope {
+  if ("failure" in outcome) throw new Error(`expected a plan, got a ${outcome.failure.category} failure: ${outcome.failure.detail}`)
+  return outcome.plan
+}
+
+/** 这句话是不是"规划失败"那一族（`agentRunner` 据此决定用哪套用户文案）。 */export function isPlanFailureDetail(detail: string): boolean {
+  return detail.startsWith(SCHEMA_FAILURE_PREFIX) ||
+    detail.startsWith(INVALID_JSON_PREFIX) ||
+    detail.startsWith(EMPTY_OUTPUT_PREFIX) ||
+    detail.startsWith(INCOMPLETE_PREFIX) ||
+    detail.startsWith(REFUSAL_PREFIX) ||
+    detail.startsWith(UNEXPECTED_TOOL_PREFIX)
+}
+
+/** 按通道给的格式建议。**只有一处**，否则修复提示与解析器会各说一套。 */
+function formatAdviceFor(channel: ModelChannel | "unknown"): string {
+  if (channel === "strict_json") return "不要用代码围栏包住它，也不要在前后添加任何文字。"
+  if (channel === "native_tools") return "请直接调用计划工具，参数必须是 JSON 对象本身，不要把对象再序列化成字符串。"
+  return "如果要包代码围栏，请只包一层 ```json，且围栏内只有这个 JSON。"
+}
+
+/**
+ * 失败 → **下一次要说的话**。
+ *
+ * 与 `describeRepairPrompt` 同一条纪律：给**字段路径**、给**这一轮真正缺的键**、
+ * 按通道给格式建议、**绝不回显模型原文**（`missingEnvelopeFields` 只读键名）。
+ * 区别只在开头那句：截断、空响应、拒绝各有各的说法，因为它们要求的**下一个动作不同**。
+ */
+export function describePlanFailureRepair(failure: PlanFailure): string {
+  const paths = failure.errors.map((error) => `${error.path}: ${error.detail}`).join("; ")
+  const opening = ((): string => {
+    switch (failure.category) {
+      case "response_incomplete":
+        return `上一条输出**在结束前被截断**${stopSuffix(failure.stopReason)}。请重新输出**完整**的 JSON 对象：不要省略任何字段，不要依赖上文续写。${failure.stopReason === undefined ? "" : "如果是因为内容太长，先把动作拆成更小的步骤。"}`
+      case "empty_output":
+        return `上一条**没有返回任何正文**${stopSuffix(failure.stopReason)}。请直接输出完整的计划 JSON 对象；如果你需要先观察场景，请调用已发布的只读工具。`
+      case "invalid_json":
+        return "上一条输出**不是合法 JSON**（下面的字段路径是引擎实际读到的位置）。请只返回一个 JSON 对象。"
+      case "unexpected_tool_call":
+        return "上一条回复调用了一个**这一轮没有发布的工具**。请只使用这一轮发布过的工具；如果这一轮发布了「plan_set_plan」，就直接调用它，否则用文本返回 JSON 信封。"
+      case "provider_refusal":
+        return `服务端**明确拒绝**了这次生成${stopSuffix(failure.stopReason)}。不要重发同一份请求；如果题目本身无法生成，请在「questions」里如实说明。`
+      case "schema_invalid":
+        return "上一轮的输出没有被接受，原因如下（字段路径 + 原因）："
+    }
+  })()
+  return [
+    opening,
+    ...[paths.length > 0 ? [paths] : []],
+    ...missingEnvelopeFields(failure.payload),
+    ...targetedTransportAdvice(failure.errors),
+    "请只返回一个 JSON 对象，不要附加任何解释文字。",
+    formatAdviceFor(failure.channel)
+  ].join("\n")
+}
+
+/**
+ * 失败 → **给用户的那句话**。
+ *
+ * 分类来自 `planFailureDetail` 的前缀（唯一生产方），不从长文本里猜。
+ * 每一类都要说清两件事：**为什么停下**、**下一次会不会不一样**（是否已用掉修复名额）。
+ */
+export function describePlanFailureForUser(detail: string): string {
+  const stop = /（结束原因：([^）]+)）|\(stopReason=([^)]+)\)/.exec(detail)
+  const stopReason = stop?.[1] ?? stop?.[2] ?? ""
+  const suffix = `引擎的原话：${detail}`
+  if (detail.startsWith(INCOMPLETE_PREFIX)) {
+    return `模型的输出在传输中**被截断**了${stopReason ? `（结束原因：${stopReason}）` : ""}，这一轮没有拿到完整的计划。系统会按有界恢复再问一次；如果仍被截断，就是这次生成的输出上限不够，需要放宽上限或把题目拆小。${suffix}`
+  }
+  if (detail.startsWith(EMPTY_OUTPUT_PREFIX)) {
+    return `模型这一次**没有返回任何正文**${stopReason ? `（结束原因：${stopReason}）` : ""}，所以没有计划可以编译。系统会按有界恢复再问一次。${suffix}`
+  }
+  if (detail.startsWith(INVALID_JSON_PREFIX)) {
+    return `模型返回的内容**不是合法 JSON**，所以这一轮停下了（这不是字段写法的问题，是整段输出没构成 JSON）。系统会按有界恢复再问一次，并把通道要求的格式再说一遍。${suffix}`
+  }
+  if (detail.startsWith(UNEXPECTED_TOOL_PREFIX)) {
+    return `模型调用了一个**这一轮没有发布的工具**，所以没有执行任何动作。这不是你操作的问题；系统会按有界恢复再问一次，并说明这一轮可用的工具。${suffix}`
+  }
+  if (detail.startsWith(REFUSAL_PREFIX)) {
+    return `服务商**明确拒绝**了这次生成${stopReason ? `（结束原因：${stopReason}）` : ""}，所以这一轮停下了。换一份模型服务或改写题目再试。${suffix}`
+  }
+  return detail
 }

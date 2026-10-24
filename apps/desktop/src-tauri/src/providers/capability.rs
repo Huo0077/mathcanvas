@@ -42,7 +42,7 @@ use serde::Serialize;
 
 use super::adapter::{ProviderAdapter, ProviderError, SecretSource, SendOutcome, Stop, Transport};
 use super::events::ModelEvent;
-use super::request::{ChatMessage, RequestOptions};
+use super::request::{ChatMessage, OutputMode, RequestOptions};
 use crate::repository::provider_profiles::{timestamp_ms, CapabilityEvidence, ProviderHealth, ProviderProfile};
 
 /// 探针要回答的四个能力。**闭集**：加一个能力会逼编译器在下面的 `match` 里给判据。
@@ -215,19 +215,19 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> Probe<'a, S, T> {
             "the provider did not return a usable text reply",
         ));
 
-        // JSON：请求一个 JSON 对象，看回来的文字能不能解析。
+        // JSON：**按严格 JSON 模式**请求一个对象，而不是只看"回来的文字能不能 parse"。
+        //
+        // T3（2026-10-24）：旧探针证明的只是"能回一个 JSON 对象"——那是 `json_text`，
+        // 而生产路径会据此发 `response_format`。两者不是同一件事：一家能回 JSON、
+        // 但**不认** `response_format` 的服务，旧判据会给它 verified，然后真请求一律 400。
+        // 所以这里让探针**真的带上严格模式**：参数被拒 ⇒ `unknown`（能力未证明），
+        // 而不是 `failed`（那会把"参数不认"说成"不会 JSON"）。
         let json = self.send(
             vec![ChatMessage::text("user", "Reply with exactly this JSON object and nothing else: {\"ok\": true}")],
-            RequestOptions::default()
+            RequestOptions { output_mode: OutputMode::JsonMode, ..RequestOptions::default() }
         );
         let json_ok = matches!(&json, Ok(events) if joined_text(events).contains('{') && serde_json::from_str::<serde_json::Value>(joined_text(events).trim()).is_ok());
-        evidence.push(classify(
-            Feature::Json,
-            &json,
-            json_ok,
-            "the provider returned text that parses as JSON",
-            "the provider replied, but not with a JSON object",
-        ));
+        evidence.push(json_evidence(&json, json_ok));
 
         // 图片：发一张真的 1×1 PNG。
         //
@@ -235,7 +235,7 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> Probe<'a, S, T> {
         //（带图 + 强制工具会 400）—— 而这里要的是"图片这件事单独能不能成"。
         let vision = self.send(
             vec![ChatMessage::with_images("user", "Reply with the single word: white. Do not explain.", vec![ONE_PIXEL_PNG_BASE64.to_string()])],
-            RequestOptions { allow_tools: false, tools: Vec::new(), force_tool: false, tool_choice_field: None }
+            RequestOptions { allow_tools: false, tools: Vec::new(), force_tool: false, tool_choice_field: None, ..RequestOptions::default() }
         );
         // 这一条的判据与别的不同：图片请求的**形状是我们拼的**，所以被 400/422 拒
         // 就是 `failed`（要我们改代码），而不是"这家不支持图片"。
@@ -245,7 +245,7 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> Probe<'a, S, T> {
         // 于是"没有工具调用"这个观测毫无意义 —— 而它会被读成"不支持工具"。
         let tools = self.send(
             vec![ChatMessage::text("user", "Use the provided tool to report the string \"ok\". Do not answer in text.")],
-            RequestOptions { allow_tools: true, tools: vec![probe_tool_schema()], force_tool: true, tool_choice_field: None }
+            RequestOptions { allow_tools: true, tools: vec![probe_tool_schema()], force_tool: true, tool_choice_field: None, ..RequestOptions::default() }
         );
         let tools_ok = matches!(&tools, Ok(events) if saw_probe_tool_call(events));
         // 注意这里的第三种情况：请求成功、也回了话、就是没调工具。那是 `unknown`。
@@ -291,6 +291,41 @@ fn replied_with_text(events: &[ModelEvent]) -> bool {
 /// 观测里有没有**我们的**工具调用。
 fn saw_probe_tool_call(events: &[ModelEvent]) -> bool {
     events.iter().any(|event| matches!(event, ModelEvent::ToolCall { tool_id, .. } if tool_id.contains("probe")))
+}
+
+/// **JSON 探针的判据**（T3，2026-10-24）。
+///
+/// 与文本类探针的差别只有一条，但很要紧：发出去的请求**带着 `response_format`**。
+/// 所以 400/422 的读法必须是 `unknown`，不是 `failed`：
+/// - `failed` 的意思是"这家不会回 JSON"——而参数被拒只说明"这家不认这个参数"；
+/// - 更糟的是旧行为：只看回复能否 parse，于是"能回 JSON 但不认 response_format"的服务
+///   会被记成 verified，生产路径随后每次都发一个它不认的参数。
+///
+/// 两种成功/失败都留着：参数被接受且回了 JSON ⇒ `verified`（严格模式可用）；
+/// 参数被接受但回的不是 JSON ⇒ `failed`（它真的不按 JSON 说话）。
+fn json_evidence(result: &Result<Vec<ModelEvent>, ProviderError>, ok: bool) -> Evidence {
+    match result {
+        Ok(_) if ok => Evidence {
+            feature: Feature::Json,
+            status: CapabilityStatus::Verified,
+            detail: "the provider accepted strict JSON mode and replied with a JSON object".to_string(),
+        },
+        Ok(_) => Evidence {
+            feature: Feature::Json,
+            status: CapabilityStatus::Failed,
+            detail: "the provider accepted strict JSON mode, but the reply was not a JSON object".to_string(),
+        },
+        Err(error) if inconclusive(error) => Evidence {
+            feature: Feature::Json,
+            status: CapabilityStatus::Unknown,
+            detail: format!("the probe could not reach the provider: {}", error.message()),
+        },
+        Err(error) => Evidence {
+            feature: Feature::Json,
+            status: CapabilityStatus::Unknown,
+            detail: format!("the provider rejected the strict JSON request; JSON capability stays unproven (it may not support response_format): {}", error.message()),
+        },
+    }
 }
 
 /// 文本类探针（streaming / json）的判据。

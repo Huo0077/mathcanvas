@@ -133,6 +133,38 @@ fn plan_for(protocol: &str, dialect: &str) -> RequestPlan {
  * 真运行通常不要）。（第一版就是 `build_request(.., allow_tools, force_tool)`，
  * 在调用点读起来完全分不出谁是谁。）
  */
+/**
+ * **这一轮向 provider 要什么形状的输出**（T3，2026-10-24）。
+ *
+ * 计划书 §5 的口径：`json_text`（只靠提示词）、`json_mode`（服务端约束"必须是一个 JSON 对象"）、
+ * `json_schema`（服务端按给定 schema 约束）是**三种不同的能力**，不是"一个 json 能力"的三种写法。
+ *
+ * 判据在调用方：只有**已验证**的能力才配得上对应的模式。这一层只负责把模式翻成 HTTP 参数，
+ * 所以它对"这家支不支持"不做任何猜测 —— 猜错了会得到一个 400，而被读成"这家不支持工具"。
+ */
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutputMode {
+    /// 不发任何输出约束，只靠提示词（默认；对每一家都成立）。
+    #[default]
+    JsonText,
+    /// 服务端要求"输出必须是 JSON 对象"。
+    JsonMode,
+    /// 服务端按 `response_schema` 校验输出。
+    JsonSchema,
+}
+
+impl OutputMode {
+    /// 从 IPC 字符串解析。**不认识就是 `JsonText`**：宁可少一层约束，也不要发一个对方不认的字段。
+    pub fn parse(value: Option<&str>) -> Self {
+        match value.unwrap_or("") {
+            "json_mode" => OutputMode::JsonMode,
+            "json_schema" => OutputMode::JsonSchema,
+            _ => OutputMode::JsonText,
+        }
+    }
+}
+
+/// 一次请求的可选参数。**全都有缺省**：不给就是"与接线之前逐字相同"。
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct RequestOptions {
     /// 允许发工具 schema 吗。由调用方按**已验证的能力证据**给出，不是按方言猜。
@@ -149,6 +181,22 @@ pub struct RequestOptions {
     /// 图片请求时把 `tool_choice` 设成 `none`（有些 provider 带图时拒绝工具）。
     /// 目前没用上；留它是因为"图片请求与工具请求互斥"这条规则会需要它。
     pub tool_choice_field: Option<String>,
+    /**
+     * 输出形状（T3）。缺省 `JsonText`。
+     *
+     * `JsonSchema` 只有在调用方**同时**给了 `response_schema` 时才真的发 schema；
+     * 没给 schema 时降级成 `JsonMode` —— 一个空的 schema 约束会让服务直接 400。
+     */
+    pub output_mode: OutputMode,
+    /// `json_schema` 模式的 schema 本体。
+    pub response_schema: Option<serde_json::Value>,
+    /**
+     * 输出上限（tokens）。缺省 `None` = 保持各协议原有缺省。
+     *
+     * 为什么不在这里写一个统一数字：Anthropic 的 `max_tokens` 是**必填**、OpenAI 兼容是**可选**、
+     * Ollama 叫 `num_predict`；"哪家该给多少"是调用方按任务与模型配置决定的，不是协议常量。
+     */
+    pub max_output_tokens: Option<u32>,
 }
 
 /// 只放行工具、不带 schema 的写法（绝大多数调用点的意思就是这个）。
@@ -206,16 +254,55 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
                 .map(anthropic_message)
                 .collect();
             object.insert("messages".into(), serde_json::json!(dialog));
-            object.insert("max_tokens".into(), serde_json::json!(4096));
+            object.insert("max_tokens".into(), serde_json::json!(options.max_output_tokens.unwrap_or(4096)));
         }
         "ollama" => {
             // Ollama 原生的图片在消息的 `images` 数组里（**裸 base64**，没有 `data:` 前缀）。
             let dialog: Vec<serde_json::Value> = messages.iter().map(ollama_message).collect();
             object.insert("messages".into(), serde_json::json!(dialog));
+            // Ollama 的 JSON 约束是 `format: "json"`，输出上限在 `options.num_predict`。
+            if options.output_mode != OutputMode::JsonText {
+                object.insert("format".into(), serde_json::json!("json"));
+            }
+            if let Some(limit) = options.max_output_tokens {
+                object.insert("options".into(), serde_json::json!({ "num_predict": limit }));
+            }
         }
         _ => {
             let dialog: Vec<serde_json::Value> = messages.iter().map(openai_message).collect();
             object.insert("messages".into(), serde_json::json!(dialog));
+            // **OpenAI 兼容的输出约束**（T3）。
+            //
+            // - `json_mode` → `response_format: {"type":"json_object"}`：服务端要求"必须是一个 JSON 对象"。
+            //   它**不**证明服务端会按我们的 schema 校验 —— 那正是 `json_schema` 单独一档的理由。
+            // - `json_schema` → 只有拿到了 schema 才发；没拿到降级成 `json_object`，
+            //   而不是发一个空 schema（那会 400，并被误读成"这家不支持"）。
+            // - `json_text` → 一个字段都不发（与接线之前逐字相同）。
+            //
+            // `strict` 保持保守：strict 模式会拒绝 `oneOf`/可选字段这类我们真的在用的形状。
+            match options.output_mode {
+                OutputMode::JsonMode => {
+                    object.insert("response_format".into(), serde_json::json!({ "type": "json_object" }));
+                }
+                OutputMode::JsonSchema => {
+                    let schema = options.response_schema.clone();
+                    match schema {
+                        Some(schema) => {
+                            object.insert("response_format".into(), serde_json::json!({
+                                "type": "json_schema",
+                                "json_schema": { "name": "plan_envelope", "schema": schema }
+                            }));
+                        }
+                        None => {
+                            object.insert("response_format".into(), serde_json::json!({ "type": "json_object" }));
+                        }
+                    }
+                }
+                OutputMode::JsonText => {}
+            }
+            if let Some(limit) = options.max_output_tokens {
+                object.insert("max_tokens".into(), serde_json::json!(limit));
+            }
         }
     }
 

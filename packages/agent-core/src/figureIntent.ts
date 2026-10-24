@@ -79,10 +79,21 @@ export interface FigureRelation {
 /** 变换（首批只有"沿折痕翻折"）。折后坐标由内核算，意图层只说"折谁、绕谁、折成谁"。 */
 export type FigureTransformation = {
   kind: "fold"
+  /**
+   * **运动类型**（T4.3，2026-10-24）。
+   *
+   * `fold` 与 `rotate` 共用同一套旋转机制（绕一条边把一张面转一个角度），但语义不同：
+   * "翻折/折叠"默认是**沿折痕翻到另一侧**，"绕边旋转到"则是明确的旋转并且目标面给了名字。
+   * 保留区别是为了让构造器能按语义选分支，而不是把所有绕边运动都当成翻折。
+   * 缺省 = `fold`（旧条目与调用方不需要改）。
+   */
+  motion?: "fold" | "rotate"
   face: string
   hinge: { from: string; to: string }
   apex: string
   apexAs: string
+  /** **原文证据**（T4）：这句话在原题里的逐字片段。读出来的条目才有。 */
+  sourceText?: string
 }
 
 export interface FigureIntent {
@@ -143,19 +154,69 @@ function locate(prompt: string, sourceText: string): DiagramSourceSpan | null {
  * 宁可说"没读懂"，也不产出一条半对的。
  */
 export function readFoldTransformations(prompt: string): FigureTransformation[] {
-  const pattern = /(?:将)?\s*(?:三角形|△|Δ)?\s*([A-Z]{3})\s*沿\s*([A-Z]{2})\s*翻[折转]?\s*(?:至|成)?\s*(?:三角形|△|Δ)?\s*([A-Z]{3})/g
+  /**
+   * ## 点名语法（T4.1，2026-10-24）
+   *
+   * 旧实现用 `[A-Z]{3}` 当代名：它认不出 `△A′BC`（卷面最常见的"折后点"写法）、
+   * 也认不出 `A₁` 这类下标。现在先把一段**字母串**抓下来，再按点名切成一个个名字：
+   * 一个大写字母 + 任意个撇号 / 下标。`[A-Z]{3}` 从此不再是点名的定义。
+   */
+  const RUN = "[A-Z][A-Z′'’ʼ₀₁₂₃₄₅₆₇₈₉]*"
+  const TRIANGLE = "(?:三角形|△|Δ)?"
+  const ACTION = "(?:翻折|折叠|折起|翻起)"
+  /** 折角可以紧跟动作词（`翻折90°`）；它是**折角**而不是"折到哪"，T6 从 `readFoldAngles` 读它。 */
+  const ACTION_WITH_ANGLE = `${ACTION}(?:\\s*[0-9]+(?:\\.[0-9]+)?\\s*(?:°|度))?`
+
+  /** 折前 → 折后（`翻折至 / 折叠成 / 翻折到`）。 */
+  const foldTo = new RegExp(`(?:将)?\\s*${TRIANGLE}\\s*(${RUN})\\s*沿\\s*(${RUN})\\s*${ACTION_WITH_ANGLE}\\s*(?:至|成|到|为)?\\s*${TRIANGLE}\\s*(${RUN})`, "g")
+  /** 绕边旋转到（与翻折共用旋转机制，但语义单独记）。 */
+  const rotateTo = new RegExp(`(?:将)?\\s*${TRIANGLE}\\s*(${RUN})\\s*绕\\s*(${RUN})\\s*旋转\\s*(?:[0-9]+(?:\\.[0-9]+)?\\s*(?:°|度))?\\s*(?:至|成|到|为)?\\s*${TRIANGLE}\\s*(${RUN})`, "g")
+  /** 只给"点 A 到达点 P"的写法（T4.2）。 */
+  const apexTo = new RegExp(`(?:将)?\\s*${TRIANGLE}\\s*(${RUN})\\s*沿\\s*(${RUN})\\s*${ACTION_WITH_ANGLE}\\s*[，,]?\\s*使\\s*点?\\s*(${RUN})\\s*(?:到达|落到|落在|重合于|与)\\s*(?:点\\s*)?(${RUN})`, "g")
+
+  const pointNames = (raw: string): string[] => raw.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? []
+
   const out: FigureTransformation[] = []
-  for (const match of prompt.matchAll(pattern)) {
-    const face = match[1]!
-    const hinge = match[2]!
-    const folded = match[3]!
-    if (!face.includes(hinge[0]!) || !face.includes(hinge[1]!)) continue
-    if (!folded.includes(hinge[0]!) || !folded.includes(hinge[1]!)) continue
-    const apex = [...face].find((name) => !hinge.includes(name))
-    const apexAs = [...folded].find((name) => !hinge.includes(name))
-    if (apex === undefined || apexAs === undefined) continue
-    out.push({ kind: "fold", face, hinge: { from: hinge[0]!, to: hinge[1]! }, apex, apexAs })
+  const seen = new Set<string>()
+  const push = (faceRaw: string, hingeRaw: string, targetRaw: string, motion: "fold" | "rotate", sourceText: string, apexRaw?: string) => {
+    const face = pointNames(faceRaw)
+    const hinge = pointNames(hingeRaw)
+    let target = pointNames(targetRaw)
+    /**
+     * **"使点 A 到达点 P"只给了折后那一个点**：折后的三角形就是"折前把 A 换成 P"。
+     * 这一步是把两种句式**归一成同一份结构**，而不是编一个目标三角形 ——
+     * 换名规则由折痕固定（E、F 不动），所以它是确定的。
+     */
+    if (apexRaw !== undefined) {
+      const apex = pointNames(apexRaw)[0]
+      const apexAs = pointNames(targetRaw)[0]
+      if (apex === undefined || apexAs === undefined) return
+      target = face.map((name) => (name === apex ? apexAs : name))
+    }
+    // 折痕两端**必须同时出现在折前与折后**（那是"这两点不动"的定义）；任一处对不上就不产出。
+    if (face.length !== 3 || hinge.length !== 2 || target.length !== 3) return
+    if (!hinge.every((name) => face.includes(name) && target.includes(name))) return
+    const apex = apexRaw === undefined ? face.find((name) => !hinge.includes(name)) : pointNames(apexRaw)[0]
+    const apexAs = target.find((name) => !hinge.includes(name))
+    if (apex === undefined || apexAs === undefined || apex === apexAs) return
+    if (!face.includes(apex)) return
+    const key = `${face.join("")}|${hinge.join("")}|${apex}|${apexAs}`
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({
+      kind: "fold",
+      ...(motion === "rotate" ? { motion } : {}),
+      face: face.join(""),
+      hinge: { from: hinge[0]!, to: hinge[1]! },
+      apex,
+      apexAs,
+      sourceText
+    })
   }
+
+  for (const match of prompt.matchAll(foldTo)) push(match[1]!, match[2]!, match[3]!, "fold", match[0])
+  for (const match of prompt.matchAll(rotateTo)) push(match[1]!, match[2]!, match[3]!, "rotate", match[0])
+  for (const match of prompt.matchAll(apexTo)) push(match[1]!, match[2]!, match[4]!, "fold", match[0], match[3])
   return out
 }
 

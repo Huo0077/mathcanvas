@@ -3,6 +3,7 @@ import { DRAFT_ACTION_IDS, PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope,
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
 import { createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
+import { planOf } from "@draw/agent-core"
 
 /**
  * **Task 3：工具发布面与动作目录必须是同一个集合**（2026-10-12）。
@@ -162,7 +163,7 @@ describe("模型规划器", () => {
     expect(runModel).toHaveBeenCalledTimes(1)
     expect(runModel.mock.calls[0]![0].profileId).toBe("openai-1")
     expect(runModel.mock.calls[0]![0].profileRevision).toBe(3)
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
   })
 
   it("把会话上下文（已确认事实 / 摘要 / 最近消息 / 草稿）渲染进系统提示词", async () => {
@@ -198,20 +199,24 @@ describe("模型规划器", () => {
 
     const outcome = await planner.plan(request())
 
-    const parsed = parsePlanEnvelope(outcome.plan)
+    const parsed = parsePlanEnvelope(planOf(outcome))
     expect(parsed.ok).toBe(true)
     if (parsed.ok) expect(parsed.value.kind).toBe("plan")
   })
 
   it("能力证据决定通道：json 已验证时**不接受**代码围栏", async () => {
-    // 严格 JSON 通道上出现围栏 = 模型没按要求的形状说话。这里如实把它交出去（协调器会拒，
-    // 并带着修复提示再问一次），而不是替它剥掉围栏。
+    // 严格 JSON 通道上出现围栏 = 模型没按要求的形状说话。T1 起这不再是"交出一份假计划"，
+    // 而是**带分类的失败**：`invalid_json`（这一轮该做的是按通道要求重说一次）。
     const verified: ModelPlannerProvider = { ...provider, capabilities: { tools: "unknown", json: "verified", vision: "unknown" } }
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider: verified }), runModel: async () => deltas("```json\n" + goodEnvelope + "\n```") })
 
     const outcome = await planner.plan(request())
 
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(false)
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) {
+      expect(outcome.failure.category).toBe("invalid_json")
+      expect(outcome.failure.channel).toBe("strict_json")
+    }
   })
 
   it("json 没有验证时走文本通道，一层围栏是**允许**的", async () => {
@@ -219,7 +224,7 @@ describe("模型规划器", () => {
 
     const outcome = await planner.plan(request())
 
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
   })
 
   /**
@@ -275,7 +280,7 @@ describe("模型规划器", () => {
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: "plan.set_plan", input: {} }] })
     })
 
-    await expect(planner.plan(request())).rejects.toThrow(/tool call/i)
+    await expect(planner.plan(request())).resolves.toMatchObject({ failure: { category: "unexpected_tool_call" } })
   })
 
   it("没有选中任何服务时如实说清，而不是回一份空计划", async () => {
@@ -373,7 +378,7 @@ describe("模型规划器", () => {
     expect(sent.messages.map((message) => message.content).join("\n")).toContain(PLAN_TOOL_NAME)
     // 信封从工具调用的参数里来，而且**这一层也会校验一次**（Fix round 1 / M12）：
     // 通过之后交出去的是**校验过的值**（字段归一化落实了）。
-    const parsed = parsePlanEnvelope(outcome.plan)
+    const parsed = parsePlanEnvelope(planOf(outcome))
     expect(parsed.ok).toBe(true)
     if (parsed.ok) expect(parsed.value.kind).toBe("plan")
     expect(outcome.requestId).toBe("req-tool")
@@ -395,11 +400,15 @@ describe("模型规划器", () => {
 
     const outcome = await planner.plan(request())
 
-    // 交出去的是原值（让协调器按**它自己的路径**报错），而且它确实不是合法信封。
-    expect(outcome.plan).toBe(notAnEnvelope)
-    const parsed = parsePlanEnvelope(outcome.plan)
-    expect(parsed.ok).toBe(false)
-    if (!parsed.ok) expect(parsed.errors[0].code).toBe("unknown_kind")
+    // 交出去的是**结构化失败**（T1）：带 `decoded` 与逐条字段错误，
+    // 协调器据此报字段路径并决定是否修复，而不是把原值当成计划。
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) {
+      expect(outcome.failure.category).toBe("schema_invalid")
+      expect(outcome.failure.decoded).toBe(notAnEnvelope)
+      expect(outcome.failure.errors[0].code).toBe("unknown_kind")
+      expect(outcome.failure.errors[0].path).toBe("envelope.kind")
+    }
 
     // 反过来：合法载荷交出去的是**校验过的值**（`assumptions: []` 被归一成"没有声明假设"）。
     const withEmptyAssumptions = { ...(JSON.parse(goodEnvelope) as Record<string, unknown>), assumptions: [] }
@@ -408,8 +417,8 @@ describe("模型规划器", () => {
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: withEmptyAssumptions }] })
     })
     const normalized = await normalizing.plan(request())
-    expect(normalized.plan).not.toBe(withEmptyAssumptions)
-    if (normalized.plan.kind === "plan") expect(normalized.plan.assumptions).toBeUndefined()
+    expect(planOf(normalized)).not.toBe(withEmptyAssumptions)
+    if (planOf(normalized).kind === "plan") expect(planOf(normalized).assumptions).toBeUndefined()
   })
 
   it("原生通道上模型改用文本作答时，仍然按文本通道解析一次", async () => {
@@ -419,7 +428,7 @@ describe("模型规划器", () => {
 
     const outcome = await planner.plan(request())
 
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
   })
 
   it("原生通道上出现**别的**工具调用仍然拒绝：我们只发过一个工具", async () => {
@@ -429,7 +438,7 @@ describe("模型规划器", () => {
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: "scene.inspect", input: {} }] })
     })
 
-    await expect(planner.plan(request())).rejects.toThrow(/tool call/i)
+    await expect(planner.plan(request())).resolves.toMatchObject({ failure: { category: "unexpected_tool_call" } })
   })
 
   /**
@@ -447,8 +456,8 @@ describe("模型规划器", () => {
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope) }] })
     })
 
-    // 工具表是空的：这一轮**不允许**出计划。
-    await expect(planner.plan(request({ model: { context: context(), tools: [] } }))).rejects.toThrow(/tool call/i)
+    // 工具表是空的：这一轮**不允许**出计划 —— 交出的是一份分类失败，而不是一份计划。
+    await expect(planner.plan(request({ model: { context: context(), tools: [] } }))).resolves.toMatchObject({ failure: { category: "unexpected_tool_call" } })
   })
 
   it("requestId / attemptId 取自模型事件，取不到才自己编", async () => {
@@ -501,7 +510,7 @@ describe("传输失败的重试策略", () => {
     const outcome = await planner.plan(request())
 
     expect(calls).toBe(3)
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
   })
 
   it("认证失败**一次就停**：重试不会让它变成成功", async () => {
@@ -554,7 +563,7 @@ describe("传输失败的重试策略", () => {
     const outcome = await planner.plan(request())
 
     expect(calls).toBe(2)
-    expect(parsePlanEnvelope(outcome.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
   })
 })
 
@@ -728,7 +737,7 @@ describe("native observation tool loop", () => {
     expect(requests).toHaveLength(2)
     const toolResults = requests[1].messages.filter((message) => message.role === "tool_result")
     expect(toolResults.map((message) => message.toolCallId)).toEqual(["call-1", "call-2"])
-    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(result)).ok).toBe(true)
   })
 
   it("still refuses a duplicate tool call id inside one batch", async () => {    // 幂等不能被批次执行削弱：同一个 id 出现两次仍旧是拒绝。
@@ -766,7 +775,7 @@ describe("native observation tool loop", () => {
     expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: "call-1", toolId: "scene.inspect", input: { documentId: "doc-1" } }))
     expect(requests[1].messages.at(-2)).toMatchObject({ role: "tool_call", toolCallId: "call-1", toolName: "scene_inspect", toolInput: { documentId: "doc-1" } })
     expect(requests[1].messages.at(-1)).toMatchObject({ role: "tool_result", toolCallId: "call-1", toolName: "scene_inspect", content: expect.stringContaining("cube-1") })
-    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(result)).ok).toBe(true)
   })
 
   /**
@@ -801,7 +810,7 @@ describe("native observation tool loop", () => {
     const result = await planner.plan(request({ budget, model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
 
     expect(executeTool).toHaveBeenCalledTimes(3)
-    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(result)).ok).toBe(true)
     // 三个工具、**一次**生成：多出来的那一次是"带着工具结果再问一遍"。
     expect(budget.snapshot().used.generation).toBe(1)
     expect(budget.snapshot().used.network).toBe(1)
@@ -870,8 +879,8 @@ describe("native observation tool loop", () => {
     // ② 现在默认：同一条路走得完，恰好 5 代 5 网。
     const budget = createBudget()
     const flow = runFlow(budget)
-    expect(parsePlanEnvelope((await flow.attempt())!.plan).ok, "首次尝试").toBe(true)
-    expect(parsePlanEnvelope((await flow.attempt())!.plan), "修复尝试（现场死在这一步）").toMatchObject({ ok: true })
+    expect(parsePlanEnvelope(planOf((await flow.attempt())!)).ok, "首次尝试").toBe(true)
+    expect(parsePlanEnvelope(planOf((await flow.attempt())!)), "修复尝试（现场死在这一步）").toMatchObject({ ok: true })
     expect(flow.executeTool, "两次尝试共读三次场景").toHaveBeenCalledTimes(3)
     expect(budget.snapshot().used.generation, "提问① + 工具 + 修复提问 + 工具 + 工具").toBe(5)
     expect(budget.snapshot().used.network).toBe(5)
@@ -900,7 +909,7 @@ describe("native observation tool loop", () => {
 
     const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] } }))
 
-    expect(parsePlanEnvelope(result.plan).ok, "字符串形式的信封应当被解出来并按计划走").toBe(true)
+    expect(parsePlanEnvelope(planOf(result)).ok, "字符串形式的信封应当被解出来并按计划走").toBe(true)
     expect(diagnostics.some((line) => line.includes("按 JSON 解了一次")), `留痕：${diagnostics.join(" ／ ")}`).toBe(true)
   })
 
@@ -944,7 +953,7 @@ describe("native observation tool loop", () => {
     const result = await planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] }, executeTool }))
     expect(requests).toBe(4)
     expect(executeTool).toHaveBeenCalledTimes(2)
-    expect(parsePlanEnvelope(result.plan).ok).toBe(true)
+    expect(parsePlanEnvelope(planOf(result)).ok).toBe(true)
   })
 
   it("refuses a read call without a matching host execution port", async () => {
@@ -953,5 +962,148 @@ describe("native observation tool loop", () => {
       runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: "scene_inspect", input: { documentId: "doc-1" } }] })
     })
     await expect(planner.plan(request({ model: { context: context(), tools: [planTool, inspectTool] } }))).rejects.toThrow(/tool/i)
+  })
+})
+
+/**
+ * **T1（2026-10-24）：失败分类的回归**
+ *
+ * 这一组复现执行任务书 §2 里的 E1 / E2，并把修复后的行为钉住：
+ * - 双重编码的**合法**计划仍然按一次解码接受（并留痕）；
+ * - 解码出来是对象、只有某个字段不合法时，失败里带**那个对象**与**那个字段路径**；
+ * - 截断（`stopReason=length`）与空响应各有自己的分类，不再退化成
+ *   「计划必须是 JSON 对象」；
+ * - 不做递归解码，也不从散文里抠计划。
+ */
+describe("T1 — the planning failure contract", () => {
+  const withTools: ModelPlannerProvider = { ...provider, capabilities: { tools: "verified", json: "unknown", vision: "unknown" } }
+
+  function native(input: unknown, extra: { stopReason?: string } = {}) {
+    const events: unknown[] = [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input }]
+    if (extra.stopReason !== undefined) events.push({ kind: "completed", requestId: "r1", attemptId: "a1", stopReason: extra.stopReason })
+    return createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: events as never })
+    })
+  }
+
+  it("双重编码的合法计划：按 JSON 解一次后接受，并在诊断里留痕", async () => {
+    const lines: string[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: withTools }),
+      runModel: async () => ({ ok: true, events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "c1", toolId: PLAN_TOOL_NAME, input: goodEnvelope }] }),
+      onDiagnostic: (line) => lines.push(line)
+    })
+
+    const outcome = await planner.plan(request())
+
+    expect(parsePlanEnvelope(planOf(outcome)).ok).toBe(true)
+    expect(lines.join("\n")).toContain("按 JSON 解了一次")
+  })
+
+  it("E1：双重编码的对象里 size.x 不是有限数时，失败带 decoded 与该字段路径", async () => {
+    const decoded = JSON.parse(goodEnvelope) as Record<string, unknown>
+    const action = (decoded.actions as { inputs: { size: { x: unknown } } }[])[0]!
+    action.inputs.size.x = "bad"
+
+    const outcome = await native(JSON.stringify(decoded)).plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if (!("failure" in outcome)) return
+    expect(outcome.failure.category).toBe("schema_invalid")
+    // 关键：交出去的是**解出来的对象**，不是那段字符串 —— 下一层才能报字段路径。
+    expect(outcome.failure.decoded).toMatchObject({ kind: "plan" })
+    expect(outcome.failure.errors.some((error) => error.path === "envelope.actions[0].inputs.size.x")).toBe(true)
+  })
+
+  it("E2：半截 JSON + stopReason=length ⇒ response_incomplete，而不是 invalid_json", async () => {
+    const half = goodEnvelope.slice(0, Math.floor(goodEnvelope.length / 2))
+    const outcome = await native(half, { stopReason: "length" }).plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if (!("failure" in outcome)) return
+    expect(outcome.failure.category).toBe("response_incomplete")
+    expect(outcome.failure.stopReason).toBe("length")
+  })
+
+  it("E2：没有正文、只有 stopReason=length ⇒ 同样是 response_incomplete", async () => {
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider }),
+      runModel: async () => ({ ok: true, events: [{ kind: "completed", requestId: "r1", attemptId: "a1", stopReason: "length" }] })
+    })
+
+    const outcome = await planner.plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) expect(outcome.failure.category).toBe("response_incomplete")
+  })
+
+  it("空正文且没有结束原因 ⇒ empty_output", async () => {
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider }),
+      runModel: async () => ({ ok: true, events: [{ kind: "completed", requestId: "r1", attemptId: "a1" }] })
+    })
+
+    const outcome = await planner.plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) expect(outcome.failure.category).toBe("empty_output")
+  })
+
+  it("不递归解码：三重编码的字符串只解一层，剩下的仍是字符串 → invalid_json", async () => {
+    const outcome = await native(JSON.stringify(goodEnvelope)).plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) {
+      // 解一层之后仍是字符串：说明它**没有**继续递归解析；而"解出来不是对象"属于 invalid_json。
+      expect(outcome.failure.category).toBe("invalid_json")
+      expect(typeof outcome.failure.decoded).toBe("string")
+    }
+  })
+
+  it("不从散文里抠计划：散文就是 invalid_json，一个动作也不会被交出去", async () => {
+    const outcome = await native("好的，我这就执行：" + goodEnvelope).plan(request())
+
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) {
+      expect(outcome.failure.category).toBe("invalid_json")
+      expect(outcome.failure.errors.every((error) => error.code !== "ok")).toBe(true)
+    }
+  })
+})
+
+/**
+ * **T3（2026-10-24）**：输出模式随通道走，且**不越级**。
+ *
+ * - `json` 能力**已验证** ⇒ 走严格 JSON 通道 ⇒ 发 `json_mode`（服务端约束"必须是一个 JSON 对象"）；
+ * - 文本通道与原生工具通道不发输出约束（前者本来就宽松，后者的结构由工具 schema 保证）。
+ *
+ * **不许**把"能回一个 JSON"的旧证据升级成 `json_schema`：那需要"会按我们的 schema 校验"的证据。
+ */
+describe("T3 — output mode follows the channel and never over-claims", () => {
+  const seen: { outputMode?: string }[] = []
+
+  function plannerFor(capabilities: ModelPlannerProvider["capabilities"]) {
+    return createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: { ...provider, capabilities } }),
+      runModel: async (request) => {
+        seen.push(request)
+        return deltas(goodEnvelope)
+      }
+    })
+  }
+
+  it("asks for json_mode only on the verified strict-JSON channel", async () => {
+    seen.length = 0
+    await plannerFor({ tools: "unknown", json: "verified", vision: "unknown" }).plan(request())
+    await plannerFor({ tools: "unknown", json: "unknown", vision: "unknown" }).plan(request())
+    await plannerFor({ tools: "verified", json: "unknown", vision: "unknown" }).plan(request())
+
+    expect(seen[0]?.outputMode).toBe("json_mode")
+    // 文本通道与原生工具通道都**不**发输出约束。
+    expect(seen[1]?.outputMode).toBeUndefined()
+    expect(seen[2]?.outputMode).toBeUndefined()
+    // 而且从不冒充 schema 级约束（本轮没有"会按 schema 校验"的证据）。
+    expect(seen.map((entry) => entry.outputMode)).not.toContain("json_schema")
   })
 })

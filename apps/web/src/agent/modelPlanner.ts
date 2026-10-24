@@ -1,21 +1,21 @@
 import {
   actionToolSchema,
   PLAN_SCHEMA_VERSION,
+  createPlanFailure,
   isRegisteredActionId,
   createRecoveryController,
   isCapabilityVerified,
   parseModelEnvelope,
   parsePlanEnvelope,
+  planFailureFromParseFailure,
   planModelRequest,
   nativeReadToolSchema,
   readToolIdFromNative,
   type ActionId,
   type Budget,
   type CapabilityEvidence,
-  type EnvelopeParseFailure,
   type ModelChannel,
   type ModelEvent,
-  type PlanEnvelope,
   type PlannerPort,
   type PlanRequest,
   type ToolResult,
@@ -188,7 +188,7 @@ export interface ModelPlannerDependencies {
   /** 现取「使用中」的那一份。缺省走真实 IPC（`resolveActiveProvider`）。 */
   resolveProvider?: () => Promise<ProviderResolution>
   /** 发一次请求。缺省走 `provider_run`。第二个参数是"这次还能不能继续"的判据（取消用）。 */
-  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[] }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
+  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema" }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
   /** 让 Rust 侧真的停下来（缺省走 `provider_cancel`）。 */
   cancelRun?: (runId: string) => Promise<boolean>
   /**
@@ -272,6 +272,26 @@ export function buildPlanToolSchema(actionIds: readonly string[]) {
             }
           },
           actions: actions.length > 0 ? { type: "array", items: { oneOf: actions }, maxItems: 32 } : { type: "array", maxItems: 0 },
+          /**
+           * **题面改写**（E4，T1/T3；2026-10-24）。
+           *
+           * `systemPrompt.ts` 一直在向模型要 `normalisations`，`schemas.ts` 也一直收它 ——
+           * 但工具 schema 里**没有这个字段**，而工具参数是 `additionalProperties: false` 的白名单：
+           * 原生工具通道上模型由此**永远无法**交出改写。这不是模型不听话，是我们没给它位置。
+           *
+           * 形状与运行时校验器一致（`readNormalisations`：两条非空字符串）；
+           * 上限取 `schemaReaders` 的数组上限 32，语义层的逐条校验仍由 `promptNormalization` 判。
+           */
+          normalisations: {
+            type: "array",
+            maxItems: 32,
+            items: {
+              type: "object",
+              properties: { original: { type: "string" }, normalized: { type: "string" } },
+              required: ["original", "normalized"],
+              additionalProperties: false
+            }
+          },
           questions: { type: "array", items: { type: "string" } },
           answer: { type: "string" },
           toolResultRefs: { type: "array", items: { type: "string" } }
@@ -352,27 +372,6 @@ function buildMessages(request: PlanRequest, channel: ModelChannel): ChatMessage
 }
 
 /**
- * **解析失败时交给协调器的东西**。
- *
- * 契约里 `PlanOutcome.plan` 是 `PlanEnvelope`，而它的注释写着"**不可信输出**：
- * 协调器必须用 `parsePlanEnvelope` 校验之后才认" —— 这一处就是那句话的落点：
- * 交出去的是**模型自己说的那个值**（能 JSON 解析就是那个对象，不能就是那段原文），
- * 于是协调器报出来的是**真实的字段路径**，而不是我们编的一句话。
- *
- * 为什么不在这里抛：抛出会绕过协调器的**一次性修复通道**（`PlanRequest.repair` 与
- * `MAX_PLAN_ATTEMPTS` 都在它手里），第二次机会就没了。
- *
- * 两处 `as` 是在说明"这个值的形状由协调器负责校验"，不是在绕过校验。
- */
-function asUntrustedEnvelope(failure: EnvelopeParseFailure): PlanEnvelope {
-  try {
-    return JSON.parse(failure.payload) as PlanEnvelope
-  } catch {
-    return failure.payload as unknown as PlanEnvelope
-  }
-}
-
-/**
  * 造一个模型规划器。
  *
  * `resolveProvider` **每次调用都现取**（不是构造时取一次）：一次运行里模型可能被问两次
@@ -381,9 +380,16 @@ function asUntrustedEnvelope(failure: EnvelopeParseFailure): PlanEnvelope {
  */
 export function createModelPlanner(dependencies: ModelPlannerDependencies = {}): PlannerPort {
   const resolveProvider = dependencies.resolveProvider ?? resolveActiveProvider
-  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[] }, signal: { isCancelled: () => boolean }) =>
+  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema" }, signal: { isCancelled: () => boolean }) =>
     startModelRun(
-      { runId: request.runId, profileId: request.profileId, profileRevision: request.profileRevision, messages: request.messages, tools: request.tools },
+      {
+        runId: request.runId,
+        profileId: request.profileId,
+        profileRevision: request.profileRevision,
+        messages: request.messages,
+        tools: request.tools,
+        ...(request.outputMode === undefined ? {} : { outputMode: request.outputMode })
+      },
       {
         invoke: (command, args) => invokeDesktop(command, args),
         // 取消之后不再产出事件（与 Rust 侧同一套语义）。
@@ -462,7 +468,18 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           throw new ModelPlannerError("provider_failed", "provider request budget exhausted before transport", false)
         }
         try {
-          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools }, { isCancelled: () => request.signal.aborted })
+          /**
+           * **输出模式随通道走**（T3，2026-10-24）。
+           *
+           * - `strict_json`（`json` 能力**已验证**才会选到它）⇒ `json_mode`：
+           *   让服务端真的要求"必须是一个 JSON 对象"，而不是只靠提示词。
+           *   **不**升级成 `json_schema`：旧证据只证明"能回一个 JSON"，不足以证明
+           *   "会按我们的 schema 校验"，而把两者混为一谈正是 E5 想消灭的那件事。
+           * - 文本通道与原生工具通道都不发输出约束：前者本来就是宽松文本，
+           *   后者的结构化由工具 schema 保证，再叠一个 `response_format` 只会让部分服务 400。
+           */
+          const outputMode = channel === "strict_json" ? "json_mode" : undefined
+          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }) }, { isCancelled: () => request.signal.aborted })
         } finally {
           request.signal.removeEventListener("abort", onAbort)
         }
@@ -506,6 +523,13 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         lastSignature = null
         const events: readonly ModelEvent[] = result.ok ? result.events : []
         const calls = events.filter((event) => event.kind === "tool_call")
+        /**
+         * **结束原因在这里取一次**（T1）：`completed.stopReason` 是 provider 给的原文，
+         * 截断 / 空响应 / 拒绝三种故障全靠它分类。取在工具分支之前，
+         * 是因为工具参数校验失败时同样要把它带进失败里。
+         */
+        const completed = events.find((event): event is Extract<ModelEvent, { kind: "completed" }> => event.kind === "completed")
+        const stopReason = completed?.stopReason
         /**
          * **一次响应里的多个调用：整批先判，再原子执行。**
          *
@@ -640,19 +664,60 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
              * **工具调用自己先过一遍信封校验**（Fix round 1 / M12）。
              *
              * 以前这里是 `toolCall.input as PlanEnvelope`，形状完全由协调器兜底。现在先校验一次：
-             * 通过就把**校验过的值**交出去（字段归一化、白名单都已落实）；不通过则把原值交出去，
-             * 让协调器按它自己的路径报**逐条字段错误**（修复通道在它手里，这一层不做决定）。
+             * 通过就把**校验过的值**交出去（字段归一化、白名单都已落实）；不通过则交出**结构化失败**
+             * —— 不再是"把原值当计划"（T1，2026-10-24）。
+             *
+             * E1 的根因就在这一步：`coerceEnvelopeArgument` 解出的对象只用来做校验，
+             * 失败时交出去的却是**原始字符串**，于是协调器只能报 `got a string`。
+             * 现在解码结果保存为变量，并随失败一起交出去（`decoded`），字段路径不再丢。
              */
-            const validated = parsePlanEnvelope(coerceEnvelopeArgument(toolCall.input, dependencies.onDiagnostic))
+            const decoded = coerceEnvelopeArgument(toolCall.input, dependencies.onDiagnostic)
+            const validated = parsePlanEnvelope(decoded)
             if (!validated.ok) {
               // 工具通道上送的参数**不是**信封：同样把原文（有界）留给本机诊断。
               dependencies.onDiagnostic?.(`[model] tool call ${toolCall.toolId} carried a plan that failed the envelope check: ${describeParseErrors(validated.errors)} — 参数：${boundedExcerpt(JSON.stringify(toolCall.input) ?? String(toolCall.input))}`)
+              /**
+               * **分类要看解码结果，而不是一律算"字段错"**（T2，2026-10-24）。
+               *
+               * 工具参数本来是一段 JSON 文本。它可能是：
+               * - 解出来是**对象**（甚至数组）⇒ 形状/字段的问题（`schema_invalid`）；
+               * - 根本解不出来（散文、半截 JSON）⇒ 那是 `invalid_json`。
+               * 一律报 `schema_invalid` 会把"模型压根没按 JSON 说话"再次说成"字段写错了"，
+               * 而这两种失败要说的话完全不同。
+               */
+              const parsedIntoJson = typeof decoded === "object" && decoded !== null
+              return {
+                failure: planFailureFromParseFailure(
+                  {
+                    ok: false,
+                    reason: parsedIntoJson ? "schema_invalid" : "invalid_json",
+                    errors: validated.errors,
+                    payload: typeof decoded === "string" ? decoded : JSON.stringify(decoded) ?? "",
+                    channel: "native_tools"
+                  },
+                  { decoded, ...(stopReason === undefined ? {} : { stopReason }) }
+                ),
+                ...ids
+              }
             }
-            return { plan: validated.ok ? validated.value : (toolCall.input as PlanEnvelope), ...ids }
+            return { plan: validated.value, ...ids }
           }
-          // 其余情况一律拒绝：我们**没有**发过那个工具，静默忽略它等于把
-          // "模型以为它调用了什么"变成"什么都没发生"。
-          throw new ModelPlannerError("unexpected_tool_call", `the provider returned a tool call (${toolCall.toolId}) that no tool schema of ours asked for — refusing to guess what it meant`)
+          /**
+           * **其余情况一律拒绝**（T1 起改成结构化失败，而不是抛）。
+           *
+           * 抛出去会绕过协调器的**一次性修复通道**：模型调用了一个没发布的工具，
+           * 本来是一句"这一轮只有这些工具"就能改好的事。分类交出去，
+           * 由协调器决定还要不要修 —— 决定权仍只在它手里。
+           */
+          return {
+            failure: createPlanFailure({
+              category: "unexpected_tool_call",
+              channel,
+              detail: `the provider returned a tool call (${toolCall.toolId}) that no tool schema of ours asked for — refusing to guess what it meant`,
+              ...(stopReason === undefined ? {} : { stopReason })
+            }),
+            ...ids
+          }
           }
         }
 
@@ -663,13 +728,16 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         /**
          * 原生工具通道上模型没调工具、而是回了一段文本时，**仍然按文本通道解析一次**：
          * 有些服务在给了工具表的情况下照旧用文本作答，而那段文本还是同一个信封合同。
-         * 让它走一次解析，比让用户白等一次修复往返要好；解析不通过时协调器照样会拒。
+         * 让它走一次解析，比让用户白等一次修复往返要好；解析不通过时交出去结构化失败。
          */
         const parsed = parseModelEnvelope(text, channel === "native_tools" ? "fenced_text" : channel)
         if (!parsed.ok) {
           // 原文（有界）只进本机诊断：它是"模型到底回了什么"唯一的证据。
           dependencies.onDiagnostic?.(`[model] envelope rejected (${parsed.channel}): ${describeParseErrors(parsed.errors)} — 原文：${boundedExcerpt(parsed.payload)}`)
-          return { plan: asUntrustedEnvelope(parsed), ...ids }
+          return {
+            failure: planFailureFromParseFailure(parsed, stopReason === undefined ? {} : { stopReason }),
+            ...ids
+          }
         }
         return { plan: parsed.value, ...ids }
       }

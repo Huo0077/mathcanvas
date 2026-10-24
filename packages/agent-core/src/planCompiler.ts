@@ -31,6 +31,7 @@ import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
+import { buildFoldChain } from "./foldChain"
 import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
 import { normalizeGeometryPrompt, expandExamShorthand } from "./latexNormalisation"
@@ -464,7 +465,17 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
    */
   const solvedFold = rescueWithSolvedFoldAngle(context, first)
   if (solvedFold !== null) return solvedFold
-  if (context.diagramWitnessSearch !== true) return first.result
+  /**
+   * **成熟路径默认可达**（T5.8，2026-10-24）：题面里确实有翻折、且能确定性地重建时，
+   * 不该因为"实验性的广义见证搜索没开"而整条落空。开关的语义一直是"允许按题设做通用候选搜索"，
+   * 不是"允许单次翻折"——把两者绑在一起，默认产品路径上就只能得到 `ok=false`（E7 的现场）。
+   *
+   * 顺序仍是"开关打开时广义搜索优先"（既有断言不被抢走）；开关关闭时，规范重建就是默认路径里唯一的救援。
+   */
+  if (context.diagramWitnessSearch !== true) {
+    const foldConstruction = rescueWithFoldConstruction(context, first)
+    return foldConstruction ?? first.result
+  }
   const rescue = rescuedByWitnessSearch(context, first)
   if (rescue.status === "rescued") return rescue.result
   /**
@@ -1636,7 +1647,8 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
   if (plan === null || context.prompt === undefined) return null
   if (plan.actions.some((action) => action.actionId === "solid.fold")) return null
 
-  const fold = readFoldTransformations(context.prompt)[0]
+  // 翻折构造只认 `motion = fold`（T4.3）：`rotate` 是另一种语义，交给别处。
+  const fold = readFoldTransformations(context.prompt).find((entry) => entry.motion !== "rotate")
   if (fold === undefined) return null
 
   /**
@@ -2414,8 +2426,17 @@ function rescueWithDihedralTriangle(context: PlanCompileContext, first: CompileO
 function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
-  const fold = readFoldTransformations(prompt)[0]
+  const fold = readFoldTransformations(prompt).find((entry) => entry.motion !== "rotate")
   if (fold === undefined) return null
+  /**
+   * **多条折叠但链不可解时不许只补第一条**（T6，2026-10-24）。
+   *
+   * `foldChain` 判成 `unsupported`（缺折角 / 引用没串起来）说明"题面里还有一次折叠我们算不出来"。
+   * 那时只按第一条补折，会让"题面说要折两次"被静默吞成一次 —— 而核验可能仍然通过，
+   * 用户看到的就是一张少折了一刀的图被判"已通过"。宁可不救，也不吞题设。
+   */
+  const chain = buildFoldChain(prompt)
+  if (readFoldTransformations(prompt).length > 1 && chain.status !== "sequential_resolvable") return null
   const quad = /四边形\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
   if (quad === null) return null
   const hostNames = new Set([quad[1]!, quad[2]!, quad[3]!, quad[4]!])
@@ -2464,6 +2485,15 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
       }
     } as unknown as (typeof first.plan.actions)[number]
   })
+  /**
+   * **连续折叠的依赖链**（T6，2026-10-24）。
+   *
+   * 只有 `foldChain` 判成 `sequential_resolvable`（每一步都引用前面折出来的点、且折角明确）时，
+   * 这里才在**第一笔折之后**追加后续的 `solid.fold`。判据交给 `foldChain` 一处：
+   * 多条独立折叠、缺折角这两种情况**不会**被拼成一条假链（上面已经就这一条早退过）。
+   */
+  const chainSteps = chain.status === "sequential_resolvable" ? chain.steps : []
+  const explicitAngle = chain.status === "single" || chain.status === "sequential_resolvable" ? chain.steps[0]?.angleDegrees : undefined
   const foldAction = {
     actionId: "solid.fold",
     actionKey: "fold-flap",
@@ -2474,36 +2504,85 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
       hinge: { from: fold.hinge.from, to: fold.hinge.to },
       apex: fold.apex,
       apexAs: fold.apexAs,
-      angle: 90
+      // 题面给了折角就用它；没给仍走"折角反求"（下面那段救援）。
+      angle: explicitAngle ?? 90
     }
   } as unknown as (typeof first.plan.actions)[number]
+  const chainActions = chainSteps.slice(1).map((step) => ({
+    actionId: "solid.fold",
+    actionKey: `fold-chain-${step.index}`,
+    factIds: [],
+    inputs: {
+      alias: `fold-chain-${step.index}`,
+      // 第二次折的是**第一次折后**的那张面：点名（含第一次产出的 `apexAs`）由 `foldChain` 保证引用正确。
+      vertexNames: [...step.transformation.face],
+      hinge: { from: step.transformation.hinge.from, to: step.transformation.hinge.to },
+      apex: step.transformation.apex,
+      apexAs: step.transformation.apexAs,
+      angle: step.angleDegrees ?? 90
+    }
+  }) as unknown as (typeof first.plan.actions)[number])
   const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
-    goal: "由平面见证坐标 + 题面比例 + 折角反求构造的折片",
+    goal: chainSteps.length > 0 ? "由平面见证坐标 + 题面比例 + 明确折角构造的连续折片" : "由平面见证坐标 + 题面比例 + 折角反求构造的折片",
     factIds: [],
-    actions: [host, ...bounds, foldAction]
+    actions: [host, ...bounds, foldAction, ...chainActions]
   }
   const prepared = cutFoldedCorner(plan)
   const verificationContext = { ...context, prompt: expandExamShorthand(prompt) }
   const compiled = compileOnce(prepared, verificationContext)
   let result = compiled.result
+  /**
+   * **折角是"题面给的"、"反求出来的"、还是"只是示意选的"**（T5，2026-10-24）。
+   *
+   * 三种情形不能混成一句话：
+   * - 题面明确写了折角 ⇒ 用题面的值；
+   * - 题面给了终态约束（如 `PC=4√3`）⇒ 由 `rescueWithSolvedFoldAngle` 反求；
+   * - **两者都没有** ⇒ 静态示意也要有个角，但那**不是**题设结论。旧实现在这里悄悄用 90°，
+   *   而 assumption 的文字还写着"折角反求"——用户会以为 90° 是题面算出来的。
+   */
+  let solvedFoldAngle = false
   if (result.diagramVerification?.status !== "passed" || !result.ok || result.draftDocument === null) {
     const solved = rescueWithSolvedFoldAngle(context, { ...first, plan: prepared, result })
     if (solved === null) return null
     result = solved
+    solvedFoldAngle = true
   }
   if (!result.ok || result.draftDocument === null || result.diagramVerification?.status !== "passed") return null
+  // 题面里有没有点名**折后点**的条件（例如 `PC=4√3`）：有，说明这个折角被整题核验约束住了，
+  // 即使我们用的是构造时的 90°，它也不是"随手选的"。
+  const foldAngleConstrained = first.obligations.ir.obligations.some((obligation) => obligation.targets.includes(fold.apexAs))
+  const angleWasAssumed = explicitAngle === undefined && !solvedFoldAngle && !foldAngleConstrained
+  const constructionText = explicitAngle !== undefined
+    ? `折片由平面见证坐标 + 题面比例 + **题面给出的折角**（${explicitAngle}°）规范重建；最终仍按题设核验。`
+    : solvedFoldAngle
+      ? "折片由平面见证坐标 + 题面比例 + 折角反求规范重建；最终仍按题设核验。"
+      : foldAngleConstrained
+        ? "折片由平面见证坐标 + 题面比例规范重建；题面里点名了折后点的条件，本次构造的折角在**整题核验**中成立（没有再单独反求）。"
+        : "折片由平面见证坐标 + 题面比例规范重建；**折角方向题面没有给出**，本次按 90° 作静态示意（未参加任何题设核验）。"
   return {
     ...result,
-    assumptions: [...result.assumptions, {
-      id: "witness.foldConstruction",
-      text: "折片由平面见证坐标 + 题面比例 + 折角反求规范重建；最终仍按题设核验。",
-      kind: "witness",
-      value: { candidate: candidate.names, hinge: fold.hinge, apex: fold.apex, apexAs: fold.apexAs },
-      overridable: true,
-      path: "envelope.actions"
-    }],
+    assumptions: [
+      ...result.assumptions,
+      {
+        id: "witness.foldConstruction",
+        text: constructionText,
+        kind: "witness",
+        value: { candidate: candidate.names, hinge: fold.hinge, apex: fold.apex, apexAs: fold.apexAs, angle: explicitAngle ?? (solvedFoldAngle ? "solved" : 90) },
+        overridable: true,
+        path: "envelope.actions"
+      },
+      ...(angleWasAssumed ? [{
+        id: "witness.foldAngleAssumed",
+        text: "题面没有给出折角，也没有能反求它的终态约束：本图按 90° 折作**静态示意**。它不是题设结论，不参与核验；要按真实折角出图，请在题面里写明折角或一条终态约束（例如 PC=4√3）。",
+        // `safe_default`：系统替用户挑了一个默认特值，用户改口（补折角）之后可以覆盖。
+        kind: "safe_default" as const,
+        value: { angle: 90 },
+        overridable: true,
+        path: "envelope.actions"
+      }] : [])
+    ],
     materialisedActions: result.actions
   }
 }
