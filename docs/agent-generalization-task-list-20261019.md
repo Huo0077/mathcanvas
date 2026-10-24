@@ -36,7 +36,7 @@
 | P3-4 | 3 | 向量式、二面角、`\overrightarrow` 等条件解析残留 | P1 | done | 二面角“为”写法 + 向量点积 `2AB·AO=|AB|²` 都已解析并核验；trig-23、trig-89 均 3/3 passed |
 | P4-1 | 4 | 只有结构化反馈，无渲染图像；无重叠/遮挡/标签碰撞 | P1 | open | 结构化 render evidence 进入修复；含包围盒重叠与标签碰撞 |
 | P4-2 | 4 | 修复预算与救援不组合 | P1 | done | 同一计划“线段顺序错 + 0° 折角 + 坐标错”可一次串起结构清洗、补折/折角反求并通过核验；`planCompiler.combinedRescue.test.ts` 钉住 |
-| P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | done | 确认面板显示通过/失败/未核验数量与逐条原因；未 `passed` 时隐藏“确认并提交”；3 个 UI 测试 38 条通过 |
+| P4-3 | 4 | “未核验”仍可出图，缺显式标记/fail-closed | P1 | partial | 确认面板显示通过/失败/未核验数量与逐条原因；`failed` / `unverified` 时隐藏“确认并提交”；**`undefined`（没有核验报告）仍显示按钮** —— 闸门是 `undefined \|\| status === "passed"`，与“未 passed 一律隐藏”不一致，待裁决；3 个 UI 测试 38 条通过 |
 | P4-4 | 4 | 渲染级美学/退化检查缺失（相机退化、近重合点） | P2 | done | 近重合、标签碰撞风险、全部共线三条警告；相机参数不在编译期，明确不在此判 |
 | P5-1 | 5 | LaTeX/OCR 归一化未进主路径 | P0 | partial | 已接入；11 道 HighMATH 原始 LaTeX 的 given 0→29、unverified 26→13，8/11 能读出条件 |
 | P5-2 | 5 | OCR 错字/符号解析残留（如“棱雉”） | P1 | done | 棱雉/棱椎/圆雉/圆椎等长替换 + `\vec{}` 归一；`latexNormalisation.ocr.test.ts` 覆盖纯文本与 LaTeX |
@@ -47,7 +47,7 @@
 | P6-4 | 6 | 无冻结 gold / 真实模型验收 | P2 | open（**用户 2026-10-20 决定先不做**） | 冻结题集 + 人评/真实模型读数。冻结表在 `packages/agent-core/src/benchmark/frozenThresholds.ts`（`authorization` 默认 `pending` ⇒ `assertPaidRunAllowed` 一律拒；预算 36 次请求 / $12）；`verifiedGoldCaseIds` 为空，**人评与美元止损都仍未测** |
 | P6-5 | 6 | v4-pro 821 秒 vs flash 39 秒的成本/延迟 | P2 | open | 按题型路由或缓存；给出预算 |
 
-## 本轮已完成（`97dde4b`）
+## 2026-10-17 本轮已完成（`97dde4b`）
 
 - 单面 `solid.create_polyhedron`（开放平面多边形）。
 - 3D 文档里的 `planar.*` 提升为可见三维图元。
@@ -55,7 +55,7 @@
 - `segment_reference_missing` 线段自动后移（含剪角）。
 - `unscoped_reference` 的 scoped 修复提示。
 - `Ctrl+A` 全选（整图删除的 workaround）。
-- 门禁：457 文件 / 4852 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
+- 门禁（**2026-10-20 复跑读数，不是 `97dde4b` 当天**）：457 文件 / 4852 通过 + 1 todo，typecheck 0，lint 0 error / 15 warning。
 
 ## 2026-10-19 P1-3 进展
 

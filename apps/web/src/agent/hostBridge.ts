@@ -56,7 +56,7 @@ export interface ConsentRecord {
   conversationId?: string
   expiresAt: number
   nonce: string
-  /** ????? consent ???????? */
+  /** 同意时锁定的渲染证据：渲染器回报的候选必须与这一版草稿一致。 */
   renderEvidenceBinding?: {
     draftId: string
     draftVersion: number
@@ -89,7 +89,7 @@ export type PreviewArtifact = {
   counts: DraftObjectCounts
   /** 基础文档的对象数，供面板说清"这次会多出/少掉多少"。 */
   baseCounts: DraftObjectCounts
-  /** ???????????????????? unverified? */
+  /** 候选渲染的核验结果；未核验时面板要如实说明，不能当成通过。 */
   candidateRenderVerification?: CandidateRenderVerification
 }
 
@@ -151,7 +151,7 @@ export interface HostBridgeDependencies {
   readConversationId?: () => string | null
   now?: () => number
   consentTtlMs?: number
-  /** ?????????????? fail-closed? */
+  /** 候选渲染证据端口；没注入时提交 fail-closed（不当作通过）。 */
   candidateRenderEvidence?: CandidateRenderEvidencePort
 }
 

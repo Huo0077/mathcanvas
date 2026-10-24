@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+
 import { describe, expect, it } from "vitest"
 
 import { cargoVersion, compareVersions, newestRelease, tauriVersion } from "./releaseFacts"
@@ -39,5 +41,28 @@ describe("版本真值：三处必须说同一个版本", () => {
     const release = newestRelease()
     expect(release.published, `${release.file} 里读不出「**发布日期：** YYYY-MM-DD」`).toBeDefined()
     expect(Number.isNaN(Date.parse(release.published!)), `${release.file} 的发布日期不是真日期`).toBe(false)
+  })
+
+  /**
+   * **入口与页头必须指向最新版**（2026-10-24 审查查实的漂移）。
+   *
+   * `current-status.md:463` 的 `最后更新` 一行在 v4.0.1 发布后仍写 `v4.0`，还把
+   * `docs-consistency` 写成 4 条时代的 12 项；同页顶部却是 v4.0.1 / 7 条 18 项。
+   * 前三条判据都看不见它（它们只比 tauri / Cargo / 发布说明三处）。
+   *
+   * 这里只钉**可判定的两行**：README 的「最新版本标签」与 current-status 的「最后更新」。
+   * 不扫全文，避免把历史叙述里的旧版本号误判成漂移。
+   */
+  it("**README 与 current-status 的版本声明必须指向最新 tag**", () => {
+    const tag = `v${newestRelease().version}`
+    for (const [file, marker] of [
+      ["README.md", "最新版本标签"],
+      ["docs/current-status.md", "最后更新"]
+    ] as const) {
+      const text = readFileSync(file, "utf8")
+      const line = text.split(/\r?\n/).find((entry) => entry.includes(marker))
+      expect(line, `${file} 里找不到含「${marker}」的那一行`).toBeDefined()
+      expect(line!, `${file} 的「${marker}」一行没有写最新 tag \`${tag}\`：${line!.slice(0, 160)}…`).toContain(tag)
+    }
   })
 })

@@ -2299,7 +2299,7 @@ axioms `["propext","Classical.choice","Quot.sound"]`；仓内对照文件 `DrawP
 
 **为什么这条命令必须窄**（这是本块的设计核心）：Lean 不是计算器 —— `#eval`、`IO.Process.run`、`@[extern]` 都能让它去干编译之外的事，所以"把一段文本交给编译器执行"本身就是一个**代码执行面**。做法是三条：
 
-1. **只接受我们自己模板生成的那种文件**（`proof/source.rs` 的 `inspect_template_source`，**在起进程之前**跑）：必须带生成标记、恰好一条允许的 `import`、一条有上限的 `set_option maxHeartbeats`（≤ 4_000_000）、一条针对**白名单定理名**（`draw_perpendicular_goal` / `draw_line_plane_perpendicular_goal`）的 `#print axioms`；并且**一个字都不许出现**能执行代码 / 反射 / 扩语法的关键字（`#eval` / `IO.` / `System.` / `unsafe` / `extern` / `run_cmd` / `elab` / `macro` / `syntax` / `initialize` / `include` 等 15 个）。**形状不对 ⇒ 不执行任何东西**（有一条用例专门钉这个：给一个绝不存在的 lake 路径，结果仍是"没有执行任何东西"）。
+1. **只接受我们自己模板生成的那种文件**（`apps/desktop/src-tauri/src/proof/source.rs` 的 `inspect_template_source`，**在起进程之前**跑）：必须带生成标记、恰好一条允许的 `import`、一条有上限的 `set_option maxHeartbeats`（≤ 4_000_000）、一条针对**白名单定理名**（`draw_perpendicular_goal` / `draw_line_plane_perpendicular_goal`）的 `#print axioms`；并且**一个字都不许出现**能执行代码 / 反射 / 扩语法的关键字（`#eval` / `IO.` / `System.` / `unsafe` / `extern` / `run_cmd` / `elab` / `macro` / `syntax` / `initialize` / `include` 等 15 个）。**形状不对 ⇒ 不执行任何东西**（有一条用例专门钉这个：给一个绝不存在的 lake 路径，结果仍是"没有执行任何东西"）。
 2. **工具链是"配上去的"，不是"从 PATH 里捡来的"**：只认 `DRAW_LEAN_LAKE` / `DRAW_LEAN_PROJECT` 两个环境变量。**刻意不做 PATH 搜索** —— 从 PATH 捡一个叫 `lake` 的东西，等于让任何能改 PATH 的人决定我们执行什么。没配置 ⇒ `unavailable`（**不是**"证不出来"），理由点名缺哪一个。
 3. **固定 argv + 两层上限**：`lake env lean <临时文件>`（没有 shell、没有可拼接参数）、墙钟超时（默认 180 s，前端给的值再夹到 10 分钟）、输出只留尾部 4 KB（并把 UTF-8 切边修好）。
 
@@ -3352,6 +3352,23 @@ theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerP
   修法是给它们加 UTF-8 BOM（各 +3 字节，`git diff --numstat` 每文件 `1/1`，只有第一行），
   并用权威检查器（比较 `[Text.Encoding]::Default` 与 UTF-8 视图的**行数**）复验。
   **注意**：这一处提交会让 `bom-check` 报 `mismatches=3` —— 那是**故意加的 BOM**，不是误删。
+
+## 2026-10-06 —— Agent N1 来源追溯与证据契约补丁
+
+- 补齐设计文档与代码的 ClaimEvidenceStatus.verified_instance 一致性。
+- 用户原话中的目标与自由点携带可回切的原文区间；旧手工集合继续如实表示来源未知。
+- RED/GREEN 用例覆盖解析、IR、兼容适配和报告；具体门禁与未交付范围见 docs/current-status.md §四 F。
+
+## 2026-10-06 —— N2 见证搜索加入默认关闭的实验性入口
+
+- 设置页新增独立开关；保存/刷新、损坏偏好 fail-closed 和不连带打开其它开关有单元与浏览器证据。
+- 只开启既有有界见证救援；题设核验与用户确认仍是提交前硬门禁。当前题集覆盖与真实 provider 成功率未因此改变，后续需独立测量。
+
+## 2026-10-06 —— N2 见证搜索支持唯一点名的非环首三角直角
+
+- 只对底面三角形做点名驱动的循环旋转；四边形与没有可靠底角证据的输入仍保守拒绝。
+- 内核构造、搜索、编译生产链的正反例覆盖；最终候选仍通过题设残差和实体拓扑判据。
+- 定向 3 文件 / 97 项、非 Lean 慢集成全库 324 文件 / 3775 项通过 + 1 todo；类型检查和 Web 构建通过，lint 0 error / 13 warning；全量浏览器 195/195 通过；未提供真实 provider 命中率变化数据。
 
 ## 2026-10-05 —— 人工可读性：先把"要读的东西"呈现出来（N4e）；pass@1 轴第一次真实读数；删掉一个假指标
 
@@ -4498,7 +4515,7 @@ theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerP
   （关系词在句子里、但状语把匹配隔开），它们没丢掉，说明上一轮的修法确实在管用。
 - **把不变量钉在题集这一层**（本批第二个产出）：新增一条用例
   ——**每一条题都必须至少留下一条给定义或一条 residue**。它用的就是跑读数时的同一个
-  `parseObligationIR`（不另写一份判断）。这样以后往 `cases.jsonl` 加新写法，静默丢掉会红在
+  `parseObligationIR`（不另写一份判断）。这样以后往 `cases.ts` 加新写法，静默丢掉会红在
   **题集**这一层，而不必等谁去逐条读归因。
 - **一条必须说清的不可比性**：覆盖率**不能**和上一批直接比 ——`5/7`（71%）→ `14/21`（67%）
   看起来是下降，但题集**换了**：新加的三类（`unsupported-expression`、`dynamic-request`、
@@ -4894,7 +4911,7 @@ theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerP
   - `report.ts`（运行记录与报告）—— 三条硬规矩：**必需字段必须"在"**（"没测"写成显式 `null`，
     不是把这个键删掉：删掉之后"没测"与"忘了写"长得一模一样）、**模式必须标识**、
     **claim 必须有证据**（唯一例外是 `not_measured` —— 逼它给证据等于逼它编）。
-  - `cases.jsonl` —— 七类各一条的起步题集（欠定 / 矛盾 / 未支持表达式 / 点名打乱 / 二面角 /
+  - `cases.jsonl`（已迁至 `packages/agent-core/src/benchmark/cases.ts`）—— 七类各一条的起步题集（欠定 / 矛盾 / 未支持表达式 / 点名打乱 / 二面角 /
     动态请求 / 普遍性请求）。
 - **一处刻意的口径**：计划原文写"必须含 `provider` / `model`"，而 `deterministic_local` **本来就没有
   provider**。所以口径是**键必须在、值可以是 `null`**；`real_provider` 模式下两者必须是非空字符串。
@@ -6125,21 +6142,3 @@ commit_rejected: action_compile: envelope.actions[1]: operation 0: section plane
 - 几何 Worker 的契约缺 `completionAssumptions` / `repair` / `planDiagnostics` / `assumptions` / `questions`，缺任何一项都会在接线后**静默降级**（确认面板变空、可修的计划变得不可修、该问用户的被报成"编译失败"）。
 
 **门禁读数**（本机实测，明细见 `docs/current-status.md`）：`npm test` 238 文件 / 2810 用例通过 + 1 todo；`npm run typecheck` 6 workspace + e2e 全 exit 0；`npm run lint` 0 error / **13** warning（基线从 14 降 1 —— 见下"顺手修掉的两处依赖问题"）；`npx playwright test` 42 spec / 141 用例全绿。（**读读数要看每一条自己的 exit code**：把几条门禁串在一条命令里跑时，整条命令的退出码来自**最后一条**，前面某一条失败会被吞掉 —— 本阶段就因此漏看过一次 `tsc` 的失败，后来改成逐条取 `$LASTEXITCODE`。）
-
-
-## 2026-10-06 —— Agent N1 来源追溯与证据契约补丁
-
-- 补齐设计文档与代码的 ClaimEvidenceStatus.verified_instance 一致性。
-- 用户原话中的目标与自由点携带可回切的原文区间；旧手工集合继续如实表示来源未知。
-- RED/GREEN 用例覆盖解析、IR、兼容适配和报告；具体门禁与未交付范围见 docs/current-status.md §四 F。
-
-## 2026-10-06 —— N2 见证搜索加入默认关闭的实验性入口
-
-- 设置页新增独立开关；保存/刷新、损坏偏好 fail-closed 和不连带打开其它开关有单元与浏览器证据。
-- 只开启既有有界见证救援；题设核验与用户确认仍是提交前硬门禁。当前题集覆盖与真实 provider 成功率未因此改变，后续需独立测量。
-
-## 2026-10-06 —— N2 见证搜索支持唯一点名的非环首三角直角
-
-- 只对底面三角形做点名驱动的循环旋转；四边形与没有可靠底角证据的输入仍保守拒绝。
-- 内核构造、搜索、编译生产链的正反例覆盖；最终候选仍通过题设残差和实体拓扑判据。
-- 定向 3 文件 / 97 项、非 Lean 慢集成全库 324 文件 / 3775 项通过 + 1 todo；类型检查和 Web 构建通过，lint 0 error / 13 warning；全量浏览器 195/195 通过；未提供真实 provider 命中率变化数据。

@@ -57,7 +57,7 @@ describe("describing where a tangent touches", () => {
 
   it("reports the parameter for a parameter-anchored tangent", () => {
     expect(tangentAnchorLabel({ kind: "parameter", parameter: 1.23456 }, () => null)).toBe("曲线参数 1.235")
-    expect(tangentAnchorLabel({ kind: "common", otherSourceId: "fn-2", branch: 1 }, () => null)).toBe("????? 2 ????")
+    expect(tangentAnchorLabel({ kind: "common", otherSourceId: "fn-2", branch: 1 }, () => null)).toBe("第 2 条公切线")
     expect(tangentAnchorLabel(undefined, () => null)).toBe("函数图像上的横坐标")
   })
 })

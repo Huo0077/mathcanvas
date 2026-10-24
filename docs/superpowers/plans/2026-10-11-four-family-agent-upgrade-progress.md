@@ -109,7 +109,7 @@
 | 旧 Task 12b | 新 Task 16 |
 | 旧 Task 15–17 | 新 Task 17–19 |
 | 旧 Task 13b/13c | 新 Task 20/21 |
-| 旧 Task 18c | 新 Task 5 记录待裁决，不另行插队 |
+| 旧 Task 18c | 未并入新编号；2026-10-11 裁决为“不另行插队”，按旧记录归档 |
 
 ## 6. 按数字顺序执行的任务卡
 
@@ -343,7 +343,7 @@
 
 **退出**：普通作图和自动 Lean 各有独立“可放行/继续默认关”的明确判定；已有旧能力不退化，完整编译、浏览器、桌面、CI 和人评证据可复核。Lean 被安全关闭时，不能把它写成整题自动证明已交付。
 
-## 7. 唯一的进度表（下一项 Task 14）
+## 7. 进度表（2026-10-12 功能验收快照；完成度以 `docs/current-status.md` 的 16 / 3 / 2 口径为准）
 
 | Task | 状态 | 退出证据 |
 | --- | --- | --- |
@@ -367,7 +367,7 @@
 | 18 | **完成**（2026-10-12） | **① 一次异步证明"回来时还算不算数"**（`proofArtifact.ts` 新增 `ProofAttemptIdentity` + `proofAttemptStaleness`，RED 7 条先红后绿）：判据是**草稿 id + 内容哈希 + claim + 目标条件出处 + inputHash + 后端版本**，**看哈希不看版本号**（暂存同一份内容不算过期），六档分开 —— `draft_replaced`（切工作区/导入别的文档）/ `document_changed`（**改题/改图/撤销**）/ `claim_replaced` / `condition_replaced` / `input_changed` / `backend_replaced`；**没绑内容哈希一律过期**（fail-closed）；**没捕获的那几栏不参与判定**（调用方拿不到就不许拿它当判据）。与 `verifyProofArtifact` 的分工写在注释里：那条判**命题一级**（刻意不绑文档指纹，R51/R56），这条判**这一轮/这一份图**，所以 `document_changed` 的措辞是"**这一轮的 claim 不能凭它升级**"，不是"那条命题不再成立" —— 两句话分开。**② 草稿层接上**：证明块发起前捕获身份、跑完复查；`previewOf` **每次都重新判一次**（后续 `stage` 让候选内容变了而证明块没被重写时，那一栏会翻成 `stale`，`draftStore.test.ts` 有用例真红真绿），过期时只改结局与理由、**不抹掉产物**。**③ 界面分档**（`ConfirmationPanel`）：标题按范围报告写"**受限引理已证（不是整道题）**"/"原题完整证明"/"过期（这份结果说的是另一张图）"，并列出**没进命题的题面条件**与过期原因；`data-proof-scope` / `data-proof-stale` 供读数。**④ e2e**：新 `e2e/agent-proof-lifecycle.spec.ts` **2 passed** —— 浏览器里没有桌面工具链 ⇒ 那一段如实说"没跑成"、范围报告列出 `BC ∥ AD` 这类没进命题的条件、**确认按钮可用且真的提交成功**；开关关着 ⇒ 那一段根本不存在、同样提交得掉（为此新增夹具题面 `PROOF_GOAL_PROMPT`：同一只四棱锥 + 一句可形式化的目标；**实测踩到** `localPlanner.isAnalysisQuestion` 认"求"字 ⇒ 题面里必须留作图动词，否则本地规划器不认这条意图）。**边界（如实记）**：**桌面真实开旗 → 一次 Lean → 改题/撤销 ⇒ 标 `stale`** 的 UI/IPC/版本证据**没有做**（本机没有桌面 + 工具链），它的判据在单测里钉住，**不拿 mock 冒充真跑**；设置入口与"只写自己那个键"沿用既有证据（`next-phase-flag-entry.spec.ts` 7 passed）。 |
 | 19 | **完成（本机那一半；真桌面发行验收仍未做，见下）**（2026-10-12） | **① 先固定现状（只读，零下载）**：`proof/lean4/` 的工程定义**逐条钉住**（新 `scripts/proof-spike/lean4Pin.test.ts` 4 条：`lakefile.toml` 的 mathlib rev == `lake-manifest.json` 的 `rev` == `inputRev`，且必须是 **40 位 commit** 而不是 `master`；URL 是 mathlib4；`lean-toolchain` 是具体版本而不是 latest；**README 必须写出当前钉住的 commit、且不许再说过期的话** —— 最后这条**先真红**：旧 README 还写着"manifest 不进仓库""换台机器复跑不保证同一份 mathlib"，与 2026-10-10 已钉住的事实矛盾；已改写成"依赖闭包是钉住的"，并保留两条真实代价：首次要下 GB 级东西、工具链不随包）。**实测读数（只读）**：`lean --version`（直接工具链）= `Lean (version 4.35.0-rc3, …, commit 470d5ce1400764999581fd26d5d72b00d990b0f4, Release)`，`lake env lean --version` 在 `proof/lean4` 里给出**同一个**串（说明 `lean-toolchain` 确实解析到那份工具链）；`~/.elan/toolchains/` 下 v4.34.1 与 v4.35.0-rc3 都在；`.lake` 展开 **7.00 GB**（mathlib olean **8615** 个，`Mathlib.olean` 在位）⇒ **本机缓存已在，本批没有触发任何下载/升级**（**停车条件未触发**；换机器时的首次下载仍需单独同意）。**② 安全判据复核（既有，本批全绿）**：三份定向测试 **74 通过**（`lean4Toolchain` / `lean4Adapter` / `lean4TemplateAllowlist`）—— `sorry` 拒、用户自定义 `axiom` 拒、报告缺失拒、报告属于别的定理拒、报告形状不认识拒、**exit code 单独不算数**、编译错 `failed`、进程级墙钟超时 `timeout`，以及"模板生成的 import/定理名 ↔ Rust 白名单"双向一致；Rust 侧 `npm run test:rust` **250 通过 / 0 失败 / 3 ignored**（17 个套件：能力集最小、只暴露具名 IPC、无通用命令、CSP、密钥无明文出口…）。**③ 真后端实测**：`npm run proof:smoke` **8 通过**（打出十栏后端审查：许可证读自工具链目录、`child-process` 进程模型、原生依赖清单、启动预算、两层超时策略、`sorry`/自定义 axiom 的失败行为、缓存与沙箱——**强沙箱下证明运行"未测"如实写着**）；`npm run test:lean` **8 passed / 1195.4 s**：冷启动单独量 **219.5 s**，四类目标各 ~62 s 全部 `formally_proved / verified / exit=0` 且公理恰好 `["propext","Classical.choice","Quot.sound"]`，`sorry` 那次 **exit=0 而判 `failed`**（真实后端上再证一次"退出码不算数"），窄 import **64.4 s** vs `import Mathlib` **588.4 s**（成本纪律有读数）。**未做（如实记）**：**打包后在干净/无网的桌面上的验收** —— 本机没有打包产物、也没有另一台干净机器，所以本任务**只主张"本机真跑绿 + 判据齐 + 工程定义钉住"**，**不主张"已发布/已发行"**（计划那句"没有真桌面发行验收，就算本机 Lean 真跑绿也不标已发布自动证明"照办）。 |
 | 20 | **进行中（免授权部分已完成；付费那一步停在授权门口）**（2026-10-12） | **① 事先冻结（计划写死的先决条件）**：新 `packages/agent-core/src/benchmark/frozenThresholds.ts` + 同名测试（7 条）把四族的**样本按题号**（开发集 8 + 留出集 4，逐题带 `offlineAttemptability`）与 **pass@1 / pass@3 / 人评 unreadable 上限 / 延迟上限 / 单题费用上限**冻住，并记 `frozenOn: 2026-10-12`、`paidRuns: 0`（"事先冻结"这件事可证：跑过付费观测之后再谈冻结就拒）。**② 停止条件落成函数**：`assertPaidRunAllowed` 四道门 —— 先冻结（`paidRuns === 0`）、**先授权**（`authorization.status === "granted"`）、额度写清（`maxRequests`/`maxCostUsd` 正数 + `grantedBy` 有人）、这次请求不许超；**默认 `pending` ⇒ 一个请求都不发**（用例先红后绿，含"点头之后仍受额度约束""缺一栏照样拒"）。**③ 离线失败分布（不发任何请求）**：新 `apps/web/src/agent/fixtures/frozenThresholds.local.test.ts` 拿**真实的** `matchLocalIntent` 逐条核对 12 道真题题面 —— 实测 **triangle 0/3、conic 0/3、function 0/3、solid 1/3** 会被本地规划器**回应**，而唯一被回应的那一条（2023 新课标Ⅰ卷 18：`正四棱柱中多条棱上的点构成的空间关系。`）拿到的是**夹具那只正棱柱**、不是这道题（该用例自己的 `requiredFigure` 恰好写着"不能用假定立方体遮蔽原题条件"）⇒ **12/12 都仍需真实 provider 判定**；计划点名的五层里只有 planning 层拆得出来，其余四层"无从谈起"（**不是通过**）。**④ 授权请求（等用户点头）**：**36 个请求**（12 题 × 3 次独立试验）、**最高费用 $12**（族上限：三角/圆锥/函数 $0.25/题、立体 $0.40/题 ⇒ 最坏 $10.35，留余量）。**⑤ "授权一到就能跑"已经建好**（新 `packages/agent-core/src/benchmark/examEvaluation.ts` + 8 条用例，**一个网络请求都没有**）：`examRequestPlan` 打出请求清单（实测 `{"cases":12,"trialsPerCase":3,"requests":36,"worstCaseCostUsd":10.35,…}`）；`runExamEvaluation` **第一件事就是 `assertPaidRunAllowed`**（未授权时 `runCase` **一次都不被调用**，用例先红后绿），跑完再核对实际费用是否超授权上限；`summarizeExamEvaluation` 把记账口径写死 —— **pass@1 = 第一次就成**、**pass@3 = 三次独立里至少一次成**、**同轮修复成功单独一栏**、**人评没标就是 `null`**（不许当可读）、**阈值只对照不改写**（用例断言冻结表逐字不变）、**少跑一条或缺一个试次就抛**（不是"按有的算"）。**⑥ 产品侧适配器已接**（新 `apps/web/src/agent/fixtures/examRunAdapter.ts` + 4 条用例，零网络）：`createExamRunCase` 调一次产品侧规划器端口（`createModelPlanner()`）并把结果映射成试验结局 —— 结局映射的**唯一一处**在 core（`examTrialOutcomeOf`：计划 / 问路 / 回了一段解释 / 抛错各自一档）；**费用由注入的 `costOf` 给**（这一层不编价格）；**抛错记 `error` 并把原文带上**（不吞成"没跑"）。**如实记的边界**：修复发生在协调器的编译回路里、端口这一层看不到 ⇒ 这条适配器一律 `repaired: false`，所以真跑时 `repairedCount` 会是 0；要么把协调器的修复标记接进来，要么在报告里读成"这一轮没走协调器"。**⑦ 2026-10-14 第二批（免授权）**：修掉一条**会让付费那一跑"看起来在跑"的真缺陷**（请求只有 `{run, userMessage}` ⇒ 真实 `createModelPlanner` 在发请求前抛 `TypeError`；RED 实测 transport 调用 **0** 次），并把一次试验从"单次规划请求"改成**规划 + 编译**：新增 `ExamFailureLayer`（plan / schema / construct / verify）与唯一判定 `examTrialVerdictOf`、观测 `failureLayer`、报告 `failureLayers` 与 `repairPath`（`not-driven`，与"同轮修复"矛盾则抛）；工作区偏好次序抽成 `agentRunner.planWorkspaceFor` 供协调器与评测共用。门禁：全量单测 375 文件 / **4427 通过** + 1 todo / 0 失败（44.85 s，exit 0）、全量 e2e **237 通过**（2.0 m）、`typecheck` exit 0、`lint` 0 error / 13 warning。**未做**：真实 provider 的 pass@1/pass@3/人评/延迟/费用读数 —— **未获授权前不跑、也不跳到 Task 21**。 |
-| 21 | 待做 | 尚无此任务的 RED→GREEN 与适用产品/兼容验收 |
+| 21 | **部分完成** | v4.0 / v4.0.1 已发布；干净机器、断网发行与教师/学生走查未做，见本文件 2026-10-16 块 |
 
 **记录纪律**：只有 Task n 的业务 RED、最小 GREEN、受影响旧路径与实际产品门禁都记录完，才将第 n 行改为完成并启动 Task n+1。历史定向 Lean 单测 7 文件/88 项通过、文档门禁 4 文件/12 项通过是既有基线，不替 Task 17–19 的原题证明/真 Lean/桌面发行。若 Task 19 只验明安全不可用，它的证明状态仍是“默认关”，Task 21 不得据此宣布自动证明已发布。每次将日期/HEAD/命令/错误数写回 docs/current-status.md，其他进度文件只同步唯一指针。
 
@@ -421,14 +421,14 @@ Task 15 的公切线缺口已在支持范围内补齐：新增 `function.create_
 
 仅完成实时输出内存上限这一项；OS 隔离、真实 Lean 慢集成、桌面发行/安装验收仍未完成。
 
-## 2026-10-16 ?????? F1?Task 16 ????????
+## 2026-10-16 功能闭环 F1：Task 16 候选渲染证据门禁
 
-- [x] `HostBridge` ???????????run/draft/version/hash???? renderer ????? draft fail-closed?
-- [x] consent ????????commit ?????????????????????????????no-op ????
-- [x] ?? `spatial-modeling` ?? manifest ???????? `HostBridgeLike` ????????????? 71/71????? 12/12?Web typecheck exit 0?lint 0 error / 13 existing warnings?
-- [ ] ?????????? WebView/IPC/?????/??????????????`structured_only` ?????????
+- [x] `HostBridge` 的候选渲染证据绑定 `runId` / `draftId` / `draftVersion` / `documentHash`；渲染器回报与当前草稿对不上时，consent 前 fail-closed。
+- [x] consent 只能放行同一份候选；提交前复核，no-op draft 不能借旧证据过关。
+- [x] 动作清单 `spatial-modeling` 补齐 `solid.unfold`，测试替身 `HostBridgeLike` 同步；定向 71/71、合同用例 12/12、绑定用例 8/8；Web `typecheck` exit 0；`lint` 0 error / 13 existing warnings。
+- [ ] 真实 WebView/IPC 渲染与视觉人评未验收；`structured_only` 不是实际截图。
 
-????????????????????????? Task 16 ????????
+边界与逐条读数以 `docs/current-status.md` 的 2026-10-16 F1 条为准；Task 16 的发行验收仍未过。
 
 ## 2026-10-16 Functional audit: Task 9 gold cases and oracle evidence
 

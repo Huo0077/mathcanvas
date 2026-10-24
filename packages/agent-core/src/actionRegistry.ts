@@ -162,8 +162,8 @@ export type FieldKind =
   | "scopedRef"      // {scope:"draft",alias} / {scope:"scene",ref}
   | "idList"         // 同一文档内的裸 id 数组
   | "interval"       // 有界区间 [lo, hi]，两个有限数且 lo < hi（函数图像的定义域）
-  | "uv"             // ?????? [u, v]
-  | "stringPair"     // ???????????????
+  | "uv"             // 面上点的二维参数 [u, v]
+  | "stringPair"     // 两个字符串组成的定长数组（如 u、v 参数 id）
 
 /**
  * **按字段名的种类表**（大多数动作共用）。
@@ -242,7 +242,7 @@ export function declaredFieldKind(spec: ActionSpec, field: string): FieldKind | 
  * 漏掉不会红、只会让模型与编译器各说各话。
  */
 export interface RawFieldTypes {
-  /** ??????????? */
+  /** 参数对（u、v） */
   uv?: "uv"
   /** 平面动作里 `center` 是 2D 点、正棱锥里是 3D 底面中心 —— 同一个名字两种形状。 */
   center?: "point" | "vector"

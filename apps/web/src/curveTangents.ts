@@ -60,7 +60,7 @@ export function tangentAnchorLabel(anchor: TangentAnchor | undefined, pointLabel
   }
   if (anchor.kind === "common") {
     const branch = (anchor.branch ?? 0) + 1
-    return `????? ${branch} ????`
+    return `第 ${branch} 条公切线`
   }
   return `曲线参数 ${Number.isFinite(anchor.parameter) ? anchor.parameter.toFixed(3) : "—"}`
 }

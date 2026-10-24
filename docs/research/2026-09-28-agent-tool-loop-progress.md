@@ -4,7 +4,7 @@
 
 > **2026-10-11 四家族真题驱动升级：本页保留旧 tool-loop 时点的过程快照。** 新的[真题需求调研](2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码实施调研](2026-10-11-github-agent-implementation-survey.md)与[连续编号 Task 1–21 的作图/兼容/Lean/缺陷任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另行记录；不可把本页旧样本分数当四家族真题作图成功率，现时仍以[当前状态](../current-status.md)为准。
 
-Date: September 29, 2026. Historical status then: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
+Date: September 28–29, 2026. Historical status then: **the six-phase checklist is complete, or deferred by a recorded decision.** The final release gate is **not** met — one line lacks real-provider data.
 
 > **2026-10-06 当前范围提示**：本文件是 2026-09-29 旧 tool-loop 阶段快照（含当时“无真实 provider 数据”）；不记录现行作图题 V0a–V3。当前 V0a WIP 与真实 provider 小样本以 [当前状态](../current-status.md)、[任务追踪](../agent-next-round-progress.md) 及 [发布门禁](../acceptance/agent-release-gate.md) 为准，旧 H0–H4 全课程计划也已被作图题范围修订取代。
 >

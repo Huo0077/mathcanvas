@@ -106,7 +106,7 @@ export interface AgentRuntimeDependencies {
   readConversationId?: () => string | null
   consentTtlMs?: number
   now?: () => number
-  /** ?? HostBridge ?????????????? HostBridge fail-closed? */
+  /** 与 HostBridge 同一语义的候选渲染证据端口；没注入时按 fail-closed 处理。 */
   candidateRenderEvidence?: CandidateRenderEvidencePort
   /**
    * **这次运行请求哪些技能**（`SKILL_MANIFESTS` 里的 id）。
