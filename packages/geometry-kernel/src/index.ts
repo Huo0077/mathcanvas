@@ -103,3 +103,4 @@ export { normalizeHostParameter } from "./reactive/constraints"
  * 而这三处此前各写一份（`[...value]` 按码位拆字 / `/^[A-Z]$/` / 自己拼 `A′`）。
  */
 export * from "./pointNames"
+export * from "./foldSystem"

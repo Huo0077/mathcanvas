@@ -67,7 +67,8 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
 
   // 发起运行：只在**出现新的在途消息**时做一次。
   useEffect(() => {
-    if (!pendingReplyId || startedRef.current === pendingReplyId) return
+    // 切回工作区会重新挂载组件，ref 会重置；已绑定运行的消息继续使用原来的草稿。
+    if (!pendingReplyId || pendingMessage?.runId || startedRef.current === pendingReplyId) return
     startedRef.current = pendingReplyId
     // 在途助手消息的前一条就是刚才那条用户消息 —— 它的 id 要交给运行账本。
     const messages = activeConversation?.messages ?? []
@@ -75,7 +76,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
     const promptMessage = pendingIndex > 0 ? messages[pendingIndex - 1] : undefined
     if (!promptMessage) return
     void onRun?.(promptMessage.text, promptMessage.id)
-  }, [pendingReplyId, activeConversation, onRun])
+  }, [pendingReplyId, pendingMessage?.runId, activeConversation, onRun])
 
   // 有新内容就滚到底：用户永远先看到最新的一条。
   // `?.()`：`scrollTo` 不是每个环境都有（jsdom 就没有），而"滚动失败"不该把一次渲染炸掉。

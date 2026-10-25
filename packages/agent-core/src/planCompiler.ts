@@ -1,6 +1,6 @@
 import type { GeometryDocument, PrimitiveSpec, Workspace } from "@draw/dsl"
 import { commitTransaction, compileAction, createIdAllocator, solidTopology3, type ActionContext, type DomainOperation, type DraftAction, type IdAllocator } from "@draw/scene-graph"
-import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance, searchFoldAngles } from "@draw/geometry-kernel"
+import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance, searchFoldAngles, type FoldSystemOptions } from "@draw/geometry-kernel"
 
 import {
   MAX_REPAIR_ATTEMPTS,
@@ -32,6 +32,7 @@ import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationR
 import { parseDiagramObligations } from "./diagramObligations"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { buildFoldChain } from "./foldChain"
+import { solvePlanFoldSystem } from "./solver/coupledFolds"
 import { materialisedHostAction, planFigureMaterialisation } from "./figureMaterialisation"
 import { applyNormalisation, parseNormalisationReply, type NormalisationReport } from "./promptNormalization"
 import { normalizeGeometryPrompt, expandExamShorthand } from "./latexNormalisation"
@@ -185,6 +186,8 @@ import { cubeCenterFrom, cubeEdgeLengthFrom, explicitlyRequestsCube } from "./ge
  */
 
 export interface PlanCompileContext {
+  /** Bounded joint-search controls; worker callers use the finite defaults. */
+  foldSystemOptions?: FoldSystemOptions
   /** 基准（真实）文档。编译**不会**改它。 */
   document: GeometryDocument
   workspace?: Workspace
@@ -372,6 +375,22 @@ function describeError(error: unknown): string {
  */
 export function compilePlan(input: unknown, context: PlanCompileContext): PlanCompileResult {
   const first = compileOnce(input, context)
+  // A passing default angle still needs independent constraints before we call it a joint solution.
+  if (first.result.ok && first.result.diagramVerification?.status === "passed"
+    && (first.plan?.actions.filter(action => action.actionId === "solid.fold").length ?? 0) > 1) {
+    const joint = rescueWithCoupledFoldAngles(context, first)
+    if (joint !== null) {
+      if (joint.plan?.kind !== "plan") return joint
+      const cut = cutFoldedCorner(joint.plan)
+      if (cut === joint.plan) return joint
+      const final = compileOnce(cut, context).result
+      if (final.ok && final.diagramVerification?.status === "passed") return {
+        ...final, materialisedActions: final.actions, assumptions: joint.assumptions
+      }
+      return joint
+    }
+    if (!first.result.ok) return first.result
+  }
   /**
    * **折角剪裁**（2026-10-17 用户截图）：模型坐标已经通过核验时，默认路径不会再走救援。
    * 但 `solid.fold` 只追加折片、不会把折走的角从宿主面上拿走 —— 画面于是同时有平放的 AEF
@@ -1671,7 +1690,35 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
 }
 
 function rescueWithSolvedFoldAngle(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if ((first.plan?.actions.filter(action => action.actionId === "solid.fold").length ?? 0) > 1) return rescueWithCoupledFoldAngles(context, first)
   return rescueWithAnalyticFoldAngle(context, first) ?? rescueWithSearchedFoldAngle(context, first)
+}
+
+function rescueWithCoupledFoldAngles(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
+  if (first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  const solved = solvePlanFoldSystem(first.plan, first.obligations.ir, context.prompt,
+    plan => compileOnce(plan, { ...context, idAllocator: undefined }).result, context.foldSystemOptions)
+  if (solved === null) return null
+  if (solved.status === "failed") {
+    if (!first.result.diagnostics.some(d => d.code === solved.code)) first.result.diagnostics.push(planDiagnostic("geometry_validation", solved.code, "envelope.actions", solved.detail))
+    first.result.ok = false
+    first.result.draftDocument = null
+    first.result.operations = []
+    first.result.actions = []
+    first.result.plan = null
+    first.result.verification = null
+    first.result.repair = repairRequestFor(toParseErrors(first.result.diagnostics), 1)
+    return null
+  }
+  // Allocate the real draft IDs once, only after candidates passed isolated trials.
+  const final = compileOnce(solved.plan, context).result
+  if (!final.ok || final.draftDocument === null || final.diagramVerification?.status !== "passed") return null
+  return { ...final, materialisedActions: final.actions, assumptions: [...final.assumptions, {
+    id: "joint-fold-angles", kind: "witness", overridable: true, path: "envelope.actions",
+    text: `同时数值求解${solved.unknownActions.length}个未知折角，并已重新编译、回代全部题设。选取 ${solved.solutions[0]!.map(v => `${v.toFixed(6)}°`).join("、")}；另有${solved.solutions.length - 1}组通过核验的候选。这是有界数值见证，不保证枚举全部解，不是形式证明。`,
+    value: { method: "bounded-joint-least-squares", complete: false, actionIndices: solved.unknownActions,
+      candidates: solved.solutions, evaluations: solved.search.evaluations, termination: solved.search.termination }
+  }] }
 }
 
 /** Numeric fallback for supported angle relations; the final whole-diagram check remains authoritative. */
@@ -2365,7 +2412,7 @@ function rescueWithDihedralTriangle(context: PlanCompileContext, first: CompileO
  * **折片题的规范重建**（2026-10-19，稳定性复跑）：不再依赖模型把“四边形 + E/F + fold”
  * 写对，而是用平面见证搜索构造 A–D，再按题面比例建 E/F、按题面补折、剪角、反求折角。
  *
- * 只处理“四边形 + 一个折片”这一族；别的结构仍走原有救援。
+ * 处理“四边形 + 单折片或有依赖的连续折片”；别的结构仍走原有救援。
  */
 function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
@@ -2375,12 +2422,12 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
   /**
    * **多条折叠但链不可解时不许只补第一条**（T6，2026-10-24）。
    *
-   * `foldChain` 判成 `unsupported`（缺折角 / 引用没串起来）说明"题面里还有一次折叠我们算不出来"。
+   * `foldChain` 判成 `unsupported`（引用没串起来）说明不能可靠追加这条折叠链。
    * 那时只按第一条补折，会让"题面说要折两次"被静默吞成一次 —— 而核验可能仍然通过，
    * 用户看到的就是一张少折了一刀的图被判"已通过"。宁可不救，也不吞题设。
    */
   const chain = buildFoldChain(prompt)
-  if (readFoldTransformations(prompt).length > 1 && chain.status !== "sequential_resolvable") return null
+  if (readFoldTransformations(prompt).length > 1 && chain.status !== "sequential_resolvable" && chain.status !== "coupled") return null
   const quad = /四边形\s*([A-Z])([A-Z])([A-Z])([A-Z])/.exec(prompt)
   if (quad === null) return null
   const hostNames = new Set([quad[1]!, quad[2]!, quad[3]!, quad[4]!])
@@ -2432,12 +2479,11 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
   /**
    * **连续折叠的依赖链**（T6，2026-10-24）。
    *
-   * 只有 `foldChain` 判成 `sequential_resolvable`（每一步都引用前面折出来的点、且折角明确）时，
-   * 这里才在**第一笔折之后**追加后续的 `solid.fold`。判据交给 `foldChain` 一处：
-   * 多条独立折叠、缺折角这两种情况**不会**被拼成一条假链（上面已经就这一条早退过）。
+   * 明确角度的链直接构造；`coupled` 链先填试算角，稍后必须联合求解与整题复核。
+   * 只有依赖关系明确的链才在第一笔折之后追加动作，多条独立折叠仍不在这里拼接。
    */
-  const chainSteps = chain.status === "sequential_resolvable" ? chain.steps : []
-  const explicitAngle = chain.status === "single" || chain.status === "sequential_resolvable" ? chain.steps[0]?.angleDegrees : undefined
+  const chainSteps = chain.status === "sequential_resolvable" || chain.status === "coupled" ? chain.steps : []
+  const explicitAngle = chain.status === "single" || chain.status === "sequential_resolvable" || chain.status === "coupled" ? chain.steps[0]?.angleDegrees : undefined
   const foldAction = {
     actionId: "solid.fold",
     actionKey: "fold-flap",
@@ -2469,7 +2515,7 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
   const plan: Extract<PlanEnvelope, { kind: "plan" }> = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
-    goal: chainSteps.length > 0 ? "由平面见证坐标 + 题面比例 + 明确折角构造的连续折片" : "由平面见证坐标 + 题面比例 + 折角反求构造的折片",
+    goal: chain.status === "coupled" ? "由平面见证坐标 + 题面条件联合求解构造的连续折片" : chainSteps.length > 0 ? "由平面见证坐标 + 题面比例 + 明确折角构造的连续折片" : "由平面见证坐标 + 题面比例 + 折角反求构造的折片",
     factIds: [],
     actions: [host, ...bounds, foldAction, ...chainActions]
   }
@@ -2487,9 +2533,13 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
    *   而 assumption 的文字还写着"折角反求"——用户会以为 90° 是题面算出来的。
    */
   let solvedFoldAngle = false
-  if (result.diagramVerification?.status !== "passed" || !result.ok || result.draftDocument === null) {
+  if (chain.status === "coupled" || result.diagramVerification?.status !== "passed" || !result.ok || result.draftDocument === null) {
     const solved = rescueWithSolvedFoldAngle(context, { ...first, plan: prepared, result })
-    if (solved === null) return null
+    if (solved === null) {
+      first.result.diagnostics.push(...result.diagnostics.filter(d => d.code.startsWith("fold_system_") && !first.result.diagnostics.some(old => old.code === d.code)))
+      first.result.repair = repairRequestFor(toParseErrors(first.result.diagnostics), 1)
+      return null
+    }
     result = solved
     solvedFoldAngle = true
   }
@@ -2498,7 +2548,9 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
   // 即使我们用的是构造时的 90°，它也不是"随手选的"。
   const foldAngleConstrained = first.obligations.ir.obligations.some((obligation) => obligation.targets.includes(fold.apexAs))
   const angleWasAssumed = explicitAngle === undefined && !solvedFoldAngle && !foldAngleConstrained
-  const constructionText = explicitAngle !== undefined
+  const constructionText = chain.status === "coupled"
+    ? "折片由平面见证坐标 + 题面比例 + 多折角联合数值求解重建；全部题设已重新回代，具体角度与候选见联合求解记录。"
+    : explicitAngle !== undefined
     ? `折片由平面见证坐标 + 题面比例 + **题面给出的折角**（${explicitAngle}°）规范重建；最终仍按题设核验。`
     : solvedFoldAngle
       ? "折片由平面见证坐标 + 题面比例 + 折角反求规范重建；最终仍按题设核验。"

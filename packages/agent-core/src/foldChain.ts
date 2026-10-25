@@ -14,7 +14,7 @@
  *
  * ## 它**不**做什么
  *
- * - 不求解未知的多个折角。那需要联立求解（独立里程碑）：这一层只如实报告"还缺哪些角"。
+ * - 不在分类器里求解折角。未知角交给 `solver/coupledFolds.ts` 联立求解。
  * - 不生成动作、不写文档。构造仍属于 `planCompiler` / 内核。
  */
 
@@ -47,13 +47,14 @@ export type FoldChainClassification =
   | { status: "single"; steps: FoldChainStep[] }
   /** 顺序链：每一步都引用前面某一步产出的点，且每一步的折角都明确。 */
   | { status: "sequential_resolvable"; steps: FoldChainStep[] }
+  | { status: "coupled"; steps: FoldChainStep[]; unknowns: string[] }
   /**
    * 多折叠但这一层**不**接：`reason` 说清是哪一种，`unknowns` 列出还缺的自由度。
    * 返回"不支持"而不是"猜一个"，是本层唯一允许的失败方式。
    */
   | {
       status: "unsupported"
-      reason: "fold_angle_unknown" | "reference_not_chained"
+      reason: "reference_not_chained"
       steps: FoldChainStep[]
       unknowns: string[]
       detail: string
@@ -83,8 +84,7 @@ export function readFoldAngles(prompt: string): (number | undefined)[] {
  * 2. 多于一条时，**第 k 条必须引用前面某一步产出的点**（`apexAs`，或该步涉及的折后点名）。
  *    引用不串起来的多折叠不是"顺序折叠"，而是"同一起始状态上的多次独立折叠"——
  *    那时坐标按哪一步算都不对，必须如实拒绝；
- * 3. 串起来之后，**每一步的折角都要明确**，否则剩下的自由度是"两个未知折角联立"——
- *    那是另一个里程碑，这里只报告缺哪几个角。
+ * 3. 串起来之后，明确角度的链直接构造；缺角的链标记为 `coupled`，由联合求解器处理。
  */
 export function buildFoldChain(prompt: string): FoldChainClassification {
   const transformations = readFoldTransformations(prompt)
@@ -130,11 +130,9 @@ export function buildFoldChain(prompt: string): FoldChainClassification {
   const angleUnknown = steps.filter((step) => step.angleDegrees === undefined)
   if (angleUnknown.length > 0) {
     return {
-      status: "unsupported",
-      reason: "fold_angle_unknown",
+      status: "coupled",
       steps,
       unknowns: angleUnknown.map((step) => `第 ${step.index} 条折叠的折角`),
-      detail: "顺序链的引用是明确的，但缺折角：多个未知折角需要联立求解，本层不做。"
     }
   }
 

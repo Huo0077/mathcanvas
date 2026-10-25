@@ -74,7 +74,7 @@ describe("fold clause binding", () => {
     ["先将△AEF沿EF翻折90°至△PEF，再将△PEF沿PF翻折至△QPF", [90, undefined]]
   ])("keeps an unspecified angle on its own clause: %s", (prompt, angles) => {
     const chain = buildFoldChain(prompt)
-    expect(chain.status).toBe("unsupported")
-    if (chain.status === "unsupported") expect(chain.steps.map(s => s.angleDegrees)).toEqual(angles)
+    expect(chain.status).toBe("coupled")
+    if (chain.status === "coupled") expect(chain.steps.map(s => s.angleDegrees)).toEqual(angles)
   })
 })

@@ -158,7 +158,7 @@ const PROVIDER_CASES: ProviderCase[] = [
 type FoldCase = {
   id: string
   prompt: string
-  expect: { foldCount: number; chain: "none" | "single" | "sequential_resolvable" | "unsupported" }
+  expect: { foldCount: number; chain: ReturnType<typeof buildFoldChain>["status"] }
 }
 
 const FOLD_CASES: FoldCase[] = [
@@ -169,7 +169,7 @@ const FOLD_CASES: FoldCase[] = [
   { id: "primed", prompt: "将△ABC沿BC翻折至△A′BC", expect: { foldCount: 1, chain: "single" } },
   { id: "rotated", prompt: "将△ABC绕BC旋转到△PBC", expect: { foldCount: 1, chain: "single" } },
   { id: "sequential_angles", prompt: "先将△AEF沿EF翻折90°至△PEF，再将△PEF沿PF折叠60°至△QPF", expect: { foldCount: 2, chain: "sequential_resolvable" } },
-  { id: "sequential_without_angles", prompt: "先将△AEF沿EF翻折至△PEF，再将△PEF沿PF翻折至△QPF", expect: { foldCount: 2, chain: "unsupported" } },
+  { id: "sequential_without_angles", prompt: "先将△AEF沿EF翻折至△PEF，再将△PEF沿PF翻折至△QPF", expect: { foldCount: 2, chain: "coupled" } },
   { id: "two_independent", prompt: "将△AEF沿EF翻折90°至△PEF，将△BCD沿CD折叠60°至△QCD", expect: { foldCount: 2, chain: "unsupported" } }
 ]
 
@@ -225,6 +225,11 @@ describe("T7 — offline replay of the planning pipeline (simulated provider res
       const chain = buildFoldChain(testCase.prompt)
       expect(chain.status, testCase.id).toBe("unsupported")
       if (chain.status === "unsupported") expect(chain.unknowns.length).toBeGreaterThan(0)
+    }
+    for (const testCase of FOLD_CASES.filter((entry) => entry.expect.chain === "coupled")) {
+      const chain = buildFoldChain(testCase.prompt)
+      expect(chain.status, testCase.id).toBe("coupled")
+      if (chain.status === "coupled") expect(chain.unknowns).toHaveLength(2)
     }
   })
 

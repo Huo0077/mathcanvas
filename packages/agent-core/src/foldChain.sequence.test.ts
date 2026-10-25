@@ -51,9 +51,8 @@ describe("T6 — sequential fold chains", () => {
   it("reports the missing angles as unknowns instead of pretending the chain is solvable", () => {
     const chain = buildFoldChain(NO_ANGLES)
 
-    expect(chain.status).toBe("unsupported")
-    if (chain.status !== "unsupported") return
-    expect(chain.reason).toBe("fold_angle_unknown")
+    expect(chain.status).toBe("coupled")
+    if (chain.status !== "coupled") return
     expect(chain.unknowns).toEqual(["第 1 条折叠的折角", "第 2 条折叠的折角"])
   })
 

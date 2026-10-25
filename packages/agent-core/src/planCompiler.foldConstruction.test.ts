@@ -128,7 +128,7 @@ describe("sequential fold chain construction", () => {
   })
 
   /**
-   * **反例（不许吞题设）**：同一句话去掉两个折角 ⇒ `foldChain` 判 `fold_angle_unknown`，
+   * **反例（不许吞题设）**：同一句话去掉两个折角且不补终态条件 ⇒ 联立系统欠定，
    * 这时**不许**只按第一条补折然后报通过 —— 那样用户拿到的是少折了一刀的图。
    */
   it("refuses to fold only the first of two folds when the second angle is unknown", () => {

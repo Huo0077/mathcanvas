@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAgentConversation, useAgentStore } from "../../agentStore"
 import { AgentWorkspace } from "./AgentWorkspace"
@@ -30,6 +30,19 @@ describe("agent workspace", () => {
     expect(screen.getByRole("heading", { name: "有什么数学问题要一起做？" })).toBeTruthy()
     expect(screen.getByRole("log", { name: "对话记录" }).textContent).toContain("发送第一条指令后")
     expect(screen.getByRole("button", { name: "发送" }).hasAttribute("disabled")).toBe(true)
+  })
+
+  it("does not restart a running or confirmable message after returning from the canvas", async () => {
+    const onRun = vi.fn((_prompt: string, promptMessageId: string) => {
+      useAgentStore.getState().pinRun({ runId: "existing-run", promptMessageId })
+    })
+    const mounted = render(<AgentWorkspace onBackToWorkspace={() => {}} onRun={onRun} />)
+    fireEvent.change(screen.getByRole("textbox", { name: "对话输入" }), { target: { value: "连续翻折" } })
+    fireEvent.click(screen.getByRole("button", { name: "发送" }))
+    await waitFor(() => expect(onRun).toHaveBeenCalledTimes(1))
+    mounted.unmount()
+    render(<AgentWorkspace onBackToWorkspace={() => {}} onRun={onRun} />)
+    expect(onRun).toHaveBeenCalledTimes(1)
   })
 
   it("sends a multi-line prompt with the button and appends it to the transcript", async () => {
