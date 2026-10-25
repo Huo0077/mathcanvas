@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
 import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
 
-import { CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
+import { USER_CHAIN_PROMPT, userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -434,6 +434,8 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
    * 否则会被"只在问读数"那道闸挡掉（见 `LocalIntent.allowWhenAsking` 的说明）。
    */
   /** T6：两次顺序折叠（第二次折的是第一次折后的面）—— 只给四边形，折痕与两笔折由构造生成。 */
+  // 用户原题（连等 `AD=AB=2CD=2`）：浏览器闭环用，验证解析与预览、确认、撤销整条链路。
+  { all: ["AD=AB=2CD=2", "二面角"], allowWhenAsking: true, skillIds: ["spatial-modeling"], build: () => userChainPyramidPlan() },
   { all: ["四边形", "翻折", "折叠"], allowWhenAsking: true, skillIds: ["planar-basics", "spatial-modeling"], build: () => userFoldChainPlan() },
   { all: ["四边形", "翻折", "pc=4√3"], allowWhenAsking: true, skillIds: ["planar-basics", "spatial-modeling"], build: () => userFoldPlan() },
   /**

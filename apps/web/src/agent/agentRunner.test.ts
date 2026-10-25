@@ -106,6 +106,25 @@ describe("the confirm and commit cycle", () => {
     expect(assistant.failure?.message).not.toContain("请补充明确点名")
   })
 
+  /**
+   * **解析层读不完整时，不许把系统缺陷说成"请补点名"**（2026-10-26）。
+   *
+   * `AB=CD=` 断尾：点名清楚、写法本身不成立；真正该说的是"系统暂未能完整解析条件"，
+   * 并给出用户可操作的退路（逐条写法），而不是让用户去补一个并不缺的点名。
+   */
+  it("条件解析不完整时不再默认要求用户补点名", async () => {
+    const planner: PlannerPort = {
+      plan: async () => ({ plan: pyramidPlan(), requestId: "parse-gap", attemptId: "attempt-1" })
+    }
+    const runner = createAgentRunner({ planner })
+    const result = await runAndWait(runner, `${PYRAMID_PROMPT}，AB=CD=`)
+
+    expect(result.phase).toBe("failed")
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.message).toContain("系统暂未能完整解析条件")
+    expect(assistant.failure?.message).not.toContain("请补充明确点名")
+  })
+
   beforeEach(() => {
     resetScene()
     resetAgent()

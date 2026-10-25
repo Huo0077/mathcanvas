@@ -103,14 +103,28 @@ span: 全部满足 prompt.slice(start,end) === sourceText
 | `chainConsistency.test.ts`（编译 + 草稿） | 3 passed |
 | `tsc -p packages/agent-core` | 0 error |
 | 全量 `vitest` | **489 文件 / 5167 通过 + 1 todo / 0 失败** |
+| Worker 生产策略 + 草稿（`chainWorkerStage.test.ts`） | 通过：原题过线程边界后 12/12 核验通过 |
+| 浏览器闭环（`e2e/agent-chain-equality.spec.ts`） | 通过（6.4s）：等待确认 → 12/12 通过、未核验 0 → 确认提交 → 单次撤销回原样 |
 
-## 7. 尚未完成（不冒充已完成）
+## 7. 本轮补齐与仍未完成
 
-- **P1 诊断分类与文案**：失败仍可能落到通用"请补充明确点名"；本轮未把原因码贯穿到 UI。
-- **Worker 生产适配器与浏览器闭环**（任务书 §6 第 4、5 项）：本轮只覆盖到 `compilePlan` 与
-  `DraftStore.stage`（同进程），未跑 `createWorkerCompileStrategy` + `inlineWorker`，
-  也未跑浏览器 e2e。
-- **`docs/current-status.md` / `CHANGELOG.md` 更新**：见本轮同批提交。
+**已补齐**
+
+- **P1 用户文案**：`agentRunner` 新增"解析不完整"这一支——`无法识别连等中的 / 长度必须是有限正数 /
+  连等表达式在等号处断尾` 走到"系统暂未能完整解析条件，本次未提交"，并给出逐条写法的退路；
+  不再默认让用户"补充明确点名"（新增 `agentRunner` 用例：`AB=CD=` 断尾）。
+- **Worker 生产链路**：`chainWorkerStage.test.ts` 用真的 `createWorkerCompileStrategy` +
+  `inlineWorker(handleGeometryRequest)` + `DraftStore.stage`，原题 12/12 通过。
+- **浏览器闭环**：`e2e/agent-chain-equality.spec.ts` 用**原题原话**走通
+  等待确认 → 12/12 通过、未核验 0 → 确认提交 → `Ctrl+Z` 一次回到原样（6.4s）。
+- **文档**：`CHANGELOG.md`、`docs/current-status.md` 已更新。
+
+**仍未完成**
+
+- **结构化原因码**：本轮用原因文案分类（解析失败/点名缺失）；尚未把 `reasonCode` 枚举从
+  parser 一路带到协调器与 UI。
+- **`docs/feature-catalog.md`**：解析能力已扩，但目录条目尚未补。
+- **目标求解**：二面角余弦仍按既有能力如实报告；核验通过不等于一般性证明。
 
 ## 8. 尚不支持的表达式
 
