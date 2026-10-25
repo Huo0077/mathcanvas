@@ -1,6 +1,7 @@
 import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 
 import { parseShapeClause } from "./solver/shapeGrammar"
+import { parseLengthChains } from "./lengthEquality"
 
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
@@ -1957,6 +1958,20 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   const givens: DiagramObligation[] = []
   const unverified: DiagramObligationSet["unverified"] = []
   const used = new Set<number>()
+
+  /**
+   * **长度连等整条解析**（2026-10-26）：`AD=AB=2CD=2` 这类混合连等必须在句型循环**之前**
+   * 整条消费，否则普通连等与倍数句型会各读一半（`AD=` 落进未核验、AB 拿到错误长度）。
+   * 这里只处理"线段的 `=` 链"；单段长度与冒号比例仍走既有读取器。
+   */
+  for (const chain of parseLengthChains(givenText)) {
+    for (let at = chain.start; at < chain.end; at += 1) used.add(at)
+    if (chain.ok) {
+      for (const draft of chain.drafts) givens.push({ ...draft, sourceText: chain.sourceText, start: chain.start, end: chain.end })
+    } else {
+      unverified.push({ sourceText: chain.sourceText, reason: chain.reason })
+    }
+  }
 
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
   for (const { pattern, read, allowAfterLabelColon, allowOverlap } of matchers) {

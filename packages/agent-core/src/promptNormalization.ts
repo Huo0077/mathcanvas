@@ -91,6 +91,42 @@ export function buildNormalisationPrompt(prompt: string, unread: readonly Unread
 }
 
 /** 逐条过阀门；不过的就进 `rejected`（带原因）。**任何一条不过都不影响别的条目**。 */
+/**
+ * **长度语义的规范形**（2026-10-26）：只对"长度/比例"这一族条件声明等价。
+ *
+ * 判据不是"字数/字母/关系词"相同，而是**约束语义**相同：
+ * - 只要链上给了绝对长度，就只看各段的定长（等长/比例由定长蕴含，免得把等价写法判成不等价）；
+ * - 没有绝对长度时，看等长与比例（值按 1e-9 归一）；
+ * - 任何一侧读不干净（有未核验残留、出现本层不认识的类型）⇒ 返回 null，调用方**不许**声称等价。
+ */
+function lengthSemanticsOf(text: string): string[] | null {
+  const parsed = parseDiagramObligations(text)
+  if (parsed.unverified.length > 0) return null
+  const lengths = new Map<string, number>()
+  const relations: string[] = []
+  for (const given of parsed.givens) {
+    if (given.kind === "fixedLength" && given.value !== undefined) {
+      lengths.set([...given.targets].sort().join(""), Number(given.value.toFixed(9)))
+      continue
+    }
+    if (given.kind === "equalLength") {
+      relations.push(`eq:${[...given.targets].sort().join("-")}`)
+      continue
+    }
+    if (given.kind === "segmentRatio" && given.value !== undefined) {
+      relations.push(`ratio:${[...given.targets].sort().join("-")}=${Number(given.value.toFixed(9))}`)
+      continue
+    }
+    // 其他族（角度、垂直、平行、中点…）不在这条等价判据的范围内。
+    return null
+  }
+  return (lengths.size > 0 ? [...lengths.entries()].map(([key, value]) => `len:${key}=${value}`) : relations).sort()
+}
+
+function sameSemantics(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((entry, index) => entry === right[index])
+}
+
 export function parseNormalisationReply(reply: unknown, prompt: string, unread: readonly UnreadClause[]): NormalisationReport {
   const parsed = parsedReply(reply)
   const clauses = isRecord(parsed) && Array.isArray(parsed.clauses) ? parsed.clauses : null
@@ -127,6 +163,12 @@ export function parseNormalisationReply(reply: unknown, prompt: string, unread: 
     const weakened = RELATION_FAMILIES.filter((family) => family.pattern.test(original) && !family.pattern.test(normalized))
     if (weakened.length > 0) {
       reject(`改写把关系换弱了（${weakened.map((family) => family.name).join("、")}）：条件不许改。`)
+      continue
+    }
+    const originalSemantics = lengthSemanticsOf(original)
+    const normalizedSemantics = lengthSemanticsOf(normalized)
+    if (originalSemantics !== null && (normalizedSemantics === null || !sameSemantics(originalSemantics, normalizedSemantics))) {
+      reject(`改写改变了长度/比例条件（原文 ${originalSemantics.join("、")}；改写后 ${normalizedSemantics === null ? "读不完整" : normalizedSemantics.join("、")}）。条件不许改值或删减。`)
       continue
     }
     const givens = parseDiagramObligations(normalized).givens.length

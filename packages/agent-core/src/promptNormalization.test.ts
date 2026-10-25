@@ -135,3 +135,31 @@ describe("编译期接线", () => {
     expect(result.diagramVerification?.checks.some((check) => check.kind === "unparsed")).toBe(true)
   })
 })
+
+/**
+ * **改写不许改值或删条件**（2026-10-26）：模型提交的三条改写里只有一条是等价的。
+ *
+ * 旧校验只看"能否读出至少一个 given"，于是 `AD=AB=2CD=2` 被改成 `AD=2`（删了两条）
+ * 或 `AD=3，AB=2，CD=1`（改了值）也会被接受 —— 那等于让模型把题面改弱成它能画的样子。
+ */
+const CHAIN_PROMPT = "四棱锥 P-ABCD 中，AD=AB=2CD=2，画出这个棱锥。"
+const CHAIN_UNREAD = [{ sourceText: "AD=AB=2CD=2", reason: "原题出现了尚未被可靠解析的几何条件，未核验。" }]
+
+describe("normalisation must preserve the length semantics", () => {
+  it("rejects deleting constraints", () => {
+    const report = parseNormalisationReply(replyWith([{ original: "AD=AB=2CD=2", normalized: "AD=2" }]), CHAIN_PROMPT, CHAIN_UNREAD)
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("长度/比例")
+  })
+
+  it("rejects changing a value", () => {
+    const report = parseNormalisationReply(replyWith([{ original: "AD=AB=2CD=2", normalized: "AD=3，AB=2，CD=1" }]), CHAIN_PROMPT, CHAIN_UNREAD)
+    expect(report.accepted).toEqual([])
+  })
+
+  it("accepts the equivalent expansion", () => {
+    const report = parseNormalisationReply(replyWith([{ original: "AD=AB=2CD=2", normalized: "AD=2，AB=2，CD=1" }]), CHAIN_PROMPT, CHAIN_UNREAD)
+    expect(report.rejected).toEqual([])
+    expect(report.accepted).toHaveLength(1)
+  })
+})

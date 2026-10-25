@@ -23,8 +23,10 @@ describe("normalizeGeometryPrompt", () => {
     expect(normalizeGeometryPrompt("三棱雉 $P-ABC$。圆雉的体积")).toBe("三棱锥P-ABC。圆锥的体积")
   })
 
-  it("expands chained equalities and equilateral wording for the parser", () => {
-    expect(normalizeGeometryPrompt("$PA=PB=2$")).toBe("PA=2，PB=2")
+  it("keeps chains verbatim (the deterministic parser reads them) and still expands equilateral wording", () => {
+    // 2026-10-26：连等不再在 LaTeX 入口被改写 —— 旧改写会把 `AD=AB=2CD=2` 读成 `AD=2，AB=2CD=2`。
+    expect(normalizeGeometryPrompt("$PA=PB=2$")).toBe("PA=PB=2")
+    expect(normalizeGeometryPrompt("$AD=AB=2CD=2$")).toBe("AD=AB=2CD=2")
     expect(normalizeGeometryPrompt("$△ABC是边长为2的等边三角形$")).toBe("AB=2，AC=2，BC=2")
   })
 

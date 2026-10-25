@@ -27,13 +27,9 @@ function fixOcrText(text: string): string {
 export function expandExamShorthand(text: string): string {
   return text
     .replace(/△?([A-Z])([A-Z])([A-Z])是边长为([0-9.]+)的等边三角形/g, "$1$2=$4，$1$3=$4，$2$3=$4")
-    .replace(
-      /((?:[A-Z][₀₁₂₃₄₅₆₇₈₉]?[A-Z][₀₁₂₃₄₅₆₇₈₉]?=)+)([0-9.]+|√[0-9.]+)/g,
-      (_match, chain: string, value: string) => {
-        const segments = [...chain.matchAll(/([A-Z][₀₁₂₃₄₅₆₇₈₉]?[A-Z][₀₁₂₃₄₅₆₇₈₉]?)=/g)].map((match) => match[1]!)
-        return segments.map((segment) => `${segment}=${value}`).join("，")
-      }
-    )
+    // 连等（`PA=PB=2`）**不再在这里改写**（2026-10-26）：这个正则只认"纯线段 + 值"，
+    // 遇到 `AD=AB=2CD=2` 会从 `AB` 开始吃，把 AD 改成 2、把乘数当整条等式的值。
+    // 连等由 `lengthEquality.ts` 整条确定性解析，各阶段共用同一份语义。
     .replace(/([0-9])\s*[.。]\s*(?=[\u4e00-\u9fff])/g, "$1，")
     .replace(/(^|[，,；;。.])\s*若/g, "$1")
 }

@@ -3,16 +3,24 @@ import { describe, expect, it } from "vitest"
 import { expandExamShorthand } from "./latexNormalisation"
 
 /**
- * **带下标的链式相等**（2026-10-19，solid-32 现场）：`AB=AA₁=2` 里的 `AA₁` 是
- * 两个点名 A、A₁；原来的链式展开只认单字符点名，于是留下一个孤零零的 `AB=`。
+ * **连等不再由 LaTeX 入口改写**（2026-10-26）。
+ *
+ * 旧实现用一条只认"纯线段 + 值"的正则把 `PA=PB=2` 展开成两条；遇到
+ * `AD=AB=2CD=2` 时它从 `AB` 开始吃，把 AD 改成 2、把乘数当成整条等式的值。
+ * 现在连等由 `lengthEquality.ts` 整条解析，这一层只保留**不改变语义**的清理
+ *（OCR 错字、数字后接中文、行首"若"、等边三角形展开）。
  */
-describe("expandExamShorthand with subscript names", () => {
-  it("expands a chain whose segment names contain subscripts", () => {
-    expect(expandExamShorthand("AB=AA₁=2")).toBe("AB=2，AA₁=2")
+describe("expandExamShorthand leaves chains to the deterministic parser", () => {
+  it("does not rewrite a chain whose segment names contain subscripts", () => {
+    expect(expandExamShorthand("AB=AA₁=2")).toBe("AB=AA₁=2")
   })
 
-  it("still expands plain chains", () => {
-    expect(expandExamShorthand("PA=AB=BC=2")).toBe("PA=2，AB=2，BC=2")
+  it("does not rewrite plain chains either", () => {
+    expect(expandExamShorthand("PA=AB=BC=2")).toBe("PA=AB=BC=2")
+  })
+
+  it("does not rewrite a chain with a coefficient", () => {
+    expect(expandExamShorthand("AD=AB=2CD=4")).toBe("AD=AB=2CD=4")
   })
 
   it("splits a number followed by a Chinese sentence and strips a leading 若", () => {
