@@ -123,7 +123,7 @@ span: 全部满足 prompt.slice(start,end) === sourceText
 
 - **结构化原因码**：本轮用原因文案分类（解析失败/点名缺失）；尚未把 `reasonCode` 枚举从
   parser 一路带到协调器与 UI。
-- **`docs/feature-catalog.md`**：解析能力已扩，但目录条目尚未补。
+- **`docs/feature-catalog.md`**：已补长度连等条目（2026-10-26）。
 - **目标求解**：二面角余弦仍按既有能力如实报告；核验通过不等于一般性证明。
 
 ## 8. 尚不支持的表达式

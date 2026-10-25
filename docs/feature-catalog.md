@@ -480,6 +480,8 @@ P7 的详细设计与切片验收见 [`2026-09-15-p7-engineering-drawing-design.
 - **体检覆盖说明（收口）**：审计方声明未覆盖的两块已由本轮补齐并判定无缺陷——`IntersectionPreview3dCache` 的剪枝（缓存只含本次扫描的 pair、`truncated` 不入缓存、上限 120 生效）与 `threeScene` 的 rAF / 拖动内部（`pointercancel` 有绑定、卸载会取消取景动画并清运行时引用、拖动会话与指针状态同生共死）。**仍未改**：`pointercancel` 提交拖动而非中止（需要先确认触摸平台的手势语义）；依赖图对 3/4 目标约束（共线 / 共面）不建边；`boolean3d.compact` 每面一次 `sort + join` 的签名拼串（微小开销）。
 - **平面画布的网格是固定尺寸（用户要求）**：一格恒为 **1 个世界单位**（`GRID_CELL`），每 10 格一条主线（`GRID_MAJOR_EVERY`），缩放只改变**可见范围**（看到更多 / 更少的格），格子的世界尺寸不变——与 3D 背景坐标系同一套语义。旧实现按屏幕像素挑"好读"的步长（0.1/0.2/0.5/1/2/5/…），缩放时格子本身会变，网格因此不能当尺子用。画布上有 `data-grid-cell` / `data-grid-major` 读数可供断言，`e2e/planar-grid-cell.spec.ts` 在真实浏览器里量相邻网格线的世界间距恒为 1。
 
+- **长度连等整条解析与一致性（2026-10-26）**：`AD=AB=2CD=2` 读成 AD=2、AB=2、CD=1，`AD=AB=2CD=4` 读成 AD=4（旧实现给 AD=2）；断尾、非正数、无法识别的项整条落未核验，不再局部读取或把 `AB=AC=0` 弱化成等长。连等由 `lengthEquality` 唯一定义，LaTeX 入口不再自行展开；模型改写须通过长度语义等价校验（删条件、改值被拒）。边界：系数只支持正数，括号/分式系数/角度连等不在范围。见[修复记录](audit/2026-10-26-chain-equality-parse-and-consistency.md)。
+
 ## 参考来源
 
 同类项目的调研、许可证边界和借鉴决策见 [`docs/research/graphing-tools.md`](./research/graphing-tools.md)。
