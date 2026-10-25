@@ -12,6 +12,7 @@ use mathcanvas_desktop_lib::repository::provider_profiles::{
 
 fn profile(id: &str, name: &str, model: &str) -> ProviderProfile {
     ProviderProfile {
+        max_output_tokens: None,
         id: id.to_string(),
         name: name.to_string(),
         protocol: "openai_compatible".to_string(),
@@ -73,6 +74,22 @@ fn survives_a_restart() {
 
     assert_eq!(reopened.list().len(), 1);
     assert_eq!(reopened.get("openai").expect("get").name, "OpenAI");
+}
+
+#[test]
+fn output_limit_survives_restart_and_invalid_limits_do_not_write() {
+    let dir = TempDir::new("output-limit");
+    let file = dir.file("providers.json");
+    let mut store = ProviderProfileStore::open(&file).expect("open");
+    let mut p = profile("p", "P", "model");
+    p.max_output_tokens = Some(8192);
+    store.upsert(p.clone(), None).expect("save limit");
+    for limit in [0, 131073] {
+        p.max_output_tokens = Some(limit);
+        assert!(store.upsert(p.clone(), Some(1)).is_err());
+    }
+    let reopened = ProviderProfileStore::open(&file).expect("reopen");
+    assert_eq!(reopened.get("p").expect("saved").max_output_tokens, Some(8192));
 }
 
 /// 更新时**修订号由存储方递增**（调用方给的值一律忽略）。

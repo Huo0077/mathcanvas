@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -546,12 +546,12 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       record.promptHash = canonicalContentHash({ prompt: effectivePrompt ?? null })
       if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
 
-      const parsed = effectivePrompt && planHasVerifiableFigure(actions)
+      const parsed = effectivePrompt && (planHasVerifiableFigure(actions) || readFoldTransformations(effectivePrompt).length > 0)
         ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
-      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-        ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true }) : undefined
+      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(effectivePrompt ?? "").length > 0)
+        ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true, prompt: effectivePrompt }) : undefined
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }

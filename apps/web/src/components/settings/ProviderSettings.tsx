@@ -206,7 +206,7 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
       return result.detail
     }
     setHealth((current) => ({ ...current, [profile.id]: result.health }))
-    const verified = result.health.capabilityEvidence.filter((entry) => entry.status === "verified").map((entry) => FEATURE_LABELS[entry.feature] ?? entry.feature)
+    const verified = ["tools", "json", "vision", "streaming"].filter(feature => isVerified(profile, feature, result.health)).map(feature => FEATURE_LABELS[feature])
     setStatus({
       kind: "ok",
       message: verified.length > 0
@@ -233,6 +233,7 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
       dialect: draft.dialect,
       baseUrl: draft.baseUrl,
       modelId: draft.modelId,
+      ...(draft.maxOutputTokens === undefined ? {} : { maxOutputTokens: draft.maxOutputTokens }),
       // **只有引用**：密钥本体走凭据库，profile 里永远只有这个名字。
       secretRef: draft.id,
       capabilities: profiles.find((entry) => entry.id === draft.id)?.capabilities ?? [],
@@ -377,7 +378,7 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
             </button>
             <button
               type="button"
-              onClick={() => setEditing({ id: profile.id, name: profile.name, protocol: profile.protocol, dialect: profile.dialect, baseUrl: profile.baseUrl, modelId: profile.modelId, networkPolicy: profile.networkPolicy, revision: profile.revision })}
+              onClick={() => setEditing({ id: profile.id, name: profile.name, protocol: profile.protocol, dialect: profile.dialect, baseUrl: profile.baseUrl, modelId: profile.modelId, maxOutputTokens: profile.maxOutputTokens, networkPolicy: profile.networkPolicy, revision: profile.revision })}
               aria-label={`编辑 ${profile.name}`}
             >
               <PencilIcon size={14} />编辑

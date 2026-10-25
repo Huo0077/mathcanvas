@@ -94,6 +94,9 @@ export type FigureTransformation = {
   apexAs: string
   /** **原文证据**（T4）：这句话在原题里的逐字片段。读出来的条目才有。 */
   sourceText?: string
+  /** Source offsets bind clause order and its own explicit angle. */
+  span?: DiagramSourceSpan
+  angleDegrees?: number
 }
 
 export interface FigureIntent {
@@ -178,7 +181,7 @@ export function readFoldTransformations(prompt: string): FigureTransformation[] 
 
   const out: FigureTransformation[] = []
   const seen = new Set<string>()
-  const push = (faceRaw: string, hingeRaw: string, targetRaw: string, motion: "fold" | "rotate", sourceText: string, apexRaw?: string) => {
+  const push = (faceRaw: string, hingeRaw: string, targetRaw: string, motion: "fold" | "rotate", sourceText: string, start: number, apexRaw?: string) => {
     const face = pointNames(faceRaw)
     const hinge = pointNames(hingeRaw)
     let target = pointNames(targetRaw)
@@ -194,15 +197,17 @@ export function readFoldTransformations(prompt: string): FigureTransformation[] 
       target = face.map((name) => (name === apex ? apexAs : name))
     }
     // 折痕两端**必须同时出现在折前与折后**（那是"这两点不动"的定义）；任一处对不上就不产出。
-    if (face.length !== 3 || hinge.length !== 2 || target.length !== 3) return
+    if (face.length !== 3 || hinge.length !== 2 || target.length !== 3 || new Set(face).size !== 3 || new Set(hinge).size !== 2 || new Set(target).size !== 3) return
     if (!hinge.every((name) => face.includes(name) && target.includes(name))) return
     const apex = apexRaw === undefined ? face.find((name) => !hinge.includes(name)) : pointNames(apexRaw)[0]
     const apexAs = target.find((name) => !hinge.includes(name))
     if (apex === undefined || apexAs === undefined || apex === apexAs) return
     if (!face.includes(apex)) return
-    const key = `${face.join("")}|${hinge.join("")}|${apex}|${apexAs}`
+    const key = `${start}|${motion}|${face.join("")}|${hinge.join("")}|${apex}|${apexAs}`
     if (seen.has(key)) return
     seen.add(key)
+    const angleText = /(?:翻折|折叠|折起|翻起|旋转)\s*(?:至|成|到)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:°|度)/.exec(sourceText)
+    const angleDegrees = angleText === null ? undefined : Number(angleText[1])
     out.push({
       kind: "fold",
       ...(motion === "rotate" ? { motion } : {}),
@@ -210,14 +215,16 @@ export function readFoldTransformations(prompt: string): FigureTransformation[] 
       hinge: { from: hinge[0]!, to: hinge[1]! },
       apex,
       apexAs,
-      sourceText
+      sourceText,
+      span: { sourceText, start, end: start + sourceText.length },
+      ...(angleDegrees === undefined ? {} : { angleDegrees })
     })
   }
 
-  for (const match of prompt.matchAll(foldTo)) push(match[1]!, match[2]!, match[3]!, "fold", match[0])
-  for (const match of prompt.matchAll(rotateTo)) push(match[1]!, match[2]!, match[3]!, "rotate", match[0])
-  for (const match of prompt.matchAll(apexTo)) push(match[1]!, match[2]!, match[4]!, "fold", match[0], match[3])
-  return out
+  for (const match of prompt.matchAll(foldTo)) push(match[1]!, match[2]!, match[3]!, "fold", match[0], match.index!)
+  for (const match of prompt.matchAll(rotateTo)) push(match[1]!, match[2]!, match[3]!, "rotate", match[0], match.index!)
+  for (const match of prompt.matchAll(apexTo)) push(match[1]!, match[2]!, match[4]!, "fold", match[0], match.index!, match[3])
+  return out.sort((left, right) => left.span!.start - right.span!.start)
 }
 
 export function buildFigureIntent(input: BuildFigureIntentInput): FigureIntent {

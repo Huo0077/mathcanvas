@@ -60,6 +60,7 @@ pub fn provider_run(
     stream: Option<bool>,
     tools: Option<Vec<serde_json::Value>>,
     output_mode: Option<String>,
+    response_schema: Option<serde_json::Value>,
     max_output_tokens: Option<u32>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
@@ -103,7 +104,11 @@ pub fn provider_run(
     // 强制它调工具是**探针**才需要的事（不强制就测不出"支持工具"）。
     // 输出模式只在这里解析一次（未知字符串降级为 json_text，绝不猜）。
     let output_mode = providers::request::OutputMode::parse(output_mode.as_deref());
-    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None, output_mode, response_schema: None, max_output_tokens };
+    let max_output_tokens = max_output_tokens.or(profile.max_output_tokens);
+    if max_output_tokens.is_some_and(|limit| limit == 0 || limit > 131072 || profile.max_output_tokens.is_some_and(|cap| limit > cap)) {
+        return Err(serde_json::json!({ "failure": "malformed_output", "message": "output token limit exceeds the configured limit", "retryable": false }));
+    }
+    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None, output_mode, response_schema, max_output_tokens };
     let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), options, cancel.as_ref())
         .map_err(|error| error.to_json())?;
     let events: Vec<serde_json::Value> = match outcome {

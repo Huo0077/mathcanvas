@@ -38,6 +38,10 @@ function rejectedWith(overrides: Record<string, unknown>, code: string, existing
 }
 
 describe("provider profile basics", () => {
+  it("preserves a configured output budget and rejects invalid limits", () => {
+    expect(accepted({ maxOutputTokens: 8192 }).maxOutputTokens).toBe(8192)
+    for (const limit of [0, -1, 1.5, 131073, "8192", NaN]) rejectedWith({ maxOutputTokens: limit }, "invalid_type")
+  })
   it("accepts a well-formed cloud profile and starts its revision at 1", () => {
     const profile = accepted()
 

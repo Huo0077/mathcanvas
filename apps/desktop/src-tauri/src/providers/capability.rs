@@ -151,10 +151,15 @@ impl ProbeReport {
         } else {
             "unknown"
         };
+        let mut capability_evidence = self.to_capability_evidence();
+        if let Some(json) = capability_evidence.iter().find(|entry| entry.feature == "json").cloned() {
+            // A versioned marker distinguishes actual JSON-mode probes from legacy text probes.
+            capability_evidence.push(CapabilityEvidence { feature: "json_mode_v1".to_string(), ..json });
+        }
         ProviderHealth {
             status: status.to_string(),
             latency_ms,
-            capability_evidence: self.to_capability_evidence(),
+            capability_evidence,
             checked_at: timestamp_ms(),
             profile_revision: self.profile_revision,
         }
@@ -226,8 +231,10 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> Probe<'a, S, T> {
             vec![ChatMessage::text("user", "Reply with exactly this JSON object and nothing else: {\"ok\": true}")],
             RequestOptions { output_mode: OutputMode::JsonMode, ..RequestOptions::default() }
         );
-        let json_ok = matches!(&json, Ok(events) if joined_text(events).contains('{') && serde_json::from_str::<serde_json::Value>(joined_text(events).trim()).is_ok());
-        evidence.push(json_evidence(&json, json_ok));
+        let json_ok = matches!(&json, Ok(events) if serde_json::from_str::<serde_json::Value>(joined_text(events).trim()).is_ok_and(|value| value.is_object()));
+        evidence.push(if self.profile.protocol == "anthropic" {
+            Evidence { feature: Feature::Json, status: CapabilityStatus::Unknown, detail: "JSON mode is not implemented for this protocol; use verified native tools".to_string() }
+        } else { json_evidence(&json, json_ok) });
 
         // 图片：发一张真的 1×1 PNG。
         //

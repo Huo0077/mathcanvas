@@ -495,6 +495,8 @@ export function compilePlan(input: unknown, context: PlanCompileContext): PlanCo
  * 多一个字段就多一份"看起来可以依赖"的形状。
  */
 interface CompileOnceOutcome {
+  /** Internal geometry for construction only; failed candidates never become public drafts. */
+  workingDocument?: GeometryDocument
   result: PlanCompileResult
   /** 解析后的计划（只有 `kind: "plan"` 才有）；救回路径要在它上面替换多面体坐标。 */
   plan: Extract<PlanEnvelope, { kind: "plan" }> | null
@@ -769,26 +771,14 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    *
    * 这里读的是 `effectivePrompt`（原文，或规范化之后的题面）—— 两处都只有这一个来源。
    */
-  const obligationParse = parserPrompt && (planHasVerifiableFigure(compiledActions) || solidDimensionGate(parserPrompt, compiledActions))
+  const obligationParse = parserPrompt && (planHasVerifiableFigure(compiledActions) || solidDimensionGate(parserPrompt, compiledActions) || readFoldTransformations(parserPrompt).length > 0)
     ? parseObligationWithLegacy(parserPrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
   const obligations = obligationParse?.legacy ?? null
-  const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true }) : undefined
+  const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0)
+    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true, prompt: parserPrompt }) : undefined
   for (const check of diagramVerification?.checks ?? []) {
-    if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
+    if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
-  }
-  /**
-   * **题面说的是"翻折"，那就必须真的折过**（Task 13，2026-10-12）。
-   *
-   * 判据来自 `figureIntent` 的 `fold` 变换（题面那句话的唯一机器可读形状），量的是**最终坐标**：
-   * 折是刚体运动 ⇒ `apexAs` 到折痕两端的距离必须与 `apex` 的一样。
-   * 没有这一条时，"模型绕开 `solid.fold`、直接把 `P` 写在某个满足 `PC=4√3` 的地方"会**通过核验** ——
-   * 实测读数：八条条件全 `passed`，而 `|PE| = 12.93` 对 `|AE| = 3.46`（差 3.7 倍），
-   * 图根本不是折出来的。
-   */
-  if (effectivePrompt !== undefined && obligationParse !== null) {
-    diagnostics.push(...foldRigidityDiagnostics(effectivePrompt, obligationParse.ir, working))
   }
   diagnostics.push(...renderDegeneracyWarnings(working))
   const failed = diagnostics.some((entry) => entry.severity === "error")
@@ -797,6 +787,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
     return {
       plan,
       obligations: obligationParse,
+      workingDocument: working,
       result: {
         ok: false,
         actions: [],
@@ -821,6 +812,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   return {
     plan,
     obligations: obligationParse,
+    workingDocument: working,
     result: {
       ok: true,
       actions: compiledActions,
@@ -1204,7 +1196,8 @@ function adoptWitnessCoordinatesInFold(
       return !(Array.isArray(inputs?.vertexNames) && inputs.vertexNames.some((name) => apexNames.has(name)))
     }) as typeof plan.actions
   }
-  const before = compileOnce(beforeFold, context).result.draftDocument
+  const builtBefore = compileOnce(beforeFold, context)
+  const before = builtBefore.workingDocument ?? builtBefore.result.draftDocument
   const labelled = new Set(
     (before?.primitives ?? [])
       .filter((primitive) => primitive.type === "point3")
@@ -1550,57 +1543,6 @@ function conflictingMaterialisedPoints(
 }
 
 /**
- * **"翻折"必须是刚体运动**（Task 13，2026-10-12）—— 从**最终坐标**量的那一条判据。
- *
- * 题面里"将三角形AEF沿EF翻折至三角形PEF"这句话的唯一机器可读形状是
- * `figureIntent` 的 `fold` 变换（`{ face, hinge, apex, apexAs }`）。折是刚体运动，所以
- * `apexAs` 到折痕两端的距离必须与 `apex` 的一样 —— 这条判据**不管 `P` 是怎么来的**：
- * 走 `solid.fold` 的必然满足，手写坐标的就不一定。
- *
- * **为什么需要它**：没有这一条时，模型绕开 `solid.fold`、把 `P` 直接写在某个满足
- * `PC = 4√3` 的地方，**八条题设会条条通过**（实测：`|PE| = 12.93` 对 `|AE| = 3.46`），
- * 而图根本不是折出来的 —— 正是计划 RED 点名的"图形很像但**折后 `P` 错**"。
- *
- * 点名不全时不在这里判（那属于"未核验"那一套：缺谁、为什么缺，已有各自的文案）。
- */
-function foldRigidityDiagnostics(
-  prompt: string,
-  ir: Parameters<typeof buildFigureIntent>[0]["ir"],
-  document: GeometryDocument
-): PlanDiagnostic[] {
-  const at = (label: string): { x: number; y: number; z: number } | null => {
-    const found = document.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)
-    return found?.type === "point3" ? found.position : null
-  }
-  const distance = (left: { x: number; y: number; z: number }, right: { x: number; y: number; z: number }): number =>
-    Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z)
-
-  const out: PlanDiagnostic[] = []
-  for (const transformation of buildFigureIntent({ prompt, ir, family: "solid" }).transformations) {
-    if (transformation.kind !== "fold") continue
-    const apex = at(transformation.apex)
-    const apexAs = at(transformation.apexAs)
-    const from = at(transformation.hinge.from)
-    const to = at(transformation.hinge.to)
-    if (apex === null || apexAs === null || from === null || to === null) continue
-
-    const before = [distance(apex, from), distance(apex, to)]
-    const after = [distance(apexAs, from), distance(apexAs, to)]
-    if (!after.every(Number.isFinite) || !before.every(Number.isFinite)) continue
-    const tolerance = Math.max(1e-6, 1e-6 * Math.max(...before, ...after))
-    if (Math.abs(after[0]! - before[0]!) <= tolerance && Math.abs(after[1]! - before[1]!) <= tolerance) continue
-
-    out.push(planDiagnostic(
-      "geometry_validation",
-      "fold_not_rigid",
-      "envelope.actions",
-      `题面说的是沿 ${transformation.hinge.from}${transformation.hinge.to} 把 ${transformation.apex} 翻折到 ${transformation.apexAs}，而折是**刚体运动**：到折痕两端的距离必须一样。实测 ${transformation.apexAs}${transformation.hinge.from}=${after[0]!.toFixed(6)} 而 ${transformation.apex}${transformation.hinge.from}=${before[0]!.toFixed(6)}，${transformation.apexAs}${transformation.hinge.to}=${after[1]!.toFixed(6)} 而 ${transformation.apex}${transformation.hinge.to}=${before[1]!.toFixed(6)} —— 这一只 ${transformation.apexAs} 不是折出来的，请用 solid.fold 让内核按折痕与折角算。`
-    ))
-  }
-  return out
-}
-
-/**
  * **折角反求**（Task 12，2026-10-12）：题面给了"折完以后 `PC = 4√3`"，却**没给折角** ——
  * 那就把它**求**出来，而不是让模型自己手算（现场"连发 7 次、7 次死因各不相同"，
  * 查实的一条正是模型在自己手算折后坐标）。
@@ -1656,7 +1598,7 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
    * 取点走**文档的点名**（`label`），与折角反求"摘掉折叠再编译一次"是同一条口径：
    * `dynamic.create_bound_point` 建出来的 `E`、`F` 没有 `vertices` 数组，只能从文档取。
    */
-  const flap = [...fold.face]
+  const flap = fold.face.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? []
   if (flap.length !== 3 || !flap.includes(fold.apex) || !flap.includes(fold.hinge.from) || !flap.includes(fold.hinge.to)) return null
   /**
    * **折片只能建出 `P`，所以它必须排在任何引用 `P` 的动作之前**（2026-10-17 用户现场）。
@@ -1670,7 +1612,8 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
     const inputs = action.inputs as { vertexNames?: unknown } | null | undefined
     return Array.isArray(inputs?.vertexNames) && inputs.vertexNames.includes(fold.apexAs)
   }
-  const preFold = compileOnce({ ...plan, actions: plan.actions.filter((action) => !referencesFoldedPoint(action)) }, context).result.draftDocument
+  const builtBefore = compileOnce({ ...plan, actions: plan.actions.filter((action) => !referencesFoldedPoint(action)) }, context)
+  const preFold = builtBefore.workingDocument ?? builtBefore.result.draftDocument
   const document = preFold ?? first.result.draftDocument
   if (document === null) return null
   const labelled = new Set(
@@ -1697,7 +1640,7 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
       apex: fold.apex,
       apexAs: fold.apexAs,
       /** 先取 90°：题面没直接给折角时，由下面那条反求（或核验）说了算。 */
-      angle: 90,
+      angle: fold.angleDegrees ?? 90,
       label: `${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 折到 ${fold.apexAs}`
     }
   } as (typeof plan.actions)[number]
@@ -1712,7 +1655,7 @@ function rescueWithSynthesisedFold(context: PlanCompileContext, first: CompileOn
   }
   const disclosure = {
     id: `synthesised-fold.${fold.apexAs}`,
-    text: `题面说的是把 ${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 翻折到 ${fold.apexAs}，而**计划里没有折这一笔**：系统按题面把这一笔补上（折角先取 90°，再按题面条件反求或核验）。`,
+    text: `题面说的是把 ${fold.apex} 沿 ${fold.hinge.from}${fold.hinge.to} 翻折到 ${fold.apexAs}，而**计划里没有折这一笔**：系统按题面把这一笔补上（${fold.angleDegrees === undefined ? "折角先取 90°，再按题面条件反求或核验" : `折角按题面取 ${fold.angleDegrees}°`}）。`,
     kind: "witness" as const,
     value: { apex: fold.apex, apexAs: fold.apexAs, hingeFrom: fold.hinge.from, hingeTo: fold.hinge.to },
     overridable: true,
@@ -1832,7 +1775,8 @@ function rescueWithAnalyticFoldAngle(context: PlanCompileContext, first: Compile
       return !(Array.isArray(inputs?.vertexNames) && inputs.vertexNames.some((name) => apexNames.has(name)))
     }) as typeof plan.actions
   }
-  const beforeFold = compileOnce(withoutFold, context).result.draftDocument
+  const builtBefore = compileOnce(withoutFold, context)
+  const beforeFold = builtBefore.workingDocument ?? builtBefore.result.draftDocument
   const fromDocument = (label: string): { x: number; y: number; z: number } | null => {
     if (beforeFold === null) return null
     const found = beforeFold.primitives.find((primitive) => primitive.type === "point3" && (primitive as { label?: unknown }).label === label)
@@ -2515,7 +2459,7 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
     inputs: {
       alias: `fold-chain-${step.index}`,
       // 第二次折的是**第一次折后**的那张面：点名（含第一次产出的 `apexAs`）由 `foldChain` 保证引用正确。
-      vertexNames: [...step.transformation.face],
+      vertexNames: step.transformation.face.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? [],
       hinge: { from: step.transformation.hinge.from, to: step.transformation.hinge.to },
       apex: step.transformation.apex,
       apexAs: step.transformation.apexAs,

@@ -46,6 +46,8 @@ pub struct CapabilityEvidence {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderProfile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
     pub id: String,
     pub name: String,
     pub protocol: String,
@@ -312,6 +314,9 @@ impl ProviderProfileStore {
         }
         if profile.model_id.trim().is_empty() {
             return Err(StoreError::Invalid { detail: "a provider profile needs a model id".to_string() });
+        }
+        if profile.max_output_tokens.is_some_and(|limit| limit == 0 || limit > 131072) {
+            return Err(StoreError::Invalid { detail: "output limit must be an integer from 1 to 131072".to_string() });
         }
         // 名字重复（除自己以外）。
         if self.file.profiles.iter().any(|candidate| candidate.id != profile.id && candidate.name == profile.name) {

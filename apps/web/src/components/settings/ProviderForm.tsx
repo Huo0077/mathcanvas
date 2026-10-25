@@ -33,6 +33,7 @@ import { PRESETS, slug } from "./providerSettingsFields"
 import { XIcon } from "./icons"
 
 export interface ProviderDraft {
+  maxOutputTokens?: number
   id: string
   name: string
   protocol: ProviderProtocol
@@ -68,6 +69,7 @@ export interface ProviderFormProps {
 }
 
 interface FieldErrors {
+  maxOutputTokens?: string
   id?: string
   name?: string
   baseUrl?: string
@@ -83,6 +85,7 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
   const [name, setName] = useState(editing?.name ?? "")
   const [baseUrl, setBaseUrl] = useState(editing?.baseUrl ?? PRESETS[0].baseUrl)
   const [modelId, setModelId] = useState(editing?.modelId ?? "")
+  const [maxOutputTokens, setMaxOutputTokens] = useState(editing?.maxOutputTokens?.toString() ?? "")
   // 密钥只在内存里过一手：**从不**写进 profile、从不落盘、从不进日志。
   const [secret, setSecret] = useState("")
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -93,6 +96,7 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
 
   function validate(): FieldErrors {
     const found: FieldErrors = {}
+    if (maxOutputTokens !== "" && (!Number.isInteger(Number(maxOutputTokens)) || Number(maxOutputTokens) < 1 || Number(maxOutputTokens) > 131072)) found.maxOutputTokens = "填写 1–131072 的整数，或留空使用服务默认值"
     const id = editing ? editing.id : slug(name)
     if (id.length === 0) found.id = "需要一个名字（它决定这份配置的 id）"
     if (name.trim().length === 0) found.name = "填一个名字，列表里靠它区分"
@@ -122,6 +126,7 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
       dialect: preset.dialect,
       baseUrl: baseUrl.trim(),
       modelId: modelId.trim(),
+      ...(maxOutputTokens === "" ? {} : { maxOutputTokens: Number(maxOutputTokens) }),
       networkPolicy: preset.networkPolicy,
       revision: editing?.revision ?? 0
     }
@@ -146,6 +151,14 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
     {failure && <p className="provider-form-error" role="alert">{failure}</p>}
 
     <div className="provider-form-grid">
+      <label className="provider-field">
+        <span>单次输出上限（tokens，可选）</span>
+        <input type="number" min="1" max="131072" step="1" value={maxOutputTokens}
+          onChange={event => setMaxOutputTokens(event.target.value)}
+          aria-invalid={errors.maxOutputTokens ? true : undefined} aria-describedby="provider-output-hint" />
+        <small id="provider-output-hint">{errors.maxOutputTokens ?? "填写模型支持的上限。首次最多输出 4096 tokens，截断修复可增加至此上限；留空使用服务默认值。"}</small>
+      </label>
+
       <label className="provider-field provider-field-wide">
         <span>预设</span>
         <select

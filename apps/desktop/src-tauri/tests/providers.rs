@@ -228,6 +228,7 @@ fn a_non_json_body_is_malformed_output_not_a_panic() {
 
 fn profile(protocol: &str, dialect: &str, base_url: &str) -> ProviderProfile {
     ProviderProfile {
+        max_output_tokens: None,
         id: "p".to_string(),
         name: "P".to_string(),
         protocol: protocol.to_string(),

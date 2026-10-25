@@ -89,7 +89,6 @@ export function readFoldAngles(prompt: string): (number | undefined)[] {
 export function buildFoldChain(prompt: string): FoldChainClassification {
   const transformations = readFoldTransformations(prompt)
   if (transformations.length === 0) return { status: "none" }
-  const angles = readFoldAngles(prompt)
 
   const produced = new Map<string, number>()
   const steps: FoldChainStep[] = []
@@ -97,11 +96,11 @@ export function buildFoldChain(prompt: string): FoldChainClassification {
     const index = position + 1
     const dependsOn = new Set<number>()
     // 这一步用到的点名里，哪些是前面某一步产出的（初始图形的点不算依赖）。
-    for (const name of [transformation.face, transformation.hinge.from, transformation.hinge.to, transformation.apex, transformation.apexAs]) {
+    for (const name of [transformation.hinge.from, transformation.hinge.to, transformation.apex]) {
       const owner = produced.get(name)
       if (owner !== undefined && owner < index) dependsOn.add(owner)
     }
-    const angle = angles[position]
+    const angle = transformation.angleDegrees
     steps.push({
       index,
       transformation,
@@ -113,7 +112,6 @@ export function buildFoldChain(prompt: string): FoldChainClassification {
     })
     // 折完之后，折后点名属于**这一步之后**的状态。
     produced.set(transformation.apexAs, index)
-    produced.set(transformation.face, index)
   }
 
   if (steps.length === 1) return { status: "single", steps }

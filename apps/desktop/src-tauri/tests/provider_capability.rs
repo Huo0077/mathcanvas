@@ -490,6 +490,7 @@ fn the_health_record_says_degraded_when_something_is_failed_and_never_says_ok_fo
     let report = Probe::new(&source, &good, profile(), stop.as_ref()).run().expect("the profile must be probed");
     assert_eq!(report.to_health(Some(120)).status, "ok");
     assert_eq!(report.to_health(Some(120)).latency_ms, Some(120));
+    assert!(report.to_health(None).capability_evidence.iter().any(|entry| entry.feature == "json_mode_v1" && entry.status == "verified"), "JSON-mode evidence must survive in the health record");
 
     let broken = ByShape::new(|shape: Shape, _request: &ProviderRequest| -> Result<String, ProviderError> {
         if shape == Shape::Tools {

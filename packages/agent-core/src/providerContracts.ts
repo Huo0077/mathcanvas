@@ -72,6 +72,7 @@ export interface ProviderCapabilityEvidence {
 }
 
 export interface ProviderProfile {
+  maxOutputTokens?: number
   id: string
   name: string
   protocol: ProviderProtocol
@@ -317,6 +318,10 @@ export function parseProviderProfile(input: unknown, existing: readonly Provider
     errors.push(fail("duplicate_name", "profile.name", `another profile is already called ${name}`))
   }
 
+  const maxOutputTokens = input.maxOutputTokens
+  if (maxOutputTokens !== undefined && (!Number.isInteger(maxOutputTokens) || typeof maxOutputTokens !== "number" || maxOutputTokens < 1 || maxOutputTokens > 131072)) {
+    errors.push(fail("invalid_type", "profile.maxOutputTokens", "output limit must be an integer from 1 to 131072"))
+  }
   if (errors.length > 0) return { ok: false, errors }
 
   /**
@@ -337,6 +342,7 @@ export function parseProviderProfile(input: unknown, existing: readonly Provider
       dialect: dialect as ProviderDialect,
       baseUrl,
       modelId,
+      ...(maxOutputTokens === undefined ? {} : { maxOutputTokens: maxOutputTokens as number }),
       secretRef,
       capabilities,
       networkPolicy: networkPolicy as NetworkPolicy,
@@ -371,6 +377,8 @@ export function containsSecretField(value: unknown, depth = 0): boolean {
  */
 export function isCapabilityVerified(evidence: readonly ProviderCapabilityEvidence[], feature: string, profileRevision: number, health: ProviderHealth | undefined): boolean {
   if (!health || health.profileRevision !== profileRevision) return false
+  // Legacy `json` proved prompt compliance, not support for response_format.
+  if (feature === "json") return health.capabilityEvidence.some(entry => entry.feature === "json_mode_v1" && entry.status === "verified")
   const fromHealth = health.capabilityEvidence.find((entry) => entry.feature === feature)
   if (fromHealth) return fromHealth.status === "verified"
   return evidence.some((entry) => entry.feature === feature && entry.status === "verified")

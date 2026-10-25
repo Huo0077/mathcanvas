@@ -131,10 +131,15 @@ const profile = (capabilities: ProviderProfile["capabilities"]): ProviderProfile
 })
 
 const health = (status: "verified" | "declared" | "failed" | "unknown", revision = 3): ProviderHealth => ({
-  status: "ok", capabilityEvidence: [{ feature: "json", status }], checkedAt: 1, profileRevision: revision
+  status: "ok", capabilityEvidence: [{ feature: "json_mode_v1", status }], checkedAt: 1, profileRevision: revision
 })
 
 describe("能力证据到网关口径的映射", () => {
+  it("does not upgrade legacy JSON text evidence into JSON mode support", () => {
+    const legacy = { ...health("verified"), capabilityEvidence: [{ feature: "json", status: "verified" as const }] }
+    expect(toGateCapabilities(profile([{ feature: "json", status: "verified" }]), legacy).json).not.toBe("verified")
+    expect(toGateCapabilities(profile([]), health("verified")).json).toBe("verified")
+  })
   it("只有当前修订号上的 verified 才算 verified", () => {
     const result = toGateCapabilities(profile([{ feature: "json", status: "verified" }]), health("verified"))
     expect(result.json).toBe("verified")
@@ -1081,6 +1086,28 @@ describe("T1 — the planning failure contract", () => {
  * **不许**把"能回一个 JSON"的旧证据升级成 `json_schema`：那需要"会按我们的 schema 校验"的证据。
  */
 describe("T3 — output mode follows the channel and never over-claims", () => {
+  it("passes the configured output limit and increases it only for bounded truncation repair", async () => {
+    const limits: (number | undefined)[] = []
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: { ...provider, maxOutputTokens: 8192 } }),
+      runModel: async sent => { limits.push(sent.maxOutputTokens); return deltas(goodEnvelope) }
+    })
+    await planner.plan(request())
+    await planner.plan(request({ repair: { reason: "response_incomplete", attempt: 1, errors: [], allowedChanges: [], hint: "请重新完整输出" } }))
+    expect(limits).toEqual([4096, 8192])
+  })
+
+  it("rejects even valid-looking tools after a length stop, before executing observations", async () => {
+    const planner = createModelPlanner({
+      resolveProvider: async () => ({ ok: true, provider: { ...provider, capabilities: { ...provider.capabilities, tools: "verified" } } }),
+      runModel: async () => ({ ok: true, events: [
+        { kind: "tool_call", toolCallId: "t", toolId: PLAN_TOOL_NAME, input: JSON.parse(goodEnvelope), requestId: "r", attemptId: "a" },
+        { kind: "completed", stopReason: "length", requestId: "r", attemptId: "a" }
+      ] })
+    })
+    const outcome = await planner.plan(request())
+    expect("failure" in outcome && outcome.failure.category).toBe("response_incomplete")
+  })
   const seen: { outputMode?: string }[] = []
 
   function plannerFor(capabilities: ModelPlannerProvider["capabilities"]) {

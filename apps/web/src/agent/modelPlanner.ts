@@ -2,6 +2,7 @@ import {
   actionToolSchema,
   PLAN_SCHEMA_VERSION,
   createPlanFailure,
+  classifyStopReason,
   isRegisteredActionId,
   createRecoveryController,
   isCapabilityVerified,
@@ -88,6 +89,7 @@ import { buildSystemPrompt } from "./systemPrompt"
  */
 
 export interface ModelPlannerProvider {
+  maxOutputTokens?: number
   id: string
   modelId: string
   /** 协议/方言名，**只用于诊断**：通道选择不看它。 */
@@ -181,14 +183,14 @@ export async function resolveActiveProvider(): Promise<ProviderResolution> {
 
   // 健康记录只读、零成本；读不到（IPC 失败）按"没有证据"处理 —— 那会让通道更保守。
   const health = await readProviderHealth(profile.id)
-  return { ok: true, provider: { id: profile.id, modelId: profile.modelId, dialect: profile.dialect, revision: profile.revision, capabilities: toGateCapabilities(profile, health.ok ? health.value : null) } }
+  return { ok: true, provider: { id: profile.id, modelId: profile.modelId, dialect: profile.dialect, revision: profile.revision, capabilities: toGateCapabilities(profile, health.ok ? health.value : null), ...(profile.maxOutputTokens === undefined ? {} : { maxOutputTokens: profile.maxOutputTokens }) } }
 }
 
 export interface ModelPlannerDependencies {
   /** 现取「使用中」的那一份。缺省走真实 IPC（`resolveActiveProvider`）。 */
   resolveProvider?: () => Promise<ProviderResolution>
   /** 发一次请求。缺省走 `provider_run`。第二个参数是"这次还能不能继续"的判据（取消用）。 */
-  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema" }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
+  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
   /** 让 Rust 侧真的停下来（缺省走 `provider_cancel`）。 */
   cancelRun?: (runId: string) => Promise<boolean>
   /**
@@ -380,7 +382,7 @@ function buildMessages(request: PlanRequest, channel: ModelChannel): ChatMessage
  */
 export function createModelPlanner(dependencies: ModelPlannerDependencies = {}): PlannerPort {
   const resolveProvider = dependencies.resolveProvider ?? resolveActiveProvider
-  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema" }, signal: { isCancelled: () => boolean }) =>
+  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number }, signal: { isCancelled: () => boolean }) =>
     startModelRun(
       {
         runId: request.runId,
@@ -388,7 +390,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         profileRevision: request.profileRevision,
         messages: request.messages,
         tools: request.tools,
-        ...(request.outputMode === undefined ? {} : { outputMode: request.outputMode })
+        ...(request.outputMode === undefined ? {} : { outputMode: request.outputMode }),
+        ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens })
       },
       {
         invoke: (command, args) => invokeDesktop(command, args),
@@ -479,7 +482,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            *   后者的结构化由工具 schema 保证，再叠一个 `response_format` 只会让部分服务 400。
            */
           const outputMode = channel === "strict_json" ? "json_mode" : undefined
-          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }) }, { isCancelled: () => request.signal.aborted })
+          const maxOutputTokens = provider.maxOutputTokens === undefined ? undefined
+            : request.repair?.reason === "response_incomplete" ? provider.maxOutputTokens : Math.min(4096, provider.maxOutputTokens)
+          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }), ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }) }, { isCancelled: () => request.signal.aborted })
         } finally {
           request.signal.removeEventListener("abort", onAbort)
         }
@@ -528,8 +533,13 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
          * 截断 / 空响应 / 拒绝三种故障全靠它分类。取在工具分支之前，
          * 是因为工具参数校验失败时同样要把它带进失败里。
          */
-        const completed = events.find((event): event is Extract<ModelEvent, { kind: "completed" }> => event.kind === "completed")
-        const stopReason = completed?.stopReason
+        const endings = events.filter((event): event is Extract<ModelEvent, { kind: "completed" }> => event.kind === "completed")
+        const stopReason = endings.map(event => event.stopReason).find(reason => ["length", "refusal"].includes(classifyStopReason(reason)))
+          ?? endings.find(event => event.stopReason !== undefined)?.stopReason
+        const ending = classifyStopReason(stopReason)
+        if (ending === "length" || ending === "refusal") {
+          return { failure: createPlanFailure({ category: ending === "length" ? "response_incomplete" : "provider_refusal", channel, stopReason }), ...ids }
+        }
         /**
          * **一次响应里的多个调用：整批先判，再原子执行。**
          *

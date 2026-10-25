@@ -6,10 +6,12 @@ import type { PlanEnvelope } from "./contracts"
 import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
 import { buildObligationIR, type ObligationIR } from "./obligationIR"
 import { relationResidual } from "./relations"
+import { readFoldTransformations } from "./figureIntent"
 
 export type DiagramCheckStatus = "passed" | "failed" | "unverified"
 export interface DiagramCheck {
-  kind: DiagramObligationKind | "unparsed"
+  kind: DiagramObligationKind | "unparsed" | "fold"
+  code?: string
   sourceText: string
   status: DiagramCheckStatus
   reason: string
@@ -68,6 +70,47 @@ export interface DiagramVerificationReport {
  */
 export interface DiagramVerificationOptions {
   obligationIR?: boolean
+  prompt?: string
+}
+
+/** Verify the motion from final geometry, including when the plan omitted it. */
+function foldChecks(prompt: string, points: Map<string, Vector3> | null): DiagramCheck[] {
+  return readFoldTransformations(prompt).flatMap((fold): DiagramCheck[] => {
+    const sourceText = fold.sourceText ?? `${fold.apex}→${fold.apexAs}`
+    const failed = (code: string, reason: string): DiagramCheck[] => [{ kind: "fold", sourceText, status: "failed", code, reason }]
+    const names = [fold.apex, fold.apexAs, fold.hinge.from, fold.hinge.to]
+    const missing = names.filter(name => !points?.has(name))
+    if (missing.length > 0) return failed("fold_reference_missing", `折叠尚未完成：缺少点 ${missing.join("、")}，不能只凭底图条件宣布通过。`)
+    const [a, p, from, to] = names.map(name => points!.get(name)!)
+    const axis = subtractVector3(to!, from!)
+    const axisSquared = axis.x ** 2 + axis.y ** 2 + axis.z ** 2
+    if (!Number.isFinite(axisSquared) || axisSquared <= 1e-20) return failed("fold_degenerate", "折痕退化，不能验证翻折。")
+    const before = [lengthVector3(subtractVector3(a!, from!)), lengthVector3(subtractVector3(a!, to!))]
+    const after = [lengthVector3(subtractVector3(p!, from!)), lengthVector3(subtractVector3(p!, to!))]
+    const tolerance = Math.max(1e-6, 1e-6 * Math.max(...before, ...after))
+    if (![...before, ...after].every(Number.isFinite) || before.some((v, i) => Math.abs(v - after[i]!) > tolerance)) {
+      return failed("fold_not_rigid", `翻折必须是刚体运动：${fold.apexAs} 到折痕两端的距离须与 ${fold.apex} 一致；这一只折后点不是折出来的，请使用 solid.fold 计算折后点。`)
+    }
+    const checks: DiagramCheck[] = [{ kind: "fold", sourceText, status: "passed", reason: "折前、折后对应点齐全，已从坐标验证刚性保持。" }]
+    if (fold.angleDegrees === undefined) return checks
+    const perpendicular = (point: Vector3): Vector3 => {
+      const v = subtractVector3(point, from!)
+      const projection = (v.x * axis.x + v.y * axis.y + v.z * axis.z) / axisSquared
+      return { x: v.x - projection * axis.x, y: v.y - projection * axis.y, z: v.z - projection * axis.z }
+    }
+    const u = perpendicular(a!)
+    const v = perpendicular(p!)
+    const denominator = lengthVector3(u) * lengthVector3(v)
+    if (!(denominator > 1e-20)) return failed("fold_degenerate", "被折点位于折痕上，无法确定折角。")
+    const actual = Math.acos(Math.max(-1, Math.min(1, (u.x * v.x + u.y * v.y + u.z * v.z) / denominator))) * 180 / Math.PI
+    const angle = fold.angleDegrees % 360
+    const expected = Math.min(angle, 360 - angle)
+    const valid = fold.angleDegrees > 0 && fold.angleDegrees < 360 && Math.abs(actual - expected) <= ANGLE_TOLERANCE_DEGREES
+    checks.push({ kind: "fold", sourceText, expected, actual, status: valid ? "passed" : "failed",
+      ...(valid ? {} : { code: "fold_angle_mismatch" }),
+      reason: valid ? "已从折前、折后坐标核对题面给出的折角。" : `题面折角为 ${fold.angleDegrees}°，候选图实际转角为 ${actual.toFixed(6)}°。` })
+    return checks
+  })
 }
 
 const UNITLESS_TOLERANCE = 1e-6
@@ -2187,6 +2230,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
       ...(result.evidence === undefined ? {} : { evidence: result.evidence })
     }
   })
+  if (options.prompt !== undefined) checks.push(...foldChecks(options.prompt, points))
   checks.push(...set.unverified.map((entry): DiagramCheck => ({ kind: "unparsed", sourceText: entry.sourceText, status: "unverified", reason: entry.reason })))
   const sampleValues: string[] = []
   for (const name of set.freeChoices) {

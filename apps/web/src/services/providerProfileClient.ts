@@ -10,6 +10,7 @@
  */
 
 import { invokeDesktop, NoDesktopShellError } from "./desktopRuntime"
+import { isCapabilityVerified } from "@draw/agent-core"
 
 export type ProviderProtocol = "openai_compatible" | "anthropic" | "ollama"
 export type ProviderDialect = "openai_native" | "deepseek" | "moonshot" | "generic_compatible" | "anthropic_messages" | "ollama_native"
@@ -24,6 +25,7 @@ export interface CapabilityEvidence {
 }
 
 export interface ProviderProfile {
+  maxOutputTokens?: number
   id: string
   name: string
   protocol: ProviderProtocol
@@ -214,10 +216,7 @@ export async function checkProviderCapabilities(profileId: string, profileRevisi
  * 前端的这份与 `agent-core` 的同名函数是同一条规则 —— 界面要靠它显示"未验证"徽章。
  */
 export function isVerified(profile: ProviderProfile, feature: string, health: ProviderHealth | null): boolean {
-  if (!health || health.profileRevision !== profile.revision) return false
-  const fromHealth = health.capabilityEvidence.find((entry) => entry.feature === feature)
-  if (fromHealth) return fromHealth.status === "verified"
-  return profile.capabilities.some((entry) => entry.feature === feature && entry.status === "verified")
+  return isCapabilityVerified(profile.capabilities, feature, profile.revision, health ?? undefined)
 }
 
 /**

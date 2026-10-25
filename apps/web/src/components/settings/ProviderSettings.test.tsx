@@ -131,6 +131,15 @@ async function fillNewProfile(name = "DeepSeek", model = "deepseek-chat", secret
 afterEach(() => cleanup())
 
 describe("adding a model service", () => {
+  it("saves the optional model output limit through the actual form", async () => {
+    const { client, saved } = makeClient()
+    render(<ProviderSettings client={client} />)
+    await fillNewProfile()
+    const { fireEvent } = await import("@testing-library/react")
+    fireEvent.change(screen.getByLabelText(/单次输出上限/), { target: { value: "8192" } })
+    fireEvent.click(screen.getByRole("button", { name: /保存并验证/ }))
+    await waitFor(() => expect(saved[0]?.maxOutputTokens).toBe(8192))
+  })
   it("keeps the form out of the way until the plus button is pressed", async () => {
     // 清单是主角。一张永远占着半屏的空表单会让"我现在有哪些配置"变得不好读。
     const { client } = makeClient()
