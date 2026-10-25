@@ -22,7 +22,7 @@ export default tseslint.config(
      * **注意**：`proof/lean4/.gitignore` 里的 `/.lake` **管不到 eslint** ——
      * eslint（flat config）**不读 `.gitignore`**，所以这条必须写在这里。
      */
-    ignores: ["**/node_modules/**", "**/dist/**", "**/build-check/**", "**/test-results/**", "**/playwright-report/**", "**/vite-cache*/**", "**/src-tauri/target/**", "**/src-tauri/gen/**", "**/.lake/**"]
+    ignores: ["**/node_modules/**", "**/dist/**", "**/build-check/**", "**/test-results/**", "**/eval-results/**", "**/playwright-report/**", "**/vite-cache*/**", "**/src-tauri/target/**", "**/src-tauri/gen/**", "**/.lake/**"]
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

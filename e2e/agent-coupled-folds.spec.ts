@@ -6,7 +6,7 @@ test("jointly solves two missing fold angles before preview, commit and undo", a
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await page.getByRole("textbox", { name: "对话输入" }).fill(
     "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。" +
-    "点E在AD上，且AE=2/5 AD；点F在AB上，且AF=1/2 AB。" +
+    "点E在AD上，且AE：AD=2：5；点F在AB上，且AF：AB=1：2。" +
     "先将三角形AEF沿EF翻折至三角形PEF，再将三角形PEF沿PF折叠至三角形QPF。" +
     "使QB=5.982610851975，QC=7.185772613248。"
   )

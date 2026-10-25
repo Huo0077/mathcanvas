@@ -30,7 +30,7 @@ if (typeof globalThis.localStorage === "undefined") {
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: new MemoryStorage() })
 }
 
-if (typeof globalThis.PointerEvent === "undefined") {
+if (typeof globalThis.PointerEvent === "undefined" && typeof globalThis.MouseEvent !== "undefined") {
   class TestPointerEvent extends MouseEvent {
     readonly pointerId: number
 

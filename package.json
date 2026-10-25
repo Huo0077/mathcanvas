@@ -16,6 +16,7 @@
     "test:lean": "vitest run --config vitest.lean.config.ts --maxWorkers=1",
     "test:e2e": "playwright test",
     "eval:agent": "node scripts/agent-eval.mjs",
+    "eval:solid": "node scripts/solid-eval/runner.mjs",
     "bench:agent": "node scripts/agent-benchmark/runner.mjs",
     "proof:smoke": "node scripts/proof-spike/runner.mjs",
     "licences:scan": "node scripts/dependency-licences/scan.mjs",

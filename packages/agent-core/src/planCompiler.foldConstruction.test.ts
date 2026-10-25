@@ -151,12 +151,21 @@ describe("sequential fold chain construction", () => {
  * 于是这条最像现场的题面在构造路径上直接落空（退回模型坐标、`AD` 实测不对）。
  */
 describe("ratio phrasing in ratio:length form", () => {
-  it("uses AE:AD=2:5 and AF:AB=1:2 to place the hinge points", () => {
-    const prompt = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。"
+  it.each([":", "："])("uses %s ratios to place and independently verify the hinge points", (colon) => {
+    const prompt = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。".replaceAll(":", colon)
     const compiled = compilePlan(incompletePlan(), { document: createEmptyDocument("geometry3d"), prompt, conversationId: "fold-ratio-form", documentGeneration: 0 })
 
     expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
     expect(compiled.diagramVerification?.status).toBe("passed")
     expect(compiled.assumptions.some((assumption) => assumption.id === "witness.foldConstruction")).toBe(true)
+    const points = compiled.draftDocument!.primitives.filter(p => p.type === "point3")
+    const point = (name: string) => {
+      const found = points.find(p => p.label === name)
+      if (found?.type !== "point3") throw new Error(`missing ${name}`)
+      return found.position
+    }
+    const a = point("A"); const e = point("E"); const f = point("F")
+    expect(Math.hypot(e.x - a.x, e.y - a.y, e.z - a.z)).toBeCloseTo(2 * Math.sqrt(3), 5)
+    expect(Math.hypot(f.x - a.x, f.y - a.y, f.z - a.z)).toBeCloseTo(4, 5)
   })
 })

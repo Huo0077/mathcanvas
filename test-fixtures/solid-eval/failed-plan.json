@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "mathcanvas.solid-eval.v2",
+  "model": "offline-fixture",
+  "sourceRevision": "fixture",
+  "promptVersion": "mathcanvas.agent.prompt.v9",
+  "at": "2026-10-25T00:00:00.000Z",
+  "status": "completed",
+  "problems": 1,
+  "requests": 0,
+  "inputTokens": 0,
+  "outputTokens": 0,
+  "rows": [
+    {
+      "id": "compiler-failed-givens-passed",
+      "focus": "length",
+      "prompt": "三角形ABC中，AB=2。",
+      "kind": "plan",
+      "actions": 2,
+      "compiled": false,
+      "hasDraft": false,
+      "verification": "passed",
+      "verified": false,
+      "expectationMet": false,
+      "traces": [],
+      "rawPlan": {
+        "schemaVersion": "mathcanvas.plan.v1",
+        "kind": "plan",
+        "goal": "offline regression fixture",
+        "factIds": [],
+        "actions": [
+          {
+            "actionId": "solid.create_face",
+            "actionKey": "base",
+            "factIds": [],
+            "inputs": {
+              "alias": "base",
+              "vertexNames": ["A", "B", "C"],
+              "vertices": [{ "x": 0, "y": 0, "z": 0 }, { "x": 2, "y": 0, "z": 0 }, { "x": 0, "y": 2, "z": 0 }]
+            }
+          },
+          {
+            "actionId": "solid.create_segment",
+            "actionKey": "missing",
+            "factIds": [],
+            "inputs": { "alias": "missing", "vertexNames": ["X", "Y"] }
+          }
+        ]
+      }
+    }
+  ],
+  "summary": { "completed": 1, "asPlan": 1, "compiled": 0, "verified": 0, "expectedRejections": 0, "expectedClarifications": 0, "expectationMet": 0 }
+}

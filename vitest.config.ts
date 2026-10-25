@@ -26,6 +26,7 @@ export default defineConfig({
      * 7.5 GB 的 olean**，所以本来就不该是"每次全量都跑"的东西。计划书 Task 19/21 的原文写的也正是
      * 「Lean 慢集成单列」。用具名脚本 `npm run test:lean` 单独跑（串行、`--maxWorkers=1`）。
      */
-    exclude: [...configDefaults.exclude, "scripts/proof-spike/lean4EndToEnd.test.ts"]
+    // Live model evaluation has a separate, explicit entry point even when a key is present.
+    exclude: [...configDefaults.exclude, "scripts/proof-spike/lean4EndToEnd.test.ts", "apps/web/src/agent/fixtures/examSolid30.eval.test.ts"]
   }
 })

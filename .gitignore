@@ -3,6 +3,7 @@ dist/
 apps/web/dist/
 build-check/
 test-results/
+eval-results/
 playwright-report/
 blob-report/
 *.log

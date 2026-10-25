@@ -20,6 +20,7 @@ import { extractRelations } from "./relationExtraction"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { constructTetrahedron } from "./solver/tetrahedron"
 import { materialiseFoldHinges } from "./solver/foldHinges"
+import { foldHingeRatios } from "./solver/foldRatios"
 import { constructSquarePyramid } from "./solver/pyramid"
 import { constructRegularSquarePyramid } from "./solver/regularPyramid"
 import { constructRegularTriangularPyramid } from "./solver/regularTriangularPyramid"
@@ -2447,36 +2448,9 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
   const candidate = found.candidate
   if (candidate.names.length !== 4 || !candidate.names.includes(fold.apex)) return null
 
-  const ratios = new Map<string, { from: string; to: string; parameter: number }>()
-  for (const match of prompt.matchAll(/([A-Z])([A-Z])=([0-9]+(?:\.[0-9]+)?)\/([0-9]+)\s*([A-Z])([A-Z])/g)) {
-    const numerator = Number(match[3])
-    const denominator = Number(match[4])
-    if (!(denominator > 0) || !Number.isFinite(numerator)) continue
-    ratios.set(match[2]!, {
-      from: match[1]!,
-      to: match[6]!,
-      parameter: Math.max(0, Math.min(1, numerator / denominator))
-    })
-  }
-  /**
-   * **同一条比例关系的另一种写法**（2026-10-25 扫题发现）：
-   * `AE:AD=2:5` / `AE:AD = 2 : 5`。用户原话与卷面都用这一种，而旧实现只认 `AE=2/5 AD` ——
-   * 于是折片构造在**真实用户题面**上直接落空（退回模型坐标，`AD` 实测不对）。
-   *
-   * 判据不变：`AP:AB=p:q` 表示点 `P` 在 `A→B` 上、`AP/AB = p/q`；两个前缀必须同起点。
-   */
-  for (const match of prompt.matchAll(/([A-Z])([A-Z])\s*:\s*([A-Z])([A-Z])\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*:\s*([0-9]+(?:\.[0-9]+)?)/g)) {
-    if (match[1] !== match[3]) continue
-    const numerator = Number(match[5])
-    const denominator = Number(match[6])
-    if (!(denominator > 0) || !Number.isFinite(numerator)) continue
-    ratios.set(match[2]!, {
-      from: match[1]!,
-      to: match[4]!,
-      parameter: Math.max(0, Math.min(1, numerator / denominator))
-    })
-  }
-  const hingeNames = [...fold.face].filter((name) => name !== fold.apex)
+  const ratios = foldHingeRatios(first.obligations.ir, hostNames)
+  const faceNames = fold.face.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? []
+  const hingeNames = faceNames.filter((name) => name !== fold.apex)
   if (hingeNames.length !== 2 || hingeNames.some((name) => !ratios.has(name))) return null
 
   const hostAlias = "fold-host"
@@ -2515,7 +2489,7 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
     factIds: [],
     inputs: {
       alias: "fold-flap",
-      vertexNames: [...fold.face],
+      vertexNames: faceNames,
       hinge: { from: fold.hinge.from, to: fold.hinge.to },
       apex: fold.apex,
       apexAs: fold.apexAs,

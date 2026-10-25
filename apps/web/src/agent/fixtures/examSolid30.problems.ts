@@ -15,6 +15,7 @@ export interface SolidProblem {
   prompt: string
   /** 期望能核验到的关键结论（人工标注，仅用于报告归类，不参与判分自动比较）。 */
   focus: "length" | "angle" | "dihedral" | "volume" | "sphere" | "section" | "fold" | "relation"
+  expectedDiagnostic?: string
 }
 
 export const SOLID_PROBLEMS: readonly SolidProblem[] = [
@@ -48,4 +49,17 @@ export const SOLID_PROBLEMS: readonly SolidProblem[] = [
   { id: "s28", prompt: "在棱长为 2 的正方体 ABCD-A1B1C1D1 中，求平面 AB1D1 与平面 ABCD 所成的锐二面角的大小。", focus: "dihedral" },
   { id: "s29", prompt: "四面体 ABCD 中，AB=CD=2，其余四条棱长都为 √3，求它的体积。", focus: "volume" },
   { id: "s30", prompt: "四棱锥 P-ABCD 的底面是菱形，边长为 2，∠BAD=60°，PA 垂直于底面，PA=2，求二面角 P-BD-A 的大小。", focus: "dihedral" }
+]
+
+const FOLD_BASE = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。"
+const TWO_FOLDS = "先将三角形AEF沿EF翻折至三角形PEF，再将三角形PEF沿PF折叠至三角形QPF。"
+
+/** Separate extension: the historical solid30 denominator remains 30. */
+export const FOLD_PROBLEMS: readonly SolidProblem[] = [
+  { id: "f01", focus: "fold", prompt: FOLD_BASE + "将三角形AEF沿EF翻折至三角形PEF，使PC=4√3。" },
+  { id: "f02", focus: "fold", prompt: FOLD_BASE.replaceAll(":", "：") + "将三角形AEF沿EF翻折至三角形PEF，使PC=4√3。" },
+  { id: "f03", focus: "fold", prompt: FOLD_BASE + TWO_FOLDS.replace("沿EF翻折至", "沿EF翻折90°至").replace("沿PF折叠至", "沿PF折叠60°至") },
+  { id: "f04", focus: "fold", prompt: FOLD_BASE + TWO_FOLDS + "使QB=5.982610851975，QC=7.185772613248。" },
+  { id: "f05", focus: "fold", prompt: FOLD_BASE + TWO_FOLDS + "再将三角形QPF沿QP翻折至三角形RQP，使PB=7.211102550928，QB=5.982610851975，RB=4.702333900814。" },
+  { id: "f06", focus: "fold", prompt: FOLD_BASE + TWO_FOLDS, expectedDiagnostic: "fold_system_underdetermined" }
 ]
