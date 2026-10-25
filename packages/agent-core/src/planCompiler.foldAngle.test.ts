@@ -117,12 +117,16 @@ describe("Task 12 — 折角反求（接进编译路径）", () => {
   })
 
   /**
-   * **负例：错的折角 + 图里缺了 `C`**（Task 13 的 RED 原话要这种"图形很像但缺 C"的例子）。
+   * **模型计划里缺了 `C` 时，规范重建会按题面补回来 —— 但必须披露**（2026-10-25 更新）。
    *
-   * `PC=4√3` 还在题面里，但折后要量的那个 `C` **不在图上** ⇒ 反求**没有目标点可用**（如实不救），
-   * 而那条条件也就核不过。这条同时挡住两件事：**不许把缺的 `C` 蒙出来**、**不许绕开那条条件**。
+   * 这份计划有一条**真的** `solid.fold`（只是折角是猜的），而四边形的顶点少了 `C`。
+   * 旧行为是"反求没有目标点 ⇒ 不救 ⇒ 整题失败"；现在默认路径会按题面的四边形重建整张图
+   *（含 `C`），并在 assumptions 里写明"折片由平面见证坐标 + 题面比例规范重建"——
+   * 用户看得到这一步是**系统补的**，不是模型写对的。
+   *
+   * 真正该挡的是下面那条：**题面里根本没有四边形**（`C` 无从补起）时，必须失败。
    */
-  it("负例：错的折角 + 图里缺 C ⇒ 反求没有依据、`PC=4√3` 核不过，不许通过", () => {
+  it("模型计划缺 C ⇒ 规范重建补回并披露（不再让缺 C 的计划默默通过）", () => {
     const plan = foldPlan(GUESSED_ANGLE) as Extract<PlanEnvelope, { kind: "plan" }>
     const face = plan.actions[0] as unknown as { inputs: { vertexNames: string[]; vertices: unknown[] } }
     // 拿掉 C（顶点名单与坐标同时拿掉，保持两个平行数组等长）。
@@ -133,9 +137,24 @@ describe("Task 12 — 折角反求（接进编译路径）", () => {
     const checks = result.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`) ?? []
     const text = result.assumptions.map((item) => (typeof item === "string" ? item : item.text)).join(" / ")
 
-    expect(text, `assumptions：${text}`).not.toMatch(/反求/)
+    expect(result.diagramVerification?.status, checks.join("；")).toBe("passed")
+    expect(text, `assumptions：${text}`).toContain("规范重建")
+    const labels = (result.draftDocument?.primitives ?? []).flatMap((primitive) => (primitive.type === "point3" ? [(primitive as { label?: unknown }).label] : []))
+    expect(labels, `文档里的点名：${JSON.stringify(labels)}`).toContain("C")
+  })
+
+  /** **真负例**：题面里没有四边形 ⇒ `C` 没有任何依据可补，整题必须失败。 */
+  it("题面里没有四边形、计划里又缺 C ⇒ 不许通过，也不许把 C 编出来", () => {
+    const plan = foldPlan(GUESSED_ANGLE) as Extract<PlanEnvelope, { kind: "plan" }>
+    const face = plan.actions[0] as unknown as { inputs: { vertexNames: string[]; vertices: unknown[] } }
+    face.inputs.vertexNames = ["A", "B", "D"]
+    face.inputs.vertices = [A, B, D]
+    const noQuadPrompt = "点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。"
+
+    const result = compilePlan(plan, { document: createEmptyDocument("geometry3d"), prompt: noQuadPrompt, conversationId: "fold-angle-no-quad", documentGeneration: 0 })
+    const checks = result.diagramVerification?.checks.map((check) => `${check.sourceText}:${check.status}`) ?? []
+
     expect(result.diagramVerification?.status, checks.join("；")).not.toBe("passed")
-    // `C` 不许被悄悄补出来（它不是中点、也不是定比分点）。
     const labels = (result.draftDocument?.primitives ?? []).flatMap((primitive) => (primitive.type === "point3" ? [(primitive as { label?: unknown }).label] : []))
     expect(labels, `文档里的点名：${JSON.stringify(labels)}`).not.toContain("C")
   })

@@ -2416,6 +2416,13 @@ function rescueWithDihedralTriangle(context: PlanCompileContext, first: CompileO
  */
 function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileOnceOutcome): PlanCompileResult | null {
   if (first.result.diagramVerification?.status === "passed" || first.plan === null || first.obligations === null || context.prompt === undefined) return null
+  /**
+   * **模型画了一条"折不起来的折"时不许重建**（2026-10-25）：
+   * 这是与"题面说要折、计划里没有折"**不同**的失败 —— 前者是模型给了一张错的图，
+   * 后者是模型漏了一步。把前者也重建掉，等于替模型把错误折角换成对的，
+   * 而用户与核验都再也看不到"模型画错了"这件事（`planCompiler.foldNegatives` 守的就是这条）。
+   */
+  if (first.result.diagnostics.some((diagnostic) => diagnostic.code === "fold_not_rigid")) return null
   const prompt = normalizeGeometryPrompt(context.prompt)
   const fold = readFoldTransformations(prompt).find((entry) => entry.motion !== "rotate")
   if (fold === undefined) return null
@@ -2448,6 +2455,24 @@ function rescueWithFoldConstruction(context: PlanCompileContext, first: CompileO
     ratios.set(match[2]!, {
       from: match[1]!,
       to: match[6]!,
+      parameter: Math.max(0, Math.min(1, numerator / denominator))
+    })
+  }
+  /**
+   * **同一条比例关系的另一种写法**（2026-10-25 扫题发现）：
+   * `AE:AD=2:5` / `AE:AD = 2 : 5`。用户原话与卷面都用这一种，而旧实现只认 `AE=2/5 AD` ——
+   * 于是折片构造在**真实用户题面**上直接落空（退回模型坐标，`AD` 实测不对）。
+   *
+   * 判据不变：`AP:AB=p:q` 表示点 `P` 在 `A→B` 上、`AP/AB = p/q`；两个前缀必须同起点。
+   */
+  for (const match of prompt.matchAll(/([A-Z])([A-Z])\s*:\s*([A-Z])([A-Z])\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*:\s*([0-9]+(?:\.[0-9]+)?)/g)) {
+    if (match[1] !== match[3]) continue
+    const numerator = Number(match[5])
+    const denominator = Number(match[6])
+    if (!(denominator > 0) || !Number.isFinite(numerator)) continue
+    ratios.set(match[2]!, {
+      from: match[1]!,
+      to: match[4]!,
       parameter: Math.max(0, Math.min(1, numerator / denominator))
     })
   }

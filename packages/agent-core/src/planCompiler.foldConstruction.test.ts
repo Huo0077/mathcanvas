@@ -144,3 +144,19 @@ describe("sequential fold chain construction", () => {
     expect(compiled.actions.filter((action) => action.actionId === "solid.fold")).toHaveLength(0)
   })
 })
+
+/**
+ * **比例关系的另一种写法**（2026-10-25 扫题发现）：
+ * 真实用户题面写的是 `AE:AD=2:5`，而构造层旧实现只认 `AE=2/5 AD` ——
+ * 于是这条最像现场的题面在构造路径上直接落空（退回模型坐标、`AD` 实测不对）。
+ */
+describe("ratio phrasing in ratio:length form", () => {
+  it("uses AE:AD=2:5 and AF:AB=1:2 to place the hinge points", () => {
+    const prompt = "平面四边形ABCD中，AB=8，AD=5√3，∠BAD=30°，∠ADC=90°，CD=3。点E在AD上，且AE:AD=2:5；点F在AB上，且AF:AB=1:2。将三角形AEF沿EF翻折至三角形PEF，使得PC=4√3。"
+    const compiled = compilePlan(incompletePlan(), { document: createEmptyDocument("geometry3d"), prompt, conversationId: "fold-ratio-form", documentGeneration: 0 })
+
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("; ")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    expect(compiled.assumptions.some((assumption) => assumption.id === "witness.foldConstruction")).toBe(true)
+  })
+})
