@@ -28,7 +28,7 @@ export function parseReliabilityArgs(args) {
       options.mode = "live"
       continue
     }
-    const field = { "--replay": "replay", "--max-requests": "maxRequests", "--out": "out" }[flag]
+    const field = { "--replay": "replay", "--max-requests": "maxRequests", "--out": "out", "--cases": "cases" }[flag]
     if (!field || args[index + 1] === undefined || args[index + 1].startsWith("--")) throw new Error(`Unknown or incomplete option: ${flag}`)
     options[field] = args[++index]
   }
@@ -53,12 +53,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (options.help) {
       console.log(
         [
-          "Offline smoke (local planner, no cost): npm run eval:reliability -- --offline",
+          "Offline smoke (local planner, no cost): npm run eval:reliability -- --offline [--cases FILE]",
           "Replay recorded rounds:               npm run eval:reliability -- --replay FILE",
           "Live provider (explicit):             npm run eval:reliability -- --allow-paid --max-requests N",
           "",
+          "Cases default to test-fixtures/reliability/dev-smoke.json (dev smoke, NOT the T02 acceptance set).",
           "Live also requires DEEPSEEK_API_KEY. Reports land in eval-results/reliability/<mode>-<time>-<pid>/.",
-          "Dev-smoke cases only: this is not the T02 acceptance set, and cost is reported as unknown, not zero."
+          "Cost is reported as unknown, not zero."
         ].join("\n")
       )
     } else {
@@ -74,6 +75,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       delete env.MATHCANVAS_RELIABILITY_MAX_REQUESTS
       env.MATHCANVAS_RELIABILITY_REPORT = outDir
       env.MATHCANVAS_RELIABILITY_REVISION = revision.status === 0 ? revision.stdout.trim() : "unknown"
+      env.MATHCANVAS_RELIABILITY_CASES = path.resolve(options.cases ?? path.join(root, "test-fixtures", "reliability", "dev-smoke.json"))
       if (options.mode === "replay") env.MATHCANVAS_RELIABILITY_REPLAY = path.resolve(options.replay)
       if (options.mode === "live") Object.assign(env, { MATHCANVAS_RELIABILITY_LIVE: "1", MATHCANVAS_RELIABILITY_MAX_REQUESTS: String(options.maxRequests) })
       const result = spawnSync(process.execPath, [path.join(root, "node_modules/vitest/vitest.mjs"), "run", "--config", "vitest.reliability.config.ts"], { cwd: root, env, stdio: "inherit" })

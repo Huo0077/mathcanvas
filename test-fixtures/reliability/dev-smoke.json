@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "suite": "reliability-dev-smoke",
+  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。",
+  "cases": [
+    {
+      "id": "rect-fold-length",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，AB⊥BC，BD=2√5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "2026-10-26 任务书用户案例（尺寸与垂直条件来自题面）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "dot", "a": "B′", "b": "D", "c": "A", "d": "C", "value": 12 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-renamed",
+      "prompt": "矩形 PQRS 中，PQ=6，QR=3，沿对角线 PR 把 △PQR 折起，使平面 PQR ⊥ 平面 PRS。求折后 QS 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "用户案例的改名/改尺寸同构题（验证不依赖固定点名与尺寸）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "P", "b": "Q′", "value": 6 },
+          { "kind": "distance", "a": "Q′", "b": "R", "value": 3 },
+          { "kind": "distance", "a": "Q′", "b": "S", "value": 5.531726674 },
+          { "kind": "point-coordinate", "name": "Q′", "x": 4.8, "y": 2.4, "z": -2.683281573 },
+          { "kind": "planes-perpendicular", "first": ["P", "Q′", "R"], "second": ["P", "R", "S"] }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-other-diagonal",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 BD 把 △BCD 折起，使平面 BCD ⊥ 平面 ABD。求折后 AC 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "用户案例换另一条对角线（BD）的同构题", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "B", "b": "C′", "value": 2 },
+          { "kind": "distance", "a": "D", "b": "C′", "value": 4 },
+          { "kind": "distance", "a": "A", "b": "C′", "value": 3.687817782917155 },
+          { "kind": "point-coordinate", "name": "C′", "x": 3.2, "y": 0.4, "z": -1.788854382 },
+          { "kind": "planes-perpendicular", "first": ["B", "C′", "D"], "second": ["A", "B", "D"] }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-false-goal",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。",
+      "expected": "clarification",
+      "contains": "不成立",
+      "provenance": { "source": "2026-10-26 任务书用户案例；该目标在题设下不成立（残差 12）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
+    },
+    {
+      "id": "rect-fold-no-angle",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折后 BD 的长。",
+      "expected": "clarification",
+      "contains": "折角",
+      "provenance": { "source": "同一题族但缺折角条件（欠定）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
+    },
+    {
+      "id": "cube",
+      "prompt": "建一个棱长 3 的立方体",
+      "expected": "plan",
+      "provenance": { "source": "常规构图冒烟（回归用）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft"]
+    }
+  ]
+}

@@ -34,6 +34,8 @@ import { writeSolidReport, readSolidReport } from "../../../../../scripts/solid-
  * 运行：`npm run eval:reliability -- --offline`（报告目录由 runner 选）。
  */
 
+import { evaluateOracle, type Oracle, type OracleResult } from "./reliabilityOracle"
+
 interface EvalCase {
   id: string
   prompt: string
@@ -42,29 +44,34 @@ interface EvalCase {
   contains?: string
   /** `expected: "plan"` 时，是否要求题设核验整体 `passed`（有题设的用例才要求）。 */
   requireVerification?: "passed"
+  /** 这一条要交付什么（`draft` / `verification_passed` / `clarification`）。 */
+  requiredOutputs?: readonly string[]
+  /** 来源与复核状态：自生成题必须如实标 `unreviewed`。 */
+  provenance?: { source: string; reviewStatus: string }
+  /** **独立判据**：只读候选几何回代，不经过产品解析/核验。 */
+  oracle?: Oracle
 }
 
-const CASES: readonly EvalCase[] = [
-  {
-    id: "rect-fold-length",
-    prompt: "矩形 ABCD 中，AB=4，BC=2，AB⊥BC，BD=2√5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
-    expected: "plan",
-    requireVerification: "passed"
-  },
-  {
-    id: "rect-fold-false-goal",
-    prompt: "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。",
-    expected: "clarification",
-    contains: "不成立"
-  },
-  {
-    id: "rect-fold-no-angle",
-    prompt: "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折后 BD 的长。",
-    expected: "clarification",
-    contains: "折角"
-  },
-  { id: "cube", prompt: "建一个棱长 3 的立方体", expected: "plan" }
-]
+interface CaseFile {
+  version: number
+  suite: string
+  notice?: string
+  cases: readonly EvalCase[]
+}
+
+/** 题单由 runner 显式指定（缺省是 `test-fixtures/reliability/dev-smoke.json`）；不存在就拒绝跑。 */
+async function loadCases(): Promise<readonly EvalCase[]> {
+  const file = env.MATHCANVAS_RELIABILITY_CASES
+  if (file === undefined || file.trim() === "") throw new Error("MATHCANVAS_RELIABILITY_CASES is required — use npm run eval:reliability")
+  const parsed = (await readSolidReport(file)) as CaseFile
+  if (parsed.version !== 1 || !Array.isArray(parsed.cases) || parsed.cases.length === 0) throw new Error(`invalid case file: ${file}`)
+  for (const entry of parsed.cases) {
+    if (typeof entry.id !== "string" || typeof entry.prompt !== "string" || (entry.expected !== "plan" && entry.expected !== "clarification")) {
+      throw new Error(`invalid case entry in ${file}: ${JSON.stringify(entry).slice(0, 120)}`)
+    }
+  }
+  return parsed.cases
+}
 
 type Mode = "local" | "replay" | "live"
 
@@ -72,12 +79,16 @@ interface ReliabilityCaseReport {
   id: string
   prompt: string
   expected: EvalCase["expected"]
+  provenance: EvalCase["provenance"] | null
+  requiredOutputs: readonly string[]
   mode: Mode
   revision: string
   terminal: RunPhase | "none" | "infrastructure"
   phase: "output_format" | "input_reading" | "identity_state" | "construction" | "solver" | "presentation_commit" | "infrastructure"
   passed: boolean
   draftPresent: boolean
+  /** 独立判据（只读候选几何回代）；没有 oracle 的条目为 `not_applicable`。 */
+  independent: OracleResult
   verificationStatus: string | null
   verificationChecks: { kind: string; status: string; sourceText: string }[]
   questions: string[] | null
@@ -238,11 +249,12 @@ describe("完整的协调器链路评测（T01）", () => {
   assertModeConfigured()
 
   it("每条用例都在干净文档 / 干净会话上跑到终态，且从不自动确认", async () => {
+    const cases = await loadCases()
     const recorded = await replayRounds()
     const reports: ReliabilityCaseReport[] = []
     const notRun: string[] = []
 
-    for (const entry of CASES) {
+    for (const entry of cases) {
       const { planner, requests, rounds, notRun: missing } = plannerFor(entry, recorded)
       if (missing !== null) {
         notRun.push(missing)
@@ -265,20 +277,37 @@ describe("完整的协调器链路评测（T01）", () => {
       const verification = stage?.ok === true ? stage.verification : undefined
       const questions = runtime.questions() ?? null
       const draftPresent = terminal === "awaiting_confirmation" && stage?.ok === true
+      const draftId = runtime.draftId()
+      const candidate = draftId === null ? null : runtime.drafts.getPreview(draftId)?.candidate ?? null
+      const independent: OracleResult = entry.oracle === undefined
+        ? { status: "not_applicable", facts: [] }
+        : evaluateOracle(candidate, entry.oracle)
+      const requiredOutputs = entry.requiredOutputs ?? []
+      const outputsSatisfied = requiredOutputs.every((output) =>
+        output === "draft" ? draftPresent
+          : output === "verification_passed" ? verification?.status === "passed"
+            : output === "clarification" ? terminal === "waiting" && questions !== null && questions.length > 0
+              : false
+      )
       const passed = entry.expected === "plan"
-        ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification)
-        : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "")
+        ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
+          && (independent.status === "passed" || independent.status === "not_applicable")
+        : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "") && outputsSatisfied
+          && (independent.status === "passed" || independent.status === "not_applicable")
 
       const report: ReliabilityCaseReport = {
         id: entry.id,
         prompt: entry.prompt,
         expected: entry.expected,
+        provenance: entry.provenance ?? null,
+        requiredOutputs,
         mode: MODE,
         revision: REVISION,
         terminal,
         phase: phaseOf(entry, terminal, passed, verification?.status ?? null, error),
         passed,
         draftPresent,
+        independent,
         verificationStatus: verification?.status ?? null,
         verificationChecks: (verification?.checks ?? []).map((check) => ({ kind: check.kind, status: check.status, sourceText: check.sourceText })),
         questions,
@@ -299,8 +328,8 @@ describe("完整的协调器链路评测（T01）", () => {
       mode: MODE,
       revision: REVISION,
       startedAt: new Date().toISOString(),
-      cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, requests: report.requests, elapsedMs: report.elapsedMs })),
-      totals: { cases: CASES.length, ran: reports.length, passed: reports.filter((report) => report.passed).length, incomplete: notRun.length },
+      cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, independent: report.independent.status, requests: report.requests, elapsedMs: report.elapsedMs })),
+      totals: { cases: cases.length, ran: reports.length, passed: reports.filter((report) => report.passed).length, incomplete: notRun.length },
       notRun,
       requests: reports.reduce((total, report) => total + report.requests, 0),
       costUsd: null,
@@ -308,7 +337,8 @@ describe("完整的协调器链路评测（T01）", () => {
       notes: [
         "dev-smoke 题单，不是 T02 的验收题单；分母只是这几条。",
         "费用未知：本轮没有计费证据，不把 costUsd 写成 0。",
-        "不自动确认：每条用例的 liveWrites 必须为 0。"
+        "不自动确认：每条用例的 liveWrites 必须为 0。",
+        "独立判据：有 oracle 的条目只读候选几何回代，不经过产品解析器/核验器。"
       ]
     }
     await writeSolidReport(`${REPORT_DIR}/summary.json`, summary, [env.DEEPSEEK_API_KEY ?? ""])
@@ -322,8 +352,13 @@ describe("完整的协调器链路评测（T01）", () => {
     expect(reports.every((report) => report.liveWrites === 0), JSON.stringify(reports.filter((report) => report.liveWrites !== 0))).toBe(true)
     // 每条用例的期望终态都要成立（passed 在报告里逐条可查）。
     expect(reports.map((report) => [report.id, report.passed, report.terminal, report.phase, report.error])).toEqual(
-      CASES.map((entry) => [entry.id, true, entry.expected === "plan" ? "awaiting_confirmation" : "waiting", entry.expected === "plan" ? "presentation_commit" : "input_reading", null])
+      cases.map((entry) => [entry.id, true, entry.expected === "plan" ? "awaiting_confirmation" : "waiting", entry.expected === "plan" ? "presentation_commit" : "input_reading", null])
     )
+    // **独立判据**：有 oracle 的条目必须由独立回代通过；没有的必须是 not_applicable（不许假装验证过）。
+    for (const report of reports) {
+      const entry = cases.find((candidateEntry) => candidateEntry.id === report.id)!
+      expect(report.independent.status, `${report.id}：${JSON.stringify(report.independent.facts.filter((fact) => fact.status === "failed"))}`).toBe(entry.oracle === undefined ? "not_applicable" : "passed")
+    }
     // 费用未知就是未知。
     expect(reports.every((report) => report.costUsd === null && report.costKnown === false)).toBe(true)
   }, 300_000)
