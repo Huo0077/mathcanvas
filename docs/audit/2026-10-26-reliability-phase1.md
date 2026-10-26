@@ -300,8 +300,8 @@
   `writeDocument` 调用次数逐条断言为 **0**。
 - 报告：每条用例一个**原子写入**的 JSON（`case-<id>.json`）+ `summary.json` + `replay.json`；
   记录终态、verification、澄清问题、请求数、耗时、逐轮信封；费用记 `null` / `costKnown: false`（**不写 0**）。
-- 题单目前是 **dev-smoke 6 条**（矩形折叠成功×3 / 假目标 / 缺折角 / 立方体），**不是** T02 的验收题单；
-  题单已外置并带独立 oracle，见 §4.6。
+- 题单目前是 **dev-smoke 14 条**（矩形折叠 6 / 表达变式 3 / 常规 3 / 负例 3，其中 1 条因已知缺陷跳过，
+  见 §4.7），**不是** T02 的验收题单；题单已外置并带独立 oracle（§4.6）。
   分母与"未执行"在 summary 里如实列出（`notRun`、`incomplete`）。
 
 **第一跑抓到的真实缺陷（已修）**
@@ -355,27 +355,56 @@
 
 **实测读数**
 
-- `npm run eval:reliability -- --offline` → **3 tests passed**；summary **6/6 passed、requests=6、incomplete=0**；
-  `firstAttemptPassed=6`、`repairedPassed=0`（首次尝试口径：规划轮次恰好 1 次且通过；
-  live 模式的工具续轮尚未单独计数，届时需要收紧该口径）。
-  三条带 oracle 的题 `independent: "passed"`，其余 `not_applicable`。
-- 用该次运行的 `replay.json` 回放 → **3 tests passed**（6/6）。
+- `npm run eval:reliability -- --offline` → **3 tests passed**；summary **13/14 ran、13 passed、1 skipped、incomplete=1**、
+  `firstAttemptPassed=13`、`repairedPassed=0`、`costUsd=null`；6 条带独立 oracle 的题 `independent: "passed"`。
+- 跳过的那条是**已知缺陷**（`rect-fold-chain`），见 §4.7 —— 它**不算通过**，并计入 `incomplete`。
+- 用该次运行的 `replay.json` 回放 → **3 tests passed**（可重放部分 13/13；被跳过的题没有轮次，不会被补出来）。
 - `reliabilityOracle.test.ts`（默认单元，3/3）：距离/点积/坐标/平面垂直全过、篡改坐标逐条失败、
   缺点名失败、候选缺失 `not_applicable`。
 
 **剩余**
 
-- 独立 oracle 目前只覆盖矩形折叠这一族（点/长度/点积/平面垂直）与点数；**验收题单（60 题）与人工复核未做**，
-  所以这一层还不能当质量分母。
-- 评分尚未区分"首次成功"与"修复后成功"（T01/T09 的口径需要按轮次记录），也还没有冻结系统提示词/模型/预算。
+- 独立 oracle 目前覆盖矩形折叠一族（点/长度/点积/平面垂直）、球/棱柱的种类计数；**验收题单（60 题）与人工复核未做**。
+- 评分尚未区分"首次成功"与"修复后成功"的**真实轮次**（当前以规划轮次近似），也没有冻结系统提示词/模型/预算。
+
+## 4.7 已知缺陷：`segmentRatio` 把共享端点的两段当成"点分线段"
+
+**发现方式**
+
+扩展 dev 题单时加入表达变式 `AB=2BC=4`（与用户案例同一几何）。预期出计划，实际编译失败：
+
+- `parseDiagramObligations` 给出 `segmentRatio targets=[A,B,B,C]`（两段 `AB`、`BC` 共享端点 `B`）；
+- `diagramVerification` 的 `segmentRatio` 分支用 `e === eAgain` 判断"**一个点把一条线段分开**"，
+  于是要求 `|AB| + |BC| = |AC|`；
+- 矩形里 `|AB|=4`、`|BC|=2`、`|AC|=√20` ⇒ 残差 **1.5279**，`diagram_condition_failed`，三轮修复后失败。
+
+**为什么是产品缺陷**
+
+- 卷面写法 `AB=2BC`（两段共享顶点）是受支持的比例表达；它**不**蕴含 `B` 在 `AC` 上。
+- 同一个编码也确实用于 `DE=2EA`（`E` 在 `DA` 上把线段分开）。**语法无法区分这两种意图**，
+  当前实现用"名字连续重复"当唯一判据，于是共享端点被误判。
+
+**当前处置（不掩盖）**
+
+- 该题在题单里标 `knownIssue`，评测**跳过执行**并在 summary 里进 `skipped` 与 `incomplete = 1`；
+  它**不算通过**，也不会被从分母里删掉；其余 13 条照常跑。
+
+**修复方向（下一步，带回归）**
+
+1. 给 `segmentRatio` 增加显式来源：`splitPoint: true` 由**分点语义的读取器**设置；
+   核验器改用该标志而不是 `e === eAgain`。
+2. 通用两段比例读取器（`AB=2BC`、冒号式、链式）显式标 `splitPoint: false`。
+3. 回归两则：`AB=2BC=4` 必须按两段比例通过；`DE=2EA` 仍必须要求 `E` 落在线段 `DA` 上
+   （反例：`E` 偏离或在反方向 ⇒ failed）。
+4. 修好后把 `rect-fold-chain` 的 `knownIssue` 去掉，`incomplete` 回到 0。
 
 ## 5. T01–T10 的状态
 
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
 | T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
-| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断 / 题单外置 / **独立 oracle 回代**（§4.5–4.6）；dev-smoke 6 条；真实模型基线与工具续轮等请求归并未完成 |
-| T02 开发集 20 题 / 验收集 60 题 | **部分** | dev-smoke 6 条已外置并带来源/预期/oracle，但**未到 20/60、未独立复核**，不能当验收 |
+| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断 / 题单外置 / **独立 oracle 回代**（§4.5–4.6）；dev-smoke 14 条中 13 条执行、1 条已知缺陷跳过（§4.7）；真实模型基线与工具续轮等请求归并未完成 |
+| T02 开发集 20 题 / 验收集 60 题 | **部分** | dev-smoke 14 条已外置并带来源/预期/oracle（1 条已知缺陷），**未到 20/60、未独立复核**，不能当验收 |
 | T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
 | T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
 | T05 状态执行/求解/回代 | **部分** | 矩形单折的构造、计划与回代已做；`coupledFolds` 未接矩形分支 |
@@ -397,8 +426,8 @@
 | `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归） |
 | `npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` | **3 passed**（本族：预览/确认/撤销、假目标澄清、缺折角澄清） |
 | `npx playwright test` 翻折/连等子集（5 个 spec） | **7 passed**（既有代表题未被新意图抢走） |
-| `npm run eval:reliability -- --offline` | **3 tests passed**；summary **6/6 passed、requests=6、incomplete=0、costUsd=null**；3 条带独立 oracle 的题 `independent: "passed"`；另写 cancel / budget 机制报告 |
-| `npm run eval:reliability -- --replay <replay.json>` | **3 tests passed**（6/6，不补轮次） |
+| `npm run eval:reliability -- --offline` | **3 tests passed**；summary **13/14 ran、13 passed、1 skipped、incomplete=1、firstAttemptPassed=13、costUsd=null**；6 条独立 oracle 通过；另写 cancel / budget 机制报告 |
+| `npm run eval:reliability -- --replay <replay.json>` | **3 tests passed**（可重放部分 13/13，不补轮次） |
 | `npm run eval:reliability -- --allow-paid --max-requests 2`（无密钥） | **exit 2**（拒绝启动，不发生任何付费请求） |
 
 注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
@@ -433,6 +462,9 @@
 
 ## 9. 下一步（按优先级）
 
-1. **T01 `eval:reliability`** 完整链路评测入口（复用生产 modelPlanner/coordinator/DraftStore/编译器，逐题原子报告、离线回放、预算记账），随后才是 T02 题单与 T09 冻结验收。
-2. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
-3. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。
+1. **修 §4.7 的 `segmentRatio` 共享端点缺陷**：加显式 `splitPoint` 来源，回归 `AB=2BC=4` 与 `DE=2EA` 两侧；
+   修好后去掉 `rect-fold-chain` 的 `knownIssue`，`incomplete` 回到 0。
+2. 把 dev 题单补到 20 条（任务书分布：常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并给常规/表达题补更多 oracle 类型。
+3. **T01 `eval:reliability`** 的剩余项：真实模型基线、逐轮原始响应、工具续轮/重试/降级的请求归并。
+4. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
+5. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。

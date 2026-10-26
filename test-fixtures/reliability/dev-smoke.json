@@ -77,6 +77,94 @@
       "expected": "plan",
       "provenance": { "source": "常规构图冒烟（回归用）", "reviewStatus": "unreviewed" },
       "requiredOutputs": ["draft"]
+    },
+    {
+      "id": "rect-fold-square-true-goal",
+      "prompt": "矩形 ABCD 中，AB=2，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "正方形（矩形的特例）上该目标确实成立：折后 (B′−D)·(C−A)=0", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "point-coordinate", "name": "B′", "x": 1, "y": 1, "z": -1.414213562 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 2 },
+          { "kind": "dot", "a": "B′", "b": "D", "c": "A", "d": "C", "value": 0 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-face-first",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，AB⊥BC，BD=2√5，将 △ABC 沿 AC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "同一道题的另一种语序（图形在前），应与折痕在前得到同一份几何", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "point-coordinate", "name": "B′", "x": 3.2, "y": 1.6, "z": -1.788854382 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "dot", "a": "B′", "b": "D", "c": "A", "d": "C", "value": 12 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-chain",
+      "prompt": "矩形 ABCD 中，AB=2BC=4，AB⊥BC，BD=2√5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "同一道题的长度连等写法（AB=2BC=4），应与逐条写法同一几何", "reviewStatus": "unreviewed" },
+      "knownIssue": "segmentRatio 把共享端点的两段（AB=2BC）当成点分线段：要求 |AB|+|BC|=|AC|，实测残差 1.5279，编译失败。这是产品缺陷，不是题单写错；见 docs/audit/2026-10-26-reliability-phase1.md §4.7。",
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "dot", "a": "B′", "b": "D", "c": "A", "d": "C", "value": 12 }
+        ]
+      }
+    },
+    {
+      "id": "sphere",
+      "prompt": "画一个球体，半径 5",
+      "expected": "plan",
+      "provenance": { "source": "常规构图（球）回归", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft"],
+      "oracle": { "facts": [{ "kind": "primitive-count", "type": "sphere", "minimum": 1 }] }
+    },
+    {
+      "id": "prism",
+      "prompt": "画一个棱柱",
+      "expected": "plan",
+      "provenance": { "source": "常规构图（棱柱）回归", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft"],
+      "oracle": { "facts": [{ "kind": "primitive-count", "minimum": 1 }] }
+    },
+    {
+      "id": "rect-fold-missing-side",
+      "prompt": "矩形 ABCD 中，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "clarification",
+      "contains": "缺少边",
+      "provenance": { "source": "同一题族但只给了一条边（条件不足）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
+    },
+    {
+      "id": "rect-fold-unsupported-sum",
+      "prompt": "矩形 ABCD 中，AB+CD=5，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "clarification",
+      "contains": "缺少边",
+      "provenance": { "source": "长度写成加法整式（本层不支持），不能只读后半截；因此确定边长的信息不足", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
+    },
+    {
+      "id": "rect-fold-unrelated-planes",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 PQR。",
+      "expected": "clarification",
+      "contains": "折痕两侧",
+      "provenance": { "source": "垂直关系说的不是折痕两侧的平面（不能用它确定折角）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
     }
   ]
 }

@@ -23,6 +23,8 @@ export type OracleFact =
   | { kind: "point-coordinate"; name: string; x: number; y: number; z: number }
   | { kind: "planes-perpendicular"; first: [string, string, string]; second: [string, string, string] }
   | { kind: "point-count"; minimum: number }
+  /** 候选文档里某类图元至少有几个（`type` 省略时数全部）。 */
+  | { kind: "primitive-count"; type?: string; minimum: number }
 
 export type Oracle = { facts: readonly OracleFact[] }
 
@@ -87,6 +89,15 @@ export function evaluateOracle(candidate: unknown, oracle: Oracle): OracleResult
   const results: OracleFactResult[] = []
 
   for (const fact of oracle.facts) {
+    if (fact.kind === "primitive-count") {
+      const matched = primitives.filter((primitive) => fact.type === undefined || (primitive as { type?: unknown }).type === fact.type)
+      results.push({
+        fact,
+        status: matched.length >= fact.minimum ? "passed" : "failed",
+        detail: `候选文档里${fact.type === undefined ? "全部图元" : ` ${fact.type} 图元`} ${matched.length} 个，至少要求 ${fact.minimum} 个。`
+      })
+      continue
+    }
     if (fact.kind === "point-count") {
       const actual = points.size
       results.push({

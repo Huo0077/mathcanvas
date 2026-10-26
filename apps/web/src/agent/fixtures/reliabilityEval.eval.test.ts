@@ -50,6 +50,11 @@ interface EvalCase {
   provenance?: { source: string; reviewStatus: string }
   /** **独立判据**：只读候选几何回代，不经过产品解析/核验。 */
   oracle?: Oracle
+  /**
+   * **已知缺陷、暂不执行的题**：写清原因。它**不算通过**，在 summary 里进 `skipped` 与
+   * `incomplete`（"未执行题保留为未完成"），修好之前不得从分母里悄悄删掉。
+   */
+  knownIssue?: string
 }
 
 interface CaseFile {
@@ -255,11 +260,13 @@ describe("完整的协调器链路评测（T01）", () => {
 
   it("每条用例都在干净文档 / 干净会话上跑到终态，且从不自动确认", async () => {
     const cases = await loadCases()
+    const skipped = cases.filter((entry) => entry.knownIssue !== undefined)
+    const runnable = cases.filter((entry) => entry.knownIssue === undefined)
     const recorded = await replayRounds()
     const reports: ReliabilityCaseReport[] = []
     const notRun: string[] = []
 
-    for (const entry of cases) {
+    for (const entry of runnable) {
       const { planner, requests, rounds, notRun: missing } = plannerFor(entry, recorded)
       if (missing !== null) {
         notRun.push(missing)
@@ -335,6 +342,7 @@ describe("完整的协调器链路评测（T01）", () => {
       revision: REVISION,
       startedAt: new Date().toISOString(),
       cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, independent: report.independent.status, firstAttempt: report.firstAttempt, requests: report.requests, elapsedMs: report.elapsedMs })),
+      skipped: skipped.map((entry) => ({ id: entry.id, knownIssue: entry.knownIssue })),
       totals: {
         cases: cases.length,
         ran: reports.length,
@@ -342,7 +350,8 @@ describe("完整的协调器链路评测（T01）", () => {
         /** 首次尝试就通过（规划轮次 1 次）；其余是通过的"修复后"条目。 */
         firstAttemptPassed: reports.filter((report) => report.firstAttempt).length,
         repairedPassed: reports.filter((report) => report.passed && !report.firstAttempt).length,
-        incomplete: notRun.length
+        /** 未执行题（含已知缺陷被跳过的）**算未完成**，不能从分母里消失。 */
+        incomplete: notRun.length + skipped.length
       },
       notRun,
       requests: reports.reduce((total, report) => total + report.requests, 0),
@@ -367,11 +376,11 @@ describe("完整的协调器链路评测（T01）", () => {
     expect(reports.every((report) => report.liveWrites === 0), JSON.stringify(reports.filter((report) => report.liveWrites !== 0))).toBe(true)
     // 每条用例的期望终态都要成立（passed 在报告里逐条可查）。
     expect(reports.map((report) => [report.id, report.passed, report.terminal, report.phase, report.error])).toEqual(
-      cases.map((entry) => [entry.id, true, entry.expected === "plan" ? "awaiting_confirmation" : "waiting", entry.expected === "plan" ? "presentation_commit" : "input_reading", null])
+      runnable.map((entry) => [entry.id, true, entry.expected === "plan" ? "awaiting_confirmation" : "waiting", entry.expected === "plan" ? "presentation_commit" : "input_reading", null])
     )
     // **独立判据**：有 oracle 的条目必须由独立回代通过；没有的必须是 not_applicable（不许假装验证过）。
     for (const report of reports) {
-      const entry = cases.find((candidateEntry) => candidateEntry.id === report.id)!
+      const entry = runnable.find((candidateEntry) => candidateEntry.id === report.id)!
       expect(report.independent.status, `${report.id}：${JSON.stringify(report.independent.facts.filter((fact) => fact.status === "failed"))}`).toBe(entry.oracle === undefined ? "not_applicable" : "passed")
     }
     // 费用未知就是未知。
