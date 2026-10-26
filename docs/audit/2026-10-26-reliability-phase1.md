@@ -290,6 +290,7 @@
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
+| `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归；**不是**本族新增 e2e） |
 
 注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
 
@@ -304,15 +305,25 @@
 
 ## 8. 提交与远程
 
-- 本轮**没有** `git commit`、没有 `git push`。
-- 没有 `git fetch` 核对远程新增提交；推送前必须先 fetch 并检查，禁止强推。
+本地已提交（`main`，未推送）：
+
+| 提交 | 内容 |
+| --- | --- |
+| `4aee620` | A1 长度边界 + A2 等价闸门 + A3 核心层（`namedFold`/`rectangleFold`）+ A4 验收 |
+| `529f45b` | A3 计划入口（`rectangleFoldPlan`）+ `modelPlanner` 请求前安全闸 |
+| `88f0839` | 折前/折后状态核验 |
+| `b6ce249` | `rectangle` 义务 + 用户案例整题 `passed` |
+| `cbc50cd` | `localPlanner` 矩形折叠通用族意图 |
+
+- `git ls-remote origin main` **失败**（`Connection was reset`）：**未 fetch、未 push**。
+  推送前必须先 fetch 检查远程新增提交，禁止强推。
+- 既有的 `apps/desktop/src-tauri/Cargo.toml` 修改与 `coverage/` 未触碰、未提交。
 
 ## 9. 下一步（按优先级）
 
-1. **状态感知的题设回代**：让 `verifyDiagramObligations` 能按"折前 / 折后"分别核验
-   （折前条件用折片 `vertices` 的折前坐标，折后条件用最终文档）—— A3 收口的最后一块。
-2. `localPlanner` 的本族通用意图（无 provider 的浏览器路径也能用上确定性构造）。
-3. 把 `solveRectangleFold` 的 `needs_fold_angle` / `goal_does_not_hold` 接到协调器的
-   澄清分支（现在 planner 已经返回澄清信封，但协调器/UI 的文案与"不新建 run"的行为要端到端验）。
-4. 浏览器闭环（T08）与 `eval:reliability`（T01）后再谈 T02/T09。
-5. 文档：状态感知核验完成后更新 `feature-catalog` 的翻折能力条目与 `current-status` 读数。
+1. **T08 浏览器闭环**：新增矩形折叠的 e2e（预览前主文档不变、确认只写一次、撤销精确恢复、缺折角/假目标的澄清路径）。
+   本轮只跑了既有的 `e2e/agent-fold-preview.spec.ts` 作回归（exit 0），**没有**新增本族 e2e。
+2. **T01 `eval:reliability`** 完整链路评测入口（复用生产 modelPlanner/coordinator/DraftStore/编译器，逐题原子报告、离线回放、预算记账），随后才是 T02 题单与 T09 冻结验收。
+3. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
+4. 协调器/UI 对 `needs_fold_angle` / `goal_does_not_hold` 的文案与"不新建 run"行为端到端验证。
+5. 远程可达后按"先 fetch、再推送"的顺序上推本地 5 个提交。
