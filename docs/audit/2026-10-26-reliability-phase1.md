@@ -356,6 +356,8 @@
 **实测读数**
 
 - `npm run eval:reliability -- --offline` → **3 tests passed**；summary **6/6 passed、requests=6、incomplete=0**；
+  `firstAttemptPassed=6`、`repairedPassed=0`（首次尝试口径：规划轮次恰好 1 次且通过；
+  live 模式的工具续轮尚未单独计数，届时需要收紧该口径）。
   三条带 oracle 的题 `independent: "passed"`，其余 `not_applicable`。
 - 用该次运行的 `replay.json` 回放 → **3 tests passed**（6/6）。
 - `reliabilityOracle.test.ts`（默认单元，3/3）：距离/点积/坐标/平面垂直全过、篡改坐标逐条失败、

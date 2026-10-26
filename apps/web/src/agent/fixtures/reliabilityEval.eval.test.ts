@@ -96,6 +96,11 @@ interface ReliabilityCaseReport {
   liveWrites: number
   primitivesAfter: number
   requests: number
+  /**
+   * **首次尝试是否成功**（T09 口径的近似）：规划轮次恰好 1 次且这一条 passed。
+   * live 模式下工具续轮也会增加 requests，届时需要按"修复轮"单独计数（尚未接）。
+   */
+  firstAttempt: boolean
   costUsd: null
   costKnown: false
   elapsedMs: number
@@ -314,6 +319,7 @@ describe("完整的协调器链路评测（T01）", () => {
         liveWrites: written.length,
         primitivesAfter: current().primitives.length,
         requests: requests(),
+        firstAttempt: passed && requests() === 1,
         costUsd: null,
         costKnown: false,
         elapsedMs: Date.now() - started,
@@ -328,8 +334,16 @@ describe("完整的协调器链路评测（T01）", () => {
       mode: MODE,
       revision: REVISION,
       startedAt: new Date().toISOString(),
-      cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, independent: report.independent.status, requests: report.requests, elapsedMs: report.elapsedMs })),
-      totals: { cases: cases.length, ran: reports.length, passed: reports.filter((report) => report.passed).length, incomplete: notRun.length },
+      cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, independent: report.independent.status, firstAttempt: report.firstAttempt, requests: report.requests, elapsedMs: report.elapsedMs })),
+      totals: {
+        cases: cases.length,
+        ran: reports.length,
+        passed: reports.filter((report) => report.passed).length,
+        /** 首次尝试就通过（规划轮次 1 次）；其余是通过的"修复后"条目。 */
+        firstAttemptPassed: reports.filter((report) => report.firstAttempt).length,
+        repairedPassed: reports.filter((report) => report.passed && !report.firstAttempt).length,
+        incomplete: notRun.length
+      },
       notRun,
       requests: reports.reduce((total, report) => total + report.requests, 0),
       costUsd: null,
@@ -338,7 +352,8 @@ describe("完整的协调器链路评测（T01）", () => {
         "dev-smoke 题单，不是 T02 的验收题单；分母只是这几条。",
         "费用未知：本轮没有计费证据，不把 costUsd 写成 0。",
         "不自动确认：每条用例的 liveWrites 必须为 0。",
-        "独立判据：有 oracle 的条目只读候选几何回代，不经过产品解析器/核验器。"
+        "独立判据：有 oracle 的条目只读候选几何回代，不经过产品解析器/核验器。",
+        "firstAttempt = 规划轮次恰好 1 次且通过；live 模式的工具续轮尚未单独计数，届时该口径需要再收紧。"
       ]
     }
     await writeSolidReport(`${REPORT_DIR}/summary.json`, summary, [env.DEEPSEEK_API_KEY ?? ""])
