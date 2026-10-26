@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { parseDiagramObligations } from "./diagramObligations"
 import { compilePlan } from "./planCompiler"
-import { applyNormalisation, buildNormalisationPrompt, parseNormalisationReply } from "./promptNormalization"
+import { applyNormalisation, applyNormalisationWithReport, buildNormalisationPrompt, parseNormalisationReply } from "./promptNormalization"
 
 /**
  * **题面规范化通道的三条安全阀**（设计 `docs/superpowers/specs/2026-10-10-prompt-normalisation-design.md`）。
@@ -161,5 +161,83 @@ describe("normalisation must preserve the length semantics", () => {
     const report = parseNormalisationReply(replyWith([{ original: "AD=AB=2CD=2", normalized: "AD=2，AB=2，CD=1" }]), CHAIN_PROMPT, CHAIN_UNREAD)
     expect(report.rejected).toEqual([])
     expect(report.accepted).toHaveLength(1)
+  })
+})
+
+/**
+ * **A2（2026-10-26）：改写必须保持全部条件**。
+ *
+ * 这一组钉的是任务书点名的反例与几类"看起来等价、其实改了条件"的写法。
+ */
+describe("A2 改写等价闸门", () => {
+  it("**必须拒绝** `AB=AC=0` → `AB=AC`（不能把矛盾条件洗成成立条件）", () => {
+    const prompt = "三角形ABC中，AB=AC=0。画示意图。"
+    const report = parseNormalisationReply(replyWith([{ original: "AB=AC=0", normalized: "AB=AC" }]), prompt, [{ sourceText: "AB=AC=0", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("无法完整读取")
+  })
+
+  it("拒绝 `AB+CD=5` → `CD=5`：不许把没读懂的和当成长度", () => {
+    const prompt = "矩形ABCD中，AB+CD=5。画出图形。"
+    const report = parseNormalisationReply(replyWith([{ original: "AB+CD=5", normalized: "CD=5" }]), prompt, [{ sourceText: "AB+CD=5", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected).toHaveLength(1)
+  })
+
+  it("等长的**端点配对**不能丢：`AB=CD` 改成 `AD=BC` 不是等价", () => {
+    const prompt = "四边形ABCD中，AB=CD。画出图形。"
+    const report = parseNormalisationReply(replyWith([{ original: "AB=CD", normalized: "AD=BC" }]), prompt, [{ sourceText: "AB=CD", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("长度/比例")
+  })
+
+  it("**比例方向**不能颠倒：`AE=2AD` 改成 `AD=2AE` 不是等价", () => {
+    const prompt = "四边形ABCD中，AE=2AD。画出图形。"
+    const report = parseNormalisationReply(replyWith([{ original: "AE=2AD", normalized: "AD=2AE" }]), prompt, [{ sourceText: "AE=2AD", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("长度/比例")
+  })
+
+  it("原文**自相矛盾**时不许假装能证明等价", () => {
+    const prompt = "四边形ABCD中，AB=2，AB=3。画出图形。"
+    const report = parseNormalisationReply(replyWith([{ original: "AB=2，AB=3", normalized: "AB=2" }]), prompt, [{ sourceText: "AB=2，AB=3", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("自相矛盾")
+  })
+
+  it("模型引入原文没有的**撇号点名**被拒（`B` 不是 `B′`）", () => {
+    const prompt = "三角形ABC中，AB⊥BC，画示意图"
+    const report = parseNormalisationReply(replyWith([{ original: "AB⊥BC", normalized: "AB′⊥BC" }]), prompt, [{ sourceText: "AB⊥BC", reason: "未核验。" }])
+
+    expect(report.accepted).toEqual([])
+    expect(report.rejected[0]?.reason).toContain("点名")
+  })
+
+  it("重复原文的改写各绑各的位置，不串改", () => {
+    const prompt = "四边形ABCD中，AB=CD，AD=BC，AB=CD。画出图形。"
+    const application = applyNormalisationWithReport(prompt, [
+      { original: "AB=CD", normalized: "AB=CD（等长）" },
+      { original: "AB=CD", normalized: "AB=CD（第二处）" }
+    ])
+
+    expect(application.text).toBe("四边形ABCD中，AB=CD（等长），AD=BC，AB=CD（第二处）。画出图形。")
+    expect(application.skipped).toEqual([])
+  })
+
+  it("**重叠**的改写两条都不采用，保留原文（不产生半截文本）", () => {
+    const prompt = "四边形ABCD中，AB=AC=2。画出图形。"
+    const application = applyNormalisationWithReport(prompt, [
+      { original: "AB=AC", normalized: "AB=AC（等长）" },
+      { original: "AB=AC=2", normalized: "AB=2，AC=2" }
+    ])
+
+    expect(application.text).toBe(prompt)
+    expect(application.applied).toEqual([])
+    expect(application.skipped).toHaveLength(2)
   })
 })

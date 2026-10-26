@@ -1,0 +1,260 @@
+import { POINT_NAME_SOURCE, canonicalPointName } from "@draw/geometry-kernel"
+
+/**
+ * **同名点的翻折状态**（A3，2026-10-26）。
+ *
+ * ## 为什么必须有这一层
+ *
+ * 题面写「沿对角线 AC 把 △ABC 折起」时，**没有给折后的新点名**。可是折后那一点
+ * 与折前那一点已经不是同一个位置：
+ *
+ * - 画面上继续叫 `B` 是对的（用户看到的就是这道题的 B）；
+ * - 坐标上必须分成 `B@state0` 与 `B@state1` —— 否则核验会把两个位置当成一个，
+ *   或者模型随手写的 `B` 覆盖掉折前的位置。
+ *
+ * 这一层只做**身份与状态的分离**，不算坐标、不生成动作：
+ *
+ * ```text
+ * entityId   显示名 + 状态   （`B@s0` / `B@s1`，不是合法点名，不会与题面撞）
+ * stateId    0 = 折前，1 = 第一次折后
+ * displayName 题面/画面上看到的名字
+ * ```
+ *
+ * ## 两种语序都要认（用户与教材都会写）
+ *
+ * - `沿对角线 AC 把 △ABC 折起。`（**折痕在前**）
+ * - `将 △ABC 沿 AC 折起。`（**图形在前**）
+ * - 以及显式点名：`…折起至 △AB′C`、`…折起，使点 B 到达点 B′`
+ *
+ * ## 什么时候**不**产出
+ *
+ * 折痕两端必须都在折前三角形里（那是"这两点不动"的定义），三角形三个点名必须互不相同。
+ * 对不上就返回 `invalid` 并留下原文；**不产出一条半对的折叠**。
+ *
+ * ## 内部新生名字的避让
+ *
+ * 需要给折后点一个**显示层面**的新名字时（例如要写进动作的 `apexAs`），
+ * `uniqueFoldDisplayName` 会避开题面里已经出现的 `B′` / `B′′` / `B₁`……
+ * 但**内部状态永远用 `entityId` 区分**，名字是否相同不影响正确性。
+ */
+
+export type StateId = string
+export type EntityId = string
+
+export interface SourceSpan {
+  start: number
+  end: number
+  text: string
+}
+
+/** 一个"实体 + 状态"的引用。`displayName` 是用户看到的名字。 */
+export interface FoldStateRef {
+  entityId: EntityId
+  stateId: StateId
+  displayName: string
+}
+
+/** 读出来的状态变换（与动作层无关；动作由构造器按它生成）。 */
+export interface NamedFoldTransition {
+  id: string
+  from: StateId
+  to: StateId
+  source: SourceSpan
+  /** 折痕两端：折前与折后是**同一个位置**，所以两个状态各有一个引用。 */
+  hinge: { before: [FoldStateRef, FoldStateRef]; after: [FoldStateRef, FoldStateRef] }
+  /** 折片三个顶点：折前与折后。 */
+  flap: { before: [FoldStateRef, FoldStateRef, FoldStateRef]; after: [FoldStateRef, FoldStateRef, FoldStateRef] }
+  /** 动的那个点（折痕两点不动，剩下的一点动）。 */
+  apex: { before: FoldStateRef; after: FoldStateRef }
+  angle:
+    | { kind: "given"; degrees: number; source: "explicit-degrees" }
+    | { kind: "unknown"; parameterId: string }
+  /** 折后点的**显示名**：没改名时就是 `apex.displayName`。 */
+  displayPostName: string
+  /** 内部折后点 id（不是合法点名，不会与题面撞）。 */
+  internalPostName: string
+  /** 题面是否显式给了折后点名。 */
+  explicitPostName: boolean
+  syntax: "hinge-first" | "face-first" | "apex-to-point"
+}
+
+export type NamedFoldRead =
+  | { status: "none" }
+  | { status: "invalid"; reason: string; sourceText: string }
+  | {
+      status: "ok"
+      transition: NamedFoldTransition
+      face: [string, string, string]
+      hingeNames: [string, string]
+      apex: string
+      /** 折痕是否被明确写成"对角线"。 */
+      diagonal: boolean
+    }
+
+const POINT = POINT_NAME_SOURCE
+const ACTION = "(?:折起|翻起|翻折|折叠)"
+const ANGLE = "(?:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(?:°|度))?"
+const TARGET = "(?:\\s*(?:至|成|到)\\s*(?:△|三角形)?\\s*(" + POINT + ")(" + POINT + ")(" + POINT + "))?"
+/** 点名串的取词（含弯撇等排版变体，比较前统一归一到 `′`）。 */
+const NAME_RUN = /[A-Z](?:[′'’´ʹʼ`]|[₁₂₃₄₅₆]){0,2}/g
+
+const HINGE_FIRST = new RegExp(
+  `沿\\s*(对角线\\s*)?(${POINT})(${POINT})\\s*把\\s*(?:△|三角形)?\\s*(${POINT})(${POINT})(${POINT})\\s*${ACTION}${ANGLE}${TARGET}`,
+  "g"
+)
+const FACE_FIRST = new RegExp(
+  `(?:将|把)\\s*(?:△|三角形)?\\s*(${POINT})(${POINT})(${POINT})\\s*沿\\s*(对角线\\s*)?(${POINT})(${POINT})\\s*${ACTION}${ANGLE}${TARGET}`,
+  "g"
+)
+const APEX_TO_POINT = new RegExp(
+  `(?:将|把)?\\s*(?:△|三角形)?\\s*(${POINT})(${POINT})(${POINT})\\s*沿\\s*(对角线\\s*)?(${POINT})(${POINT})\\s*${ACTION}${ANGLE}\\s*[，,]?\\s*使\\s*点?\\s*(${POINT})\\s*(?:到达|落到|落在|与|到)\\s*(?:点\\s*)?(${POINT})`,
+  "g"
+)
+
+/** 题面里已经出现的点名（归一后）。 */
+export function pointNamesIn(prompt: string): Set<string> {
+  return new Set([...prompt.matchAll(NAME_RUN)].map((match) => canonicalPointName(match[0])))
+}
+
+/**
+ * 给折后点挑一个**题面里没被占用**的显示名：`B′` → `B′′` → `B₁` → `B₂`。
+ *
+ * 只用于"必须写一个显式名字"的场合（例如动作的 `apexAs`）；内部状态由
+ * `entityId` 区分，这个函数**不**参与核验。
+ */
+export function uniqueFoldDisplayName(prompt: string, base: string): string {
+  const taken = pointNamesIn(prompt)
+  for (const suffix of ["′", "′′", "₁", "₂", "₃"]) {
+    const candidate = `${canonicalPointName(base)}${suffix}`
+    if (!taken.has(candidate)) return candidate
+  }
+  return `${canonicalPointName(base)}@1`
+}
+
+function stateRef(name: string, stateId: StateId): FoldStateRef {
+  return { entityId: `${name}@${stateId}`, stateId, displayName: name }
+}
+
+function makeTransition(input: {
+  face: [string, string, string]
+  hinge: [string, string]
+  apex: string
+  explicitPostName?: string
+  angleDegrees?: number
+  syntax: NamedFoldTransition["syntax"]
+  source: SourceSpan
+  offset: number
+}): NamedFoldTransition {
+  const canonical = (name: string): string => canonicalPointName(name)
+  const face = input.face.map(canonical) as [string, string, string]
+  const hinge = input.hinge.map(canonical) as [string, string]
+  const apex = canonical(input.apex)
+  const displayPostName = input.explicitPostName === undefined ? apex : canonical(input.explicitPostName)
+  const flapAfter = face.map((name) => (name === apex ? displayPostName : name)) as [string, string, string]
+  return {
+    id: `fold@${input.offset}`,
+    from: "s0",
+    to: "s1",
+    source: input.source,
+    hinge: { before: [stateRef(hinge[0], "s0"), stateRef(hinge[1], "s0")], after: [stateRef(hinge[0], "s1"), stateRef(hinge[1], "s1")] },
+    flap: {
+      before: [stateRef(flapAfter[0] === displayPostName ? apex : flapAfter[0], "s0"), stateRef(flapAfter[1] === displayPostName ? apex : flapAfter[1], "s0"), stateRef(flapAfter[2] === displayPostName ? apex : flapAfter[2], "s0")],
+      after: [stateRef(flapAfter[0], "s1"), stateRef(flapAfter[1], "s1"), stateRef(flapAfter[2], "s1")]
+    },
+    apex: { before: stateRef(apex, "s0"), after: stateRef(displayPostName, "s1") },
+    angle: input.angleDegrees === undefined
+      ? { kind: "unknown", parameterId: "foldAngle" }
+      : { kind: "given", degrees: input.angleDegrees, source: "explicit-degrees" },
+    displayPostName,
+    internalPostName: `${displayPostName}@s1`,
+    explicitPostName: input.explicitPostName !== undefined,
+    syntax: input.syntax
+  }
+}
+
+/**
+ * 读出一条翻折：折痕、折片、动的点、折角，以及**内部状态引用**。
+ *
+ * 三种语序都归一到同一份结构；读不出（折痕不在折片上、点名重复、残缺）就返回
+ * `invalid` 并留下原文 —— 不猜、不产出半对的一条。
+ */
+export function readNamedFold(prompt: string): NamedFoldRead {
+  type Hit = { index: number; match: RegExpExecArray; syntax: NamedFoldTransition["syntax"] }
+  const hits: Hit[] = []
+  for (const match of prompt.matchAll(HINGE_FIRST)) hits.push({ index: match.index, match, syntax: "hinge-first" })
+  for (const match of prompt.matchAll(FACE_FIRST)) hits.push({ index: match.index, match, syntax: "face-first" })
+  for (const match of prompt.matchAll(APEX_TO_POINT)) hits.push({ index: match.index, match, syntax: "apex-to-point" })
+  if (hits.length === 0) return { status: "none" }
+  hits.sort((left, right) => left.index - right.index)
+  const first = hits[0]!
+  const sourceText = first.match[0]
+  const span: SourceSpan = { start: first.index, end: first.index + sourceText.length, text: sourceText }
+
+  const groups = first.match
+  let faceRaw: [string, string, string]
+  let hingeRaw: [string, string]
+  let diagonal: boolean
+  let explicitPostName: string | undefined
+  let angleRaw: string | undefined
+  if (first.syntax === "hinge-first") {
+    diagonal = groups[1] !== undefined
+    hingeRaw = [groups[2]!, groups[3]!]
+    faceRaw = [groups[4]!, groups[5]!, groups[6]!]
+    angleRaw = groups[7]
+    const target = [groups[8], groups[9], groups[10]].filter((entry): entry is string => entry !== undefined)
+    if (target.length === 3) {
+      const remaining = target.map(canonicalPointName).filter((name) => !hingeRaw.map(canonicalPointName).includes(name))
+      if (remaining.length !== 1) return { status: "invalid", reason: "折后三角形的点名与折痕对不上（折痕两端必须不动）。", sourceText }
+      explicitPostName = remaining[0]
+    }
+  } else if (first.syntax === "face-first") {
+    faceRaw = [groups[1]!, groups[2]!, groups[3]!]
+    diagonal = groups[4] !== undefined
+    hingeRaw = [groups[5]!, groups[6]!]
+    angleRaw = groups[7]
+    const target = [groups[8], groups[9], groups[10]].filter((entry): entry is string => entry !== undefined)
+    if (target.length === 3) {
+      const remaining = target.map(canonicalPointName).filter((name) => !hingeRaw.map(canonicalPointName).includes(name))
+      if (remaining.length !== 1) return { status: "invalid", reason: "折后三角形的点名与折痕对不上（折痕两端必须不动）。", sourceText }
+      explicitPostName = remaining[0]
+    }
+  } else {
+    faceRaw = [groups[1]!, groups[2]!, groups[3]!]
+    diagonal = groups[4] !== undefined
+    hingeRaw = [groups[5]!, groups[6]!]
+    angleRaw = groups[7]
+    const apexName = canonicalPointName(groups[8]!)
+    const postName = canonicalPointName(groups[9]!)
+    if (!faceRaw.map(canonicalPointName).includes(apexName)) {
+      return { status: "invalid", reason: `题面说动的是点 ${apexName}，它不在折片 ${faceRaw.join("")} 上。`, sourceText }
+    }
+    explicitPostName = postName
+  }
+
+  const face = faceRaw.map(canonicalPointName)
+  const hinge = hingeRaw.map(canonicalPointName)
+  if (new Set(face).size !== 3) return { status: "invalid", reason: `折片点名有重复（${faceRaw.join("")}）。`, sourceText }
+  if (new Set(hinge).size !== 2) return { status: "invalid", reason: `折痕点名有重复（${hingeRaw.join("")}）。`, sourceText }
+  if (!hinge.every((name) => face.includes(name))) {
+    return { status: "invalid", reason: `折痕 ${hinge.join("")} 的两端必须都在折片 ${face.join("")} 上（那是"这两点不动"的定义）。`, sourceText }
+  }
+  const apex = face.find((name) => !hinge.includes(name))
+  if (apex === undefined) return { status: "invalid", reason: "折片上找不到会动的那个点。", sourceText }
+  if (explicitPostName !== undefined && explicitPostName === apex) {
+    return { status: "invalid", reason: `折后点名与折前相同（${apex}），无法区分两个位置。`, sourceText }
+  }
+
+  const angleValue = angleRaw === undefined ? undefined : Number(angleRaw)
+  const angleDegrees = angleValue !== undefined && Number.isFinite(angleValue) && angleValue > 0 && angleValue < 360 ? angleValue : undefined
+  const transition = makeTransition({
+    face: faceRaw,
+    hinge: hingeRaw,
+    apex,
+    ...(explicitPostName === undefined ? {} : { explicitPostName }),
+    ...(angleDegrees === undefined ? {} : { angleDegrees }),
+    syntax: first.syntax,
+    source: span,
+    offset: first.index
+  })
+  return { status: "ok", transition, face: faceRaw.map(canonicalPointName) as [string, string, string], hingeNames: hingeRaw.map(canonicalPointName) as [string, string], apex, diagonal }
+}

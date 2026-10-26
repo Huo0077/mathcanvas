@@ -33,6 +33,16 @@ export * from "./events"
 export * from "./figureIntent"
 export * from "./foldChain"
 export * from "./geometryIntent"
+/**
+ * **同名点的翻折状态**（A3，2026-10-26）：折前/折后的同名点分成两个状态（`B@s0` / `B@s1`），
+ * 两种语序（`沿 AC 把 △ABC 折起` / `将 △ABC 沿 AC 折起`）归一到同一份状态变换。
+ */
+export * from "./namedFold"
+/**
+ * **矩形沿对角线折起**（A3）：折前矩形判据、折后刚性与两平面垂直**分别**核验；
+ * 折角未知时返回具体澄清（**不默认 90°**）。
+ */
+export * from "./rectangleFold"
 export * from "./localPlanDefaults"
 export * from "./modelEvents"
 export * from "./modelGateway"

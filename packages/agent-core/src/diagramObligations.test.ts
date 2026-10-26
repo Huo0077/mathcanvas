@@ -915,3 +915,59 @@ describe("立体几何：能读的读，没判据的显形", () => {
     }
   })
 })
+
+/**
+ * **A1（2026-10-26）：长度表达式整条读取**。
+ *
+ * 解析器层的用例在 `lengthEquality.test.ts`；这一组钉的是**它们在题设账上的后果**：
+ * 一条读不懂的表达式既不能变成"成立的条件"，也不能变成"干净通过"。
+ */
+describe("题设账：长度表达式的边界", () => {
+  it("`2/3 AB=CD=2` ⇒ AB=3、CD=2（分数系数按有理数算）", () => {
+    const parsed = parseDiagramObligations("在矩形ABCD中，2/3 AB=CD=2。画出这个矩形。")
+    expect(parsed.givens.filter((given) => given.kind === "fixedLength").map((given) => [given.targets.join(""), given.value])).toEqual([
+      ["AB", 3],
+      ["CD", 2]
+    ])
+    // 这一句被**整条**读掉：不许再有"2/3 AB=CD=2 未核验"的残留。
+    expect(parsed.unverified.some((entry) => entry.sourceText.includes("2/3"))).toBe(false)
+  })
+
+  it("`AB+CD=5` **不许**只读成 CD=5", () => {
+    const parsed = parseDiagramObligations("在矩形ABCD中，AB+CD=5。画出这个矩形。")
+
+    expect(parsed.givens.some((given) => given.kind === "fixedLength")).toBe(false)
+    expect(parsed.unverified.some((entry) => entry.sourceText.includes("AB+CD=5"))).toBe(true)
+  })
+
+  it("`-AB=CD=2` **不许**忽略负号读成 AB=CD=2", () => {
+    const parsed = parseDiagramObligations("在矩形ABCD中，-AB=CD=2。画出这个矩形。")
+
+    expect(parsed.givens.some((given) => given.kind === "equalLength" || given.kind === "fixedLength")).toBe(false)
+    expect(parsed.unverified.some((entry) => entry.sourceText.includes("-AB=CD=2"))).toBe(true)
+  })
+
+  it("`（即 AD=AB=2CD=2）` 里的连等照旧进题设（不是被整体忽略的噪声）", () => {
+    const parsed = parseDiagramObligations("在矩形ABCD中，已知 BC=1（即 AD=AB=2CD=2）。画出这个矩形。")
+
+    expect(parsed.givens.filter((given) => given.kind === "fixedLength").map((given) => [given.targets.join(""), given.value])).toEqual(
+      expect.arrayContaining([
+        ["AD", 2],
+        ["AB", 2],
+        ["CD", 1]
+      ])
+    )
+    // 括号里的重述被读到了；它不该**整段**落进未核验。
+    expect(parsed.unverified.some((entry) => entry.sourceText.includes("即 AD=AB=2CD=2"))).toBe(false)
+  })
+
+  it("同一从句里的角度与连等分开读（`∠A=60°且AB=AC=2`）", () => {
+    const parsed = parseDiagramObligations("在三角形ABC中，∠A=60°且AB=AC=2。画出这个三角形。")
+
+    expect(parsed.givens.filter((given) => given.kind === "fixedLength").map((given) => [given.targets.join(""), given.value])).toEqual([
+      ["AB", 2],
+      ["AC", 2]
+    ])
+    expect(parsed.givens.some((given) => given.kind === "planarAngle")).toBe(true)
+  })
+})

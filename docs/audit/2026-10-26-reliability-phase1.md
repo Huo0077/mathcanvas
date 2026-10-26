@@ -1,0 +1,197 @@
+# 2026-10-26 文字题可靠性 · 第一阶段修复执行台账
+
+> 本文件是任务书 §7 要求的执行记录：每项任务写**实际基线、改了什么、测试与退出码、是否调用真实模型、剩余问题**。
+> "现在时"的读数为 `docs/current-status.md`；本条记录只覆盖本轮实际做过的事，不写没跑过的结论。
+
+## 0. 实际基线（T00）
+
+- 仓库根：`D:\数学画布\mathcanvas-main`（工作目录 `D:\数学画布` 本身不是 git 仓库）。
+- HEAD：`bdf2c48 docs: 补长度连等的能力条目与收尾读数`（`main`，跟踪 `origin/main`）。
+- 工作区既有差异（与本轮无关，未触碰）：`apps/desktop/src-tauri/Cargo.toml` 已修改、`coverage/` 未跟踪。
+- **任务书提到的 `c57f683` / `5be2223` 在本仓库不存在**（`git cat-file` 报 `Not a valid object name`），
+  因此不 cherry-pick，按实际代码重新实现。
+- 工具链：Node 24.15.0 / npm 11.12.1 / vitest 4.1.11 / TypeScript 5.9.2。
+- 仓库内没有 `AGENTS.md`。
+
+### 0.1 先核实"哪些修复已经存在"
+
+| 项 | 实际代码里的状态（本轮开始时） | 结论 |
+| --- | --- | --- |
+| A1 长度连等 | `lengthEquality.ts`（d02aafd）已做整条链解析，但分数系数被整条跳过、`-AB=…` 会丢负号、`AB+CD=5` 只读后半截、括号里的重述被切掉 | 补齐 |
+| A2 等价闸门 | `promptNormalization.ts` 已有长度语义比较，但"原文读不完整 ⇒ 跳过检查"，`AB=AC=0 → AB=AC` 会被接受 | 补齐 |
+| A3 矩形对角线折叠 | `namedFold.ts` / `rectangleFold.ts` **不存在**；`readFoldTransformations` 只认显式折后三角形 | 新增 |
+| A4 Worker 澄清 | `draftStore.stage` 已有 `draftDocument === null` 闸门与 `needs_more_information` 映射，但没有验收级测试 | 补测试 + 复核 |
+
+## 1. A1 长度表达式完整读取
+
+**改动**
+
+- `packages/agent-core/src/lengthEquality.ts`
+  - 系数改为有理数 `{numerator, denominator}`：`2/3 AB=CD=2` → AB=3、CD=2；`V·分母/分子` 避免 `2/(2/3)=3.0000000000000004`。
+  - 扫描器改为"从线段项向右看到中文/标点边界"，再检查左邻算符与右接算符：
+    `-AB=CD=2`、`AB+CD=5`、`AB/CD=2`、`0AB=CD=2`、`AB=CD=1e999` **整条**落未核验。
+  - 括号窗口切分：`（即 AD=AB=2CD=2）` 里的连等照旧进题设（不再按 `（` 截断）。
+  - 守住既有语义：`AE=2/5 AD` 仍产出同一个 `segmentRatio`；`∠ABC=60°`、`AB²=4`、`P-ABCD`、
+    `|AB|=3`、`|AB|=2|AC|`、`则SA=.` 不被误读（前两轮回归暴露了这六类，已逐条钉住）。
+- `packages/agent-core/src/lengthEquality.test.ts`：新增 13 条（分数系数、边界、括号重述）。
+- `packages/agent-core/src/diagramObligations.test.ts`：新增 5 条题设账用例。
+
+**验证**
+
+- `npx vitest run packages/agent-core/src/lengthEquality.test.ts` → 25/25 passed。
+- `npx vitest run packages/agent-core/src/diagramObligations.test.ts` → 102/102 passed。
+- `clauseFamiliesThirdPass.test.ts` + `diagramObligations.goal.test.ts` 同批 141/141 passed。
+
+**剩余**
+
+- 加法/乘法整式仍按"不支持"落未核验（任务书不要求通用代数）；根式系数（`√2 AB=…`）不支持。
+
+## 2. A2 改写必须保持全部条件
+
+**改动**
+
+- `packages/agent-core/src/promptNormalization.ts`
+  - 新增三态读取 `notLength / ok / unreadable`：连等层**整条拒绝**时判 `unreadable`，
+    改写一律拒绝（`AB=AC=0 → AB=AC` 不再被接受，理由"原文的长度条件无法完整读取"）。
+  - 规范形按约束计算：线段**成对**（`AB=CD` 与 `AD=BC` 不再撞键）、比例方向归一到 `≥1`、
+    固定长度/比例闭环做一致性检查（`AB=2，AB=3` 判"固定长度自相矛盾"）。
+  - 点名改用项目撇号/下标词法（`POINT_NAME_SOURCE`）并用 `canonicalPointName` 归一（`B′` 与 `B'` 同名）。
+  - `applyNormalisation` 改为绑定原文区间：先在原文里枚举出现位置，认领互不重叠的区间，
+    从右往左替换；**重叠的两条都不采用**并如实记 `skipped`（避免出现 `AB=AC（等长）=2` 这种半截文本）。
+    新增 `applyNormalisationWithReport` 返回 `applied / skipped`。
+- `packages/agent-core/src/promptNormalization.test.ts`：新增 8 条（任务书反例、配对、方向、矛盾、撇号、重复/重叠）。
+
+**验证**
+
+- `npx vitest run packages/agent-core/src/promptNormalization.test.ts` → 22/22 passed。
+- 全量 `packages/agent-core` + `apps/web/src/agent`：**226 文件 / 2367 passed / 1 todo**，exit 0
+  （该跑包含 A1+A2 之后的源码；A4 的新测试文件是之后新增的，单独跑过，见 §4）。
+
+**剩余**
+
+- `AD:AB=1` 这类"比例=数值"写法今天的读取器仍不覆盖；因为没有被连等层判为 `unreadable`，
+  它继续走旧的关系词族闸门（与改动前一致）。这是已记录的缺口，不是本轮引入的放宽。
+- `applyNormalisationWithReport` 的 `skipped` 目前没有接到界面/报告，只在本层可见。
+
+## 3. A3 矩形对角线折叠与同名点状态（核心层）
+
+**新增**
+
+- `packages/agent-core/src/namedFold.ts`
+  - `StateId` / `EntityId` / `FoldStateRef` / `NamedFoldTransition`：显示名与状态分离
+    （没改名时显示名仍是 `B`，内部是 `B@s0` / `B@s1`）。
+  - 两种语序归一到同一份结构：`沿对角线 AC 把 △ABC 折起`（hinge-first）与
+    `将 △ABC 沿 AC 折起`（face-first），另收 `…使点 B 到达点 B′` 与 `…至 △AB′C`。
+  - 折角只认**紧跟动作词**的数字；没有就是 `{kind:"unknown"}`，不默认 90°。
+  - `uniqueFoldDisplayName` 在需要生成显示名时避开题面已有的 `B′/B′′/B₁`。
+  - 折痕不在折片、点名重复、折后点名与折前同名 ⇒ `invalid` 并留原文。
+- `packages/agent-core/src/rectangleFold.ts`
+  - 读矩形环 + 两条边长（只认环上的边；缺边/只给对角线 ⇒ `unsupported` 并说缺哪条）。
+  - 折痕必须是对角线；折片必须是折痕两侧之一；动点必须一致。
+  - 垂直关系只认折痕两侧的平面；其他平面垂直 ⇒ `unsupported`（不据此取 90°）。
+  - `buildRectangleFold`：内部坐标系由点名/边长/折痕决定（不匹配原题字符串），
+    折后动点绕折痕旋转；`branch=±1` 两个镜像分支；**折角未知返回 `needs_angle` + 具体问题**。
+  - `verifyRectangleFold`：折前矩形判据（非退化、平行四边形闭合、相邻边垂直、共面、边长），
+    折后折痕不动、折片刚性、已知折角对得上、两平面垂直（题面明写时）。
+  - `evaluatePerpendicular` / `evaluateLength`：给残差，不硬证。
+- `packages/agent-core/src/rectangleFold.test.ts`（18 条）：两种语序、状态分离、显式改名、
+  B′ 避让、用户案例精确值、无折角不默认 90°、显式 60°、改名/改尺寸/另一条对角线、
+  缺边/非对角线/不相干垂直、篡改坐标四类负例、假目标残差。
+
+**用户案例的确定性结论（已由测试钉住）**
+
+- 折后 B=(16/5, 8/5, ±4/√5)；BD²=68/5；BD=2√85/5。
+- (B₁−D)·(C−A)=12（两个镜像分支都是 12）⇒ **BD⊥AC 不成立**。
+
+**验证**
+
+- `npx vitest run packages/agent-core/src/rectangleFold.test.ts` → 18/18 passed。
+- `npx tsc -p packages/agent-core/tsconfig.json --noEmit` → exit 0。
+- `npx eslint`（新增/改动文件）→ exit 0。
+
+**剩余（重要）**
+
+- **还没有接进 `planCompiler` / `localPlanner` 的真实链路**：动作生成、候选文档 → 状态点表的映射、
+  假目标在 Agent 回答层的澄清文案尚未接线，因此"用户案例在浏览器里表现为不生成可提交草稿"
+  **没有**被端到端验证。`needs_angle` 的澄清目前只有模块级调用方拿得到。
+- 未支持：连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用、非矩形四边形折叠。
+- 构造坐标目前把 `ring[0]` 放原点、`ring[0]→ring[1]` 放 x 轴（内部坐标系）；与画布现有对象的相对位置无关。
+
+## 4. A4 Worker 不得把澄清包装成成功
+
+**核实**
+
+- `draftStore.stage` 已有 `if (!compiled.ok || compiled.draftDocument === null)` 的失败分支；
+  澄清问题在"无 error 诊断"时映射为 `needs_more_information`，否则保留原诊断码。
+- `workerRuntime` 成功路径的 `document` 来自 `commitTransaction`，契约层 `readCompileResult`
+  也拒绝缺 `document` 的回包；`compileInWorker` 成功分支因此不会产出 `draftDocument: null`。
+
+**新增测试** `apps/web/src/agent/stagedClarification.test.ts`（3 条）
+
+1. `ok:true + draftDocument:null + 澄清` ⇒ `ok:false`、`needs_more_information`、问题原文保留、
+   预览 hash/版本/候选文档不变。
+2. `ok:true + draftDocument:null + 无澄清` ⇒ 仍失败、草稿不动。
+3. in-process 与生产 Worker（`createWorkerCompileStrategy` + `inlineWorker`）对同一份计划：
+   同一原因码（`unsafe_omission`）、同一澄清正文（含"半径"）、失败前后哈希相同、版本不推进。
+
+**验证**
+
+- `npx vitest run apps/web/src/agent/stagedClarification.test.ts` → 3/3 passed。
+
+**剩余**
+
+- 该 fixture 走的是"参数审计同时给出问题与 error 诊断"的路径，因此界面看到的是 `unsafe_omission`
+  诊断（正文即问题），而不是 `needs_more_information`；后者的"只有问题、没有 error 诊断"路径
+  由第 1 条 stub 用例守住。两条路径是**不同**的编译产物，这里如实分开记录。
+
+## 5. T01–T10 的状态
+
+| 任务 | 状态 | 说明 |
+| --- | --- | --- |
+| T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
+| T01 `eval:reliability` 完整链路评测 | **未开始** | 需要新的 runner + 逐题原子报告 + 离线回放 |
+| T02 开发集 20 题 / 验收集 60 题 | **未开始** | 未生成、未独立复核，不冒充 |
+| T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
+| T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
+| T05 状态执行/求解/回代 | **部分** | 矩形单折的构造与回代已做；未接 `planCompiler` / `coupledFolds` |
+| T06 Worker 与草稿链路 | **部分** | A4 复核 + 测试；A3 尚未过界 |
+| T07 最多两轮共享修复 | **未开始** | 预算与协调器本轮未改 |
+| T08 浏览器闭环 | **未开始** | 本轮未跑 e2e |
+| T09 冻结新题真实验收 | **未开始** | 无真实模型凭据/费用授权，保持未完成 |
+| T10 交付 | **部分** | 源码头；桌面包、远程推送未做 |
+
+## 6. 最终门禁读数（2026-10-26，本机）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
+| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **228 文件 / 2388 passed / 1 todo**，exit 0 |
+| `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
+| `npx eslint .` | exit 0 |
+| `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
+
+注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
+
+补充：`apps/web/src/agent/stagedClarification.test.ts` 第一版用 `StagedCompileResult` 作 `stage` 的返回类型，
+`npm run typecheck` 报了 2 条（`StageResult` 才含 `{code,message}`），改成 `StageResult` 后 exit 0 —— 这条也记下来，
+因为它说明"只跑 vitest 不跑 tsc"会漏掉这类类型谎言。
+
+## 7. 真实模型与费用
+
+- 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub。
+- 费用：**0**。没有读取或使用任何历史额度。
+
+## 8. 提交与远程
+
+- 本轮**没有** `git commit`、没有 `git push`。
+- 没有 `git fetch` 核对远程新增提交；推送前必须先 fetch 并检查，禁止强推。
+
+## 9. 下一步（按优先级）
+
+1. 把 `readRectangleFold` / `buildRectangleFold` / `verifyRectangleFold` 接进 `planCompiler`：
+   由 spec 生成 `solid.create_face` + `solid.fold` 的动作，并让 `verifyDiagramObligations`
+   按状态核验；`needs_angle` 接到协调器的澄清分支。
+2. 假目标的 Agent 回答：在核验完整题设后，用 `evaluatePerpendicular` 的残差说明目标不成立，
+   不生成可提交草稿（需要与 `agentRunner` 的失败/澄清分支对齐）。
+3. 浏览器闭环（T08）与 `eval:reliability`（T01）后再谈 T02/T09。
+4. 文档：A3 接线完成后更新 `feature-catalog` 的翻折能力条目与 `current-status` 读数。
