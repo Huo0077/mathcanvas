@@ -458,18 +458,20 @@
 `bf5654e`（`eval:reliability` 入口）、`183439a`（取消/预算机制）、`1fb1ab5`（题单外置 + 独立 oracle）、
 `bf512a6`（首次/修复后口径）、`6885de1`（dev 题单扩到 14 条 + 已知缺陷），见 §4.5–4.7。
 
-- **2026-10-27 00:31（+08:00）尝试推送失败**：`git fetch origin` 与 `git push origin main` 都在
+- **2026-10-27 00:31（+08:00）首次推送失败**：`git fetch origin` 与 `git push origin main` 都在
   `github.com:443` 连接阶段超时（`curl 28 ... Could not connect to server`，退出码 128）。
-  `origin/main` 的本地引用仍是 `bdf2c48`（**过期**，不能据此判断远端没有新提交）；
-  `git rev-list --left-right --count origin/main...main = 0 13`（本地领先 13 个提交）。
-- **为恢复网络后的推送准备了增量包**：`D:\数学画布\mathcanvas-main-push-20261027.bundle`
-  （`bdf2c48..main`，142 KB，不在仓库内）。在能联网的机器上：
+  当时 `origin/main` 的本地引用仍是 `bdf2c48`（**过期**），不能用它判断远端没有新提交。
+- **随后重试成功**（同一轮，网络恢复）：先 `git fetch origin`（exit 0），再 `git push origin main`
+  → **`bdf2c48..aa3f3578 main -> main`**（非强制、快进）。推送后 `origin/main = aa3f3578`，
+  `git rev-list --left-right --count origin/main...main = 0 0`；本地 14 个提交已全部到达远程。
+  远端在 fetch 时没有新提交，因此没有覆盖任何他人工作。
+- **离线备份**：`D:\数学画布\mathcanvas-main-push-20261027.bundle`（`bdf2c48..main`，143 KB，
+  含上述 14 个提交）。它只是恢复手段，不再是唯一通道。
   ```bash
   git fetch /path/to/mathcanvas-main-push-20261027.bundle main:main
-  git fetch origin && git log --oneline origin/main -3   # 先确认远端没有新提交
-  git push origin main                                   # 非强制
+  git fetch origin && git log --oneline origin/main -3   # 推送前仍要先确认远端没有新提交
+  git push origin main                                   # 禁止强推
   ```
-  推送前必须重新 fetch 并检查；禁止强推、禁止覆盖他人提交。
 - 既有的 `apps/desktop/src-tauri/Cargo.toml` 修改与 `coverage/` 未触碰、未提交。
 
 ## 9. 下一步（按优先级）
