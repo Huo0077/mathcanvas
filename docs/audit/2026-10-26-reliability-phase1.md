@@ -238,6 +238,24 @@
 
 - `localPlanner.test.ts` 63/63。
 
+### 3.5 浏览器闭环（T08 本族，第五轮补）
+
+新增 `e2e/agent-rectangle-fold.spec.ts`（3 条，真实浏览器 + WebGL 画布 + 生产路径）：
+
+1. **完整题设 + 长度目标**：本地通用意图 → 协调器 → 编译器 → 隔离草稿 → 「等待你确认」；
+   确认面板写明"只占一步撤销"；**确认前画布对象数为 0**（主文档没变）；确认后对象 >0 并截图
+   `test-results/rectangle-fold-preview.png`；`Ctrl+Z` **一步**回到 0。
+2. **目标 `BD⊥AC` 不成立**：界面出现澄清正文（"不成立……" + 距离），
+   **没有**「确认改动」面板、**没有**「确认并提交」按钮 —— 假目标不生成可提交草稿。
+3. **缺折角**：澄清正文问"折角"，同样没有确认面板 —— 不默认 90°。
+
+验证：`npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` → **3 passed**（约 7.7s）；
+`npm run typecheck`（含 e2e tsconfig）0；`eslint e2e/agent-rectangle-fold.spec.ts` 0。
+
+**边界**：这是**本地确定性规划器**的浏览器证据，不是真实模型成功率；
+「缺折角 / 假目标」两条的文案与状态来自 `agentRunner` 的 `needs_more_information` 分支，
+没有 provider 在场。
+
 ## 4. A4 Worker 不得把澄清包装成成功
 
 **核实**
@@ -290,7 +308,8 @@
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
-| `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归；**不是**本族新增 e2e） |
+| `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归） |
+| `npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` | **3 passed**（本族：预览/确认/撤销、假目标澄清、缺折角澄清） |
 
 注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
 
@@ -305,7 +324,7 @@
 
 ## 8. 提交与远程
 
-本地已提交（`main`，未推送）：
+本地功能提交（`main`，未推送；另有台账/文档提交未逐一列出）：
 
 | 提交 | 内容 |
 | --- | --- |
@@ -321,9 +340,6 @@
 
 ## 9. 下一步（按优先级）
 
-1. **T08 浏览器闭环**：新增矩形折叠的 e2e（预览前主文档不变、确认只写一次、撤销精确恢复、缺折角/假目标的澄清路径）。
-   本轮只跑了既有的 `e2e/agent-fold-preview.spec.ts` 作回归（exit 0），**没有**新增本族 e2e。
-2. **T01 `eval:reliability`** 完整链路评测入口（复用生产 modelPlanner/coordinator/DraftStore/编译器，逐题原子报告、离线回放、预算记账），随后才是 T02 题单与 T09 冻结验收。
-3. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
-4. 协调器/UI 对 `needs_fold_angle` / `goal_does_not_hold` 的文案与"不新建 run"行为端到端验证。
-5. 远程可达后按"先 fetch、再推送"的顺序上推本地 5 个提交。
+1. **T01 `eval:reliability`** 完整链路评测入口（复用生产 modelPlanner/coordinator/DraftStore/编译器，逐题原子报告、离线回放、预算记账），随后才是 T02 题单与 T09 冻结验收。
+2. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
+3. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。
