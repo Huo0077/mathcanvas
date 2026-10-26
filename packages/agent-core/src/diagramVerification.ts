@@ -2133,6 +2133,47 @@ export function statedOriginNames(set: DiagramObligationSet, drawn: { has(name: 
   return definedByPrompt ? [] : [ORIGIN_POINT_NAME]
 }
 
+/**
+ * **折前状态核验**（A3，2026-10-26）：翻折题里的题设分属两个状态。
+ *
+ * 折前条件（矩形的边、角、分点）说的是**折起来之前**那张平面图；折后条件（两平面垂直、
+ * 折后距离）说的是最终文档。旧核验只有"最终文档 + 单一状态"，于是：
+ * - 折前点被改名后（`B ⇒ B′`），`AB=4` 会报"点名缺失：B"；
+ * - 即使名字还在，`AB⊥BC` 这类**角**条件在折后已不成立（刚体运动保持长度，不保持夹角）。
+ *
+ * 这一层从**真实动作**重建折前状态：只认**显式给了 `vertices`** 的 `solid.fold`
+ *（折前坐标是计划自己声明的，内核按它算出折后位置）；没给坐标的折（按点名从文档找点）
+ * 无法重建折前位置 —— 那时**不猜**，按原口径核验最终文档。
+ *
+ * 只覆盖**单次折**：多次折叠的中间状态需要逐段重建，今天没有证据，宁可不动。
+ */
+interface PreFoldState {
+  points: Map<string, Vector3>
+  apex: string
+  apexAs: string
+}
+
+/** 这些条件属于**折前图形**：长度、等长、比例、中点、点在线上、角、垂直、平行。 */
+const PRE_FOLD_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
+  "fixedLength", "equalLength", "segmentRatio", "midpoint", "pointOnSegment", "planarAngle", "perpendicular", "parallel"
+])
+
+function preFoldStateOf(plan: PlanEnvelope, drawn: Map<string, Vector3>): PreFoldState | null {
+  if (plan.kind !== "plan") return null
+  const folds = plan.actions.filter((action) => action.actionId === "solid.fold")
+  if (folds.length !== 1) return null
+  const fold = folds[0]!
+  const vertices = fold.inputs.vertices
+  if (vertices === undefined || vertices.length !== fold.inputs.vertexNames.length) return null
+  const points = new Map(drawn)
+  for (const [index, name] of fold.inputs.vertexNames.entries()) {
+    const vertex = vertices[index]
+    if (vertex === undefined) return null
+    points.set(name, { x: vertex.x, y: vertex.y, z: vertex.z })
+  }
+  return { points, apex: fold.inputs.apex, apexAs: fold.inputs.apexAs }
+}
+
 export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument, options: DiagramVerificationOptions = {}): DiagramVerificationReport {
   const mapped = candidatePoints(plan, candidate, base)
   const points = mapped.ok ? mapped.points : null
@@ -2144,6 +2185,17 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
    */
   const originNames = points === null ? [] : statedOriginNames(set, points)
   for (const name of originNames) points?.set(name, { x: 0, y: 0, z: 0 })
+  /** 折前状态（只有"显式给了折前坐标的单次折"才建得出来；否则为 `null`，按原口径核验）。 */
+  const preFold = points === null ? null : preFoldStateOf(plan, points)
+  /**
+   * **折后同名点的别名**：题面写 `平面 ABC ⊥ 平面 ACD` 时，折后的 `ABC` 指的就是
+   * `A B′ C`（计划把动点改成了 `B′`）。没有这一层，折后条件会报"点名缺失：B"。
+   * 只在**文档里没有**这个折前名字时补别名（文档里真有 B 时以它为准）。
+   */
+  if (points !== null && preFold !== null && !points.has(preFold.apex)) {
+    const folded = points.get(preFold.apexAs)
+    if (folded !== undefined) points.set(preFold.apex, folded)
+  }
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
@@ -2167,7 +2219,14 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
         reason: `候选图缺少可靠的点名映射：${pointMapReason ?? "原因不明"}；不能按题面顺序猜坐标。`
       }
     }
-    const result = calculate(item, points ?? new Map(), figures)
+    /**
+     * **这一条该在哪一个状态核**：折前图形条件（角、长度、中点…）且点到了会动的那个点，
+     * 就用折前坐标；其余（含两平面垂直这类折后条件）用最终文档。
+     */
+    const usePre = preFold !== null && PRE_FOLD_KINDS.has(item.kind) && item.targets.includes(preFold.apex)
+      && item.targets.every((name) => preFold.points.has(name))
+    const statePoints = usePre ? preFold.points : (points ?? new Map())
+    const result = calculate(item, statePoints, figures)
     if (result === null) {
       /**
        * **先说清缺谁**（2026-10-10）：原先只有一句把三种成因混起来的
@@ -2175,7 +2234,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
        * 点名表在手上时，"缺谁"是**算得出来的**，所以这一段把它写出来；
        * 退化 / 算不出角度仍然落回原句（那时缺的不是名字）。
        */
-      const missing = pointBased && points !== null ? [...new Set(item.targets.filter((name) => !points.has(name)))] : []
+      const missing = pointBased && points !== null ? [...new Set(item.targets.filter((name) => !statePoints.has(name)))] : []
       return {
         kind: item.kind,
         sourceText: item.sourceText,
@@ -2216,10 +2275,13 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     const originNote = originNames.length > 0 && item.targets.includes(ORIGIN_POINT_NAME)
       ? `（\`O\` 按**原点** (0, 0) 取：图上没有这个点名，这是解析几何的常用约定，不是图上量出来的。）`
       : ""
+    const stateNote = usePre && preFold !== null
+      ? `（按**折前状态**核验：${preFold.apex} 取折片折前坐标，折后它叫 ${preFold.apexAs}。）`
+      : ""
     const baseReason = result.detail !== undefined
       ? (status === "passed" ? result.detail : `${result.detail}最大偏差 ${result.actual.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。`)
       : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`)
-    const reason = `${baseReason}${originNote}`
+    const reason = `${baseReason}${originNote}${stateNote}`
     return {
       kind: item.kind,
       sourceText: item.sourceText,

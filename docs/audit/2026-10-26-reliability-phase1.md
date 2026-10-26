@@ -142,12 +142,52 @@
 
 **剩余（重要）**
 
-- **状态感知的题设回代仍未接进 `verifyDiagramObligations`**：折前条件（矩形、边长）要在折前状态核，
-  折后条件（两平面垂直、折后距离）在折后状态核；今天草稿核验仍是"最终文档 + 单一状态"。
-  这是 A3 最后一块，也是"用户案例的草稿态能显示 passed"的前提。
 - `localPlanner` 还没有本族的通用意图（浏览器无 provider 时走不到这条构造）。
 - 未支持：连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用、非矩形四边形折叠。
 - 构造坐标把 `ring[0]` 放原点、`ring[0]→ring[1]` 放 x 轴（内部坐标系）；与画布现有对象的相对位置无关。
+
+### 3.2 折前 / 折后状态核验（本轮第三轮补）
+
+**改动** `packages/agent-core/src/diagramVerification.ts`
+
+- `preFoldStateOf(plan, drawn)`：从**真实动作**重建折前状态 —— 只认**单次**、且**显式给了
+  `vertices`** 的 `solid.fold`（折前坐标是计划自己声明的，内核按它算折后位置）。
+  没给坐标的折（按点名从文档找点）或多次折叠一律返回 `null`，**不猜**，按原口径核验最终文档。
+- 状态归属：`fixedLength / equalLength / segmentRatio / midpoint / pointOnSegment /
+  planarAngle / perpendicular / parallel` 这些**折前图形条件**，只要点到了会动的那个点，
+  就用折前坐标核；`planePerpendicular` / `dihedral` / 折后距离等仍用最终文档。
+- **折后别名**：题面写 `平面 ABC ⊥ 平面 ACD` 时，折后的 `ABC` 指 `A B′ C`。
+  文档里没有折前名字时，把 `apex` 别名到 `apexAs` 的坐标（文档里真有该名字时以它为准）。
+- 每条判据的 `reason` 标明「按**折前状态**核验」，面板上看得见用的是哪个状态。
+
+**为什么必须做**（两条实测）：
+
+- 计划把折后点改名后，最终文档里没有 `B`：旧的单一状态核验把 `AB=4` 报成"点名缺失：B"。
+- **跨折痕的量会随折而变**：矩形对角线 `BD=2√5`（折前 √20）与折后 `B′D=2√85/5` 是两个数；
+  拿最终文档核折前条件会把对的判错。用例同时断言「折后 B′D 与 2√5 相差 > 0.5」，
+  证明 `BD=2√5` 的通过只可能来自折前坐标。
+
+**同步更新的旧用例（原先钉住的是缺口本身）**
+
+- `diagramFoldPoints.test.ts`：`AE=1` 从"点名缺失：A"改为**折前状态通过**；
+  新增跨折痕判别 `AB=2`（折前 2、折后 √3）与折后 `PE=1`（不带折前注记）。
+- `foldedTriangleClauses.test.ts`：`AC=3` / `BC=4` / `CD=1` 从"点名缺失：C"改为
+  **折前状态通过**；`C'D⊥平面 ABD` 仍按折后核、仍如实报矛盾（残差 1/√17）。
+- `pointOnConic.test.ts` 的"缺名"理由保持不变：`missing` 的判据仍是"点名表**建出来了**"
+  （不是"表非空"），本轮第一版曾把空表也算成"建出来了"，被这条用例当场抓回。
+
+**验证**
+
+- `rectangleFoldStateVerification.test.ts` 3/3；上述三个旧文件相关用例全绿；
+  全量 `packages/agent-core` + `apps/web/src/agent`：**2401 passed / 1 todo**，exit 0；
+  `npm run typecheck` exit 0；`eslint .` exit 0。
+
+**剩余**
+
+- `矩形 ABCD` 这个**形状从句本身**还没有进题设账（仍落未核验），
+  所以用户案例的草稿态还到不了 `passed`。下一步是新增 `rectangle` 义务
+  （闭合/直角/共面/非退化，按折前状态核），并同步 `obligationIR` 的已判种类表。
+- 折后条件里"点在折片上的位置"这类需要状态链的量仍未覆盖。
 
 ## 4. A4 Worker 不得把澄清包装成成功
 
@@ -197,7 +237,7 @@
 | 命令 | 结果 |
 | --- | --- |
 | `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
-| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2398 passed / 1 todo**，exit 0（第二轮接线后；第一轮为 2388） |
+| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2401 passed / 1 todo**，exit 0（第三轮状态核验后；第一轮 2388、第二轮 2398） |
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |

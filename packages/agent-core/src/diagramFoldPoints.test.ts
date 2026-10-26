@@ -72,14 +72,32 @@ describe("折出来的面进点名表（2026-10-11）", () => {
     expect(check?.status).toBe("passed")
   })
 
-  it("**折后的名字与折前的名字都在表里**（`apex` 改成 `apexAs`，不是两个都在）", () => {
+  it("**折前的条件按折前坐标核**（`AE=1` / `AB=2` 通过），折后的名字仍按折后核", () => {
     const { plan, candidate } = fixture()
-    // `AE=1` 是折前的写法：折完那个点已经叫 `P` 了，所以 `A` **不该**在表里 ——
-    // 它必须如实报"点名缺失：A"，而不是拿 `P` 去凑。
-    const report = verifyDiagramObligations(parseDiagramObligations("AE=1"), plan, candidate)
-    const check = report.checks.find((entry) => entry.sourceText.includes("AE=1"))
-    expect(check?.status).toBe("unverified")
-    expect(check?.reason ?? "").toContain("点名缺失")
-    expect(check?.reason ?? "").toContain("A")
+    /**
+     * **A3（2026-10-26）改变了这一条的期望**：折片 `AEF` 在动作里给了**折前坐标**，
+     * 所以 `AE=1`（动点 A + 折痕端点 E）是**折前图形**的条件，应按折前状态核 ——
+     * 旧口径拿最终文档核，A 已改名成 P，只能报"点名缺失：A"。那不是题面缺条件，
+     * 是我们的核验只看一个状态。折前条件现在**核得出来**，理由里标明状态。
+     */
+    const preFoldLength = verifyDiagramObligations(parseDiagramObligations("AE=1"), plan, candidate)
+      .checks.find((entry) => entry.sourceText.includes("AE=1"))
+    expect(preFoldLength?.status).toBe("passed")
+    expect(preFoldLength?.reason ?? "").toContain("折前状态")
+
+    /**
+     * **跨折痕的量必须真的用折前坐标**：折前 `|AB|=2`，折后 `|PB|=√3`。
+     * 若拿最终文档去核（把 A 别名成 P），这条会失败 —— 它通过只可能来自折前状态。
+     */
+    const crossFold = verifyDiagramObligations(parseDiagramObligations("AB=2"), plan, candidate)
+      .checks.find((entry) => entry.sourceText.includes("AB=2"))
+    expect(crossFold?.status).toBe("passed")
+    expect(crossFold?.reason ?? "").toContain("折前状态")
+
+    // 折后自己的名字（P）不受影响：仍按最终文档核，且**不带**折前注记。
+    const postFold = verifyDiagramObligations(parseDiagramObligations("PE=1"), plan, candidate)
+      .checks.find((entry) => entry.sourceText.includes("PE=1"))
+    expect(postFold?.status).toBe("passed")
+    expect(postFold?.reason ?? "").not.toContain("折前状态")
   })
 })

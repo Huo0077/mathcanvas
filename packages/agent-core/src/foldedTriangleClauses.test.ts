@@ -136,11 +136,16 @@ describe("Rt△ABC 折起那道题：读得出什么、还读不出什么", () =
     const foldedLength = (result.diagramVerification?.checks ?? []).find((entry) => entry.sourceText.includes("C'D=1"))
     expect(foldedLength?.status, why).toBe("passed")
     /**
-     * ③ **仍然如实记着的第二处缺口**：折前的 `C` 在折后不存在，所以 `AC=3` / `BC=4` / `CD=1`
-     * 这类**折前条件**依旧"点名缺失：C" —— 那不是字符问题，是"折前条件今天一律对最终文档核验"。
-     * 把它钉在这里，免得下一轮把这条读数当成"归一没生效"。
+     * ③ **A3（2026-10-26）修掉的缺口**：折前的 `C` 在最终文档里叫 `C′`，旧口径拿最终文档核
+     * 只能报"点名缺失：C"。现在折片动作显式给了**折前坐标**，`AC=3` / `BC=4` / `CD=1`
+     * 这些折前条件按**折前状态**核验并给出结果（理由里标明），不再误报缺名。
      */
-    expect(reasons, `核验：${reasons}`).toContain("点名缺失：C")
+    for (const segment of ["AC=3", "BC=4", "CD=1"]) {
+      const preFold = (result.diagramVerification?.checks ?? []).find((entry) => entry.sourceText.includes(segment))
+      expect(preFold?.status, `${segment}：${preFold?.reason}｜${why}`).toBe("passed")
+      expect(preFold?.reason ?? "", segment).toContain("折前状态")
+    }
+    expect(reasons, `核验：${reasons}`).not.toContain("点名缺失：C")
   })
 
   /**
