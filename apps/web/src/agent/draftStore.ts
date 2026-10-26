@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -546,11 +546,19 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       record.promptHash = canonicalContentHash({ prompt: effectivePrompt ?? null })
       if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
 
-      const parsed = effectivePrompt && (planHasVerifiableFigure(actions) || readFoldTransformations(effectivePrompt).length > 0)
+      /**
+       * **没有折后点名的折也在题设账上**（A3，2026-10-26）。
+       *
+       * `沿对角线 AC 把 △ABC 折起` 没有给折后点名，`readFoldTransformations` 因此返回空 ——
+       * 但折片、折痕与折角都是确定性的。不把这一族纳入核验，"折了却没核验"就会从后门通过
+       * （评测入口第一条用例当场抓到的就是 `draftDocument` 有、`diagramVerification` 没有）。
+       */
+      const namedFoldDeclared = effectivePrompt !== undefined && readNamedFold(effectivePrompt).status === "ok"
+      const parsed = effectivePrompt && (planHasVerifiableFigure(actions) || readFoldTransformations(effectivePrompt).length > 0 || namedFoldDeclared)
         ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
-      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(effectivePrompt ?? "").length > 0)
+      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(effectivePrompt ?? "").length > 0 || namedFoldDeclared)
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true, prompt: effectivePrompt }) : undefined
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }

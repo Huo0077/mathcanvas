@@ -27,6 +27,6 @@ export default defineConfig({
      * 「Lean 慢集成单列」。用具名脚本 `npm run test:lean` 单独跑（串行、`--maxWorkers=1`）。
      */
     // Live model evaluation has a separate, explicit entry point even when a key is present.
-    exclude: [...configDefaults.exclude, "scripts/proof-spike/lean4EndToEnd.test.ts", "apps/web/src/agent/fixtures/examSolid30.eval.test.ts"]
+    exclude: [...configDefaults.exclude, "scripts/proof-spike/lean4EndToEnd.test.ts", "apps/web/src/agent/fixtures/examSolid30.eval.test.ts", "apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts"]
   }
 })

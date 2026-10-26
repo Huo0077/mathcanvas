@@ -285,19 +285,61 @@
   诊断（正文即问题），而不是 `needs_more_information`；后者的"只有问题、没有 error 诊断"路径
   由第 1 条 stub 用例守住。两条路径是**不同**的编译产物，这里如实分开记录。
 
+## 4.5 T01 `eval:reliability` 入口（第六轮补）
+
+**新增**
+
+- `scripts/reliability-eval/runner.mjs` + `vitest.reliability.config.ts` + `apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts`；
+  `package.json` 增加 `eval:reliability`，默认 `npm test` 明确排除这个文件（与 solid eval 同一条纪律）。
+- 三种模式互斥：
+  - `--offline`（缺省）：确定性本地规划器，**不产生费用**；
+  - `--replay FILE`：回放记录的**逐轮信封**，记录里没有的轮次不会被补出来（缺一轮即标记未完成）；
+  - `--allow-paid --max-requests N`：真实 provider，必须另有 `DEEPSEEK_API_KEY`，否则 **exit 2 拒绝启动**（实测）。
+- 链路是生产那一条：`createAgentRuntime`（真实 `DraftStore` + 编译器/Worker 兜底 + 真实协调器）。
+  每条用例用**干净文档与干净会话**，跑到「待确认 / 澄清 / 失败」终态，**从不自动确认**；
+  `writeDocument` 调用次数逐条断言为 **0**。
+- 报告：每条用例一个**原子写入**的 JSON（`case-<id>.json`）+ `summary.json` + `replay.json`；
+  记录终态、verification、澄清问题、请求数、耗时、逐轮信封；费用记 `null` / `costKnown: false`（**不写 0**）。
+- 题单目前是 **dev-smoke 4 条**（矩形折叠成功/假目标/缺折角 + 立方体），**不是** T02 的验收题单；
+  分母与"未执行"在 summary 里如实列出（`notRun`、`incomplete`）。
+
+**第一跑抓到的真实缺陷（已修）**
+
+- 首跑 `rect-fold-length` 拿到 `draftDocument` 却没有 `diagramVerification`：`draftStore.stage`
+  只在 `planHasVerifiableFigure(actions) || readFoldTransformations(prompt)` 时核验，而**没有折后点名**的
+  `沿对角线 AC 把 △ABC 折起` 两者都不满足 ⇒ 这一族"折了却没核验"从后门通过。
+- 修法：`draftStore.stage` 增加 `readNamedFold(prompt).status === "ok"` 这一支（核验条件与 `checked` 条件同时加）。
+  这不是评测专用补丁 —— 产品草稿面板同样因此拿到核验报告。
+
+**实测读数**
+
+- `npm run eval:reliability -- --offline` → **1 test passed**；summary：**4/4 passed、requests=4、incomplete=0、costUsd=null**。
+- 用上一次运行产出的 `replay.json` 回放 → **1 test passed**（4/4，不补轮次）。
+- `--help` 打印三种模式与费用口径；`--allow-paid --max-requests 2`（无密钥）→ **exit 2**，
+  消息为 "live mode requires DEEPSEEK_API_KEY; refusing to start (no automatic spend)"。
+
+**剩余**
+
+- **T02 题单与独立 oracle 未做**：当前 4 条是开发冒烟，不能当质量分母。
+- **真实模型基线未跑**（无凭据/费用授权）；live 模式的逐轮**原始响应**没有落盘（只有信封），
+  真实成本也仍无法可靠计量 ⇒ 质量与费用门槛保持**未完成**。
+- 预算记账目前只到"协调器 + 模型预算"这一层，尚未把工具续轮/降级/修复的请求数逐项归并进 summary。
+
+| 任务 | 状态 | 说明 |
+| --- | --- | --- |
 ## 5. T01–T10 的状态
 
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
 | T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
-| T01 `eval:reliability` 完整链路评测 | **未开始** | 需要新的 runner + 逐题原子报告 + 离线回放 |
+| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放已实现（§4.5）；dev-smoke 4 条；真实模型基线、逐轮原始响应、逐项请求归并未完成 |
 | T02 开发集 20 题 / 验收集 60 题 | **未开始** | 未生成、未独立复核，不冒充 |
 | T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
 | T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
-| T05 状态执行/求解/回代 | **部分** | 矩形单折的构造与回代已做；未接 `planCompiler` / `coupledFolds` |
-| T06 Worker 与草稿链路 | **部分** | A4 复核 + 测试；A3 尚未过界 |
+| T05 状态执行/求解/回代 | **部分** | 矩形单折的构造、计划与回代已做；`coupledFolds` 未接矩形分支 |
+| T06 Worker 与草稿链路 | **部分** | A4 复核 + 测试；无折后点名的折已纳入草稿核验（§4.5） |
 | T07 最多两轮共享修复 | **未开始** | 预算与协调器本轮未改 |
-| T08 浏览器闭环 | **未开始** | 本轮未跑 e2e |
+| T08 浏览器闭环 | **部分** | 本族 3 条 e2e + 5 spec 子集 7 passed；完整浏览器回归与真实模型路径未跑 |
 | T09 冻结新题真实验收 | **未开始** | 无真实模型凭据/费用授权，保持未完成 |
 | T10 交付 | **部分** | 源码头；桌面包、远程推送未做 |
 
@@ -313,6 +355,9 @@
 | `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归） |
 | `npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` | **3 passed**（本族：预览/确认/撤销、假目标澄清、缺折角澄清） |
 | `npx playwright test` 翻折/连等子集（5 个 spec） | **7 passed**（既有代表题未被新意图抢走） |
+| `npm run eval:reliability -- --offline` | **1 test passed**；summary **4/4 passed、requests=4、incomplete=0、costUsd=null** |
+| `npm run eval:reliability -- --replay <上次的 replay.json>` | **1 test passed**（4/4，不补轮次） |
+| `npm run eval:reliability -- --allow-paid --max-requests 2`（无密钥） | **exit 2**（拒绝启动，不发生任何付费请求） |
 
 注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
 
@@ -322,8 +367,9 @@
 
 ## 7. 真实模型与费用
 
-- 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub。
-- 费用：**0**。没有读取或使用任何历史额度。
+- 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub；`eval:reliability` 只跑过 `--offline` 与 `--replay`。
+- 费用：**未知**（报告的 `costUsd` 为 `null`、`costKnown: false`）—— 没有计费证据，**不写成 0**。
+  没有读取或使用任何历史额度；live 模式在缺少 `DEEPSEEK_API_KEY` 时直接 exit 2。
 
 ## 8. 提交与远程
 
@@ -339,6 +385,7 @@
 
 - `git ls-remote origin main` **失败**（`Connection was reset`）：**未 fetch、未 push**。
   推送前必须先 fetch 检查远程新增提交，禁止强推。
+- 另有 T01 入口（`eval:reliability` / 报告 / 回放）与"无折后点名的折纳入草稿核验"的提交，见 §4.5。
 - 既有的 `apps/desktop/src-tauri/Cargo.toml` 修改与 `coverage/` 未触碰、未提交。
 
 ## 9. 下一步（按优先级）
