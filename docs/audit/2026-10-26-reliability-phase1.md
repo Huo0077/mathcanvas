@@ -454,10 +454,22 @@
 | `b6ce249` | `rectangle` 义务 + 用户案例整题 `passed` |
 | `cbc50cd` | `localPlanner` 矩形折叠通用族意图 |
 
-- `git ls-remote origin main` **失败**（`Connection was reset`）：**未 fetch、未 push**。
-  推送前必须先 fetch 检查远程新增提交，禁止强推。
-- 另有 T01 入口（`eval:reliability` / 报告 / 回放）、题单外置与独立 oracle（§4.6）、
-  以及"无折后点名的折纳入草稿核验"的提交。
+此后还有 8 个提交：`eb472d6`（台账）、`5d38a2d`（本族 e2e）、`406747d`（e2e 读数）、
+`bf5654e`（`eval:reliability` 入口）、`183439a`（取消/预算机制）、`1fb1ab5`（题单外置 + 独立 oracle）、
+`bf512a6`（首次/修复后口径）、`6885de1`（dev 题单扩到 14 条 + 已知缺陷），见 §4.5–4.7。
+
+- **2026-10-27 00:31（+08:00）尝试推送失败**：`git fetch origin` 与 `git push origin main` 都在
+  `github.com:443` 连接阶段超时（`curl 28 ... Could not connect to server`，退出码 128）。
+  `origin/main` 的本地引用仍是 `bdf2c48`（**过期**，不能据此判断远端没有新提交）；
+  `git rev-list --left-right --count origin/main...main = 0 13`（本地领先 13 个提交）。
+- **为恢复网络后的推送准备了增量包**：`D:\数学画布\mathcanvas-main-push-20261027.bundle`
+  （`bdf2c48..main`，142 KB，不在仓库内）。在能联网的机器上：
+  ```bash
+  git fetch /path/to/mathcanvas-main-push-20261027.bundle main:main
+  git fetch origin && git log --oneline origin/main -3   # 先确认远端没有新提交
+  git push origin main                                   # 非强制
+  ```
+  推送前必须重新 fetch 并检查；禁止强推、禁止覆盖他人提交。
 - 既有的 `apps/desktop/src-tauri/Cargo.toml` 修改与 `coverage/` 未触碰、未提交。
 
 ## 9. 下一步（按优先级）
