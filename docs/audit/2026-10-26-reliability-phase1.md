@@ -250,7 +250,9 @@
 3. **缺折角**：澄清正文问"折角"，同样没有确认面板 —— 不默认 90°。
 
 验证：`npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` → **3 passed**（约 7.7s）；
-`npm run typecheck`（含 e2e tsconfig）0；`eslint e2e/agent-rectangle-fold.spec.ts` 0。
+`npm run typecheck`（含 e2e tsconfig）0；`eslint e2e/agent-rectangle-fold.spec.ts` 0；
+翻折/连等相关 e2e 子集（本族 + fold-preview + fold-chain + chain-equality + exam-solid）→ **7 passed**（约 12.1s），
+说明 `localPlanner` 新增的通用意图没有抢走既有代表题的路径。
 
 **边界**：这是**本地确定性规划器**的浏览器证据，不是真实模型成功率；
 「缺折角 / 假目标」两条的文案与状态来自 `agentRunner` 的 `needs_more_information` 分支，
@@ -310,6 +312,7 @@
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
 | `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归） |
 | `npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` | **3 passed**（本族：预览/确认/撤销、假目标澄清、缺折角澄清） |
+| `npx playwright test` 翻折/连等子集（5 个 spec） | **7 passed**（既有代表题未被新意图抢走） |
 
 注意：A1/A2/A3/A4 的用例都在上面那次全量单元里；没有跳过、没有提高超时、没有放宽任何断言。
 
