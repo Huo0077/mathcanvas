@@ -1918,8 +1918,8 @@ Logs: `audit-20261016/task16-camera-{red,green,browser-red,browser-green,typeche
 基线 `bdf2c48`（`main`，跟踪 `origin/main`）。任务书提到的 `c57f683` / `5be2223` **不在本仓库**（`git cat-file` 查无此对象），本轮按实际代码重新实现，**未** cherry-pick。工作区既有的 `apps/desktop/src-tauri/Cargo.toml` 修改与 `coverage/` 未触碰。
 
 - **A1 长度连等**：分数系数（`2/3 AB=CD=2` ⇒ AB=3、CD=2）与表达式边界（`-AB=…`、`AB+CD=5`、`AB/CD=2`、`0AB=…`、`1e999` 整条落未核验）已修；括号重述不再被截断。`lengthEquality.test.ts` 25/25、`diagramObligations.test.ts` 102/102 通过。
-- **A2 改写等价**：三态闸门（读不完整即拒绝）+ 约束级规范形（配对/方向/矛盾/闭环）+ 区间绑定替换（重复各一次、重叠都不采用）。`promptNormalization.test.ts` 22/22 通过。全量 `packages/agent-core` + `apps/web/src/agent`：**228 文件 / 2388 passed / 1 todo**，exit 0。
-- **A3 矩形对角线折叠（核心层）**：新增 `namedFold` / `rectangleFold`，两种语序归一到同一份状态变换、同名点 `B@s0`/`B@s1` 分离、矩形判据含闭合/共面、折后分别核刚性/折痕/折角/两平面垂直、**没有折角不默认 90°**。用户案例：折后 B=(16/5, 8/5, ±4/√5)、BD²=68/5、BD=2√85/5，BD⊥AC 残差 12（**该问不成立**）。`rectangleFold.test.ts` 18/18 通过；agent-core typecheck 与改动文件 lint exit 0。
+- **A2 改写等价**：三态闸门（读不完整即拒绝）+ 约束级规范形（配对/方向/矛盾/闭环）+ 区间绑定替换（重复各一次、重叠都不采用）。`promptNormalization.test.ts` 22/22 通过。全量 `packages/agent-core` + `apps/web/src/agent`：**2398 passed / 1 todo**，exit 0。
+- **A3 矩形对角线折叠（核心层 + 计划入口）**：新增 `namedFold` / `rectangleFold`，两种语序归一到同一份状态变换、同名点 `B@s0`/`B@s1` 分离、矩形判据含闭合/共面、折后分别核刚性/折痕/折角/两平面垂直、**没有折角不默认 90°**。用户案例：折后 B=(16/5, 8/5, ±4/√5)、BD²=68/5、BD=2√85/5，BD⊥AC 残差 12（**该问不成立**）。`rectangleFold.test.ts` 18/18 通过。第二轮新增 `rectangleFoldPlan`：题面 → `solid.create_face` + `solid.fold` 的动作链（经 `compilePlan` 编出的折后坐标与模块一致）；`modelPlanner` 在**发请求之前**拦截"缺折角"与"目标不成立"两族终态，返回澄清且**不调用模型**（`rectangleFoldPlan.test.ts` 7/7、`modelPlanner.test.ts` 新增 3 条）；agent-core typecheck 与改动文件 lint exit 0。
 - **A4 澄清不包装成成功**：`stagedClarification.test.ts` 3/3 通过（`ok:true + draftDocument:null` ⇒ 失败且澄清保留、文档不变；in-process 与生产 Worker 同码同文）。该文件晚于上面那次全量运行，单独跑过。
-- **仍未完成（不冒充）**：A3 **尚未接进 `planCompiler` / `localPlanner` 的真实动作链**（所以"用户案例在浏览器里不生成可提交草稿"没有端到端证据）；T01 `eval:reliability`、T02 题单、T07 两轮修复、T08 浏览器闭环、T09 真实验收均未开始；T03/T04/T05 只到模块层。真实模型调用 **0 次**、费用 **0**；未 commit、未 push、未 fetch 核对远程。
+- **仍未完成（不冒充）**：A3 的**状态感知题设回代**还没接进 `verifyDiagramObligations`（折前/折后分别核验），`localPlanner` 也没有本族通用意图，所以"草稿态显示 passed"与无 provider 的浏览器路径仍无证据；T01 `eval:reliability`、T02 题单、T07 两轮修复、T08 浏览器闭环、T09 真实验收均未开始；T03/T04/T05 只到模块层。真实模型调用 **0 次**、费用 **0**；未 push（远程连接被重置）。
 - 证据：[第一阶段修复台账](audit/2026-10-26-reliability-phase1.md)。

@@ -12,6 +12,7 @@ import {
   planModelRequest,
   nativeReadToolSchema,
   readToolIdFromNative,
+  solveRectangleFold,
   type ActionId,
   type Budget,
   type CapabilityEvidence,
@@ -406,6 +407,34 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
   return {
     async plan(request) {
       sequence += 1
+      /**
+       * **矩形沿对角线折起的安全闸**（A3，2026-10-26）。
+       *
+       * 这一族题有两个"必须问、不能让模型猜"的终态：
+       * - 题面只说了折起，既没给折角、也没给"两平面垂直" ⇒ 折后点不唯一，问折角；
+       * - 题干里的目标（例如 `求证 BD⊥AC`）在题设下被直接回代否定 ⇒ 说明不成立，
+       *   **不生成**看起来像"证明了"的草稿。
+       *
+       * 判定来自确定性的 `solveRectangleFold`（坐标由内核算，不匹配原题字符串），
+       * 命中时**不发出 provider 请求** —— 既能省一次调用，也不会让模型把不成立的目标圆过去。
+       * 不属于这一族、或题设完整且目标未被否定时，照旧交给模型规划。
+       */
+      if (request.run.target.workspace === "geometry3d") {
+        const rectangleFold = solveRectangleFold(request.userMessage)
+        if (rectangleFold.status === "clarification") {
+          return {
+            plan: {
+              schemaVersion: PLAN_SCHEMA_VERSION,
+              kind: "clarification",
+              goal: rectangleFold.reason === "needs_fold_angle" ? "矩形沿对角线折起：缺折角" : "矩形沿对角线折起：目标不成立",
+              factIds: [],
+              questions: [...rectangleFold.questions]
+            },
+            requestId: `model-request-${sequence}`,
+            attemptId: `model-attempt-${sequence}`
+          }
+        }
+      }
       const resolved = await resolveProvider()
       if (!resolved.ok) throw new ModelPlannerError(resolved.code === "no_desktop_shell" ? "no_desktop_shell" : resolved.code, resolved.detail)
 

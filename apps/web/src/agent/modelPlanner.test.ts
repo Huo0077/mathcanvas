@@ -1134,3 +1134,46 @@ describe("T3 — output mode follows the channel and never over-claims", () => {
     expect(seen.map((entry) => entry.outputMode)).not.toContain("json_schema")
   })
 })
+
+/**
+ * **A3 安全闸（2026-10-26）：矩形对角线折叠的两个"必须问"终态不交给模型猜**。
+ *
+ * 命中时**一次 provider 请求都不发**；不属于这一族的题面照旧走模型。
+ */
+describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
+  it("缺折角 ⇒ 直接澄清问折角，不发请求（不默认 90°）", async () => {
+    const runModel = vi.fn(async () => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    const outcome = await planner.plan(request({ userMessage: "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折后 BD 的长。" }))
+
+    expect("plan" in outcome).toBe(true)
+    if (!("plan" in outcome)) return
+    expect(outcome.plan.kind).toBe("clarification")
+    if (outcome.plan.kind !== "clarification") return
+    expect(outcome.plan.questions.join(" ")).toContain("折角")
+    expect(runModel).not.toHaveBeenCalled()
+  })
+
+  it("目标被题设否定 ⇒ 直接澄清并给出距离，不发请求", async () => {
+    const runModel = vi.fn(async () => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    const outcome = await planner.plan(request({
+      userMessage: "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。"
+    }))
+
+    expect("plan" in outcome).toBe(true)
+    if (!("plan" in outcome)) return
+    expect(outcome.plan.kind).toBe("clarification")
+    if (outcome.plan.kind !== "clarification") return
+    expect(outcome.plan.questions.join(" ")).toContain("不成立")
+    expect(outcome.plan.questions.join(" ")).toContain("BD")
+    expect(runModel).not.toHaveBeenCalled()
+  })
+
+  it("不属于这一族的题面照旧交给模型", async () => {
+    const runModel = vi.fn(async () => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    await planner.plan(request())
+    expect(runModel).toHaveBeenCalledTimes(1)
+  })
+})

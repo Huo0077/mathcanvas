@@ -43,6 +43,10 @@ export * from "./namedFold"
  * 折角未知时返回具体澄清（**不默认 90°**）。
  */
 export * from "./rectangleFold"
+/**
+ * **矩形对角线折叠题的计划入口**（A3 接线第一步）：题面 → 动作链 / 澄清（折角未知、目标被否定）。
+ */
+export * from "./rectangleFoldPlan"
 export * from "./localPlanDefaults"
 export * from "./modelEvents"
 export * from "./modelGateway"

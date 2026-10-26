@@ -109,13 +109,45 @@
 - `npx tsc -p packages/agent-core/tsconfig.json --noEmit` → exit 0。
 - `npx eslint`（新增/改动文件）→ exit 0。
 
+### 3.1 计划入口与 planner 安全闸（本轮第二轮补）
+
+**新增** `packages/agent-core/src/rectangleFoldPlan.ts`
+
+- `readRectangleFoldGoals`：**只把问句区**（`求证 / 证明 / 求` 之后）里的"两线段垂直"与"某线段的长"当目标；
+  题设区的 `平面 ABC ⊥ 平面 ACD` 不会被误读成待证结论（已由用例钉住）。
+- `evaluateRectangleFoldGoals`：在**折后**坐标上回答目标；垂直给残差，长度给数值；
+  折后点按 `apexAs` 映射，避免"文档里的 B′"与"算出的折后位置"张冠李戴。
+- `solveRectangleFold(prompt)`：
+  1. 非本族 ⇒ `none`；读不全 ⇒ `unsupported`（说缺什么）；
+  2. 折角未知 ⇒ `clarification`（问折角，**不默认 90°**）；
+  3. 目标被确定性否定 ⇒ `clarification`（说明哪条不成立 + 可给的距离），**不出计划**；
+  4. 其余 ⇒ `plan`：`solid.create_face`（固定片）+ `solid.fold`（折片，折前坐标显式给出）。
+- 生成计划前先跑 `verifyRectangleFold` 自检；不通过就 `unsupported`，不把半对的构造交出去。
+
+**接线** `apps/web/src/agent/modelPlanner.ts`
+
+- 在 `plan()` 里、**发出 provider 请求之前**调用 `solveRectangleFold`：
+  - `needs_fold_angle` ⇒ 直接返回澄清信封（问折角）；
+  - `goal_does_not_hold` ⇒ 直接返回澄清信封（说明目标不成立 + 距离）；
+  - 只对 `workspace === "geometry3d"` 生效；其余题面照旧交给模型。
+- 这样"用户案例不生成可提交草稿"在 **model planner 这条生产路径**上有确定性证据，
+  而且命中的两族终态**一次模型调用都不发**（省费用，也不让模型把不成立的目标圆过去）。
+
+**验证**
+
+- `rectangleFoldPlan.test.ts` 7/7：目标解析（不误读平面垂直）、用户案例澄清（残差 12 + 2√85/5）、
+  长度题计划经 `compilePlan` 编出折后 B′=(16/5, 8/5, −4/√5)、改名/尺寸/另一条对角线、
+  缺折角澄清、无目标仍出计划。
+- `modelPlanner.test.ts` 新增 3 条：缺折角与目标否定都**不发请求**、非本族照旧调用模型。
+
 **剩余（重要）**
 
-- **还没有接进 `planCompiler` / `localPlanner` 的真实链路**：动作生成、候选文档 → 状态点表的映射、
-  假目标在 Agent 回答层的澄清文案尚未接线，因此"用户案例在浏览器里表现为不生成可提交草稿"
-  **没有**被端到端验证。`needs_angle` 的澄清目前只有模块级调用方拿得到。
+- **状态感知的题设回代仍未接进 `verifyDiagramObligations`**：折前条件（矩形、边长）要在折前状态核，
+  折后条件（两平面垂直、折后距离）在折后状态核；今天草稿核验仍是"最终文档 + 单一状态"。
+  这是 A3 最后一块，也是"用户案例的草稿态能显示 passed"的前提。
+- `localPlanner` 还没有本族的通用意图（浏览器无 provider 时走不到这条构造）。
 - 未支持：连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用、非矩形四边形折叠。
-- 构造坐标目前把 `ring[0]` 放原点、`ring[0]→ring[1]` 放 x 轴（内部坐标系）；与画布现有对象的相对位置无关。
+- 构造坐标把 `ring[0]` 放原点、`ring[0]→ring[1]` 放 x 轴（内部坐标系）；与画布现有对象的相对位置无关。
 
 ## 4. A4 Worker 不得把澄清包装成成功
 
@@ -165,7 +197,7 @@
 | 命令 | 结果 |
 | --- | --- |
 | `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
-| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **228 文件 / 2388 passed / 1 todo**，exit 0 |
+| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2398 passed / 1 todo**，exit 0（第二轮接线后；第一轮为 2388） |
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
@@ -188,10 +220,10 @@
 
 ## 9. 下一步（按优先级）
 
-1. 把 `readRectangleFold` / `buildRectangleFold` / `verifyRectangleFold` 接进 `planCompiler`：
-   由 spec 生成 `solid.create_face` + `solid.fold` 的动作，并让 `verifyDiagramObligations`
-   按状态核验；`needs_angle` 接到协调器的澄清分支。
-2. 假目标的 Agent 回答：在核验完整题设后，用 `evaluatePerpendicular` 的残差说明目标不成立，
-   不生成可提交草稿（需要与 `agentRunner` 的失败/澄清分支对齐）。
-3. 浏览器闭环（T08）与 `eval:reliability`（T01）后再谈 T02/T09。
-4. 文档：A3 接线完成后更新 `feature-catalog` 的翻折能力条目与 `current-status` 读数。
+1. **状态感知的题设回代**：让 `verifyDiagramObligations` 能按"折前 / 折后"分别核验
+   （折前条件用折片 `vertices` 的折前坐标，折后条件用最终文档）—— A3 收口的最后一块。
+2. `localPlanner` 的本族通用意图（无 provider 的浏览器路径也能用上确定性构造）。
+3. 把 `solveRectangleFold` 的 `needs_fold_angle` / `goal_does_not_hold` 接到协调器的
+   澄清分支（现在 planner 已经返回澄清信封，但协调器/UI 的文案与"不新建 run"的行为要端到端验）。
+4. 浏览器闭环（T08）与 `eval:reliability`（T01）后再谈 T02/T09。
+5. 文档：状态感知核验完成后更新 `feature-catalog` 的翻折能力条目与 `current-status` 读数。
