@@ -218,8 +218,25 @@
 
 **剩余**
 
-- `localPlanner` 无本族通用意图（无 provider 的浏览器路径走不到这条构造）。
 - 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用未做。
+
+### 3.4 本地通用族意图（本轮第四轮补）
+
+- `localPlanner` 新增 `RECTANGLE_FOLD` 意图（触发：`矩形` + 折起/翻起/翻折/折叠，`allowWhenAsking`）：
+  `build` 调 `solveRectangleFold(input.prompt)`，三种终态各自落地 ——
+  出计划（原样返回动作链）/ 缺折角（澄清问角度）/ 目标不成立（澄清说明哪条不成立 + 距离）；
+  读不全（缺边、折痕不是对角线）把原因交给用户。
+- **不逐字匹配原题**：边长、点名、折痕（AC 或 BD）都从题面读；代表题仍走上游既有夹具（本意图排在它们之后）。
+- 用例：`localPlanner.test.ts` 新增 4 条（完整题设出计划、缺折角、假目标、改名/改尺寸仍命中）。
+
+**结果**
+
+- 浏览器**无 provider** 时也能走到这条确定性构造（`createLocalPlanner` 的路径）。
+- 仍需浏览器 e2e 证明"预览 → 确认 → 撤销"（T08 未做）。
+
+**验证**
+
+- `localPlanner.test.ts` 63/63。
 
 ## 4. A4 Worker 不得把澄清包装成成功
 
@@ -269,7 +286,7 @@
 | 命令 | 结果 |
 | --- | --- |
 | `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
-| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2402 passed / 1 todo（230 文件）**，exit 0（第四轮矩形义务后；此前 2388 → 2398 → 2401） |
+| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2406 passed / 1 todo（230 文件）**，exit 0（第四轮本地通用意图后；2388 → 2398 → 2401 → 2402 → 2406） |
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |

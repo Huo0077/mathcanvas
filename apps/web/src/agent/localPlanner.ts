@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold } from "@draw/agent-core"
 
 import { USER_CHAIN_PROMPT, userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
@@ -384,8 +384,30 @@ function solidShapeIntentFor(prompt: string): LocalIntent | null {
   }
 }
 
-export const LOCAL_INTENTS: readonly LocalIntent[] = [
-  { all: ["圆台"], exact: ROUND_FRUSTUM_PROMPT, skillIds: ["spatial-modeling"], build: () => ROUND_FRUSTUM() },
+/**
+ * **矩形沿对角线折起**（A3，2026-10-26）：题面 → 确定性动作链 / 澄清。
+ *
+ * 与固定夹具的区别是**不匹配原题字符串**：边长、点名、折痕、折角都从 `solveRectangleFold`
+ * 读出来。缺折角或目标被否定时返回澄清（前者问角度、后者说明哪条不成立），
+ * 读不全时把原因原样交给用户 —— 三种终态都不猜。
+ */
+const RECTANGLE_FOLD = (input: LocalIntentInput): PlanEnvelope => {
+  const solved = solveRectangleFold(input.prompt)
+  if (solved.status === "plan") return solved.plan
+  if (solved.status === "clarification") {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: solved.reason === "needs_fold_angle" ? "矩形沿对角线折起：缺折角" : "矩形沿对角线折起：目标不成立",
+      factIds: [],
+      questions: [...solved.questions]
+    }
+  }
+  const reason = solved.status === "unsupported" ? solved.reason : "这条题面不是「矩形沿对角线折起」的完整题设。"
+  return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "矩形折叠：暂不支持", factIds: [], questions: [reason] }
+}
+
+export const LOCAL_INTENTS: readonly LocalIntent[] = [  { all: ["圆台"], exact: ROUND_FRUSTUM_PROMPT, skillIds: ["spatial-modeling"], build: () => ROUND_FRUSTUM() },
   { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   /**
    * **同一张图 + 一句可形式化的目标**（Task 18）：浏览器里证明通道不存在，
@@ -515,6 +537,14 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [
   { all: ["正方体"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["cube"], skillIds: ["spatial-modeling"], build: (input) => CUBE({ ...input, size: sizeFrom(input.prompt, 2) }) },
   { all: ["点"], any: ["画一个点", "画个点", "作一个点", "建一个点", "添加一个点", "画一点", "画点", "添加点"], skillIds: ["planar-basics"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
+  /**
+   * **矩形沿对角线折起**（A3，2026-10-26）：**通用族意图**，不逐字匹配原题 ——
+   * 边长、点名、折痕（AC 或 BD）、折角都从题面读。缺折角 / 目标被否定 ⇒ 澄清；
+   * 读不全（缺边、折痕不是对角线）⇒ 说明原因，不猜。
+   *
+   * 放在既有翻折夹具**之后**：代表题仍走它们原来的路径（不抢）。
+   */
+  { all: ["矩形"], any: ["折起", "翻起", "翻折", "折叠"], allowWhenAsking: true, skillIds: ["spatial-modeling"], build: RECTANGLE_FOLD },
   // 只读提问不产生动作，因此**不请求任何技能** —— 上下文里不该出现用不上的动作菜单。
   { all: ["有什么"], skillIds: [], build: () => COUNT_ANSWER() }
 ]
