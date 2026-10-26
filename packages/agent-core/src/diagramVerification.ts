@@ -1504,6 +1504,52 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (item.targets.length !== 1 || coordinate === undefined || ![coordinate.x, coordinate.y, coordinate.z].every(Number.isFinite)) return null
     return { actual: length(at(0), coordinate), expected: 0, tolerance: distanceTolerance(1) }
   }
+  if (item.kind === "rectangle") {
+    /**
+     * **矩形判据**（A3，2026-10-26）：四个点必须同时满足
+     * ① 非退化（面积 > 0）；② 顶点闭合（`A+C = B+D`，即平行四边形）；③ 共面；
+     * ④ 四个角都是直角。**只查"相邻边垂直"是不够的** —— 三维里斜四边形也能凑出三个直角。
+     *
+     * 返回值分两类：角不对时给**归一化点积**（无量纲），结构与共面不对时给**长度残差**。
+     */
+    if (vertices.length < 4) return null
+    const [a, b, c, d] = vertices as [Vector3, Vector3, Vector3, Vector3]
+    const sideLengths = [length(a, b), length(b, c), length(c, d), length(d, a)]
+    const scale = Math.max(...sideLengths)
+    if (!(scale > 1e-10)) return null
+    const normal = crossVector3(subtractVector3(b, a), subtractVector3(c, b))
+    const areaTwice = lengthVector3(normal)
+    const tolerance = distanceTolerance(scale)
+    if (!(areaTwice > 1e-10)) {
+      return { actual: Number.POSITIVE_INFINITY, expected: 0, tolerance, detail: "四边形面积为 0（退化），不是矩形。" }
+    }
+    const planeDistance = Math.abs(dotVector3(subtractVector3(d, a), normal)) / areaTwice
+    const closure = lengthVector3(subtractVector3(subtractVector3(b, a), subtractVector3(c, d)))
+    /**
+     * **相邻边垂直**：环上四条边向量 `AB / BC / CD / DA`，检查每一对相邻边的夹角
+     *（`AB·BC`、`BC·CD`、`CD·DA`、`DA·AB`）。注意不是"顶点到两个邻居"那种写法 ——
+     * 环上顶点 `A` 的邻居是 `B` 与 `D`，写成 `(A,B,C)` 会去量对角线 `AC` 与边 `AB` 的夹角。
+     */
+    const edges = [subtractVector3(b, a), subtractVector3(c, b), subtractVector3(d, c), subtractVector3(a, d)]
+    let worstCosine = 0
+    for (let index = 0; index < edges.length; index += 1) {
+      const left = edges[index]!
+      const right = edges[(index + 1) % edges.length]!
+      const denominator = lengthVector3(left) * lengthVector3(right)
+      if (!(denominator > 1e-20)) return null
+      worstCosine = Math.max(worstCosine, Math.abs(dotVector3(left, right) / denominator))
+    }
+    if (worstCosine > 1e-6) {
+      return { actual: worstCosine, expected: 0, tolerance: 1e-6, detail: `四个角里有不垂直的：最大 |cos|=${worstCosine.toPrecision(6)}。` }
+    }
+    const residual = Math.max(closure, planeDistance)
+    return {
+      actual: residual,
+      expected: 0,
+      tolerance,
+      detail: `闭合残差 ${closure.toPrecision(6)}、共面残差 ${planeDistance.toPrecision(6)}、最大 |cos|=${worstCosine.toPrecision(6)}。`
+    }
+  }
   if (item.kind === "fixedLength") {
     if (numeric === undefined) return null
     return { actual: length(at(0), at(1)), expected: numeric, tolerance: distanceTolerance(numeric) }
@@ -2155,7 +2201,7 @@ interface PreFoldState {
 
 /** 这些条件属于**折前图形**：长度、等长、比例、中点、点在线上、角、垂直、平行。 */
 const PRE_FOLD_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
-  "fixedLength", "equalLength", "segmentRatio", "midpoint", "pointOnSegment", "planarAngle", "perpendicular", "parallel"
+  "fixedLength", "equalLength", "segmentRatio", "midpoint", "pointOnSegment", "planarAngle", "perpendicular", "parallel", "rectangle"
 ])
 
 function preFoldStateOf(plan: PlanEnvelope, drawn: Map<string, Vector3>): PreFoldState | null {

@@ -72,7 +72,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** 施工单①（2026-10-15）：点在不在曲线上，由核验器拿内核的残差从**图上那一点**自己算（`pointOnConic` 支）。 */
   "pointOnConic",
   /** 2026-10-15：点在线段上（共线 + 落在线段内），由核验器从最终坐标自己算（`pointOnSegment` 支）。 */
-  "pointOnSegment"
+  "pointOnSegment",
+  /** A3（2026-10-26）：矩形（非退化 + 闭合 + 共面 + 四个直角），由核验器自己算。 */
+  "rectangle"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -101,6 +103,8 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "circumcenter") return { kind: "absolute", value: distanceTolerance(1) }
   /** **中位线比的是"端点到中点的偏差"**（2026-10-20）：长度量，按边长缩放。 */
   if (kind === "midline") return { kind: "absolute", value: distanceTolerance(1) }
+  /** 矩形残差是长度（闭合/共面），量级随边长走；角那一步用的是无量纲点积，见核验器。 */
+  if (kind === "rectangle") return { kind: "absolute", value: distanceTolerance(1) }
   /**
    * **实体标量尺寸**（2026-10-20 补）：半径 / 高 / 母线 / 底边长这些是长度，面积与体积随量级走 ——
    * 核验器那边用的是同一把 `distanceTolerance(量级)`，这里按题面写的那个数取量级。

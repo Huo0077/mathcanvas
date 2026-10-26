@@ -6,6 +6,13 @@ import { parseLengthChains } from "./lengthEquality"
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
   | "fixedLength" | "equilateral" | "equalLength" | "midpoint" | "segmentRatio"
+  /**
+   * **四边形是矩形**（A3，2026-10-26）：`targets` 是**环上的四个点**。
+   *
+   * 判据不能只看"相邻边垂直"：三维里三个直角**不足以**说明它是矩形（斜四边形也能凑出来）。
+   * 必须一起查**非退化 / 顶点闭合（平行四边形）/ 共面 / 四个角**，见 `diagramVerification`。
+   */
+  | "rectangle"
   | "planePerpendicular" | "dihedral" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
   | "acuteTriangle" | "rightTriangle" | "obtuseTriangle" | "pointInsideTriangle"
   /**
@@ -1315,6 +1322,26 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     /**
+     * **`矩形 ABCD 中` / `四边形 ABCD 是矩形`**（A3，2026-10-26）。
+     *
+     * 卷面最常见的矩形写法是**前置形状名**（`矩形 ABCD 中，AB=4…`），而此前只有
+     * `面 ABCD 是矩形` 那一种语序 ⇒ 整句落进"未核验"，折前条件永远过不了门禁。
+     *
+     * 落成**一条** `rectangle` 义务（四个点），而不是拆成三条 `perpendicular`：
+     * 三维里三个直角不足以定出矩形，判据必须一起看非退化/闭合/共面（见 `diagramVerification`）。
+     * `rectangleFold` 那条折前状态核验会按折片折前坐标量它。
+     */
+    pattern: new RegExp(`(?:矩形|长方形)\\s*(${POINT_NAME}${POINT_NAME}${POINT_NAME}${POINT_NAME})|四边形\\s*(${POINT_NAME}${POINT_NAME}${POINT_NAME}${POINT_NAME})\\s*(?:是|为)\\s*(?:矩形|长方形)`, "g"),
+    read: (m) => {
+      const raw = m[1] ?? m[2]
+      if (raw === undefined) return null
+      const ring = names(raw)
+      if (ring.length !== 4) return null
+      return { kind: "rectangle" as const, targets: ring }
+    }
+  },
+  {
+    /**
      * **`侧面 AA₁B₁B 为正方形`**（2026-10-15 用户现场，直三棱柱那道题）。
      *
      * 现场：这句**读得出、验不了**（`relation_not_checkable`），于是整轮停在"题设还没核验，
@@ -1350,6 +1377,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
         { kind: "perpendicular" as const, targets: [c, d, d, a] }
       ]
       if (m[2] === "菱形") return equalEdges
+      if (m[2] === "矩形" || m[2] === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
       if (m[2] !== "正方形") return rightAngles
       return [...equalEdges, ...rightAngles]
     }

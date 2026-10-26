@@ -184,10 +184,42 @@
 
 **剩余**
 
-- `矩形 ABCD` 这个**形状从句本身**还没有进题设账（仍落未核验），
-  所以用户案例的草稿态还到不了 `passed`。下一步是新增 `rectangle` 义务
-  （闭合/直角/共面/非退化，按折前状态核），并同步 `obligationIR` 的已判种类表。
 - 折后条件里"点在折片上的位置"这类需要状态链的量仍未覆盖。
+- `localPlanner` 仍未接本族通用意图。
+
+### 3.3 矩形义务与用户案例的草稿态（本轮第四轮补）
+
+**改动**
+
+- `diagramObligations.ts`：新增 `rectangle` 义务（`targets` = 环上四点），收两种语序：
+  `矩形 ABCD 中` / `长方形 ABCD`（前置形状名）与 `四边形 ABCD 是矩形`；
+  `面/侧面 … 是矩形` 那条旧句型也改为落 `rectangle`（原来拆成三个 `perpendicular`）。
+- `diagramVerification.ts`：新增矩形判据 —— **非退化**（面积 > 0）、**顶点闭合**（`A+C = B+D`）、
+  **共面**（D 到平面 ABC 的距离）、**相邻边两两垂直**（环上四条边向量，注意不是"顶点到两个邻居"
+  那种写法，那是量对角线）。角不对时给归一化点积，结构与共面不对时给长度残差。
+  `rectangle` 进 `PRE_FOLD_KINDS`：折前状态核。
+- `obligationIR.ts`：`rectangle` 进已判种类表，容差按绝对长度（残差是闭合/共面）。
+
+**结果**
+
+- 用户案例（`矩形 ABCD`、`AB=4`、`BC=2`、`AB⊥BC`、`BD=2√5`、两平面垂直、折起）现在
+  **全部 checks `passed`**，`diagramVerification.status === "passed"` —— 题设账干净，
+  折前条件用折前坐标、折后条件用折后坐标、矩形用四条判据一起核。
+- 假目标（`求证 BD⊥AC`）仍在 `modelPlanner` 的请求前安全闸被拦成澄清，**不生成可提交草稿**。
+- 负例：把折片折前坐标里的 B 挪成不闭合 ⇒ `rectangle` 判 `failed`（不是只查相邻边垂直）。
+
+**验证**
+
+- `rectangleFoldStateVerification.test.ts` 4/4（含"整体 passed"与"不闭合 ⇒ rectangle failed"）。
+- `faceShapeReaders.test.ts` 的"矩形 ⇒ 三个直角"按新事实翻转成"一条 `rectangle` 义务"
+  （旧拆法在三维里不成立：斜四边形也能凑出三个直角）；正方形/菱形两条不变。
+- 全量 `packages/agent-core` + `apps/web/src/agent`：**2402 passed / 1 todo（230 文件）**，exit 0；
+  `npm run typecheck` 0；`eslint .` 0；`docs-consistency` 0；`@draw/web` build 0。
+
+**剩余**
+
+- `localPlanner` 无本族通用意图（无 provider 的浏览器路径走不到这条构造）。
+- 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用未做。
 
 ## 4. A4 Worker 不得把澄清包装成成功
 
@@ -237,7 +269,7 @@
 | 命令 | 结果 |
 | --- | --- |
 | `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
-| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2401 passed / 1 todo**，exit 0（第三轮状态核验后；第一轮 2388、第二轮 2398） |
+| `npx vitest run packages/agent-core apps/web/src/agent --maxWorkers=1` | **2402 passed / 1 todo（230 文件）**，exit 0（第四轮矩形义务后；此前 2388 → 2398 → 2401） |
 | `npx vitest run scripts/docs-consistency --maxWorkers=1` | exit 0 |
 | `npx eslint .` | exit 0 |
 | `npm run build --workspace @draw/web` | exit 0（`✓ built in 4.83s`；仅有 Vite 的既有 chunk 体积提示） |
