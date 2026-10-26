@@ -53,7 +53,7 @@
 
 - **澄清与空结果不会被包装成成功暂存（2026-10-26，A4 验收）**：编译结果 `ok:true` 但 `draftDocument:null` 时，草稿层按失败处理并保留数学澄清（`needs_more_information`）或原诊断码；失败前后预览哈希与草稿版本不变。in-process 与生产 Worker 两条路对同一份缺半径的圆柱计划给出同一原因码与同一句问题正文。见 [`docs/audit/2026-10-26-reliability-phase1.md`](audit/2026-10-26-reliability-phase1.md)。
 
-- **完整链路评测入口（2026-10-27，T01 部分）**：`npm run eval:reliability` 三种互斥模式 —— `--offline`（本地确定性规划器，无费用）、`--replay FILE`（回放记录的逐轮信封，缺一轮就标未完成，不补）、`--allow-paid --max-requests N`（真实模型，另需 `DEEPSEEK_API_KEY`，否则 exit 2 拒绝启动）。链路走生产 `createAgentRuntime`（真实 `DraftStore`、编译器与协调器），每题干净文档/会话，停在待确认/澄清，**从不自动确认**（`writeDocument` 断言 0 次）；逐题原子 JSON + `summary.json` + `replay.json`；费用未知记 `null`，不写 0。当前题单是 **dev-smoke 4 条**，不是验收题单。见[执行台账](audit/2026-10-26-reliability-phase1.md) §4.5。
+- **完整链路评测入口（2026-10-27，T01 部分）**：`npm run eval:reliability` 三种互斥模式 —— `--offline`（本地确定性规划器，无费用）、`--replay FILE`（回放记录的逐轮信封，缺一轮就标未完成，不补）、`--allow-paid --max-requests N`（真实模型，另需 `DEEPSEEK_API_KEY`，否则 exit 2 拒绝启动）。链路走生产 `createAgentRuntime`（真实 `DraftStore`、编译器与协调器），每题干净文档/会话，停在待确认/澄清，**从不自动确认**（`writeDocument` 断言 0 次）；逐题原子 JSON + `summary.json` + `replay.json`；费用未知记 `null`，不写 0。另有**取消**（终态 `cancelled`、0 写入）与**预算中断**（修复轮被总预算拒绝、规划器只问一次）两条机制证据。当前题单是 **dev-smoke 4 条**，不是验收题单。见[执行台账](audit/2026-10-26-reliability-phase1.md) §4.5。
 
 - **中位线有判据了（2026-10-20，那批"只有显形"里最常用的一个）**：`DE 是 △ABC 的中位线` 读成 `midline`（`targets` = [D, E, A, B, C]）。**难点是"哪两条边"** —— 题面不说，而三对边各有一条中位线；所以判据**不猜**：三条边的中点全算出来，问 `D`、`E` 是不是**恰好落在其中两个不同的中点**上（**存在性**，与"旁心是三个之一"同一种读法）。中位线定理的另外两条（`DE ∥ 第三边`、`DE = 第三边的一半`）**因此不必单独判** —— 两端都是中点时它们自动成立，多判一条只是把同一件事说三遍。**一条边界**：`梯形 ABCD 的中位线` 是**另一条定理**（上下底之和的一半），句型要求"两个点名 + 三角形三顶点"，所以梯形写法读不出来、如实落未核验。
 

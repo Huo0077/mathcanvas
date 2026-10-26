@@ -313,7 +313,13 @@
 
 **实测读数**
 
-- `npm run eval:reliability -- --offline` → **1 test passed**；summary：**4/4 passed、requests=4、incomplete=0、costUsd=null**。
+- `npm run eval:reliability -- --offline` → **3 tests passed**；summary：**4/4 passed、requests=4、incomplete=0、costUsd=null**；
+  另有 `mechanism-cancel.json` 与 `mechanism-budget.json`。
+- **取消**：用一个"进门后挂住"的规划器把取消点钉在规划返回之后 ⇒ `cancelAccepted=true`、
+  终态 `cancelled`、事件停在 `planning`、`liveWrites=0`（迟到的计划没有被暂存或提交）。
+- **预算中断**：第一份计划是退化棱柱（编译期拒绝并给修复请求），`generation` 上限给 1 ⇒
+  修复轮被总预算拒绝：终态 `failed`、**规划器只被问了一次**、`liveWrites=0`，
+  账本尾条为 `budget exhausted: budget_repair；额度：generation 还剩 0、network 还剩 7`。
 - 用上一次运行产出的 `replay.json` 回放 → **1 test passed**（4/4，不补轮次）。
 - `--help` 打印三种模式与费用口径；`--allow-paid --max-requests 2`（无密钥）→ **exit 2**，
   消息为 "live mode requires DEEPSEEK_API_KEY; refusing to start (no automatic spend)"。
@@ -323,7 +329,8 @@
 - **T02 题单与独立 oracle 未做**：当前 4 条是开发冒烟，不能当质量分母。
 - **真实模型基线未跑**（无凭据/费用授权）；live 模式的逐轮**原始响应**没有落盘（只有信封），
   真实成本也仍无法可靠计量 ⇒ 质量与费用门槛保持**未完成**。
-- 预算记账目前只到"协调器 + 模型预算"这一层，尚未把工具续轮/降级/修复的请求数逐项归并进 summary。
+- 请求数目前只归并"规划轮次"（含协调器修复轮）；**工具续轮 / 传输重试 / 降级**的请求数
+  要等真实模型路径接通后再逐项并入 summary。
 
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
@@ -332,7 +339,7 @@
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
 | T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
-| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放已实现（§4.5）；dev-smoke 4 条；真实模型基线、逐轮原始响应、逐项请求归并未完成 |
+| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断已实现（§4.5）；dev-smoke 4 条；真实模型基线、逐轮原始响应、工具续轮等请求归并未完成 |
 | T02 开发集 20 题 / 验收集 60 题 | **未开始** | 未生成、未独立复核，不冒充 |
 | T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
 | T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
@@ -355,7 +362,7 @@
 | `npx playwright test e2e/agent-fold-preview.spec.ts --workers=1` | exit 0（既有翻折预览回归） |
 | `npx playwright test e2e/agent-rectangle-fold.spec.ts --workers=1` | **3 passed**（本族：预览/确认/撤销、假目标澄清、缺折角澄清） |
 | `npx playwright test` 翻折/连等子集（5 个 spec） | **7 passed**（既有代表题未被新意图抢走） |
-| `npm run eval:reliability -- --offline` | **1 test passed**；summary **4/4 passed、requests=4、incomplete=0、costUsd=null** |
+| `npm run eval:reliability -- --offline` | **3 tests passed**；summary **4/4 passed、requests=4、incomplete=0、costUsd=null**；另写 cancel / budget 机制报告 |
 | `npm run eval:reliability -- --replay <上次的 replay.json>` | **1 test passed**（4/4，不补轮次） |
 | `npm run eval:reliability -- --allow-paid --max-requests 2`（无密钥） | **exit 2**（拒绝启动，不发生任何付费请求） |
 

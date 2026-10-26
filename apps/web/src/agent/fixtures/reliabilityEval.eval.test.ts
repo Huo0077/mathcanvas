@@ -1,6 +1,7 @@
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import type { PlanEnvelope, PlannerPort, RunPhase } from "@draw/agent-core"
+import { createBudget } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { createAgentRuntime } from "../agentRuntime"
@@ -192,11 +193,12 @@ function exportPreflight() {
   }
 }
 
-function runtimeFor(planner: PlannerPort, runId: string) {
+function runtimeFor(planner: PlannerPort, runId: string, budget?: ReturnType<typeof createBudget>) {
   let current = createEmptyDocument("geometry3d")
   const written: GeometryDocument[] = []
   const stages: { ok: boolean; verification?: { status: string; checks: readonly { kind: string; status: string; sourceText: string }[] } }[] = []
   const runtime = createAgentRuntime({
+    ...(budget === undefined ? {} : { budget }),
     readDocument: () => current,
     writeDocument: (candidate) => {
       written.push(candidate)
@@ -325,4 +327,107 @@ describe("完整的协调器链路评测（T01）", () => {
     // 费用未知就是未知。
     expect(reports.every((report) => report.costUsd === null && report.costKnown === false)).toBe(true)
   }, 300_000)
+
+  /**
+   * **取消**（T01 要求：取消后及时收尾、且不写现场文档）。
+   *
+   * 用一个"进门后挂住"的规划器把取消点钉在**规划返回之后**：协调器在 `plan()` 之后有
+   * `if (cancelled) return`，所以迟到的计划不会被暂存、更不会被提交。
+   */
+  it("取消：迟到的规划器不会写用户文档", async () => {
+    let releasePlanner!: () => void
+    const gate = new Promise<void>((resolve) => { releasePlanner = resolve })
+    let plannerEntered!: () => void
+    const entered = new Promise<void>((resolve) => { plannerEntered = resolve })
+    const planner: PlannerPort = {
+      async plan() {
+        plannerEntered()
+        await gate
+        return { plan: cubeEnvelope(), requestId: "cancel-1", attemptId: "cancel-1" }
+      }
+    }
+    const { runtime, written, current } = runtimeFor(planner, "reliability-cancel")
+    const events: RunPhase[] = []
+    const consuming = (async () => {
+      for await (const event of runtime.coordinator.start({ run: runContext(current(), "reliability-cancel"), userMessage: "建一个棱长 3 的立方体" })) events.push(event.phase)
+    })()
+    await entered
+    const cancelResult = runtime.coordinator.cancel("user")
+    releasePlanner()
+    await consuming
+
+    expect(cancelResult.cancelled).toBe(true)
+    expect(runtime.coordinator.phase()).toBe("cancelled")
+    expect(written).toHaveLength(0)
+    expect(current().primitives).toHaveLength(0)
+    expect(events).not.toContain("awaiting_confirmation")
+    await writeSolidReport(`${REPORT_DIR}/mechanism-cancel.json`, {
+      id: "cancel", mode: MODE, revision: REVISION, phase: "infrastructure",
+      cancelAccepted: cancelResult.cancelled, terminal: runtime.coordinator.phase(),
+      liveWrites: written.length, events, costUsd: null, costKnown: false
+    }, [env.DEEPSEEK_API_KEY ?? ""])
+  }, 60_000)
+
+  /**
+   * **预算中断**（T01 要求：修复共用总预算；被拒即停、不改文档）。
+   *
+   * 第一份计划是一笔**退化棱柱**（编译期拒绝并给修复请求）；`generation` 上限给 1，
+   * 于是"再问一次修一修"这一步被预算拒绝 —— 终态必须是 `failed`，规划器**只被问了一次**。
+   */
+  it("预算耗尽：修复轮被总预算拒绝，不写用户文档", async () => {
+    let calls = 0
+    const planner: PlannerPort = {
+      async plan() {
+        calls += 1
+        if (calls > 1) throw new Error("budget should have stopped the run before a second plan call")
+        return { plan: degeneratePrismEnvelope(), requestId: "budget-1", attemptId: "budget-1" }
+      }
+    }
+    const { runtime, written, current } = runtimeFor(planner, "reliability-budget", createBudget({ generation: 1 }))
+    const events: RunPhase[] = []
+    for await (const event of runtime.coordinator.start({ run: runContext(current(), "reliability-budget"), userMessage: "画一个棱柱" })) events.push(event.phase)
+
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.coordinator.phase()).toBe("failed")
+    expect(calls).toBe(1)
+    expect(written).toHaveLength(0)
+    const ledger = [...runtime.coordinator.ledger()]
+    const last = ledger.at(-1)
+    expect(JSON.stringify(last)).toMatch(/budget|额度/)
+    await writeSolidReport(`${REPORT_DIR}/mechanism-budget.json`, {
+      id: "budget", mode: MODE, revision: REVISION, phase: "infrastructure",
+      terminal: runtime.coordinator.phase(), plannerCalls: calls, liveWrites: written.length, events,
+      ledgerTail: last === undefined ? null : { phase: last.phase, detail: last.detail },
+      costUsd: null, costKnown: false
+    }, [env.DEEPSEEK_API_KEY ?? ""])
+  }, 60_000)
 })
+
+function cubeEnvelope(): PlanEnvelope {
+  return {
+    schemaVersion: "mathcanvas.plan.v1",
+    kind: "plan",
+    goal: "建一个棱长 2 的立方体",
+    factIds: [],
+    actions: [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } }]
+  }
+}
+
+function degeneratePrismEnvelope(): PlanEnvelope {
+  return {
+    schemaVersion: "mathcanvas.plan.v1",
+    kind: "plan",
+    goal: "退化棱柱（拉伸向量为零）",
+    factIds: [],
+    actions: [{
+      actionId: "solid.create_prism",
+      actionKey: "d",
+      factIds: [],
+      inputs: {
+        alias: "d",
+        basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }],
+        vector: { x: 0, y: 0, z: 0 }
+      }
+    }]
+  }
+}
