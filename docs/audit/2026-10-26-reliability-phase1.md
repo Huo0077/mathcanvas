@@ -406,7 +406,7 @@
 | --- | --- | --- |
 | T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
 | T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断 / 题单外置 / **独立 oracle 回代**（§4.5–4.6）；**2026-10-27 起 dev-smoke 14 条全部执行、14 通过、`incomplete = 0`（无跳过）**（§10.2）；真实模型基线与工具续轮等请求归并**未完成** |
-| T02 开发集 20 题 / 验收集 60 题 | **部分** | dev-smoke 14 条已外置并带来源/预期/oracle，**2026-10-27 起 14/14 执行且全部通过**；**未到 20/60、未独立复核**，不能当验收 |
+| T02 开发集 20 题 / 验收集 60 题 | **部分** | **2026-10-27 第二块：dev-smoke 扩到 22 条**（常规 5 / 翻折 7 / 表达变式 5 / 负例 5），22/22 执行且全部通过，16 条带独立 oracle（§11）；**仍未到任务书的分母口径（20 条开发集 + 60 条验收集）、`reviewStatus` 全是 `unreviewed`（没有独立复核）**，不能当验收 |
 | T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
 | T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
 | T05 状态执行/求解/回代 | **部分** | 矩形单折的构造、计划与回代已做；`coupledFolds` 未接矩形分支 |
@@ -453,6 +453,20 @@
 （= 旧行为）⇒ 矩形 `AB=2BC=4` 那条新用例变红；改成 `const split = false && …`（= 只比长度比）
 ⇒ `DE=2EA` 离轴反例那条变红。两条都不是"写完就绿"的假判据。
 
+### 6.2 2026-10-27 第二块（题单 22 条 + 两种新 oracle 事实）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **22/22 ran、22 passed、0 skipped、incomplete=0、firstAttemptPassed=22**；16 条带独立 oracle 全部 `passed`；`costUsd: null` |
+| `npx vitest run apps/web/src/agent/fixtures/reliabilityOracle.test.ts` | **6 passed**（新增 4 条：`segment-ratio` / `angle` 的正例与反例、两种新事实的缺点名） |
+| `npx vitest run`（全量） | **495 文件 / 5244 通过 + 1 todo / 0 失败**，exit 0（178.0 s） |
+| `npm run typecheck` | **exit 0** |
+| `npx eslint .` | **exit 0**（0 error / 17 warning，既有未用变量） |
+| `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
+
+**回到 §5 的 T02**：题单从 14 条扩到 22 条并按"常规 5 / 翻折 7 / 表达变式 5 / 负例 5"记账，
+但 `reviewStatus` 仍是 `unreviewed`、也没有 60 题验收集 ⇒ **T02 仍是"部分"**，不能当验收。
+
 ## 7. 真实模型与费用
 
 - 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub；`eval:reliability` 只跑过 `--offline` 与 `--replay`。
@@ -497,7 +511,10 @@
    修好后去掉 `rect-fold-chain` 的 `knownIssue`，`incomplete` 回到 0。~~ **2026-10-27 已完成**，见 §10。
    剩余边界（如实）：`AB=2BC` **不带绝对长度锚点**时仍按定比分点读（`splitPoint: true`）——
    与 `DE=2EA` 语法完全同形，见 §10.4。
-2. **（下一块）** 把 dev 题单补到 20 条（任务书分布：常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并给常规/表达题补更多 oracle 类型。
+2. ~~**（下一块）** 把 dev 题单补到 20 条（任务书分布：常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并给常规/表达题补更多 oracle 类型。~~
+   **2026-10-27 已完成并超出（22 条：常规 5 / 翻折 7 / 表达变式 5 / 负例 5，新增 `segment-ratio` 与 `angle` 两种 oracle 事实）**，见 §11。
+   下一块按 §11.5 的四个缺口排：① `长方形` 同义词（折起求解器）；② 折起求解器的边长只认"逐条长度"（`AB:BC=2:1，AB=4` 读不出）；
+   ③ 无长度锚点的 `AB=2BC` 与定比分点同形（§10.4）；④ 本地规划器忽略"坐标是 (1,2)"。
 3. **T01 `eval:reliability`** 的剩余项：真实模型基线、逐轮原始响应、工具续轮/重试/降级的请求归并。
 4. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
 5. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。
@@ -563,3 +580,64 @@
 | 紧随其后的文档提交 | 本文件 §4.7 / §5 / §6.1 / §9 / §10、`docs/current-status.md`、`CHANGELOG.md`、`docs/feature-catalog.md`、`docs/project-progress.md` |
 
 推送按本仓纪律走"先 `git fetch` 再看 ahead/behind、然后 `git push`（禁止强推）"。本轮推送结果见 §8 末尾追加的那条。
+
+**推送记录（2026-10-27，+08:00）**：`git fetch origin` 之后 `git rev-list --left-right --count origin/main...main` 为 `0 2`（远端无新提交 ⇒ 不覆盖别人），
+`git push origin main` → **`92e2ed05..1193e85a main -> main`**（快进、非强制），推送后为 `0 0`。
+
+## 11. 2026-10-27 第二块：dev 题单扩到 22 条 + 两种新 oracle 事实
+
+### 11.1 题单分布（`test-fixtures/reliability/dev-smoke.json`，22 条）
+
+| 类别 | 条数 | 用例 id | 与任务书的关系 |
+| --- | --- | --- | --- |
+| 常规构图 | 5 | `cube`、`sphere`、`prism`、`tetra-regular`（正四面体，棱长 2）、`planar-point`（平面点） | 任务书要 5 ✔ |
+| 翻折 | 7 | `rect-fold-length`、`-renamed`、`-other-diagonal`、`-square-true-goal`、`-face-first`、`-bd-triangle-bcd`（3×6，折痕 BD，折 △BCD）、`-other-flap`（4×2，折痕 BD，折的是另一侧 △ABD） | 任务书要 7 ✔ |
+| 表达变式 | 5 | `rect-fold-chain`（长度 + 连等各写一次）、`-ratio-only`（只给 `AB=2BC=4`）、`-fold-later`（`将 △ABC 沿 AC 折起` 后置语序）、`-side-prefix`（`边长 AB=4、BC=2`）、`-tight-spacing`（`平面 ABC⊥平面 ACD` 无空格） | 任务书要 5 ✔ |
+| 负例 | 5 | `-false-goal`、`-no-angle`、`-missing-side`、`-unsupported-sum`、`-unrelated-planes` | 任务书要 3，**多 2 条**：这两条是既有回归，删掉会丢覆盖 |
+
+`notice` 里写的是这同一组数，题单自己就能对账。**每一题都带 `provenance.source` 与 `reviewStatus: unreviewed`** ——
+它们是开发冒烟，不是 T02 的验收题单（那条要 20/60 题 + 独立复核，仍未做）。
+
+### 11.2 两种新 oracle 事实（`reliabilityOracle.ts`）
+
+| 事实 | 口径 | 为什么加 |
+| --- | --- | --- |
+| `segment-ratio` | `\|ab\| / \|cd\| = value`（相对容差 1e-6） | §4.7 那条缺陷的形状就是"两段之比"；产品侧改成只比长度比之后，**oracle 侧也必须能独立量出同一个比值**，否则这条判据只在产品内部自说自话 |
+| `angle` | `∠((b−a), (d−c))`，单位度 | 翻折题最有用的不变量是"折片与折痕的夹角折叠前后不变"（`∠(AB′, AC) = ∠BAC = 26.565…°`），它不依赖折起多少度，能把"折片没被拉长/压扁"独立钉住 |
+
+**RED → GREEN**：三条新用例先在 `evaluateOracle` 上真红（未知 kind 掉进 `point-coordinate` 那支 ⇒ 判 `failed`、
+且缺点名时给出的是一句空话 `缺点名：。`）；补齐两支 + 名字检查后 **6/6 通过**，其中两条各自带一个反例
+（比值写错、折错的图 ⇐ 都必须 `failed`）。
+
+顺带一处诊断改进：`primitive-count` 不指定 `type` 时，`detail` 现在会**列出实际都有哪些图元类型**
+（`point3×1` 这种）。这一条不是装饰 —— 本轮就是靠它查清"平面点在候选文档里是 `point3` 而不是 `point`"。
+
+### 11.3 新题是怎么选进来的（探针 → 只收真的过了的）
+
+先写**探针题单**（不提交），逐条跑 `--offline` 看真实终态，只有"计划成立 + 题设核验 passed + 独立 oracle passed"
+的才进正式题单：
+
+| 探针写法 | 终态 | 处置 |
+| --- | --- | --- |
+| `长方形 ABCD 中，AB=6，BC=3，沿对角线 BD 把 △BCD 折起…` | clarification | **不收**：`长方形` 这个同义词在折起求解器里不认（缺口 ①） |
+| `矩形 ABCD 中，AB:BC=2:1，AB=4，…` | clarification（缺少边） | **不收**：折起求解器只认"逐条给出长度"，"比例 + 一条边"读不出（缺口 ②） |
+| `矩形 ABCD 中，AB=4，BC=2，且 AB=2BC，…` | failed | **不收**：`AB=2BC` 无长度锚点 ⇒ 按定比分点读（§10.4 的已知边界，缺口 ③） |
+| `画一个点，坐标是 (1, 2)。` | plan，但点是 **(1, 0)** | **不收**：本地规划器只取第一个数字（缺口 ④）；换成 `画一个点。` 后进题单 |
+| 其余 8 条（正四面体 / 平面点 / 3×6 折 △BCD / 折另一侧 △ABD / `AB=2BC=4` / 后置语序 / `边长…` / 无空格垂直） | plan + `passed` | **收进题单** |
+
+### 11.4 读数（2026-10-27，本机）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **22/22 ran、22 passed、0 skipped、incomplete=0、firstAttemptPassed=22**；**16 条**带独立 oracle 且全部 `passed`；`costUsd: null`、`costKnown: false` |
+| `npx vitest run apps/web/src/agent/fixtures/reliabilityOracle.test.ts` | **6 passed**（新增 4 条：两种事实的正例 + 两种反例 + 缺点名） |
+| 全量单测 / `typecheck` / `eslint` / `docs-consistency` | 见 §6.2 |
+
+### 11.5 这一块**没做**的事（如实）
+
+- **T02 的 20/60 题与独立复核**：仍是 22 条开发冒烟，题单里的 `reviewStatus` 全部是 `unreviewed`
+  —— 没有第二个人复核过这些题面与 oracle，所以**不能当验收**。
+- **真实模型**：0 次调用（无凭据）。题单现在能在 live 模式下跑，但没有跑过。
+- **下面四个缺口没修**（下一块的候选，按发现顺序）：① `长方形` 同义词；② 折起求解器只认"逐条长度"；
+  ③ 无长度锚点的 `AB=2BC` 与定比分点同形；④ 本地规划器忽略"坐标是 (1,2)"。
+- **本轮 e2e 未跑**（同 §10.4：改动只在题单、oracle 与上一块的解析/核验）。

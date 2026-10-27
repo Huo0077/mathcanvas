@@ -8,6 +8,14 @@
 
 
 
+## 2026-10-27 —— 可靠性评测题单扩到 22 条 + 两种新 oracle 事实（开发版）
+
+- `test-fixtures/reliability/dev-smoke.json` 由 14 条扩到 **22 条**：常规构图 5（正方体 / 球 / 棱柱 / 正四面体 / 平面点）、翻折 7（新增"3×6 折痕 BD 折 △BCD"与"4×2 同一折痕折另一侧 △ABD"）、表达变式 5（新增"只给连等 `AB=2BC=4` / `将 △ABC 沿 AC 折起` 后置语序 / `边长 AB=4、BC=2` / 无空格 `平面 ABC⊥平面 ACD`"）、负例 5（任务书是 3，多出的 2 条是既有回归）。每条都带来源与 `reviewStatus: unreviewed`。
+- 独立 oracle 新增两种事实：`segment-ratio`（`|ab|/|cd|`，把"两条边的长度比"从产品外部独立量一次）与 `angle`（两条向量夹角，用来钉"折片与折痕的夹角折叠前后不变"，`∠(AB′, AC)=∠BAC=26.565…°`）。两者都带正例与反例，缺点名时逐条说清缺谁。`primitive-count` 不指定 `type` 时，诊断会列出候选文档里实际有哪些图元类型。
+- 题单里的新题**先跑探针再收**：只有"计划成立 + 题设核验 passed + 独立 oracle passed"才进正式题单；`长方形` 同义词、`AB:BC=2:1，AB=4`、`AB=4，BC=2，且 AB=2BC`、`画一个点，坐标是 (1,2)` 四条探针没通过，**如实记成缺口而不写进题单当通过**。
+- 读数：`eval:reliability -- --offline` **22/22 ran、22 passed、0 skipped、incomplete 0**、16 条独立 oracle 全 `passed`、`costUsd=null`；`reliabilityOracle.test.ts` 6 passed；全量单测 **495 文件 / 5244 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。过程见[执行台账](docs/audit/2026-10-26-reliability-phase1.md) §11。
+- **没做**：T02 的 20/60 题与独立复核（题单仍是开发冒烟）、真实模型调用（0 次，费用未知）、本轮 e2e、§11.5 列出的四个缺口（下一块）。
+
 ## 2026-10-27 —— `segmentRatio` 共享端点缺陷修复（开发版）
 
 - `AB=2BC=4`（矩形两条边的长度比）与 `DE=2EA`（定比分点）在 `targets` 上完全同形（`[A,B,B,C]` / `[D,E,E,A]`），旧判据用"中间点名重复"当唯一线索 ⇒ 矩形上要求 `|AB|+|BC|=|AC|`（残差 1.5279）⇒ 该表达变式题编译失败。现在由**读取器**写下来源：`segmentRatio` 增可选 `splitPoint`，核验器只读标志 —— 只有"中间点名重复"形状**且**来源不是 `false` 时才同时要求共享点落在外两点之间；`false` 时只比长度比（不替题面断言共线）。

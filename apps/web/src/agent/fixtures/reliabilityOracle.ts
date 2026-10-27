@@ -25,6 +25,19 @@ export type OracleFact =
   | { kind: "point-count"; minimum: number }
   /** 候选文档里某类图元至少有几个（`type` 省略时数全部）。 */
   | { kind: "primitive-count"; type?: string; minimum: number }
+  /**
+   * **两段长度之比** `|ab| / |cd|`（2026-10-27）：题面里"两条边的长度比"那一族（`AB=2BC`、
+   * `AB=2BC=4`）与"定比分点"在形状上分不开，产品侧改成读读取器写下的来源；
+   * oracle 侧就**只量比值** —— 两边各量各的，谁都不看对方的解析结果。
+   */
+  | { kind: "segment-ratio"; a: string; b: string; c: string; d: string; value: number }
+  /**
+   * **两条向量的夹角（度）** `∠((b−a), (d−c))`（2026-10-27）。
+   *
+   * 翻折题里最有用的不变量是"折片与折痕的夹角折叠前后不变"（`∠(AB′, AC) = ∠BAC`）：
+   * 它只依赖刚体运动，不依赖折起多少度，所以能独立地把"折片没被拉长/压扁"钉住。
+   */
+  | { kind: "angle"; a: string; b: string; c: string; d: string; value: number }
 
 export type Oracle = { facts: readonly OracleFact[] }
 
@@ -77,6 +90,14 @@ function close(actual: number, expected: number): boolean {
   return Math.abs(actual - expected) <= DISTANCE_TOLERANCE * Math.max(1, Math.abs(actual), Math.abs(expected))
 }
 
+/** 两条向量的夹角（度）。任一向量退化时返回 `null`（不猜一个角度出来）。 */
+function angleDegrees(left: Vec, right: Vec): number | null {
+  const scale = norm(left) * norm(right)
+  if (!(scale > 1e-12)) return null
+  const cosine = Math.max(-1, Math.min(1, dot(left, right) / scale))
+  return (Math.acos(cosine) * 180) / Math.PI
+}
+
 /**
  * 把题单的 oracle 逐条回代到候选文档。
  *
@@ -91,10 +112,18 @@ export function evaluateOracle(candidate: unknown, oracle: Oracle): OracleResult
   for (const fact of oracle.facts) {
     if (fact.kind === "primitive-count") {
       const matched = primitives.filter((primitive) => fact.type === undefined || (primitive as { type?: unknown }).type === fact.type)
+      // 不指定 `type` 时把**实际都有哪些类型**也说出来：题单写错类型名时，这条 detail 是唯一的线索。
+      const byType = new Map<string, number>()
+      for (const primitive of primitives) {
+        const type = (primitive as { type?: unknown }).type
+        const key = typeof type === "string" ? type : "(无 type)"
+        byType.set(key, (byType.get(key) ?? 0) + 1)
+      }
+      const inventory = [...byType.entries()].map(([type, count]) => `${type}×${count}`).join("、")
       results.push({
         fact,
         status: matched.length >= fact.minimum ? "passed" : "failed",
-        detail: `候选文档里${fact.type === undefined ? "全部图元" : ` ${fact.type} 图元`} ${matched.length} 个，至少要求 ${fact.minimum} 个。`
+        detail: `候选文档里${fact.type === undefined ? "全部图元" : ` ${fact.type} 图元`} ${matched.length} 个，至少要求 ${fact.minimum} 个${fact.type === undefined && inventory.length > 0 ? `（实际类型：${inventory}）` : ""}。`
       })
       continue
     }
@@ -126,7 +155,7 @@ export function evaluateOracle(candidate: unknown, oracle: Oracle): OracleResult
       })
       continue
     }
-    const needed = fact.kind === "distance" ? [fact.a, fact.b] : fact.kind === "dot" ? [fact.a, fact.b, fact.c, fact.d] : [fact.name]
+    const needed = fact.kind === "distance" ? [fact.a, fact.b] : fact.kind === "dot" || fact.kind === "segment-ratio" || fact.kind === "angle" ? [fact.a, fact.b, fact.c, fact.d] : [fact.name]
     const missing = needed.filter((name) => !points.has(name))
     if (missing.length > 0) {
       results.push({ fact, status: "failed", detail: `缺点名：${[...new Set(missing)].join("、")}。` })
@@ -135,6 +164,28 @@ export function evaluateOracle(candidate: unknown, oracle: Oracle): OracleResult
     if (fact.kind === "distance") {
       const actual = norm(sub(points.get(fact.a)!, points.get(fact.b)!))
       results.push({ fact, status: close(actual, fact.value) ? "passed" : "failed", detail: `|${fact.a}${fact.b}|=${actual}，独立 oracle=${fact.value}。` })
+      continue
+    }
+    if (fact.kind === "segment-ratio") {
+      const numerator = norm(sub(points.get(fact.a)!, points.get(fact.b)!))
+      const denominator = norm(sub(points.get(fact.d)!, points.get(fact.c)!))
+      const actual = denominator > 1e-12 ? numerator / denominator : Number.POSITIVE_INFINITY
+      results.push({
+        fact,
+        status: close(actual, fact.value) ? "passed" : "failed",
+        detail: `|${fact.a}${fact.b}|/|${fact.c}${fact.d}|=${actual}，独立 oracle=${fact.value}。`
+      })
+      continue
+    }
+    if (fact.kind === "angle") {
+      const actual = angleDegrees(sub(points.get(fact.b)!, points.get(fact.a)!), sub(points.get(fact.d)!, points.get(fact.c)!))
+      results.push({
+        fact,
+        status: actual !== null && close(actual, fact.value) ? "passed" : "failed",
+        detail: actual === null
+          ? `∠(${fact.a}${fact.b}, ${fact.c}${fact.d}) 有一条向量退化了（量不出角度）。`
+          : `∠(${fact.a}${fact.b}, ${fact.c}${fact.d})=${actual}°，独立 oracle=${fact.value}°。`
+      })
       continue
     }
     if (fact.kind === "dot") {

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "reliability-dev-smoke",
-  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。",
+  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 22 条：常规 5 / 翻折 7 / 表达变式 5 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
   "cases": [
     {
       "id": "rect-fold-length",
@@ -164,6 +164,132 @@
       "contains": "折痕两侧",
       "provenance": { "source": "垂直关系说的不是折痕两侧的平面（不能用它确定折角）", "reviewStatus": "unreviewed" },
       "requiredOutputs": ["clarification"]
+    },
+    {
+      "id": "tetra-regular",
+      "prompt": "画一个正四面体 ABCD，棱长 2。",
+      "expected": "plan",
+      "provenance": { "source": "常规构图（正四面体，棱长 2）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft"],
+      "oracle": { "facts": [{ "kind": "point-count", "minimum": 4 }, { "kind": "primitive-count", "minimum": 1 }] }
+    },
+    {
+      "id": "planar-point",
+      "prompt": "画一个点。",
+      "expected": "plan",
+      "provenance": { "source": "常规构图（平面点）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft"],
+      "oracle": { "facts": [{ "kind": "primitive-count", "type": "point3", "minimum": 1 }] }
+    },
+    {
+      "id": "rect-fold-bd-triangle-bcd",
+      "prompt": "矩形 ABCD 中，AB=3，BC=6，沿对角线 BD 把 △BCD 折起，使平面 BCD ⊥ 平面 ABD。求折后 AC 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "翻折：折痕 BD + 3×6（折的是 △BCD，折后顶点 C′）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "C′", "b": "A", "value": 5.531726674375732 },
+          { "kind": "distance", "a": "C′", "b": "B", "value": 6 },
+          { "kind": "distance", "a": "C′", "b": "D", "value": 3 },
+          { "kind": "angle", "a": "B", "b": "C′", "c": "B", "d": "D", "value": 26.56505117707799 },
+          { "kind": "segment-ratio", "a": "C′", "b": "B", "c": "C′", "d": "D", "value": 2 },
+          { "kind": "planes-perpendicular", "first": ["B", "C′", "D"], "second": ["B", "D", "A"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-other-flap",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 BD 把 △ABD 折起，使平面 ABD ⊥ 平面 BCD。求折后 AC 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "翻折：同一条折痕 BD，但折的是另一侧三角形（折后顶点 A′）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A′", "b": "C", "value": 3.6878177829171546 },
+          { "kind": "distance", "a": "A′", "b": "B", "value": 4 },
+          { "kind": "distance", "a": "A′", "b": "D", "value": 2 },
+          { "kind": "angle", "a": "B", "b": "A′", "c": "B", "d": "D", "value": 26.56505117707799 },
+          { "kind": "segment-ratio", "a": "A′", "b": "B", "c": "A′", "d": "D", "value": 2 },
+          { "kind": "planes-perpendicular", "first": ["B", "A′", "D"], "second": ["B", "D", "C"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-ratio-only",
+      "prompt": "矩形 ABCD 中，AB=2BC=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "表达变式：两条边只由连等式给出（AB=2BC=4），与逐条写法同一几何", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "angle", "a": "A", "b": "B′", "c": "A", "d": "C", "value": 26.56505117707799 },
+          { "kind": "segment-ratio", "a": "B′", "b": "A", "c": "B′", "d": "C", "value": 2 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-fold-later",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，将 △ABC 沿 AC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "表达变式：折起写在后面的语序（将 △ABC 沿 AC 折起）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "segment-ratio", "a": "B′", "b": "A", "c": "B′", "d": "C", "value": 2 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-side-prefix",
+      "prompt": "矩形 ABCD 中，边长 AB=4、BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "表达变式：边长前缀 + 顿号分隔（边长 AB=4、BC=2）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-tight-spacing",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，把 △ABC 沿 AC 折起，使平面 ABC⊥平面 ACD，求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "表达变式：无空格的垂直写法 + 逗号接问句（平面 ABC⊥平面 ACD，求…）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "angle", "a": "A", "b": "B′", "c": "A", "d": "C", "value": 26.56505117707799 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
     }
   ]
 }
