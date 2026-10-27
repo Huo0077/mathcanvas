@@ -126,6 +126,26 @@ describe("length expression boundaries and fraction coefficients", () => {
     expect(allFixed("1/2 AB=2/3 CD=1")).toEqual({ AB: 2, CD: 1.5 })
   })
 
+  /**
+   * **共享端点的两段比例必须带上自己的来源**（2026-10-27，§4.7 缺陷）。
+   *
+   * `AB=2BC=4` 与 `DE=2EA` 在语法上**一模一样**（两段共享中间那个点名），但卷面上是两件事：
+   * 前者是"图上两条边的长度比"，**不**蕴含 `B` 落在 `AC` 上；后者是定比分点，`E` 就是被这个
+   * 比例**定位**在 `DA` 上的那个点。判据不能靠"名字重复"去猜，只能由读取器**显式**声明。
+   *
+   * 判据（本层）：**链上有绝对长度锚点时**标 `splitPoint: false`（尺寸陈述），
+   * **没有锚点时**标 `splitPoint: true`（定比分点）。
+   */
+  it("marked an anchored chain ratio AB=2BC=4 as a two-segment ratio", () => {
+    const ratio = draftsOf("AB=2BC=4").find((draft) => draft.kind === "segmentRatio")
+    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(false)
+  })
+
+  it("keeps an unanchored part:part ratio DE=2EA as a split point", () => {
+    const ratio = draftsOf("DE=2EA").find((draft) => draft.kind === "segmentRatio")
+    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(true)
+  })
+
   it("keeps the existing AE=2/5 AD ratio as the same segmentRatio", () => {
     // 这条已有专用读取器；本层一并读时必须给出同一个 `|AE|/|AD| = 2/5`。
     const chains = read("AE=2/5 AD")

@@ -36,7 +36,13 @@ import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 export type LengthChainDraft =
   | { kind: "fixedLength"; targets: string[]; value: number }
   | { kind: "equalLength"; targets: string[] }
-  | { kind: "segmentRatio"; targets: string[]; value: number }
+  /**
+   * **两段之比**。`splitPoint` 是**来源**，不是从形状猜的（2026-10-27，§4.7）：
+   * `AB=2BC=4` 与 `DE=2EA` 的 targets 形状一模一样（`[A,B,B,C]` / `[D,E,E,A]`，中间点名重复），
+   * 但卷面上是两件事 —— 前者是"两条边的长度比"，**不**蕴含 `B` 在 `AC` 上；后者是定比分点。
+   * 判据见 `diagramVerification` 的 `segmentRatio` 支：只有 `true` 才要求那个点在两外点之间。
+   */
+  | { kind: "segmentRatio"; targets: string[]; value: number; splitPoint: boolean }
 
 export type LengthChain =
   | { ok: true; start: number; end: number; sourceText: string; drafts: LengthChainDraft[] }
@@ -121,7 +127,13 @@ function relationsOf(terms: readonly Term[], value: number | null): LengthChainD
       drafts.push({ kind: "equalLength", targets: [...term.segment, ...next.segment] })
     } else {
       // c₁L₁ = c₂L₂ ⇒ L₁ / L₂ = c₂ / c₁
-      drafts.push({ kind: "segmentRatio", targets: [...term.segment, ...next.segment], value: lengthRatio(term, next) })
+      /**
+       * **链上有绝对长度锚点 ⇒ 这是尺寸陈述，不是定比分点**（2026-10-27，§4.7）：
+       * `AB=2BC=4` 说的是"两条边分别 4 与 2"，`B` 在不在 `AC` 上题面没说；
+       * 而**没有锚点**的 `DE=2EA` 正是卷面上的定比分点写法（`E` 被这个比定位在 `DA` 上）。
+       * 这个标志只影响判据要不要"同时要求共线"，不影响比值。
+       */
+      drafts.push({ kind: "segmentRatio", targets: [...term.segment, ...next.segment], value: lengthRatio(term, next), splitPoint: value === null })
     }
   }
   return drafts

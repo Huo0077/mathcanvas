@@ -1579,8 +1579,19 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      * 判据原先只有第一支（`e !== eAgain` 直接 `return null`），于是第二支**永远核不了** ——
      * 只要题面里写了「AD=2AB」这种"两条线段成倍数"，门禁就永远不放行。抽取器早就把两种形状
      * 编得不一样（重复 / 不重复），缺的只是判据这一支。
+     *
+     * **2026-10-27 补：形状重复不等于"点分线段"**（§4.7 缺陷）。`AB=2BC=4` 与 `DE=2EA` 的
+     * targets 一字排开都是 `[X,Y,Y,Z]`，但前者是矩形两条**边**的长度比（`B` 不在 `AC` 上），
+     * 后者才是定比分点。旧判据拿"中间点名重复"当唯一线索 ⇒ 矩形上要求 `|AB|+|BC|=|AC|`
+     * ⇒ 残差 1.5279 ⇒ 整题 `diagram_condition_failed`。于是改成读**读取器写下的来源**：
+     * `item.splitPoint === false` ⇒ 只比长度比；其它（`true` / 缺省）⇒ 两件事一起判。
+     * 缺省时仍按形状推断，只为兼容手工构造的旧义务（不走读取器的那条路）。
+     * **`splitPoint` 只在"中间重复"这种形状上才有意义** —— 例如链式 `AE=2/5 AD`
+     *（targets `[A,E,A,D]`）说的是 `AE/AD`，共享点在**两端**，那时永远走比值支。
      */
-    if (e !== eAgain) {
+    const sharedMiddle = e !== undefined && e === eAgain
+    const split = sharedMiddle && item.splitPoint !== false
+    if (!split) {
       const numerator = length(d, e)
       const denominator = length(eAgain, a)
       if (denominator <= 1e-10) return null

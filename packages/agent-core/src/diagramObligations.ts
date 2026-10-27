@@ -221,6 +221,17 @@ export interface DiagramObligation {
     shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid" | "polyhedron"
     metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume" | "circumradius" | "inradius"
   }
+  /**
+   * `segmentRatio` 专用：**这条比例是不是在给那个共享点定位**（2026-10-27，§4.7）。
+   *
+   * `DE=2EA`（定比分点：`E` 在 `DA` 上）与 `AB=2BC=4`（矩形两条边的长度比）在 targets 上
+   * 一模一样（`[D,E,E,A]` / `[A,B,B,C]`，中间点名重复），靠形状分不开。所以由**读取器**
+   * 显式写上，核验器只读这个标志：
+   * - `true` ⇒ 比值对 **且** 共享点落在外两点之间（两件事一起判）；
+   * - `false` ⇒ 只比长度比（不替题面断言共线）；
+   * - 缺省 ⇒ 沿用旧形状推断（只为兼容手工构造的旧义务，见 `diagramVerification`）。
+   */
+  splitPoint?: boolean
 }
 
 export interface DiagramSourceSpan {
@@ -240,7 +251,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint">
 
 interface Matcher {
   pattern: RegExp
@@ -1465,7 +1476,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const numerator = finitePositive(m[3])
       const denominator = finitePositive(m[4])
       if (numerator === null || denominator === null) return null
-      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[2])], value: numerator / denominator }
+      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[2])], value: numerator / denominator, splitPoint: false }
     }
   },
   {
@@ -1523,14 +1534,14 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const stated = finitePositive(m[4])
       if (ratio === null || stated === null) return null
       return [
-        { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value: ratio },
+        { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value: ratio, splitPoint: false },
         { kind: "fixedLength", targets: names(m[1]), value: stated }
       ]
     }
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
-    read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value } }
+    read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value, splitPoint: true } }
   },
   {
     /**
@@ -1550,7 +1561,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const numerator = finitePositive(m[2])
       const denominator = finitePositive(m[3])
       if (numerator === null || denominator === null) return null
-      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[4])], value: numerator / denominator }
+      return { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[4])], value: numerator / denominator, splitPoint: false }
     }
   },
   {

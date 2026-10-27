@@ -115,7 +115,6 @@
       "expected": "plan",
       "requireVerification": "passed",
       "provenance": { "source": "同一道题的长度连等写法（AB=2BC=4），应与逐条写法同一几何", "reviewStatus": "unreviewed" },
-      "knownIssue": "segmentRatio 把共享端点的两段（AB=2BC）当成点分线段：要求 |AB|+|BC|=|AC|，实测残差 1.5279，编译失败。这是产品缺陷，不是题单写错；见 docs/audit/2026-10-26-reliability-phase1.md §4.7。",
       "requiredOutputs": ["draft", "verification_passed"],
       "oracle": {
         "facts": [

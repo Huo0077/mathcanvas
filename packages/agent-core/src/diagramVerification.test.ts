@@ -153,6 +153,78 @@ describe("verifyDiagramObligations", () => {
     expect(failing.checks.find((check) => check.sourceText.includes("AD=2AB"))?.status).toBe("failed")
   })
 
+  /**
+   * **§4.7 缺陷的回归（2026-10-27）**：`AB=2BC=4` 是"矩形两条边的长度比"，
+   * **不是**"`B` 把 `AC` 分成两段"。旧判据用"中间点名重复"当唯一线索 ⇒ 要求
+   * `|AB| + |BC| = |AC|` ⇒ 矩形上残差 1.5279 ⇒ 整题 `diagram_condition_failed`。
+   *
+   * 判据两侧都要钉住：矩形**必须通过**；而那条 `DE=2EA` 的定比分点**必须仍然严格**
+   * （下面第二条用例：`E` 离开 `DA` 而比值仍为 2 ⇒ **failed**，不是 passed）。
+   */
+  it("reads a shared-endpoint side ratio AB=2BC=4 on a rectangle as a ratio, not a split point", () => {
+    const prompt = "在矩形ABCD中，AB=2BC=4"
+    // A(0,0)、B(4,0)、C(4,2)、D(0,2)：|AB| = 4、|BC| = 2；B **不**在 AC 上。
+    const rectangle = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }]
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画示意图",
+      factIds: [],
+      actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: { alias: "solid", vertices: rectangle, faces: [[0, 1, 2], [0, 2, 3]], vertexNames: ["A", "B", "C", "D"] } }]
+    } as unknown as PlanEnvelope
+    const candidate = createEmptyDocument("geometry3d")
+    candidate.primitives.push(...rectangle.map((position, index) => ({ id: `p-${index}`, type: "point3" as const, position: { ...position }, label: ["A", "B", "C", "D"][index] })))
+    candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: rectangle.map((_, index) => `p-${index}`), edgeIds: [], faceIds: [] })
+
+    const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+    const ratio = report.checks.find((check) => check.kind === "segmentRatio")
+    expect(ratio, JSON.stringify(report.checks).slice(0, 700)).toBeDefined()
+    expect(ratio?.status).toBe("passed")
+  })
+
+  /**
+   * **定比分点那条不许被放宽**（§4.7 的"两侧回归"）：`DE=2EA` 的判据是**两件事** ——
+   * 比值对 **且** `E` 在线段 `DA` 上。这条用例里的 `E` 与 `D`、`A` 的距离比**恰好是 2**，
+   * 但 `E` 离开 `DA`（`y = 0.5`）⇒ 必须判 `failed`。
+   *
+   * 若把这条判据放宽成"只比长度比"，它就会变绿 —— 那等于承认"斜着放在旁边"也算 `DE=2EA`。
+   */
+  it("keeps DE=2EA strict: a point with ratio 2 that leaves DA is failed, not passed", () => {
+    const prompt = "在三棱锥 A-BCD中，DE=2EA，画示意图"
+    // 阿波罗尼斯球面 |PE| = 2|PD|…这里取定 D、A 之后按 |ED| = 2|EA| 解一个**离轴**的点。
+    const D = { x: 1, y: 0, z: 0 }
+    const A = { x: 0, y: 0, z: 1 }
+    // |P−D|² = 4|P−A|² ⇒ 3x² + 3y² + 3z² + 2x − 8z + 3 = 0。取 y = 0.5、x = 1/3 解 z：
+    // 3z² − 8z + 4.75 = 0 ⇒ z = (8 ± √7)/6；取小的那支，E 就**离开** DA（y ≠ 0）。
+    const x = 1 / 3
+    const y = 0.5
+    const a2 = 3
+    const b2 = -8
+    const c2 = 3 * x * x + 3 * y * y + 2 * x + 3
+    const disc = b2 * b2 - 4 * a2 * c2
+    expect(disc).toBeGreaterThan(0)
+    const z = (-b2 - Math.sqrt(disc)) / (2 * a2)
+    const E = { x, y, z }
+    const distance = (p: Vector3, q: Vector3) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z)
+    expect(distance(E, D) / distance(E, A)).toBeCloseTo(2, 9)
+
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画示意图",
+      factIds: [],
+      actions: TETRA_ACTIONS
+    } as unknown as PlanEnvelope
+    const candidate = createEmptyDocument("geometry3d")
+    candidate.primitives.push(...TETRA_POSITIONS.map((position, index) => ({ id: `solid-v${index}`, type: "point3" as const, position: { ...position } })))
+    candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: TETRA_POSITIONS.map((_, index) => `solid-v${index}`), edgeIds: [], faceIds: [] })
+    candidate.primitives.push({ id: "point3-e", type: "point3" as const, position: E, label: "E" })
+
+    const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+    const ratio = report.checks.find((check) => check.kind === "segmentRatio")
+    expect(ratio?.status).toBe("failed")
+  })
+
   it("detects the wrong dihedral even when the other six conditions hold", () => {
     const { plan, candidate } = fixture(0.64)
     const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)

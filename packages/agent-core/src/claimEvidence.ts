@@ -114,6 +114,14 @@ export interface ObligationGeometry {
    * **只记种类、不记半轴**：那句话里没写半轴，记了就等于给半轴造出第二个来源。
    */
   conicKind?: "ellipse" | "hyperbola" | "parabola" | "circle"
+  /**
+   * `segmentRatio` 的**来源**：这条比例是不是在给那个共享点定位（2026-10-27，§4.7）。
+   *
+   * 装在这里的理由与 `conicKind` 相同 —— 它是**原话的读法**，generic 字段装不下。
+   * `AB=2BC=4` 与 `DE=2EA` 的 targets 形状一模一样，判据只能读这个标志：
+   * `false` 只比长度比，`true` 还要求共享点落在外两点之间。
+   */
+  splitPoint?: boolean
 }
 
 /**

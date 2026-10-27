@@ -140,6 +140,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } }),
     ...(item.conic === undefined ? {} : { conic: { ...item.conic } }),
     ...(item.conicKind === undefined ? {} : { conicKind: item.conicKind }),
+    ...(item.splitPoint === undefined ? {} : { splitPoint: item.splitPoint }),
     ...(item.expression === undefined ? {} : { expression: item.expression })
   }
   return {
@@ -265,6 +266,7 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } }),
     ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } }),
     ...(item.geometry?.conicKind === undefined ? {} : { conicKind: item.geometry.conicKind }),
+    ...(item.geometry?.splitPoint === undefined ? {} : { splitPoint: item.geometry.splitPoint }),
     ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression })
   }))
   return {
