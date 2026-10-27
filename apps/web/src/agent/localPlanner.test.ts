@@ -143,6 +143,37 @@ describe("local planner translates the commands it knows", () => {
   })
 
   /**
+   * **题面里明写的坐标要照用**（2026-10-27，探针 §11.5 缺口④）。
+   *
+   * 旧实现只把原话里**第一个数字**当 `size`，点永远落在 `(size, 0)` —— 于是
+   * `画一个点，坐标是 (1, 2)` 会得到 `(1, 0)`：`y` 被悄悄丢掉。那是"读一半就当真"，
+   * 比读不出更糟。现在：能认出 `(x, y)` 就按它来，认不出才退回示例值。
+   */
+  it("uses the coordinate the prompt actually gives for a planar point", async () => {
+    const envelope = await plan("画一个点，坐标是 (1, 2)")
+
+    if (envelope.kind !== "plan") throw new Error("expected a plan")
+    expect(envelope.actions[0].inputs).toMatchObject({ points: [{ x: 1, y: 2 }] })
+  })
+
+  /**
+   * **`长方形` 与 `矩形` 是同一个形状**（2026-10-27，探针 §11.5 缺口①）。
+   *
+   * `readRectangleFold` 早就同时认这两个词，但**意图表**只写了 `矩形` ⇒ 整句落到
+   * "本地规划器只认识几条固定指令" ⇒ 用户拿到的是"请换一种说法"。
+   * 判据放在**匹配层**（`matchLocalIntent`）而不是求解层：这两处各写一份"认哪些词"必然分叉。
+   */
+  it("matches a 长方形 fold prompt with the rectangle-fold intent", async () => {
+    const prompt = "长方形 ABCD 中，AB=6，BC=3，沿对角线 BD 把 △BCD 折起，使平面 BCD ⊥ 平面 ABD。求折后 AC 的长。"
+    expect(matchLocalIntent(prompt)).not.toBeNull()
+
+    const envelope = await plan(prompt)
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") throw new Error("expected a plan")
+    expect(envelope.actions.some((action) => action.actionId === "solid.fold")).toBe(true)
+  })
+
+  /**
    * **正四面体**（用户口径直接要它）。
    *
    * 以前动作层没有这个形状，模型只能拿三棱柱冒充（用户现场：要正四面体，拿到三棱柱）。现在：

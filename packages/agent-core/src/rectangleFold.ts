@@ -174,8 +174,9 @@ export function readRectangleFold(prompt: string): RectangleFoldRead {
   }
 
   // 边长：只认**环上的边**。给的是对角线就说明这条不是"边长"，缺边长无法确定矩形。
+  const givens = parseDiagramObligations(prompt).givens
   const lengths = new Map<string, { value: number; sourceText: string }>()
-  for (const given of parseDiagramObligations(prompt).givens) {
+  for (const given of givens) {
     if (given.kind !== "fixedLength" || given.value === undefined) continue
     const pair = given.targets
     if (pair.length !== 2) continue
@@ -191,8 +192,51 @@ export function readRectangleFold(prompt: string): RectangleFoldRead {
     }
     return null
   }
-  const a = edgeOf(ring[0], ring[1])
-  const b = edgeOf(ring[1], ring[2])
+  /**
+   * **"比例 + 一条边"也要定得出矩形**（2026-10-27，探针 §11.5 缺口②）。
+   *
+   * 卷面上 `AB:BC=2:1，AB=4` 这种写法很常见：比例 + 一条边把另一条边**唯一确定**。
+   * 旧实现只认"逐条给长度"，于是整句被判"缺少边 BC"⇒ 题做不了。
+   *
+   * **只认相邻的一对边**：`segmentRatio` 的两段必须分别落在"a 边"（`ring[0]→ring[1]` 或它的对边）
+   * 与"b 边"（`ring[1]→ring[2]` 或它的对边）上。`AB:CD` 这种写的是**两条对边**之比 ——
+   * 矩形的对边本来相等，那条比例定不出 `BC`，所以仍然说缺失（有反例用例钉住）。
+   * 值的方向按 `segmentRatio` 的约定：`value = |前一段| / |后一段|`。
+   */
+  const sideOf = (pair: readonly string[]): 0 | 1 | null => {
+    if (pair.length !== 2) return null
+    const [first, second] = [canonicalPointName(pair[0]!), canonicalPointName(pair[1]!)]
+    const isEdge = (index: number): boolean =>
+      (first === ring[index] && second === ring[(index + 1) % 4]) || (first === ring[(index + 1) % 4] && second === ring[index])
+    if (isEdge(0) || isEdge(2)) return 0
+    if (isEdge(1) || isEdge(3)) return 1
+    return null
+  }
+  /**
+   * **相邻一对边的比例**：`r` 的含义是 `|a 边| / |b 边| = r`（`a 边` = `ring[0]→ring[1]`，
+   * `b 边` = `ring[1]→ring[2]`；对边因矩形性质等价）。
+   *
+   * `segmentRatio` 的约定是 `value = |前一段| / |后一段|`，所以两段的落在哪条边上决定 r 怎么算。
+   * `AB:CD` 这种"两条对边之比"不算 —— 矩形的对边本来相等，它定不出另一条边。
+   */
+  const adjacentRatio = (): number | null => {
+    for (const given of givens) {
+      if (given.kind !== "segmentRatio" || given.value === undefined) continue
+      const first = sideOf(given.targets.slice(0, 2))
+      const second = sideOf(given.targets.slice(2, 4))
+      if (first === null || second === null || first === second) continue
+      const value = Number(given.value)
+      if (!Number.isFinite(value) || !(value > 0)) continue
+      return first === 0 ? value : 1 / value
+    }
+    return null
+  }
+  const ratio = adjacentRatio()
+  let a = edgeOf(ring[0], ring[1])
+  let b = edgeOf(ring[1], ring[2])
+  // **只有恰好缺一条边时才用比例补**（两条都缺 ⇒ 比例给定不出尺度，仍然如实报缺）。
+  if (a !== null && b === null && ratio !== null) b = { value: a.value / ratio, segment: `${ring[1]}${ring[2]}` }
+  if (b !== null && a === null && ratio !== null) a = { value: b.value * ratio, segment: `${ring[0]}${ring[1]}` }
   if (a === null || b === null) {
     const missing = a === null ? `${ring[0]}${ring[1]}` : `${ring[1]}${ring[2]}`
     return {

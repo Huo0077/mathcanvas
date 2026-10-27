@@ -196,6 +196,32 @@ describe("A3 矩形对角线折叠的构造与核验", () => {
     if (read.status === "unsupported") expect(read.reason).toContain("BC")
   })
 
+  /**
+   * **"比例 + 一条边"也要定得出矩形**（2026-10-27，探针 §11.5 缺口②）。
+   *
+   * 卷面上常见 `AB:BC=2:1，AB=4` 这种写法：给了比例又给了一条边，另一条边**唯一确定**。
+   * 旧读取器只认"逐条给长度"，于是整句被判 `缺少边 BC` ⇒ 题做不了。
+   * 判据：比例的两段必须是**环上相邻的一对边**（对边等价），比值按 `|前|/|后|` 折算。
+   */
+  it("比例 + 一条边 ⇒ 另一条边由比例确定（AB:BC=2:1，AB=4 ⇒ BC=2）", () => {
+    const read = readRectangleFold("矩形 ABCD 中，AB:BC=2:1，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
+    expect(read.status).toBe("ok")
+    if (read.status === "ok") expect(read.spec.sides).toMatchObject({ a: 4, b: 2 })
+  })
+
+  it("比例方向反过来同样成立（AB:BC=1:2，AB=4 ⇒ BC=8）", () => {
+    const read = readRectangleFold("矩形 ABCD 中，AB:BC=1:2，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
+    expect(read.status).toBe("ok")
+    if (read.status === "ok") expect(read.spec.sides).toMatchObject({ a: 4, b: 8 })
+  })
+
+  it("比例用对边写（AB:CD=2:1）不据此定另一条边 —— 那时缺的信息仍然缺", () => {
+    // `AB:CD` 是**两条对边**之比：矩形的对边本来相等，这条比例只说明"1 = 1"，定不出 BC。
+    const read = readRectangleFold("矩形 ABCD 中，AB:CD=2:1，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
+    expect(read.status).toBe("unsupported")
+    if (read.status === "unsupported") expect(read.reason).toContain("BC")
+  })
+
   it("折痕不是对角线 ⇒ 明确拒绝", () => {
     const read = readRectangleFold("矩形 ABCD 中，AB=4，BC=2，将 △ABC 沿 AB 折起。")
     expect(read.status).toBe("unsupported")

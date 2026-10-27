@@ -107,18 +107,31 @@ const CUBE = (input: LocalIntentInput): PlanEnvelope => {
   }
 }
 
-const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => ({
-  schemaVersion: PLAN_SCHEMA_VERSION,
-  kind: "plan",
-  goal: "创建一个平面点",
-  factIds: [],
-  actions: [{
-    actionId: "planar.create_point",
-    actionKey: "point",
+const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => {
+  /**
+   * **题面明写了坐标就照用**（2026-10-27，探针 §11.5 缺口④）。
+   *
+   * 旧实现只把原话里第一个数字当边长，点永远在 `(size, 0)`：`画一个点，坐标是 (1, 2)`
+   * 会得到 `(1, 0)` —— `y` 被悄悄丢掉。那只在"只给关系、数字由系统挑"的句式里才是对的；
+   * 题面给了 `(x, y)` 就得按它来。认不出坐标才退回示例值（并靠既有口径说清是示例）。
+   */
+  const coordinate = /\(\s*(-?\d+(?:\.\d+)?)\s*[,，]\s*(-?\d+(?:\.\d+)?)\s*\)/.exec(input.prompt)
+  const points = coordinate === null
+    ? [{ x: input.size, y: 0 }]
+    : [{ x: Number(coordinate[1]), y: Number(coordinate[2]) }]
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "创建一个平面点",
     factIds: [],
-    inputs: { alias: "point", points: [{ x: input.size, y: 0 }] }
-  }]
-})
+    actions: [{
+      actionId: "planar.create_point",
+      actionKey: "point",
+      factIds: [],
+      inputs: { alias: "point", points }
+    }]
+  }
+}
 
 /**
  * **球**：球心 + 半径（球体切片 Task 8 的端到端那一半）。
@@ -581,7 +594,10 @@ export function isAnalysisQuestion(prompt: string): boolean {
 export function matchLocalIntent(prompt: string, options: { enableFreeApex?: boolean } = {}): LocalIntent | null {
   const freeApex = options.enableFreeApex === true ? freeApexIntentFor(prompt) : null
   if (freeApex !== null) return freeApex
-  const normalized = prompt.toLowerCase()
+  // **形状名的同义词在匹配层归一**（2026-10-27，探针 §11.5 缺口①）：`长方形` 与 `矩形` 是同一个形状，
+  // 而求解层（`readRectangleFold`）本来就两个词都认。以前意图表只写 `矩形`，于是整句落到
+  // "本地规划器只认识几条固定指令"、用户被告知换一种说法。归一放在**这一处**，不要给每条意图再抄一份同义词。
+  const normalized = prompt.toLowerCase().replaceAll("长方形", "矩形")
   // 只在问读数、又没说要画：**请求技能的建模意图一律不认**（认不出的结果是"老实问路"）。
   // 不求技能的意图（例如"有什么"那条只读回答）不受影响 —— 它们本来就要在问句里命中。
   const analysis = isAnalysisQuestion(normalized)

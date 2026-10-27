@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "reliability-dev-smoke",
-  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 22 条：常规 5 / 翻折 7 / 表达变式 5 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
+  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 24 条：常规 5 / 翻折 8 / 表达变式 6 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
   "cases": [
     {
       "id": "rect-fold-length",
@@ -286,6 +286,44 @@
           { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
           { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
           { "kind": "angle", "a": "A", "b": "B′", "c": "A", "d": "C", "value": 26.56505117707799 },
+          { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-oblong-word",
+      "prompt": "长方形 ABCD 中，AB=6，BC=3，沿对角线 BD 把 △BCD 折起，使平面 BCD ⊥ 平面 ABD。求折后 AC 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "翻折：形状名写成同义词「长方形」（2026-10-27 缺口①修好后收进题单）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "C′", "b": "A", "value": 5.531726674375732 },
+          { "kind": "distance", "a": "C′", "b": "B", "value": 3 },
+          { "kind": "distance", "a": "C′", "b": "D", "value": 6 },
+          { "kind": "angle", "a": "B", "b": "C′", "c": "B", "d": "D", "value": 63.43494882292201 },
+          { "kind": "segment-ratio", "a": "C′", "b": "B", "c": "C′", "d": "D", "value": 0.5 },
+          { "kind": "planes-perpendicular", "first": ["B", "C′", "D"], "second": ["B", "D", "A"] },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-ratio-plus-side",
+      "prompt": "矩形 ABCD 中，AB:BC=2:1，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "表达变式：比例 + 一条边（2026-10-27 缺口②修好后收进题单，实际几何为 4×2）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3.687817782917155 },
+          { "kind": "angle", "a": "A", "b": "B′", "c": "A", "d": "C", "value": 26.56505117707799 },
+          { "kind": "segment-ratio", "a": "B′", "b": "A", "c": "B′", "d": "C", "value": 2 },
           { "kind": "planes-perpendicular", "first": ["A", "B′", "C"], "second": ["A", "C", "D"] },
           { "kind": "point-count", "minimum": 4 }
         ]
