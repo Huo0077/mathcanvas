@@ -8,6 +8,15 @@
 
 
 
+## 2026-10-27 —— `segmentRatio` 共享端点缺陷修复（开发版）
+
+- `AB=2BC=4`（矩形两条边的长度比）与 `DE=2EA`（定比分点）在 `targets` 上完全同形（`[A,B,B,C]` / `[D,E,E,A]`），旧判据用"中间点名重复"当唯一线索 ⇒ 矩形上要求 `|AB|+|BC|=|AC|`（残差 1.5279）⇒ 该表达变式题编译失败。现在由**读取器**写下来源：`segmentRatio` 增可选 `splitPoint`，核验器只读标志 —— 只有"中间点名重复"形状**且**来源不是 `false` 时才同时要求共享点落在外两点之间；`false` 时只比长度比（不替题面断言共线）。
+- 来源的具体口径：链式读取器有绝对长度锚点（`AB=2BC=4`）标 `false`、没有锚点（`DE=2EA`）标 `true`；冒号式 `AE:AD=2:5`、倍数+后置长度 `AD=2AB=2`、分数式 `AE=2/5 AD` 标 `false`；纯倍数 `X=nY` 保持 `true`。`AE=2/5 AD` 这类共享点在**两端**的写法永远走比值支（否则会把 `AE/AD` 误算成 `AE/ED`）。
+- IR 往返同步（`ObligationGeometry.splitPoint` + `toLegacyObligationSet`），否则"IR 还原必须与解析结果逐字段相等"那条判据当场变红。
+- 回归两则：矩形 `AB=2BC=4` 必须按两段比例通过；`DE=2EA` 的离轴反例（`|ED|/|EA|` 恰好 2 但 `E` 不在 `DA` 上）必须 `failed`。两侧都做过注入验证（改回旧行为 ⇒ 矩形那条红；只比长度比 ⇒ 离轴反例红）。
+- `eval:reliability --offline`：`rect-fold-chain` 去掉 `knownIssue`，**14/14 ran、14 passed、incomplete 0**、`costUsd=null`（8 条独立 oracle 通过）。门禁：`typecheck` exit 0；全量单测 495 文件 / 5241 通过 + 1 todo / 0 失败；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。过程与证据见[执行台账](docs/audit/2026-10-26-reliability-phase1.md) §10。
+- **没做**：真实模型调用（无凭据，0 次，费用记 `null`）、T02 的 20/60 题与独立复核、工具续轮的请求归并、本轮 e2e。
+
 ## 2026-10-25 —— 翻折完整性与输出链路修复（开发版）
 
 - 折片比例构造改为复用原始题设IR，统一支持中英文冒号、分数及反向比例，拒绝冲突或越界比例；补齐实际折痕点距离回归。
@@ -31,7 +40,7 @@
 - **`rectangle` 义务**：`矩形 ABCD` / `长方形` / `四边形 ABCD 是矩形` 落成一条义务，判据是非退化 + 顶点闭合（平行四边形）+ 共面 + 相邻边两两垂直（三维里三个直角不足以说明矩形），按折前状态核；`面 … 为矩形` 也从"三个垂直"改为这条。用户案例的题设账因此全部通过、草稿态 `passed`。
 - **本地通用族意图**：`localPlanner` 按 `矩形` + 折起类词命中，边长/点名/折痕/折角从题面读（不逐字匹配原题），出计划 / 缺折角 / 目标不成立三种终态分别落地——无 provider 的浏览器路径也能走到这条确定性构造。
 - **完整链路评测入口（T01/T02 部分）**：新增 `npm run eval:reliability`（`--offline` / `--replay` / `--allow-paid`；live 无密钥直接 exit 2；`--cases FILE` 换题单）。走生产 `createAgentRuntime`（真实 `DraftStore`、编译器、协调器），每题干净文档/会话、不自动确认（`writeDocument` 断言 0 次），逐题原子报告 + `summary.json` + `replay.json`；费用未知记 `null` 不写 0。题单外置到 `test-fixtures/reliability/dev-smoke.json`（14 条开发冒烟，带来源与 oracle；13 条执行、1 条因已知缺陷跳过）；新增**独立判据**（只读候选 `point3` 坐标回代距离/点积/坐标/两平面垂直，不经过产品解析器），`passed` 需期望终态 + requiredOutputs + 独立回代同时成立。`--offline` 13/13（`firstAttemptPassed=13`、`incomplete=1`）、replay 可重放部分 13/13，另有**取消**与**预算中断**两条机制用例。
-- **已知缺陷（如实记录、未修）**：`segmentRatio` 把共享端点的两段（`AB=2BC`）当成"点分线段"，要求 `|AB|+|BC|=|AC|`（矩形上残差 1.5279），导致该表达变式题编译失败；题单里标 `knownIssue` 并计入 `incomplete`，修复方向见[执行台账](docs/audit/2026-10-26-reliability-phase1.md) §4.7。
+- **已知缺陷（如实记录、未修）**：`segmentRatio` 把共享端点的两段（`AB=2BC`）当成"点分线段"，要求 `|AB|+|BC|=|AC|`（矩形上残差 1.5279），导致该表达变式题编译失败；题单里标 `knownIssue` 并计入 `incomplete`，修复方向见[执行台账](docs/audit/2026-10-26-reliability-phase1.md) §4.7。 —— **2026-10-27 已修**（显式 `splitPoint` 来源），见上一条与台账 §10。
 - **本族浏览器闭环**：`e2e/agent-rectangle-fold.spec.ts` 3 passed —— 隔离预览（确认前画布对象 0）→ 一次提交 → `Ctrl+Z` 一步回到原样；假目标与缺折角两条都只出澄清、没有确认面板。
 - **折前 / 折后状态核验**：从动作里显式给出的折前坐标重建折前状态（只认单次折，未给坐标不猜）；长度、等长、比例、中点、点在线上、角、垂直/平行、矩形按**折前状态**核并标注状态，两平面垂直与折后距离按最终文档核；折前点名在折后条件下别名到 `B′`。修正了折前条件被误报「点名缺失」与跨折痕量（`BD=2√5` 折前 vs `B′D=2√85/5` 折后）判错的问题。
 - 补 Worker 澄清的验收：`ok:true + draftDocument:null` 不再被包装成成功暂存，澄清与原因码保留、现场文档不变，in-process 与生产 Worker 结局一致。过程与验证见[第一阶段修复台账](docs/audit/2026-10-26-reliability-phase1.md)。

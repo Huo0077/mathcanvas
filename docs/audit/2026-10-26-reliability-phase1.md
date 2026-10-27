@@ -389,6 +389,8 @@
 - 该题在题单里标 `knownIssue`，评测**跳过执行**并在 summary 里进 `skipped` 与 `incomplete = 1`；
   它**不算通过**，也不会被从分母里删掉；其余 13 条照常跑。
 
+**2026-10-27 已修**（完整读数见 §10；下面这段是当时的修复方向，按它实施的记录在 §10.1）
+
 **修复方向（下一步，带回归）**
 
 1. 给 `segmentRatio` 增加显式来源：`splitPoint: true` 由**分点语义的读取器**设置；
@@ -403,8 +405,8 @@
 | 任务 | 状态 | 说明 |
 | --- | --- | --- |
 | T00 基线与台账 | **完成** | 本文件 + `docs/current-status.md` 追加 |
-| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断 / 题单外置 / **独立 oracle 回代**（§4.5–4.6）；dev-smoke 14 条中 13 条执行、1 条已知缺陷跳过（§4.7）；真实模型基线与工具续轮等请求归并未完成 |
-| T02 开发集 20 题 / 验收集 60 题 | **部分** | dev-smoke 14 条已外置并带来源/预期/oracle（1 条已知缺陷），**未到 20/60、未独立复核**，不能当验收 |
+| T01 `eval:reliability` 完整链路评测 | **部分** | 入口 / 三种模式 / 原子报告 / 离线回放 / 取消 / 预算中断 / 题单外置 / **独立 oracle 回代**（§4.5–4.6）；**2026-10-27 起 dev-smoke 14 条全部执行、14 通过、`incomplete = 0`（无跳过）**（§10.2）；真实模型基线与工具续轮等请求归并**未完成** |
+| T02 开发集 20 题 / 验收集 60 题 | **部分** | dev-smoke 14 条已外置并带来源/预期/oracle，**2026-10-27 起 14/14 执行且全部通过**；**未到 20/60、未独立复核**，不能当验收 |
 | T03 原文来源与覆盖 | **部分**（既有） | 本轮只保证 A1 的括号窗口与 `sourceText/start/end` 一致；未做区间映射表 |
 | T04 统一对象身份和状态 | **部分** | `namedFold` 只覆盖单折；IR 级状态契约未接入 |
 | T05 状态执行/求解/回代 | **部分** | 矩形单折的构造、计划与回代已做；`coupledFolds` 未接矩形分支 |
@@ -435,6 +437,21 @@
 补充：`apps/web/src/agent/stagedClarification.test.ts` 第一版用 `StagedCompileResult` 作 `stage` 的返回类型，
 `npm run typecheck` 报了 2 条（`StageResult` 才含 `{code,message}`），改成 `StageResult` 后 exit 0 —— 这条也记下来，
 因为它说明"只跑 vitest 不跑 tsc"会漏掉这类类型谎言。
+
+### 6.1 2026-10-27（§4.7 修复后复跑，本机）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run typecheck` | **exit 0**（workspaces + e2e + scripts） |
+| `npx vitest run`（全量） | **495 文件 / 5241 通过 + 1 todo / 0 失败**，exit 0（158.7 s）。**一处如实**：同一命令的首跑报了 2 条失败且没留下文件名（当时后台还在跑 `eval:reliability`，属于本仓记录过的并行抖动）；立即复跑即全绿，两条读数都在 §10.3 |
+| `npx vitest run packages/agent-core`（本次改动面） | 214 项通过（6 个文件：`lengthEquality` / `diagramVerification` / `diagramObligations` / `obligationIR` / `planCompiler.namedPoints` / `foldedTriangleClauses`） |
+| `npx eslint .` | **exit 0**（0 error / **17** warning，均为既有未用变量：`planar-constraints` / `polynomial` / `sections3d` 等） |
+| `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（§4.7 的文档改动之后复跑） |
+| `npm run eval:reliability -- --offline` | **3 tests passed**；summary **14/14 ran、14 passed、0 skipped、incomplete=0、firstAttemptPassed=14、costUsd=null**；8 条独立 oracle 通过（`rect-fold-chain` 也在其中，`independent: "passed"`） |
+
+**注入验证（两侧都做过，改回源码后逐字还原）**：把核验器那一行改回 `const split = sharedMiddle`
+（= 旧行为）⇒ 矩形 `AB=2BC=4` 那条新用例变红；改成 `const split = false && …`（= 只比长度比）
+⇒ `DE=2EA` 离轴反例那条变红。两条都不是"写完就绿"的假判据。
 
 ## 7. 真实模型与费用
 
@@ -476,9 +493,73 @@
 
 ## 9. 下一步（按优先级）
 
-1. **修 §4.7 的 `segmentRatio` 共享端点缺陷**：加显式 `splitPoint` 来源，回归 `AB=2BC=4` 与 `DE=2EA` 两侧；
-   修好后去掉 `rect-fold-chain` 的 `knownIssue`，`incomplete` 回到 0。
-2. 把 dev 题单补到 20 条（任务书分布：常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并给常规/表达题补更多 oracle 类型。
+1. ~~**修 §4.7 的 `segmentRatio` 共享端点缺陷**：加显式 `splitPoint` 来源，回归 `AB=2BC=4` 与 `DE=2EA` 两侧；
+   修好后去掉 `rect-fold-chain` 的 `knownIssue`，`incomplete` 回到 0。~~ **2026-10-27 已完成**，见 §10。
+   剩余边界（如实）：`AB=2BC` **不带绝对长度锚点**时仍按定比分点读（`splitPoint: true`）——
+   与 `DE=2EA` 语法完全同形，见 §10.4。
+2. **（下一块）** 把 dev 题单补到 20 条（任务书分布：常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并给常规/表达题补更多 oracle 类型。
 3. **T01 `eval:reliability`** 的剩余项：真实模型基线、逐轮原始响应、工具续轮/重试/降级的请求归并。
 4. 连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。
 5. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。
+
+## 10. 2026-10-27 §4.7 修复记录：`segmentRatio` 的显式来源
+
+### 10.1 改了什么（4 处代码 + 1 处题单）
+
+1. **义务带上来源**：`DiagramObligation` 增可选 `splitPoint?: boolean`（`ObligationDraft` 的 `Pick<>` 同步扩一项）。
+   它不是"从形状猜出来的"，而是**读取器写下的**：`true` = 这条比例在给共享点定位（定比分点），
+   `false` = 两条线段的长度比（题面没说那个点在哪条线上）。
+2. **读取器各自声明**：
+   - `lengthEquality.relationsOf`（链式，`AB=2BC=4` / `DE=2EA` 都走这里）：**有绝对长度锚点** ⇒ `splitPoint: false`；
+     **没有锚点** ⇒ `true`。理由：带 `=4` 的是尺寸陈述（两条边各多长），不带锚点的连续两段比例才是卷面上的定比分点写法。
+   - 冒号式 `AE:AD=2:5`、倍数 + 后置长度 `AD=2AB=2`（`[A,D,A,B]` 形状）、分数式 `AE=2/5 AD` ⇒ `false`；
+     纯倍数 `X=nY` ⇒ `true`（保持它原来的读法）。
+3. **核验器只读来源**（`diagramVerification` 的 `segmentRatio` 支）：
+   `const sharedMiddle = e === eAgain`；`const split = sharedMiddle && item.splitPoint !== false`。
+   两个要点：① 只有"中间点名重复"这种形状**才可能**走分点支（否则 `AE:2/5 AD` 的 `AE/AD` 会被误算成 `AE/ED`）；
+   ② 来源缺省时仍按旧形状推断，只为兼容手工构造的义务（不走读取器的那条路）。
+4. **IR 往返不丢字段**：`claimEvidence.ObligationGeometry` 增 `splitPoint`，`obligationIR` 的
+   `claimOf` / `toLegacyObligationSet` 各补一行 —— 否则 `obligationIR.test.ts` 那条
+   "IR 还原必须与 `parseDiagramObligations` **逐字段相等**"的判据当场变红（它确实先红了，见 10.2）。
+5. **题单**：`test-fixtures/reliability/dev-smoke.json` 去掉 `rect-fold-chain` 的 `knownIssue`。
+
+**选了什么、为什么不选另一个**：另一条路是"让核验器按图形上下文猜"（例如问 `B` 是不是已经是多面体顶点）——
+那要引入"题面读法依赖候选图"的新耦合，同一个题面配不同的图会读出不同的条件，违反本仓"判据只从原话来"的纪律。
+所以选"读取器声明来源、核验器只读标志"。
+
+### 10.2 RED → GREEN
+
+| 用例（文件） | 先红（未修时） | 转绿（修完后） |
+| --- | --- | --- |
+| `lengthEquality.test.ts`「anchored chain ratio `AB=2BC=4` is a two-segment ratio」 | `expected undefined to be false`（草稿上没有这个字段） | 通过 |
+| `lengthEquality.test.ts`「unanchored `DE=2EA` keeps split point」 | `expected undefined to be true` | 通过 |
+| `diagramVerification.test.ts`「矩形 `AB=2BC=4` 按两段比例判」 | `segmentRatio` 判 `failed`（要求 `|AB|+|BC|=|AC|`） | 通过（比值 2 成立、不要求共线） |
+| `diagramVerification.test.ts`「`DE=2EA` 离轴反例必须 failed」 | 用例本身先红了两次：先是阿波罗尼斯方程的判别式算错（`disc = −2`），改成 `4ac` 后 `|ED|/|EA|` 恰好 2 且 `y ≠ 0` | 通过（判 `failed`） |
+| `obligationIR.test.ts`「IR 还原逐字段相等」 | `splitPoint` 在 IR 往返里丢了 ⇒ `- "splitPoint": true` | 通过（`claimEvidence` + `obligationIR` 各补一处） |
+
+**注入验证**（改完源码后逐字还原）：`const split = sharedMiddle`（旧行为）⇒ 矩形那条变红；
+`const split = false && …`（只比长度比）⇒ `DE=2EA` 那条变红。两侧都不是"写完就绿"的假判据。
+
+### 10.3 门禁读数
+
+见 §6.1（2026-10-27 复跑表）：`typecheck` exit 0、全量单测 **495 文件 / 5241 通过 + 1 todo / 0 失败**、
+`eslint` 0 error / 17 warning（既有）、`docs-consistency` 8 文件 / 20 项、
+`eval:reliability --offline` **14/14 ran、14 passed、incomplete 0、costUsd=null**。
+
+### 10.4 剩余边界与没做的事（如实）
+
+- **`AB=2BC` 不带绝对长度锚点**时仍按定比分点读（`splitPoint: true`）：它与 `DE=2EA` **语法完全同形**，
+  读取器只能挑一侧；挑的是保守侧（fail-closed）：会把矩形上这种写法判成 `failed`，而不是悄悄放过。
+  要按"`B` 是不是已有顶点"分开，需要引入上面说过的那个新耦合，属于后续任务。
+- **真实模型调用 0 次**：没有 `DEEPSEEK_API_KEY`，`--allow-paid` 直接 exit 2；费用记 `null` 不写 0。
+- **T02 的 20/60 题、独立复核、工具续轮/重试/降级的请求归并**：仍未做（下一块）。
+- **e2e 本轮未跑**：本次改动只动读取器 / 核验器与题单，浏览器路径没变；上一轮本族 e2e 3 passed 仍是既有读数。
+
+### 10.5 提交与远程（2026-10-27）
+
+| 提交 | 内容 |
+| --- | --- |
+| `50a0d68` | 代码 + 用例 + 题单：`splitPoint` 来源、核验器改读标志、四则回归、去掉 `knownIssue` |
+| 紧随其后的文档提交 | 本文件 §4.7 / §5 / §6.1 / §9 / §10、`docs/current-status.md`、`CHANGELOG.md`、`docs/feature-catalog.md`、`docs/project-progress.md` |
+
+推送按本仓纪律走"先 `git fetch` 再看 ahead/behind、然后 `git push`（禁止强推）"。本轮推送结果见 §8 末尾追加的那条。
