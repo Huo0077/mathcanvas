@@ -970,4 +970,25 @@ describe("题设账：长度表达式的边界", () => {
     ])
     expect(parsed.givens.some((given) => given.kind === "planarAngle")).toBe(true)
   })
+
+  /**
+   * **两条边都已经给了长度 ⇒ 那条共享端点的比例不是定比分点**（2026-10-27，§11.5 缺口③）。
+   *
+   * `AB=4，BC=2，且 AB=2BC` 在矩形题里是**一致性重述**：两条边的长度都已经写清楚了，
+   * 这条比例不可能是"把某个点定位到线段上"的定义。旧口径按"中间点名重复"一律当定比分点，
+   * 于是要求 `|AB|+|BC|=|AC|` ⇒ 矩形上判 `failed`（与 §4.7 是同一个缺陷的两面）。
+   *
+   * 判据只在**两条线段各自都被题面写出了长度**时生效；没写长度时仍按定比分点读（`DE=2EA` 那一侧）。
+   */
+  it("marks a shared-endpoint ratio as a plain ratio once both segments have stated lengths", () => {
+    const parsed = parseDiagramObligations("在矩形 ABCD 中，AB=4，BC=2，且 AB=2BC，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
+    const ratio = parsed.givens.find((given) => given.kind === "segmentRatio")
+    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(false)
+  })
+
+  it("keeps a shared-endpoint ratio as a split point when the lengths are not stated", () => {
+    const parsed = parseDiagramObligations("在矩形 ABCD 中，AB=2BC，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
+    const ratio = parsed.givens.find((given) => given.kind === "segmentRatio")
+    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(true)
+  })
 })

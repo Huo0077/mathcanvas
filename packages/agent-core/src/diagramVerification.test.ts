@@ -183,6 +183,33 @@ describe("verifyDiagramObligations", () => {
   })
 
   /**
+   * **同一个缺陷的另一面（缺口③）**：`AB=4，BC=2，且 AB=2BC` —— 两条边的长度都写清楚了，
+   * 那条比例只是**一致性重述**，不该再被当成"`B` 把 `AC` 分成两段"。
+   *
+   * 解析层按"两条线段是否都有长度"标 `splitPoint: false`（见 `diagramObligations`），
+   * 这里钉住**端到端**：同一张矩形图上这条比例必须 `passed`。
+   */
+  it("treats AB=2BC as a plain ratio when both sides already have lengths", () => {
+    const prompt = "在矩形ABCD中，AB=4，BC=2，且 AB=2BC，画出这个矩形。"
+    const rectangle = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 4, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }]
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "画示意图",
+      factIds: [],
+      actions: [{ actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: { alias: "solid", vertices: rectangle, faces: [[0, 1, 2], [0, 2, 3]], vertexNames: ["A", "B", "C", "D"] } }]
+    } as unknown as PlanEnvelope
+    const candidate = createEmptyDocument("geometry3d")
+    candidate.primitives.push(...rectangle.map((position, index) => ({ id: `q-${index}`, type: "point3" as const, position: { ...position }, label: ["A", "B", "C", "D"][index] })))
+    candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: rectangle.map((_, index) => `q-${index}`), edgeIds: [], faceIds: [] })
+
+    const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
+    const ratio = report.checks.find((check) => check.kind === "segmentRatio")
+    expect(ratio, JSON.stringify(report.checks).slice(0, 700)).toBeDefined()
+    expect(ratio?.status).toBe("passed")
+  })
+
+  /**
    * **定比分点那条不许被放宽**（§4.7 的"两侧回归"）：`DE=2EA` 的判据是**两件事** ——
    * 比值对 **且** `E` 在线段 `DA` 上。这条用例里的 `E` 与 `D`、`A` 的距离比**恰好是 2**，
    * 但 `E` 离开 `DA`（`y = 0.5`）⇒ 必须判 `failed`。

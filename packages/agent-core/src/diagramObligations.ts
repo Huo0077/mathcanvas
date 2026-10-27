@@ -2129,6 +2129,30 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }
+  /**
+   * **两条线段都写出了长度 ⇒ 那条共享端点的比例只是"两段之比"，不是定比分点**（2026-10-27，缺口③）。
+   *
+   * 卷面：`矩形 ABCD 中，AB=4，BC=2，且 AB=2BC` —— 两条边的长度已经写清楚了，那句比例是
+   * **一致性重述**（说"这个比确实是 2"），不可能是"把某个点定位到线段上"的定义。
+   * 旧口径按"中间点名重复"一律当定比分点 ⇒ 要求 `|AB|+|BC|=|AC|` ⇒ 矩形上判 `failed`。
+   *
+   * **只在这一对线段各自都有 `fixedLength` 时生效**（含连等层给出的长度）：`DE=2EA` 那种
+   * 两条分线段没给长度的写法仍然按定比分点读（有反例用例钉住）。
+   * 这是一个**保守**的降级：不引入"读法依赖候选图"的耦合，只用题面自己说了什么。
+   */
+  const segmentKeyOf = (targets: readonly string[]): string =>
+    targets.length < 2 ? "" : [canonicalPointName(targets[0]!), canonicalPointName(targets[1]!)].sort().join("|")
+  const sizedSegments = new Set<string>()
+  for (const given of givens) {
+    if (given.kind !== "fixedLength" || given.value === undefined || given.targets.length !== 2) continue
+    sizedSegments.add(segmentKeyOf(given.targets))
+  }
+  for (const given of givens) {
+    if (given.kind !== "segmentRatio" || given.splitPoint !== true || given.targets.length !== 4) continue
+    if (sizedSegments.has(segmentKeyOf(given.targets.slice(0, 2))) && sizedSegments.has(segmentKeyOf(given.targets.slice(2, 4)))) {
+      given.splitPoint = false
+    }
+  }
   givens.sort((left, right) => left.start - right.start)
   return { givens, goals, ...(goalSources.length ? { goalSources } : {}), freeChoices, ...(freeChoiceSources.length ? { freeChoiceSources } : {}), unverified }
 }
