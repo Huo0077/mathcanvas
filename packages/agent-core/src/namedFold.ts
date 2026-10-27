@@ -206,15 +206,31 @@ export function namedFoldSpans(prompt: string): string[] {
  * 三种语序都归一到同一份结构；读不出（折痕不在折片上、点名重复、残缺）就返回
  * `invalid` 并留下原文 —— 不猜、不产出半对的一条。
  */
-export function readNamedFold(prompt: string): NamedFoldRead {
-  type Hit = { index: number; match: RegExpExecArray; syntax: NamedFoldTransition["syntax"] }
-  const hits: Hit[] = []
+type FoldHit = { index: number; match: RegExpExecArray; syntax: NamedFoldTransition["syntax"] }
+
+/**
+ * **题面里每一笔折起的命中**，按出现顺序，且**互不重叠**。
+ *
+ * 去重是必要的：一条从句可能同时被两种语序的句型各命中一次（同一段文字从不同起点算起），
+ * 不去重就会把"一笔"数成两笔 —— 连续折叠的守卫会因此误拒，链式读取会读出一笔假的第二折。
+ */
+function collectFoldHits(prompt: string): FoldHit[] {
+  const hits: FoldHit[] = []
   for (const match of prompt.matchAll(HINGE_FIRST)) hits.push({ index: match.index, match, syntax: "hinge-first" })
   for (const match of prompt.matchAll(FACE_FIRST)) hits.push({ index: match.index, match, syntax: "face-first" })
   for (const match of prompt.matchAll(APEX_TO_POINT)) hits.push({ index: match.index, match, syntax: "apex-to-point" })
-  if (hits.length === 0) return { status: "none" }
   hits.sort((left, right) => left.index - right.index)
-  const first = hits[0]!
+  const kept: FoldHit[] = []
+  for (const hit of hits) {
+    const end = hit.index + hit.match[0].length
+    if (kept.some((other) => hit.index < other.index + other.match[0].length && other.index < end)) continue
+    kept.push(hit)
+  }
+  return kept
+}
+
+/** 把一条命中解析成一条折起（读不出就 `invalid`，带原文）。 */
+function foldFromHit(first: FoldHit): NamedFoldRead {
   const sourceText = first.match[0]
   const span: SourceSpan = { start: first.index, end: first.index + sourceText.length, text: sourceText }
 
@@ -285,4 +301,26 @@ export function readNamedFold(prompt: string): NamedFoldRead {
     offset: first.index
   })
   return { status: "ok", transition, face: faceRaw.map(canonicalPointName) as [string, string, string], hingeNames: hingeRaw.map(canonicalPointName) as [string, string], apex, diagonal }
+}
+
+/**
+ * 读出一条翻折（**第一笔**）：折痕、折片、动的点、折角，以及**内部状态引用**。
+ *
+ * 三种语序都归一到同一份结构；读不出（折痕不在折片上、点名重复、残缺）就返回
+ * `invalid` 并留下原文 —— 不猜、不产出半对的一条。
+ *
+ * 连续折起请看 `readNamedFolds`：这个入口只给第一笔（单折那条路的既有语义）。
+ */
+export function readNamedFold(prompt: string): NamedFoldRead {
+  const hits = collectFoldHits(prompt)
+  if (hits.length === 0) return { status: "none" }
+  return foldFromHit(hits[0]!)
+}
+
+/**
+ * **每一笔**折起（按出现顺序，互不重叠）。`invalid` 的条目也照原样返回 ——
+ * 由调用方决定"第二笔读不出"算不算阻断（连续折叠这一层是**必须阻断**的）。
+ */
+export function readNamedFolds(prompt: string): NamedFoldRead[] {
+  return collectFoldHits(prompt).map(foldFromHit)
 }

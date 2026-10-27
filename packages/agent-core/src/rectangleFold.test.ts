@@ -197,17 +197,20 @@ describe("A3 矩形对角线折叠的构造与核验", () => {
   })
 
   /**
-   * **两次折起必须明确拒绝，不许"只折第一次"**（2026-10-27，探针实测的静默丢句）。
+   * **单折入口对多笔题面必须明确拒绝**（2026-10-27）。
    *
-   * `readNamedFold` 只返回第一笔。连续折起的题面若照旧往下走，产物只有一笔 `solid.fold`，
-   * 而题设核验照样报 `passed` —— 图少折一笔、报告干净。这一条把"静默"变成"说清"。
+   * `readNamedFold` 只返回第一笔。单折这条路若照旧往下走，产物只有一笔 `solid.fold`，
+   * 而题设核验照样报 `passed` —— 图少折一笔、报告干净（探针实测）。
+   *
+   * **连续折叠本身是支持的**，但走的是链式入口（`solveRectangleFoldChain`，见
+   * `rectangleFoldPlan.test.ts` 的「连续两次折起」用例）；这条只钉"单折入口不吞第二笔"。
    */
-  it("两次折起 ⇒ 明确拒绝，不会只画第一次", () => {
+  it("两次折起 ⇒ 单折入口明确拒绝，不会只画第一次", () => {
     const read = readRectangleFold("矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。")
     expect(read.status).toBe("unsupported")
     if (read.status !== "unsupported") return
     expect(read.reason).toContain("2 笔折起")
-    expect(read.reason).toContain("连续折叠目前不支持")
+    expect(read.reason).toContain("单折这条路只接受一笔")
   })
 
   it("countNamedFolds 数得清每一笔（同一从句不重复计数、没有折起时为 0）", () => {

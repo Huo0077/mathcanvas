@@ -139,31 +139,18 @@ function segmentKey(first: string, second: string): string {
  * 返回 `none` 表示"这道题不是这一类"；`unsupported` 表示"看起来是，但缺条件/对不上"，
  * 两种情况必须分开 —— 不能把"缺一条边"说成"不是矩形折叠题"。
  */
-export function readRectangleFold(prompt: string): RectangleFoldRead {
+/**
+ * **单折读取的实体**：矩形 + 第一笔折起（**不**做"几句折起"的守卫）。
+ *
+ * 连续折叠那一层要用它读**第一笔**，所以守卫不能写在这里 —— 守卫在公开的
+ * `readRectangleFold` 上（单折那条路必须拒绝多笔，链式那条路必须允许）。
+ */
+export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
   const rectangle = RECTANGLE_PATTERN.exec(prompt)
   if (rectangle === null) return { status: "none" }
   const ring = rectangle.slice(1, 5).map(canonicalPointName) as [string, string, string, string]
   if (new Set(ring).size !== 4) return { status: "unsupported", reason: `矩形点名有重复（${ring.join("")}）。`, sourceText: rectangle[0] }
   const rectangleSpan: SourceSpan = { start: rectangle.index, end: rectangle.index + rectangle[0].length, text: rectangle[0] }
-
-  /**
-   * **两次折起：明确拒绝，不"只折第一次"**（2026-10-27，探针实测的静默丢句）。
-   *
-   * `readNamedFold` 只返回**第一笔**折起。连续折起的题面（`先沿 AC 折起…，再沿 B′C 折起…`）
-   * 若照旧往下走，产物只有一笔 `solid.fold`，而题设核验却报 `passed`
-   * —— 图少折一笔、报告干净，正是本仓最不能接受的一类（与"静默丢条件"同源）。
-   *
-   * 连续折叠的支持（第二次折的是第一次折后的面）还没做，所以这里**说清不支持**：
-   * 宁可不出计划，也不出一张少了一笔的图。
-   */
-  const foldSpans = namedFoldSpans(prompt)
-  if (foldSpans.length > 1) {
-    return {
-      status: "unsupported",
-      reason: `题面里有 ${foldSpans.length} 笔折起（${foldSpans.map((span) => `「${span}」`).join("、")}）—— 连续折叠目前不支持：只画第一笔会少折一笔，所以这里不生成计划。`,
-      sourceText: rectangle[0]
-    }
-  }
 
   const foldRead = readNamedFold(prompt)
   if (foldRead.status === "none") {
@@ -308,6 +295,29 @@ export function readRectangleFold(prompt: string): RectangleFoldRead {
       spans: { rectangle: rectangleSpan, fold: foldRead.transition.source }
     }
   }
+}
+
+/**
+ * **单折入口**：读矩形 + 第一笔折起，且要求题面里**只有一笔**折起。
+ *
+ * 多次折起的题面以前会**静默只折第一笔**（`readNamedFold` 的单折语义），产物少一笔
+ * 而核验照旧 `passed`（2026-10-27 探针实测）。现在：
+ * - 单折这条路 ⇒ 说清"连续折叠不支持"（宁可不出计划，不出少一笔的图）；
+ * - 连续折叠那条路（`solveRectangleFoldChain`）⇒ 直接读 `readRectangleFoldCore` 拿第一笔，
+ *   再把第二笔接上去 —— 两笔都画出来，不是少画一笔。
+ */
+export function readRectangleFold(prompt: string): RectangleFoldRead {
+  const rectangle = RECTANGLE_PATTERN.exec(prompt)
+  if (rectangle === null) return { status: "none" }
+  const foldSpans = namedFoldSpans(prompt)
+  if (foldSpans.length > 1) {
+    return {
+      status: "unsupported",
+      reason: `题面里有 ${foldSpans.length} 笔折起（${foldSpans.map((span) => `「${span}」`).join("、")}）—— 单折这条路只接受一笔；连续折叠请走链式入口（第二笔折的是第一笔折后的面），不要只画第一笔。`,
+      sourceText: rectangle[0]
+    }
+  }
+  return readRectangleFoldCore(prompt)
 }
 
 /**

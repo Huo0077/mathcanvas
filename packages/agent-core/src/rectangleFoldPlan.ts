@@ -2,13 +2,15 @@ import { POINT_NAME_SOURCE } from "@draw/geometry-kernel"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { foldPointAboutHinge } from "./foldChain"
-import { uniqueFoldDisplayName } from "./namedFold"
+import { readNamedFolds, uniqueFoldDisplayName, type NamedFoldRead } from "./namedFold"
 import {
   buildRectangleFold,
   evaluateLength,
   evaluatePerpendicular,
   readRectangleFold,
+  readRectangleFoldCore,
   verifyRectangleFold,
+  type PointTable,
   type RectangleFoldGeometry,
   type RectangleSpec
 } from "./rectangleFold"
@@ -123,20 +125,32 @@ export function readRectangleFoldGoals(prompt: string): { kind: "perpendicular" 
   return goals.sort((left, right) => left.start - right.start)
 }
 
-function postNameOf(spec: RectangleSpec, geometry: RectangleFoldGeometry, name: string): string {
+function postNameOf(spec: RectangleSpec, geometry: RectangleFoldGeometry, name: string, renames: Record<string, string> = {}): string {
+  const renamed = renames[name]
+  if (renamed !== undefined) return renamed
   return name === spec.apex && geometry.apexPostName !== spec.apex ? geometry.apexPostName : name
 }
 
 /** 在**折后**坐标上回答目标。垂直给残差，长度给数值。 */
-export function evaluateRectangleFoldGoals(prompt: string, spec: RectangleSpec, geometry: RectangleFoldGeometry): RectangleFoldGoalFinding[] {
+export function evaluateRectangleFoldGoals(
+  prompt: string,
+  spec: RectangleSpec,
+  geometry: RectangleFoldGeometry,
+  /**
+   * **改名表**：连续折叠里可能有两笔各自改过名（`B ⇒ B′`、`A ⇒ A′`），
+   * 目标句里用的是**折后**的名字吗？不一定 —— 题面常写 `求折后 AD 的长` 这种"还用原名"的说法。
+   * 这张表把"原名 → 折后名"一次说清，判据不自己猜。
+   */
+  renames: Record<string, string> = {}
+): RectangleFoldGoalFinding[] {
   const findings: RectangleFoldGoalFinding[] = []
   for (const goal of readRectangleFoldGoals(prompt)) {
     if (goal.kind === "perpendicular") {
       const [first, second] = goal.segments as [[string, string], [string, string]]
       const result = evaluatePerpendicular(
         geometry.post,
-        [postNameOf(spec, geometry, first[0]), postNameOf(spec, geometry, first[1])],
-        [postNameOf(spec, geometry, second[0]), postNameOf(spec, geometry, second[1])]
+        [postNameOf(spec, geometry, first[0], renames), postNameOf(spec, geometry, first[1], renames)],
+        [postNameOf(spec, geometry, second[0], renames), postNameOf(spec, geometry, second[1], renames)]
       )
       findings.push({
         kind: "perpendicular",
@@ -149,7 +163,7 @@ export function evaluateRectangleFoldGoals(prompt: string, spec: RectangleSpec, 
       continue
     }
     const segment = (goal.segments as [[string, string]])[0]
-    const result = evaluateLength(geometry.post, [postNameOf(spec, geometry, segment[0]), postNameOf(spec, geometry, segment[1])])
+    const result = evaluateLength(geometry.post, [postNameOf(spec, geometry, segment[0], renames), postNameOf(spec, geometry, segment[1], renames)])
     findings.push({ kind: "length", sourceText: goal.sourceText, segment, value: result.value, detail: result.detail })
   }
   return findings
@@ -349,7 +363,218 @@ export function solveRectangleFoldAngle(prompt: string, spec: RectangleSpec): Fo
   }
 }
 
+/**
+ * **连续两次折起**（2026-10-27，§9 第 4 条后半）。
+ *
+ * 题面：`矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，
+ * 再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。`
+ *
+ * 与单折的差别**只有状态**：第二笔折的是**第一笔折后的那张面**，所以它的点名可以是折后名（`B′`）。
+ * 其余口径与单折一致：两笔都要明确的折角、逐步自检（折痕不动 / 刚体 / 角度）、
+ * 目标在**最终**点表上回代（带改名表）。
+ *
+ * ## 为什么不去"只画一笔"
+ *
+ * 少画一笔的图看起来完全正常，核验还可能是 `passed`（探针实测）。所以这里一旦某一步读不全，
+ * 就**不出计划**：第二笔读不出、缺折角、点名在第一步之后的点表里不存在 —— 三族各自说清。
+ */
+export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | -1 } = {}): RectangleFoldSolution {
+  const read = readRectangleFoldCore(prompt)
+  if (read.status === "none") return { status: "none" }
+  if (read.status === "unsupported") return { status: "unsupported", reason: read.reason, ...(read.sourceText === undefined ? {} : { sourceText: read.sourceText }) }
+  const spec = read.spec
+
+  const folds = readNamedFolds(prompt)
+  const invalid = folds.find((entry): entry is Extract<NamedFoldRead, { status: "invalid" }> => entry.status === "invalid")
+  if (invalid !== undefined) return { status: "unsupported", reason: invalid.reason, sourceText: invalid.sourceText }
+  const usable = folds.filter((entry): entry is Extract<NamedFoldRead, { status: "ok" }> => entry.status === "ok")
+  if (usable.length !== 2) {
+    return { status: "unsupported", reason: `连续折叠目前只支持两笔，这道题里读到 ${usable.length} 笔折起。` }
+  }
+  const second = usable[1]!
+
+  // 两笔的折角都必须**明写**：多笔折起时的"未知折角"还没有求解器，不猜。
+  if (spec.angle.kind !== "given") {
+    return { status: "clarification", reason: "needs_fold_angle", questions: [`第一笔折起没有给折角（${spec.fold.source.text}），连续折叠目前不会自动求解。请补充折角。`], spec, findings: [] }
+  }
+  if (second.transition.angle.kind !== "given") {
+    return { status: "clarification", reason: "needs_fold_angle", questions: [`第二笔折起（${second.transition.source.text}）没有给折角。连续折叠里两笔的折角都要明写。`], spec, findings: [] }
+  }
+
+  const built = buildRectangleFold(spec, { angleDegrees: spec.angle.degrees, ...(options.branch === undefined ? {} : { branch: options.branch }) })
+  if (built.status !== "ok") return { status: "unsupported", reason: built.status === "needs_angle" ? built.question : built.reason }
+  const state1 = built.geometry.post
+  const apexAs1 = built.geometry.apexPostName
+
+  // 第二笔用到的每一个点名都必须在"第一笔折后"的点表里 —— 不许拿别的点凑。
+  const referenced = [...second.face, ...second.hingeNames, second.apex]
+  const missing = [...new Set(referenced.filter((name) => state1[name] === undefined))]
+  if (missing.length > 0) {
+    return {
+      status: "unsupported",
+      reason: `第二笔折起（${second.transition.source.text}）点到 ${missing.join("、")}，但这些点在第一笔折后都不存在（那时图上只有 ${Object.keys(state1).join("、")}）。它折的是第一笔折后的面，点名的写法要能对上。`
+    }
+  }
+
+  const apex2 = second.apex
+  const apexAs2 = second.transition.explicitPostName ? second.transition.displayPostName : uniqueFoldDisplayName(prompt, apex2)
+  if (apexAs2 === apex2) return { status: "unsupported", reason: `第二笔折起的折后点名与折前相同（${apex2}），无法区分两个位置。` }
+  if (state1[apexAs2] !== undefined) return { status: "unsupported", reason: `第二笔折起的折后点名 ${apexAs2} 在第一笔折后已经存在，不能用同一个名字表示两个位置。` }
+
+  const rotated = foldPointAboutHinge(state1[apex2]!, state1[second.hingeNames[0]]!, state1[second.hingeNames[1]]!, second.transition.angle.degrees)
+  const state2: PointTable = { ...state1, [apexAs2]: rotated }
+  delete state2[apex2]
+
+  const step1 = verifyRectangleFold(spec, { pre: built.geometry.pre, post: state1 }, { angleDegrees: spec.angle.degrees })
+  if (step1.status !== "passed") {
+    return { status: "unsupported", reason: `第一笔折起的自检未通过：${step1.checks.filter((check) => check.status === "failed").map((check) => `${check.id}：${check.detail}`).join("；")}` }
+  }
+  const step2 = verifySecondFold(state1, state2, second, apex2, apexAs2)
+  if (!step2.ok) return { status: "unsupported", reason: `第二笔折起的自检未通过：${step2.reason}` }
+
+  const geometry: RectangleFoldGeometry = { ...built.geometry, post: state2, apexPostName: apexAs1 }
+  const renames = { [spec.apex]: apexAs1, [apex2]: apexAs2 } as Record<string, string>
+  const findings = evaluateRectangleFoldGoals(prompt, spec, geometry, renames)
+  const disproved = findings.filter((finding): finding is PerpendicularGoalFinding => finding.kind === "perpendicular" && !finding.holds)
+  if (disproved.length > 0) {
+    const explanation = [
+      `按两笔折起的回代，「${disproved.map((finding) => finding.sourceText).join("」「")}」**不成立**：${disproved.map((finding) => finding.detail).join(" ")}`,
+      `这条结论是对题设（矩形边长 + 两笔折角）的直接回代，不是"没搜到"；因此本轮不会生成可提交的草稿。`
+    ].join("\n")
+    return { status: "clarification", reason: "goal_does_not_hold", questions: [explanation], spec, geometry, findings }
+  }
+
+  return { status: "plan", plan: chainPlanOf(spec, built.geometry.pre, state1, second, apexAs1, apexAs2), spec, geometry, findings }
+}
+
+/** 第二笔折起的三条判据：折痕不动、折片刚性、转过给定角度；其余点一个都不许动。 */
+function verifySecondFold(
+  state1: PointTable,
+  state2: PointTable,
+  second: Extract<NamedFoldRead, { status: "ok" }>,
+  apex: string,
+  apexAs: string
+): { ok: true } | { ok: false; reason: string } {
+  const [h0, h1] = second.hingeNames
+  const before = { apex: state1[apex]!, h0: state1[h0]!, h1: state1[h1]! }
+  const after = { apex: state2[apexAs]!, h0: state2[h0]!, h1: state2[h1]! }
+  const scale = Math.max(1, Math.hypot(before.apex.x - before.h0.x, before.apex.y - before.h0.y, before.apex.z - before.h0.z))
+  const tolerance = 1e-9 * scale
+  for (const key of ["h0", "h1"] as const) {
+    const moved = Math.hypot(after[key].x - before[key].x, after[key].y - before[key].y, after[key].z - before[key].z)
+    if (moved > tolerance) return { ok: false, reason: `折痕上的 ${key === "h0" ? h0 : h1} 被移动了 ${moved}（折痕上的点必须不动）。` }
+  }
+  for (const key of ["h0", "h1"] as const) {
+    const was = Math.hypot(before.apex.x - before[key].x, before.apex.y - before[key].y, before.apex.z - before[key].z)
+    const now = Math.hypot(after.apex.x - after[key].x, after.apex.y - after[key].y, after.apex.z - after[key].z)
+    if (Math.abs(was - now) > 1e-9 * Math.max(1, was)) return { ok: false, reason: `折片不是刚体：${apex} 到 ${key === "h0" ? h0 : h1} 的距离从 ${was} 变成 ${now}。` }
+  }
+  const angle = rotationAngleDegrees(before.apex, after.apex, before.h0, before.h1)
+  if (angle === null) return { ok: false, reason: `量不出第二笔折角（折片退化）。` }
+  const expected = second.transition.angle.kind === "given" ? second.transition.angle.degrees : null
+  if (expected === null) return { ok: false, reason: `第二笔折起没有明确折角，环没有可核的角。` }
+  if (Math.abs(angle - expected) > 1e-6) return { ok: false, reason: `第二笔的折角应是 ${expected}°，实测 ${angle}°。` }
+  for (const [name, point] of Object.entries(state1)) {
+    if (name === apex || name === h0 || name === h1) continue
+    const other = state2[name]
+    if (other === undefined) return { ok: false, reason: `${name} 在第二笔之后消失了。` }
+    if (Math.hypot(other.x - point.x, other.y - point.y, other.z - point.z) > tolerance) return { ok: false, reason: `${name} 不是第二笔折起的点，却被移动了。` }
+  }
+  return { ok: true }
+}
+
+/** 绕轴旋转的角度（度）：把两个点都投影到垂直于轴的方向，再取夹角。退化返回 `null`。 */
+function rotationAngleDegrees(before: { x: number; y: number; z: number }, after: { x: number; y: number; z: number }, origin: { x: number; y: number; z: number }, far: { x: number; y: number; z: number }): number | null {
+  const axis = { x: far.x - origin.x, y: far.y - origin.y, z: far.z - origin.z }
+  const length = Math.hypot(axis.x, axis.y, axis.z)
+  if (!(length > 1e-12)) return null
+  const unit = { x: axis.x / length, y: axis.y / length, z: axis.z / length }
+  const project = (point: { x: number; y: number; z: number }) => {
+    const vector = { x: point.x - origin.x, y: point.y - origin.y, z: point.z - origin.z }
+    const along = vector.x * unit.x + vector.y * unit.y + vector.z * unit.z
+    return { x: vector.x - along * unit.x, y: vector.y - along * unit.y, z: vector.z - along * unit.z }
+  }
+  const left = project(before)
+  const right = project(after)
+  const leftLength = Math.hypot(left.x, left.y, left.z)
+  const rightLength = Math.hypot(right.x, right.y, right.z)
+  if (!(leftLength > 1e-12) || !(rightLength > 1e-12)) return null
+  const cosine = Math.max(-1, Math.min(1, (left.x * right.x + left.y * right.y + left.z * right.z) / (leftLength * rightLength)))
+  return (Math.acos(cosine) * 180) / Math.PI
+}
+
+/** 连续两笔折起的动作链：固定片 → 第一笔折起 → 第二笔折起（第二笔的坐标取**第一笔折后**的点表）。 */
+function chainPlanOf(
+  spec: RectangleSpec,
+  pre: PointTable,
+  state1: PointTable,
+  second: Extract<NamedFoldRead, { status: "ok" }>,
+  apexAs1: string,
+  apexAs2: string
+): Extract<PlanEnvelope, { kind: "plan" }> {
+  const pick = (table: PointTable, name: string): { x: number; y: number; z: number } => {
+    const point = table[name]
+    if (point === undefined) throw new Error(`missing point ${name}`)
+    return { x: point.x, y: point.y, z: point.z }
+  }
+  const angle1 = spec.angle.kind === "given" ? spec.angle.degrees : 0
+  const angle2 = second.transition.angle.kind === "given" ? second.transition.angle.degrees : 0
+  const actions = [
+    {
+      actionId: "solid.create_face",
+      actionKey: "fixed",
+      factIds: [],
+      inputs: { alias: "fixed", vertexNames: [...spec.fixed], vertices: spec.fixed.map((name) => pick(pre, name)), label: `固定片 ${spec.fixed.join("")}` }
+    },
+    {
+      actionId: "solid.fold",
+      actionKey: "flap",
+      factIds: [],
+      inputs: {
+        alias: "flap",
+        vertexNames: [...spec.moving],
+        vertices: spec.moving.map((name) => pick(pre, name)),
+        hinge: { from: spec.hinge[0], to: spec.hinge[1] },
+        apex: spec.apex,
+        apexAs: apexAs1,
+        angle: angle1,
+        label: `第一笔：折起的三角形 ${apexAs1}${spec.hinge.join("")}`
+      }
+    },
+    {
+      actionId: "solid.fold",
+      actionKey: "flap2",
+      factIds: [],
+      inputs: {
+        alias: "flap2",
+        vertexNames: [...second.face],
+        vertices: second.face.map((name) => pick(state1, name)),
+        hinge: { from: second.hingeNames[0], to: second.hingeNames[1] },
+        apex: second.apex,
+        apexAs: apexAs2,
+        angle: angle2,
+        label: `第二笔：折起的三角形 ${second.face.map((name) => (name === second.apex ? apexAs2 : name)).join("")}`
+      }
+    }
+  ]
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: `矩形 ${spec.ring.join("")} 连续两笔折起：沿 ${spec.hinge.join("")} 把 △${spec.moving.join("")} 折起 ${angle1}°，再沿 ${second.hingeNames.join("")} 把 △${second.face.join("")} 折起 ${angle2}°`,
+    factIds: [],
+    actions
+  } as unknown as Extract<PlanEnvelope, { kind: "plan" }>
+}
+
 export function solveRectangleFold(prompt: string, options: { branch?: 1 | -1; apexAs?: string } = {}): RectangleFoldSolution {
+  /**
+   * **题面里有第二笔折起 ⇒ 走链式这条路**（2026-10-27，§9 第 4 条后半）。
+   *
+   * 单折入口（`readRectangleFold`）对多笔题面是**明确拒绝**的（它以前会静默只折第一笔）。
+   * 这里先把"两笔"这种情形分流出去，链式入口会把两笔都画出来；第二笔读不出、缺折角、
+   * 点名不存在时，链式入口自己会给出澄清或拒绝 —— 都不会退化成"只画一笔"。
+   */
+  if (readNamedFolds(prompt).length > 1) return solveRectangleFoldChain(prompt, options)
   const read = readRectangleFold(prompt)
   if (read.status === "none") return { status: "none" }
   if (read.status === "unsupported") return { status: "unsupported", reason: read.reason, ...(read.sourceText === undefined ? {} : { sourceText: read.sourceText }) }

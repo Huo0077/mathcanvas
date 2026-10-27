@@ -355,11 +355,29 @@
       "requiredOutputs": ["clarification"]
     },
     {
-      "id": "rect-fold-double-refused",
+      "id": "rect-fold-double",
       "prompt": "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "连续两次折起（2026-10-27 §9 第 4 条后半；旧实现只画第一笔且核验报 passed）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "B′", "b": "A", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "distance", "a": "A′", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "A′", "b": "C", "value": 4.47213595499958 },
+          { "kind": "angle", "a": "B′", "b": "A′", "c": "B′", "d": "A", "value": 30 },
+          { "kind": "point-count", "minimum": 5 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-double-no-angle",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 至 △A′B′C。",
       "expected": "clarification",
-      "contains": "连续折叠目前不支持",
-      "provenance": { "source": "连续两次折起：旧实现会静默只折第一笔且核验报 passed（探针实测），现在明确拒绝", "reviewStatus": "unreviewed" },
+      "contains": "第二笔",
+      "provenance": { "source": "连续两次折起的否定侧：第二笔没给折角（连续折叠不自动求解折角）", "reviewStatus": "unreviewed" },
       "requiredOutputs": ["clarification"]
     },
     {

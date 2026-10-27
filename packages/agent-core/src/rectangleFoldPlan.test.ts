@@ -1,6 +1,8 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
+import { parseDiagramObligations } from "./diagramObligations"
+import { verifyDiagramObligations } from "./diagramVerification"
 import { compilePlan } from "./planCompiler"
 import { readRectangleFoldGoals, solveRectangleFold } from "./rectangleFoldPlan"
 
@@ -145,6 +147,85 @@ describe("A3 题面 → 计划 / 澄清", () => {
     expect(Math.abs(c!.z)).toBeGreaterThan(0.1)
     const hingeDistance = Math.hypot(c!.x - 4, c!.y - 0, c!.z - 0)
     expect(hingeDistance).toBeCloseTo(2, 9)
+  })
+
+  /**
+   * **连续两次折起**（2026-10-27，§9 第 4 条后半）。
+   *
+   * 第二笔折的是**第一笔折后的面**（`△AB′C`），所以它的点名可以是折后名 `B′`。
+   * 判据全部从**编译出来的坐标**自己算：折痕上的点不动、折片是刚体、第二笔真的转了 30°，
+   * 而且第一笔的折后点 `B′` 仍然在它该在的位置（两笔不是"二选一"）。
+   */
+  const CHAIN = "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。"
+
+  it("连续两次折起：两笔动作都落地，坐标满足两笔各自的刚性与折痕不动", () => {
+    const solved = solveRectangleFold(CHAIN)
+    expect(solved.status, solved.status === "unsupported" ? solved.reason : solved.status === "clarification" ? solved.questions.join(" / ") : "").toBe("plan")
+    if (solved.status !== "plan") return
+
+    const folds = solved.plan.actions.filter((action) => action.actionId === "solid.fold")
+    expect(folds, "两笔折起必须是**两笔**动作，不许只画一笔").toHaveLength(2)
+    expect(folds[1]!.inputs).toMatchObject({ hinge: { from: "B′", to: "C" }, apex: "A", apexAs: "A′", angle: 30 })
+
+    const compiled = compile(solved.plan)
+    expect(compiled.ok, compiled.ok ? "" : JSON.stringify(compiled.diagnostics)).toBe(true)
+    const document = compiled.draftDocument
+    const A = pointAt(document, "A")!
+    const B = pointAt(document, "B′")!
+    const Ap = pointAt(document, "A′")!
+    const C = pointAt(document, "C")!
+    const D = pointAt(document, "D")!
+    expect([A, B, Ap, C, D].every((point) => point !== undefined)).toBe(true)
+
+    const distance = (p: { x: number; y: number; z: number }, q: { x: number; y: number; z: number }) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z)
+    // 第一笔：折痕 AC 不动（A、C 与题面的矩形一致），B′ 到 AC 两端保持原长。
+    expect(distance(A, C)).toBeCloseTo(Math.hypot(4, 2), 9)
+    expect(distance(B, A)).toBeCloseTo(4, 9)
+    expect(distance(B, C)).toBeCloseTo(2, 9)
+    // 第二笔：折痕 B′C 不动，A′ 到 B′、C 的距离与 A 原本到它们的距离一致（刚体）。
+    expect(distance(Ap, B)).toBeCloseTo(distance(A, B), 9)
+    expect(distance(Ap, C)).toBeCloseTo(distance(A, C), 9)
+    // A′ 真的动了，而且不在 z=0（两笔都折起来了）。
+    expect(distance(Ap, A)).toBeGreaterThan(0.1)
+  })
+
+  it("第二笔没给折角 ⇒ 澄清，不猜（连续折叠不会自动求解折角）", () => {
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 至 △A′B′C。")
+    expect(solved.status).toBe("clarification")
+    if (solved.status !== "clarification") return
+    expect(solved.reason).toBe("needs_fold_angle")
+    expect(solved.questions.join("\n")).toContain("第二笔")
+  })
+
+  it("第二笔点到第一笔折后不存在的点 ⇒ unsupported，并说清缺谁", () => {
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 QC 把 △AQC 折起 30° 至 △A′QC。")
+    expect(solved.status).toBe("unsupported")
+    if (solved.status !== "unsupported") return
+    expect(solved.reason).toContain("第一笔折后都不存在")
+    expect(solved.reason).toContain("Q")
+  })
+
+  /**
+   * **连续折起也要能过状态感知核验**（2026-10-27）。
+   *
+   * 折前条件（`矩形 ABCD`、`AB=4`、`BC=2`）说的是**初始**矩形，而折后文档里 `B` 已经叫 `B′`
+   * —— 以前 `preFoldStateOf` 要求**恰好一笔**折起，两笔时直接返回 `null`，于是这三条
+   * 全部落到"点名缺失"（实测端到端 `not_supported`）。现在折前状态由**第一笔**重建，
+   * 这三条必须 `passed`，而折后的 `A′B′=4`（两笔之后的距离）也要 `passed`。
+   */
+  it("连续两次折起：折前条件按第一笔重建的点表核验，折后条件按最终点表核验", () => {
+    const prompt = `${CHAIN}求折后 A′D 的长。`
+    const solved = solveRectangleFold(prompt)
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") return
+    const compiled = compile(solved.plan)
+    expect(compiled.ok, compiled.ok ? "" : JSON.stringify(compiled.diagnostics)).toBe(true)
+    const report = verifyDiagramObligations(parseDiagramObligations(prompt), solved.plan, compiled.draftDocument!)
+    const byText = (fragment: string) => report.checks.find((check) => check.sourceText.includes(fragment))
+    expect(byText("矩形")?.status, JSON.stringify(report.checks).slice(0, 600)).toBe("passed")
+    expect(byText("AB=4")?.status).toBe("passed")
+    expect(byText("BC=2")?.status).toBe("passed")
+    expect(report.status).toBe("passed")
   })
 
   it("没有折角、也没有两平面垂直 ⇒ 问折角，不出计划（不默认 90°）", () => {

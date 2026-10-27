@@ -510,6 +510,17 @@
 | `npx eslint .` | **exit 0**（0 error / 17 warning，既有未用变量） |
 | `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
 
+### 6.7 2026-10-27 第八块（连续两次折起，题单 29 条）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **29/29 ran、29 passed、0 skipped、incomplete=0**；**21 条**带独立 oracle 全部 `passed`；`costUsd: null` |
+| `npx vitest run packages/agent-core/src/rectangleFold.test.ts packages/agent-core/src/rectangleFoldPlan.test.ts` | **38 passed**（新增 4 条，含折前状态重建那条） |
+| `npx vitest run`（全量） | **495 文件 / 5262 通过 + 1 todo / 0 失败**，exit 0（176.5 s） |
+| `npm run typecheck` | **exit 0** |
+| `npx eslint .` | **exit 0**（0 error / 17 warning，既有未用变量） |
+| `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
+
 ## 7. 真实模型与费用
 
 - 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub；`eval:reliability` 只跑过 `--offline` 与 `--replay`。
@@ -559,8 +570,8 @@
    下一块按剩下的缺口与 T01 剩余项排：(a) 无长度锚点的 `AB=2BC` 与定比分点同形（§10.4，需要"读法依赖候选图"的新耦合，先想清楚再动）；
    (b) T01 的逐轮原始响应归档与工具续轮/重试/降级的请求归并；(c) 连续两次矩形折叠与折角未知的联立求解在矩形分支的复用。
 3. **T01 `eval:reliability`** 的剩余项：真实模型基线、逐轮原始响应、工具续轮/重试/降级的请求归并。
-4. ~~连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。~~ **前半（折角未知 ⇒ 由"折后某段长度"解出来）2026-10-27 已完成**，见 §15；
-   **后半（连续两次矩形折叠）仍未开始** —— `foldChain` 的分类与 `foldPointAboutHinge` 已有，缺的是接进矩形族这条链。
+4. ~~连续两次矩形折叠、折角未知的联立求解在矩形分支上的复用。~~ **2026-10-27 两块做完**：折角未知 ⇒ 由"折后某段长度"解出来（§15）；
+   连续两次折起 ⇒ 两笔都落地 + 逐步判据 + 折前状态由第一笔重建（§17）。剩余：**多笔链**与**链式未知折角**未做。
 5. ~~远程可达后按"先 fetch、再推送"的顺序上推本地提交。~~ **每块都做了**：先 `git fetch`、看 ahead/behind、再 `git push`（禁止强推）。
 6. **T08 的"真实模型路径"** 与 **T09 真实验收**：仍缺凭据（真实模型 0 次调用），保持未完成。
 5. 远程可达后按"先 fetch、再推送"的顺序上推本地提交。
@@ -919,3 +930,80 @@ T08 的"真实模型路径"仍然没跑（没有凭据）。
   下一块做：`readNamedFolds`（读出每一笔）+ 两步状态 + 两笔 `solid.fold` + 逐笔判据。
 - 三次及以上的折起同样是拒绝（同一个计数守卫覆盖）。
 - 真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑（只动了单折读取器前面的一个计数守卫）。
+
+## 17. 2026-10-27 第八块：连续两次折起的**完整支持**（题单 28 → 29）
+
+### 17.1 这一块把上一块的"拒绝"变成"能画"
+
+§16 先堵住了静默丢句（单折入口对多笔题面明确拒绝）。这一块补的是能力本身：
+**第二笔折的是第一笔折后的面**，两笔都要真的落进文档。
+
+题面形状：`矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，
+再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。`
+
+### 17.2 改了什么
+
+| 位置 | 改动 |
+| --- | --- |
+| `namedFold.ts` | 抽出 `collectFoldHits`（三种语序合扫 + **按区间去重**，一笔不会数成两笔）与 `foldFromHit`；新增 `readNamedFolds(prompt)` 返回**每一笔**。`readNamedFold` 的语义不变（只给第一笔） |
+| `rectangleFold.ts` | 把原读取体抽成 `readRectangleFoldCore`（**不做**多笔守卫）；公开 `readRectangleFold` 仍对多笔题面明确拒绝，并指向链式入口 |
+| `rectangleFoldPlan.ts` | 新增 `solveRectangleFoldChain`、`verifySecondFold`、`rotationAngleDegrees`、`chainPlanOf`；`solveRectangleFold` 在多笔题面上**分流**到链式入口；目标回代支持**改名表**（`B⇒B′`、`A⇒A′`） |
+| `diagramVerification.ts` | `preFoldStateOf` 从"必须恰好一笔"改成"**只要有折起就用第一笔重建折前点表**"（见 17.3） |
+
+**判据（每一条都从坐标自己算，不看面板结论）**：
+
+1. **第一笔**：沿用 `verifyRectangleFold`（矩形判据 + 折痕不动 + 折片刚性 + 折角）。
+2. **第二笔**：`verifySecondFold` —— 折痕两端在 state1→state2 里**不动**、折片是**刚体**
+   （两条边距离不变）、把两个点投影到垂直于折痕的方向后夹角**等于题面给的折角**、**其余点一个都不许动**。
+3. **目标**：在**最终**点表上回代，名字按改名表映射（`求折后 A′D 的长` 直接量 `A′D`）。
+
+**fail-closed 的三族**（都不出计划）：第二笔读不出（`invalid`）⇒ 拒绝并给原文；两笔里任一笔**没给折角**
+⇒ 澄清（连续折叠不自动求解折角）；第二笔点到**第一笔折后不存在**的点 ⇒ 拒绝并列出现有名字。
+
+### 17.3 端到端撞出来的那个缺陷
+
+链式计划本身编得出图（独立 oracle 6 条全过：`|B′A|=4`、`|B′C|=2`、`|A′B′|=4`、
+`|A′C|=√20`、`∠(B′A′,B′A)=30°`、5 个点名），但**端到端核验报 `not_supported`**：
+
+- `preFoldStateOf` 以前要求 `folds.length !== 1 ⇒ null`。两笔折起时拿不到折前点表，
+  于是 `矩形 ABCD` / `AB=4` / `BC=2` 三条**折前条件**在折后文档里找不到 `B`（它已经叫 `B′`）
+  ⇒ 三条全落 `not_supported`，整轮 `failed`。
+- 修法：**只要求"有折起"，用第一笔的 `vertices` 重建折前点表**。第一笔的坐标就是初始坐标
+  （第二笔的 `vertices` 已经是折后坐标），再并上最终文档里没被折走的点（固定片），正好还原初始矩形。
+- 修完：三条折前条件 `passed`、报告整体 `passed`；链式题单用例也从"只有草稿"升级成
+  **`requireVerification: "passed"`**。
+
+### 17.4 RED → GREEN
+
+| 用例（`rectangleFoldPlan.test.ts`） | 先红 | 转绿 |
+| --- | --- | --- |
+| 「连续两次折起：两笔动作都落地」（动作数、第二笔的 hinge/apex/angle、编译后的刚性与折痕不动） | 旧实现只有一笔 `solid.fold`（上一块是拒绝，这一块之前是静默） | 通过（**2 笔**动作；`|A′B′|=|AB′|`、`|A′C|=|AC|`、`A′` 真的动了） |
+| 「第二笔没给折角 ⇒ 澄清」 | — | 通过（正文含"第二笔"） |
+| 「第二笔点到不存在的点 ⇒ unsupported」 | — | 通过（正文含"第一笔折后都不存在"与 `Q`） |
+| 「连续两次折起：折前条件按第一笔重建的点表核验」 | `expected 'not_supported' to be 'passed'`（17.3 那个缺陷） | 通过（矩形 / AB=4 / BC=2 三条 `passed`，整体 `passed`） |
+
+### 17.5 题单与读数
+
+| 变化 | 内容 |
+| --- | --- |
+| 删 | `rect-fold-double-refused`（上一块的"拒绝"用例，行为已升级） |
+| 加 | `rect-fold-double`（**正例**：`requireVerification: passed` + 6 条独立 oracle，全部与符号无关：`|B′A|`、`|B′C|`、`|A′B′|`、`|A′C|`、`∠(B′A′,B′A)=30°`、点数 5） |
+| 加 | `rect-fold-double-no-angle`（**负例**：第二笔没给折角 ⇒ 澄清） |
+
+题单 **28 → 29 条**（常规 5 / 翻折 12 / 表达变式 7 / 负例 5）。
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **29/29 ran、29 passed、0 skipped、incomplete=0**；**21 条**带独立 oracle 全部 `passed`；`costUsd: null` |
+| `npx vitest run packages/agent-core/src/rectangleFold*.test.ts` | **38 passed**（新增 4 条） |
+| 全量单测 / `typecheck` / `eslint` / `docs-consistency` | 见 §6.7 |
+
+### 17.6 边界与没做的事（如实）
+
+- **只支持两笔**，而且两笔的折角都必须**明写**；多笔链、未知折角的链式求解（"使 A′D=3 求第二笔折角"）
+  都还没做 —— 遇到就如实澄清。
+- **没有做纸张一致性检查**：第二笔折的是"第一笔折后的面"，而那块面与原固定片共享的点
+  （`A`、`C`）在真实折纸里会限制可行折法。本层与仓里既有的 `foldChain`（T6）同一口径：
+  每一步是一次**刚体旋转**，判据是"折痕不动 / 折片刚性 / 角度对"，不是"整张纸不撕开"。
+  这一点必须写清，否则会被读成物理折纸的完整模型。
+- 真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑（改动在矩形族与核验的折前状态重建）。

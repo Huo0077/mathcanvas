@@ -10,6 +10,32 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-10-27（第八块）—— 连续两次折起的完整支持（题单 29）
+
+**目标**：把上一块的"说清不支持"变成"能画两笔"。
+
+**读取层**：`namedFold` 抽出 `collectFoldHits`（三种语序合扫 + **按区间去重**，一笔不会数成两笔）与
+`foldFromHit`，新增 `readNamedFolds`；`rectangleFold` 抽出 `readRectangleFoldCore`（不做多笔守卫），
+公开 `readRectangleFold` 仍拒绝多笔并指向链式入口。
+
+**求解层**：`solveRectangleFoldChain` —— 第二笔的 `vertices` 取**第一笔折后**的点表；`verifySecondFold`
+核"折痕不动 / 折片刚性 / 投影后夹角等于题面折角 / 其余点一个都不许动"；目标按改名表（`B⇒B′`、`A⇒A′`）在
+最终点表上回代。fail-closed 三族：第二笔读不出 / 任一笔缺折角（澄清）/ 第二笔点到第一笔折后不存在的点（拒绝）。
+
+**端到端撞出来的缺陷（这一块最有价值的部分）**：链式计划编得出图（独立 oracle 6 条全过），但端到端
+`not_supported`。根因：`preFoldStateOf` 要求"恰好一笔折起"，两笔时拿不到折前点表 ⇒ `矩形 ABCD`、`AB=4`、
+`BC=2` 在折后文档里找不到 `B`（已改名 `B′`）。修法：只要求"有折起"，用第一笔的 `vertices`（初始坐标）
+重建折前点表，再并上最终文档里没被折走的点。修完三条折前条件 `passed`、整体 `passed`，题单用例从
+"只要草稿"升级成 `requireVerification: "passed"`。
+
+**题单 28 → 29**：删"拒绝"用例；加正例 `rect-fold-double`（6 条与符号无关的独立 oracle）与负例
+`rect-fold-double-no-angle`。读数：`eval --offline` **29/29 passed、incomplete 0**、21 条独立 oracle 全
+`passed`；`rectangleFold*.test.ts` 38 passed；全量单测 **495 文件 / 5262 通过 + 1 todo / 0 失败**（176.5 s）；
+`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**边界**：只支持两笔、折角必须明写；**不做纸张一致性检查**（与 `foldChain` 的 T6 同口径：每步是刚体旋转，
+不是"整张纸不撕开"）。多笔链与链式未知折角未做；真实模型 0 次；本轮 e2e 未重跑。
+
 ## 2026-10-27（第七块）—— 连续两次折起先"说清不支持"（题单 28）
 
 **探针实测**（`probe5`）：两个连续折起的矩形题面都只产出**一笔** `solid.fold`，而 `verification: passed`

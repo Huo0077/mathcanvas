@@ -2218,7 +2218,17 @@ const PRE_FOLD_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObliga
 function preFoldStateOf(plan: PlanEnvelope, drawn: Map<string, Vector3>): PreFoldState | null {
   if (plan.kind !== "plan") return null
   const folds = plan.actions.filter((action) => action.actionId === "solid.fold")
-  if (folds.length !== 1) return null
+  /**
+   * **连续折起时，折前状态由第一笔重建**（2026-10-27，§9 第 4 条后半）。
+   *
+   * 以前这里要求**恰好一笔**（`folds.length !== 1` 就返回 `null`），于是两笔折起的题面
+   * 拿不到折前点表 ⇒ `矩形 ABCD` / `AB=4` / `BC=2` 这些**折前条件**全部找不到 `B`
+   *（折后它叫 `B′`）⇒ 三条全落 `not_supported`（实测：链式计划编得出图，核验报 not_supported）。
+   *
+   * 为什么只用第一笔：第一笔的 `vertices` 就是**初始**坐标（第二笔的 `vertices` 已经是
+   * 第一笔折后坐标），再并上最终文档里没被折走的点（固定片），正好还原初始矩形。
+   */
+  if (folds.length === 0) return null
   const fold = folds[0]!
   const vertices = fold.inputs.vertices
   if (vertices === undefined || vertices.length !== fold.inputs.vertexNames.length) return null
