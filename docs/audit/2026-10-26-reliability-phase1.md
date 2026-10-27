@@ -519,6 +519,7 @@
 | `npx vitest run`（全量） | **495 文件 / 5262 通过 + 1 todo / 0 失败**，exit 0（176.5 s） |
 | `npm run typecheck` | **exit 0** |
 | `npx eslint .` | **exit 0**（0 error / 17 warning，既有未用变量） |
+| `npx playwright test --workers=3` | **246 passed / 0 failed**，exit 0（4.6 min；本块动了折前状态重建，浏览器侧重跑） |
 | `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
 
 ## 7. 真实模型与费用
@@ -996,6 +997,7 @@ T08 的"真实模型路径"仍然没跑（没有凭据）。
 | --- | --- |
 | `npm run eval:reliability -- --offline` | **29/29 ran、29 passed、0 skipped、incomplete=0**；**21 条**带独立 oracle 全部 `passed`；`costUsd: null` |
 | `npx vitest run packages/agent-core/src/rectangleFold*.test.ts` | **38 passed**（新增 4 条） |
+| `npx playwright test --workers=3` | **246 passed / 0 failed**，**4.6 min**，exit 0（在本块之后、于当前 HEAD 复跑 —— 本块动了 `diagramVerification` 的折前状态重建与本地规划器的折起路径，浏览器侧必须重跑；与 §13 那次同数） |
 | 全量单测 / `typecheck` / `eslint` / `docs-consistency` | 见 §6.7 |
 
 ### 17.6 边界与没做的事（如实）
