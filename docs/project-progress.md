@@ -10,6 +10,27 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-10-27（第七块）—— 连续两次折起先"说清不支持"（题单 28）
+
+**探针实测**（`probe5`）：两个连续折起的矩形题面都只产出**一笔** `solid.fold`，而 `verification: passed`
+—— 第二笔被静默丢掉。根因：`readNamedFold` 是单折读取器（只取 `hits[0]`），矩形族没问过"有几笔折起"。
+
+**选择**：(A) 直接做完整支持 vs (B) 先堵住静默。**选 (B)**：fail-closed 的最小改动，把"错误的通过"变成
+"诚实的拒绝"，后面做 (A) 时不需要回滚。(A) 明确记为下一块，不当已完成。
+
+**改动**：`namedFold.ts` 加 `countNamedFolds` / `namedFoldSpans`（按起点去重，同一从句不被两种语序重复计数）；
+`readRectangleFold` 在读折起前先数笔数，`> 1` ⇒ `unsupported`，reason 列出每一笔原文并说明连续折叠不支持。
+守卫放这一层，`solveRectangleFold` 与本地规划器两条路都变成"说清"。
+
+**RED → GREEN + 注入**：两条用例（拒绝 / 计数）；把守卫临时改成空数组 ⇒ 拒绝对应用例从绿变红
+（`expected 'ok' to be 'unsupported'`），改回后恢复 —— 不做注入就只是"写完就绿"。
+
+**题单 27 → 28**（负例 `rect-fold-double-refused`）。读数：`eval --offline` **28/28 passed、incomplete 0**、
+20 条独立 oracle 全 `passed`；`rectangleFold.test.ts` 23 passed；全量单测 **495 文件 / 5258 通过 + 1 todo /
+0 失败**（175.9 s）；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**没做**：连续两次折起的完整支持；三次及以上折起同样拒绝（同一守卫覆盖）；真实模型 0 次；本轮 e2e 未重跑。
+
 ## 2026-10-27（第六块）—— 折角未知时由"折后某段长度"解出来（题单 27）
 
 **起因**：§9 第 4 条"折角未知的联立求解在矩形分支上的复用"。探针实测（`probe4`）：`沿对角线 AC 把 △ABC

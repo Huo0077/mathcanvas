@@ -2,7 +2,7 @@ import { POINT_NAME_SOURCE, canonicalPointName } from "@draw/geometry-kernel"
 
 import { parseDiagramObligations } from "./diagramObligations"
 import { foldPointAboutHinge } from "./foldChain"
-import { readNamedFold, type NamedFoldTransition, type SourceSpan } from "./namedFold"
+import { readNamedFold, namedFoldSpans, type NamedFoldTransition, type SourceSpan } from "./namedFold"
 
 /**
  * **矩形沿对角线折起**（A3，2026-10-26）。
@@ -145,6 +145,25 @@ export function readRectangleFold(prompt: string): RectangleFoldRead {
   const ring = rectangle.slice(1, 5).map(canonicalPointName) as [string, string, string, string]
   if (new Set(ring).size !== 4) return { status: "unsupported", reason: `矩形点名有重复（${ring.join("")}）。`, sourceText: rectangle[0] }
   const rectangleSpan: SourceSpan = { start: rectangle.index, end: rectangle.index + rectangle[0].length, text: rectangle[0] }
+
+  /**
+   * **两次折起：明确拒绝，不"只折第一次"**（2026-10-27，探针实测的静默丢句）。
+   *
+   * `readNamedFold` 只返回**第一笔**折起。连续折起的题面（`先沿 AC 折起…，再沿 B′C 折起…`）
+   * 若照旧往下走，产物只有一笔 `solid.fold`，而题设核验却报 `passed`
+   * —— 图少折一笔、报告干净，正是本仓最不能接受的一类（与"静默丢条件"同源）。
+   *
+   * 连续折叠的支持（第二次折的是第一次折后的面）还没做，所以这里**说清不支持**：
+   * 宁可不出计划，也不出一张少了一笔的图。
+   */
+  const foldSpans = namedFoldSpans(prompt)
+  if (foldSpans.length > 1) {
+    return {
+      status: "unsupported",
+      reason: `题面里有 ${foldSpans.length} 笔折起（${foldSpans.map((span) => `「${span}」`).join("、")}）—— 连续折叠目前不支持：只画第一笔会少折一笔，所以这里不生成计划。`,
+      sourceText: rectangle[0]
+    }
+  }
 
   const foldRead = readNamedFold(prompt)
   if (foldRead.status === "none") {

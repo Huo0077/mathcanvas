@@ -499,6 +499,17 @@
 | `npx eslint .` | **exit 0**（0 error / 17 warning；第一版在二分循环里留了一个"赋了不用的 `lowGap = 0`"，被 `no-useless-assignment` 抓住，改成 `high = middle` 之后清零 —— 这条如实记下来，因为它是 `vitest` 抓不到的那一类） |
 | `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
 
+### 6.6 2026-10-27 第七块（连续折起的守卫，题单 28 条）
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **28/28 ran、28 passed、0 skipped、incomplete=0**；20 条带独立 oracle 全部 `passed`；`costUsd: null` |
+| `npx vitest run packages/agent-core/src/rectangleFold.test.ts` | **23 passed**（新增 2 条：两次折起拒绝、`countNamedFolds` 计数） |
+| `npx vitest run`（全量） | **495 文件 / 5258 通过 + 1 todo / 0 失败**，exit 0（175.9 s） |
+| `npm run typecheck` | **exit 0** |
+| `npx eslint .` | **exit 0**（0 error / 17 warning，既有未用变量） |
+| `npx vitest run scripts/docs-consistency` | **8 文件 / 20 项**通过（本节写完后复跑） |
+
 ## 7. 真实模型与费用
 
 - 本轮**没有**任何真实模型调用：所有测试用确定性夹具/stub；`eval:reliability` 只跑过 `--offline` 与 `--replay`。
@@ -841,3 +852,70 @@ T08 的"真实模型路径"仍然没跑（没有凭据）。
 - 折角求解**只要"使 …=n"这一种条件形状**：`使 ∠…=60°`、`使 体积=…` 等都不读（仍然问折角）。
 - 真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑（第六块只动矩形族的求解与题单，
   浏览器路径没变；上一次全量 e2e 是 246 通过，见 §13）。
+
+## 16. 2026-10-27 第七块：连续两次折起——先堵住"静默只折第一笔"（题单 27 → 28）
+
+### 16.1 探针实测到的静默丢句
+
+用两个连续折起的矩形题面跑 `--offline`（`probe5`），结果是：
+
+| 探针题面 | 实测终态 | 实际动作 |
+| --- | --- | --- |
+| `先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C` | `awaiting_confirmation`，**`verification: passed`** | `solid.create_face` + **一笔** `solid.fold(B/90)` |
+| 同族另一条（第二次折痕 `B′C`） | 同上 | 同上 |
+
+也就是说：**第二笔折起被静默丢掉，而题设核验照样报 `passed`**。这正是本仓反复列为最严重的一类
+（"图少画一笔、报告干净"），比读不出来的代价大得多。
+
+根因在 `readNamedFold`：它是**单折读取器**，只取第一处命中（`hits[0]`）。矩形族这一层没有问过
+"这一句话里有几笔折起"。
+
+### 16.2 做的选择：先拒绝，再支持
+
+两条路：
+- **(A) 先做"连续折叠"的完整支持**：读第二次折、两步状态、两份判据、两笔动作 —— 这是 §9 第 4 条的
+  后半，工作量大且几何面出错代价高；
+- **(B) 先把"静默"堵住**：题面里出现第二笔折起就**明确拒绝**，说清"连续折叠目前不支持、
+  只画第一笔会少折一笔"，然后下一块再做完整支持。
+
+**选了 (B) 先做**，理由：这是 fail-closed 的最小改动，能把"错误的通过"变成"诚实的拒绝"，
+而完整支持（A）可以接着做、不需要回滚这一步；仓里的纪律也是"宁可不出计划，不出少一笔的图"。
+(A) 明确记为**下一块**，不是"已完成"。
+
+### 16.3 改了什么
+
+| 位置 | 改动 |
+| --- | --- |
+| `namedFold.ts` | 新增 `countNamedFolds(prompt)` 与 `namedFoldSpans(prompt)`：同一组句型扫一遍，按**起点**去重（一条从句可能被两种语序各命中一次，但同一个起点只算一笔） |
+| `rectangleFold.ts` | `readRectangleFold` 在读折起之前先数笔数；`> 1` ⇒ `unsupported`，reason 里列出**每一笔原文**并说明连续折叠不支持 |
+
+**为什么把守卫放在 `readRectangleFold`**：`solveRectangleFold` 与本地规划器的 `RECTANGLE_FOLD` 意图
+都经过它 —— 一处守卫，两条路都变成"说清"。也正因为它在这一层，`namedFold` 那边**不需要**改语义
+（它仍然是单折读取器，只是现在调用方知道有几笔）。
+
+### 16.4 RED → GREEN（含注入验证）
+
+| 用例（`rectangleFold.test.ts`） | 先红 | 转绿 |
+| --- | --- | --- |
+| 「两次折起 ⇒ 明确拒绝，不会只画第一次」 | `expected 'ok' to be 'unsupported'`（旧行为直接出计划） | 通过（reason 含 `2 笔折起` 与 `连续折叠目前不支持`） |
+| 「`countNamedFolds` 数得清每一笔」 | 函数不存在 | 通过（1 / 1 / 2 / 0 四种输入） |
+
+**注入验证**：把守卫那一行临时改成 `const foldSpans: string[] = []` ⇒ 拒绝对那条用例立刻变红
+（`expected 'ok' to be 'unsupported'`）；改回后恢复绿。**没有这条注入就只是"写完就绿"**。
+
+### 16.5 题单与读数
+
+新增负例 `rect-fold-double-refused`（`expected: "clarification"`、正文含"连续折叠目前不支持"）⇒ 题单 **27 → 28 条**。
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run eval:reliability -- --offline` | **28/28 ran、28 passed、0 skipped、incomplete=0**；20 条带独立 oracle 全部 `passed`；`costUsd: null` |
+| `npx vitest run packages/agent-core/src/rectangleFold.test.ts` | **23 passed**（新增 2 条） |
+| 全量单测 / `typecheck` / `eslint` / `docs-consistency` | 见 §6.6 |
+
+### 16.6 没做的事（如实）
+
+- **连续两次折起的完整支持（§9 第 4 条后半）没做**：现在的行为是"明确拒绝"，不是"能画"。
+  下一块做：`readNamedFolds`（读出每一笔）+ 两步状态 + 两笔 `solid.fold` + 逐笔判据。
+- 三次及以上的折起同样是拒绝（同一个计数守卫覆盖）。
+- 真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑（只动了单折读取器前面的一个计数守卫）。

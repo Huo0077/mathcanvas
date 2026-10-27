@@ -7,7 +7,7 @@ import {
   readRectangleFold,
   verifyRectangleFold
 } from "./rectangleFold"
-import { readNamedFold, uniqueFoldDisplayName } from "./namedFold"
+import { countNamedFolds, readNamedFold, uniqueFoldDisplayName } from "./namedFold"
 
 /**
  * **A3（2026-10-26）：矩形沿对角线折起 + 同名点状态**。
@@ -194,6 +194,27 @@ describe("A3 矩形对角线折叠的构造与核验", () => {
     const read = readRectangleFold("矩形 ABCD 中，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
     expect(read.status).toBe("unsupported")
     if (read.status === "unsupported") expect(read.reason).toContain("BC")
+  })
+
+  /**
+   * **两次折起必须明确拒绝，不许"只折第一次"**（2026-10-27，探针实测的静默丢句）。
+   *
+   * `readNamedFold` 只返回第一笔。连续折起的题面若照旧往下走，产物只有一笔 `solid.fold`，
+   * 而题设核验照样报 `passed` —— 图少折一笔、报告干净。这一条把"静默"变成"说清"。
+   */
+  it("两次折起 ⇒ 明确拒绝，不会只画第一次", () => {
+    const read = readRectangleFold("矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。")
+    expect(read.status).toBe("unsupported")
+    if (read.status !== "unsupported") return
+    expect(read.reason).toContain("2 笔折起")
+    expect(read.reason).toContain("连续折叠目前不支持")
+  })
+
+  it("countNamedFolds 数得清每一笔（同一从句不重复计数、没有折起时为 0）", () => {
+    expect(countNamedFolds("沿 AC 把 △ABC 折起 90°")).toBe(1)
+    expect(countNamedFolds("将 △ABC 沿 AC 折起 60° 至 △AB′C")).toBe(1)
+    expect(countNamedFolds("沿 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C")).toBe(2)
+    expect(countNamedFolds("在矩形 ABCD 中，AB=4，BC=2")).toBe(0)
   })
 
   /**

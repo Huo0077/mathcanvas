@@ -355,6 +355,14 @@
       "requiredOutputs": ["clarification"]
     },
     {
+      "id": "rect-fold-double-refused",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C。",
+      "expected": "clarification",
+      "contains": "连续折叠目前不支持",
+      "provenance": { "source": "连续两次折起：旧实现会静默只折第一笔且核验报 passed（探针实测），现在明确拒绝", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
+    },
+    {
       "id": "rect-fold-restated-ratio",
       "prompt": "矩形 ABCD 中，AB=4，BC=2，且 AB=2BC，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
       "expected": "plan",

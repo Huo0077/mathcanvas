@@ -8,6 +8,14 @@
 
 
 
+## 2026-10-27 —— 连续两次折起不再"静默只折第一笔"（开发版）
+
+- **探针实测的静默丢句**：`先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C` 这类题面，产物里**只有一笔** `solid.fold`，而题设核验报 `passed` —— 图少折一笔、报告干净。根因是 `readNamedFold` 是**单折读取器**（只取第一处命中），矩形族这一层没问过"这句话里有几笔折起"。
+- **先堵住，再支持**：`namedFold.ts` 新增 `countNamedFolds` / `namedFoldSpans`（按起点去重，同一从句不被两种语序重复计数）；`readRectangleFold` 在读折起之前先数笔数，`> 1` 就**明确拒绝**并列出每一笔原文、说明"连续折叠目前不支持：只画第一笔会少折一笔，所以这里不生成计划"。守卫放在 `readRectangleFold` 这一层，`solveRectangleFold` 与本地规划器的 `RECTANGLE_FOLD` 意图两条路都变成"说清"。
+- 注入验证：把守卫那一行临时改成空数组 ⇒ 拒绝对应用例立刻变红（`expected 'ok' to be 'unsupported'`），改回后恢复绿。
+- 题单 **27 → 28 条**（新增负例 `rect-fold-double-refused`）。读数：`eval --offline` **28/28 通过、incomplete 0**、20 条独立 oracle 全 `passed`；`rectangleFold.test.ts` 23 passed；全量单测 **495 文件 / 5258 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+- **没做**：连续两次折起的**完整支持**（现在的行为是"明确拒绝"，不是"能画"）—— 下一块做 `readNamedFolds` + 两步状态 + 两笔 `solid.fold` + 逐笔判据。真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑。
+
 ## 2026-10-27 —— 折角未知时由"折后某段长度"解出来（开发版）
 
 - **折角没写、但题面给了一条折后长度时，解出折角而不是问用户**：`沿对角线 AC 把 △ABC 折起，使 BD=3，求折角` 以前一律回"请补充折角"（等于把有唯一解的题判成条件不足）。现在：

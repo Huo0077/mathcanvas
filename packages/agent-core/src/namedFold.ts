@@ -173,6 +173,34 @@ function makeTransition(input: {
 }
 
 /**
+ * **题面里有几笔折起**（2026-10-27）：同一组句型扫一遍、按**起点**去重 —— 一条从句可能同时
+ * 被两种语序命中（`沿 AC 把 △ABC 折起` 与 `将 △ABC 沿 AC 折起` 是两种，不会同时命中同一段），
+ * 但**同一个起点**只算一次。
+ *
+ * 为什么需要它：`readNamedFold` 只返回**第一笔**（它是单折的读取器）。连续折起的题面
+ * 若直接用它会**静默丢掉第二笔** —— 那正是本仓最不能接受的一类：图少画一笔、报告却是干净的。
+ * 有了这个计数，调用方可以明确选择"支持"或"如实拒绝"。
+ */
+export function countNamedFolds(prompt: string): number {
+  const starts = new Set<number>()
+  for (const pattern of [HINGE_FIRST, FACE_FIRST, APEX_TO_POINT]) {
+    for (const match of prompt.matchAll(pattern)) starts.add(match.index)
+  }
+  return starts.size
+}
+
+/** 题面里**每一笔**折起的原文片段（按出现顺序），给"不支持"的说明用。 */
+export function namedFoldSpans(prompt: string): string[] {
+  const byStart = new Map<number, string>()
+  for (const pattern of [HINGE_FIRST, FACE_FIRST, APEX_TO_POINT]) {
+    for (const match of prompt.matchAll(pattern)) {
+      if (!byStart.has(match.index)) byStart.set(match.index, match[0])
+    }
+  }
+  return [...byStart.entries()].sort((left, right) => left[0] - right[0]).map((entry) => entry[1])
+}
+
+/**
  * 读出一条翻折：折痕、折片、动的点、折角，以及**内部状态引用**。
  *
  * 三种语序都归一到同一份结构；读不出（折痕不在折片上、点名重复、残缺）就返回
