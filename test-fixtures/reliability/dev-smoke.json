@@ -1,7 +1,7 @@
 {
   "version": 1,
   "suite": "reliability-dev-smoke",
-  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 25 条：常规 5 / 翻折 8 / 表达变式 7 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
+  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 27 条：常规 5 / 翻折 10 / 表达变式 7 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
   "cases": [
     {
       "id": "rect-fold-length",
@@ -328,6 +328,31 @@
           { "kind": "point-count", "minimum": 4 }
         ]
       }
+    },
+    {
+      "id": "rect-fold-solved-angle",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 B′D=3。求折角。",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "provenance": { "source": "折角未知、由一条折后长度条件唯一确定（2026-10-27 §9 第 4 条前半；独立 oracle 只量几何）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "B′", "b": "D", "value": 3 },
+          { "kind": "distance", "a": "A", "b": "B′", "value": 4 },
+          { "kind": "distance", "a": "B′", "b": "C", "value": 2 },
+          { "kind": "segment-ratio", "a": "B′", "b": "A", "c": "B′", "d": "C", "value": 2 },
+          { "kind": "point-count", "minimum": 4 }
+        ]
+      }
+    },
+    {
+      "id": "rect-fold-angle-impossible",
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 B′D=6。求折角。",
+      "expected": "clarification",
+      "contains": "解不出",
+      "provenance": { "source": "折角求解的否定侧：要求 6 而折后范围只有 2.68～4.47（不许硬凑一个角）", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["clarification"]
     },
     {
       "id": "rect-fold-restated-ratio",

@@ -26,6 +26,54 @@ function pointAt(document: { primitives: readonly unknown[] } | null | undefined
 }
 
 describe("A3 题面 → 计划 / 澄清", () => {
+  /**
+   * **折角未知、但由一条长度条件唯一确定**（2026-10-27，§9 第 4 条的前半）。
+   *
+   * `沿 AC 把 △ABC 折起，使 BD=3` —— 折角没写，但折后 `B′D` 的长随折角单调变化：
+   * 4×2 矩形里 `|B′D|² = 13.6 + 6.4·cos θ`，所以 `|B′D| = 3` 唯一确定
+   * `cos θ = −0.71875`。这一族题以前一律回"请补充折角"（探针实测），现在要**解出来**。
+   *
+   * 三件事一起钉：解出的角、计划里的 `angle`、以及**解不出来时仍然拒绝**（下一个用例）。
+   */
+  const SOLVED_ANGLE = (Math.acos(-0.71875) * 180) / Math.PI
+
+  it("solves the fold angle from a length condition on the folded apex", () => {
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 B′D=3。求折角。")
+    expect(solved.status, JSON.stringify(solved).slice(0, 400)).toBe("plan")
+    if (solved.status !== "plan") return
+    expect(solved.geometry.angleDegrees).toBeCloseTo(SOLVED_ANGLE, 6)
+    const fold = solved.plan.actions.find((action) => action.actionId === "solid.fold")
+    expect(fold?.inputs).toMatchObject({ angle: expect.closeTo(SOLVED_ANGLE, 6) })
+  })
+
+  it("reads the same condition when the题面 writes the un-primed name", () => {
+    // `使 BD=3` 在折起句之后，指的是**折后** B 与 D 的距离（折前 |BD| = √20 ≈ 4.472 与题设矛盾）。
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=3。求折角。")
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") return
+    expect(solved.geometry.angleDegrees).toBeCloseTo(SOLVED_ANGLE, 6)
+  })
+
+  it("refuses when the length condition cannot be met, and says what range is reachable", () => {
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 B′D=6。求折角。")
+    expect(solved.status).toBe("clarification")
+    if (solved.status !== "clarification") return
+    expect(solved.reason).toBe("needs_fold_angle")
+    const question = solved.questions.join("\n")
+    expect(question).toContain("解不出")
+    // 能到达的范围要摆出来：|B′D| ∈ [2.683, 4.472]（θ ∈ [0°, 180°]）。
+    expect(question).toContain("2.68")
+    expect(question).toContain("4.47")
+  })
+
+  it("still asks for the angle when there is no condition to solve from", () => {
+    const solved = solveRectangleFold("矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。")
+    expect(solved.status).toBe("clarification")
+    if (solved.status !== "clarification") return
+    expect(solved.reason).toBe("needs_fold_angle")
+    expect(solved.questions.join("\n")).toContain("没有给折角")
+  })
+
   it("目标只从问句区读：`平面 ABC ⊥ 平面 ACD` 不是目标，`求证 BD⊥AC` 与 `求 … 的长` 是", () => {
     const goals = readRectangleFoldGoals(`${USER_CASE}（1）求证 BD⊥AC；（2）求折后 BD 的长。`)
     expect(goals.map((goal) => [goal.kind, goal.sourceText])).toEqual([
