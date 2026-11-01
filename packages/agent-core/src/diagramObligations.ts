@@ -107,6 +107,14 @@ export type DiagramObligationKind =
    */
   | "solidCenter"
   /**
+   * **棱柱的形状语义**（2026-11-01 外部复核）：直 / 斜 / 正、底面边数。
+   *
+   * 只看底边与高不够：直棱柱被画成斜的、三棱柱被画成四棱柱、正六棱柱被画成
+   * 四边形底面，都能让 `solidDimension` 通过。这条义务要求从最终实体量：
+   * 底面边数、底面是否为正多边形、侧棱是否平行底面法向。
+   */
+  | "solidPrismShape"
+  /**
    * **直线与这条圆锥曲线的交点**（Task 14）。
    *
    * 为什么单开一种、而不是并进 `conicAxes`：`conicAxes` 比的是**曲线自己的参数**，
@@ -230,6 +238,8 @@ export interface DiagramObligation {
     shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid" | "polyhedron" | "prism"
     metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume" | "circumradius" | "inradius"
   }
+  /** `solidPrismShape` 专用：题面写下的形状语义（未写的字段不设限）。 */
+  prismShape?: { sides?: number; regular?: boolean; straight?: boolean }
   /**
    * `segmentRatio` 专用：**这条比例是不是在给那个共享点定位**（2026-10-27，§4.7）。
    *
@@ -787,6 +797,20 @@ function resolveExplicitSolidConditions(
   pushValue(conditions.sphere.radius, { shape: "sphere", metric: "radius" }, /半径/g)
   pushValue(conditions.prism.baseEdge, { shape: "prism", metric: "baseEdge" }, /底面\s*(?:边长|边)|底边长|底边|边长/g)
   pushValue(conditions.prism.height, { shape: "prism", metric: "height" }, /高(?:度)?/g)
+
+  const shape = conditions.prism.shape
+  if (shape.sides !== undefined || shape.regular !== undefined || shape.straight !== undefined) {
+    const shapeSource = /(?:正|直|斜)?\s*(?:[三四五六七八九十]|\d+)?\s*棱柱/.exec(givenText)?.[0] ?? "棱柱形状"
+    const start = givenText.indexOf(shapeSource)
+    givens.push({
+      kind: "solidPrismShape",
+      targets: [],
+      prismShape: shape,
+      sourceText: shapeSource,
+      start: start < 0 ? 0 : start,
+      end: start < 0 ? shapeSource.length : start + shapeSource.length
+    })
+  }
 }
 
 /**

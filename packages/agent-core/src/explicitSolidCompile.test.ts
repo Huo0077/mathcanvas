@@ -17,7 +17,7 @@ function sphere(center: { x: number; y: number; z: number }, radius: number, ali
   }
 }
 
-function prism(input: { vector?: { x: number; y: number; z: number }; span?: number; alias?: string } = {}) {
+function prism(input: { vector?: { x: number; y: number; z: number }; span?: number; alias?: string; basePolygon?: { x: number; y: number; z: number }[] } = {}) {
   const alias = input.alias ?? "prism"
   const span = input.span ?? 4
   return {
@@ -26,7 +26,7 @@ function prism(input: { vector?: { x: number; y: number; z: number }; span?: num
     factIds: [],
     inputs: {
       alias,
-      basePolygon: [{ x: 0, y: 0, z: 0 }, { x: span, y: 0, z: 0 }, { x: span, y: span, z: 0 }, { x: 0, y: span, z: 0 }],
+      basePolygon: input.basePolygon ?? [{ x: 0, y: 0, z: 0 }, { x: span, y: 0, z: 0 }, { x: span, y: span, z: 0 }, { x: 0, y: span, z: 0 }],
       vector: input.vector ?? { x: 1, y: 0.5, z: 8 }
     }
   }
@@ -97,6 +97,45 @@ describe("compile-time explicit solid conditions", () => {
     const result = compilePlan(plan([prism({ span: 3 })]), context(PRISM_PROMPT))
     expect(result.ok).toBe(false)
     expect(failureText(result)).toMatch(/底面边长|base edge/i)
+  })
+
+  it("rejects a straight prism whose lateral vector is oblique", () => {
+    const result = compilePlan(plan([prism({ vector: { x: 1, y: 0.5, z: 8 } })]), context("画一个直棱柱，底面边长 4，高 8"))
+    expect(result.ok).toBe(false)
+    expect(failureText(result)).toMatch(/直|侧棱|垂直/)
+    expect(result.diagramVerification?.status).toBe("failed")
+  })
+
+  it("accepts a regular square prism only with a square base and vertical sides", () => {
+    const correct = compilePlan(plan([prism({ vector: { x: 0, y: 0, z: 8 } })]), context("画一个正四棱柱，底面边长 4，高 8"))
+    expect(correct.ok, failureText(correct)).toBe(true)
+    expect(correct.diagramVerification?.status).toBe("passed")
+    const oblique = compilePlan(plan([prism({ vector: { x: 1, y: 0.5, z: 8 } })]), context("画一个正四棱柱，底面边长 4，高 8"))
+    expect(oblique.ok).toBe(false)
+    expect(failureText(oblique)).toMatch(/侧棱|垂直|直/)
+  })
+
+  it("rejects a triangular prism request built with a quadrilateral base", () => {
+    const result = compilePlan(plan([prism()]), context("画一个三棱柱，底面边长 4，高 8"))
+    expect(result.ok).toBe(false)
+    expect(failureText(result)).toMatch(/边数|三|3/)
+    expect(result.diagramVerification?.status).toBe("failed")
+  })
+
+  it("rejects a regular hexagonal prism request built with a quadrilateral base", () => {
+    const result = compilePlan(plan([prism()]), context("画一个正六棱柱，底面边长 4，高 8"))
+    expect(result.ok).toBe(false)
+    expect(failureText(result)).toMatch(/边数|六|6/)
+    expect(result.diagramVerification?.status).toBe("failed")
+  })
+
+  it("rejects a rhombus as the base of a regular square prism", () => {
+    // 四边等长但不是正多边形：60°/120° 的菱形不共圆。
+    const rhombus = [{ x: 0, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }, { x: 6, y: 2 * Math.sqrt(3), z: 0 }, { x: 2, y: 2 * Math.sqrt(3), z: 0 }]
+    const result = compilePlan(plan([prism({ basePolygon: rhombus, vector: { x: 0, y: 0, z: 8 } })]), context("画一个正四棱柱，底面边长 4，高 8"))
+    expect(result.ok).toBe(false)
+    expect(failureText(result)).toMatch(/正多边形|共圆|regular/)
+    expect(result.diagramVerification?.status).toBe("failed")
   })
 
   it("rejects a plan that is missing the explicitly requested entity", () => {

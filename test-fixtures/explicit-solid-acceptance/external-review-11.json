@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "suite": "explicit-solid-external-review",
+  "notice": "外部复核追加题；自编、未经独立人工复核。控制样例与原 40 条有重复，用于确认修复没有破坏正确行为。",
+  "cases": [
+    {
+      "id": "external-straight-prism",
+      "category": "legal",
+      "request": "直棱柱：侧棱垂直底面，垂直高 8",
+      "prompt": "画一个直棱柱，底面边长 4，高 8",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "底面边长 4，两底面垂直高 8，侧棱垂直底面。",
+      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8, "upright": true },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-regular-square-prism",
+      "category": "legal",
+      "request": "正四棱柱：正方形底面 + 垂直侧棱",
+      "prompt": "画一个正四棱柱，底面边长 4，高 8",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "底面恰有 4 条边且为正多边形，两底面垂直高 8，侧棱垂直底面。",
+      "geometry": { "kind": "prism", "sides": 4, "regular": true, "baseEdge": 4, "height": 8, "upright": true },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-triangular-prism",
+      "category": "missing",
+      "request": "三棱柱：底面边数必须为 3；不支持则澄清",
+      "prompt": "画一个三棱柱，底面边长 4，高 8",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "不允许生成四边形底面的棱柱；当前选择明确澄清。",
+      "clarificationContains": "暂不支持",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-regular-hex-prism",
+      "category": "missing",
+      "request": "正六棱柱：正六边形底面 + 垂直侧棱；不支持则澄清",
+      "prompt": "画一个正六棱柱，底面边长 4，高 8",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "不允许生成四边形底面的斜棱柱；当前选择明确澄清。",
+      "clarificationContains": "暂不支持",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-spaced-fraction",
+      "category": "invalid",
+      "request": "半径 1 / 2 是分数，不支持",
+      "prompt": "画一个球体，半径 1 / 2",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "不能截取为半径 1；必须明确拒绝分数。",
+      "clarificationContains": "分数",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-multiplication",
+      "category": "invalid",
+      "request": "半径 5×2 是未支持乘法表达式",
+      "prompt": "画一个球体，半径 5×2",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "不能截取为半径 5；必须明确拒绝乘法表达式（除非实现为 10）。",
+      "clarificationContains": "乘法",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-pi-space",
+      "category": "legal",
+      "request": "半径 2 π 应按 2π 处理（或明确澄清）",
+      "prompt": "画一个球体，半径 2 π",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "最终半径为 2π，不能截取为 2。",
+      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 6.283185307179586 },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-coordinate-internal-space",
+      "category": "invalid",
+      "request": "球心 (1 2,3,4) 的第一坐标内部有空白",
+      "prompt": "画一个球体，球心 (1 2,3,4)，半径 5",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "不能把 1 和 2 拼成 12；必须澄清非法坐标。",
+      "clarificationContains": "坐标",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-spaced-fraction-fullwidth",
+      "category": "invalid",
+      "request": "全角空格分隔的分数 1　/　2",
+      "prompt": "画一个球体，半径 1\u3000/\u30002",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "与普通空格分数一致：明确拒绝，不截取为 1。",
+      "clarificationContains": "分数",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-pi-fullwidth-space",
+      "category": "legal",
+      "request": "全角空格分隔的 2　π",
+      "prompt": "画一个球体，半径 2\u3000π",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "最终半径为 2π，不能截取为 2。",
+      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 6.283185307179586 },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-sphere-coordinate-fullwidth-internal-space",
+      "category": "invalid",
+      "request": "全角空格分隔的坐标内部空白 (1　2, 3, 4)",
+      "prompt": "画一个球体，球心 (1\u30002, 3, 4)，半径 5",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "与普通空格一致：不能把 1 和 2 拼成 12；必须澄清。",
+      "clarificationContains": "坐标",
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-control-sphere",
+      "category": "legal",
+      "request": "控制样例：显式球心与半径",
+      "prompt": "画一个球体，球心 (1,2,3)，半径 5",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "球心 (1,2,3)，半径 5。",
+      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-control-oblique-prism",
+      "category": "legal",
+      "request": "控制样例：斜棱柱侧棱不垂直底面",
+      "prompt": "画一个斜棱柱，底面边长 4，高 8",
+      "allowedTerminals": ["plan"],
+      "mustSatisfy": "底面边长 4，垂直高 8，侧棱不垂直底面。",
+      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8, "upright": false },
+      "requireVerification": true,
+      "defaults": { "allowed": false, "disclosure": [] }
+    },
+    {
+      "id": "external-control-fraction",
+      "category": "invalid",
+      "request": "控制样例：1/2 澄清",
+      "prompt": "画一个球体，半径 1/2",
+      "allowedTerminals": ["clarification"],
+      "mustSatisfy": "明确拒绝分数。",
+      "clarificationContains": "分数",
+      "defaults": { "allowed": false, "disclosure": [] }
+    }
+  ]
+}

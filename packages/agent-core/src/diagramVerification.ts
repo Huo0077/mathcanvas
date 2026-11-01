@@ -411,7 +411,18 @@ type FigureSolid =
    * 斜棱柱上两者不相等，把侧棱长当高会放过一张高度错了的图。
    * 底面不是正多边形时 `baseEdge` 为 `null`，此时“底面边长”落未核验，但高度仍可量。
    */
-  | { shape: "prism"; baseEdge: number | null; basePerimeter: number; height: number; lateralEdge: number }
+  | {
+    shape: "prism"
+    sides: number
+    baseEdge: number | null
+    basePerimeter: number
+    height: number
+    lateralEdge: number
+    /** 底面各边相等**且**顶点共圆（正多边形的必要条件；菱形会被排除）。 */
+    regular: boolean
+    /** 侧棱是否平行底面法向（直棱柱）。 */
+    upright: boolean
+  }
   /** 长方体的**三条棱**（外接球 / 内切球半径是它们的函数）。 */
   | { shape: "cuboid"; sizeX: number; sizeY: number; sizeZ: number }
   /**
@@ -971,15 +982,33 @@ function candidatePrism(candidate: GeometryDocument, base?: GeometryDocument): F
   const perimeter = edges.reduce((sum, value) => sum + value, 0)
   if (!(perimeter > 0)) return null
   const meanEdge = perimeter / polygon.length
-  const regular = edges.every((edge) => Math.abs(edge - meanEdge) <= 1e-6 * Math.max(1, meanEdge))
+  const equalEdges = edges.every((edge) => Math.abs(edge - meanEdge) <= 1e-6 * Math.max(1, meanEdge))
+  const centroid = polygon.reduce((sum, point) => ({
+    x: sum.x + point.x / polygon.length,
+    y: sum.y + point.y / polygon.length,
+    z: sum.z + point.z / polygon.length
+  }), { x: 0, y: 0, z: 0 })
+  const radii = polygon.map((point) => euclid(point, centroid))
+  const maxRadius = Math.max(...radii)
+  const minRadius = Math.min(...radii)
+  /**
+   * **正多边形不能只看各边相等**：60°/120° 的菱形四边也相等，但它不共圆、不是正多边形。
+   * 这里同时要求“各边相等”与“所有顶点到形心等距”；两者合起来才足以排除菱形。
+   */
+  const concyclic = maxRadius > 0 && maxRadius - minRadius <= 1e-6 * Math.max(1, maxRadius)
   const height = Math.abs(dot(vector, normal))
   if (!Number.isFinite(height) || !(height > 0)) return null
+  const lateral = Math.hypot(vector.x, vector.y, vector.z)
+  const upright = Math.abs(Math.abs(dot(vector, normal)) - lateral) <= 1e-6 * Math.max(1, lateral)
   return {
     shape: "prism",
-    baseEdge: regular ? meanEdge : null,
+    sides: polygon.length,
+    baseEdge: equalEdges ? meanEdge : null,
     basePerimeter: perimeter,
     height,
-    lateralEdge: Math.hypot(vector.x, vector.y, vector.z)
+    lateralEdge: lateral,
+    regular: equalEdges && concyclic,
+    upright
   }
 }
 const subtract = (a: Vector3, b: Vector3): Vector3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
@@ -1214,6 +1243,29 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       expected: 0,
       tolerance: distanceTolerance(Math.max(Math.abs(stated.x), Math.abs(stated.y), Math.abs(stated.z), 1)),
       detail: `实测球心 (${drawn.center.x.toPrecision(6)}, ${drawn.center.y.toPrecision(6)}, ${drawn.center.z.toPrecision(6)})；题设要求 (${stated.x}, ${stated.y}, ${stated.z})。`
+    }
+  }
+  if (item.kind === "solidPrismShape") {
+    /**
+     * **形状语义也是题设**（2026-11-01）：直 / 斜 / 正、底面边数。
+     * 只看底边与高会放过“直变斜”“三变四”“正六变四”和“菱形冒充正方形”。
+     */
+    const stated = item.prismShape
+    const drawn = figures.solid
+    if (stated === undefined || drawn === null || drawn.shape !== "prism") return null
+    const failures: string[] = []
+    if (stated.sides !== undefined && drawn.sides !== stated.sides) failures.push(`底面边数实测 ${drawn.sides}，题设要求 ${stated.sides}`)
+    if (stated.regular === true && !drawn.regular) failures.push("底面不是正多边形（各边相等且顶点共圆才成立）")
+    if (stated.straight === true && !drawn.upright) failures.push("题设要求直棱柱，但侧棱不垂直底面")
+    if (stated.straight === false && drawn.upright) failures.push("题设要求斜棱柱，但侧棱垂直底面")
+    const actual = failures.length === 0 ? 0 : 1
+    return {
+      actual,
+      expected: 0,
+      tolerance: 1e-9,
+      detail: failures.length === 0
+        ? `实测棱柱：底面 ${drawn.sides} 边、${drawn.regular ? "正多边形" : "非正多边形"}、${drawn.upright ? "直棱柱" : "斜棱柱"}；与题设形状一致。`
+        : `实测棱柱：底面 ${drawn.sides} 边、${drawn.regular ? "正多边形" : "非正多边形"}、${drawn.upright ? "直棱柱" : "斜棱柱"}；${failures.join("；")}。`
     }
   }
   if (item.kind === "solidDimension") {
@@ -2157,7 +2209,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter" && kind !== "solidPrismShape"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */
@@ -2415,6 +2467,8 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
                 ? "候选图里没有唯一、可量的这条实体（少了或多了一条），或这个形状量不出这个尺寸（例如正三棱锥的底面分不出是哪三张面、底面不是正多边形），未核验。"
                 : item.kind === "solidCenter"
                   ? "候选图里没有唯一、可读的球（少了或多了一条），或球心坐标不是有限数，未核验。"
+                : item.kind === "solidPrismShape"
+                  ? "候选图里没有唯一、可读的棱柱，或底面 / 侧棱的几何退化，无法核验形状语义。"
                 : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }

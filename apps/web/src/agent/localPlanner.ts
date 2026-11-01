@@ -239,13 +239,31 @@ const PRISM = (input: LocalIntentInput): PlanEnvelope => {
     const all = readExplicitSolidConditions(input.prompt).issues.filter((issue) => issue.field.startsWith("prism."))
     return clarificationFor(all, "棱柱条件未核验")
   }
+  const sides = conditions.shape.sides
+  if (sides !== undefined && sides !== 4) {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: "棱柱底面边数暂不支持",
+      factIds: [],
+      questions: [`暂不支持${sides === 3 ? "三" : sides === 6 ? "六" : `${sides} `}棱柱的本地构造（当前只构造正方形底面的四棱柱）。请改用四棱柱，或到画布手工完成。`]
+    }
+  }
   const span = conditions.baseEdge.status === "parsed" ? conditions.baseEdge.value! : DEFAULT_PRISM_SPAN
   const height = conditions.height.status === "parsed" ? conditions.height.value! : DEFAULT_PRISM_HEIGHT
+  const straight = conditions.shape.straight
+  const regular = conditions.shape.regular === true
+  const label = `${regular ? "正" : straight === true ? "直" : straight === false ? "斜" : ""}${sides === 4 ? "四" : ""}棱柱`
+  const assumptions: string[] = []
+  if (sides === undefined) assumptions.push("题面未写底面边数，底面取正方形。")
+  if (regular && sides === undefined) assumptions.push("“正棱柱”未写底面边数，按正四棱柱（正方形底面）处理。")
+  if (straight === undefined) assumptions.push("题面未指定直 / 斜，按斜棱柱示例处理。")
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
-    goal: `创建一个底面边长 ${span}、高 ${height} 的斜棱柱`,
+    goal: `创建一个底面边长 ${span}、高 ${height} 的${label}`,
     factIds: [],
+    assumptions: assumptions.length === 0 ? undefined : assumptions,
     actions: [{
       actionId: "solid.create_prism",
       actionKey: "prism",
@@ -253,8 +271,8 @@ const PRISM = (input: LocalIntentInput): PlanEnvelope => {
       inputs: {
         alias: "prism",
         basePolygon: defaultPrismBasePolygon(span),
-        // `z` 是两底面之间的垂直分量；侧棱另有水平分量 `(1, 0.5)`，所以侧棱长不等于高。
-        vector: { x: 1, y: 0.5, z: height }
+        // 直 / 正：侧棱垂直底面；斜 / 未指定：保留水平分量，侧棱长不等于垂直高。
+        vector: straight === true ? { x: 0, y: 0, z: height } : { x: 1, y: 0.5, z: height }
       }
     }]
   }

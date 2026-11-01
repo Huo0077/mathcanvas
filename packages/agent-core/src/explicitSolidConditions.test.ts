@@ -105,6 +105,45 @@ describe("explicit solid conditions", () => {
     }
   })
 
+  it("reads prism orientation and base side count", () => {
+    expect(readExplicitSolidConditions("画一个直棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ straight: true })
+    expect(readExplicitSolidConditions("画一个正四棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ sides: 4, regular: true, straight: true })
+    expect(readExplicitSolidConditions("画一个三棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ sides: 3 })
+    expect(readExplicitSolidConditions("画一个正六棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ sides: 6, regular: true, straight: true })
+    expect(readExplicitSolidConditions("画一个斜四棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ sides: 4, straight: false })
+    expect(readExplicitSolidConditions("画一个正棱柱，底面边长 4，高 8").prism.shape).toMatchObject({ regular: true, straight: true })
+    expect(readExplicitSolidConditions("画一个棱柱，底面边长 4，高 8").prism.shape).toEqual({})
+  })
+
+  it("does not split a spaced fraction, multiplication expression or π coefficient", () => {
+    const spacedFraction = readExplicitSolidConditions("画一个球体，半径 1 / 2")
+    expect(spacedFraction.sphere.radius.status).toBe("invalid")
+    expect(spacedFraction.sphere.radius.reason).toMatch(/分数/)
+    const multiplication = readExplicitSolidConditions("画一个球体，半径 5×2")
+    expect(multiplication.sphere.radius.status).toBe("invalid")
+    expect(multiplication.sphere.radius.reason).toMatch(/乘法/)
+    const piWithSpace = readExplicitSolidConditions("画一个球体，半径 2 π")
+    expect(piWithSpace.sphere.radius.status).toBe("parsed")
+    expect(piWithSpace.sphere.radius.value).toBeCloseTo(2 * Math.PI, 12)
+    const piWithFullWidthSpace = readExplicitSolidConditions("画一个球体，半径 2\u3000π")
+    expect(piWithFullWidthSpace.sphere.radius.status).toBe("parsed")
+    expect(piWithFullWidthSpace.sphere.radius.value).toBeCloseTo(2 * Math.PI, 12)
+  })
+
+  it("rejects internal whitespace in coordinates instead of concatenating digits", () => {
+    const conditions = readExplicitSolidConditions("画一个球体，球心 (1 2,3,4)，半径 5")
+    expect(conditions.sphere.center.status).toBe("invalid")
+    expect(conditions.sphere.center.reason).toMatch(/坐标|十进制/)
+    const fullWidth = readExplicitSolidConditions("画一个球体，球心 (1\u30002, 3, 4)，半径 5")
+    expect(fullWidth.sphere.center.status).toBe("invalid")
+  })
+
+  it("rejects internal whitespace in a plain dimension", () => {
+    const conditions = readExplicitSolidConditions("画一个球体，半径 1 2")
+    expect(conditions.sphere.radius.status).toBe("invalid")
+    expect(conditions.sphere.radius.reason).toMatch(/数值|无法识别/)
+  })
+
   it("does not turn a height-only prism request into a base edge", () => {
     const heightOnly = readExplicitSolidConditions("画一个斜棱柱，高 8")
     expect(heightOnly.prism.height.value).toBe(8)

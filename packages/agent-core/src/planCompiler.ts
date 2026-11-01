@@ -124,7 +124,7 @@ function prismCarriesVertexNames(inputs: unknown): boolean {
  */
 function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
   if (!actions.some((action) => action.actionId === "solid.create_template" || action.actionId === "solid.create_regular_pyramid" || action.actionId === "solid.create_sphere" || action.actionId === "solid.create_prism")) return false
-  return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension" || entry.kind === "solidCenter")
+  return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension" || entry.kind === "solidCenter" || entry.kind === "solidPrismShape")
 }
 
 /**

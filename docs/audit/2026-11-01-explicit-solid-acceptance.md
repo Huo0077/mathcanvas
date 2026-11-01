@@ -164,6 +164,6 @@
 ## 8. 提交与推送状态
 
 - 验收题单、runner、修复与首版报告已本地提交：`104fd9a2`（`test(agent): 增加 40 题明确球体与棱柱离线验收`）。
-- 2026-11-01 多次尝试 `git push origin main` 均被网络层拒绝：Git 报 `Recv failure: Connection was reset`，`git ls-remote` 报 `curl 28 Failed to connect to github.com:443`。
-- 因此**远程尚未更新**；网络恢复后执行 `git push origin main` 即可。
-- 本节只记录上述事实，不把本地提交写成已推送。
+- 2026-11-01 的推送失败是**历史故障记录**：当时 Git 报 `Recv failure: Connection was reset`，`git ls-remote` 报 `curl 28`。
+- 网络恢复后，`842e6845..6ee90a17` 已成功推送到 `origin/main`；**远程当时已更新**。
+- 后续“棱柱形状语义与完整数值词法”修复见[新报告](2026-11-01-prism-shape-and-lexer.md)。

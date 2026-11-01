@@ -8,357 +8,700 @@
       "category": "legal",
       "request": "球心 (1,2,3)、半径 5",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为 (1,2,3)，半径为 5。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-swapped",
       "category": "legal",
       "request": "半径 4、球心 (2,-1,3.5)，语序调换",
       "prompt": "画一个球体，半径 4，球心 (2, -1, 3.5)",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为 (2,-1,3.5)，半径为 4。",
-      "geometry": { "kind": "sphere", "center": { "x": 2, "y": -1, "z": 3.5 }, "radius": 4 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 2,
+          "y": -1,
+          "z": 3.5
+        },
+        "radius": 4
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-chinese-punctuation",
       "category": "legal",
       "request": "中文标点、负坐标、小数坐标",
       "prompt": "画一个球体，球心（−1，2.5，−3），半径 4。",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为 (-1,2.5,-3)，半径为 4。",
-      "geometry": { "kind": "sphere", "center": { "x": -1, "y": 2.5, "z": -3 }, "radius": 4 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": -1,
+          "y": 2.5,
+          "z": -3
+        },
+        "radius": 4
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-origin",
       "category": "legal",
       "request": "球心在原点、半径 6",
       "prompt": "画一个球体，球心在原点，半径 6",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为原点，半径为 6。",
-      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 6 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 6
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-radical",
       "category": "legal",
       "request": "半径写成 2√3",
       "prompt": "画一个球体，球心 (0,0,0)，半径 2√3",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终半径为 2√3 ≈ 3.4641016151377544。",
-      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 3.4641016151377544 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 3.4641016151377544
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-pi",
       "category": "legal",
       "request": "半径写成 2π",
       "prompt": "画一个球体，球心 (0,0,1)，半径 2π",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终半径为 2π ≈ 6.283185307179586。",
-      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 1 }, "radius": 6.283185307179586 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "radius": 6.283185307179586
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-base-height",
       "category": "legal",
       "request": "底面边长 4、高 8",
       "prompt": "画一个斜棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-reversed",
       "category": "legal",
       "request": "先高后底边",
       "prompt": "画一个斜棱柱，高 8，底面边长 4",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-decimal",
       "category": "legal",
       "request": "直棱柱、底面边长 3.5、高度 6.5",
       "prompt": "画一个直棱柱，底面边长 3.5，高度 6.5",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 3.5，两底面垂直高为 6.5。",
-      "geometry": { "kind": "prism", "baseEdge": 3.5, "height": 6.5 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 3.5,
+        "height": 6.5,
+        "upright": true
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-four",
       "category": "legal",
       "request": "斜四棱柱、底面边长 4、高 8",
       "prompt": "画一个斜四棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "sides": 4,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-tight",
       "category": "legal",
       "request": "无空格写法",
       "prompt": "画一个斜棱柱，底面边长4，高8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-generic-with-dimensions",
       "category": "legal",
       "request": "泛称棱柱但明确给出底边和高",
       "prompt": "画一个棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-ascii-tight",
       "category": "legal",
       "request": "ASCII 逗号、无空格",
       "prompt": "画一个球体,球心(1,2,3),半径5",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为 (1,2,3)，半径为 5。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-sphere-negative-no-space",
       "category": "legal",
       "request": "负坐标、无空格",
       "prompt": "画一个球体，球心(-2,0.5,3.25)，半径4",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终球心为 (-2,0.5,3.25)，半径为 4。",
-      "geometry": { "kind": "sphere", "center": { "x": -2, "y": 0.5, "z": 3.25 }, "radius": 4 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": -2,
+          "y": 0.5,
+          "z": 3.25
+        },
+        "radius": 4
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-regular",
       "category": "legal",
       "request": "正棱柱、底面边长 4、高 8",
       "prompt": "画一个正棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "regular": true,
+        "upright": true
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "legal-prism-spaced",
       "category": "legal",
       "request": "底边和高之间有额外空格",
       "prompt": "画一个斜棱柱，底面边长 4 ， 高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "最终底边为 4，两底面垂直高为 8。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "missing-sphere-default-all",
       "category": "missing",
       "request": "球体什么尺寸都没给",
       "prompt": "画一个球体",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "允许使用共享默认半径 2 和原点球心，并在计划里披露。",
-      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 2 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 2
+      },
       "requireVerification": false,
-      "defaults": { "allowed": true, "disclosure": ["半径 2", "球心 (0, 0, 0)"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "半径 2",
+          "球心 (0, 0, 0)"
+        ]
+      }
     },
     {
       "id": "missing-sphere-center-only",
       "category": "missing",
       "request": "只给球心",
       "prompt": "画一个球体，球心 (1,2,3)",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "球心照用，半径允许使用默认 2 并披露。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 2 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 2
+      },
       "requireVerification": true,
-      "defaults": { "allowed": true, "disclosure": ["半径 2"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "半径 2"
+        ]
+      }
     },
     {
       "id": "missing-sphere-radius-only",
       "category": "missing",
       "request": "只给半径",
       "prompt": "画一个球体，半径 5",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "半径照用，球心允许使用默认原点并披露。",
-      "geometry": { "kind": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "radius": 5
+      },
       "requireVerification": true,
-      "defaults": { "allowed": true, "disclosure": ["球心 (0, 0, 0)"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "球心 (0, 0, 0)"
+        ]
+      }
     },
     {
       "id": "missing-prism-default-all",
       "category": "missing",
       "request": "斜棱柱什么尺寸都没给",
       "prompt": "画一个斜棱柱",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "允许使用共享默认底边 4 和高 3，并在计划里披露。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 3 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 3,
+        "upright": false
+      },
       "requireVerification": false,
-      "defaults": { "allowed": true, "disclosure": ["底面边长 4", "高 3"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "底面边长 4",
+          "高 3"
+        ]
+      }
     },
     {
       "id": "missing-prism-base-only",
       "category": "missing",
       "request": "只给底面边长",
       "prompt": "画一个斜棱柱，底面边长 4",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "底边照用，高度允许使用默认 3 并披露。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 3 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 3,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": true, "disclosure": ["高 3"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "高 3"
+        ]
+      }
     },
     {
       "id": "missing-prism-height-only",
       "category": "missing",
       "request": "只给高",
       "prompt": "画一个斜棱柱，高 8",
-      "allowedTerminals": ["plan"],
+      "allowedTerminals": [
+        "plan"
+      ],
       "mustSatisfy": "高度照用，底边允许使用默认 4 并披露。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "requireVerification": true,
-      "defaults": { "allowed": true, "disclosure": ["底面边长 4"] }
+      "defaults": {
+        "allowed": true,
+        "disclosure": [
+          "底面边长 4"
+        ]
+      }
     },
     {
       "id": "missing-sphere-center-label",
       "category": "missing",
       "request": "写了球心但没给坐标",
       "prompt": "画一个球体，球心",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清球心，不能用原点静默顶替。",
       "clarificationContains": "球心",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "missing-prism-height-label",
       "category": "missing",
       "request": "写了高但没给数值",
       "prompt": "画一个斜棱柱，高",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清高度，不能用默认高静默顶替。",
       "clarificationContains": "数值",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-center-conflict",
       "category": "invalid",
       "request": "球心重复且冲突",
       "prompt": "画一个球体，球心 (1,2,3)，球心 (1,2,4)，半径 5",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清冲突，不能任选一个球心。",
       "clarificationContains": "矛盾",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-radius-conflict",
       "category": "invalid",
       "request": "半径重复且冲突",
       "prompt": "画一个球体，半径 5，半径 6",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清冲突，不能任选一个半径。",
       "clarificationContains": "矛盾",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-prism-base-conflict",
       "category": "invalid",
       "request": "底边重复且冲突",
       "prompt": "画一个斜棱柱，底面边长 4，底面边长 5，高 8",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清冲突，不能任选一个底边。",
       "clarificationContains": "矛盾",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-prism-height-conflict",
       "category": "invalid",
       "request": "高重复且冲突",
       "prompt": "画一个斜棱柱，底面边长 4，高 8，高 9",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清冲突，不能任选一个高。",
       "clarificationContains": "矛盾",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-radius-zero",
       "category": "invalid",
       "request": "半径为零",
       "prompt": "画一个球体，半径 0",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须拒绝零半径，不能默认成 2。",
       "clarificationContains": "正数",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-radius-fraction",
       "category": "invalid",
       "request": "不支持的分数",
       "prompt": "画一个球体，半径 1/2",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须明确拒绝分数，不能读成 1 或默认 2。",
       "clarificationContains": "分数",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-height-scientific",
       "category": "invalid",
       "request": "不支持/溢出的科学计数法",
       "prompt": "画一个斜棱柱，高 1e999",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须明确拒绝科学计数法或报告溢出，不能读成 1。",
       "clarificationContains": "科学计数法",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "invalid-center-two-coords",
       "category": "invalid",
       "request": "球心只给了两个坐标",
       "prompt": "画一个球体，球心 (1,2)，半径 5",
-      "allowedTerminals": ["clarification"],
+      "allowedTerminals": [
+        "clarification"
+      ],
       "mustSatisfy": "必须澄清球心需要三个坐标，不能用原点顶替。",
       "clarificationContains": "三个坐标",
-      "defaults": { "allowed": false, "disclosure": [] }
+      "defaults": {
+        "allowed": false,
+        "disclosure": []
+      }
     },
     {
       "id": "wrong-sphere-center",
       "category": "wrong_plan",
       "request": "要求球心 (1,2,3)、半径 5",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划把球心放在原点，必须被拦截。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "错误球心",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_sphere", "actionKey": "sphere", "factIds": [], "inputs": { "alias": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 5 } }]
+        "actions": [
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere",
+              "center": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "radius": 5
+            }
+          }
+        ]
       }
     },
     {
@@ -366,15 +709,40 @@
       "category": "wrong_plan",
       "request": "要求半径 5",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划把半径改成默认 2，必须被拦截。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "错误半径",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_sphere", "actionKey": "sphere", "factIds": [], "inputs": { "alias": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 2 } }]
+        "actions": [
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere",
+              "center": {
+                "x": 1,
+                "y": 2,
+                "z": 3
+              },
+              "radius": 2
+            }
+          }
+        ]
       }
     },
     {
@@ -382,15 +750,58 @@
       "category": "wrong_plan",
       "request": "要求底边 4、高 8",
       "prompt": "画一个斜棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划底边为 3，必须被拦截。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "错误底边",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_prism", "actionKey": "prism", "factIds": [], "inputs": { "alias": "prism", "basePolygon": [{ "x": 0, "y": 0, "z": 0 }, { "x": 3, "y": 0, "z": 0 }, { "x": 3, "y": 3, "z": 0 }, { "x": 0, "y": 3, "z": 0 }], "vector": { "x": 1, "y": 0.5, "z": 8 } } }]
+        "actions": [
+          {
+            "actionId": "solid.create_prism",
+            "actionKey": "prism",
+            "factIds": [],
+            "inputs": {
+              "alias": "prism",
+              "basePolygon": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 3,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 3,
+                  "y": 3,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 3,
+                  "z": 0
+                }
+              ],
+              "vector": {
+                "x": 1,
+                "y": 0.5,
+                "z": 8
+              }
+            }
+          }
+        ]
       }
     },
     {
@@ -398,15 +809,58 @@
       "category": "wrong_plan",
       "request": "要求垂直高 8",
       "prompt": "画一个斜棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "侧棱长为 8 但垂直高只有 4，必须被拦截。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "侧棱冒充高",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_prism", "actionKey": "prism", "factIds": [], "inputs": { "alias": "prism", "basePolygon": [{ "x": 0, "y": 0, "z": 0 }, { "x": 4, "y": 0, "z": 0 }, { "x": 4, "y": 4, "z": 0 }, { "x": 0, "y": 4, "z": 0 }], "vector": { "x": 6.928203230275509, "y": 0, "z": 4 } } }]
+        "actions": [
+          {
+            "actionId": "solid.create_prism",
+            "actionKey": "prism",
+            "factIds": [],
+            "inputs": {
+              "alias": "prism",
+              "basePolygon": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 4,
+                  "y": 0,
+                  "z": 0
+                },
+                {
+                  "x": 4,
+                  "y": 4,
+                  "z": 0
+                },
+                {
+                  "x": 0,
+                  "y": 4,
+                  "z": 0
+                }
+              ],
+              "vector": {
+                "x": 6.928203230275509,
+                "y": 0,
+                "z": 4
+              }
+            }
+          }
+        ]
       }
     },
     {
@@ -414,15 +868,45 @@
       "category": "wrong_plan",
       "request": "要求球体",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划只建了立方体，没有球体，必须被拦截。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "错误实体",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_template", "actionKey": "cube", "factIds": [], "inputs": { "alias": "cube", "template": "cube", "origin": { "x": 0, "y": 0, "z": 0 }, "size": { "x": 2, "y": 2, "z": 2 } } }]
+        "actions": [
+          {
+            "actionId": "solid.create_template",
+            "actionKey": "cube",
+            "factIds": [],
+            "inputs": {
+              "alias": "cube",
+              "template": "cube",
+              "origin": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "size": {
+                "x": 2,
+                "y": 2,
+                "z": 2
+              }
+            }
+          }
+        ]
       }
     },
     {
@@ -430,15 +914,37 @@
       "category": "wrong_plan",
       "request": "要求棱柱",
       "prompt": "画一个斜棱柱，底面边长 4，高 8",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划建的是球体而不是棱柱，必须被拦截。",
-      "geometry": { "kind": "prism", "baseEdge": 4, "height": 8 },
+      "geometry": {
+        "kind": "prism",
+        "baseEdge": 4,
+        "height": 8,
+        "upright": false
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "错误类型",
         "factIds": [],
-        "actions": [{ "actionId": "solid.create_sphere", "actionKey": "sphere", "factIds": [], "inputs": { "alias": "sphere", "center": { "x": 0, "y": 0, "z": 0 }, "radius": 5 } }]
+        "actions": [
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere",
+              "center": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "radius": 5
+            }
+          }
+        ]
       }
     },
     {
@@ -446,17 +952,53 @@
       "category": "wrong_plan",
       "request": "只要求一个球体",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划生成两个球体，必须被拦截。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "多个球体",
         "factIds": [],
         "actions": [
-          { "actionId": "solid.create_sphere", "actionKey": "sphere-a", "factIds": [], "inputs": { "alias": "sphere-a", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 } },
-          { "actionId": "solid.create_sphere", "actionKey": "sphere-b", "factIds": [], "inputs": { "alias": "sphere-b", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 } }
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere-a",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere-a",
+              "center": {
+                "x": 1,
+                "y": 2,
+                "z": 3
+              },
+              "radius": 5
+            }
+          },
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere-b",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere-b",
+              "center": {
+                "x": 1,
+                "y": 2,
+                "z": 3
+              },
+              "radius": 5
+            }
+          }
         ]
       }
     },
@@ -465,17 +1007,58 @@
       "category": "wrong_plan",
       "request": "只要求一个球体",
       "prompt": "画一个球体，球心 (1,2,3)，半径 5",
-      "allowedTerminals": ["rejected"],
+      "allowedTerminals": [
+        "rejected"
+      ],
       "mustSatisfy": "计划在正确球体之外又建了一个立方体，属于对象归属不清，必须被拦截。",
-      "geometry": { "kind": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 },
+      "geometry": {
+        "kind": "sphere",
+        "center": {
+          "x": 1,
+          "y": 2,
+          "z": 3
+        },
+        "radius": 5
+      },
       "plan": {
         "schemaVersion": "mathcanvas.plan.v1",
         "kind": "plan",
         "goal": "球体加多余实体",
         "factIds": [],
         "actions": [
-          { "actionId": "solid.create_sphere", "actionKey": "sphere", "factIds": [], "inputs": { "alias": "sphere", "center": { "x": 1, "y": 2, "z": 3 }, "radius": 5 } },
-          { "actionId": "solid.create_template", "actionKey": "cube", "factIds": [], "inputs": { "alias": "cube", "template": "cube", "origin": { "x": 0, "y": 0, "z": 0 }, "size": { "x": 2, "y": 2, "z": 2 } } }
+          {
+            "actionId": "solid.create_sphere",
+            "actionKey": "sphere",
+            "factIds": [],
+            "inputs": {
+              "alias": "sphere",
+              "center": {
+                "x": 1,
+                "y": 2,
+                "z": 3
+              },
+              "radius": 5
+            }
+          },
+          {
+            "actionId": "solid.create_template",
+            "actionKey": "cube",
+            "factIds": [],
+            "inputs": {
+              "alias": "cube",
+              "template": "cube",
+              "origin": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              "size": {
+                "x": 2,
+                "y": 2,
+                "z": 2
+              }
+            }
+          }
         ]
       }
     }

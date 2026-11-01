@@ -23,6 +23,12 @@ interface GeometryExpectation {
   radius?: number
   baseEdge?: number
   height?: number
+  /** 底面边数（题面显式写了三 / 四 / 六 / 正 N 时）。 */
+  sides?: number
+  /** 底面是否是正多边形（各边相等 + 顶点共圆）。 */
+  regular?: boolean
+  /** `true` = 直棱柱；`false` = 斜棱柱；缺省 = 题面没要求。 */
+  upright?: boolean
 }
 interface AcceptanceCase {
   id: string
@@ -45,6 +51,15 @@ interface CaseFile {
   cases: readonly AcceptanceCase[]
 }
 
+interface AcceptanceManifest {
+  version: number
+  suite: string
+  notice?: string
+  suites: readonly { name: string; file: string; expected: number }[]
+}
+
+type LoadedCase = AcceptanceCase & { suite: string }
+
 interface GeometryFact { name: string; status: "passed" | "failed"; detail: string }
 interface GeometryResult { status: "passed" | "failed" | "not_applicable"; facts: GeometryFact[] }
 
@@ -52,6 +67,7 @@ type Terminal = "plan" | "clarification" | "rejected" | "accepted" | "error"
 
 interface CaseReport {
   id: string
+  suite: string
   category: AcceptanceCase["category"]
   request: string
   prompt: string
@@ -81,9 +97,21 @@ const REVISION = env.MATHCANVAS_EXPLICIT_ACCEPTANCE_REVISION ?? "unknown"
 if (!REPORT_DIR?.trim()) throw new Error("Use scripts/explicit-solid-acceptance/runner.mjs — it selects a report directory")
 if (!CASES_FILE?.trim()) throw new Error("Use scripts/explicit-solid-acceptance/runner.mjs — it selects the fixed case file")
 
-const caseFile = await readSolidReport(CASES_FILE) as CaseFile
-if (caseFile.version !== 1 || !Array.isArray(caseFile.cases) || caseFile.cases.length !== 40) {
-  throw new Error(`the acceptance suite must contain exactly 40 cases; got ${JSON.stringify(caseFile).slice(0, 160)}`)
+const manifest = await readSolidReport(CASES_FILE) as AcceptanceManifest
+if (manifest.version !== 1 || !Array.isArray(manifest.suites) || manifest.suites.length === 0) {
+  throw new Error(`invalid acceptance manifest: ${JSON.stringify(manifest).slice(0, 160)}`)
+}
+const caseDir = CASES_FILE.slice(0, Math.max(CASES_FILE.lastIndexOf("/"), CASES_FILE.lastIndexOf("\\")) + 1)
+const loadedCases: LoadedCase[] = []
+for (const suiteEntry of manifest.suites) {
+  const suite = await readSolidReport(`${caseDir}${suiteEntry.file}`) as CaseFile
+  if (suite.version !== 1 || !Array.isArray(suite.cases) || suite.cases.length !== suiteEntry.expected) {
+    throw new Error(`suite ${suiteEntry.name} must contain ${suiteEntry.expected} cases`)
+  }
+  loadedCases.push(...suite.cases.map((entry) => ({ ...entry, suite: suiteEntry.name })))
+}
+if (loadedCases.length !== manifest.suites.reduce((total, suiteEntry) => total + suiteEntry.expected, 0)) {
+  throw new Error("manifest and loaded case counts disagree")
 }
 
 const subtract = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
@@ -157,6 +185,24 @@ function evaluateGeometry(primitives: readonly PrimitiveSpec[], expected: Geomet
       const height = Math.abs(dot(vector, normal))
       check("prism-vertical-height", near(height, expected.height), `实测两底面垂直高 ${height.toPrecision(8)}；期望 ${expected.height}；侧棱长 ${length(vector).toPrecision(8)}`)
     }
+    const meanEdge = edges.reduce((sum, edge) => sum + edge, 0) / edges.length
+    const equalEdges = edges.every((edge) => near(edge, meanEdge))
+    const centroid = polygon.reduce((sum, point) => ({ x: sum.x + point.x / polygon.length, y: sum.y + point.y / polygon.length, z: sum.z + point.z / polygon.length }), { x: 0, y: 0, z: 0 })
+    const radii = polygon.map((point) => length(subtract(point, centroid)))
+    const maxRadius = Math.max(...radii)
+    const concyclic = maxRadius > 0 && maxRadius - Math.min(...radii) <= 1e-6 * Math.max(1, maxRadius)
+    const regular = equalEdges && concyclic
+    const lateral = length(vector)
+    const upright = Math.abs(Math.abs(dot(vector, normal)) - lateral) <= 1e-6 * Math.max(1, lateral)
+    if (expected.sides !== undefined) {
+      check("prism-sides", polygon.length === expected.sides, `实测底面边数 ${polygon.length}；期望 ${expected.sides}`)
+    }
+    if (expected.regular !== undefined) {
+      check("prism-regular", regular === expected.regular, `实测底面 ${regular ? "是" : "不是"}正多边形（各边相等=${equalEdges}，顶点共圆=${concyclic}）；期望 ${expected.regular ? "是" : "不是"}`)
+    }
+    if (expected.upright !== undefined) {
+      check("prism-upright", upright === expected.upright, `实测侧棱${upright ? "垂直" : "不垂直"}底面（侧棱长 ${lateral.toPrecision(8)}，垂直高 ${Math.abs(dot(vector, normal)).toPrecision(8)}）；期望${expected.upright ? "直" : "斜"}棱柱`)
+    }
   }
 
   return { status: facts.every((fact) => fact.status === "passed") ? "passed" : "failed", facts }
@@ -175,11 +221,12 @@ function checkDisclosure(entry: AcceptanceCase, plan: PlanEnvelope): { ok: boole
 }
 
 function reportFor(
-  entry: AcceptanceCase,
-  partial: Omit<CaseReport, "id" | "category" | "request" | "prompt" | "allowedTerminals">
+  entry: LoadedCase,
+  partial: Omit<CaseReport, "id" | "suite" | "category" | "request" | "prompt" | "allowedTerminals">
 ): CaseReport {
   return {
     id: entry.id,
+    suite: entry.suite,
     category: entry.category,
     request: entry.request,
     prompt: entry.prompt,
@@ -192,7 +239,7 @@ const planner = createLocalPlanner()
 const reports: CaseReport[] = []
 const startedAt = new Date().toISOString()
 
-for (const entry of caseFile.cases) {
+for (const entry of loadedCases) {
   const started = Date.now()
   try {
     if (entry.category === "wrong_plan") {
@@ -334,12 +381,20 @@ for (const entry of caseFile.cases) {
 
 const byCategory = (category: AcceptanceCase["category"]) => reports.filter((report) => report.category === category)
 const summary = {
-  suite: caseFile.suite,
+  suite: manifest.suite,
   mode: "offline",
   revision: REVISION,
   startedAt,
-  notice: caseFile.notice,
+  notice: manifest.notice,
   cases: reports,
+  suites: Object.fromEntries(manifest.suites.map((suiteEntry) => {
+    const suiteReports = reports.filter((report) => report.suite === suiteEntry.name)
+    return [suiteEntry.name, {
+      total: suiteReports.length,
+      passed: suiteReports.filter((report) => report.passed).length,
+      rate: suiteReports.length === 0 ? 0 : suiteReports.filter((report) => report.passed).length / suiteReports.length
+    }]
+  })),
   categories: {
     legal: {
       total: byCategory("legal").length,
@@ -364,7 +419,8 @@ const summary = {
       draftAccepted: byCategory("wrong_plan").filter((report) => report.stagedOk === true).length
     }
   },
-  wrongFigureAccepted: reports.filter((report) => report.category === "wrong_plan" && (report.compiledOk === true || report.stagedOk === true)).length,
+  wrongFigureAccepted: reports.filter((report) => report.passed === false && (report.compiledOk === true || report.stagedOk === true)).length,
+  acceptedErrorIds: reports.filter((report) => report.passed === false && (report.compiledOk === true || report.stagedOk === true)).map((report) => report.id),
   totals: {
     cases: reports.length,
     ran: reports.length,
@@ -376,24 +432,26 @@ const summary = {
   costKnown: false,
   notes: [
     "自编离线验收题单，未经独立人工复核；不是真实模型盲测，也不代表真实 provider 成功率。",
-    "独立判据只读最终候选文档的图元并自行计算球心/半径、底边/垂直高，不读产品 passed 作为唯一判据。",
-    "错误图被当作成功：错误计划在 compilePlan 或 DraftStore.stage 任一侧通过即计入。",
-    "未执行数为 0；所有 40 条都跑过。"
+    "独立判据只读最终候选文档的图元并自行计算球心/半径、底边/垂直高、底面边数、正多边形条件与直/斜关系，不读产品 passed 作为唯一判据。",
+    "错误图被当作成功：**所有类别**中，失败项只要在 compilePlan 或 DraftStore.stage 任一侧通过就计入，不只统计 wrong_plan。",
+    "未执行数为 0；所有题都跑过。"
   ]
 }
 
 await writeSolidReport(`${REPORT_DIR}/summary.json`, summary, [env.DEEPSEEK_API_KEY ?? ""])
 
-describe("explicit solid 40-case offline acceptance", () => {
+describe("explicit solid 54-case offline acceptance", () => {
   it("ran every fixed case and recorded a machine-readable report", () => {
-    expect(reports).toHaveLength(40)
-    expect(summary.totals.ran).toBe(40)
+    expect(reports).toHaveLength(54)
+    expect(summary.totals.ran).toBe(54)
   })
 
   it("meets the pre-registered category thresholds", () => {
-    expect(summary.categories.legal.passed, JSON.stringify(reports.filter((report) => report.category === "legal" && !report.passed), null, 2)).toBe(16)
-    expect(summary.categories.missing.passed, JSON.stringify(reports.filter((report) => report.category === "missing" && !report.passed), null, 2)).toBe(8)
-    expect(summary.categories.invalid.passed, JSON.stringify(reports.filter((report) => report.category === "invalid" && !report.passed), null, 2)).toBe(8)
+    expect(summary.suites["baseline-40"].passed, JSON.stringify(reports.filter((report) => report.suite === "baseline-40" && !report.passed), null, 2)).toBe(40)
+    expect(summary.suites["external-review"].passed, JSON.stringify(reports.filter((report) => report.suite === "external-review" && !report.passed), null, 2)).toBe(14)
+    expect(summary.categories.legal.passed, JSON.stringify(reports.filter((report) => report.category === "legal" && !report.passed), null, 2)).toBe(22)
+    expect(summary.categories.missing.passed, JSON.stringify(reports.filter((report) => report.category === "missing" && !report.passed), null, 2)).toBe(10)
+    expect(summary.categories.invalid.passed, JSON.stringify(reports.filter((report) => report.category === "invalid" && !report.passed), null, 2)).toBe(14)
     expect(summary.categories.wrongPlan.blocked, JSON.stringify(reports.filter((report) => report.category === "wrong_plan" && !report.passed), null, 2)).toBe(8)
     expect(summary.wrongFigureAccepted).toBe(0)
   })

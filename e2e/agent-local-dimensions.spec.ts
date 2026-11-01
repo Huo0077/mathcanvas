@@ -117,6 +117,37 @@ test("the committed oblique prism has base edge 4 and vertical height 8, not sid
   }
 })
 
+test("the committed straight prism keeps vertical lateral edges", async ({ page }) => {
+  await openAgent(page)
+  await send(page, "画一个直棱柱，底面边长 4，高 8")
+
+  const panel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(panel).toBeVisible()
+  const verification = panel.getByRole("region", { name: "题设核验" })
+  await expect(verification).toHaveAttribute("data-status", "passed")
+  await expect(verification).toContainText("直棱柱")
+
+  await commitDraft(page)
+  await expect.poll(async () => (await readPrimitives(page)).some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+  const primitives = await readPrimitives(page)
+  const solid = primitives.find((primitive) => primitive.type === "polyhedron3")
+  const points = (solid?.vertexIds ?? []).map((id) => {
+    const point = primitives.find((primitive) => primitive.id === id)
+    if (point?.position === undefined) throw new Error(`顶点 ${id} 没有坐标`)
+    return point.position
+  })
+  const base = points.slice(0, 4)
+  const top = points.slice(4)
+  for (let index = 0; index < 4; index += 1) {
+    const next = (index + 1) % 4
+    expect(Math.hypot(base[index]!.x - base[next]!.x, base[index]!.y - base[next]!.y, base[index]!.z - base[next]!.z)).toBeCloseTo(4, 6)
+    expect(top[index]!.x - base[index]!.x).toBeCloseTo(0, 6)
+    expect(top[index]!.y - base[index]!.y).toBeCloseTo(0, 6)
+    expect(top[index]!.z - base[index]!.z).toBeCloseTo(8, 6)
+    expect(Math.hypot(top[index]!.x - base[index]!.x, top[index]!.y - base[index]!.y, top[index]!.z - base[index]!.z)).toBeCloseTo(8, 6)
+  }
+})
+
 test("the height-only prism uses the disclosed default base edge 4 and commits vertical height 8", async ({ page }) => {
   await openAgent(page)
   await send(page, "画一个斜棱柱，高 8")
@@ -144,6 +175,24 @@ test("the height-only prism uses the disclosed default base edge 4 and commits v
     expect(top[index]!.z - base[index]!.z).toBeCloseTo(8, 6)
     expect(Math.hypot(top[index]!.x - base[index]!.x, top[index]!.y - base[index]!.y, top[index]!.z - base[index]!.z)).toBeGreaterThan(8)
   }
+})
+
+test("a spaced fraction asks for clarification and never produces a draft", async ({ page }) => {
+  await openAgent(page)
+  const before = await readPrimitives(page)
+  await send(page, "画一个球体，半径 1 / 2")
+
+  await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
+  const status = page.getByRole("region", { name: "运行状态" }).last()
+  await expect(status).toBeVisible()
+  await expect(status.locator(".agent-run-state")).not.toHaveText("进行中")
+  await expect(status).not.toBeEmpty()
+  await expect(page.getByText(/分数|不支持/).first()).toBeVisible()
+
+  expect(await readPrimitives(page)).toEqual(before)
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "撤销", exact: true })).toBeDisabled()
 })
 
 test("an unsupported explicit value asks for clarification instead of defaulting", async ({ page }) => {

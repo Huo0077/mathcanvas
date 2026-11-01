@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "suite": "explicit-solid-acceptance",
+  "notice": "自编离线验收集，未经独立人工复核；不是真实模型盲测。",
+  "suites": [
+    { "name": "baseline-40", "file": "cases.json", "expected": 40 },
+    { "name": "external-review", "file": "external-review-11.json", "expected": 14 }
+  ]
+}

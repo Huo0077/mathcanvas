@@ -35,7 +35,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       const outDir = path.resolve(options.out ?? path.join(root, "eval-results", "explicit-solid-acceptance", `offline-${stamp}-${process.pid}`))
       const env = { ...process.env }
       env.MATHCANVAS_EXPLICIT_ACCEPTANCE_REPORT = outDir
-      env.MATHCANVAS_EXPLICIT_ACCEPTANCE_CASES = path.resolve(options.cases ?? path.join(root, "test-fixtures", "explicit-solid-acceptance", "cases.json"))
+      env.MATHCANVAS_EXPLICIT_ACCEPTANCE_CASES = path.resolve(options.cases ?? path.join(root, "test-fixtures", "explicit-solid-acceptance", "manifest.json"))
       env.MATHCANVAS_EXPLICIT_ACCEPTANCE_REVISION = revision.status === 0 ? revision.stdout.trim() : "unknown"
       const result = spawnSync(process.execPath, [path.join(root, "node_modules/vitest/vitest.mjs"), "run", "--config", "vitest.explicit-solid.config.ts"], { cwd: root, env, stdio: "inherit" })
       console.log(`Report directory: ${outDir}`)
