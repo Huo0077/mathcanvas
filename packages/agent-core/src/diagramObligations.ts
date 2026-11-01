@@ -1,5 +1,6 @@
 import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 
+import { readExplicitSolidConditions } from "./explicitSolidConditions"
 import { parseShapeClause } from "./solver/shapeGrammar"
 import { parseLengthChains } from "./lengthEquality"
 
@@ -97,6 +98,14 @@ export type DiagramObligationKind =
    * 圆锥 / 圆柱**不带题面点名**，所以此前这三个字面量根本没进过核验。
    */
   | "solidDimension"
+  /**
+   * **球心的明确坐标**（2026-11-01）：`球心 (1,2,3)` / `球心在原点`。
+   *
+   * 只写半径时，球心的默认值仍然只能是原点；但**一旦题面写了球心**，那句原话就是
+   * 一条独立判据 —— 半径对、位置挪了三格，仍然是另一只球。坐标存在 `coordinate`，
+   * 核验时与最终 `sphere` 图元的 `center` 比较。
+   */
+  | "solidCenter"
   /**
    * **直线与这条圆锥曲线的交点**（Task 14）。
    *
@@ -218,7 +227,7 @@ export interface DiagramObligation {
    * 由核验层在**候选图**里认（与 `conicAxes` 认曲线同一条纪律：不在计划里猜）。
    */
   solid?: {
-    shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid" | "polyhedron"
+    shape: "cone" | "cylinder" | "pyramid" | "sphere" | "cuboid" | "polyhedron" | "prism"
     metric: "radius" | "height" | "slantHeight" | "baseArea" | "lateralArea" | "baseEdge" | "lateralEdge" | "basePerimeter" | "surfaceArea" | "volume" | "circumradius" | "inradius"
   }
   /**
@@ -626,6 +635,8 @@ const SOLID_METRICS: Record<NonNullable<DiagramObligation["solid"]>["shape"], Re
   sphere: new Set(["radius", "surfaceArea", "volume"]),
   /** 长方体的两个派生球半径（外接球 / 内切球）—— 同样走专用句型。 */
   cuboid: new Set(["circumradius", "inradius"]),
+  /** 棱柱（2026-11-01）：底边与两底面垂直高分开量；侧棱长是另一件事。 */
+  prism: new Set(["baseEdge", "height", "basePerimeter", "lateralEdge"]),
   /** 一般多面体（`polyhedron3`）：判据从网格算，不收别的度量。 */
   polyhedron: new Set(["circumradius", "inradius"])
 }
@@ -696,6 +707,86 @@ function resolveSolidDimensions(
       for (let at = start; at < start + match[0].length; at += 1) used.add(at)
     }
   }
+}
+
+/**
+ * **明确给出的球 / 棱柱条件**（2026-11-01）。
+ *
+ * 读取规则只有一份（`explicitSolidConditions`），这里只负责把它转成义务，并**先把原话标成已用**：
+ * 否则既有的“球的半径”读取器会把同一句再读一遍，而 `1e999` / `1/2` 这类写法会被它截成 `1`
+ * 再当成一条合法条件 —— 那正是本轮要消灭的“只吃一部分”。
+ *
+ * 读不懂 / 互相矛盾时**不产出义务**，而是落进 `unverified`；编译器再按同一份 `issues`
+ * 给出 error，默认值没有机会接手。
+ */
+function resolveExplicitSolidConditions(
+  givens: DiagramObligation[],
+  unverified: DiagramObligationSet["unverified"],
+  givenText: string,
+  used: Set<number>
+): void {
+  const conditions = readExplicitSolidConditions(givenText)
+  if (!conditions.sphere.requested && !conditions.prism.requested) return
+
+  const mark = (pattern: RegExp): void => {
+    for (const match of givenText.matchAll(pattern)) {
+      for (let at = match.index; at < match.index + match[0].length; at += 1) used.add(at)
+    }
+  }
+  const markCondition = (sourceText: string | undefined, labels: RegExp): void => {
+    const at = sourceText === undefined ? -1 : givenText.indexOf(sourceText)
+    if (at >= 0 && sourceText !== undefined) {
+      for (let index = at; index < at + sourceText.length; index += 1) used.add(index)
+    } else {
+      mark(labels)
+    }
+  }
+  const pushValue = (
+    value: { status: string; value?: number; sourceText?: string; reason?: string },
+    solid: NonNullable<DiagramObligation["solid"]>,
+    label: RegExp
+  ): void => {
+    if (value.status === "parsed" && value.value !== undefined) {
+      const sourceText = value.sourceText ?? solid.metric
+      const start = givenText.indexOf(sourceText)
+      givens.push({
+        kind: "solidDimension",
+        targets: [],
+        value: value.value,
+        solid,
+        sourceText,
+        start: start < 0 ? 0 : start,
+        end: start < 0 ? sourceText.length : start + sourceText.length
+      })
+      markCondition(sourceText, label)
+    } else if (value.status === "invalid") {
+      const sourceText = value.sourceText ?? solid.metric
+      unverified.push({ sourceText, reason: value.reason ?? "这条明确给出的条件无法读取。" })
+      markCondition(sourceText, label)
+    }
+  }
+
+  const center = conditions.sphere.center
+  if (center.status === "parsed" && center.value !== undefined) {
+    const sourceText = center.sourceText ?? "球心"
+    const start = givenText.indexOf(sourceText)
+    givens.push({
+      kind: "solidCenter",
+      targets: [],
+      coordinate: center.value,
+      sourceText,
+      start: start < 0 ? 0 : start,
+      end: start < 0 ? sourceText.length : start + sourceText.length
+    })
+    markCondition(sourceText, /球心/g)
+  } else if (center.status === "invalid") {
+    unverified.push({ sourceText: center.sourceText ?? "球心", reason: center.reason ?? "球心条件无法读取。" })
+    markCondition(center.sourceText, /球心/g)
+  }
+
+  pushValue(conditions.sphere.radius, { shape: "sphere", metric: "radius" }, /半径/g)
+  pushValue(conditions.prism.baseEdge, { shape: "prism", metric: "baseEdge" }, /底面\s*(?:边长|边)|底边长|底边|边长/g)
+  pushValue(conditions.prism.height, { shape: "prism", metric: "height" }, /高(?:度)?/g)
 }
 
 /**
@@ -2012,6 +2103,12 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
     }
   }
 
+  /**
+   * **球 / 棱柱的明确条件必须排在通用句型之前**：通用“球的半径”读取器只认一小段数字词法，
+   * 遇到 `1e999` / `1/2` 会截成 `1`。先由共享读取器把整段消费掉，读不懂就直接落未核验。
+   */
+  resolveExplicitSolidConditions(givens, unverified, givenText, used)
+
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
   for (const { pattern, read, allowAfterLabelColon, allowOverlap } of matchers) {
     for (const match of givenText.matchAll(pattern)) {
@@ -2031,7 +2128,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || new Set(result.targets).size >= 2)
       for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)

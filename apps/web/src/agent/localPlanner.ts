@@ -1,7 +1,7 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold, type ExplicitSolidIssue } from "@draw/agent-core"
 
-import { USER_CHAIN_PROMPT, userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
+import { userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
 /**
  * **本地确定性规划器**（Task 2.5 Step 2 的过渡件）。
@@ -145,18 +145,41 @@ const PLANAR_POINT = (input: LocalIntentInput): PlanEnvelope => {
  */
 export const SPHERE_PROMPT = "画一个球体，半径 5"
 
+const CONDITIONS_FIELD_LABEL: Record<ExplicitSolidIssue["field"], string> = {
+  "sphere.center": "球心",
+  "sphere.radius": "球的半径",
+  "prism.baseEdge": "棱柱底面边长",
+  "prism.height": "棱柱的高"
+}
+
+function clarificationFor(issues: readonly ExplicitSolidIssue[], goal: string): PlanEnvelope {
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "clarification",
+    goal,
+    factIds: [],
+    questions: issues.map((issue) => `${CONDITIONS_FIELD_LABEL[issue.field]}：${issue.reason}`)
+  }
+}
+
 const SPHERE = (input: LocalIntentInput): PlanEnvelope => {
-  const radius = sizeFrom(input.prompt, DEFAULT_SOLID_SIZE)
+  const conditions = readExplicitSolidConditions(input.prompt).sphere
+  if (conditions.center.status === "invalid" || conditions.radius.status === "invalid") {
+    const all = readExplicitSolidConditions(input.prompt).issues.filter((issue) => issue.field.startsWith("sphere."))
+    return clarificationFor(all, "球体条件未核验")
+  }
+  const radius = conditions.radius.status === "parsed" ? conditions.radius.value! : DEFAULT_SOLID_SIZE
+  const center = conditions.center.status === "parsed" ? conditions.center.value! : { x: 0, y: 0, z: 0 }
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
-    goal: `创建一个半径 ${radius}、球心在原点的球`,
+    goal: `创建一个半径 ${radius}、球心 (${center.x}, ${center.y}, ${center.z}) 的球`,
     factIds: [],
     actions: [{
       actionId: "solid.create_sphere",
       actionKey: "sphere",
       factIds: [],
-      inputs: { alias: "sphere", center: { x: 0, y: 0, z: 0 }, radius }
+      inputs: { alias: "sphere", center, radius }
     }]
   }
 }
@@ -211,8 +234,13 @@ const ROUND_FRUSTUM = (): PlanEnvelope => {
  * `sizeFrom(input.prompt, 4)` 与 `height = 3`，与本切片"这些默认值只有一处"的声明冲突。
  */
 const PRISM = (input: LocalIntentInput): PlanEnvelope => {
-  const span = sizeFrom(input.prompt, DEFAULT_PRISM_SPAN)
-  const height = DEFAULT_PRISM_HEIGHT
+  const conditions = readExplicitSolidConditions(input.prompt).prism
+  if (conditions.baseEdge.status === "invalid" || conditions.height.status === "invalid") {
+    const all = readExplicitSolidConditions(input.prompt).issues.filter((issue) => issue.field.startsWith("prism."))
+    return clarificationFor(all, "棱柱条件未核验")
+  }
+  const span = conditions.baseEdge.status === "parsed" ? conditions.baseEdge.value! : DEFAULT_PRISM_SPAN
+  const height = conditions.height.status === "parsed" ? conditions.height.value! : DEFAULT_PRISM_HEIGHT
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -225,6 +253,7 @@ const PRISM = (input: LocalIntentInput): PlanEnvelope => {
       inputs: {
         alias: "prism",
         basePolygon: defaultPrismBasePolygon(span),
+        // `z` 是两底面之间的垂直分量；侧棱另有水平分量 `(1, 0.5)`，所以侧棱长不等于高。
         vector: { x: 1, y: 0.5, z: height }
       }
     }]

@@ -1,4 +1,4 @@
-import { DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
+import { DEFAULT_PRISM_HEIGHT, DEFAULT_SOLID_SIZE, compilePlan, parsePlanEnvelope, SKILL_MANIFESTS } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
@@ -48,6 +48,54 @@ describe("the sphere intent", () => {
     expect(envelope.kind).toBe("plan")
     if (envelope.kind !== "plan") return
     expect(envelope.actions[0].inputs).toMatchObject({ radius: DEFAULT_SOLID_SIZE })
+  })
+
+  it("uses the explicitly written sphere center and radius, and checks the generated geometry", async () => {
+    const prompt = "画一个球体，球心 (1,2,3)，半径 5"
+    const envelope = await plan(prompt)
+
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ center: { x: 1, y: 2, z: 3 }, radius: 5 })
+    const document = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(envelope, { document, workspace: "geometry3d", prompt, conversationId: "eval", documentGeneration: document.revision })
+    expect(compiled.ok, compiled.diagnostics.map((entry) => entry.detail).join("; ")).toBe(true)
+    expect(compiled.draftDocument?.primitives[0]).toMatchObject({ type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5 })
+    expect(compiled.diagramVerification?.status, JSON.stringify(compiled.diagramVerification)).toBe("passed")
+  })
+
+  it("accepts the reverse order, negative / decimal coordinates and Chinese punctuation", async () => {
+    const prompt = "画一个球体，半径 4，球心（−1，2.5，−3）"
+    const envelope = await plan(prompt)
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    expect(envelope.actions[0].inputs).toMatchObject({ center: { x: -1, y: 2.5, z: -3 }, radius: 4 })
+    const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), prompt })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+  })
+
+  it("defaults only the field that was not written", async () => {
+    const centerOnly = await plan("画一个球体，球心 (1,2,3)")
+    expect(centerOnly.kind).toBe("plan")
+    if (centerOnly.kind === "plan") {
+      expect(centerOnly.actions[0].inputs).toMatchObject({ center: { x: 1, y: 2, z: 3 }, radius: DEFAULT_SOLID_SIZE })
+    }
+    const radiusOnly = await plan("画一个球体，半径 7")
+    expect(radiusOnly.kind).toBe("plan")
+    if (radiusOnly.kind === "plan") {
+      expect(radiusOnly.actions[0].inputs).toMatchObject({ center: { x: 0, y: 0, z: 0 }, radius: 7 })
+    }
+  })
+
+  it("asks for clarification instead of defaulting an unreadable sphere condition", async () => {
+    for (const prompt of ["画一个球体，球心 (1,2)，半径 5", "画一个球体，半径 1/2", "画一个球体，半径 1e999", "画一个球体，半径 √"]) {
+      const envelope = await plan(prompt)
+      expect(envelope.kind, prompt).toBe("clarification")
+      if (envelope.kind === "clarification") {
+        expect(envelope.questions.join(" "), prompt).toMatch(/球心|分数|科学计数法|根式/)
+      }
+    }
   })
 
   it("does not hijack an analysis question that merely mentions a sphere", () => {
@@ -219,6 +267,45 @@ describe("local planner translates the commands it knows", () => {
     expect((inputs.basePolygon as unknown[]).length).toBeGreaterThanOrEqual(3)
     // 向量必须非零，而且**带水平分量**：否则那是一只直棱柱，"斜"字就没了意义。
     expect(inputs.vector).toMatchObject({ x: 1, z: 3 })
+  })
+
+  it("reads the prism base edge and vertical height independently", async () => {
+    const prompt = "画一个斜棱柱，底面边长 4，高 8"
+    const envelope = await plan(prompt)
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    const inputs = envelope.actions[0].inputs as { basePolygon: { x: number; y: number; z: number }[]; vector: { x: number; y: number; z: number } }
+    expect(Math.hypot(inputs.basePolygon[1]!.x - inputs.basePolygon[0]!.x, inputs.basePolygon[1]!.y - inputs.basePolygon[0]!.y)).toBeCloseTo(4, 12)
+    expect(inputs.vector).toMatchObject({ z: 8 })
+    const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), prompt })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.diagramVerification?.status, JSON.stringify(compiled.diagramVerification)).toBe("passed")
+  })
+
+  it("does not reuse the prism height as the base edge when only the height is written", async () => {
+    const envelope = await plan("画一个斜棱柱，高 8")
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    const inputs = envelope.actions[0].inputs as { basePolygon: { x: number; y: number; z: number }[]; vector: { z: number } }
+    const edge = Math.hypot(inputs.basePolygon[1]!.x - inputs.basePolygon[0]!.x, inputs.basePolygon[1]!.y - inputs.basePolygon[0]!.y)
+    expect(edge).toBeCloseTo(4, 12)
+    expect(inputs.vector.z).toBe(8)
+  })
+
+  it("uses the default height when only the prism base edge is written", async () => {
+    const envelope = await plan("画一个斜棱柱，底面边长 4")
+    expect(envelope.kind).toBe("plan")
+    if (envelope.kind !== "plan") return
+    const inputs = envelope.actions[0].inputs as { vector: { z: number } }
+    expect(inputs.vector.z).toBe(DEFAULT_PRISM_HEIGHT)
+  })
+
+  it("asks for clarification on conflicting or unsupported prism dimensions", async () => {
+    for (const prompt of ["画一个斜棱柱，底面边长 4，底面边长 5，高 8", "画一个斜棱柱，高 1/2", "画一个斜棱柱，高 1e999"]) {
+      const envelope = await plan(prompt)
+      expect(envelope.kind, prompt).toBe("clarification")
+      if (envelope.kind === "clarification") expect(envelope.questions.join(" "), prompt).toMatch(/矛盾|分数|科学计数法/)
+    }
   })
 
   it("answers a read-only question without producing any action", async () => {

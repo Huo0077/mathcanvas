@@ -74,7 +74,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** 2026-10-15：点在线段上（共线 + 落在线段内），由核验器从最终坐标自己算（`pointOnSegment` 支）。 */
   "pointOnSegment",
   /** A3（2026-10-26）：矩形（非退化 + 闭合 + 共面 + 四个直角），由核验器自己算。 */
-  "rectangle"
+  "rectangle",
+  /** 2026-11-01：实体标量尺寸与球心，由核验器从最终图元自己算。 */
+  "solidDimension", "solidCenter"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -111,6 +113,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
    * **漏了这一行它就会掉进 `undefined`**（这一条与角平分线那次是同一类漏：判据给尺子、IR 不给）。
    */
   if (kind === "solidDimension") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
+  if (kind === "solidCenter") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
   if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。

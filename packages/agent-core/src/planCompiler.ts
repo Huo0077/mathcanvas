@@ -31,6 +31,7 @@ import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
 import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
 import { parseDiagramObligations } from "./diagramObligations"
+import { directlyRequestsPrism, directlyRequestsSphere, readExplicitSolidConditions } from "./explicitSolidConditions"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
 import { buildFoldChain } from "./foldChain"
 import { solvePlanFoldSystem } from "./solver/coupledFolds"
@@ -122,8 +123,8 @@ function prismCarriesVertexNames(inputs: unknown): boolean {
  * 闸门只对这一族开，立方体等其它模板题面**逐字不变**。
  */
 function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
-  if (!actions.some((action) => action.actionId === "solid.create_template" || action.actionId === "solid.create_regular_pyramid" || action.actionId === "solid.create_sphere")) return false
-  return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension")
+  if (!actions.some((action) => action.actionId === "solid.create_template" || action.actionId === "solid.create_regular_pyramid" || action.actionId === "solid.create_sphere" || action.actionId === "solid.create_prism")) return false
+  return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension" || entry.kind === "solidCenter")
 }
 
 /**
@@ -783,6 +784,8 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   const parserPrompt = effectivePrompt === undefined ? undefined : normalizeGeometryPrompt(effectivePrompt)
 
   diagnostics.push(...verifyExplicitCubeRequest(compiledActions, parserPrompt))
+  diagnostics.push(...explicitConditionDiagnostics(parserPrompt))
+  diagnostics.push(...verifyExplicitSolidRequest(working, context.document, parserPrompt))
   diagnostics.push(...validateRelations(plan, parserPrompt))
   /**
    * **原话清单的解析入口在这里收成一个**（Phase N1）：`parseObligationWithLegacy` 同时给出
@@ -3858,6 +3861,66 @@ function vertexByName(plan: PlanEnvelope, name: string): { x: number; y: number;
     return null
   }
   return null
+}
+
+const EXPLICIT_FIELD_LABEL: Record<string, string> = {
+  "sphere.center": "球心",
+  "sphere.radius": "球的半径",
+  "prism.baseEdge": "棱柱底面边长",
+  "prism.height": "棱柱的高"
+}
+
+/** 明确条件读不懂 / 矛盾时给 error；默认值不得接手。 */
+function explicitConditionDiagnostics(prompt: string | undefined): PlanDiagnostic[] {
+  if (prompt === undefined) return []
+  return readExplicitSolidConditions(prompt).issues.map((issue) =>
+    planDiagnostic("geometry_validation", "explicit_condition_invalid", "envelope.actions", `用户明确给出的${EXPLICIT_FIELD_LABEL[issue.field] ?? issue.field}无法采用：${issue.reason}`)
+  )
+}
+
+/**
+ * **目标实体本身也是题设**（2026-11-01）：用户要一只球 / 一只棱柱时，
+ * “计划缺少目标实体 / 生成错误类型 / 一只都没画 / 画了多只”都不算完成。
+ *
+ * 这里看**最终候选图**，不看动作自报：动作可能被补全、被救援替换，最终物化出来的
+ * 才是用户会看到的那张图。
+ */
+/**
+ * **用户是不是在直接要一只球 / 一只特定棱柱**。
+ *
+ * 判据在 `explicitSolidConditions` 里只写一份：编译器、草稿层与解析层读的是同一个
+ * “直接请求”的定义，避免一边认、一边不认。
+ */
+function verifyExplicitSolidRequest(
+  candidate: GeometryDocument,
+  base: GeometryDocument,
+  prompt: string | undefined
+): PlanDiagnostic[] {
+  if (prompt === undefined) return []
+  const wantSphere = directlyRequestsSphere(prompt)
+  const wantPrism = directlyRequestsPrism(prompt)
+  if (!wantSphere && !wantPrism) return []
+  const priorIds = new Set(base.primitives.map((primitive) => primitive.id))
+  const newSphereCount = candidate.primitives.filter((primitive) => primitive.type === "sphere" && !priorIds.has(primitive.id)).length
+  const newPrismCount = candidate.primitives.filter((primitive) =>
+    primitive.type === "polyhedron3"
+    && primitive.construction?.kind === "prism"
+    && !priorIds.has(primitive.id)
+  ).length
+  const diagnostics: PlanDiagnostic[] = []
+  const checkOne = (requested: boolean, count: number, name: string): void => {
+    if (!requested) return
+    if (count === 0) {
+      diagnostics.push(planDiagnostic("geometry_validation", "user_constraint_mismatch", "envelope.actions", `用户要求画${name}，但最终图里没有${name}（实体缺失或类型错误）。`))
+      return
+    }
+    if (count > 1) {
+      diagnostics.push(planDiagnostic("geometry_validation", "user_constraint_mismatch", "envelope.actions", `用户只要求一个${name}，但最终图里生成了 ${count} 个。`))
+    }
+  }
+  checkOne(wantSphere, newSphereCount, "球体（sphere）")
+  checkOne(wantPrism, newPrismCount, "棱柱（prism）")
+  return diagnostics
 }
 
 function verifyExplicitCubeRequest(actions: readonly DraftAction[], prompt: string | undefined): PlanDiagnostic[] {

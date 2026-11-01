@@ -25,6 +25,11 @@ export * from "./diagramVerification"
 export * from "./draftCounts"
 export * from "./events"
 /**
+ * **明确给出的球 / 棱柱条件**：规划器与编译器共用的唯一读取规则。
+ * 默认值只能落在 `absent` 上；读不懂或互相矛盾时给出具体原因。
+ */
+export * from "./explicitSolidConditions"
+/**
  * **Task 6（2026-10-12）**：来源可追溯的四族图形意图。这一层是**只读映射** ——
  * 它不改 `diagramObligations` / `obligationIR` / `contracts` 里任何既有类型，
  * 只把它们的产物收成一份"不含坐标、每一句都能追回原话"的结构（见该文件头）。

@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, compilePlan, hasExplicitSolidConditions, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -554,7 +554,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * （评测入口第一条用例当场抓到的就是 `draftDocument` 有、`diagramVerification` 没有）。
        */
       const namedFoldDeclared = effectivePrompt !== undefined && readNamedFold(effectivePrompt).status === "ok"
-      const parsed = effectivePrompt && (planHasVerifiableFigure(actions) || readFoldTransformations(effectivePrompt).length > 0 || namedFoldDeclared)
+      /**
+       * **明确给出的球 / 棱柱条件也必须在草稿层重算一遍**（2026-11-01）。
+       * 编译期已经用同一个 `verifyDiagramObligations` 判过；这里不能因为“球 / 棱柱不在
+       * `planHasVerifiableFigure` 白名单里”就让预览丢报告 —— 那正是编译器说 passed、面板什么都没有的分叉。
+       */
+      const explicitSolidDeclared = effectivePrompt !== undefined && hasExplicitSolidConditions(effectivePrompt)
+      const parsed = effectivePrompt && (planHasVerifiableFigure(actions) || explicitSolidDeclared || readFoldTransformations(effectivePrompt).length > 0 || namedFoldDeclared)
         ? parseObligationWithLegacy(effectivePrompt, { spatialPointConditions: witnessSearch === true }) : null
       const obligations = parsed?.legacy ?? null
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }

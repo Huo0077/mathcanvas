@@ -403,7 +403,15 @@ type FigureConic = ConicDescription & { primitive: PlanarConic }
  */
 type FigureSolid =
   | { shape: "cone" | "cylinder"; radius: number; height: number }
-  | { shape: "sphere"; radius: number }
+  | { shape: "sphere"; radius: number; center: Vector3 }
+  /**
+   * **棱柱**（2026-11-01）：底面边长与**两底面之间的垂直高度**分开量。
+   *
+   * `height` 只取拉伸向量在底面法向上的分量，**不是** `|vector|`（侧棱长）；
+   * 斜棱柱上两者不相等，把侧棱长当高会放过一张高度错了的图。
+   * 底面不是正多边形时 `baseEdge` 为 `null`，此时“底面边长”落未核验，但高度仍可量。
+   */
+  | { shape: "prism"; baseEdge: number | null; basePerimeter: number; height: number; lateralEdge: number }
   /** 长方体的**三条棱**（外接球 / 内切球半径是它们的函数）。 */
   | { shape: "cuboid"; sizeX: number; sizeY: number; sizeZ: number }
   /**
@@ -738,6 +746,7 @@ function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?:
  */
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
   if (plan.kind !== "plan") return null
+  if (plan.actions.some((action) => action.actionId === "solid.create_prism")) return candidatePrism(candidate, base)
   if (plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) return candidatePyramid(candidate, base)
   if (plan.actions.some((action) => action.actionId === "solid.create_polyhedron")) {
     const general = candidatePolyhedron(candidate, base)
@@ -747,13 +756,16 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
     /**
      * **球**（2026-10-20）：图元只有 `radius`，三个常用度量（半径 / 表面积 / 体积）都是它的函数。
      * 与别处同一条纪律：候选图里**恰好一条**新画的球才算数。
+     *
+     * 2026-11-01：把 `center` 一并交出去 —— 题面明写球心时，半径对、位置错了仍然是另一只球。
      */
     const priorSphereIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
     const spheres = candidate.primitives.filter((primitive) => primitive.type === "sphere" && !priorSphereIds.has(primitive.id))
     if (spheres.length !== 1) return null
     const [sphere] = spheres
     if (sphere.type !== "sphere" || !Number.isFinite(sphere.radius) || !(sphere.radius > 0)) return null
-    return { shape: "sphere", radius: sphere.radius }
+    if (![sphere.center.x, sphere.center.y, sphere.center.z].every(Number.isFinite)) return null
+    return { shape: "sphere", radius: sphere.radius, center: sphere.center }
   }
   if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
@@ -802,6 +814,16 @@ function measureSolid(solid: FigureSolid, metric: NonNullable<DiagramObligation[
     switch (metric) {
       case "circumradius": return Math.hypot(solid.sizeX, solid.sizeY, solid.sizeZ) / 2
       case "inradius": return Math.min(solid.sizeX, solid.sizeY, solid.sizeZ) / 2
+      default: return null
+    }
+  }
+  if (solid.shape === "prism") {
+    switch (metric) {
+      case "baseEdge": return solid.baseEdge
+      case "basePerimeter": return solid.basePerimeter
+      case "height": return solid.height
+      case "lateralEdge": return solid.lateralEdge
+      // 棱柱没有半径 / 母线 / 表面积这类标量义务（底面积要底环形状，今天不在这里猜）。
       default: return null
     }
   }
@@ -922,6 +944,44 @@ function candidatePyramid(candidate: GeometryDocument, base?: GeometryDocument):
 }
 
 const euclid = (a: Vector3, b: Vector3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+
+/**
+ * **棱柱：从最终 `polyhedron3` 的构造描述量底面边长与垂直高**（2026-11-01）。
+ *
+ * 为什么要看构造描述而不是动作参数：`DraftStore.stage` 与编译器都以最终候选图为准，
+ * 而候选图里的 `polyhedron3.construction` 是物化后的真源。底面边长取底环相邻边的长度；
+ * 高度取 `vector` 在**底面单位法向**上的投影 —— 侧棱 `|vector|` 是另一件事。
+ *
+ * 底面不是正多边形时 `baseEdge = null`（“底面边长”没有唯一数），但高度仍然量得出来。
+ */
+function candidatePrism(candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  const solids = candidate.primitives.filter((primitive) => primitive.type === "polyhedron3" && !priorIds.has(primitive.id))
+  if (solids.length !== 1) return null
+  const [polyhedron] = solids
+  if (polyhedron.type !== "polyhedron3") return null
+  const construction = polyhedron.construction
+  if (construction === undefined || construction.kind !== "prism") return null
+  const polygon = construction.base.polygon
+  const vector = construction.vector
+  if (polygon.length < 3) return null
+  const normal = polygonNormal(polygon)
+  if (normal === null) return null
+  const edges = polygon.map((point, index) => euclid(point, polygon[(index + 1) % polygon.length]!))
+  const perimeter = edges.reduce((sum, value) => sum + value, 0)
+  if (!(perimeter > 0)) return null
+  const meanEdge = perimeter / polygon.length
+  const regular = edges.every((edge) => Math.abs(edge - meanEdge) <= 1e-6 * Math.max(1, meanEdge))
+  const height = Math.abs(dot(vector, normal))
+  if (!Number.isFinite(height) || !(height > 0)) return null
+  return {
+    shape: "prism",
+    baseEdge: regular ? meanEdge : null,
+    basePerimeter: perimeter,
+    height,
+    lateralEdge: Math.hypot(vector.x, vector.y, vector.z)
+  }
+}
 const subtract = (a: Vector3, b: Vector3): Vector3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
 const dot = (a: Vector3, b: Vector3): number => a.x * b.x + a.y * b.y + a.z * b.z
 
@@ -1136,6 +1196,26 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 两个半轴对调会把焦点从 `(±√5, 0)` 挪到 `(0, ±√5)`，那是另一条曲线。
    * 把这两个数一起写进 `detail`，用户才看得出"为什么半轴错了等于焦点错了"。
    */
+  if (item.kind === "solidCenter") {
+    /**
+     * **球心是独立判据**（2026-11-01）：`球心 (1,2,3)` 与半径对错分开说。
+     * 只比半径的话，“半径对、球心在原点”会通过 —— 那是另一只球。
+     */
+    const stated = item.coordinate
+    const drawn = figures.solid
+    if (stated === undefined || drawn === null || drawn.shape !== "sphere") return null
+    const gap = Math.max(
+      Math.abs(drawn.center.x - stated.x),
+      Math.abs(drawn.center.y - stated.y),
+      Math.abs(drawn.center.z - stated.z)
+    )
+    return {
+      actual: gap,
+      expected: 0,
+      tolerance: distanceTolerance(Math.max(Math.abs(stated.x), Math.abs(stated.y), Math.abs(stated.z), 1)),
+      detail: `实测球心 (${drawn.center.x.toPrecision(6)}, ${drawn.center.y.toPrecision(6)}, ${drawn.center.z.toPrecision(6)})；题设要求 (${stated.x}, ${stated.y}, ${stated.z})。`
+    }
+  }
   if (item.kind === "solidDimension") {
     /**
      * **实体尺寸**（2026-10-20）：题面写的是"这条圆锥的底面半径是 2"，判据量的是
@@ -1181,13 +1261,15 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     /** 底下那两个数**各形状不一样**，所以这段说明也按形状写（说错一个数就是假话）。 */
     const basis = drawn.shape === "pyramid"
       ? `正 ${drawn.sides} 棱锥，底面边长 ${drawn.baseEdge.toPrecision(6)}、侧棱长 ${drawn.lateralEdge.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
-      : drawn.shape === "sphere"
-        ? `球的半径 ${drawn.radius.toPrecision(6)}`
-        : drawn.shape === "cuboid"
-          ? `长方体的三条棱 ${drawn.sizeX.toPrecision(6)}、${drawn.sizeY.toPrecision(6)}、${drawn.sizeZ.toPrecision(6)}`
-          : drawn.shape === "polyhedron"
-            ? `多面体的体积 ${drawn.volume.toPrecision(6)}、表面积 ${drawn.surfaceArea.toPrecision(6)}`
-            : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
+      : drawn.shape === "prism"
+        ? `棱柱，底面边长 ${drawn.baseEdge === null ? "（底面不是正多边形，没有唯一值）" : drawn.baseEdge.toPrecision(6)}、两底面垂直高 ${drawn.height.toPrecision(6)}、侧棱长 ${drawn.lateralEdge.toPrecision(6)}`
+        : drawn.shape === "sphere"
+          ? `球的半径 ${drawn.radius.toPrecision(6)}`
+          : drawn.shape === "cuboid"
+            ? `长方体的三条棱 ${drawn.sizeX.toPrecision(6)}、${drawn.sizeY.toPrecision(6)}、${drawn.sizeZ.toPrecision(6)}`
+            : drawn.shape === "polyhedron"
+              ? `多面体的体积 ${drawn.volume.toPrecision(6)}、表面积 ${drawn.surfaceArea.toPrecision(6)}`
+              : `${drawn.shape === "cone" ? "圆锥" : "圆柱"}，半径 ${drawn.radius.toPrecision(6)}、高 ${drawn.height.toPrecision(6)}`
     return {
       actual: measured,
       expected: item.value,
@@ -2075,7 +2157,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */
@@ -2331,6 +2413,8 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
                  * 底面不是正多边形（"底边长"没有唯一的数）。
                  */
                 ? "候选图里没有唯一、可量的这条实体（少了或多了一条），或这个形状量不出这个尺寸（例如正三棱锥的底面分不出是哪三张面、底面不是正多边形），未核验。"
+                : item.kind === "solidCenter"
+                  ? "候选图里没有唯一、可读的球（少了或多了一条），或球心坐标不是有限数，未核验。"
                 : "点名缺失、图形退化或角度无法计算，未核验。"
       }
     }
