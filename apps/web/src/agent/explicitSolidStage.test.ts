@@ -103,4 +103,11 @@ describe("explicit solid conditions on the draft staging path", () => {
     expect(staged.ok).toBe(false)
     if (!staged.ok) expect(staged.planDiagnostics?.some((entry) => /分数|不支持/.test(entry.detail))).toBe(true)
   })
+
+  it("blocks a correct sphere plus an extra cube as unclear ownership", async () => {
+    const cube = { actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } }
+    const staged = await stage([sphereAction({ x: 1, y: 2, z: 3 }, 5), cube], SPHERE_PROMPT)
+    expect(staged.ok).toBe(false)
+    if (!staged.ok) expect(staged.planDiagnostics?.some((entry) => /归属|一个实体|2 个实体/.test(entry.detail))).toBe(true)
+  })
 })

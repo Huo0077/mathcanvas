@@ -123,6 +123,18 @@ describe("compile-time explicit solid conditions", () => {
     expect(failureText(result)).toMatch(/一个|more than one|multiple/i)
   })
 
+  it("rejects a correct target plus an extra solid as unclear ownership", () => {
+    const cube = {
+      actionId: "solid.create_template",
+      actionKey: "cube",
+      factIds: [],
+      inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }
+    }
+    const result = compilePlan(plan([sphere({ x: 1, y: 2, z: 3 }, 5), cube]), context("画一个球体，球心 (1,2,3)，半径 5"))
+    expect(result.ok).toBe(false)
+    expect(failureText(result)).toMatch(/归属|一个实体|2 个实体/)
+  })
+
   it("fails closed on an unsupported explicit value instead of using a default", () => {
     const result = compilePlan(plan([sphere({ x: 0, y: 0, z: 0 }, DEFAULT_SOLID_SIZE)]), context("画一个球体，半径 1/2"))
     expect(result.ok).toBe(false)

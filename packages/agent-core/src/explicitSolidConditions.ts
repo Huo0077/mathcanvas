@@ -199,11 +199,16 @@ function resolveOccurrences<T>(
   if (found.length === 0) return ABSENT()
   const parsed: ResolvedOccurrence<T>[] = []
   for (const occurrence of found) {
-    const { at, separator } = skipValueSeparator(prompt, occurrence.end)
+    const { at } = skipValueSeparator(prompt, occurrence.end)
     const token = scanNumericToken(prompt, at)
     if (token.length === 0) {
-      if (separator) return INVALID<T>("后面没有数值。", occurrence.sourceText)
-      continue
+      /**
+       * **写了字段名却没有值不是“未提供”**（2026-11-01 泛化验收）。
+       *
+       * `画一个斜棱柱，高` 如果当成 absent，默认值就会接手 —— 用户明明已经开始指定高度，
+       * 系统却画了一只高 3 的棱柱。这里必须落成 invalid，由规划器澄清。
+       */
+      return INVALID<T>("后面没有数值。", occurrence.sourceText)
     }
     const result = read(token)
     if (!result.ok) return INVALID<T>(result.reason ?? "数值无法读取。", `${occurrence.sourceText} ${token}`.trim())
@@ -326,7 +331,17 @@ export function directlyRequestsSphere(prompt: string): boolean {
  * 只认“画/作/建 + 一个 + 斜/直/正/数词 + 棱柱”的直接请求。
  */
 export function directlyRequestsPrism(prompt: string): boolean {
-  return /(?:画|作|建|创建)\s*(?:一个|个|一只)?\s*(?:(?:斜|直|正)\s*(?:[三四五六七八九十]|\d)?|[三四五六七八九十]|\d)\s*棱柱/.test(prompt)
+  const specific = /(?:画|作|建|创建)\s*(?:一个|个|一只)?\s*(?:(?:斜|直|正)\s*(?:[三四五六七八九十]|\d)?|[三四五六七八九十]|\d)\s*棱柱/.test(prompt)
+  if (specific) return true
+  /**
+   * **泛称棱柱 + 显式尺寸也算直接请求**（2026-11-01 泛化验收）。
+   *
+   * `画一个棱柱，底面边长 4，高 8` 没有 `斜/直/正/数词`，但它已经明确给出了尺寸；
+   * 不把它当直接请求会让规划器退回默认高，且跳过核验。没有尺寸的裸 `画一个棱柱`
+   * 仍然保持旧行为（不强制动作类型）。
+   */
+  return /(?:画|作|建|创建)\s*(?:一个|个|一只)?\s*棱柱/.test(prompt)
+    && /(?:底面\s*(?:边长|边)|底边长|底边|边长|高(?:度)?)/.test(prompt)
 }
 
 export function readExplicitSolidConditions(prompt: string): ExplicitSolidConditions {

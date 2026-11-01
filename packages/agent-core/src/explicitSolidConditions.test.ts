@@ -88,6 +88,23 @@ describe("explicit solid conditions", () => {
     expect(conditions.issues).toEqual([])
   })
 
+  it("treats a generic prism with explicit dimensions as a direct request", () => {
+    const conditions = readExplicitSolidConditions("画一个棱柱，底面边长 4，高 8")
+    expect(conditions.prism.requested).toBe(true)
+    expect(conditions.prism.baseEdge.value).toBe(4)
+    expect(conditions.prism.height.value).toBe(8)
+    expect(hasExplicitSolidConditions("画一个棱柱，底面边长 4，高 8")).toBe(true)
+  })
+
+  it("treats a label with no value as missing information, not as absent", () => {
+    for (const prompt of ["画一个斜棱柱，高", "画一个斜棱柱，底面边长", "画一个球体，半径"]) {
+      const conditions = readExplicitSolidConditions(prompt)
+      const value = prompt.includes("半径") ? conditions.sphere.radius : prompt.includes("边长") ? conditions.prism.baseEdge : conditions.prism.height
+      expect(value.status, prompt).toBe("invalid")
+      expect(value.reason, prompt).toMatch(/没有数值/)
+    }
+  })
+
   it("does not turn a height-only prism request into a base edge", () => {
     const heightOnly = readExplicitSolidConditions("画一个斜棱柱，高 8")
     expect(heightOnly.prism.height.value).toBe(8)

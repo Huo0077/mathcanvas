@@ -18,6 +18,7 @@
     "eval:agent": "node scripts/agent-eval.mjs",
     "eval:solid": "node scripts/solid-eval/runner.mjs",
     "eval:reliability": "node scripts/reliability-eval/runner.mjs",
+    "eval:explicit-solid": "node scripts/explicit-solid-acceptance/runner.mjs",
     "bench:agent": "node scripts/agent-benchmark/runner.mjs",
     "proof:smoke": "node scripts/proof-spike/runner.mjs",
     "licences:scan": "node scripts/dependency-licences/scan.mjs",

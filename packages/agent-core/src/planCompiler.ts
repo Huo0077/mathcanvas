@@ -3907,7 +3907,20 @@ function verifyExplicitSolidRequest(
     && primitive.construction?.kind === "prism"
     && !priorIds.has(primitive.id)
   ).length
+  /**
+   * **对象归属不清**（2026-11-01 泛化验收）：用户直接要一只球 / 一只棱柱时，
+   * 最终图里出现第二只实体（例如“正确的球 + 多余的立方体”）不是“顺手多画一个”，
+   * 而是无法判断哪一只才是用户要的。这里按**最终实体图元**数，不按动作数。
+   */
+  const newSolidCount = candidate.primitives.filter((primitive) =>
+    (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder"
+      || primitive.type === "cone" || primitive.type === "sphere" || primitive.type === "polyhedron3")
+    && !priorIds.has(primitive.id)
+  ).length
   const diagnostics: PlanDiagnostic[] = []
+  if (newSolidCount > 1) {
+    diagnostics.push(planDiagnostic("geometry_validation", "user_constraint_mismatch", "envelope.actions", `用户只要求一个实体，但最终图里生成了 ${newSolidCount} 个实体（对象归属不清）。`))
+  }
   const checkOne = (requested: boolean, count: number, name: string): void => {
     if (!requested) return
     if (count === 0) {
