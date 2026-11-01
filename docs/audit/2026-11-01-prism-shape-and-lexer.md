@@ -163,4 +163,6 @@ eval-results/explicit-solid-acceptance/offline-2026-11-01T14-19-38.060Z-24812/
 
 ## 8. 提交
 
-本轮实现与报告提交 SHA 见提交记录；文档状态以 `git log` 与远端 `origin/main` 为准。
+本轮实现与首版报告提交：`e8a2b9be`（`fix(agent): 核验棱柱形状语义与完整数值词法`）。
+
+本节的 SHA 记录在随后一次纯文档提交中；远端同步状态以 `git log` 与 `origin/main` 为准。

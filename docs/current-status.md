@@ -9,7 +9,7 @@
 - 数值词法按完整字段边界扫描：`1 / 2` 拒绝为分数、`5×2` 拒绝为乘法、`2 π` / `2　π` 读成 `2π`、`(1 2,3,4)` 不再拼成 `12`；坐标只允许分量两端空白；
 - 原 40 条补充直 / 斜、底面边数、正多边形预期；新增 14 条外部复核（8 反例 + 3 控制 + 3 空白变体），合并为 **54 条**。
 
-**验证（2026-11-01 本机）**：`eval:explicit-solid --offline` **54/54**（原 40/40、外部 14/14），错误图被当作成功 **0**、未执行 **0**；浏览器 6 条通过；全量单测 **499 文件 / 5319 通过 + 1 todo / 0 失败**；`typecheck` exit 0；改动文件 ESLint 0 错误；`build` 通过；`eval:reliability --offline` 29/29、incomplete 0；`docs-consistency` 8 文件 / 20 项通过。详细根因、逐题边界见[审计报告](audit/2026-11-01-prism-shape-and-lexer.md)和[旧报告状态更正](audit/2026-11-01-explicit-solid-acceptance.md)。
+**验证（2026-11-01 本机）**：`eval:explicit-solid --offline` **54/54**（原 40/40、外部 14/14），错误图被当作成功 **0**、未执行 **0**；浏览器 6 条通过；全量单测 **499 文件 / 5319 通过 + 1 todo / 0 失败**；`typecheck` exit 0；改动文件 ESLint 0 错误；`build` 通过；`eval:reliability --offline` 29/29、incomplete 0；`docs-consistency` 8 文件 / 20 项通过。实现提交 `e8a2b9be`。详细根因、逐题边界见[审计报告](audit/2026-11-01-prism-shape-and-lexer.md)和[旧报告状态更正](audit/2026-11-01-explicit-solid-acceptance.md)。
 
 **边界**：三 / 五 / 六棱柱的自然语言构造暂不支持、明确澄清；自然语言棱柱入口仍只构造正方形底面；乘法表达式明确拒绝；离线结果不代表真实模型成功率。
 
