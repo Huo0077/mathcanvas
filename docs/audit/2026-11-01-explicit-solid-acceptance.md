@@ -160,3 +160,10 @@
 - 数值语法只覆盖十进制、负坐标、`√3`、`2√3`、`π`、`2π`；科学计数法与分数明确拒绝，不是支持。
 - 浏览器只走 4 条代表案例，其余 36 条由离线 runner 覆盖；没有重跑全量 e2e。
 - 未做真实 provider 30 题复跑、安装包发布或跨机器复验。
+
+## 8. 提交与推送状态
+
+- 验收题单、runner、修复与首版报告已本地提交：`104fd9a2`（`test(agent): 增加 40 题明确球体与棱柱离线验收`）。
+- 2026-11-01 多次尝试 `git push origin main` 均被网络层拒绝：Git 报 `Recv failure: Connection was reset`，`git ls-remote` 报 `curl 28 Failed to connect to github.com:443`。
+- 因此**远程尚未更新**；网络恢复后执行 `git push origin main` 即可。
+- 本节只记录上述事实，不把本地提交写成已推送。
