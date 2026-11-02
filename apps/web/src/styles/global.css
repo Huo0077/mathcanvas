@@ -17,7 +17,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    状态栏 116px → 150px、画布 532px → 498px，同一个屏幕坐标不再对应同一个世界点，
    于是 pointermove 报"命中预览"、pointerup 却报"落空"——点不中就是这么来的。
    固定高度之后多出来的文案在自己那一行里滚动，画布不再受文案长度影响。 */
-.workbench { display: grid; grid-template-columns: var(--panel-left-width) minmax(0, 1fr) var(--panel-right-width); grid-template-rows: minmax(0, 1fr) var(--status-bar-height); min-height: 0; min-width: 0; }
+.workbench { display: grid; grid-template-columns: var(--panel-left-width) minmax(0, 1fr) var(--panel-right-width) 0px; grid-template-rows: minmax(0, 1fr) var(--status-bar-height); min-height: 0; min-width: 0; position: relative; }
 .toolbar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-5); background: var(--color-panel); border-bottom: 1px solid var(--color-border); }
 .toolbar .primary { background: var(--color-accent); border-color: var(--color-accent); color: white; }
 .panel { background: var(--color-panel); border-right: 1px solid var(--color-border); min-height: 0; min-width: 0; }
@@ -1272,13 +1272,181 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 .command-search-group { font-size: 10px; color: var(--color-muted); margin-left: 8px; }
 .command-search-empty { padding: 8px 12px; margin: 0; font-size: var(--text-xs); color: var(--color-muted); text-align: center; }
 
-/* 桌面端工作台侧栏折叠 */
-.workbench[data-left-open="false"] { grid-template-columns: 0px minmax(0, 1fr) var(--panel-right-width); }
-.workbench[data-right-open="false"] { grid-template-columns: var(--panel-left-width) minmax(0, 1fr) 0px; }
-.workbench[data-left-open="false"][data-right-open="false"] { grid-template-columns: 0px minmax(0, 1fr) 0px; }
+/* 桌面端工作台侧栏折叠与 Copilot 抽屉 */
+.workbench[data-copilot-open="true"] { grid-template-columns: var(--panel-left-width) minmax(0, 1fr) var(--panel-right-width) var(--copilot-drawer-width); }
+.workbench[data-left-open="false"] { grid-template-columns: 0px minmax(0, 1fr) var(--panel-right-width) 0px; }
+.workbench[data-left-open="false"][data-copilot-open="true"] { grid-template-columns: 0px minmax(0, 1fr) var(--panel-right-width) var(--copilot-drawer-width); }
+.workbench[data-right-open="false"] { grid-template-columns: var(--panel-left-width) minmax(0, 1fr) 0px 0px; }
+.workbench[data-right-open="false"][data-copilot-open="true"] { grid-template-columns: var(--panel-left-width) minmax(0, 1fr) 0px var(--copilot-drawer-width); }
+.workbench[data-left-open="false"][data-right-open="false"] { grid-template-columns: 0px minmax(0, 1fr) 0px 0px; }
+.workbench[data-left-open="false"][data-right-open="false"][data-copilot-open="true"] { grid-template-columns: 0px minmax(0, 1fr) 0px var(--copilot-drawer-width); }
 .workbench[data-left-open="false"] > .panel:not(.right) { display: none; }
 .workbench[data-right-open="false"] > .panel.right { display: none; }
 .status-bar-spacer { flex: 1 1 auto; }
 .status-bar-dock-toggles { display: inline-flex; gap: var(--space-1); margin-left: auto; }
 .status-bar-dock-btn { height: 24px; min-height: 24px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface-subtle); color: var(--color-muted); font-size: 11px; cursor: pointer; }
 .status-bar-dock-btn:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent); }
+.status-bar-dock-btn[data-copilot-toggle="true"][aria-expanded="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent); font-weight: 600; }
+
+/* AI Copilot 同屏人机共创抽屉（规格 §7.1） */
+.copilot-drawer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--color-panel);
+  border-left: 1px solid var(--color-border);
+  overflow: hidden;
+  z-index: 10;
+}
+.copilot-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+.copilot-drawer-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  color: var(--color-ink);
+}
+.copilot-drawer-icon {
+  font-size: 15px;
+}
+.copilot-drawer-badge {
+  font-size: 11px;
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+.copilot-drawer-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.copilot-drawer-close:hover {
+  background: var(--color-border);
+  color: var(--color-ink);
+}
+.copilot-drawer-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+.copilot-drawer-composer {
+  flex: 0 0 auto;
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+
+/* 画布实时草稿预览与悬浮确认横幅（规格 §7.2, §7.3） */
+.canvas-draft-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(61, 90, 128, 0.35);
+  border-radius: 9999px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+  color: #1e293b;
+  pointer-events: auto;
+  user-select: none;
+  animation: banner-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.canvas-draft-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.canvas-draft-banner-sparkle {
+  font-size: 15px;
+}
+.canvas-draft-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.canvas-draft-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  min-height: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.canvas-draft-banner-btn.confirm {
+  background: #3d5a80;
+  color: #ffffff;
+  border: 1px solid #3d5a80;
+}
+.canvas-draft-banner-btn.confirm:hover {
+  background: #2b4260;
+  border-color: #2b4260;
+}
+.canvas-draft-banner-btn.discard {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+.canvas-draft-banner-btn.discard:hover {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #94a3b8;
+}
+@keyframes banner-slide-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.canvas-ghost-group {
+  pointer-events: none;
+}
+.canvas-ghost-group [data-ghost-primitive] {
+  animation: ghost-pulse 2.5s ease-in-out infinite alternate;
+}
+@keyframes ghost-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 0.85;
+  }
+}

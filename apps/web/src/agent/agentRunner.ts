@@ -96,6 +96,7 @@ export interface AgentRunner {
   retry(prompt: string, promptMessageId: string): Promise<RunPromptResult>
   /** 当前是否有一份等待确认的草稿（任意一轮）。 */
   hasDraft(): boolean
+  getActiveDraftCandidate(runId?: string): { candidate: GeometryDocument; runId: string; draftId: string } | null
 }
 
 /** 阶段 → 给用户看的一句话（与 `RunStatus` 里的表分开：这张用于**轨迹摘要**）。 */
@@ -1074,6 +1075,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     /** 重试 = 用同一句话再跑一轮。它**不**复用上一轮的草稿（那份已经作废了）。 */
     async retry(prompt, promptMessageId) {
       return runPrompt(prompt, promptMessageId)
+    },
+
+    getActiveDraftCandidate(runId) {
+      const entry = resolveRun(runId)
+      if (!entry) return null
+      const draftId = entry.runtime.draftId()
+      if (!draftId) return null
+      const preview = entry.runtime.host.preview(draftId)
+      if (!preview.ok) return null
+      return { candidate: preview.artifact.candidate, runId: entry.commit.runId, draftId }
     },
 
     hasDraft() {

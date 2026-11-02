@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 UI/UX 第二阶段实施：AI Copilot 同屏抽屉与画布实时 Ghost 草稿预览（Block 4）
+
+全面落地 AI Copilot 同屏人机共创抽屉与画布实时 Ghost 幽灵草稿预览（Live-Canvas Co-Creation）：
+
+- **AI Copilot 同屏人机共创抽屉（Side-by-Side Co-Creation）**：废除传统“进入 Agent 就卸载几何画布”的割裂设计，在传统工程/几何工作台引入同屏可折叠的 AI 抽屉组件 `apps/web/src/components/agent/CopilotDrawer.tsx`。状态栏新增 `✨ AI 助手` 停靠展开按钮，支持边查看/旋转画布边与智能助手自然语言对话，并在大屏与多列网格下实现画布与助手同屏无缝共创；
+- **画布实时 Ghost 幽灵草稿预览（Ghost Mode）**：在 `apps/web/src/agent/agentRunner.ts` 中增强运行器能力 `getActiveDraftCandidate`，无缝提取待确认草稿候选几何文档；在 `apps/web/src/agent/useActiveGhostDraft.ts` 中构建响应式候选草稿监听器。2D 画布（`GraphicsView.tsx`）与 3D 场景（`ThreeSceneView.tsx`）实时以半透明色调（`#3d5a80`）、脉冲虚线及轻量徽标呈现待确认的新增图元，且完全不抢夺底层指针事件，用户可自由漫游平移或 360° 旋转视角全方位检视草稿几何质量；
+- **草稿检视悬浮确认横幅（Review Floating Banner）与双通道快速动作**：在画布正上方居中浮现胶囊悬浮横幅，动态提示草稿图元统计（`✨ AI 草稿预览：包含 X 个图元`），并提供 `[✓ 确认写入 (Enter)]` 与 `[✕ 放弃草稿 (Esc)]` 快速操作；同时支持在非输入框聚焦状态下按 `Enter` 键单步事务合并入库（支持单步 Ctrl+Z 完整撤回）或按 `Esc` 键静默打回丢弃草稿。
+
+**验证读数（2026-11-02 本机）**：全量单元测试（含新增 `copilotLiveCreation.test.tsx` 3 项全过、`App.test.tsx` 116 项全过、`agentRunner.test.ts` 59 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 UI/UX 第二阶段实施：动点在轨直接绑定与画布直通（Block 3）
 
 全面落地动点在轨直接绑定与画布直通（Direct Curve Binding）：

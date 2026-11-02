@@ -34,6 +34,7 @@ const POINT_MARKER_RADIUS = 2.5
 
 interface GraphicsViewProps {
   document: GeometryDocument
+  ghostCandidate?: GeometryDocument | null
   selectedIds: string[]
   creationMode: CreationMode
   onSelect: (id: string | null, additive?: boolean) => void
@@ -100,7 +101,7 @@ function pointsAttribute(points: Coordinate[], viewport: Viewport): string {
   return points.map((point) => `${worldToSvg({ x: point.x, y: 0 }, viewport).x},${worldToSvg({ x: 0, y: point.y }, viewport).y}`).join(" ")
 }
 
-export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onCancelCreation, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate, creationStep = null }: GraphicsViewProps) {
+export function GraphicsView({ document, ghostCandidate = null, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onCancelCreation, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate, creationStep = null }: GraphicsViewProps) {
   const workspace = document.workspace
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)
@@ -213,6 +214,11 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     return result.changed ? result.document : document
   }, [document, dragCurrent, dragState])
   const displayPrimitives = previewDocument.primitives
+  const ghostPrimitives = useMemo(() => {
+    if (!ghostCandidate) return []
+    const existingIds = new Set(document.primitives.map((p) => p.id))
+    return ghostCandidate.primitives.filter((p) => !existingIds.has(p.id))
+  }, [document.primitives, ghostCandidate])
   /**
    * A saved intersection must hide only the solution it captured. Filtering the whole pair instead dropped the
    * sibling crossing of a line and a circle the moment one of them became a persistent point.
@@ -719,5 +725,33 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       * 这一层 `pointer-events: none`（见 CSS），所以拾取行为一字不变。
       */}
     {measurementLabels.map((label) => <text key={label.id} className="planar-measurement-label" data-measurement-label={label.id} data-selected={label.selected ? "true" : "false"} x={toX(label.position.x)} y={toY(label.position.y)} textAnchor="middle">{label.text}</text>)}
+    {ghostPrimitives.length > 0 && <g className="canvas-ghost-group" data-ghost-draft="true" pointerEvents="none" opacity={0.65}>
+      {ghostPrimitives.map((primitive) => {
+        if (primitive.type === "point") {
+          return <g key={`ghost-${primitive.id}`} data-ghost-primitive="point">
+            <circle cx={toX(primitive.x)} cy={toY(primitive.y)} r="5" fill="#3d5a80" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="2 2" />
+            {primitive.label && <text x={toX(primitive.x) + 7} y={toY(primitive.y) - 7} fill="#3d5a80" fontSize="13" fontWeight="bold">{primitive.label}</text>}
+          </g>
+        }
+        if (primitive.type === "segment") {
+          return <line key={`ghost-${primitive.id}`} data-ghost-primitive="segment" x1={toX(primitive.a.x)} y1={toY(primitive.a.y)} x2={toX(primitive.b.x)} y2={toY(primitive.b.y)} stroke="#3d5a80" strokeWidth="2" strokeDasharray="5 4" />
+        }
+        if (primitive.type === "line") {
+          const visible = viewportLine(primitive)
+          return <line key={`ghost-${primitive.id}`} data-ghost-primitive="line" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="#3d5a80" strokeWidth="2" strokeDasharray="5 4" />
+        }
+        if (primitive.type === "ray") {
+          const visible = rayToViewport(primitive, worldBounds)
+          return <line key={`ghost-${primitive.id}`} data-ghost-primitive="ray" x1={toX(visible.a.x)} y1={toY(visible.a.y)} x2={toX(visible.b.x)} y2={toY(visible.b.y)} stroke="#3d5a80" strokeWidth="2" strokeDasharray="5 4" />
+        }
+        if (primitive.type === "circle") {
+          return <circle key={`ghost-${primitive.id}`} data-ghost-primitive="circle" cx={toX(primitive.center.x)} cy={toY(primitive.center.y)} r={primitive.radius * viewport.scale} fill="rgba(61,90,128,0.12)" stroke="#3d5a80" strokeWidth="2" strokeDasharray="5 4" />
+        }
+        if (primitive.type === "polyline") {
+          return <polyline key={`ghost-${primitive.id}`} data-ghost-primitive="polyline" points={pointsAttribute(primitive.points, viewport)} fill="rgba(61,90,128,0.12)" stroke="#3d5a80" strokeWidth="2" strokeDasharray="5 4" />
+        }
+        return null
+      })}
+    </g>}
   </svg></div></main>
 }

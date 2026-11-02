@@ -26,6 +26,7 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onSelect: (id: string | null, additive?: boolean) => void
   creationSession?: SpatialCreationSession | null
   solidWizardOpen?: boolean
+  ghostActive?: boolean
   solidPreviewActive?: boolean
   onOpenSolidWizard?: () => void
   onCreationAnchor?: (anchor: Extract<SpatialPickResult, { position: Vector3 }>) => void
@@ -58,7 +59,7 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, ghostActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -379,7 +380,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, false, document))} aria-label="3D 几何场景"
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} data-ghost-active={ghostActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, false, document))} aria-label="3D 几何场景"
     onPointerDownCapture={(event) => {
       if (!creationSession || event.button !== 0 || event.shiftKey || !isCreationCanvasTarget(event.target)) return
       event.stopPropagation()

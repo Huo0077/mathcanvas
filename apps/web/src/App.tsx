@@ -33,6 +33,9 @@ import { PaperTexture } from "./components/PaperTexture"
 import { ModuleRail } from "./components/ModuleRail"
 import { WorkspaceHeader } from "./components/WorkspaceHeader"
 import { AgentWorkspace } from "./components/agent/AgentWorkspace"
+import { CopilotDrawer } from "./components/agent/CopilotDrawer"
+import { useActiveGhostDraft } from "./agent/useActiveGhostDraft"
+import { isTextEditingTarget } from "./documentIds"
 import { ExperimentalFeatures } from "./components/settings/ExperimentalFeatures"
 import { ProviderEval } from "./components/settings/ProviderEval"
 import { ProviderSettings } from "./components/settings/ProviderSettings"
@@ -274,6 +277,8 @@ export function App() {
   const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
   const [ribbonExpanded, setRibbonExpanded] = useState(true)
   const [ribbonPinned, setRibbonPinned] = useState(false)
+  const [copilotOpen, setCopilotOpen] = useState(false)
+  const activeGhostDraft = useActiveGhostDraft(document)
   /**
    * 顶级模块：A「传统工作区」（画布：CAD / 平面几何 / 立体几何）与 B「Agent 工作区」。
    *
@@ -726,7 +731,7 @@ export function App() {
    * 入口撤掉之后它没有任何调用者，因此一并删除 —— 功能区那四个按钮仍然照旧工作。
    */
 
-  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
+  const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -866,6 +871,25 @@ export function App() {
         ? activeCommand
         : "select-tool"
 
+  useEffect(() => {
+    if (!activeGhostDraft) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTextEditingTarget(event.target)) return
+      if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        agentRunner.confirm(activeGhostDraft.runId)
+      } else if (event.key === "Escape") {
+        const isCreating = Boolean(creationStep) || Boolean(spatialSession) || (activeCommand && (activeCommand.startsWith("create-") || activeCommand.startsWith("draw-")))
+        if (!isCreating) {
+          event.preventDefault()
+          agentRunner.discard(activeGhostDraft.runId)
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [activeGhostDraft, effectiveActiveCommand, creationStep, spatialSession])
+
   const cadWorkbench = <EngineeringWorkbench
     document={document}
     mode={cadMode}
@@ -895,13 +919,43 @@ export function App() {
       <AppChrome
       onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
       {document.workspace === "cad" ? cadWorkbench : (
-        <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"}>
+        <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"} data-copilot-open={copilotOpen ? "true" : "false"}>
+        {activeGhostDraft && (
+          <div className="canvas-draft-banner" role="region" aria-label="AI 草稿预览">
+            <div className="canvas-draft-banner-info">
+              <span className="canvas-draft-banner-sparkle" aria-hidden="true">✨</span>
+              <span className="canvas-draft-banner-text">
+                AI 草稿预览：包含 {activeGhostDraft.primitiveCount} 个图元
+              </span>
+            </div>
+            <div className="canvas-draft-banner-actions">
+              <button
+                type="button"
+                className="canvas-draft-banner-btn confirm"
+                onClick={() => {
+                  agentRunner.confirm(activeGhostDraft.runId)
+                }}
+              >
+                ✓ 确认写入 (Enter)
+              </button>
+              <button
+                type="button"
+                className="canvas-draft-banner-btn discard"
+                onClick={() => {
+                  agentRunner.discard(activeGhostDraft.runId)
+                }}
+              >
+                ✕ 放弃草稿 (Esc)
+              </button>
+            </div>
+          </div>
+        )}
         <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
           <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
         </div>
         {algebraPanel}
-        {document.workspace === "geometry3d" ? <ThreeSceneView document={wizardPreviewDocument} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+        {document.workspace === "geometry3d" ? <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
           const primitive = document.primitives.find((candidate) => candidate.id === id)
           if (primitive?.type !== "point3" || !primitive.binding) return
           // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
@@ -911,7 +965,16 @@ export function App() {
           else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
         }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
         {inspectorPanel}
-        <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span><span className="status-bar-spacer" /><div className="status-bar-dock-toggles" role="group" aria-label="工作台侧栏折叠"><button type="button" className="status-bar-dock-btn" aria-expanded={leftDockOpen} onClick={() => setLeftDockOpen((open) => !open)} title={leftDockOpen ? "收起左侧对象列表（增大画布）" : "展开左侧对象列表"}>{leftDockOpen ? "◀ 左栏" : "▶ 左栏"}</button><button type="button" className="status-bar-dock-btn" aria-expanded={rightDockOpen} onClick={() => setRightDockOpen((open) => !open)} title={rightDockOpen ? "收起右侧属性栏（增大画布）" : "展开右侧属性栏"}>{rightDockOpen ? "右栏 ▶" : "右栏 ◀"}</button></div></div>
+        <CopilotDrawer
+          open={copilotOpen}
+          onClose={() => setCopilotOpen(false)}
+          onRun={runAgentPrompt}
+          onConfirm={(runId) => { agentRunner.confirm(runId) }}
+          onDiscard={(runId) => { agentRunner.discard(runId) }}
+          onStop={(runId) => { agentRunner.stop(runId) }}
+          onRetry={retryLastPrompt}
+        />
+        <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span><span className="status-bar-spacer" /><div className="status-bar-dock-toggles" role="group" aria-label="工作台侧栏折叠"><button type="button" className="status-bar-dock-btn" data-copilot-toggle="true" aria-expanded={copilotOpen} onClick={() => setCopilotOpen((open) => !open)} title={copilotOpen ? "收起 AI 助手抽屉" : "展开 AI 助手抽屉"}>✨ AI 助手</button><button type="button" className="status-bar-dock-btn" aria-expanded={leftDockOpen} onClick={() => setLeftDockOpen((open) => !open)} title={leftDockOpen ? "收起左侧对象列表（增大画布）" : "展开左侧对象列表"}>{leftDockOpen ? "◀ 左栏" : "▶ 左栏"}</button><button type="button" className="status-bar-dock-btn" aria-expanded={rightDockOpen} onClick={() => setRightDockOpen((open) => !open)} title={rightDockOpen ? "收起右侧属性栏（增大画布）" : "展开右侧属性栏"}>{rightDockOpen ? "右栏 ▶" : "右栏 ◀"}</button></div></div>
       </div>
       )}
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
