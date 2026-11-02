@@ -8,6 +8,16 @@
 
 
 
+## 2026-11-02 —— 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8，开发版）
+
+- **顶点变形后模板实体残影重影根治（threePrimitives.ts / projectionVisuals.ts / intersectionPreviews3d.ts）**：修复模板立体（立方体、四棱锥、圆柱、圆锥）在拖动单一顶点升级为显式面环多面体（`construction.kind === "fromFaces"`）后，`visibleSolids` 与 `resolveProjectedDrawing` 因仅过滤 `kind === "template"` 而把未变形的原始 `BoxGeometry` / 模板网格重新绘制在原位（导致“松手后图形复位在原处而标注点停在新位置”的视觉错觉），并在 `intersectionPreviews3d.ts` 中排除同源影子多面体与模板自身的自交预览误报。
+- **多面体子元素拾取归属与整块刚体平移/旋转闭环（threePicking.ts / apply.ts / AlgebraView.tsx）**：在 `templateTopologyOwners` 中补齐 `fromPoints`（正四面体）与 `fromFaces`（顶点变形后的实体）的面/棱归属映射，解决点击或拖动正四面体及变形后立方体表面时仅抓走单块面导致立体撕裂的缺陷；在 `apply.ts` 的 `translatePrimitive3` 与 `rotatePrimitive3` 中，针对已升级为 `fromFaces` 的模板实体同步平移和旋转其全部显式顶点集，确保变形后的立体依然支持整体拖拽平移、三色环旋转与样式同步。
+- **3D 线/面拖动刚体族边界收敛与逐帧实时拉伸变形（threeDrag.ts / threeSceneInteraction.ts / threeSceneEffect.ts）**：在 `dragFamilyIds` 中收敛 `line3` / `segment3` / `ray3` / `edge3` / `face3` / `plane3` 的刚体平移闭包，仅包含受控端点及完全由其决定的子图元，杜绝顺着父级多面体反向拉入未移动兄弟顶点；在 `threeSceneInteraction.ts` 中新增 `deformDependents` 与 `originalPositions` 机制，拖动自由顶点或线/面时逐帧实时重算并刷新相连边与面的网格，松手或取消时精确复原，实现“拖点时相连棱面实时跟手拉伸”的自然物理手感。
+- **2D 动点圆、锚定切线与旋转跟随曲线实时拖拽预览对齐（GraphicsView.tsx）**：在 `GraphicsView.tsx` 的 `previewDocument` 中对齐 `App.tsx` 的 4 类重定向与批量联动语义（以动点为圆心的圆、锚定于动点的切线/法线、函数无锚切线、以点为旋转中心的跟随圆/椭圆），消除拖拽过程中画面静止、松手才跳变的脱节感。
+- **测试覆盖与门禁验证**：
+  - 单元测试：`threeScene.test.ts` 59 项全过（新增 `fromFaces` 残影抑制、`fromPoints`/`fromFaces` 拓扑归属、变形后整体平移与旋转断言）；`packages/scene-graph/` 与 `apps/web/` 相关 7 套核心套件 260 项全过；
+  - `npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 3D 顶点直接操纵隔离、Three.js 视觉偏移归零与视口 HUD 排版优化（Block 6，开发版）
 
 - **3D 立方体顶点拖动严格隔离（threeDrag.ts）**：在 `dragFamilyIds` 中针对空间点（`primitive.type === "point3"`）增加原子隔离逻辑，返回仅包含该点自身的集合。彻底根除此前拖动立方体顶点时、因遍历 DAG 引用逆向拉入父级多面体及所有 8 个顶点导致整个立方体一起跟着移动的严重缺陷。

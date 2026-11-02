@@ -211,11 +211,52 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     const tangent = tangentTargetOf(primitive, document.primitives, document.parameters)
     const action = createDragAction(primitive, dragState.handle, dragState.origin, dragCurrent, rotationTargetOf(primitive, document.primitives) ?? undefined, tangent ? { ...tangent, parameterOffset: dragState.tangentOffset } : undefined)
     if (!action || action.kind === "bindToPath") return document
+    if (action.kind === "translate" && primitive.type === "circle" && primitive.centerPointId) {
+      const result = applyOperation(document, { op: "translatePrimitive", id: primitive.centerPointId, delta: action.delta })
+      return result.changed ? result.document : document
+    }
+    if (action.kind === "translate" && (primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor?.kind === "point") {
+      const result = applyOperation(document, { op: "translatePrimitive", id: primitive.anchor.pointId, delta: action.delta })
+      return result.changed ? result.document : document
+    }
+    if (action.kind === "translate" && (primitive.type === "tangent" || primitive.type === "normal") && !primitive.anchor && action.delta.x !== 0) {
+      const result = applyOperation(document, { op: "updatePrimitive", id: primitive.id, patch: { x: primitive.x + action.delta.x } })
+      return result.changed ? result.document : document
+    }
     const operation: DomainOperation = action.kind === "translate"
       ? { op: "translatePrimitive", id: primitive.id, delta: action.delta }
       : { op: "updatePrimitive", id: primitive.id, patch: action.patch }
     const result = applyOperation(document, operation)
-    return result.changed ? result.document : document
+    if (!result.changed) return document
+    if (action.kind === "translate" && primitive.type === "point") {
+      const moved = result.document.primitives.find((candidate) => candidate.id === primitive.id)
+      if (moved?.type === "point") {
+        const delta = { x: moved.x - primitive.x, y: moved.y - primitive.y }
+        if (delta.x !== 0 || delta.y !== 0) {
+          let nextDoc = result.document
+          for (const candidate of result.document.primitives) {
+            if (candidate.type !== "circle" && candidate.type !== "ellipse") continue
+            const placement = candidate.rotationAbout
+            if (placement?.pivot.kind === "primitive" && placement.pivot.primitiveId === primitive.id) {
+              const follow = applyOperation(nextDoc, {
+                op: "updatePrimitive",
+                id: candidate.id,
+                patch: {
+                  center: { x: candidate.center.x + delta.x, y: candidate.center.y + delta.y },
+                  rotationAbout: {
+                    ...placement,
+                    baseCenter: { x: placement.baseCenter.x + delta.x, y: placement.baseCenter.y + delta.y }
+                  }
+                }
+              })
+              if (follow.changed) nextDoc = follow.document
+            }
+          }
+          return nextDoc
+        }
+      }
+    }
+    return result.document
   }, [document, dragCurrent, dragState])
   const displayPrimitives = previewDocument.primitives
   const ghostPrimitives = useMemo(() => {

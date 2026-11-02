@@ -125,6 +125,9 @@ export interface DragSessionState {
   hostConstraint?: Host3
   hostDependents?: string[]
   hostParameter?: Host3Parameter
+  /** 自由拖动顶点或线/面时，未整体刚体平移但共享了移动顶点的下游边/面，拖动期间逐帧实时拉伸。 */
+  deformDependents?: string[]
+  originalPositions?: Map<string, { x: number; y: number; z: number }>
   /**
    * 绑定点的坐标由 **Reactive DAG** 求出（Reactive DAG 切片 Task 4）：宿主是来源节点、
    * 宿主参数（u/v/w）是三个参数节点、点本身是约束节点。每帧只写参数、求一次闭包，

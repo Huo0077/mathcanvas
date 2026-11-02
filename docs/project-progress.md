@@ -10,6 +10,29 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8）
+
+**目标**：对全仓 2D 与 3D 的点、线、面、体交互链路进行代码级深度体检，彻底解决“拖动顶点松手后原位重现未变形立方体、拖动正四面体或变形后实体表面把单块面扯飞、变形后实体无法整体平移/旋转、拖动顶点时相连棱面静止不拉伸、2D 动点圆与切线拖拽中不预览”等一切不合理操作现象。
+
+**排查与根因**：
+1. **变形后原位重现未变形实体（“松手后图形复位而标注点未复位”的第二重真凶）**：
+   - 拖动立方体 `cube-1` 的一个顶点后，`cube-1-polyhedron.construction` 从 `{ kind: "template", sourceIds: ["cube-1"] }` 升级为 `{ kind: "fromFaces", sourceIds: [...], sourceId: "cube-1" }`。
+   - 然而 `threePrimitives.ts` 的 `visibleSolids` 与 `projectionVisuals.ts` 的 `resolveProjectedDrawing` 仅排除了 `construction.kind === "template"` 的源实体！一旦变成 `fromFaces`，`visibleSolids` 立即把 `cube-1` 当作未物化的独立实体，在原位置画出一只未变形的不透明 `BoxGeometry` 盖在变形后的面片上；同时 `intersectionPreviews3d.ts` 把 `cube-1` 与 `cube-1-polyhedron` 当成两只重合实体求交，铺满红色虚线。
+   - **修复**：在 `visibleSolids`、`resolveProjectedDrawing`、`intersectionPreviews3d` 与 `AlgebraView` 中统一识别 `construction.kind === "fromFaces" && construction.sourceId`。
+2. **正四面体（`fromPoints`）与变形后实体（`fromFaces`）的子元素拾取归属缺失与整体变换失效**：
+   - `threePicking.ts` 的 `templateTopologyOwners` 此前只认 `template` 与 `prism`，漏掉了 `fromPoints` 与 `fromFaces`，导致点击或拖动正四面体或变形立方体的面/棱时落到单个 `face3` 上，一拖就把立体扯散；且 `apply.ts` 在整体平移/旋转已降级为 `fromFaces` 的模板实体时只改了模板自身的 `origin`/`rotation`，没有同步移动 `polyhedron.vertexIds`。
+   - **修复**：在 `templateTopologyOwners` 中补齐 `fromPoints` 与 `fromFaces` 归属；在 `apply.ts` 的 `translatePrimitive3` 与 `rotatePrimitive3` 中同步变换 `fromFaces` 实体的全部显式顶点。
+3. **3D 线/面刚体族越界与顶点拖拽期间相连棱面实时拉伸**：
+   - 在 `threeDrag.ts` 的 `dragFamilyIds` 中收敛线/棱/面/平面的刚体平移族，只纳入其受控点及完全由这些点决定的图元；在 `threeSceneInteraction.ts` 中新增 `deformDependents` 逐帧更新机制，使拖动顶点时相连的边与面实时跟手拉伸变形。
+4. **2D 拖拽预览与提交不一致**：
+   - 在 `GraphicsView.tsx` 的 `previewDocument` 中同步 `App.tsx` 的圆心点重定向、切线定位点重定向与旋转中心跟随曲线更新。
+
+**验证读数（2026-11-02 本机）**：
+- 核心场景图与 3D 单元测试 7 文件 / 260 项全过（含 `threeScene.test.ts` 59 项全过）；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 3D 空间顶点拖拽隔离、视觉位移归零与视口 HUD 排版优化
 
 **目标**：彻底解决用户在立体几何中遇到的“拖动立方体的一个点整个立方体跟着动、松手后图形复位而标注点未复位”的严重体感缺陷，以及 3D 视口浮动控件排版杂乱、遮挡画布的视觉问题。

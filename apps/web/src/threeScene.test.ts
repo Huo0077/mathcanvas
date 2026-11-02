@@ -4,10 +4,10 @@ import * as THREE from "three"
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
-import { applyOperation, compileSolidPrism } from "@draw/scene-graph"
+import { applyOperation, compileSolidPrism, compileSolidTetrahedron } from "@draw/scene-graph"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
-import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
+import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal, visibleSolids } from "./threePrimitives"
 import { applyCameraState, cameraBasis, clampCameraTarget, createCameraState, fitCameraState, panCameraState, resetCameraState, rotateCameraState, zoomCameraState } from "./threeCamera"
 import { sceneSyncDecision } from "./sceneContentKey"
 
@@ -860,6 +860,32 @@ describe("free 3D drag", () => {
     expect(movedPoint.position.x).toBeCloseTo(-0.5, 6)
     const polyhedron = outcome.document.primitives.find((p) => p.type === "polyhedron3") as any
     expect(polyhedron.construction.kind).toBe("fromFaces")
+
+    // 关键回归保证 1：顶点变形后（fromFaces），visibleSolids 绝不能再把未变形的原始 cube-1 网格重复画在原位
+    expect(visibleSolids(outcome.document)).toEqual([])
+
+    // 关键回归保证 2：顶点变形后的立方体（以及 fromPoints 正四面体）的面和棱依然归属实体本身，点选/拖动不会扯掉单块面
+    const owners = templateTopologyOwners(outcome.document)
+    for (const faceId of polyhedron.faceIds) expect(owners.get(faceId)).toBe("cube-1")
+    const tetra = compileSolidTetrahedron("tetra-1", { baseCenter: { x: 0, y: 0, z: 0 }, edge: 3 }, "正四面体 1")
+    const tetraDoc: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: tetra.primitives }
+    const tetraOwners = templateTopologyOwners(tetraDoc)
+    for (const faceId of tetra.faceIds) expect(tetraOwners.get(faceId)).toBe("tetra-1")
+    for (const edgeId of tetra.edgeIds) expect(tetraOwners.get(edgeId)).toBe("tetra-1")
+
+    // 关键回归保证 3：顶点变形后的立方体整体平移或旋转时，它的所有变形后顶点一起同步平移/旋转
+    const translatedSolid = applyOperation(outcome.document, { op: "translatePrimitive3", id: "cube-1", delta: { x: 2, y: 1, z: -1 } })
+    expect(translatedSolid.changed).toBe(true)
+    const shiftedPoint1 = translatedSolid.document.primitives.find((p) => p.id === "cube-1-point-1") as Point3Primitive
+    const shiftedPoint2 = translatedSolid.document.primitives.find((p) => p.id === "cube-1-point-2") as Point3Primitive
+    expect(shiftedPoint1.position).toEqual({ x: 1.5, y: 0, z: -2 })
+    expect(shiftedPoint2.position).toEqual({ x: 3, y: 0, z: -2 })
+
+    const rotatedSolid = applyOperation(outcome.document, { op: "rotatePrimitive3", id: "cube-1", axis: "z", degrees: 90 })
+    expect(rotatedSolid.changed).toBe(true)
+    const rotatedPoint1 = rotatedSolid.document.primitives.find((p) => p.id === "cube-1-point-1") as Point3Primitive
+    expect(rotatedPoint1.position.x).toBeCloseTo(1, 6)
+    expect(rotatedPoint1.position.y).toBeCloseTo(-0.5, 6)
   })
 
   it("carries a point-driven line's endpoints with it", () => {

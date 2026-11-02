@@ -1,6 +1,7 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import { templateSolidPivot } from "@draw/geometry-kernel"
 import type { DomainOperation } from "./operations"
-import { movedSectionPlane, rotatedSectionPlane } from "./solidGeometry"
+import { movedSectionPlane, ownerOfTopology, rotatedSectionPlane } from "./solidGeometry"
 import { deletionPlan, layerDescendantIds, unbindDeletedHost, type DeletionPlan } from "./deletion"
 import { EDITABLE_GEOMETRY_TYPES, isFreeDraggable3, isRotatable3, point3Index, prismMatchesVertices, primitiveBounds, realignPrismDescriptor, rotatePrimitive3, shiftedPoint, templateTopologyIds, translateFunction, translatePrimitive, translatePrimitive3 } from "./transforms"
 import { dragBoundPoint } from "./resolve3d"
@@ -314,7 +315,7 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     // A template solid paints its generated point/edge/face children, so a template style change recolours them too.
     if (operation.patch.style !== undefined && ["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {
       for (const candidate of next.primitives) {
-        if (candidate.type !== "polyhedron3" || candidate.construction?.kind !== "template" || candidate.construction.sourceIds[0] !== primitive.id) continue
+        if (candidate.type !== "polyhedron3" || ownerOfTopology(candidate) !== primitive.id) continue
         candidate.style = { ...candidate.style, ...operation.patch.style }
         for (const childId of [...candidate.vertexIds, ...candidate.edgeIds, ...candidate.faceIds]) {
           const child = next.primitives.find((entry) => entry.id === childId)
@@ -356,13 +357,23 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     if (!isFreeDraggable3(primitive, point3Index(next), templateTopologyIds(next))) return { document, changed: false, error: "object is not draggable" }
     const moved = translatePrimitive3(primitive, operation.delta)
     const movedIds = new Set(moved.movedIds)
+    // 顶点曾被改动过的模板实体（construction 已降级为 fromFaces）不再走 syncTemplateTopology 重建顶点：
+    // 整体平移该实体时，必须同步把它的显式顶点集一起平移，否则画面松手后会弹回原位。
+    if (["cube", "pyramid", "cylinder", "cone"].includes(primitive.type)) {
+      for (const candidate of next.primitives) {
+        if (candidate.type === "polyhedron3" && candidate.construction?.kind === "fromFaces" && candidate.construction.sourceId === primitive.id) {
+          for (const vertexId of candidate.vertexIds) movedIds.add(vertexId)
+        }
+      }
+    }
     next.primitives = next.primitives
       .map((candidate) => candidate.id === operation.id ? moved.primitive : candidate)
       // A point-driven object is moved by moving its points; the object itself only follows through recompute.
       .map((candidate) => candidate.type === "point3" && candidate.id !== operation.id && movedIds.has(candidate.id) ? { ...candidate, position: shiftedPoint(candidate.position, operation.delta) } : candidate)
-    if (primitive.type === "point3") {
+    const movedPointIds = [...movedIds].filter((id) => next.primitives.some((candidate) => candidate.id === id && candidate.type === "point3"))
+    if (movedPointIds.length > 0 && !["cube", "pyramid", "cylinder", "cone", "polyhedron3"].includes(primitive.type)) {
       for (const candidate of next.primitives) {
-        if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id)) continue
+        if (candidate.type !== "polyhedron3" || !movedPointIds.some((id) => candidate.vertexIds.includes(id))) continue
         if (candidate.construction?.kind === "template") {
           candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.construction.sourceIds[0] }
           continue
@@ -371,8 +382,10 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
           candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.id }
         }
       }
-      const triangulationError = triangulateWarpedSolidFaces(next.primitives, primitive.id)
-      if (triangulationError) return { document, changed: false, error: triangulationError }
+      for (const pointId of movedPointIds) {
+        const triangulationError = triangulateWarpedSolidFaces(next.primitives, pointId)
+        if (triangulationError) return { document, changed: false, error: triangulationError }
+      }
     }
     // Sections name their source by id, so they are not in the dependency index: a moved solid has to
     // re-derive its own cuts explicitly, or the drawn section would keep the old shape while the solid moves.
@@ -392,6 +405,16 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
     const turned = rotatePrimitive3(primitive, points, operation.axis, operation.degrees, operation.pivot)
     if (!turned) return { document, changed: false, error: "object has no geometry to rotate" }
     const turnedPoints = new Map(turned.movedPoints.map((moved) => [moved.id, moved.position]))
+    // 顶点已降级为 fromFaces 的模板实体，整体旋转时同步旋转它的显式顶点集。
+    if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") {
+      const solidPivot = operation.pivot ?? templateSolidPivot(primitive)
+      for (const candidate of next.primitives) {
+        if (candidate.type === "polyhedron3" && candidate.construction?.kind === "fromFaces" && candidate.construction.sourceId === primitive.id) {
+          const polyTurned = rotatePrimitive3(candidate, points, operation.axis, operation.degrees, solidPivot)
+          for (const movedPoint of polyTurned?.movedPoints ?? []) turnedPoints.set(movedPoint.id, movedPoint.position)
+        }
+      }
+    }
     next.primitives = next.primitives.map((candidate) => {
       if (candidate.id === operation.id) return turned.primitive
       // 点驱动的对象由它的点带着转；模板实体的物化拓扑由 `buildSolidTemplate` 重算。

@@ -32,6 +32,42 @@ export function dragFamilyIds(document: GeometryDocument, id: string): Set<strin
   if (primitive?.type === "point3") {
     return new Set<string>([id])
   }
+  // 线 / 线段 / 射线 / 棱 / 面 / 平面：只带动它自己管理的端点以及完全由这些端点决定的子图元，
+  // 绝不能顺着多面体反向把未移动的兄弟顶点一起拉进刚体平移族。
+  if (primitive && ["line3", "segment3", "ray3", "edge3", "face3", "plane3"].includes(primitive.type)) {
+    const movedPoints = new Set<string>(managedPointIds(primitive))
+    const family = new Set<string>([id, ...movedPoints])
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const candidate of document.primitives) {
+        if (family.has(candidate.id)) continue
+        if (candidate.type === "point3" && candidate.binding) {
+          const b = candidate.binding
+          const boundToFamily =
+            (b.kind === "onHost" && family.has(b.hostId)) ||
+            (b.kind === "onLine" && family.has(b.lineId)) ||
+            (b.kind === "onPlane" && family.has(b.planeId)) ||
+            (b.kind === "onFace" && family.has(b.faceId)) ||
+            (b.kind === "derived" && b.sourceIds.length > 0 && b.sourceIds.every((src) => movedPoints.has(src)))
+          if (boundToFamily) {
+            movedPoints.add(candidate.id)
+            family.add(candidate.id)
+            grew = true
+          }
+          continue
+        }
+        if (["line3", "segment3", "ray3", "edge3", "face3"].includes(candidate.type)) {
+          const owned = managedPointIds(candidate)
+          if (owned.length > 0 && owned.every((ptId) => movedPoints.has(ptId))) {
+            family.add(candidate.id)
+            grew = true
+          }
+        }
+      }
+    }
+    return family
+  }
   const { dependents, parents } = dragGraph(document)
   const family = new Set<string>([id])
   const queue = [id]
@@ -275,7 +311,12 @@ export function rotationHandleRadius(reach: number): number {
 
 /** 模板实体的物化顶点（画面上真正画出来的那些点）。 */
 function templateVertices(document: GeometryDocument, solidId: string): { x: number; y: number; z: number }[] {
-  const polyhedron = document.primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === solidId)
+  const polyhedron = document.primitives.find((primitive) =>
+    primitive.type === "polyhedron3" && (
+      (primitive.construction?.kind === "template" && primitive.construction.sourceIds[0] === solidId) ||
+      (primitive.construction?.kind === "fromFaces" && primitive.construction.sourceId === solidId)
+    )
+  )
   if (!polyhedron || polyhedron.type !== "polyhedron3") return []
   const points = new Map(document.primitives.filter((primitive): primitive is Extract<typeof primitive, { type: "point3" }> => primitive.type === "point3").map((point) => [point.id, point]))
   return polyhedron.vertexIds.map((vertexId) => points.get(vertexId)?.position).filter((position): position is { x: number; y: number; z: number } => Boolean(position))

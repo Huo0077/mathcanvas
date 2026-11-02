@@ -116,10 +116,13 @@ export const DEFAULT_MAX_POINTS_PER_PAIR = 64
 export const MAX_PAIRS = 120
 
 /** 顶层实体：可见、类型可求交，且不是模板物化出来的"影子"多面体。 */
-function isCandidate(primitive: PrimitiveSpec): boolean {
+function isCandidate(primitive: PrimitiveSpec, primitiveMap: Map<string, PrimitiveSpec>): boolean {
   if (primitive.visible === false) return false
   if (!CANDIDATE_TYPES.has(primitive.type)) return false
-  if (primitive.type === "polyhedron3" && primitive.construction?.kind === "template") return false
+  if (primitive.type === "polyhedron3") {
+    if (primitive.construction?.kind === "template") return false
+    if (primitive.construction?.kind === "fromFaces" && primitive.construction.sourceId && primitive.construction.sourceId !== primitive.id && primitiveMap.has(primitive.construction.sourceId)) return false
+  }
   return true
 }
 
@@ -161,7 +164,7 @@ export function computeIntersectionPreviews3d(document: GeometryDocument, option
   const candidates: Candidate[] = []
   for (const primitive of document.primitives) {
     if (candidates.length >= maxSources) break
-    if (!isCandidate(primitive)) continue
+    if (!isCandidate(primitive, primitiveMap)) continue
     const topology = solidTopology3(primitive, primitiveMap)
     if (!topology) continue
     const bounds = boundsOf(topology.vertices)

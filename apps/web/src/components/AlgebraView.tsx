@@ -75,9 +75,14 @@ function ObjectRow({ label, type, visible, locked, selected, depth = 0, expanded
  * template label and is suffixed so it stays distinguishable from the editable parameter row. */
 function solidGroupLabel(solid: Polyhedron3Primitive, byId: Map<string, PrimitiveSpec>): string {
   const construction = solid.construction
-  const templateLabel = construction?.kind === "template" ? byId.get(construction.sourceIds[0])?.label : undefined
+  const ownerId = construction?.kind === "template"
+    ? construction.sourceIds[0]
+    : construction?.kind === "fromFaces" && construction.sourceId && construction.sourceId !== solid.id
+      ? construction.sourceId
+      : undefined
+  const templateLabel = ownerId ? byId.get(ownerId)?.label : undefined
   const base = solid.label ?? templateLabel ?? solid.id
-  return construction?.kind === "template" ? `${base} 拓扑` : base
+  return ownerId ? `${base} 拓扑` : base
 }
 
 export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], parameters, workspace, filter = "", className = "panel", id, onSetParameter, onDeleteParameter, onAddParameter }: AlgebraViewProps) {

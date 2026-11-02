@@ -268,7 +268,30 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
         } else if (grabAllowed && hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
           const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
-          dragSessionRef.current = { targetId: target.id, family: dragFamilyIds(documentRef.current, target.id), anchor, origin, total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false }
+          const family = dragFamilyIds(documentRef.current, target.id)
+          const movedPointIds = [...family].filter((memberId) => points.has(memberId))
+          const originalPositions = new Map<string, Vector3>()
+          for (const ptId of movedPointIds) {
+            const pt = points.get(ptId)
+            if (pt) originalPositions.set(ptId, { ...pt.position })
+          }
+          const affected = movedPointIds.length > 0 ? getAffectedPrimitiveIds(documentRef.current, movedPointIds) : new Set<string>()
+          const deformDependents = [...affected].filter((depId) => {
+            if (family.has(depId)) return false
+            const dep = documentRef.current.primitives.find((candidate) => candidate.id === depId)
+            return Boolean(dep && ["line3", "segment3", "ray3", "edge3", "face3"].includes(dep.type))
+          })
+          dragSessionRef.current = {
+            targetId: target.id,
+            family,
+            anchor,
+            origin,
+            total: new THREE.Vector3(),
+            visualApplied: new THREE.Vector3(),
+            applied: false,
+            deformDependents,
+            originalPositions
+          }
         }
       }
       if (!dragModeRef.current && dragSessionRef.current) dragSessionRef.current.direct = true
@@ -406,6 +429,22 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               if (Math.abs(distance) > 1e-12) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(distance))
             } else {
               applyDragOffsets(scene, session.family, step)
+              if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
+                for (const [ptId, orig] of session.originalPositions) {
+                  const current = points.get(ptId)
+                  if (current) {
+                    points.set(ptId, {
+                      ...current,
+                      position: {
+                        x: orig.x + session.total.x,
+                        y: orig.y + session.total.y,
+                        z: orig.z + session.total.z
+                      }
+                    })
+                  }
+                }
+                for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
+              }
             }
             // 手柄的位置跟着图形走（环的**朝向**不变：它是世界轴的参照）。
             moveRotationHandles(session.slideNormal ? session.slideNormal.clone().multiplyScalar(step.dot(session.slideNormal)) : step)
@@ -491,6 +530,13 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             render()
             moveSectionRef.current?.(session.targetId, distance)
           } else {
+            if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
+              for (const [ptId, orig] of session.originalPositions) {
+                const current = points.get(ptId)
+                if (current) points.set(ptId, { ...current, position: { ...orig } })
+              }
+              for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
+            }
             if (session.visualApplied.lengthSq() > 1e-12) {
               applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
               session.visualApplied.set(0, 0, 0)
@@ -499,6 +545,13 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             dragEndRef.current?.(session.targetId, session.total)
           }
         } else if (session.applied && session.visualApplied.lengthSq() > 1e-12) {
+          if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
+            for (const [ptId, orig] of session.originalPositions) {
+              const current = points.get(ptId)
+              if (current) points.set(ptId, { ...current, position: { ...orig } })
+            }
+            for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
+          }
           applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
           session.visualApplied.set(0, 0, 0)
           render()

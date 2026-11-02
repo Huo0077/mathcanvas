@@ -125,10 +125,17 @@ export function pickRaycastHit3(scene: THREE.Scene, camera: THREE.Camera, normal
  */
 export function templateTopologyOwners(document: GeometryDocument): Map<string, string> {
   const owners = new Map<string, string>()
+  const primitiveIds = new Set(document.primitives.map((primitive) => primitive.id))
   for (const primitive of document.primitives) {
     if (primitive.type !== "polyhedron3") continue
     const construction = primitive.construction
-    const ownerId = construction?.kind === "template" ? construction.sourceIds[0] : construction?.kind === "prism" ? primitive.id : undefined
+    const ownerId = construction?.kind === "template"
+      ? construction.sourceIds[0]
+      : construction?.kind === "fromFaces" && construction.sourceId && primitiveIds.has(construction.sourceId)
+        ? construction.sourceId
+        : construction?.kind === "prism" || construction?.kind === "fromPoints" || construction?.kind === "fromFaces"
+          ? primitive.id
+          : undefined
     if (!ownerId) continue
     for (const childId of [...primitive.edgeIds, ...primitive.faceIds]) owners.set(childId, ownerId)
   }

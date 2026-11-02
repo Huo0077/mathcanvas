@@ -966,7 +966,12 @@ function createCubeUnfoldGroup(primitive: CubePrimitive, selected: boolean, opti
 }
 
 export function visibleSolids(document: GeometryDocument): SolidPrimitive[] {
-  const templateSources = new Set(document.primitives.flatMap((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" ? primitive.construction.sourceIds : []))
+  const templateSources = new Set(document.primitives.flatMap((primitive) => {
+    if (primitive.type !== "polyhedron3") return []
+    if (primitive.construction?.kind === "template") return primitive.construction.sourceIds
+    if (primitive.construction?.kind === "fromFaces" && primitive.construction.sourceId) return [primitive.construction.sourceId]
+    return []
+  }))
   return document.primitives.filter((primitive): primitive is SolidPrimitive => ["cube", "pyramid", "cylinder", "cone", "sphere"].includes(primitive.type) && primitive.visible !== false && !templateSources.has(primitive.id))
 }
 

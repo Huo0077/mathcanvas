@@ -1,5 +1,16 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8）
+
+深度排查并一次性修复 2D 与 3D 中点、线、面、体在拖拽、变形、拾取、旋转与实时预览中的 6 类深层交互缺陷：
+
+- **顶点变形后模板实体残影重影根治（threePrimitives.ts / projectionVisuals.ts / intersectionPreviews3d.ts）**：当立方体等模板实体的顶点被拖动后，`polyhedron3.construction` 升级为 `fromFaces`（带 `sourceId`）。此前 `visibleSolids` 与 `resolveProjectedDrawing` 仅过滤 `kind === "template"`，导致松手瞬间在原位额外画出一只未变形的原始立方体网格（表现为“松手后图形复位在原处而标注点停在新位置”），且 `intersectionPreviews3d` 将模板与自身的 `fromFaces` 拓扑当作两个相交实体产生满屏红色自交预览。现已统一识别 `fromFaces.sourceId`，彻底根除残影重影与自交误报；
+- **多面体子元素拾取归属与变形后整体平移/旋转闭环（threePicking.ts / apply.ts / AlgebraView.tsx）**：在 `templateTopologyOwners` 中补齐 `fromPoints`（正四面体）与 `fromFaces`（顶点变形后的实体）的面/棱归属映射，杜绝拖动正四面体或变形立方体表面时仅抓走单块面导致立体撕裂；在 `apply.ts` 的 `translatePrimitive3` 与 `rotatePrimitive3` 中同步平移与旋转 `fromFaces` 实体的全部显式顶点；
+- **3D 线/面拖动刚体族收敛与逐帧实时拉伸（threeDrag.ts / threeSceneInteraction.ts）**：在 `dragFamilyIds` 中收敛线/棱/面/平面的刚体平移闭包，不再通过父级多面体反向拉入静止兄弟顶点；在 `threeSceneInteraction.ts` 中引入 `deformDependents` 逐帧实时刷新机制，拖动顶点或边/面时相连的棱与面实时平滑拉伸；
+- **2D 动点圆、锚定切线与旋转跟随曲线实时拖拽预览对齐（GraphicsView.tsx）**：将 `GraphicsView.tsx` 的 `previewDocument` 与 `App.tsx` 的 `handleDragEnd` 完全对齐，使以点为圆心的圆、动点切线/法线、函数切线及绕点旋转跟随曲线在拖拽期间全程实时跟手预览。
+
+**验证读数（2026-11-02 本机）**：核心 3D/场景图单元测试 7 文件 / 260 项全过（含 `threeScene.test.ts` 59 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 3D 空间图元操作细节修复与视口排版优化
 
 针对用户反馈的“在立方体中拖动一个点整个立方体跟着动、松手后图形复位而标注点未复位”等核心体感缺陷，以及 3D 视口排版杂乱问题完成系统性根治：

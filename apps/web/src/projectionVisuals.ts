@@ -199,7 +199,12 @@ function resolveProjectedAnnotations(document: GeometryDocument, view: DrawingVi
 
 export function resolveProjectedDrawing(document: GeometryDocument, view: DrawingView): ProjectedDrawing {
   const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
-  const templateSourceIds = new Set(document.primitives.flatMap((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" ? primitive.construction.sourceIds : []))
+  const templateSourceIds = new Set(document.primitives.flatMap((primitive) => {
+    if (primitive.type !== "polyhedron3") return []
+    if (primitive.construction?.kind === "template") return primitive.construction.sourceIds
+    if (primitive.construction?.kind === "fromFaces" && primitive.construction.sourceId) return [primitive.construction.sourceId]
+    return []
+  }))
   const diagnostics: string[] = []
   const primitives: ProjectedPrimitive[] = []
 

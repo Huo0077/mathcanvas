@@ -230,7 +230,6 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   const owned = managedPointIds(primitive)
   if (owned.length === 0) return false
   return owned.every((id) => {
-    if (generated.has(id)) return false
     const point = points.get(id)
     return Boolean(point) && (!point!.binding || point!.binding.kind === "free")
   })
