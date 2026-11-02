@@ -7,7 +7,7 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 import type { SectionPrimitive, Vector3 } from "@draw/dsl"
 import { host3FromPrimitive, reactive, type Host3 } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
-import { isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
+import { getAffectedPrimitiveIds, isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
 import { cameraDragMode, clampCameraTarget, panCameraState, rotateCameraState } from "./threeCamera"
 import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
 import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
@@ -250,7 +250,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           if (hostConstraint) {
             const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
             const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
-            const dependents = dragFamilyIds(documentRef.current, target.id)
+            const dependents = getAffectedPrimitiveIds(documentRef.current, [target.id])
             dependents.delete(target.id)
             dragSessionRef.current = {
               targetId: target.id,
@@ -485,8 +485,23 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           // 绑定点：提交的是**宿主参数**；坐标由重算派生，所以点不会因为浮点累积而漂离宿主。
           hostDragEndRef.current?.(session.targetId, session.hostParameter)
         } else if (session.applied && session.total.lengthSq() > 1e-8) {
-          if (session.slideNormal) moveSectionRef.current?.(session.targetId, session.total.dot(session.slideNormal))
-          else dragEndRef.current?.(session.targetId, session.total)
+          if (session.slideNormal) {
+            const distance = session.total.dot(session.slideNormal)
+            offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(-distance))
+            render()
+            moveSectionRef.current?.(session.targetId, distance)
+          } else {
+            if (session.visualApplied.lengthSq() > 1e-12) {
+              applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
+              session.visualApplied.set(0, 0, 0)
+              render()
+            }
+            dragEndRef.current?.(session.targetId, session.total)
+          }
+        } else if (session.applied && session.visualApplied.lengthSq() > 1e-12) {
+          applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
+          session.visualApplied.set(0, 0, 0)
+          render()
         }
         // 选中放在抬手：拖动本身不该因为高亮重建而多一次场景重建。
         if (!selectedIdsRef.current.includes(session.targetId)) onSelectRef.current(session.targetId, false)

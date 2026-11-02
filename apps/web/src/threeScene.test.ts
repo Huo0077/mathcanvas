@@ -4,7 +4,7 @@ import * as THREE from "three"
 import type { GeometryDocument, Point3Primitive, PrimitiveSpec, SectionPrimitive } from "@draw/dsl"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldPolyhedron3 } from "@draw/geometry-kernel"
-import { compileSolidPrism } from "@draw/scene-graph"
+import { applyOperation, compileSolidPrism } from "@draw/scene-graph"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
 import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal } from "./threePrimitives"
@@ -839,6 +839,27 @@ describe("free 3D drag", () => {
     // The solid is drawn through its children, so a drag that misses one of them would look like nothing moved.
     expect(family.has("cube-1")).toBe(true)
     for (const childId of [...topology.vertexIds, ...topology.edgeIds, ...topology.faceIds]) expect(family.has(childId)).toBe(true)
+  })
+
+  it("isolates dragging a single vertex so the rest of the solid stays put", () => {
+    const cube = { id: "cube-1", type: "cube" as const, origin: { x: -1, y: -1, z: -1 }, size: { x: 2, y: 2, z: 2 } }
+    const built = buildSolidTemplate(cube)
+    const document: GeometryDocument = { ...createEmptyDocument("geometry3d"), primitives: [cube, ...built.primitives] }
+
+    const family = dragFamilyIds(document, "cube-1-point-1")
+    // 拖动一个点只拖动该点本身，决不能带走整只立方体或其它 7 个顶点
+    expect([...family]).toEqual(["cube-1-point-1"])
+    expect(family.has("cube-1")).toBe(false)
+    expect(family.has("cube-1-point-2")).toBe(false)
+    expect(family.has(built.polyhedronId!)).toBe(false)
+
+    // 提交平移后立方体顺利转为显式面环多面体，顶点位置更新且不报错
+    const outcome = applyOperation(document, { op: "translatePrimitive3", id: "cube-1-point-1", delta: { x: 0.5, y: 0, z: 0 } })
+    expect(outcome.changed).toBe(true)
+    const movedPoint = outcome.document.primitives.find((p) => p.id === "cube-1-point-1") as Point3Primitive
+    expect(movedPoint.position.x).toBeCloseTo(-0.5, 6)
+    const polyhedron = outcome.document.primitives.find((p) => p.type === "polyhedron3") as any
+    expect(polyhedron.construction.kind).toBe("fromFaces")
   })
 
   it("carries a point-driven line's endpoints with it", () => {

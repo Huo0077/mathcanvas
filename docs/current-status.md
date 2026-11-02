@@ -1,5 +1,16 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 3D 空间图元操作细节修复与视口排版优化
+
+针对用户反馈的“在立方体中拖动一个点整个立方体跟着动、松手后图形复位而标注点未复位”等核心体感缺陷，以及 3D 视口排版杂乱问题完成系统性根治：
+
+- **3D 顶点拖动严格原子隔离（threeDrag.ts）**：在 `dragFamilyIds` 中为空间点图元（`primitive.type === "point3"`）建立原子防击穿隔离，直接返回单一图元 ID 集合。彻底解决此前拖拽单一顶点时因图元引用图逆向遍历（`parents.get(member)`）拉入父级多面体及全部 8 个顶点导致整个立方体连带平移的根因；
+- **模板实体顶点拖拽自由形变（transforms.ts & apply.ts）**：放宽 `transforms.ts` 中的 `isFreeDraggable3`，允许模板实体生成的自由点直接可拖；在 `apply.ts` 的 `translatePrimitive3` 中平移空间点时，若该点从属于多面体（如立方体），自动将该多面体转为显式面环多面体（`fromFaces`），并对形变翘曲的四边形面执行自适应三角剖分，使拖动顶点的空间变形被内核如实接收入库并支持无损撤销，不再被内核拒绝；
+- **Three.js 视觉临时偏移归零同步（threeSceneInteraction.ts）**：在 `handlePointerUp` 中显式清除应用于 Three.js 场景网格对象的临时视觉偏移（`applyDragOffsets(..., visualApplied.negate())`）并将 `visualApplied` 归零，彻底根除因复用网格（`keepContent`）保留临时位移导致 2D SVG 点标注（`pointLabelPlacements`）与 3D 几何图形脱节漂移的深层历史缺陷；
+- **3D 悬浮 HUD 紧凑排版与微拟物毛玻璃容器优化（global.css）**：将 `.three-scene-controls` 与 `.three-camera-controls` 重构为高度 30px 的紧凑药丸形控制组，整合入半透明毛玻璃柔光卡片底板中；突出「常用立体」主入口高亮；优化 `.three-camera-hint` 与角度读数角落卡片，消除高分辨率与窄视口下的遮挡与视觉杂乱。
+
+**验证读数（2026-11-02 本机）**：全量单元测试 **505 文件 / 5373 通过 + 1 todo / 0 失败**（含 `threeScene.test.ts` 59 项全过、`packages/scene-graph/` 425 项全过）；Playwright e2e `geometry3d-drag.spec.ts` **10/10 全过**（含新增顶点隔离拖动用例）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 CI 审查报错排查与全量端到端测试绿灯修复
 
 排查并彻底修复 GitHub Actions CI 中 `checks` 与 `e2e` 作业报错问题（定位于 CAD 框选与创建态互斥、3D 空间绘制提交后会话清理，以及桌面视口状态栏防挤压布局）：

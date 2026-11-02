@@ -366,3 +366,24 @@ function parseVector(bounds: string | null): number[] {
 function distance(first: number[], second: number[]) {
   return Math.hypot(first[0] - second[0], first[1] - second[1], first[2] - second[2])
 }
+
+
+test("drags a single vertex of a cube without moving the entire cube or displacing other vertices", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "添加立方体" }).click()
+  await expect(page.getByText("立方体 1").first()).toBeVisible()
+  await page.getByRole("button", { name: "自由拖动" }).click()
+
+  // 立方体原点是 (-7, 3, 0)，尺寸是 (4, 4, 4)。顶面一角为 (-7, 3, 4)。
+  const vertex = await projectWorldPoint(page, { x: -7, y: 3, z: 4 })
+  await page.mouse.move(vertex.x, vertex.y)
+  await page.mouse.down()
+  await expect(scene).toHaveAttribute("data-drag-target", /point.*->point3/)
+  await page.mouse.move(vertex.x + 50, vertex.y - 30, { steps: 5 })
+  await page.mouse.up()
+
+  await expect(scene).toHaveAttribute("data-drag-offset-drift", "0.0000")
+})

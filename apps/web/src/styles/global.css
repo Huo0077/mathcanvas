@@ -536,9 +536,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .measurement-guidance { grid-column: 1 / -1; margin: 0; padding: var(--space-2); border-radius: var(--radius-sm); background: var(--color-accent-soft); color: var(--color-accent-strong); font-size: var(--text-xs); line-height: 1.45; }
 .three-canvas-shell canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .three-scene-status { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(82%, 320px); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: rgb(255 255 255 / 92%); color: var(--color-muted); font-size: var(--text-md); line-height: 1.5; text-align: center; pointer-events: none; }
-.three-camera-controls { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.three-camera-controls button { min-height: 44px; padding-inline: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); }
-.three-camera-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
+.three-camera-controls { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding: 3px; background: rgb(255 255 255 / 82%); border: 1px solid rgb(226 232 240 / 85%); border-radius: var(--radius-md); box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05); backdrop-filter: blur(12px); }
+.three-camera-controls button { min-height: 30px; height: 30px; padding-inline: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 88%); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); font-size: var(--text-xs); font-weight: 500; transition: all 0.15s ease; user-select: none; }
+.three-camera-controls button:hover { background: #ffffff; color: var(--color-ink); border-color: var(--color-border); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); }
+.three-camera-controls button:active { transform: translateY(1px); }
+.three-camera-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); font-weight: 600; }
 /**
  * 画布左下角的两个常驻浮层（相机操作提示 / 功能指引）**共用一套"角落卡片"外观**。
  *
@@ -550,12 +552,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  * 同一档字号。差别只保留"是否可操作"：指引带强调色左边框和正文色，相机提示保持次要色。
  * 真正合成一个 DOM 节点需要改 JSX，本轮按约定不动结构。
  */
-.three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: 1.45; pointer-events: none; }
+.three-camera-hint { position: absolute; z-index: 2; bottom: var(--space-3); left: var(--space-3); margin: 0; padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 94%); box-shadow: var(--shadow-card); backdrop-filter: blur(8px); font-size: var(--text-2xs); line-height: 1.45; pointer-events: none; }
 .three-creation-controls { position: absolute; z-index: 3; bottom: calc(var(--space-3) + 36px); left: var(--space-3); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); max-width: calc(100% - var(--space-6)); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: rgb(255 255 255 / 96%); box-shadow: var(--shadow-card); }
 /* 创建会话里的悬停读数：与 2D 画布的 `.coordinate-readout` 同一个形状（只读、不吃指针事件）。 */
 .creation-readout { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: var(--text-xs); font-variant-numeric: tabular-nums; pointer-events: none; }
 .three-creation-controls span { padding-inline: var(--space-2); color: var(--color-muted); font-size: var(--text-xs); }
-.three-creation-controls button { min-height: 44px; padding-inline: var(--space-2); border-color: var(--color-border); background: var(--color-panel); }
+.three-creation-controls button { min-height: 32px; height: 32px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-panel); font-size: var(--text-xs); }
 .three-creation-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent-strong); background: var(--color-accent-soft); }
 .three-canvas-shell[data-creation-tool]:not([data-creation-tool=""]) canvas { cursor: crosshair; }
 .three-solid-wizard { display: grid; gap: var(--space-3); min-width: 0; padding: var(--space-4); color: var(--color-ink); }
@@ -588,9 +590,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .three-camera-controls { max-width: calc(50% - var(--space-4)); }
 }
 .toolbar-hint { margin: var(--space-2) 0 0; color: var(--color-muted); font-size: var(--text-sm); line-height: 1.4; }
-.three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.three-scene-controls button { min-height: 44px; padding-inline: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); white-space: nowrap; }
-.three-scene-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); }
+.three-scene-controls { position: absolute; z-index: 2; top: var(--space-3); left: var(--space-3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding: 3px; background: rgb(255 255 255 / 82%); border: 1px solid rgb(226 232 240 / 85%); border-radius: var(--radius-md); box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05); backdrop-filter: blur(12px); }
+.three-scene-controls button { min-height: 30px; height: 30px; padding-inline: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--color-muted); background: rgb(255 255 255 / 88%); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); white-space: nowrap; font-size: var(--text-xs); font-weight: 500; transition: all 0.15s ease; user-select: none; }
+.three-scene-controls button:hover { background: #ffffff; color: var(--color-ink); border-color: var(--color-border); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); }
+.three-scene-controls button:active { transform: translateY(1px); }
+.three-scene-controls button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); background: var(--color-accent-soft); font-weight: 600; }
+.three-scene-controls button.three-solid-open { font-weight: 600; color: var(--color-accent-strong); border-color: rgba(99, 102, 241, 0.25); background: rgb(240 249 255 / 95%); }
+.three-scene-controls button.three-solid-open:hover { background: #ffffff; border-color: var(--color-accent); }
 .three-angle-readout { position: absolute; z-index: 2; right: var(--space-3); bottom: var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-ink); background: rgb(255 255 255 / 92%); box-shadow: var(--shadow-card); font-size: var(--text-sm); }
 .coordinate-readout { top: 18px; left: 18px; border-color: var(--color-border); border-radius: var(--radius-md); color: var(--color-muted); background: rgb(255 255 255 / 90%); }
 .panel.right { background: var(--color-surface-subtle); border-left-color: var(--color-border); }

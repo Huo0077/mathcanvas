@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-02 —— 3D 顶点直接操纵隔离、Three.js 视觉偏移归零与视口 HUD 排版优化（Block 6，开发版）
+
+- **3D 立方体顶点拖动严格隔离（threeDrag.ts）**：在 `dragFamilyIds` 中针对空间点（`primitive.type === "point3"`）增加原子隔离逻辑，返回仅包含该点自身的集合。彻底根除此前拖动立方体顶点时、因遍历 DAG 引用逆向拉入父级多面体及所有 8 个顶点导致整个立方体一起跟着移动的严重缺陷。
+- **模板实体顶点拖拽自由变形（transforms.ts & apply.ts）**：在 `transforms.ts` 的 `isFreeDraggable3` 中允许未绑定的自由空间点（含模板立方体生成的物化顶点）直接响应拖拽。在 `apply.ts` 的 `translatePrimitive3` 中支持平移多面体顶点，自动将模板实体（`polyhedron3`）转变为由显式面环驱动的多面体（`fromFaces`），并对翘曲的四边形面执行自适应三角剖分，使拖动顶点的空间变形被内核如实接收入库并支持无损撤销，不再被内核拒绝。
+- **Three.js 临时视觉位移（visualApplied）自动清除归零（threeSceneInteraction.ts）**：在拖拽抬手（`handlePointerUp`）触发文档更新或拖拽被取消时，显式将临时应用于 Three.js 网格对象的位移矩阵撤销（`applyDragOffsets(..., visualApplied.negate())`）并将 `visualApplied` 归零，彻底根除因复用网格（`keepContent`）保留临时位移导致 2D SVG 点标注（`pointLabelPlacements`）与 3D 几何图形脱节漂移的深层历史缺陷。
+- **3D 视口浮动控制面板紧凑排版与微拟物毛玻璃药丸容器优化（global.css）**：将 `.three-scene-controls` 与 `.three-camera-controls` 浮动 HUD 按钮重构为高度 30px 的紧凑药丸形（圆角 4px、字号 12px、内边距 8px），并置于半透明毛玻璃柔光卡片底板中；突出「常用立体」主入口高亮；优化 `.three-camera-hint` 与角度读数角落卡片，消除高分辨率与窄视口下的遮挡与视觉杂乱。
+- **测试覆盖与门禁验证**：
+  - 单元测试：`threeScene.test.ts` 新增 `"isolates dragging a single vertex so the rest of the solid stays put"` 用例，59 项全过；`packages/scene-graph/` 34 文件 / 425 项全过；全量单元测试 **505 文件 / 5373 通过 + 1 todo / 0 失败**；
+  - 端到端测试：`e2e/geometry3d-drag.spec.ts` 新增 `"drags a single vertex of a cube without moving the entire cube or displacing other vertices"` 用例，10 项全过；
+  - `npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— CI 审查报错与 3D 绘图会话状态修复（开发版）
 
 - **CAD 绘图视口框选与创建态严格互斥（DrawingViewport & engineering-workbench）**：在 `DrawingViewport.tsx` 中恢复 `creation` 存在即互斥框选的设计，确保用户处于画线/画圆等任何创建态时不会意外触发框选；在 `e2e/engineering-workbench.spec.ts` 中针对粘滞连续作图心流（Sticky Tools）场景，在绘制完线段后显式触发 `Escape` 键退出连续画线并回归选择模式，同时确保 `DrawingViewport.test.tsx` 单测与 Playwright e2e 框选双向 100% 绿色通过。

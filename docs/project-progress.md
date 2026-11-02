@@ -10,6 +10,31 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— 3D 空间顶点拖拽隔离、视觉位移归零与视口 HUD 排版优化
+
+**目标**：彻底解决用户在立体几何中遇到的“拖动立方体的一个点整个立方体跟着动、松手后图形复位而标注点未复位”的严重体感缺陷，以及 3D 视口浮动控件排版杂乱、遮挡画布的视觉问题。
+
+**排查与根因**：
+1. **立方体整体连带移动的根因**：
+   - 在 `threeDrag.ts` 的 `dragFamilyIds` 中，算法构建了依赖图并正向拉入依赖项。由于空间点被空间多面体（`polyhedron3`）依赖，算法将多面体加入了拖动族；随后第 46 行 `for (const member of [...family]) for (const parentId of parents.get(member) ?? []) family.add(parentId)` 又逆向查询多面体的父级，将整个立方体模板（`cube-1`）以及立方体的全部 8 个顶点全部加入了拖动族，导致用户按住一个顶点拖动时，Three.js 场景把整个立方体及其 8 个点全部加上了临时位移。
+   - **修复**：在 `dragFamilyIds` 中增加针对空间点的原子隔离保护：`if (primitive?.type === "point3") return new Set<string>([id])`，确保拖动一个点只移动该点本身，绝不连带拉入父级多面体或兄弟顶点。
+2. **松手后图形复位但点标注不复位的根因**：
+   - 包含双重原因：
+     - 首先，`transforms.ts` 中的 `isFreeDraggable3` 在首部包含了 `if (generated.has(primitive.id)) return false`，导致模板立体生成的物化顶点被判定为不可自由拖动，抬手提交 `translatePrimitive3` 时被内核拒绝（报错 `"object is not draggable"`），文档完全没有发生改变；
+     - 其次，由于文档未变且 `handlePointerUp` 中此前未对 Three.js 对象的 `applyDragOffsets` 进行反向抵消清理，导致网格对象位置保留了临时偏移；当组件重新渲染时，`threeSceneContent.ts` 复用已有顶点网格（`keepContent`），该网格依然处于被拖动后的世界坐标；而 2D HTML 点标注（`pointLabelPlacements`）正是通过读取该网格的实时世界坐标进行投影计算的，导致点标注悬空留在拖拽后的位置，而立方体几何表面因未变动停在原处，形成了“图形复位了但标注点脱节漂移”的诡异现象。
+   - **修复**：
+     - 在 `transforms.ts` 的 `isFreeDraggable3` 中允许未绑定的自由空间点直接可拖；在 `apply.ts` 的 `translatePrimitive3` 中平移空间点时，自动将从属的多面体（`polyhedron3`）由模板模式（`template`）转换为显式面环多面体（`fromFaces`），并对形变翘曲的四边形面执行自适应三角剖分，内核成功入库并支持无损撤销；
+     - 在 `threeSceneInteraction.ts` 的 `handlePointerUp` 中，无论是提交文档还是拖动取消/无位移，在结束拖拽时均统一调用 `applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())` 彻底归零清除 Three.js 临时偏移，确保渲染管道与文档真实状态 100% 同步对齐。
+3. **3D 视口排版优化**：
+   - 将 `.three-scene-controls` 与 `.three-camera-controls` 浮动 HUD 按钮重构为高度 30px 的紧凑药丸形（圆角 4px、字号 12px、内边距 8px），整合入半透明毛玻璃柔光卡片底板中；突出「常用立体」主入口高亮；优化 `.three-camera-hint` 与角度读数角落卡片，消除高分辨率与窄视口下的遮挡与视觉杂乱。
+
+**验证读数（2026-11-02 本机）**：
+- 全量单元测试 **505 文件 / 5373 通过 + 1 todo / 0 失败**（含 `threeScene.test.ts` 59 项全过、`packages/scene-graph/` 425 项全过）；
+- Playwright e2e `geometry3d-drag.spec.ts` **10/10 全过**（含新增顶点隔离拖动用例）；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— CI 审查报错排查与 3D 绘图会话状态修复
 
 **目标**：排查并彻底修复 GitHub Actions CI 中 `checks`（Vitest 单元测试）与 `e2e`（Playwright 自动化测试）作业报错问题，确保全量门禁 100% 绿色通过。

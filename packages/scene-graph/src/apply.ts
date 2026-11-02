@@ -360,6 +360,20 @@ export function applyOperation(document: GeometryDocument, operation: DomainOper
       .map((candidate) => candidate.id === operation.id ? moved.primitive : candidate)
       // A point-driven object is moved by moving its points; the object itself only follows through recompute.
       .map((candidate) => candidate.type === "point3" && candidate.id !== operation.id && movedIds.has(candidate.id) ? { ...candidate, position: shiftedPoint(candidate.position, operation.delta) } : candidate)
+    if (primitive.type === "point3") {
+      for (const candidate of next.primitives) {
+        if (candidate.type !== "polyhedron3" || !candidate.vertexIds.includes(primitive.id)) continue
+        if (candidate.construction?.kind === "template") {
+          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.construction.sourceIds[0] }
+          continue
+        }
+        if (candidate.construction?.kind === "prism" && !prismMatchesVertices(candidate, candidate.construction, next.primitives)) {
+          candidate.construction = { kind: "fromFaces", sourceIds: [...candidate.faceIds], sourceId: candidate.id }
+        }
+      }
+      const triangulationError = triangulateWarpedSolidFaces(next.primitives, primitive.id)
+      if (triangulationError) return { document, changed: false, error: triangulationError }
+    }
     // Sections name their source by id, so they are not in the dependency index: a moved solid has to
     // re-derive its own cuts explicitly, or the drawn section would keep the old shape while the solid moves.
     const cutIds = next.primitives.filter((candidate): candidate is Extract<PrimitiveSpec, { type: "section" }> => candidate.type === "section" && candidate.sourceId === operation.id).map((section) => section.id)

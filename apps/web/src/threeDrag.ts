@@ -27,6 +27,11 @@ export function dragWorldPoint(camera: THREE.Camera, anchor: THREE.Vector3, norm
  * 以及模板实体所生成的点/棱/面。少了这一步，拖点驱动的棱就"只动属性不动画面"。
  */
 export function dragFamilyIds(document: GeometryDocument, id: string): Set<string> {
+  const primitive = document.primitives.find((candidate) => candidate.id === id)
+  // 点是空间的原子图元：拖动点只移动该点本身，决不能连带把父级多面体或兄弟顶点一起拽走。
+  if (primitive?.type === "point3") {
+    return new Set<string>([id])
+  }
   const { dependents, parents } = dragGraph(document)
   const family = new Set<string>([id])
   const queue = [id]

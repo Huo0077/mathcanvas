@@ -216,8 +216,8 @@ export function templateTopologyIds(document: GeometryDocument): Set<string> {
  */
 export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, Point3Primitive>, generated: Set<string> = new Set()): boolean {
   if (primitive.locked) return false
-  if (generated.has(primitive.id)) return false
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
+  if (generated.has(primitive.id)) return false
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
   // 球与模板实体同类：几何是**它自己的**（球心坐标 + 半径），不依赖任何点能不能动。
   // **但派生球不是**：球心与半径由宿主算出来（`derivedFrom`），拖它只会被下一次重算覆盖 ——
