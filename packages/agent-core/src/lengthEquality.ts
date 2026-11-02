@@ -1,4 +1,4 @@
-import { POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
+import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
 
 /**
  * **长度连等表达式的确定性解析**（2026-10-26）。
@@ -89,7 +89,7 @@ function parseTerm(text: string): Term | null {
   // `|AB|` 这种绝对值记法在卷面上等同于线段长度；两侧的竖线不是判据的一部分。
   const match = TERM.exec(text.trim().replace(/^\|+|\|+$/g, ""))
   if (match === null) return null
-  const names = splitPointNames(match[3]!)
+  const names = splitPointNames(match[3]!).map(canonicalPointName)
   if (names.length !== 2) return null
   const numerator = match[1] === undefined ? 1 : Number(match[1])
   const denominator = match[2] === undefined ? 1 : Number(match[2])

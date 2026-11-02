@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { CHANGELOG, newestChangelogDate, newestRelease } from "./releaseFacts"
+import { CHANGELOG, CURRENT_STATUS, newestChangelogDate, newestCurrentStatusSectionDate, newestProjectProgressDate, newestRelease, PROJECT_PROGRESS } from "./releaseFacts"
 
 /**
  * **发了版就必须在 CHANGELOG 里留一笔**。
@@ -30,6 +30,25 @@ describe("CHANGELOG 不得落后于最新一次正式发布", () => {
       changelogDate! >= release.published!,
       `最新发布说明 ${release.file} 的日期是 ${release.published}，` +
         `而 ${CHANGELOG} 的最新条目停在 ${changelogDate} —— 发版了却没写变更记录`
+    ).toBe(true)
+  })
+
+  it("**CHANGELOG 与 project-progress 的最新 `## YYYY-MM-DD` 不早于 current-status 最新章节日期**", () => {
+    const statusSectionDate = newestCurrentStatusSectionDate()
+    const changelogDate = newestChangelogDate()
+    const progressDate = newestProjectProgressDate()
+
+    expect(statusSectionDate, `${CURRENT_STATUS} 里读不出 \`## YYYY-MM-DD\` 章节标题`).toBeDefined()
+    expect(changelogDate, `${CHANGELOG} 里读不出 \`## YYYY-MM-DD\` 章节标题`).toBeDefined()
+    expect(progressDate, `${PROJECT_PROGRESS} 里读不出 \`## YYYY-MM-DD\` 章节标题`).toBeDefined()
+
+    expect(
+      changelogDate! >= statusSectionDate!,
+      `${CURRENT_STATUS} 最新章节日期是 ${statusSectionDate}，而 ${CHANGELOG} 最新条目停在 ${changelogDate}`
+    ).toBe(true)
+    expect(
+      progressDate! >= statusSectionDate!,
+      `${CURRENT_STATUS} 最新章节日期是 ${statusSectionDate}，而 ${PROJECT_PROGRESS} 最新条目停在 ${progressDate}`
     ).toBe(true)
   })
 })

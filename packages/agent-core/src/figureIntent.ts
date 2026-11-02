@@ -1,3 +1,4 @@
+import { canonicalPointName } from "@draw/geometry-kernel"
 import type { DiagramSourceSpan } from "./diagramObligations"
 import type { ObligationIR } from "./obligationIR"
 
@@ -177,7 +178,7 @@ export function readFoldTransformations(prompt: string): FigureTransformation[] 
   /** 只给"点 A 到达点 P"的写法（T4.2）。 */
   const apexTo = new RegExp(`(?:将)?\\s*${TRIANGLE}\\s*(${RUN})\\s*沿\\s*(${RUN})\\s*${ACTION_WITH_ANGLE}\\s*[，,]?\\s*使\\s*点?\\s*(${RUN})\\s*(?:到达|落到|落在|重合于|与)\\s*(?:点\\s*)?(${RUN})`, "g")
 
-  const pointNames = (raw: string): string[] => raw.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? []
+  const pointNames = (raw: string): string[] => (raw.match(/[A-Z](?:[′'’ʼ]+|[₀-₉]+)*/g) ?? []).map(canonicalPointName)
 
   const out: FigureTransformation[] = []
   const seen = new Set<string>()

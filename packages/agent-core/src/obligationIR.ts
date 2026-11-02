@@ -62,7 +62,9 @@ import { normalizeGeometryPrompt } from "./latexNormalisation"
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
   "planePerpendicular", "dihedral", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
-  "conicAxes", "tangentAt", "functionGraph",
+  "conicAxes", "conicChord", "tangentAt", "functionGraph", "commonTangent",
+  "angleBisector", "chordCenterDistance", "arcLength",
+  "incenter", "centroid", "orthocenter", "excenter", "circumcenter", "midline",
   /** Task 11：面积由核验器**从最终坐标自己算**（`diagramVerification.calculate` 的 `area` 支）。 */
   "area",
   /** Task 13 边界（2026-10-14）：线面角由核验器从最终坐标自己算（`linePlaneAngle` 支）。 */
@@ -144,8 +146,13 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     ...(item.coordinate === undefined ? {} : { coordinate: { ...item.coordinate } }),
     ...(item.conic === undefined ? {} : { conic: { ...item.conic } }),
     ...(item.conicKind === undefined ? {} : { conicKind: item.conicKind }),
+    ...(item.line === undefined ? {} : { line: { ...item.line } }),
+    ...(item.expectation === undefined ? {} : { expectation: item.expectation }),
     ...(item.splitPoint === undefined ? {} : { splitPoint: item.splitPoint }),
-    ...(item.expression === undefined ? {} : { expression: item.expression })
+    ...(item.expression === undefined ? {} : { expression: item.expression }),
+    ...(item.expressions === undefined ? {} : { expressions: [...item.expressions] as [string, string] }),
+    ...(item.solid === undefined ? {} : { solid: { ...item.solid } }),
+    ...(item.prismShape === undefined ? {} : { prismShape: { ...item.prismShape } })
   }
   return {
     id: `obligation-${index}`,
@@ -270,8 +277,13 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     ...(item.geometry?.coordinate === undefined ? {} : { coordinate: { ...item.geometry.coordinate } }),
     ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } }),
     ...(item.geometry?.conicKind === undefined ? {} : { conicKind: item.geometry.conicKind }),
+    ...(item.geometry?.line === undefined ? {} : { line: { ...item.geometry.line } }),
+    ...(item.geometry?.expectation === undefined ? {} : { expectation: item.geometry.expectation }),
     ...(item.geometry?.splitPoint === undefined ? {} : { splitPoint: item.geometry.splitPoint }),
-    ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression })
+    ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression }),
+    ...(item.geometry?.expressions === undefined ? {} : { expressions: [...item.geometry.expressions] as [string, string] }),
+    ...(item.geometry?.solid === undefined ? {} : { solid: { ...item.geometry.solid } }),
+    ...(item.geometry?.prismShape === undefined ? {} : { prismShape: { ...item.geometry.prismShape } })
   }))
   return {
     givens,

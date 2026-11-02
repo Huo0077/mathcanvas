@@ -10,6 +10,20 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— 全仓审查与四组 TDD 修复（明确实体、IR 往返、矩形单/双折、门禁卫生）
+
+**目标**：对全仓做系统性审查并按 TDD（Red → Green → Refactor）逐项修复查实的缺陷。
+
+**修复与证据**：
+1. **明确球体/棱柱条件与管线对齐**：补齐 `prism.shape` 矛盾检测（`斜` 与 `直/正` 同现、多处不同边数、`< 3` 非法边数）、上标幂/单位后缀词法拒绝、`sourceText` 原文切片、`directlyRequestsPrism` 句式对齐，以及 `localPlanner` / `DraftStore.stage` 的 `normalizeGeometryPrompt` 与 `solidDimensionGate` 同构门禁。
+2. **`obligationIR` R4 无损往返**：在 `ObligationGeometry`、`claimOf`、`toLegacyObligationSet` 中补齐 `solid`、`prismShape`、`line`、`expectation`、`expressions`，并同步 `JUDGED_KINDS`。
+3. **矩形单/双折与折前/折后状态核验**：修复 `foldChecks` 被折后别名污染报 `0°` 的缺陷、修复折起句后 `使 BD=3` 被误判为折前对角线的缺陷、修复 `readRectangleFoldCore` 误扫 `求证` 段平面垂直、补齐 `solveRectangleFoldChain` 隐式命名回退与第二折面片校验，以及 ASCII 撇号 `'` 规范化。
+4. **仓库卫生与文档门禁**：清理 `audit-20261016/` 未跟踪产物与外层散落探针，更新 `.gitignore`、`eslint.config.mjs`、CI 门禁与 `docs-consistency` 的日期不落后判据。
+
+## 2026-11-01 —— 明确球体 / 棱柱尺寸、形状语义与 54 题离线验收
+
+详见 [审计报告](audit/2026-11-01-prism-shape-and-lexer.md) 与 [独立验收报告](audit/2026-11-01-explicit-solid-acceptance.md)。
+
 ## 2026-10-27（第八块）—— 连续两次折起的完整支持（题单 29）
 
 **目标**：把上一块的"说清不支持"变成"能画两笔"。

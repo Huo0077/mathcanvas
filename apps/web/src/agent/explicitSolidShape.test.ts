@@ -86,4 +86,34 @@ describe("complete numeric lexical boundaries through the planner", () => {
     expect(envelope.kind).toBe("clarification")
     if (envelope.kind === "clarification") expect(envelope.questions.join(" ")).toMatch(/坐标|十进制/)
   })
+
+  it("reads prism dimensions and shape when modifiers precede '棱柱' or creation verbs vary", async () => {
+    const preModified = prismInputs(await plan("画一个底面边长 5，高 8 的直棱柱"))
+    expect(preModified.vector).toEqual({ x: 0, y: 0, z: 8 })
+    expect(preModified.basePolygon[1]!.x).toBe(5)
+
+    const added = prismInputs(await plan("添加一个正四棱柱，底面边长 6，高 9"))
+    expect(added.vector).toEqual({ x: 0, y: 0, z: 9 })
+    expect(added.basePolygon[1]!.x).toBe(6)
+
+    const noVerbTriangular = await plan("正三棱柱，底面边长 4，高 8")
+    expect(noVerbTriangular.kind).toBe("clarification")
+
+    const twelveSided = await plan("画一个正12棱柱")
+    expect(twelveSided.kind).toBe("clarification")
+
+    const contradictory = await plan("画一个斜正四棱柱，底面边长 4，高 8")
+    expect(contradictory.kind).toBe("clarification")
+  })
+
+  it("normalizes LaTeX radicals in the local planner and rejects superscript powers", async () => {
+    const latexSphere = await plan("画一个球体，半径 \\sqrt{3}")
+    expect(latexSphere.kind).toBe("plan")
+    if (latexSphere.kind === "plan") {
+      expect((latexSphere.actions[0]!.inputs as { radius: number }).radius).toBeCloseTo(Math.sqrt(3), 12)
+    }
+
+    const superscriptSphere = await plan("画一个球体，半径 2²")
+    expect(superscriptSphere.kind).toBe("clarification")
+  })
 })

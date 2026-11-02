@@ -110,4 +110,20 @@ describe("explicit solid conditions on the draft staging path", () => {
     expect(staged.ok).toBe(false)
     if (!staged.ok) expect(staged.planDiagnostics?.some((entry) => /归属|一个实体|2 个实体/.test(entry.detail))).toBe(true)
   })
+
+  it("normalizes LaTeX prompts and verifies non-sphere/prism template dimensions at the draft gate", async () => {
+    const latexStaged = await stage([sphereAction({ x: 0, y: 0, z: 0 }, Math.sqrt(3))], "画一个球体，半径 \\sqrt{3}")
+    expect(latexStaged.ok).toBe(true)
+    if (latexStaged.ok) expect(latexStaged.preview.diagramVerification?.status).toBe("passed")
+
+    const validCone = {
+      actionId: "solid.create_template",
+      actionKey: "cone",
+      factIds: [],
+      inputs: { alias: "cone", template: "cone", origin: { x: 0, y: 0, z: 0 }, radius: 2, height: 3 }
+    }
+    const coneStaged = await stage([validCone], "圆锥的底面半径为 2，高为 3")
+    expect(coneStaged.ok).toBe(true)
+    if (coneStaged.ok) expect(coneStaged.preview.diagramVerification?.status).toBe("passed")
+  })
 })

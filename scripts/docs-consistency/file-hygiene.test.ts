@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 import { describe, expect, it } from "vitest"
+import { CURRENT_STATUS, newestCurrentStatusSectionDate } from "./releaseFacts"
 
 /**
  * **文件卫生**（V3 的"旧问题归属"里点名的那一条：BOM / 换行 / 链接 / **日期**卫生）。
@@ -97,5 +98,17 @@ describe("文件卫生：日期", () => {
       expect(Number.isNaN(stamp), `${file} 的日期不是真日期：${matched[0]}`).toBe(false)
       expect(stamp, `${file} 的日期在**未来**：${matched[1]}-${matched[2]}-${matched[3]}`).toBeLessThan(limit)
     }
+  })
+
+  it("**current-status.md 的「最后更新」不得早于页内最新的 `## YYYY-MM-DD` 章节日期**", () => {
+    const text = readFileSync(path.join(process.cwd(), CURRENT_STATUS), "utf8")
+    const matched = text.match(/(?:最后更新|Updated)[：:]\s*\**\s*(\d{4}-\d{2}-\d{2})/)
+    const newestSection = newestCurrentStatusSectionDate()
+    expect(matched, `${CURRENT_STATUS} 里读不出「最后更新：YYYY-MM-DD」`).not.toBeNull()
+    expect(newestSection, `${CURRENT_STATUS} 里读不出 \`## YYYY-MM-DD\` 章节标题`).toBeDefined()
+    expect(
+      matched![1]! >= newestSection!,
+      `${CURRENT_STATUS} 的最新章节日期是 ${newestSection}，但「最后更新」仍停在 ${matched?.[1]}`
+    ).toBe(true)
   })
 })

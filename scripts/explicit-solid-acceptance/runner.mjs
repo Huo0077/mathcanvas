@@ -3,10 +3,10 @@ import path from "node:path"
 import { fileURLToPath, URL } from "node:url"
 
 /**
- * **明确球体 / 棱柱 40 条离线验收入口**（2026-11-01）。
+ * **明确球体 / 棱柱 54 条离线验收入口**（2026-11-01）。
  *
  * 只跑确定性本地规划器与编译器，不调用付费模型。题单必须先在
- * `test-fixtures/explicit-solid-acceptance/cases.json` 固定；报告目录每次唯一。
+ * `test-fixtures/explicit-solid-acceptance/manifest.json` 固定；报告目录每次唯一。
  */
 
 export function parseArgs(args) {

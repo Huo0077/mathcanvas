@@ -122,7 +122,7 @@ function prismCarriesVertexNames(inputs: unknown): boolean {
  * （而报告里只有一条"没有可靠识别到可核验的题设"），把本来能确认的草稿拦下来。
  * 闸门只对这一族开，立方体等其它模板题面**逐字不变**。
  */
-function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
+export function solidDimensionGate(parserPrompt: string, actions: readonly { actionId: string; inputs?: unknown }[]): boolean {
   if (!actions.some((action) => action.actionId === "solid.create_template" || action.actionId === "solid.create_regular_pyramid" || action.actionId === "solid.create_sphere" || action.actionId === "solid.create_prism")) return false
   return parseDiagramObligations(parserPrompt).givens.some((entry) => entry.kind === "solidDimension" || entry.kind === "solidCenter" || entry.kind === "solidPrismShape")
 }
@@ -3867,7 +3867,8 @@ const EXPLICIT_FIELD_LABEL: Record<string, string> = {
   "sphere.center": "球心",
   "sphere.radius": "球的半径",
   "prism.baseEdge": "棱柱底面边长",
-  "prism.height": "棱柱的高"
+  "prism.height": "棱柱的高",
+  "prism.shape": "棱柱形状"
 }
 
 /** 明确条件读不懂 / 矛盾时给 error；默认值不得接手。 */

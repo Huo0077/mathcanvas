@@ -168,4 +168,17 @@ describe("V0a coordinate obligation IR", () => {
     expect(prompt.slice(point!.start, point!.end)).toBe("A=(0,0,0)")
     expect(toLegacyObligationSet(ir)).toEqual(legacy)
   })
+
+  it("preserves explicit solidDimension and solidPrismShape fields losslessly through IR ↔ legacy", () => {
+    for (const prompt of [
+      "画一个球体，球心 (1,2,3)，半径 5",
+      "画一个正四棱柱，底面边长 4，高 8",
+      "圆锥的底面半径为 2，母线长为 3"
+    ]) {
+      const legacy = parseDiagramObligations(prompt)
+      const ir = parseObligationIR(prompt)
+      expect(toLegacyObligationSet(ir), prompt).toEqual(legacy)
+      expect(ir.obligations.every((item) => item.judgeability === "supported"), prompt).toBe(true)
+    }
+  })
 })

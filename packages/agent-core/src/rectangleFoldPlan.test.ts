@@ -244,4 +244,39 @@ describe("A3 题面 → 计划 / 澄清", () => {
     expect(solved.findings).toEqual([])
     expect(solved.plan.actions).toHaveLength(2)
   })
+
+  it("求证段里的两平面垂直不会被误判为题设里的非折痕两侧平面垂直", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起 90° 至 △AB′C。求证：平面 AB′D ⊥ 平面 B′CD。"
+    const solved = solveRectangleFold(prompt)
+    expect(solved.status, solved.status === "unsupported" ? solved.reason : "").toBe("plan")
+  })
+
+  it("连续两次折起：第一笔未显式命名折后三角形时，自动分配唯一显示名并完成第二笔", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90°，再沿 BC 把 △ABC 折起 30° 至 △A′BC。"
+    const solved = solveRectangleFold(prompt)
+    expect(solved.status, solved.status === "unsupported" ? solved.reason : "").toBe("plan")
+    if (solved.status !== "plan") return
+    const compiled = compilePlan(solved.plan, { document: createEmptyDocument("geometry3d"), conversationId: "a3-chain-implicit", documentGeneration: 0, prompt })
+    expect(compiled.ok, compiled.ok ? "" : JSON.stringify(compiled.diagnostics)).toBe(true)
+  })
+
+  it("连续两次折起：第二笔折的不是第一笔折后的两个三角形之一时拒绝", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′D 把 △AB′D 折起 30° 至 △A′B′D。"
+    const solved = solveRectangleFold(prompt)
+    expect(solved.status).toBe("unsupported")
+  })
+
+  it("ASCII 撇号 B'D=3 与连等式 A'B=2B'C=4 均规范化为标准撇号 ′", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 B'D=3。求折后 B'D 的长。"
+    const solved = solveRectangleFold(prompt)
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") return
+    expect(solved.geometry.apexPostName).toBe("B′")
+    const chainParsed = parseDiagramObligations("A'B=2B'C=4")
+    expect(chainParsed.givens.map((g) => g.targets)).toEqual([
+      ["A′", "B"],
+      ["A′", "B", "B′", "C"],
+      ["B′", "C"]
+    ])
+  })
 })

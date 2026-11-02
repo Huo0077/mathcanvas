@@ -185,4 +185,21 @@ describe("compile-time explicit solid conditions", () => {
     expect(result.ok).toBe(false)
     expect(failureText(result)).toMatch(/矛盾|冲突/)
   })
+
+  it("verifies '=' separator conditions as passed without triggering false unread-condition diagnostics", () => {
+    const result = compilePlan(plan([sphere({ x: 1, y: 2, z: 3 }, 5)]), context("画一个球体，球心 = (1, 2, 3)，半径 = 5"))
+    expect(result.ok, failureText(result)).toBe(true)
+    expect(result.diagramVerification?.status, JSON.stringify(result.diagramVerification)).toBe("passed")
+    expect(result.diagramVerification?.checks.every((check) => check.status === "passed")).toBe(true)
+  })
+
+  it("rejects contradictory prism shape modifiers and superscript-truncated sphere radii", () => {
+    const contradictoryPrism = compilePlan(plan([prism({ vector: { x: 0, y: 0, z: 8 } })]), context("画一个斜棱柱，改成直棱柱，底面边长 4，高 8"))
+    expect(contradictoryPrism.ok).toBe(false)
+    expect(failureText(contradictoryPrism)).toMatch(/矛盾|冲突/)
+
+    const truncatedSphere = compilePlan(plan([sphere({ x: 0, y: 0, z: 0 }, 2)]), context("画一个球体，半径 2²"))
+    expect(truncatedSphere.ok).toBe(false)
+    expect(failureText(truncatedSphere)).toMatch(/幂|指数|无法识别/)
+  })
 })

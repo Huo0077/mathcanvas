@@ -74,14 +74,33 @@ export interface DiagramVerificationOptions {
 }
 
 /** Verify the motion from final geometry, including when the plan omitted it. */
-function foldChecks(prompt: string, points: Map<string, Vector3> | null): DiagramCheck[] {
+function foldChecks(prompt: string, points: Map<string, Vector3> | null, plan?: PlanEnvelope): DiagramCheck[] {
+  const foldActions = plan?.kind === "plan" ? plan.actions.filter((action) => action.actionId === "solid.fold") : []
   return readFoldTransformations(prompt).flatMap((fold): DiagramCheck[] => {
     const sourceText = fold.sourceText ?? `${fold.apex}→${fold.apexAs}`
     const failed = (code: string, reason: string): DiagramCheck[] => [{ kind: "fold", sourceText, status: "failed", code, reason }]
+    const matchingAction = foldActions.find((action) => action.inputs.apex === fold.apex && action.inputs.apexAs === fold.apexAs)
+      ?? foldActions.find((action) => action.inputs.apex === fold.apex)
+    const stepPre = new Map<string, Vector3>()
+    if (matchingAction?.inputs.vertices !== undefined && matchingAction.inputs.vertices.length === matchingAction.inputs.vertexNames.length) {
+      for (const [index, name] of matchingAction.inputs.vertexNames.entries()) {
+        const vertex = matchingAction.inputs.vertices[index]
+        if (vertex !== undefined) stepPre.set(name, { x: vertex.x, y: vertex.y, z: vertex.z })
+      }
+    }
+    const a = stepPre.get(fold.apex) ?? points?.get(fold.apex)
+    const p = points?.get(fold.apexAs)
+    const from = stepPre.get(fold.hinge.from) ?? points?.get(fold.hinge.from)
+    const to = stepPre.get(fold.hinge.to) ?? points?.get(fold.hinge.to)
+    const resolved: Record<string, Vector3 | undefined> = {
+      [fold.apex]: a,
+      [fold.apexAs]: p,
+      [fold.hinge.from]: from,
+      [fold.hinge.to]: to
+    }
     const names = [fold.apex, fold.apexAs, fold.hinge.from, fold.hinge.to]
-    const missing = names.filter(name => !points?.has(name))
+    const missing = names.filter(name => resolved[name] === undefined)
     if (missing.length > 0) return failed("fold_reference_missing", `折叠尚未完成：缺少点 ${missing.join("、")}，不能只凭底图条件宣布通过。`)
-    const [a, p, from, to] = names.map(name => points!.get(name)!)
     const axis = subtractVector3(to!, from!)
     const axisSquared = axis.x ** 2 + axis.y ** 2 + axis.z ** 2
     if (!Number.isFinite(axisSquared) || axisSquared <= 1e-20) return failed("fold_degenerate", "折痕退化，不能验证翻折。")
@@ -2388,6 +2407,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   for (const name of originNames) points?.set(name, { x: 0, y: 0, z: 0 })
   /** 折前状态（只有"显式给了折前坐标的单次折"才建得出来；否则为 `null`，按原口径核验）。 */
   const preFold = points === null ? null : preFoldStateOf(plan, points)
+  const rawPoints = points === null ? null : new Map(points)
   /**
    * **折后同名点的别名**：题面写 `平面 ABC ⊥ 平面 ACD` 时，折后的 `ABC` 指的就是
    * `A B′ C`（计划把动点改成了 `B′`）。没有这一层，折后条件会报"点名缺失：B"。
@@ -2397,6 +2417,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     const folded = points.get(preFold.apexAs)
     if (folded !== undefined) points.set(preFold.apex, folded)
   }
+  const foldClauseMatch = options.prompt === undefined ? null : /(?:翻折|折叠|折起|翻起)/.exec(options.prompt)
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
@@ -2422,9 +2443,10 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     }
     /**
      * **这一条该在哪一个状态核**：折前图形条件（角、长度、中点…）且点到了会动的那个点，
-     * 就用折前坐标；其余（含两平面垂直这类折后条件）用最终文档。
+     * 就用折前坐标；其余（含两平面垂直这类折后条件，或写在折起动作之后的 `使 BD=3` 等折后条件）用最终文档。
      */
-    const usePre = preFold !== null && PRE_FOLD_KINDS.has(item.kind) && item.targets.includes(preFold.apex)
+    const isPostFoldClause = foldClauseMatch !== null && item.start > foldClauseMatch.index
+    const usePre = !isPostFoldClause && preFold !== null && PRE_FOLD_KINDS.has(item.kind) && item.targets.includes(preFold.apex)
       && item.targets.every((name) => preFold.points.has(name))
     const statePoints = usePre ? preFold.points : (points ?? new Map())
     const result = calculate(item, statePoints, figures)
@@ -2497,7 +2519,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
       ...(result.evidence === undefined ? {} : { evidence: result.evidence })
     }
   })
-  if (options.prompt !== undefined) checks.push(...foldChecks(options.prompt, points))
+  if (options.prompt !== undefined) checks.push(...foldChecks(options.prompt, rawPoints, plan))
   checks.push(...set.unverified.map((entry): DiagramCheck => ({ kind: "unparsed", sourceText: entry.sourceText, status: "unverified", reason: entry.reason })))
   const sampleValues: string[] = []
   for (const name of set.freeChoices) {

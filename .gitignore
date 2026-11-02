@@ -10,3 +10,9 @@ blob-report/
 .env
 .env.*
 !.env.example
+.superpowers/
+audit-*/MathCanvas-installed/
+audit-*/final-desktop-runtime/
+audit-*/final-e2e-preserved/
+audit-*/*.exit
+audit-*/*.pid

@@ -1,3 +1,5 @@
+import type { DiagramObligation } from "./diagramObligations"
+
 /**
  * **统一数学状态 IR 的证据词表**（设计 2026-10-04 §3；Phase N1）。
  *
@@ -122,6 +124,11 @@ export interface ObligationGeometry {
    * `false` 只比长度比，`true` 还要求共享点落在外两点之间。
    */
   splitPoint?: boolean
+  line?: DiagramObligation["line"]
+  expectation?: DiagramObligation["expectation"]
+  expressions?: [string, string]
+  solid?: DiagramObligation["solid"]
+  prismShape?: DiagramObligation["prismShape"]
 }
 
 /**

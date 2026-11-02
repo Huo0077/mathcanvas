@@ -798,18 +798,26 @@ function resolveExplicitSolidConditions(
   pushValue(conditions.prism.baseEdge, { shape: "prism", metric: "baseEdge" }, /底面\s*(?:边长|边)|底边长|底边|边长/g)
   pushValue(conditions.prism.height, { shape: "prism", metric: "height" }, /高(?:度)?/g)
 
-  const shape = conditions.prism.shape
-  if (shape.sides !== undefined || shape.regular !== undefined || shape.straight !== undefined) {
-    const shapeSource = /(?:正|直|斜)?\s*(?:[三四五六七八九十]|\d+)?\s*棱柱/.exec(givenText)?.[0] ?? "棱柱形状"
-    const start = givenText.indexOf(shapeSource)
-    givens.push({
-      kind: "solidPrismShape",
-      targets: [],
-      prismShape: shape,
-      sourceText: shapeSource,
-      start: start < 0 ? 0 : start,
-      end: start < 0 ? shapeSource.length : start + shapeSource.length
-    })
+  const shapeIssues = conditions.issues.filter((issue) => issue.field === "prism.shape")
+  if (shapeIssues.length > 0) {
+    for (const issue of shapeIssues) {
+      unverified.push({ sourceText: issue.sourceText || "棱柱形状", reason: issue.reason })
+      markCondition(issue.sourceText, /(?:正|直|斜|[一二两三四五六七八九十]+|\d+)\s*棱柱/g)
+    }
+  } else {
+    const shape = conditions.prism.shape
+    if (shape.sides !== undefined || shape.regular !== undefined || shape.straight !== undefined) {
+      const shapeSource = /(?:(?:正|直|斜)\s*)*(?:[一二两三四五六七八九十]+|\d+)?\s*棱柱/.exec(givenText)?.[0]?.trim() ?? "棱柱形状"
+      const start = givenText.indexOf(shapeSource)
+      givens.push({
+        kind: "solidPrismShape",
+        targets: [],
+        prismShape: shape,
+        sourceText: shapeSource,
+        start: start < 0 ? 0 : start,
+        end: start < 0 ? shapeSource.length : start + shapeSource.length
+      })
+    }
   }
 }
 

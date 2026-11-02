@@ -12,6 +12,8 @@ export const TAURI = "apps/desktop/src-tauri/tauri.conf.json"
 export const CARGO = "apps/desktop/src-tauri/Cargo.toml"
 export const RELEASE_DIR = "docs/release"
 export const CHANGELOG = "CHANGELOG.md"
+export const CURRENT_STATUS = "docs/current-status.md"
+export const PROJECT_PROGRESS = "docs/project-progress.md"
 
 /** `4.0` / `4.0.0` / `v4.0.1` 一律归一成三段数字，便于逐段比较。 */
 export function segments(version: string): number[] {
@@ -78,6 +80,20 @@ export function newestRelease(): ReleaseDoc {
 /** CHANGELOG 里最新一条 `## YYYY-MM-DD` 标题的日期。 */
 export function newestChangelogDate(): string | undefined {
   const text = readFileSync(CHANGELOG, "utf8")
+  const dates = [...text.matchAll(/^##\s+(\d{4}-\d{2}-\d{2})/gm)].map((match) => match[1]!)
+  return dates.sort((left, right) => right.localeCompare(left))[0]
+}
+
+/** `docs/current-status.md` 里最新一条 `## YYYY-MM-DD` 标题的日期。 */
+export function newestCurrentStatusSectionDate(): string | undefined {
+  const text = readFileSync(CURRENT_STATUS, "utf8")
+  const dates = [...text.matchAll(/^##\s+(\d{4}-\d{2}-\d{2})/gm)].map((match) => match[1]!)
+  return dates.sort((left, right) => right.localeCompare(left))[0]
+}
+
+/** `docs/project-progress.md` 里最新一条 `## YYYY-MM-DD` 标题的日期。 */
+export function newestProjectProgressDate(): string | undefined {
+  const text = readFileSync(PROJECT_PROGRESS, "utf8")
   const dates = [...text.matchAll(/^##\s+(\d{4}-\d{2}-\d{2})/gm)].map((match) => match[1]!)
   return dates.sort((left, right) => right.localeCompare(left))[0]
 }

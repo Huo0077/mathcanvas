@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-02 —— 全仓代码审查与四组回归修复（开发版）
+
+- **明确球体/棱柱解析、词法与规划/草稿对齐**：`directlyRequestsPrism` 对齐前置定语、省略动词、其他创建动词与 `\d+` 多位数边数，并排除带顶点名（`ABC-A₁B₁C₁`）或 `在…中` 的复杂多面体题面；`readPrismShape` 新增多处不同边数、`< 3` 非法边数以及 `斜` 与 `直/正` 同现的矛盾检测（归入 `prism.shape` issue）；`scanNumericToken` 消费并拒绝上标幂（`2²`）与字母/单位后缀（`5a`、`5cm`），同时保留原文精确切片 `sourceText`（修复 `半径 = 5` 的假 `unverified` 与 `start: 0` 偏移错误）；`localPlanner` 与 `DraftStore.stage` 统一调用 `normalizeGeometryPrompt` 与 `solidDimensionGate`。
+- **`obligationIR` R4 无损往返与 `JUDGED_KINDS` 同步**：`ObligationGeometry`、`claimOf` 与 `toLegacyObligationSet` 补齐 `solid`、`prismShape`、`line`、`expectation`、`expressions` 字段；`JUDGED_KINDS` 补齐 `conicChord`、`commonTangent`、`angleBisector`、`chordCenterDistance`、`arcLength`、五心及 `midline`。
+- **矩形折起求解、双折与折前/折后核验修复**：`diagramVerification` 在别名覆盖前保留 `rawPoints` 并结合 `solid.fold` 折前顶点核验 `foldChecks`（修复显式折角并命名目标面报 `0° vs 90°` 的缺陷）；区分折起动词之后的折后距离条件（修复 `使 BD=3` 误用折前对角线核验）；`readRectangleFoldCore` 跳过 `求证/证明/求` 目标段中的两平面垂直；`solveRectangleFoldChain` 补齐第一笔隐式折后点名回退与第二笔折片合法性校验；`lengthEquality`、`figureIntent` 与 `rectangleFoldPlan` 统一用 `canonicalPointName` 规范化 ASCII 撇号 `'`。
+- **仓库卫生与文档门禁加固**：清理未跟踪探针与二进制残留，加固 `.gitignore`、`eslint.config.mjs`、CI 门禁（`test:docs`、`eval:reliability -- --offline`、`eval:explicit-solid -- --offline`）及 `docs-consistency` 日期一致性测试。
+
+## 2026-11-01 —— 明确球体 / 棱柱尺寸与形状语义读取及 54 题离线验收（开发版）
+
+- 新增 `explicitSolidConditions.ts` 统一规划器、解析器与编译器的球体/棱柱条件读取；新增 `solidCenter` 与 `solidPrismShape` 义务及核验判据；新增 `eval:explicit-solid -- --offline` 54 条固定离线验收题单（54/54 通过）。详见 [`docs/audit/2026-11-01-prism-shape-and-lexer.md`](docs/audit/2026-11-01-prism-shape-and-lexer.md) 与 [`docs/audit/2026-11-01-explicit-solid-acceptance.md`](docs/audit/2026-11-01-explicit-solid-acceptance.md)。
+
 ## 2026-10-27 —— 连续两次折起的完整支持（开发版）
 
 - **第二笔折的是第一笔折后的面**：`矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起 90° 至 △AB′C，再沿 B′C 把 △AB′C 折起 30° 至 △A′B′C` 现在真的落成**两笔** `solid.fold`（上一块只是"说清不支持"，更早是静默只折一笔）。

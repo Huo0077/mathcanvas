@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { hasExplicitSolidConditions, readExplicitSolidConditions } from "./explicitSolidConditions"
+import { directlyRequestsPrism, hasExplicitSolidConditions, readExplicitSolidConditions } from "./explicitSolidConditions"
 
 const SPHERE = "画一个球体，球心 (1,2,3)，半径 5"
 const PRISM = "画一个斜棱柱，底面边长 4，高 8"
@@ -169,5 +169,69 @@ describe("explicit solid conditions", () => {
       expect(field.status, prompt).toBe("invalid")
       expect(field.reason, prompt).toMatch(pattern)
     }
+  })
+
+  it("matches direct prism requests across modifier orders, omitted verbs, creation verbs and multi-digit sides while excluding named prisms", () => {
+    expect(readExplicitSolidConditions("画一个底面边长 5，高 8 的直棱柱").prism).toMatchObject({
+      requested: true,
+      baseEdge: { status: "parsed", value: 5 },
+      height: { status: "parsed", value: 8 },
+      shape: { straight: true }
+    })
+    expect(readExplicitSolidConditions("正三棱柱，底面边长 4，高 8").prism).toMatchObject({
+      requested: true,
+      shape: { sides: 3, regular: true, straight: true }
+    })
+    expect(readExplicitSolidConditions("添加一个正四棱柱，底面边长 6，高 9").prism).toMatchObject({
+      requested: true,
+      baseEdge: { status: "parsed", value: 6 },
+      height: { status: "parsed", value: 9 },
+      shape: { sides: 4, regular: true, straight: true }
+    })
+    expect(readExplicitSolidConditions("画一个正12棱柱").prism).toMatchObject({
+      requested: true,
+      shape: { sides: 12, regular: true, straight: true }
+    })
+    expect(readExplicitSolidConditions("斜棱柱，高 1/2").prism.height.status).toBe("invalid")
+    expect(readExplicitSolidConditions("画直三棱柱 ABC-A₁B₁C₁，底面边长 4，高 8").prism.requested).toBe(false)
+    expect(readExplicitSolidConditions("在直三棱柱中，底面边长为 4，高为 8").prism.requested).toBe(false)
+  })
+
+  it("rejects contradictory prism shape modifiers and invalid polygon side counts", () => {
+    for (const prompt of [
+      "画一个斜正四棱柱，底面边长 4，高 8",
+      "画一个直棱柱，改成斜棱柱，底面边长 4，高 8",
+      "画一个斜棱柱，改成直棱柱，底面边长 4，高 8",
+      "画一个四棱柱，改成三棱柱，底面边长 4，高 8",
+      "画一个二棱柱，底面边长 4，高 8",
+      "画一个2棱柱，底面边长 4，高 8"
+    ]) {
+      const conditions = readExplicitSolidConditions(prompt)
+      expect(conditions.prism.requested, prompt).toBe(true)
+      expect(conditions.issues.some((issue) => issue.field === "prism.shape"), prompt).toBe(true)
+    }
+  })
+
+  it("rejects superscript powers and trailing unit/variable letters instead of truncating the number", () => {
+    for (const prompt of [
+      "画一个球体，半径 2²",
+      "画一个球体，半径 2³",
+      "画一个球体，半径 5a",
+      "画一个球体，半径 5cm"
+    ]) {
+      const conditions = readExplicitSolidConditions(prompt)
+      expect(conditions.sphere.radius.status, prompt).toBe("invalid")
+      expect(conditions.issues.some((issue) => issue.field === "sphere.radius"), prompt).toBe(true)
+    }
+  })
+
+  it("preserves the exact prompt slice as sourceText when separators like '=' are used", () => {
+    const conditions = readExplicitSolidConditions("画一个球体，球心 = (1, 2, 3)，半径 = 5")
+    expect(conditions.sphere.center.sourceText).toBe("球心 = (1, 2, 3)")
+    expect(conditions.sphere.radius.sourceText).toBe("半径 = 5")
+  })
+
+  it("does not treat complex rhombus/section/named-point prism problems as simple direct prism requests", () => {
+    expect(directlyRequestsPrism("底面边长 2、一角 60° 的菱形斜四棱柱，侧棱向量 (1,0,4)，过三条棱的中点作截面，并让点 P 在边界上移动")).toBe(false)
   })
 })

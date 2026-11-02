@@ -252,9 +252,12 @@ export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
     }
   }
 
-  // 垂直关系：**只认折痕两侧的那两张面**。先扫完再判，免得"先看到一条不相干的垂直"就放弃。
+  // 垂直关系：**只认题设区里折痕两侧的那两张面**（跳过求证/证明/求目标段）。先扫完再判，免得"先看到一条不相干的垂直"就放弃。
+  const goalMatch = /(?:求证|证明|求)/.exec(prompt)
+  const goalStart = goalMatch === null ? Number.POSITIVE_INFINITY : goalMatch.index
   const perpendicularMatches: { first: string[]; second: string[]; span: SourceSpan }[] = []
   for (const match of prompt.matchAll(PERPENDICULAR_PLANES)) {
+    if (match.index >= goalStart) continue
     perpendicularMatches.push({
       first: [match[1]!, match[2]!, match[3]!].map(canonicalPointName),
       second: [match[4]!, match[5]!, match[6]!].map(canonicalPointName),

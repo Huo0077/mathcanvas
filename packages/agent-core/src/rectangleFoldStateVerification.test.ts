@@ -104,4 +104,24 @@ describe("A3 折前 / 折后分别核验", () => {
     const rectangle = report.checks.find((check) => check.kind === "rectangle")
     expect(rectangle?.status, `矩形核验：${rectangle?.reason}`).toBe("failed")
   })
+
+  it("显式折角并命名目标面（将 △ABC 沿 AC 折起 90° 至 △AB′C）在带 prompt 编译时通过 foldChecks 核验", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，将 △ABC 沿 AC 折起 90° 至 △AB′C。"
+    const compiled = compile(prompt)
+    expect(compiled.ok, compiled.ok ? "" : JSON.stringify(compiled.diagnostics)).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    const foldChecks = compiled.diagramVerification?.checks.filter((check) => check.kind === "fold") ?? []
+    expect(foldChecks.length).toBeGreaterThanOrEqual(2)
+    expect(foldChecks.every((check) => check.status === "passed")).toBe(true)
+  })
+
+  it("折起句之后的无撇号距离条件（使 BD=3）按折后状态核验，不误用折前矩形对角线", () => {
+    const prompt = "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=3。求折角。"
+    const compiled = compile(prompt)
+    expect(compiled.ok, compiled.ok ? "" : JSON.stringify(compiled.diagnostics)).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
+    const bdCheck = compiled.diagramVerification?.checks.find((check) => check.sourceText.includes("BD=3"))
+    expect(bdCheck?.status).toBe("passed")
+    expect(bdCheck?.reason ?? "").not.toContain("折前状态")
+  })
 })

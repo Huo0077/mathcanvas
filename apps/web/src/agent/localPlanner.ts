@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold, type ExplicitSolidIssue } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, normalizeGeometryPrompt, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold, type ExplicitSolidIssue } from "@draw/agent-core"
 
 import { userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
@@ -149,7 +149,8 @@ const CONDITIONS_FIELD_LABEL: Record<ExplicitSolidIssue["field"], string> = {
   "sphere.center": "球心",
   "sphere.radius": "球的半径",
   "prism.baseEdge": "棱柱底面边长",
-  "prism.height": "棱柱的高"
+  "prism.height": "棱柱的高",
+  "prism.shape": "棱柱形状"
 }
 
 function clarificationFor(issues: readonly ExplicitSolidIssue[], goal: string): PlanEnvelope {
@@ -163,11 +164,13 @@ function clarificationFor(issues: readonly ExplicitSolidIssue[], goal: string): 
 }
 
 const SPHERE = (input: LocalIntentInput): PlanEnvelope => {
-  const conditions = readExplicitSolidConditions(input.prompt).sphere
-  if (conditions.center.status === "invalid" || conditions.radius.status === "invalid") {
-    const all = readExplicitSolidConditions(input.prompt).issues.filter((issue) => issue.field.startsWith("sphere."))
-    return clarificationFor(all, "球体条件未核验")
+  const normalizedPrompt = normalizeGeometryPrompt(input.prompt)
+  const all = readExplicitSolidConditions(normalizedPrompt)
+  const sphereIssues = all.issues.filter((issue) => issue.field.startsWith("sphere."))
+  if (sphereIssues.length > 0) {
+    return clarificationFor(sphereIssues, "球体条件未核验")
   }
+  const conditions = all.sphere
   const radius = conditions.radius.status === "parsed" ? conditions.radius.value! : DEFAULT_SOLID_SIZE
   const center = conditions.center.status === "parsed" ? conditions.center.value! : { x: 0, y: 0, z: 0 }
   return {
@@ -234,11 +237,13 @@ const ROUND_FRUSTUM = (): PlanEnvelope => {
  * `sizeFrom(input.prompt, 4)` 与 `height = 3`，与本切片"这些默认值只有一处"的声明冲突。
  */
 const PRISM = (input: LocalIntentInput): PlanEnvelope => {
-  const conditions = readExplicitSolidConditions(input.prompt).prism
-  if (conditions.baseEdge.status === "invalid" || conditions.height.status === "invalid") {
-    const all = readExplicitSolidConditions(input.prompt).issues.filter((issue) => issue.field.startsWith("prism."))
-    return clarificationFor(all, "棱柱条件未核验")
+  const normalizedPrompt = normalizeGeometryPrompt(input.prompt)
+  const all = readExplicitSolidConditions(normalizedPrompt)
+  const prismIssues = all.issues.filter((issue) => issue.field.startsWith("prism."))
+  if (prismIssues.length > 0) {
+    return clarificationFor(prismIssues, "棱柱条件未核验")
   }
+  const conditions = all.prism
   const sides = conditions.shape.sides
   if (sides !== undefined && sides !== 4) {
     return {

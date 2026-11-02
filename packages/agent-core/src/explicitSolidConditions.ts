@@ -27,7 +27,7 @@ export interface ExplicitValue<T> {
   reason?: string
 }
 
-export type ExplicitSolidField = "sphere.center" | "sphere.radius" | "prism.baseEdge" | "prism.height"
+export type ExplicitSolidField = "sphere.center" | "sphere.radius" | "prism.baseEdge" | "prism.height" | "prism.shape"
 
 export interface ExplicitSolidIssue {
   field: ExplicitSolidField
@@ -96,10 +96,11 @@ interface NumericParse {
 function parseNumericToken(raw: string): NumericParse {
   const compact = raw.replace(/[\u3000\u00a0]/g, " ").trim().replace(/[−–]/g, "-")
   if (compact.length === 0) return { ok: false, reason: "后面没有数值。" }
-  if (/[eE]/.test(compact)) return { ok: false, reason: "不支持科学计数法；请写成普通小数。" }
+  if (/\d\s*[eE]/.test(compact)) return { ok: false, reason: "不支持科学计数法；请写成普通小数。" }
   if (compact.includes("/")) return { ok: false, reason: "不支持分数；请写成小数。" }
-  if (/[×*÷^]/.test(compact)) return { ok: false, reason: "不支持乘法 / 幂运算表达式；请先算出数值。" }
+  if (/[×*÷^²³⁰¹⁴⁵⁶⁷⁸⁹]/.test(compact)) return { ok: false, reason: "不支持乘法 / 幂运算表达式；请先算出数值。" }
   if (/[+-]/.test(compact.slice(1))) return { ok: false, reason: "不支持加减表达式；请先算出数值。" }
+  if (/[a-zA-Z₀-₉%°±]/.test(compact)) return { ok: false, reason: "数值写法无法识别（不支持带字母、单位或符号后缀）。" }
 
   let value: number | null
   const pi = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))?\s*π$/.exec(compact)
@@ -162,29 +163,36 @@ function skipValueSeparator(prompt: string, from: number): { at: number; separat
   return { at: from + spaces, separator: false }
 }
 
+interface ScannedToken {
+  token: string
+  end: number
+}
+
 /**
- * 从 `start` 起扫一个**尽量长**的数值 token。
+ * 从 `start` 起扫一个**尽量长**的数值 token，并返回去除尾部空白后的原文切片终点 `end`。
  *
- * “尽量长”是重点：`半径 1e999` 必须扫成 `1e999`，不能扫成 `1`；`半径 1/2` 也一样。
+ * “尽量长”是重点：`半径 1e999` 必须扫成 `1e999`，不能扫成 `1`；`半径 1/2`、`半径 2²`、`半径 5cm` 同理。
  */
-function scanNumericToken(prompt: string, start: number): string {
+function scanNumericToken(prompt: string, start: number): ScannedToken {
   let index = start
   let token = ""
   while (index < prompt.length) {
     const character = prompt[index]!
     /**
-     * **完整词法边界**：数字、空白、空格变体与未支持运算符都先吃进来，
-     * 交给 `parseNumericToken` 统一拒绝；遇到中文字段名 / 标点才结束。
-     * 这样 `1 / 2` 不会在空格处被截成 `1`，`2 π` 也不会被截成 `2`。
+     * **完整词法边界**：数字、空白、空格变体、未支持运算符、上下标指数与紧随其后的 ASCII 字母/符号
+     * 都先吃进来，交给 `parseNumericToken` 统一拒绝；遇到中文字段名 / 标点才结束。
+     * 这样 `1 / 2` 不会在空格处被截成 `1`，`2 π` 不会被截成 `2`，`2²` / `5a` 也不会被截成 `2` 或 `5`。
      */
-    if (/[0-9eE+\-./√π×*÷^\s\u3000\u00a0−–]/.test(character)) {
+    if (/[0-9eE+\-./√π×*÷^\s\u3000\u00a0−–²³⁰¹⁴⁵⁶⁷⁸⁹₀-₉a-zA-Z%°±]/.test(character)) {
       token += character
       index += 1
       continue
     }
     break
   }
-  return token.replace(/[−–]/g, "-").trim()
+  let end = index
+  while (end > start && /[\s\u3000\u00a0]/.test(prompt[end - 1]!)) end -= 1
+  return { token: token.replace(/[−–]/g, "-").trim(), end }
 }
 
 interface ResolvedOccurrence<T> {
@@ -205,7 +213,7 @@ function resolveOccurrences<T>(
   const parsed: ResolvedOccurrence<T>[] = []
   for (const occurrence of found) {
     const { at } = skipValueSeparator(prompt, occurrence.end)
-    const token = scanNumericToken(prompt, at)
+    const { token, end } = scanNumericToken(prompt, at)
     if (token.length === 0) {
       /**
        * **写了字段名却没有值不是“未提供”**（2026-11-01 泛化验收）。
@@ -215,9 +223,10 @@ function resolveOccurrences<T>(
        */
       return INVALID<T>("后面没有数值。", occurrence.sourceText)
     }
+    const rawSlice = prompt.slice(occurrence.start, end).trim()
     const result = read(token)
-    if (!result.ok) return INVALID<T>(result.reason ?? "数值无法读取。", `${occurrence.sourceText} ${token}`.trim())
-    parsed.push({ value: result.value as T, sourceText: `${occurrence.sourceText} ${token}`.trim() })
+    if (!result.ok) return INVALID<T>(result.reason ?? "数值无法读取。", rawSlice)
+    parsed.push({ value: result.value as T, sourceText: rawSlice })
   }
   if (parsed.length === 0) return ABSENT()
   const first = parsed[0]!
@@ -256,7 +265,7 @@ function readCenter(prompt: string): ExplicitValue<ExplicitVector3> {
     const { at, separator } = skipValueSeparator(prompt, occurrence.end)
     const rest = prompt.slice(at)
     if (/^原点/.test(rest)) {
-      parsed.push({ value: { x: 0, y: 0, z: 0 }, sourceText: `${occurrence.sourceText} 原点` })
+      parsed.push({ value: { x: 0, y: 0, z: 0 }, sourceText: prompt.slice(occurrence.start, at + 2).trim() })
       continue
     }
     const coordinate = /^[（(]\s*([^,，)）]+)\s*[,，]\s*([^,，)）]+)\s*[,，]\s*([^,，)）]+)\s*[)）]/.exec(rest)
@@ -266,11 +275,12 @@ function readCenter(prompt: string): ExplicitValue<ExplicitVector3> {
       }
       return INVALID<ExplicitVector3>("球心后没有可读的坐标或“原点”。", occurrence.sourceText)
     }
+    const rawSlice = prompt.slice(occurrence.start, at + coordinate[0].length).trim()
     const values = coordinate.slice(1, 4).map((part) => parseCartesianComponent(part))
     if (values.some((value) => value === null)) {
-      return INVALID<ExplicitVector3>("球心坐标只能是十进制实数（可带负号）。", `${occurrence.sourceText} ${coordinate[0]}`.trim())
+      return INVALID<ExplicitVector3>("球心坐标只能是十进制实数（可带负号）。", rawSlice)
     }
-    parsed.push({ value: { x: values[0]!, y: values[1]!, z: values[2]! }, sourceText: `${occurrence.sourceText} ${coordinate[0]}`.trim() })
+    parsed.push({ value: { x: values[0]!, y: values[1]!, z: values[2]! }, sourceText: rawSlice })
   }
   const first = parsed[0]!
   for (const entry of parsed.slice(1)) {
@@ -302,42 +312,119 @@ function readSphere(prompt: string): ExplicitSphereConditions {
   }
 }
 
-const CHINESE_SIDES: Record<string, number> = { 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 }
+const CHINESE_SIDES: Record<string, number> = {
+  一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10,
+  十一: 11, 十二: 12
+}
+
+function parseSideCount(raw: string): number {
+  if (CHINESE_SIDES[raw] !== undefined) return CHINESE_SIDES[raw]!
+  if (/^十[一二三四五六七八九]$/.test(raw)) return 10 + (CHINESE_SIDES[raw[1]!] ?? 0)
+  return Number(raw)
+}
 
 /**
- * **棱柱的形状语义**：直 / 斜 / 正、底面边数。
+ * **棱柱的形状语义**：直 / 斜 / 正、底面边数，以及多处/矛盾形状校验。
  *
  * 这些不是“画图风格”，而是可核验的几何条件：直棱柱的侧棱必须平行底面法向，
  * 正棱柱的底面必须是正多边形，三 / 六棱柱的底面边数必须分别等于 3 / 6。
  */
-function readPrismShape(prompt: string): ExplicitPrismShape {
-  const sideMatch = /(?:正|直|斜)?\s*([三四五六七八九十]|\d+)\s*棱柱/.exec(prompt)
-  const sides = sideMatch === null ? undefined : CHINESE_SIDES[sideMatch[1]!] ?? Number(sideMatch[1])
-  const regular = /正\s*(?:[三四五六七八九十]|\d+)?\s*棱柱/.test(prompt)
+function readPrismShapeWithIssues(prompt: string): { shape: ExplicitPrismShape; issues: ExplicitSolidIssue[] } {
+  const issues: ExplicitSolidIssue[] = []
+  let sawOblique = false
+  let sawUpright = false
+  let sawRegular = false
+  const obliqueTexts: string[] = []
+  const uprightTexts: string[] = []
+  const sideEntries: { count: number; sourceText: string }[] = []
+
+  for (const match of prompt.matchAll(/((?:(?:正|直|斜)\s*)*)([一二两三四五六七八九十]+|\d+)?\s*棱柱/g)) {
+    const modifiers = match[1] ?? ""
+    const rawSides = match[2]
+    const phrase = match[0].trim()
+    if (modifiers.includes("斜")) {
+      sawOblique = true
+      obliqueTexts.push(phrase)
+    }
+    if (modifiers.includes("正")) {
+      sawRegular = true
+      sawUpright = true
+      uprightTexts.push(phrase)
+    }
+    if (modifiers.includes("直")) {
+      sawUpright = true
+      uprightTexts.push(phrase)
+    }
+    if (rawSides !== undefined) {
+      const count = parseSideCount(rawSides)
+      if (!Number.isInteger(count) || count < 3) {
+        issues.push({
+          field: "prism.shape",
+          reason: `棱柱底面至少需要 3 条边（当前为 ${rawSides}）。`,
+          sourceText: phrase
+        })
+      } else {
+        sideEntries.push({ count, sourceText: phrase })
+      }
+    }
+  }
+
+  if (sawOblique && sawUpright) {
+    issues.push({
+      field: "prism.shape",
+      reason: "题面同时要求直/正棱柱与斜棱柱，形状互相矛盾。",
+      sourceText: [...new Set([...obliqueTexts, ...uprightTexts])].join("；")
+    })
+  }
+
+  if (sideEntries.length > 1) {
+    const firstCount = sideEntries[0]!.count
+    const conflict = sideEntries.find((entry) => entry.count !== firstCount)
+    if (conflict !== undefined) {
+      issues.push({
+        field: "prism.shape",
+        reason: `棱柱底面边数重复给出且互相矛盾：${firstCount} 与 ${conflict.count}。`,
+        sourceText: sideEntries.map((item) => item.sourceText).join("；")
+      })
+    }
+  }
+
+  const hasSideConflict = sideEntries.length > 1 && sideEntries.some((entry) => entry.count !== sideEntries[0]!.count)
+  const sides = !hasSideConflict && sideEntries.length > 0 ? sideEntries[0]!.count : undefined
+  const regular = !sawOblique && sawRegular
   let straight: boolean | undefined
-  if (/直\s*(?:[三四五六七八九十]|\d+)?\s*棱柱/.test(prompt) || regular) straight = true
-  else if (/斜\s*(?:[三四五六七八九十]|\d+)?\s*棱柱/.test(prompt)) straight = false
+  if (sawOblique && sawUpright) straight = undefined
+  else if (sawUpright) straight = true
+  else if (sawOblique) straight = false
+
   return {
-    ...(sides === undefined ? {} : { sides }),
-    ...(regular ? { regular: true } : {}),
-    ...(straight === undefined ? {} : { straight })
+    shape: {
+      ...(sides === undefined ? {} : { sides }),
+      ...(regular ? { regular: true } : {}),
+      ...(straight === undefined ? {} : { straight })
+    },
+    issues
   }
 }
 
-function readPrism(prompt: string): ExplicitPrismConditions {
+function readPrism(prompt: string): { prism: ExplicitPrismConditions; shapeIssues: ExplicitSolidIssue[] } {
   const requested = /棱柱|prism/i.test(prompt)
-  if (!requested) return { requested: false, baseEdge: ABSENT(), height: ABSENT(), shape: {} }
+  if (!requested) return { prism: { requested: false, baseEdge: ABSENT(), height: ABSENT(), shape: {} }, shapeIssues: [] }
   const baseEdge = resolveOccurrences<number>(prompt, occurrences(prompt, /底面\s*(?:边长|边)|底边长|底边|边长/g), parsePositiveDimension)
   const heightOccurrences = occurrences(prompt, /高(?:度)?/g).filter((occurrence) => {
     const next = prompt.slice(occurrence.end).match(/^\s*(\S)/)?.[1]
     // “高线 / 高的中点”不是高度赋值；不要把几何名词当成数值条件。
     return next === undefined || !/[线中的]/.test(next)
   })
+  const { shape, issues: shapeIssues } = readPrismShapeWithIssues(prompt)
   return {
-    requested: true,
-    baseEdge,
-    height: resolveOccurrences<number>(prompt, heightOccurrences, parsePositiveDimension),
-    shape: readPrismShape(prompt)
+    prism: {
+      requested: true,
+      baseEdge,
+      height: resolveOccurrences<number>(prompt, heightOccurrences, parsePositiveDimension),
+      shape
+    },
+    shapeIssues
   }
 }
 
@@ -356,25 +443,31 @@ export function directlyRequestsSphere(prompt: string): boolean {
  *
  * 不能拿“句子里出现棱柱”当判据：真题里到处都是 `在三棱柱ABC-A′B′C′中…`，
  * 那些题面的几何由点名/见证搜索负责，不能在这里被强制成 `solid.create_prism`。
- * 只认“画/作/建 + 一个 + 斜/直/正/数词 + 棱柱”的直接请求。
+ * 只要排除带顶点名、`在…棱柱…中` 与求证/提问句，含创建动词（或以棱柱打头）且带有
+ * 形状修饰（`斜/直/正/数词`）或显式尺寸（`底面边长/高`）的请求都归入直接请求。
+ * 没有尺寸且无修饰的裸 `画一个棱柱` 仍然保持旧行为（不强制动作类型）。
  */
 export function directlyRequestsPrism(prompt: string): boolean {
-  const specific = /(?:画|作|建|创建)\s*(?:一个|个|一只)?\s*(?:(?:斜|直|正)\s*(?:[三四五六七八九十]|\d)?|[三四五六七八九十]|\d)\s*棱柱/.test(prompt)
-  if (specific) return true
-  /**
-   * **泛称棱柱 + 显式尺寸也算直接请求**（2026-11-01 泛化验收）。
-   *
-   * `画一个棱柱，底面边长 4，高 8` 没有 `斜/直/正/数词`，但它已经明确给出了尺寸；
-   * 不把它当直接请求会让规划器退回默认高，且跳过核验。没有尺寸的裸 `画一个棱柱`
-   * 仍然保持旧行为（不强制动作类型）。
-   */
-  return /(?:画|作|建|创建)\s*(?:一个|个|一只)?\s*棱柱/.test(prompt)
-    && /(?:底面\s*(?:边长|边)|底边长|底边|边长|高(?:度)?)/.test(prompt)
+  if (!/棱柱/.test(prompt)) return false
+  if (/棱柱\s*[A-Za-z]/.test(prompt)) return false
+  if (/在[^，,。；;\n]*棱柱[^，,。；;\n]*中/.test(prompt)) return false
+  if (/[?？]|为什么|怎么|如何|多少|多大|多长|求证|证明/.test(prompt)) return false
+  if (/[A-Z]|菱形|侧棱|所成角|二面角|外接球|内切球|截面/.test(prompt)) return false
+
+  const hasVerb = /(?:画|作|建|创建|添加|放|来一个|来个)/.test(prompt)
+  const hasModifier = /(?:(?:斜|直|正)\s*)+(?:[一二两三四五六七八九十]+|\d+)?\s*棱柱|(?:[一二两三四五六七八九十]+|\d+)\s*棱柱/.test(prompt)
+  const hasDimension = /(?:底面\s*(?:边长|边)|底边长|底边|边长|高(?:度)?)/.test(prompt)
+
+  if (hasVerb) return hasModifier || hasDimension
+  const startsWithPrism = /^\s*(?:一个|个|一只)?\s*(?:(?:斜|直|正)\s*)*(?:[一二两三四五六七八九十]+|\d+)?\s*棱柱/.test(prompt)
+  return startsWithPrism && (hasModifier || hasDimension)
 }
 
 export function readExplicitSolidConditions(prompt: string): ExplicitSolidConditions {
   const sphere = directlyRequestsSphere(prompt) ? readSphere(prompt) : { requested: false, center: ABSENT<ExplicitVector3>(), radius: ABSENT<number>() }
-  const prism = directlyRequestsPrism(prompt) ? readPrism(prompt) : { requested: false, baseEdge: ABSENT<number>(), height: ABSENT<number>(), shape: {} }
+  const { prism, shapeIssues } = directlyRequestsPrism(prompt)
+    ? readPrism(prompt)
+    : { prism: { requested: false, baseEdge: ABSENT<number>(), height: ABSENT<number>(), shape: {} }, shapeIssues: [] as ExplicitSolidIssue[] }
   const issues: ExplicitSolidIssue[] = []
   const collect = (field: ExplicitSolidField, value: ExplicitValue<unknown>): void => {
     if (value.status === "invalid") issues.push({ field, reason: value.reason ?? "条件无法读取。", sourceText: value.sourceText ?? "" })
@@ -383,6 +476,7 @@ export function readExplicitSolidConditions(prompt: string): ExplicitSolidCondit
   collect("sphere.radius", sphere.radius)
   collect("prism.baseEdge", prism.baseEdge)
   collect("prism.height", prism.height)
+  issues.push(...shapeIssues)
   return { sphere, prism, issues }
 }
 
@@ -391,5 +485,6 @@ export function hasExplicitSolidConditions(prompt: string): boolean {
   const conditions = readExplicitSolidConditions(prompt)
   return (conditions.sphere.requested && (conditions.sphere.center.status !== "absent" || conditions.sphere.radius.status !== "absent"))
     || (conditions.prism.requested && (conditions.prism.baseEdge.status !== "absent" || conditions.prism.height.status !== "absent"
-      || conditions.prism.shape.sides !== undefined || conditions.prism.shape.regular !== undefined || conditions.prism.shape.straight !== undefined))
+      || conditions.prism.shape.sides !== undefined || conditions.prism.shape.regular !== undefined || conditions.prism.shape.straight !== undefined
+      || conditions.issues.some((issue) => issue.field === "prism.shape")))
 }

@@ -1,4 +1,4 @@
-import { POINT_NAME_SOURCE } from "@draw/geometry-kernel"
+import { canonicalPointName, POINT_NAME_SOURCE } from "@draw/geometry-kernel"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { foldPointAboutHinge } from "./foldChain"
@@ -105,22 +105,28 @@ export function readRectangleFoldGoals(prompt: string): { kind: "perpendicular" 
   if (!Number.isFinite(goalStart)) return []
   for (const match of prompt.matchAll(PERPENDICULAR_GOAL)) {
     if (match.index < goalStart) continue
-    const key = `${match[1]}${match[2]}|${match[3]}${match[4]}`
+    const p1 = canonicalPointName(match[1]!)
+    const p2 = canonicalPointName(match[2]!)
+    const p3 = canonicalPointName(match[3]!)
+    const p4 = canonicalPointName(match[4]!)
+    const key = `${p1}${p2}|${p3}${p4}`
     if (seen.has(key)) continue
     seen.add(key)
     goals.push({
       kind: "perpendicular",
       sourceText: match[0],
-      segments: [[match[1]!, match[2]!], [match[3]!, match[4]!]],
+      segments: [[p1, p2], [p3, p4]],
       start: match.index
     })
   }
   for (const match of prompt.matchAll(LENGTH_GOAL)) {
     if (match.index < goalStart) continue
-    const key = `${match[1]}${match[2]}`
+    const p1 = canonicalPointName(match[1]!)
+    const p2 = canonicalPointName(match[2]!)
+    const key = `${p1}${p2}`
     if (seen.has(key)) continue
     seen.add(key)
-    goals.push({ kind: "length", sourceText: match[0], segments: [[match[1]!, match[2]!]], start: match.index })
+    goals.push({ kind: "length", sourceText: match[0], segments: [[p1, p2]], start: match.index })
   }
   return goals.sort((left, right) => left.start - right.start)
 }
@@ -254,10 +260,12 @@ export function readFoldDistanceConstraints(prompt: string): FoldDistanceConstra
   for (const match of prompt.matchAll(pattern)) {
     const value = Number(match[3])
     if (!Number.isFinite(value) || !(value > 0)) continue
-    const key = `${match[1]}${match[2]}`
+    const first = canonicalPointName(match[1]!)
+    const second = canonicalPointName(match[2]!)
+    const key = `${first}${second}`
     if (seen.has(key)) continue
     seen.add(key)
-    constraints.push({ segment: [match[1]!, match[2]!], value, sourceText: match[0] })
+    constraints.push({ segment: [first, second], value, sourceText: match[0] })
   }
   return constraints
 }
@@ -403,11 +411,25 @@ export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | 
 
   const built = buildRectangleFold(spec, { angleDegrees: spec.angle.degrees, ...(options.branch === undefined ? {} : { branch: options.branch }) })
   if (built.status !== "ok") return { status: "unsupported", reason: built.status === "needs_angle" ? built.question : built.reason }
-  const state1 = built.geometry.post
-  const apexAs1 = built.geometry.apexPostName
+  const apexAs1 = spec.fold.explicitPostName ? built.geometry.apexPostName : uniqueFoldDisplayName(prompt, spec.apex)
+  const state1: PointTable = { ...built.geometry.post }
+  if (apexAs1 !== built.geometry.apexPostName) {
+    const folded = state1[built.geometry.apexPostName]
+    if (folded !== undefined) {
+      delete state1[built.geometry.apexPostName]
+      state1[apexAs1] = folded
+    }
+  }
+  const mapAfterFirst = (name: string): string => (!spec.fold.explicitPostName && name === spec.apex ? apexAs1 : name)
+  const normalizedSecond: Extract<NamedFoldRead, { status: "ok" }> = {
+    ...second,
+    face: second.face.map(mapAfterFirst) as [string, string, string],
+    hingeNames: second.hingeNames.map(mapAfterFirst) as [string, string],
+    apex: mapAfterFirst(second.apex)
+  }
 
   // 第二笔用到的每一个点名都必须在"第一笔折后"的点表里 —— 不许拿别的点凑。
-  const referenced = [...second.face, ...second.hingeNames, second.apex]
+  const referenced = [...normalizedSecond.face, ...normalizedSecond.hingeNames, normalizedSecond.apex]
   const missing = [...new Set(referenced.filter((name) => state1[name] === undefined))]
   if (missing.length > 0) {
     return {
@@ -415,21 +437,30 @@ export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | 
       reason: `第二笔折起（${second.transition.source.text}）点到 ${missing.join("、")}，但这些点在第一笔折后都不存在（那时图上只有 ${Object.keys(state1).join("、")}）。它折的是第一笔折后的面，点名的写法要能对上。`
     }
   }
+  const sameTriangleSet = (left: readonly string[], right: readonly string[]): boolean =>
+    left.length === right.length && [...left].sort().join("|") === [...right].sort().join("|")
+  const foldedFace1: [string, string, string] = [spec.hinge[0], apexAs1, spec.hinge[1]]
+  if (!sameTriangleSet(normalizedSecond.face, foldedFace1) && !sameTriangleSet(normalizedSecond.face, spec.fixed)) {
+    return {
+      status: "unsupported",
+      reason: `第二笔折起（${second.transition.source.text}）要折的面 △${normalizedSecond.face.join("")} 不是第一笔折后存在的两张三角形面片之一（应为 △${foldedFace1.join("")} 或 △${spec.fixed.join("")}）。`
+    }
+  }
 
-  const apex2 = second.apex
-  const apexAs2 = second.transition.explicitPostName ? second.transition.displayPostName : uniqueFoldDisplayName(prompt, apex2)
+  const apex2 = normalizedSecond.apex
+  const apexAs2 = normalizedSecond.transition.explicitPostName ? normalizedSecond.transition.displayPostName : uniqueFoldDisplayName(prompt, apex2)
   if (apexAs2 === apex2) return { status: "unsupported", reason: `第二笔折起的折后点名与折前相同（${apex2}），无法区分两个位置。` }
   if (state1[apexAs2] !== undefined) return { status: "unsupported", reason: `第二笔折起的折后点名 ${apexAs2} 在第一笔折后已经存在，不能用同一个名字表示两个位置。` }
 
-  const rotated = foldPointAboutHinge(state1[apex2]!, state1[second.hingeNames[0]]!, state1[second.hingeNames[1]]!, second.transition.angle.degrees)
+  const rotated = foldPointAboutHinge(state1[apex2]!, state1[normalizedSecond.hingeNames[0]]!, state1[normalizedSecond.hingeNames[1]]!, second.transition.angle.degrees)
   const state2: PointTable = { ...state1, [apexAs2]: rotated }
   delete state2[apex2]
 
-  const step1 = verifyRectangleFold(spec, { pre: built.geometry.pre, post: state1 }, { angleDegrees: spec.angle.degrees })
+  const step1 = verifyRectangleFold(spec, { pre: built.geometry.pre, post: built.geometry.post }, { angleDegrees: spec.angle.degrees })
   if (step1.status !== "passed") {
     return { status: "unsupported", reason: `第一笔折起的自检未通过：${step1.checks.filter((check) => check.status === "failed").map((check) => `${check.id}：${check.detail}`).join("；")}` }
   }
-  const step2 = verifySecondFold(state1, state2, second, apex2, apexAs2)
+  const step2 = verifySecondFold(state1, state2, normalizedSecond, apex2, apexAs2)
   if (!step2.ok) return { status: "unsupported", reason: `第二笔折起的自检未通过：${step2.reason}` }
 
   const geometry: RectangleFoldGeometry = { ...built.geometry, post: state2, apexPostName: apexAs1 }
@@ -444,7 +475,7 @@ export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | 
     return { status: "clarification", reason: "goal_does_not_hold", questions: [explanation], spec, geometry, findings }
   }
 
-  return { status: "plan", plan: chainPlanOf(spec, built.geometry.pre, state1, second, apexAs1, apexAs2), spec, geometry, findings }
+  return { status: "plan", plan: chainPlanOf(spec, built.geometry.pre, state1, normalizedSecond, apexAs1, apexAs2), spec, geometry, findings }
 }
 
 /** 第二笔折起的三条判据：折痕不动、折片刚性、转过给定角度；其余点一个都不许动。 */

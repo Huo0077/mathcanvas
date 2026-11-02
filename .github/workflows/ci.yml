@@ -46,6 +46,12 @@ jobs:
         run: npm run lint
       - name: Unit and UI tests (Vitest)
         run: npm test
+      - name: Documentation consistency gate
+        run: npm run test:docs
+      - name: Offline reliability and explicit-solid acceptance gates
+        run: |
+          npm run eval:reliability -- --offline
+          npm run eval:explicit-solid -- --offline
       # 性能趋势（评审方案 7）：先把 `PERF <场景> <毫秒>` 那几行落进 job summary，
       # 再跑一遍当护栏。这样"这次改动让它变慢了吗"在 PR 页面上直接看得到，
       # 而不用去翻日志 —— 趋势要被看见才有用。
