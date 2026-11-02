@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
-import { commitPatch, commitTransaction } from "@draw/scene-graph"
+import { commitPatch, commitTransaction, cascadeDeletionClosure } from "@draw/scene-graph"
+import { ContextMenu, type ContextMenuPosition, type ContextMenuTargetPrimitive } from "./components/ContextMenu"
+import { InlineRenameInput } from "./components/InlineRenameInput"
 import type { DomainOperation } from "@draw/scene-graph"
 
 import { AlgebraView } from "./components/AlgebraView"
@@ -217,6 +219,15 @@ export function App() {
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
   const [leftDockOpen, setLeftDockOpen] = useState(true)
   const [rightDockOpen, setRightDockOpen] = useState(true)
+  const [contextMenuState, setContextMenuState] = useState<{
+    position: ContextMenuPosition
+    targetId: string | null
+  } | null>(null)
+  const [renamingState, setRenamingState] = useState<{
+    primitiveId: string
+    position: { x: number; y: number }
+    initialValue: string
+  } | null>(null)
   const [showProjectionDiagnostics, setShowProjectionDiagnostics] = useState(false)
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null)
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
@@ -356,6 +367,8 @@ export function App() {
       setActiveCommand(null)
       setActiveSheetId(null)
       setActiveViewId(null)
+      setContextMenuState(null)
+      setRenamingState(null)
       setFileError(null)
     } catch (error) {
       setFileError(error instanceof Error ? error.message : "无法打开 .mgeo 文件")
@@ -701,7 +714,81 @@ export function App() {
    * 键盘快捷键（Esc 分级 / Delete / 撤销重做）在 `./useKeyboardShortcuts`：
    * 搬动时顺手修掉两处依赖问题（多余的 `document`、漏掉的 `deleteSelected`），见那个文件的头注释。
    */
-  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, onSelectAll: () => setSelectedIds(document.primitives.filter((primitive) => primitive.visible !== false).map((primitive) => primitive.id)), setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard: closeSolidWizard, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
+  const getPrimitiveScreenPosition = (id: string): { x: number; y: number } => {
+    const element = globalThis.document?.querySelector(`[data-primitive-id="${id}"]`)
+    if (element) {
+      const rect = element.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top }
+    }
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+  }
+
+  const handleCanvasContextMenu = ({ clientX, clientY, targetId }: { clientX: number; clientY: number; targetId: string | null }) => {
+    if (targetId) {
+      if (!selectedIds.includes(targetId)) {
+        setSelectedIds([targetId])
+      }
+    }
+    setContextMenuState({ position: { x: clientX, y: clientY }, targetId })
+  }
+
+  const handleDoubleClickPrimitive = (id: string, screenPoint: { x: number; y: number }) => {
+    const primitive = document.primitives.find((p) => p.id === id)
+    if (!primitive) return
+    setSelectedIds([id])
+    setRenamingState({
+      primitiveId: id,
+      position: screenPoint,
+      initialValue: primitive.label ?? primitive.id,
+    })
+  }
+
+  const triggerRenameSelected = () => {
+    if (selectedIds.length !== 1) return
+    const id = selectedIds[0]
+    const primitive = document.primitives.find((p) => p.id === id)
+    if (!primitive) return
+    const pos = getPrimitiveScreenPosition(id)
+    setRenamingState({
+      primitiveId: id,
+      position: pos,
+      initialValue: primitive.label ?? primitive.id,
+    })
+  }
+
+  const handleCommitRename = (newLabel: string) => {
+    if (!renamingState) return
+    apply({ op: "updatePrimitive", id: renamingState.primitiveId, patch: { label: newLabel } })
+    setRenamingState(null)
+  }
+
+  const handleInspectDependencies = (targetId: string) => {
+    const target = document.primitives.find((p) => p.id === targetId)
+    const closure = cascadeDeletionClosure(document, [targetId])
+    const downstream = closure.filter((id) => id !== targetId)
+    setSelectedIds(closure)
+    if (downstream.length > 0) {
+      const names = downstream.map((id) => document.primitives.find((p) => p.id === id)?.label ?? id).join("、")
+      setGuidance(`「${target?.label ?? targetId}」的直接与间接从属依赖包含 ${downstream.length} 个图元：${names}`)
+    } else {
+      setGuidance(`「${target?.label ?? targetId}」为独立/叶子图元，没有从属依赖。`)
+    }
+  }
+
+  const handleContextMenuSelectTool = (tool: "point" | "segment" | "circle") => {
+    if (tool === "point") {
+      setActiveCommand("create-point")
+      setCreationStep({ mode: "point", center: null, points: [], sticky: true })
+    } else if (tool === "segment") {
+      setActiveCommand("create-segment")
+      setCreationStep({ mode: "segment", center: null, points: [], sticky: true })
+    } else if (tool === "circle") {
+      setActiveCommand("create-circle")
+      setCreationStep({ mode: "circle", center: null, sticky: true })
+    }
+  }
+
+  useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, undo, redo, deleteSelected, onSelectAll: () => setSelectedIds(document.primitives.filter((primitive) => primitive.visible !== false).map((primitive) => primitive.id)), onRename: triggerRenameSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard: closeSolidWizard, onCancelSpatialCreation: () => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }, onFinishSpatialCreation: finishSpatialDrawing, onRemoveSpatialAnchor: () => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) } })
 
   // 优先级：创建步骤 > 3D 显示开关提示（法向量/二面角示例）> 交线预览 > 默认选择提示。
   // 显示开关是用户刚刚按下按钮触发的，必须盖过"选择带来的预览"，否则状态栏会像没反应。
@@ -731,7 +818,7 @@ export function App() {
    * 入口撤掉之后它没有任何调用者，因此一并删除 —— 功能区那四个按钮仍然照旧工作。
    */
 
-  const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
+  const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onCanvasContextMenu={handleCanvasContextMenu} onDoubleClickPrimitive={handleDoubleClickPrimitive} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -888,7 +975,7 @@ export function App() {
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [activeGhostDraft, effectiveActiveCommand, creationStep, spatialSession])
+  }, [activeGhostDraft, effectiveActiveCommand, creationStep, spatialSession, activeCommand])
 
   const cadWorkbench = <EngineeringWorkbench
     document={document}
@@ -974,6 +1061,71 @@ export function App() {
           onStop={(runId) => { agentRunner.stop(runId) }}
           onRetry={retryLastPrompt}
         />
+        {contextMenuState && (
+          <ContextMenu
+            position={contextMenuState.position}
+            targetPrimitive={
+              contextMenuState.targetId
+                ? (document.primitives.find((p) => p.id === contextMenuState.targetId) as ContextMenuTargetPrimitive) ?? null
+                : null
+            }
+            onClose={() => setContextMenuState(null)}
+            onRename={() => {
+              if (!contextMenuState.targetId) return
+              const p = document.primitives.find((item) => item.id === contextMenuState.targetId)
+              if (!p) return
+              const pos = getPrimitiveScreenPosition(p.id)
+              setRenamingState({
+                primitiveId: p.id,
+                position: pos,
+                initialValue: p.label ?? p.id,
+              })
+            }}
+            onToggleVisibility={() => {
+              if (!contextMenuState.targetId) return
+              const p = document.primitives.find((item) => item.id === contextMenuState.targetId)
+              if (!p) return
+              apply({ op: "toggleVisibility", id: p.id, visible: p.visible === false })
+            }}
+            onToggleLock={() => {
+              if (!contextMenuState.targetId) return
+              const p = document.primitives.find((item) => item.id === contextMenuState.targetId)
+              if (!p) return
+              apply({ op: "toggleLock", id: p.id, locked: !p.locked })
+            }}
+            onDelete={() => {
+              deleteSelected()
+            }}
+            onInspectDependencies={() => {
+              if (contextMenuState.targetId) {
+                handleInspectDependencies(contextMenuState.targetId)
+              }
+            }}
+            onColorChange={(color) => {
+              if (contextMenuState.targetId) {
+                apply({ op: "setPrimitivesStyle", ids: [contextMenuState.targetId], style: { stroke: color } })
+              }
+            }}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={undo}
+            onRedo={redo}
+            onSelectAll={() => setSelectedIds(document.primitives.filter((p) => p.visible !== false).map((p) => p.id))}
+            onSelectTool={handleContextMenuSelectTool}
+          />
+        )}
+        {renamingState && (
+          <InlineRenameInput
+            position={renamingState.position}
+            initialValue={renamingState.initialValue}
+            primitiveId={renamingState.primitiveId}
+            existingLabels={document.primitives
+              .filter((p) => p.id !== renamingState.primitiveId && p.label)
+              .map((p) => p.label as string)}
+            onCommit={handleCommitRename}
+            onCancel={() => setRenamingState(null)}
+          />
+        )}
         <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span><span className="status-bar-spacer" /><div className="status-bar-dock-toggles" role="group" aria-label="工作台侧栏折叠"><button type="button" className="status-bar-dock-btn" data-copilot-toggle="true" aria-expanded={copilotOpen} onClick={() => setCopilotOpen((open) => !open)} title={copilotOpen ? "收起 AI 助手抽屉" : "展开 AI 助手抽屉"}>✨ AI 助手</button><button type="button" className="status-bar-dock-btn" aria-expanded={leftDockOpen} onClick={() => setLeftDockOpen((open) => !open)} title={leftDockOpen ? "收起左侧对象列表（增大画布）" : "展开左侧对象列表"}>{leftDockOpen ? "◀ 左栏" : "▶ 左栏"}</button><button type="button" className="status-bar-dock-btn" aria-expanded={rightDockOpen} onClick={() => setRightDockOpen((open) => !open)} title={rightDockOpen ? "收起右侧属性栏（增大画布）" : "展开右侧属性栏"}>{rightDockOpen ? "右栏 ▶" : "右栏 ◀"}</button></div></div>
       </div>
       )}

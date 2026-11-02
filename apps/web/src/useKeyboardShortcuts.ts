@@ -37,6 +37,8 @@ export interface KeyboardShortcutDeps {
   onRemoveSpatialAnchor?: () => void
   /** 全选（Ctrl/Cmd+A）：画布上没有框选时，这是"把 Agent 画的整张图删掉"的唯一入口。 */
   onSelectAll?: () => void
+  /** F2 快捷键对当前单选图元重命名（Block 5）。 */
+  onRename?: () => void
   undo: () => void
   redo: () => void
   deleteSelected: () => void
@@ -46,7 +48,7 @@ export interface KeyboardShortcutDeps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
-export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
+export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, onRename, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds }: KeyboardShortcutDeps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const shortcut = historyShortcut(event)
@@ -66,6 +68,11 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "a" && !isTextEditingTarget(event.target)) {
         event.preventDefault()
         onSelectAll?.()
+        return
+      }
+      if (event.key === "F2" && !isTextEditingTarget(event.target) && selectedIds.length === 1) {
+        event.preventDefault()
+        onRename?.()
         return
       }
       if (event.key === "Escape" && solidWizardOpen) { event.preventDefault(); onCancelSolidWizard?.(); return }
@@ -88,5 +95,5 @@ export function useKeyboardShortcuts({ creationStep, activeCommand, guidance, se
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
+  }, [creationStep, activeCommand, guidance, selectedIds, spatialSession, solidWizardOpen, onCancelSolidWizard, onCancelSpatialCreation, onFinishSpatialCreation, onRemoveSpatialAnchor, onSelectAll, onRename, undo, redo, deleteSelected, setCreationStep, setActiveCommand, setGuidance, setSelectedIds])
 }

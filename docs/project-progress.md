@@ -10,6 +10,17 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— UI/UX 第二阶段实施：画布右键上下文菜单与双击内联重命名（Block 5）
+
+**目标**：彻底消除此前隐藏、锁定、删除、重命名与样式修改必须去右侧面板甚至找不到直观入口的繁琐交互，落地原生微拟物风格的画布右键上下文菜单（Context Menu）与双击/F2 原位内联重命名（Inline Renaming）。
+
+**实施与证据**：
+1. **画布图元原生风格上下文菜单（Context Menu）**：实现 `apps/web/src/components/ContextMenu.tsx`，在 2D/3D 画布图元上右键单击弹出微拟物浮动菜单，包含图元类型徽标、6 种常用颜色快捷切换色板、`[✏️ 重命名 (F2)]`、`[👁️ 隐藏/显示]`、`[🔒 锁定/解锁]`、`[🔍 查看从属依赖拓扑]`（联动 DAG 级联依赖计算并高亮从属图元），以及红底危险操作 `[🗑️ 级联删除 (Del)]`；
+2. **画布空白处上下文全局菜单**：在画布空白背景处右键单击，提供 `[↶ 撤销 (Ctrl+Z)]`、`[↷ 重做 (Ctrl+Y)]`、`[📐 绘制点 (P)]`、`[📏 绘制线段 (L)]`、`[⭕ 绘制圆 (C)]` 及 `[📋 全选图元 (Ctrl+A)]`；
+3. **双击与 F2 内联快捷编辑重命名（Inline Renaming）**：实现 `apps/web/src/components/InlineRenameInput.tsx`，在 2D/3D 画布双击图元或按 `F2` 时在图元原位展开内联输入框，自动全选内容，支持重名冲突与非空校验（红色气泡提示），按 `Enter` 提交保存入库，按 `Esc` 或失焦取消。
+
+**验证读数（2026-11-02 本机）**：全量单元测试（含新增 `canvasContextMenu.test.tsx` 8 项全过、`copilotLiveCreation.test.tsx` 3 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
 ## 2026-11-02 —— UI/UX 第二阶段实施：AI Copilot 同屏抽屉与画布实时 Ghost 草稿预览（Block 4）
 
 **目标**：彻底消除此前进入 Agent 会话即卸载画布的割裂流程，落地同屏人机共创抽屉（Side-by-Side Co-Creation）、2D/3D 画布实时半透明 Ghost 虚线草稿检视（Ghost Mode），以及画布悬浮确认胶囊横幅（Review Floating Banner）与双通道快速确认/丢弃。

@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 UI/UX 第二阶段实施：画布右键上下文菜单与双击内联重命名（Block 5）
+
+全面落地画布右键原生上下文操作菜单与双击/F2 原位内联重命名（Context Menu & Inline Renaming）：
+
+- **画布图元原生风格上下文菜单（Context Menu）**：实现微拟物浮动菜单组件 `apps/web/src/components/ContextMenu.tsx`。在 2D/3D 画布图元上右键单击，在光标位置弹出带毛玻璃与微拟物柔和阴影的上下文操作菜单：包含图元类型徽标、6 色预设快速调色板、`[✏️ 重命名 (F2)]`、`[👁️ 隐藏/显示对象]`、`[🔒 锁定/解锁几何位置]`、`[🔍 查看从属依赖拓扑]`，以及红底危险操作 `[🗑️ 级联删除 (Del)]`；
+- **画布空白处上下文全局菜单**：在画布空白背景处右键单击，提供 `[↶ 撤销 (Ctrl+Z)]`、`[↷ 重做 (Ctrl+Y)]`、`[📐 绘制点 (P)]`、`[📏 绘制线段 (L)]`、`[⭕ 绘制圆 (C)]` 及 `[📋 全选图元 (Ctrl+A)]`，大幅提升作图效率；
+- **双击与 F2 内联快捷编辑重命名（Inline Renaming）**：实现原地文本输入组件 `apps/web/src/components/InlineRenameInput.tsx`。双击画布图元或在单选中态下按下 `F2` 快捷键，图元原位展开内联文本框并自动全选内容；支持即时重名冲突与非空校验（展示小红气泡提示），按 `Enter` 键提交保存入库，按 `Esc` 键或失焦取消。
+
+**验证读数（2026-11-02 本机）**：全量单元测试（含新增 `canvasContextMenu.test.tsx` 8 项全过、`copilotLiveCreation.test.tsx` 3 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 UI/UX 第二阶段实施：AI Copilot 同屏抽屉与画布实时 Ghost 草稿预览（Block 4）
 
 全面落地 AI Copilot 同屏人机共创抽屉与画布实时 Ghost 幽灵草稿预览（Live-Canvas Co-Creation）：
