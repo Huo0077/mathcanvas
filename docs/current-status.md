@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变）
+
+严格遵循“让 UI 有动感一点、柔和舒适一点，注意不是改颜色”的设计要求，在不触碰任何现有色彩令牌的前提下完成动效与交互触感升级：
+
+- **物理弹簧缓动与柔和过渡令牌（tokens.css）**：新增基于 CSS `linear()` 的物理阻尼弹簧曲线 `--ease-spring`、回退曲线 `--ease-spring-fallback`、柔和减速曲线 `--ease-soft-out` 与三档过渡时长令牌（`160ms` / `260ms` / `420ms`），全量保留冷色调板岩蓝配色体系；
+- **3D 视口可拖拽光标感知（threeSceneInteraction.ts / global.css）**：在 3D 视口交互层实时检测指针是否悬停于旋转环手柄、半径手柄、自由点或自由拖动目标并同步 `data-hover-draggable` 与 `data-dragging`，实现悬停 `cursor: grab`、拖拽中 `cursor: grabbing` 的直观物理抓手反馈；
+- **全工作台控件弹性微交互与卡片柔和入场（global.css）**：为工作区标签、Ribbon 命令按钮与图标、视口悬浮 HUD 药丸按钮、左侧对象树行及右侧属性检查器卡片注入弹簧悬浮、按压微缩回弹、焦点弥散光晕及 `mc-card-soft-enter` 柔和入场过渡，并内置 `prefers-reduced-motion: reduce` 前庭觉无障碍保护。
+
+**验证读数（2026-11-02 本机）**：`threeScene.test.ts`（59 项）与 `App.test.tsx`（116 项）共 175 项全过；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8）
 
 深度排查并一次性修复 2D 与 3D 中点、线、面、体在拖拽、变形、拾取、旋转与实时预览中的 6 类深层交互缺陷：

@@ -8,6 +8,19 @@
 
 
 
+## 2026-11-02 —— 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变，开发版）
+
+- **物理弹簧缓动令牌体系（tokens.css，零配色改动）**：在不改动任何色彩变量的前提下，于 `tokens.css` 中新增物理阻尼弹簧缓动曲线 `--ease-spring`（基于现代 CSS `linear()` 多点采样）、三次贝塞尔回退 `--ease-spring-fallback`、柔和出画曲线 `--ease-soft-out` 及三档标准时长令牌（`--duration-fast` / `--duration-normal` / `--duration-spring`）。
+- **3D 视口可拖拽悬停（grab）与抓取中（grabbing）光标反馈（threeSceneInteraction.ts / global.css）**：在 `threeSceneInteraction.ts` 的指针移动与拖拽会话生命周期中维护 `data-hover-draggable` 与 `data-dragging` 状态属性；当鼠标悬停于空间自由点、旋转环手柄、轨道半径手柄或自由拖动模式下的可拖实体时切换为 `cursor: grab`，按住拖拽期间锁定为 `cursor: grabbing`，并为全部高频交互控件补充 `user-select: none` 防误选保护。
+- **全工作台柔和微交互与弹性触感（global.css）**：
+  - 顶栏、工作区切换标签（`.workspace-tabs button`）、状态栏停靠按钮与视口悬浮胶囊按钮（`.three-scene-controls` / `.three-camera-controls` / `.canvas-viewport-controls`）引入柔和悬停微浮起（`translateY(-1px)`）与按压回弹（`scale(0.96)`）；
+  - 功能区卡片（`.ribbon-group`）与工具按钮（`.ribbon-command`）加入弹簧微动效，悬停时图标（`.ribbon-icon`）呈现 `scale(1.1) translateY(-0.5px)` 灵动响应；
+  - 左侧对象树行（`.object-row`）与类型圆点（`.object-dot`）支持平滑右移与圆点弹性放大（`scale(1.22)`）；
+  - 右侧属性检查器卡片（`.primitive-properties` / `.batch-properties` / `.inspector-selected-heading`）与操作引导横幅（`.guidance-hint`）接入柔和入场动画 `mc-card-soft-enter` 与聚焦弥散阴影过渡，并提供完整的 `@media (prefers-reduced-motion: reduce)` 无障碍降级保护。
+- **测试覆盖与门禁验证**：
+  - 单元测试：`threeScene.test.ts` 59 项全过、`App.test.tsx` 116 项全过（共 175 项通过）；
+  - `npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8，开发版）
 
 - **顶点变形后模板实体残影重影根治（threePrimitives.ts / projectionVisuals.ts / intersectionPreviews3d.ts）**：修复模板立体（立方体、四棱锥、圆柱、圆锥）在拖动单一顶点升级为显式面环多面体（`construction.kind === "fromFaces"`）后，`visibleSolids` 与 `resolveProjectedDrawing` 因仅过滤 `kind === "template"` 而把未变形的原始 `BoxGeometry` / 模板网格重新绘制在原位（导致“松手后图形复位在原处而标注点停在新位置”的视觉错觉），并在 `intersectionPreviews3d.ts` 中排除同源影子多面体与模板自身的自交预览误报。

@@ -1632,3 +1632,223 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
   pointer-events: none;
 }
 
+/* ==========================================================================
+   Block 9: Dynamic, Soft & Comfortable UI Micro-Interactions (No Color Change)
+   ========================================================================== */
+
+/* 3D & 2D Canvas Drag / Grab Cursor Affordances */
+.three-canvas-shell[data-hover-draggable="true"] canvas {
+  cursor: grab;
+}
+.three-canvas-shell[data-dragging="true"] canvas {
+  cursor: grabbing !important;
+}
+.ribbon-command,
+.workspace-tabs button,
+.topbar-commands button,
+.three-scene-controls button,
+.three-camera-controls button,
+.canvas-viewport-controls button,
+.object-row,
+.status-bar-dock-btn {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Topbar, Workspace Tabs & Status Bar Dock Buttons — Soft Cushion & Spring Lift */
+.workspace-tabs button,
+.topbar-commands button,
+.status-bar-dock-btn {
+  transition:
+    background-color var(--duration-fast) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    color var(--duration-fast) var(--ease-soft-out),
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function:
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-spring);
+}
+.workspace-tabs button:hover:not(:disabled),
+.topbar-commands button:hover:not(:disabled),
+.status-bar-dock-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.workspace-tabs button:active:not(:disabled),
+.topbar-commands button:active:not(:disabled),
+.status-bar-dock-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.97);
+  transition-duration: 90ms;
+}
+
+/* Ribbon Groups & Command Buttons — Tactile Spring Feedback */
+.ribbon-group {
+  transition:
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-normal) var(--ease-soft-out);
+}
+.ribbon-group:hover {
+  box-shadow: 0 14px 32px -20px rgb(44 62 80 / 24%), 0 2px 6px rgb(44 62 80 / 6%);
+}
+.ribbon-command {
+  transition:
+    background-color var(--duration-fast) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    color var(--duration-fast) var(--ease-soft-out),
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function:
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-spring);
+}
+.ribbon-command .ribbon-icon {
+  transition: transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function: var(--ease-spring);
+}
+.ribbon-command:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  box-shadow: 0 8px 18px -10px rgb(44 62 80 / 22%);
+}
+.ribbon-command:hover:not(:disabled) .ribbon-icon {
+  transform: scale(1.1) translateY(-0.5px);
+}
+.ribbon-command:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.95);
+  transition-duration: 80ms;
+}
+
+/* Floating 3D & 2D Viewport Pill Toolbars — Soft Breathing & Hover Lift */
+.three-scene-controls,
+.three-camera-controls,
+.canvas-viewport-controls {
+  transition:
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-normal) var(--ease-soft-out);
+}
+.three-scene-controls:hover,
+.three-camera-controls:hover,
+.canvas-viewport-controls:hover {
+  box-shadow: 0 14px 32px -12px rgb(44 62 80 / 22%), 0 4px 12px -4px rgb(44 62 80 / 10%);
+}
+.three-scene-controls button,
+.three-camera-controls button,
+.canvas-viewport-controls button {
+  transition:
+    background-color var(--duration-fast) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    color var(--duration-fast) var(--ease-soft-out),
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function:
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-spring);
+}
+.three-scene-controls button:hover:not(:disabled),
+.three-camera-controls button:hover:not(:disabled),
+.canvas-viewport-controls button:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.02);
+}
+.three-scene-controls button:active:not(:disabled),
+.three-camera-controls button:active:not(:disabled),
+.canvas-viewport-controls button:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.96);
+  transition-duration: 80ms;
+}
+
+/* Object Tree Rows & Entity Dots — Smooth Glide & Cushion Selection */
+.object-row {
+  transition:
+    background-color var(--duration-fast) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function:
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-soft-out),
+    var(--ease-spring);
+}
+.object-row .object-dot {
+  transition: transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function: var(--ease-spring);
+}
+.object-row:hover {
+  transform: translateX(2px);
+}
+.object-row:hover .object-dot {
+  transform: scale(1.22);
+}
+.object-row:active {
+  transform: translateX(1px) scale(0.99);
+}
+
+/* Inspector Cards, Inputs & Popovers — Soft Entrance & Focus Cushion */
+@keyframes mc-card-soft-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.properties > .primitive-properties,
+.properties > .batch-properties,
+.inspector-selected-heading {
+  animation: mc-card-soft-enter var(--duration-normal) var(--ease-soft-out);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    transform var(--duration-normal) var(--ease-soft-out);
+}
+.properties > .primitive-properties:focus-within,
+.properties > .batch-properties:focus-within {
+  box-shadow: 0 14px 32px -16px rgb(44 62 80 / 18%), 0 2px 8px -2px rgb(44 62 80 / 6%);
+}
+.properties input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
+.properties select,
+.properties textarea {
+  transition:
+    border-color var(--duration-fast) var(--ease-soft-out),
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    background-color var(--duration-fast) var(--ease-soft-out);
+}
+.guidance-hint {
+  animation: mc-card-soft-enter var(--duration-normal) var(--ease-soft-out);
+}
+
+/* Accessibility: Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tabs button,
+  .topbar-commands button,
+  .status-bar-dock-btn,
+  .ribbon-group,
+  .ribbon-command,
+  .ribbon-command .ribbon-icon,
+  .three-scene-controls,
+  .three-camera-controls,
+  .canvas-viewport-controls,
+  .three-scene-controls button,
+  .three-camera-controls button,
+  .canvas-viewport-controls button,
+  .object-row,
+  .object-row .object-dot,
+  .properties > .primitive-properties,
+  .properties > .batch-properties,
+  .inspector-selected-heading,
+  .guidance-hint {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+}

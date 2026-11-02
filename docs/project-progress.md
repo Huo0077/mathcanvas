@@ -10,6 +10,24 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变）
+
+**目标**：在不修改任何既有色彩令牌（冷白画布与深板岩蓝体系）的前提下，消除界面切换与按钮点击的生硬感，赋予全工作台物理弹簧级的灵动微交互、柔和舒适的卡片过渡以及明确的 3D 抓取光标反馈。
+
+**实施与证据**：
+1. **CSS `linear()` 阻尼弹簧缓动令牌（tokens.css）**：
+   - 新增 `--ease-spring`、`--ease-spring-fallback`、`--ease-soft-out` 与 `--duration-fast` / `--duration-normal` / `--duration-spring`，零色彩改动。
+2. **3D 画布抓取光标反馈（threeSceneInteraction.ts / global.css）**：
+   - 在 `handlePointerMove` 未按下阶段检测指针是否悬停于旋转手柄、半径手柄或可拖拽图元，写入 `sceneShell.dataset.hoverDraggable`；在拖拽会话激活期间写入 `sceneShell.dataset.dragging`，抬手自动清除，配合 CSS 呈现 `grab` / `grabbing` 光标与 `user-select: none` 防误选。
+3. **全工作台柔和触感与无障碍保护（global.css）**：
+   - 为 `.ribbon-command`、`.workspace-tabs button`、`.three-scene-controls button`、`.object-row` 等高频交互元素注入弹簧升起与按压回弹；为属性面板卡片与引导条加入 `mc-card-soft-enter` 柔和淡入与 `prefers-reduced-motion: reduce` 降级保护。
+
+**验证读数（2026-11-02 本机）**：
+- `threeScene.test.ts`（59 项）与 `App.test.tsx`（116 项）175 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8）
 
 **目标**：对全仓 2D 与 3D 的点、线、面、体交互链路进行代码级深度体检，彻底解决“拖动顶点松手后原位重现未变形立方体、拖动正四面体或变形后实体表面把单块面扯飞、变形后实体无法整体平移/旋转、拖动顶点时相连棱面静止不拉伸、2D 动点圆与切线拖拽中不预览”等一切不合理操作现象。

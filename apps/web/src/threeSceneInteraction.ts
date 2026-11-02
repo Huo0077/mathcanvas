@@ -295,11 +295,40 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
         }
       }
       if (!dragModeRef.current && dragSessionRef.current) dragSessionRef.current.direct = true
+      if (dragSessionRef.current && !dragSessionRef.current.direct && sceneShell) {
+        sceneShell.dataset.dragging = "true"
+      }
       renderer.domElement.setPointerCapture(event.pointerId)
     }
     const handlePointerMove = (event: PointerEvent) => {
       const pointerState = pointerStateRef.current
-      if (!pointerState || pointerState.pointerId !== event.pointerId) return
+      if (!pointerState) {
+        if (sceneShell) {
+          const point = pointFromEvent(event)
+          const radiusHandle = trackRadiusHandleRef.current
+          const handle = rotationHandleRef.current
+          const hoveringHandle = Boolean(
+            (radiusHandle && trackRadiusHandleHit(radiusHandle.group, camera, point))
+            || (handle && rotationHandleAxisAt(handle.group, camera, point))
+          )
+          let hoveringDraggable = hoveringHandle
+          if (!hoveringDraggable && !panModeRef.current && !facePickModeRef.current) {
+            const generated = templateTopologyIds(documentRef.current)
+            const hit = pickRaycastHit3(scene, camera, point, {
+              tolerance: pickTolerance(),
+              accept: (primitiveId) => {
+                const resolved = resolveSelectableHit(primitiveId, topologyOwners)
+                const candidate = resolved === null ? undefined : documentRef.current.primitives.find((primitive) => primitive.id === resolved)
+                return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
+              }
+            })
+            hoveringDraggable = Boolean(hit && (dragModeRef.current || hit.kind === "point"))
+          }
+          sceneShell.dataset.hoverDraggable = hoveringDraggable ? "true" : "false"
+        }
+        return
+      }
+      if (pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
       const deltaX = point.x - pointerState.lastX
       const deltaY = point.y - pointerState.lastY
@@ -308,6 +337,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
       // 直抓的会话在指针真正移动之前什么都不改：原地点一下仍然是"选中"，不会顺手把点挪一丝。
       if (session?.direct && !pointerState.moved) return
       if (session) {
+        if (sceneShell) sceneShell.dataset.dragging = "true"
         /**
          * 拖**半径手柄**（缩放）：指针落在圆所在平面上的点到圆心的距离。拖动期间**不提交文档**——
          * 只改画面（预览半径），一次拖动因此仍然是"抬手提交一次 = 一步撤销"。
@@ -591,6 +621,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
         if (previewWins && previewClickRef.current) previewClickRef.current(previewHit.preview!)
         else onSelectRef.current(resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, event.altKey), event.shiftKey)
       }
+      if (sceneShell) delete sceneShell.dataset.dragging
       renderer.domElement.releasePointerCapture(event.pointerId)
       pointerStateRef.current = null
     }
