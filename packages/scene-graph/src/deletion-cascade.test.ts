@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { createEmptyDocument } from "@draw/dsl"
 import { buildSolidTemplate } from "@draw/geometry-kernel"
 
-import { applyOperation, createPoint3, deletionPlan, deletionTargets, recomputeDerivedObjects, validateDeletion } from "./index"
+import { applyOperation, cascadeDeletionClosure, createPoint3, deletionPlan, deletionTargets, recomputeDerivedObjects, validateDeletion } from "./index"
 import { compileSolidPrism, compileSolidTetrahedron } from "./actions"
 
 /**
@@ -291,5 +291,45 @@ describe("deleting an orphan topology cluster (the solid body was never material
     expect(validateDeletion(document, ["point-a"]).valid).toBe(false)
     // ……点 + 线一起删仍然合法（并集校验那条既有语义没被放宽也没被收紧）。
     expect(validateDeletion(document, ["point-a", "line-ab"])).toEqual({ valid: true })
+  })
+})
+
+describe("cascadeDeletionClosure (DAG dependency closure for intelligent deletion)", () => {
+  it("collects downstream 3D line and plane when only the parent point is targeted", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("point-a", { x: 0, y: 0, z: 0 }),
+      createPoint3("point-b", { x: 2, y: 0, z: 0 }),
+      createPoint3("point-c", { x: 0, y: 2, z: 0 }),
+      { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b"] } },
+      { id: "plane-abc", type: "plane3", definition: { kind: "throughPoints", pointIds: ["point-a", "point-b", "point-c"] } }
+    ]
+
+    const closure = cascadeDeletionClosure(document, ["point-a"])
+    expect(closure.sort()).toEqual(["line-ab", "plane-abc", "point-a"].sort())
+    expect(closure).not.toContain("point-b")
+    expect(closure).not.toContain("point-c")
+    expect(validateDeletion(document, closure)).toEqual({ valid: true })
+  })
+
+  it("recursively cascades through multi-level 3D DAG dependencies", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [
+      createPoint3("p-1", { x: 0, y: 0, z: 0 }),
+      createPoint3("p-2", { x: 1, y: 0, z: 0 }),
+      createPoint3("p-3", { x: 0, y: 1, z: 0 }),
+      { id: "line-12", type: "line3", definition: { kind: "throughPoints", pointIds: ["p-1", "p-2"] } },
+      { id: "seg-13", type: "segment3", pointIds: ["p-1", "p-3"] },
+      { id: "plane-123", type: "plane3", definition: { kind: "throughPoints", pointIds: ["p-1", "p-2", "p-3"] } }
+    ]
+
+    const closure = cascadeDeletionClosure(document, ["p-1"])
+    expect(closure).toContain("p-1")
+    expect(closure).toContain("line-12")
+    expect(closure).toContain("seg-13")
+    expect(closure).toContain("plane-123")
+    expect(closure).not.toContain("p-2")
+    expect(closure).not.toContain("p-3")
+    expect(validateDeletion(document, closure)).toEqual({ valid: true })
   })
 })

@@ -237,3 +237,95 @@ export function layerDescendantIds(document: GeometryDocument, id: string): Set<
   }
   return descendants
 }
+
+/**
+ * 一个图元直接依赖的其它图元 id。
+ *
+ * 若这些依赖中的任何一个被删除，该图元便失去有效几何基础，必须在级联删除中连带移除。
+ */
+export function primitiveDirectDependencies(primitive: PrimitiveSpec): string[] {
+  const deps: string[] = []
+  if (primitive.type === "line3") {
+    if (primitive.definition.kind === "throughPoints") deps.push(...primitive.definition.pointIds)
+    else if (primitive.definition.kind === "pointDirection") deps.push(primitive.definition.pointId)
+  } else if (primitive.type === "segment3") {
+    deps.push(...primitive.pointIds)
+  } else if (primitive.type === "ray3") {
+    deps.push(primitive.originId, primitive.throughId)
+  } else if (primitive.type === "plane3") {
+    if (primitive.definition.kind === "throughPoints") deps.push(...primitive.definition.pointIds)
+    else if (primitive.definition.kind === "pointNormal") deps.push(primitive.definition.pointId)
+  } else if (primitive.type === "edge3") {
+    deps.push(...primitive.pointIds)
+    if (primitive.faceIds) deps.push(...primitive.faceIds)
+  } else if (primitive.type === "face3") {
+    deps.push(...primitive.pointIds)
+    if (primitive.edgeIds) deps.push(...primitive.edgeIds)
+    if (primitive.planeId) deps.push(primitive.planeId)
+  } else if (primitive.type === "polyhedron3") {
+    deps.push(...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds)
+    if (isSourceIdConstruction(primitive.construction)) deps.push(...primitive.construction.sourceIds)
+  } else if (primitive.type === "connection") {
+    deps.push(primitive.startPointId, primitive.endPointId)
+    if (primitive.control?.thirdPointId) deps.push(primitive.control.thirdPointId)
+  } else if (primitive.type === "locus") {
+    deps.push(primitive.sourcePointId)
+  } else if (primitive.type === "circle" && primitive.centerPointId) {
+    deps.push(primitive.centerPointId)
+  } else if ((primitive.type === "tangent" || primitive.type === "normal") && primitive.anchor) {
+    if (primitive.anchor.kind === "point") deps.push(primitive.anchor.pointId)
+    else if (primitive.anchor.kind === "common") deps.push(primitive.anchor.otherSourceId)
+  } else if (primitive.type === "intersection") {
+    deps.push(primitive.lineA, primitive.lineB)
+  } else if (primitive.type === "lineCircleIntersection") {
+    deps.push(primitive.lineId, primitive.circleId)
+  } else if (primitive.type === "circleIntersection") {
+    deps.push(primitive.circleA, primitive.circleB)
+  } else if (primitive.type === "curveIntersection" || primitive.type === "intersectionSet") {
+    deps.push(primitive.objectA, primitive.objectB)
+  } else if (primitive.type === "section") {
+    deps.push(primitive.sourceId)
+  } else if (primitive.type === "intersectionLine" || primitive.type === "intersectionSolid" || primitive.type === "intersectionFace" || primitive.type === "intersectionPoint3") {
+    deps.push(...primitive.sourceIds)
+  }
+  if (isPlaceableConic(primitive) && primitive.rotationAbout?.pivot.kind === "primitive") {
+    deps.push(primitive.rotationAbout.pivot.primitiveId)
+  }
+  const analysisSource = functionAnalysisSourceId(primitive)
+  if (analysisSource !== null) deps.push(analysisSource)
+  return deps
+}
+
+/**
+ * **计算选定图元集合在整个 DAG 中的智能级联删除闭包（Cascade Deletion Closure）**。
+ *
+ * 遍历有向无环依赖图，自动递归解析所有直接与间接下游从属图元。
+ * 当用户在界面删除某个对象时，自动将受其影响的全部下游从属对象合并为单笔原子删除事务。
+ */
+export function cascadeDeletionClosure(document: GeometryDocument, ids: string[]): string[] {
+  const closure = new Set<string>()
+  for (const id of ids) {
+    for (const target of deletionTargets(document, id)) {
+      closure.add(target)
+    }
+  }
+
+  let expanded = true
+  while (expanded) {
+    expanded = false
+    for (const primitive of document.primitives) {
+      if (closure.has(primitive.id)) continue
+      const deps = primitiveDirectDependencies(primitive)
+      if (deps.some((depId) => closure.has(depId))) {
+        for (const target of deletionTargets(document, primitive.id)) {
+          if (!closure.has(target)) {
+            closure.add(target)
+            expanded = true
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(closure)
+}

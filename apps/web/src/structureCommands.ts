@@ -16,7 +16,7 @@
 
 import type { GeometryDocument } from "@draw/dsl"
 import { CAPABILITY_REGISTRY_REVISION } from "@draw/agent-core"
-import { compileActions, createIdAllocator, validateDeletion, type DomainOperation } from "@draw/scene-graph"
+import { cascadeDeletionClosure, compileActions, createIdAllocator, validateDeletion, type DomainOperation } from "@draw/scene-graph"
 
 export interface StructureCommandDeps {
   document: GeometryDocument
@@ -40,20 +40,26 @@ export function createStructureCommands({ document, selectedIds, apply, applyBat
      * `validateDeletion` 仍然先行：它给出的是**用户可读**的拒绝理由
      *（"对象被另一个对象引用"），而事务的 `errors` 是给 run 记录看的实现细节。
      */
-    const validation = validateDeletion(document, selectedIds)
+    /**
+     * **智能级联删除闭包（Cascade Deletion Closure）**：
+     * 自动解析所有直接与间接下游从属图元（DAG 闭包），合并为单笔原子删除事务。
+     * 根绝生硬的"对象被另一个对象引用"拒绝报错，单步 Ctrl+Z 即可完整恢复整族依赖。
+     */
+    const targetIds = cascadeDeletionClosure(document, selectedIds)
+    const validation = validateDeletion(document, targetIds)
     if (!validation.valid) {
       setFileError(validation.errors.join(", "))
       return
     }
     /**
      * 手工按钮与 Agent 走**同一份动作编译器**（设计规格 §7.4：不复制一份 Agent 专用语义）。
-     * `validateDeletion` 仍然先行，因为它给的是**用户可读**的拒绝理由（"对象被另一个对象引用"）；
+     * `validateDeletion` 仍然先行，因为它给的是**用户可读**的拒绝理由（如"对象已锁定"）；
      * 编译器的诊断是给 run 记录与模型修复路径看的，措辞面向执行而非面向人。
      */
-    const compiled = compileActions(document, [{ actionId: "object.delete_many", actionKey: "manual-delete", factIds: [], inputs: { targets: [...selectedIds] } }], {
+    const compiled = compileActions(document, [{ actionId: "object.delete_many", actionKey: "manual-delete", factIds: [], inputs: { targets: [...targetIds] } }], {
       targetDocument: document,
       targetWorkspace: document.workspace,
-      orderedSelection: [...selectedIds],
+      orderedSelection: [...targetIds],
       capabilityRevision: CAPABILITY_REGISTRY_REVISION,
       idAllocator: createIdAllocator(document.primitives.map((primitive) => primitive.id))
     })

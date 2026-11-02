@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 UI/UX 第二阶段实施：智能级联删除（Cascade Delete）与单步事务化（Block 2）
+
+全面落地智能级联删除与单步事务化（Cascade Delete & DAG Batch Closure）：
+
+- **智能级联删除闭包（Cascade Deletion Closure）**：在 `packages/scene-graph/src/deletion.ts` 中实现图元依赖图分析工具 `primitiveDirectDependencies` 与下游递归依赖闭包计算器 `cascadeDeletionClosure`，遍历 2D/3D DAG 依赖关系；
+- **单步事务化批量删除**：在 `apps/web/src/structureCommands.ts` 中将用户选中的删除图元接入 `cascadeDeletionClosure`，自动将所有下游依赖图元（如以选中点为端点的线段、以点/线定义的平面等）一并纳入单步原子批量删除（`object.delete_many`），同时保留锁定保护；
+- **消除阻断报错与 Ctrl+Z 单步无损恢复**：彻底消除此前删除父图元时硬编码弹错阻断的反人类逻辑，整个级联删除操作在撤销栈中聚合为单步事务，按 `Ctrl+Z` 可单步原子化完整恢复所有被级联删除的图元。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（`deletion-cascade.test.ts` 16 项全过、`structureCommands.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 UI/UX 第二阶段实施：连续作图心流（Sticky Tools）与统一画布落点
 
 全面落地连续做图心流（Sticky Tools & 统一画布落点 + Esc/右键解脱）：

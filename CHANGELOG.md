@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-02 —— UI/UX 体验重构第二阶段：智能级联删除（Cascade Delete）与单步事务化（Block 2，开发版）
+
+- **智能级联删除闭包（Cascade Deletion Closure）**：在 `packages/scene-graph/src/deletion.ts` 中实现图元依赖图分析工具 `primitiveDirectDependencies` 与下游递归依赖闭包计算器 `cascadeDeletionClosure`，遍历 2D（圆、连接线、轨迹、切线/法线等）与 3D（空间线、线段、射线、空间面、多面体拓扑引用等）DAG 依赖关系。
+- **单步事务化批量删除**：在 `apps/web/src/structureCommands.ts` 中将用户发起的对象删除接入 `cascadeDeletionClosure` 批量闭包计算。若用户选中父级图元（如点 `A`），系统自动将所有依赖该父图元的下游子图元（如以 `A` 为端点的线段、过 `A` 的空间平面、空间多面体等）一并纳入批量删除事务（`object.delete_many`），并执行统一的锁定保护检查。
+- **消除僵硬弹错与支持 Ctrl+Z 单步无损撤销**：彻底消除此前用户删除父图元时粗暴弹出 `"object is referenced by another object"` 阻断操作的反人类设计；删除过程封装为单步事务（`applyBatch`），在撤销栈中仅占一步，用户按一次 `Ctrl+Z` 即可完整恢复父图元及其所有下游级联依赖图元。
+- **读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（`deletion-cascade.test.ts` 16 项全过、`structureCommands.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0（0 错误）；`npm run lint` 0 错误 / 16 警告。
+
 ## 2026-11-02 —— UI/UX 体验重构第二阶段：连续作图心流（Sticky Tools）与轻量解脱落地（开发版）
 
 - **连续绘图机制（Sticky Continuous Drafting）**：平面作图工具（点 `point`、直线 `line`、线段 `segment`、射线 `ray`、圆 `circle`、圆弧 `arc`、折线 `polyline`）及 3D 作图工具在完成一个图元创建后保持激活状态（`center: null`, `sticky: true`），工具按钮保持高亮，支持一气呵成连续绘制多个图元（如连续画线构成三角形或多边形），无需画完一个图元反复回到 Ribbon 重新点击。

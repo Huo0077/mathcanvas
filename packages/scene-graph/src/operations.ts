@@ -309,7 +309,7 @@ export { recomputeDerivedObjects } from "./recompute"
 // 交面 / 交点与几个小几何辅助在 `./sectionRecompute`。
 
 // 删除的级联判据在 `./deletion`（评审方案 2 拆出来的）：这里只引入要用的，并把公开面转出去。
-export { deletionPlan, deletionTargets, layerDescendantIds, type DeletionPlan } from "./deletion"
+export { cascadeDeletionClosure, deletionPlan, deletionTargets, layerDescendantIds, primitiveDirectDependencies, type DeletionPlan } from "./deletion"
 
 // 图元种类判据在 `./primitiveKinds`（deletion 也要用，放这里避免成环）。
 export { isPlaceableConic, isSourceIdConstruction, type SourceIdSolidConstruction } from "./primitiveKinds"

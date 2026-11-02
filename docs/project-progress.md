@@ -10,6 +10,17 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— UI/UX 第二阶段实施：智能级联删除与单步事务化（Block 2）
+
+**目标**：落地智能级联删除与 DAG 闭包批量事务，消除此前删除父对象时由于引用关系弹出 `"object is referenced by another object"` 导致操作无法继续、且必须手工逐个反向寻找并删除子对象的繁琐反人类交互，并保证单步 `Ctrl+Z` 完整恢复。
+
+**实施与证据**：
+1. **依赖分析与闭包收集**：在 `packages/scene-graph/src/deletion.ts` 新增 `primitiveDirectDependencies` 与 `cascadeDeletionClosure`，递归计算选中图元的所有直接与间接下游依赖对象。
+2. **结构命令接入与锁定保护**：在 `apps/web/src/structureCommands.ts` 的 `deleteSelected` 中统一计算目标图元的级联闭包 `cascadeDeletionClosure`，若闭包内存在锁定对象则安全阻断，否则编译为 `object.delete_many` 单步事务。
+3. **单步原子事务与撤销验证**：调用 `applyBatch(compiled.operations)` 实现单步原子提交。在单测中验证了删除父点后依赖的空间线、空间面均自动安全清除，且通过单步 Undo 完整复原。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（`deletion-cascade.test.ts` 16 项全过、`structureCommands.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
 ## 2026-11-02 —— UI/UX 第二阶段实施：连续作图心流（Sticky Tools）与轻量解脱（Block 1）
 
 **目标**：落地连续作图心流，解决绘图工具一次性强制退出（One-Shot Reset）打断连贯作图流的反人类交互。

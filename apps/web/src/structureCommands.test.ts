@@ -109,4 +109,37 @@ describe("structure commands", () => {
     // 没有别的几何层可接：如实删（**不**编一个不存在的 `reassignTo` 出来）。
     expect(applied[0]).toEqual({ op: "deleteLayer", id: "layer-1" })
   })
+  it("automatically cascades dependent 3D lines and planes when parent point is deleted", () => {
+    const document = createEmptyDocument("geometry3d")
+    const pA = { id: "p-a", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" } as PrimitiveSpec
+    const pB = { id: "p-b", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" } as PrimitiveSpec
+    const lineAB = { id: "line-ab", type: "line3", definition: { kind: "throughPoints", pointIds: ["p-a", "p-b"] } } as PrimitiveSpec
+    document.primitives = [pA, pB, lineAB]
+
+    const { commands, batched, errors, selections } = harness(document, ["p-a"])
+    commands.deleteSelected()
+
+    expect(errors).toHaveLength(0)
+    expect(batched).toHaveLength(1)
+    expect(batched[0][0]).toMatchObject({ op: "deleteObjects" })
+    const deletedIds = (batched[0][0] as { op: "deleteObjects"; ids: string[] }).ids
+    expect(deletedIds).toContain("p-a")
+    expect(deletedIds).toContain("line-ab")
+    expect(deletedIds).not.toContain("p-b")
+    expect(selections).toEqual([[]])
+  })
+
+  it("blocks cascade deletion if any cascaded dependent is locked", () => {
+    const document = createEmptyDocument("geometry3d")
+    const pA = { id: "p-a", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" } as PrimitiveSpec
+    const pB = { id: "p-b", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" } as PrimitiveSpec
+    const lineAB = { id: "line-ab", type: "line3", locked: true, definition: { kind: "throughPoints", pointIds: ["p-a", "p-b"] } } as PrimitiveSpec
+    document.primitives = [pA, pB, lineAB]
+
+    const { commands, batched, errors } = harness(document, ["p-a"])
+    commands.deleteSelected()
+
+    expect(batched).toHaveLength(0)
+    expect(errors).toContain("object is locked")
+  })
 })
