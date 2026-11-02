@@ -21,6 +21,7 @@ import { GRID_CELL, GRID_MAJOR_EVERY } from "../sceneGrid"
 import { isTextEditingTarget } from "../documentIds"
 import type { CreationMode, CreationStep } from "../draftingCommands"
 import { creationPreviewShapes, creationSnapTarget, snapCandidatesOf } from "../creationPreview"
+import { findNearestCurveTarget } from "../curveBinding"
 
 /**
  * 点的可见半径（屏幕像素）。
@@ -204,7 +205,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     if (!primitive) return document
     const tangent = tangentTargetOf(primitive, document.primitives, document.parameters)
     const action = createDragAction(primitive, dragState.handle, dragState.origin, dragCurrent, rotationTargetOf(primitive, document.primitives) ?? undefined, tangent ? { ...tangent, parameterOffset: dragState.tangentOffset } : undefined)
-    if (!action) return document
+    if (!action || action.kind === "bindToPath") return document
     const operation: DomainOperation = action.kind === "translate"
       ? { op: "translatePrimitive", id: primitive.id, delta: action.delta }
       : { op: "updatePrimitive", id: primitive.id, patch: action.patch }
@@ -376,8 +377,26 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
    * 只在创建模式里生效：选择 / 拖动的拾取规则一字不变。
    */
   const snapCandidates = useMemo(() => creationMode ? snapCandidatesOf(displayPrimitives, intersectionPreviews) : [], [creationMode, displayPrimitives, intersectionPreviews])
-  const snapCoordinate = (coordinate: Coordinate) => creationSnapTarget(snapCandidates, coordinate, viewport.scale) ?? coordinate
   const snapTarget = creationMode && hoverCoordinate ? creationSnapTarget(snapCandidates, hoverCoordinate, viewport.scale) : null
+  const snapCoordinate = (coordinate: Coordinate) => {
+    const pointTarget = creationSnapTarget(snapCandidates, coordinate, viewport.scale)
+    if (pointTarget) return pointTarget
+    const curveTarget = findNearestCurveTarget(document, coordinate, viewport.scale, { snapRadiusPx: 14 })
+    if (curveTarget) return curveTarget.point
+    return coordinate
+  }
+  const activeCurveSnap = useMemo(() => {
+    if (dragState && dragCurrent) {
+      const dragged = document.primitives.find((p) => p.id === dragState.id)
+      if (dragged?.type === "point" && dragged.binding?.kind !== "onPath") {
+        return findNearestCurveTarget(document, dragCurrent, viewport.scale, { snapRadiusPx: 14, draggedPointId: dragged.id })
+      }
+    }
+    if (creationMode === "point" && hoverCoordinate && !snapTarget) {
+      return findNearestCurveTarget(document, hoverCoordinate, viewport.scale, { snapRadiusPx: 14 })
+    }
+    return null
+  }, [dragState, dragCurrent, creationMode, hoverCoordinate, snapTarget, document, viewport.scale])
   const creationPointer = creationMode && hoverCoordinate ? snapTarget ?? hoverCoordinate : null
   const creationShapes = creationMode ? creationPreviewShapes(creationStep, creationPointer, Math.hypot(worldBounds.maxX - worldBounds.minX, worldBounds.maxY - worldBounds.minY) * 2) : []
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => {
@@ -441,6 +460,20 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     if (dragState && event.pointerId === dragState.pointerId) {
       const primitive = document.primitives.find((candidate) => candidate.id === dragState.id)
       const current = eventToWorld(event, viewport)
+      if (primitive?.type === "point" && primitive.binding?.kind !== "onPath") {
+        const curveTarget = findNearestCurveTarget(document, current, viewport.scale, {
+          snapRadiusPx: 14,
+          draggedPointId: primitive.id
+        })
+        if (curveTarget) {
+          suppressClick.current = true
+          onDragEnd(primitive.id, { kind: "bindToPath", target: curveTarget })
+          setDragState(null)
+          setDragCurrent(null)
+          transientTraceRef.current.clear()
+          return
+        }
+      }
       const tangent = primitive ? tangentTargetOf(primitive, document.primitives, document.parameters) : null
       const action = primitive && createDragAction(primitive, dragState.handle, dragState.origin, current, rotationTargetOf(primitive, document.primitives) ?? undefined, tangent ? { ...tangent, parameterOffset: dragState.tangentOffset } : undefined)
       if (primitive && action && Math.hypot(current.x - dragState.origin.x, current.y - dragState.origin.y) > 0.01) { suppressClick.current = true; onDragEnd(primitive.id, action) }
@@ -632,6 +665,13 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
       const previous = points[index - 1]
       return <line key={`trace-${index}`} x1={toX(previous.x)} y1={toY(previous.y)} x2={toX(point.x)} y2={toY(point.y)} stroke="var(--color-warning)" strokeWidth="1.5" strokeDasharray="2 3" opacity="0.85" />
     })}</g>}
+    {activeCurveSnap && <g className="curve-snap-indicator" data-curve-snap-indicator="true" pointerEvents="none">
+      <circle data-curve-snap-ring="true" cx={toX(activeCurveSnap.point.x)} cy={toY(activeCurveSnap.point.y)} r="8" fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="3 3" />
+      <circle cx={toX(activeCurveSnap.point.x)} cy={toY(activeCurveSnap.point.y)} r="3.5" fill="#2563eb" />
+      <text data-snap-badge="true" x={toX(activeCurveSnap.point.x) + 10} y={toY(activeCurveSnap.point.y) - 10} fill="#2563eb" fontSize="12" fontWeight="700">
+        {`贴轨「${activeCurveSnap.path.label ?? activeCurveSnap.path.id}」`}
+      </text>
+    </g>}
     {/* 定点标记：告诉用户"曲线正绕哪个点转"，它本身不接指针事件。 */}
     {renderRotationAnchors()}
     {/* 交点预览画在曲线之上、但在**点之下**：预览的命中圆同样是 14px，若画在最后会把点抢走。 */}

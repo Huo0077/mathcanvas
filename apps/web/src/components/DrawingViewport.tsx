@@ -346,7 +346,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
     const primitive = document.primitives.find((candidate) => candidate.id === drag.id)
     if (!primitive) return document
     const action = createDragAction(primitive, drag.handle, drag.origin, dragCurrent)
-    if (!action) return document
+    if (!action || action.kind === "bindToPath") return document
     const operation: DomainOperation = action.kind === "translate"
       ? { op: "translatePrimitive", id: primitive.id, delta: action.delta }
       : { op: "updatePrimitive", id: primitive.id, patch: action.patch }

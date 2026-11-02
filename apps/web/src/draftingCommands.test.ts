@@ -168,4 +168,27 @@ describe("drafting commands", () => {
     expect(s.applied[1]).toMatchObject({ op: "addPrimitive", primitive: { type: "point", x: 3, y: 4 } })
     expect(s.step()).toEqual({ mode: "point", center: null, sticky: true })
   })
+
+  it("creates bound dynamic points directly when clicking on a curve in point mode", () => {
+    const s = session()
+    s.document.primitives.push({ id: "line-track", type: "line", a: { x: -10, y: 0 }, b: { x: 10, y: 0 }, label: "直线轨" })
+    s.start("point")
+    s.click({ x: 4, y: 0.05 })
+    expect(s.applied).toHaveLength(2)
+    expect(s.applied[0]).toMatchObject({ op: "setParameter", id: "t-point-1" })
+    expect(s.applied[1]).toMatchObject({
+      op: "addPrimitive",
+      primitive: {
+        type: "point",
+        x: expect.closeTo(4),
+        y: expect.closeTo(0),
+        binding: {
+          kind: "onPath",
+          pathId: "line-track",
+          parameterId: "t-point-1"
+        }
+      }
+    })
+    expect(s.step()).toEqual({ mode: "point", center: null, sticky: true })
+  })
 })

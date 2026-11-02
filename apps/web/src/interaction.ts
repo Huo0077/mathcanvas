@@ -5,7 +5,10 @@ import type { PrimitiveUpdatePatch } from "@draw/scene-graph"
 import { anchoredCurve, dragRotationAngle, isRotatableCurve, placementPatch, radiusHandlePoint, resizedPlacement, rotationHandlePoint, type RotatableCurve } from "./curveRotation"
 
 export type DragHandle = "body" | "a" | "b" | "radius" | "startAngle" | "endAngle" | "vertex" | "radiusX" | "radiusY" | "rotation" | "rotate" | `vertex-${number}`
-export type DragAction = { kind: "translate"; delta: { x: number; y: number } } | { kind: "update"; patch: PrimitiveUpdatePatch }
+export type DragAction =
+  | { kind: "translate"; delta: { x: number; y: number } }
+  | { kind: "update"; patch: PrimitiveUpdatePatch }
+  | { kind: "bindToPath"; target: import("./curveBinding").CurveSnapTarget }
 
 /**
  * 拖动"绕定点旋转"的曲线时需要的东西：定点、基准中心，以及定点是不是一个点图元。

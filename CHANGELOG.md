@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-02 —— UI/UX 体验重构第二阶段：动点在轨直接绑定与画布直通（Block 3，开发版）
+
+- **画布直通在轨动点绑定（Direct Curve Snapping & Drop-to-Bind）**：在 `apps/web/src/curveBinding.ts` 中实现高精度最近曲线吸附目标计算器 `findNearestCurveTarget`、自由点贴轨绑定操作构造器 `createPointBindingOperations` 及曲线上直接落点构造器 `createBoundPointCreationOperations`。支持直线、线段、射线、圆、圆弧、抛物线、双曲线、函数图像等全量可承载动点的曲线，并在图元依赖图上引入循环依赖防护（拒绝将点绑定到自身派生出的下游曲线上）。
+- **拖拽磁吸与吸附光环/贴轨徽标**：在 `GraphicsView.tsx` 中增强指针拖拽动力学，当自由点靠近任意可见曲线并在 14px 阈值范围内时，画布实时呈现高亮贴轨光环与 `贴轨「<曲线名>」` 徽标指示，并在松手时原子级触发 `bindToPath` 批量事务，自动分配 `t-<pointId>` 驱动参数并将点转换为在轨动点。
+- **动点属性栏交互升级（Range Slider 与一键解绑）**：在 `apps/web/src/components/PropertiesBar.tsx` 中为在轨动点增加直观的交互滑轨 `<input type="range" aria-label="路径滑轨" />`，与精确数值框实时双向同步，滑动即可让动点沿曲线实时滑行；新增「解绑为自由点」快捷按钮，一键释放约束恢复自由拖拽。
+- **读数（2026-11-02 本机）**：全量单测 **503 文件 / 5356 通过 + 1 todo / 0 失败**（`curveBinding.test.ts` 7 项全过、`directCurveBinding.test.tsx` 3 项全过、`draftingCommands.test.ts` 11 项全过、`inspectorModel.test.tsx` 7 项全过、`interaction.test.ts` 21 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0（0 错误）；`npm run lint` 0 错误 / 16 警告。
+
 ## 2026-11-02 —— UI/UX 体验重构第二阶段：智能级联删除（Cascade Delete）与单步事务化（Block 2，开发版）
 
 - **智能级联删除闭包（Cascade Deletion Closure）**：在 `packages/scene-graph/src/deletion.ts` 中实现图元依赖图分析工具 `primitiveDirectDependencies` 与下游递归依赖闭包计算器 `cascadeDeletionClosure`，遍历 2D（圆、连接线、轨迹、切线/法线等）与 3D（空间线、线段、射线、空间面、多面体拓扑引用等）DAG 依赖关系。

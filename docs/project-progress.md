@@ -10,6 +10,18 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— UI/UX 第二阶段实施：动点在轨直接绑定与画布直通（Block 3）
+
+**目标**：彻底消除此前动点路径绑定必须去右侧属性栏 `<select>` 下拉列表中从数十个图元 ID 中翻查的反人类交互，落地画布直通的拖拽贴轨吸附（Drop-to-Bind）与在轨直接落点，并提供直观的路径参数滑轨与解绑控制。
+
+**实施与证据**：
+1. **吸附目标检测与环路防护**：在 `apps/web/src/curveBinding.ts` 实现 `findNearestCurveTarget`，支持全量 2D 动点载体曲线（直线、圆、圆弧、圆锥曲线、函数等），并在 DAG 依赖图上执行拓扑闭包分析 `cascadeDeletionClosure`，严格拒绝点绑定到自身下游图元；
+2. **原子事务化贴轨操作生成**：实现 `createPointBindingOperations` 与 `createBoundPointCreationOperations`，将参数创建与动点更新/添加聚合为 `applyBatch` 原子单步事务；
+3. **画布指针动力学与磁吸徽标**：在 `GraphicsView.tsx` 中增强自由点拖拽，当靠近曲线 14px 阈值时触发光环与 `贴轨「<曲线名>」` 徽标指示，并在松手时执行 `bindToPath` 事务绑定；
+4. **属性栏交互滑轨与快捷解绑**：在 `apps/web/src/components/PropertiesBar.tsx` 为在轨动点提供 `<input type="range" aria-label="路径滑轨" />`，与数值输入框双向同步，并提供「解绑为自由点」按钮一键释放约束。
+
+**验证读数（2026-11-02 本机）**：全量单测 **503 文件 / 5356 通过 + 1 todo / 0 失败**（`curveBinding.test.ts` 7 项全过、`directCurveBinding.test.tsx` 3 项全过、`draftingCommands.test.ts` 11 项全过、`inspectorModel.test.tsx` 7 项全过、`interaction.test.ts` 21 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
 ## 2026-11-02 —— UI/UX 第二阶段实施：智能级联删除与单步事务化（Block 2）
 
 **目标**：落地智能级联删除与 DAG 闭包批量事务，消除此前删除父对象时由于引用关系弹出 `"object is referenced by another object"` 导致操作无法继续、且必须手工逐个反向寻找并删除子对象的繁琐反人类交互，并保证单步 `Ctrl+Z` 完整恢复。

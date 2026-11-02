@@ -3,6 +3,7 @@ import type { DomainOperation } from "@draw/scene-graph"
 
 import { nextPointLabel, nextPrimitiveId } from "./documentIds"
 import { guidanceFor } from "./guidance"
+import { createBoundPointCreationOperations, findNearestCurveTarget } from "./curveBinding"
 
 /**
  * **2D 绘图的创建流程**（从 `App.tsx` 拆出，评审方案 2）。
@@ -43,13 +44,14 @@ export interface DraftingCommandDeps {
   canCreateFace3: boolean
   selectedPoint3Ids: string[]
   apply: (operation: DomainOperation) => void
+  applyBatch?: (operations: DomainOperation[]) => void
   setCreationStep: (step: CreationStep | null) => void
   setSelectedIds: (ids: string[]) => void
   setGuidance: (guidance: string | null) => void
   cadLayerFields: () => { layerId?: string }
 }
 
-export function createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, setCreationStep, setSelectedIds, setGuidance, cadLayerFields }: DraftingCommandDeps) {
+export function createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, applyBatch, setCreationStep, setSelectedIds, setGuidance, cadLayerFields }: DraftingCommandDeps) {
   const startCreation = (mode: Exclude<CreationMode, null>, options?: { sticky?: boolean }) => {
     if (document.workspace === "geometry3d") {
       // 预置条件不足时给左下角指引，而不是弹一条不知道该怎么做的报错。
@@ -75,7 +77,18 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
     if (!creationStep) return
     if (creationStep.mode === "point") {
       const id = nextPrimitiveId(document, "point")
-      apply({ op: "addPrimitive", primitive: { id, type: "point", x: coordinate.x, y: coordinate.y, ...cadLayerFields(), label: nextPointLabel(document) } })
+      const label = nextPointLabel(document)
+      const curveTarget = findNearestCurveTarget(document, coordinate, 50, { snapRadiusPx: 14 })
+      if (curveTarget) {
+        const operations = createBoundPointCreationOperations(document, id, label, curveTarget, cadLayerFields())
+        if (applyBatch) applyBatch(operations)
+        else operations.forEach(apply)
+        setSelectedIds([id])
+        setCreationStep(creationStep.sticky !== false ? { mode: "point", center: null, sticky: true } : null)
+        setGuidance(`已在「${curveTarget.path.label ?? curveTarget.path.id}」上创建在轨动点 ${label}`)
+        return
+      }
+      apply({ op: "addPrimitive", primitive: { id, type: "point", x: coordinate.x, y: coordinate.y, ...cadLayerFields(), label } })
       setSelectedIds([id])
       setCreationStep(creationStep.sticky !== false ? { mode: "point", center: null, sticky: true } : null)
       setGuidance(null)

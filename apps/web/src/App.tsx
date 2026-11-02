@@ -115,6 +115,7 @@ import { createSelectionCommands } from "./selectionCommands"
  * 2D 绘图的创建流程（开始创建 → 画布点击 → 折线双击收尾）在 `./draftingCommands`：
  * `CreationMode` / `CreationStep` 两个类型也随之搬过去（只准有一份定义）。
  */
+import { createPointBindingOperations } from "./curveBinding"
 import { createDraftingCommands, type CreationMode, type CreationStep } from "./draftingCommands"
 /**
  * 状态栏那句话的推导（创建步骤 > 显示开关 > 交线预览 > 默认提示）在 `./canvasStatusPrompt`：
@@ -500,7 +501,7 @@ export function App() {
   const { addSection, rotateSelectedSection, rotateSelected3, applySectionFace, bindPointToHost, setPointHostParameter, materializeSelectedSection } = createSolidCommands({ document, selectedPrimitive, selectedId, apply, setSelectedIds, setGuidance, setFileError })
   const { createFromPreview, createIntersectionFromPreview } = createPreviewCommands({ document, apply, setSelectedIds, setLayerNotice, addSection })
   const { addPoint, addPoint3, addLine3, addPlane3, addFace3, addCircle3Track } = createPoint3ToolCommands({ document, selectedPoint3Ids, canCreateLine3, canCreatePlane3, canCreateFace3, canCreateCircle3, apply, setSelectedIds, setGuidance, setFileError, cadLayerFields })
-  const { startCreation, handleCanvasCreationClick, handleCanvasDoubleClick } = createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, setCreationStep, setSelectedIds, setGuidance, cadLayerFields })
+  const { startCreation, handleCanvasCreationClick, handleCanvasDoubleClick } = createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, applyBatch, setCreationStep, setSelectedIds, setGuidance, cadLayerFields })
   const { addAnnotation, addEngineeringAnnotation, addParameter, addMeasurement, deleteMeasurement } = createRecordCommands({ document, selectedPrimitive, selectedIds, apply, setGuidance, setFileError })
   /**
    * 拖动之后的提交。两件事：
@@ -530,6 +531,14 @@ export function App() {
   }
 
   const handleDragEnd = (id: string, action: import("./interaction").DragAction) => {
+    if (action.kind === "bindToPath") {
+      const dragged = document.primitives.find((primitive) => primitive.id === id)
+      const operations = createPointBindingOperations(document, id, action.target, dragged?.label)
+      applyBatch(operations)
+      setSelectedIds([id])
+      setGuidance(`已将点 ${dragged?.label ?? id} 绑定到「${action.target.path.label ?? action.target.path.id}」在轨运行`)
+      return
+    }
     /**
      * 拖动"以动点为圆心"的圆 = 拖动那个圆心点。
      *
