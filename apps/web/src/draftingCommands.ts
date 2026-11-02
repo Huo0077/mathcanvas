@@ -1,7 +1,7 @@
 import type { GeometryDocument } from "@draw/dsl"
 import type { DomainOperation } from "@draw/scene-graph"
 
-import { nextPrimitiveId } from "./documentIds"
+import { nextPointLabel, nextPrimitiveId } from "./documentIds"
 import { guidanceFor } from "./guidance"
 
 /**
@@ -21,13 +21,14 @@ import { guidanceFor } from "./guidance"
  * 4. **图元落在当前图层上**（`cadLayerFields`）—— 由调用方注入，平面工作区里它是空的。
  */
 
-export type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
+export type CreationMode = "point" | "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
 export interface CreationStep {
   mode: Exclude<CreationMode, null>
   center: { x: number; y: number } | null
   start?: { x: number; y: number }
   points?: { x: number; y: number }[]
+  sticky?: boolean
 }
 
 export interface DraftingCommandDeps {
@@ -49,7 +50,7 @@ export interface DraftingCommandDeps {
 }
 
 export function createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, setCreationStep, setSelectedIds, setGuidance, cadLayerFields }: DraftingCommandDeps) {
-  const startCreation = (mode: Exclude<CreationMode, null>) => {
+  const startCreation = (mode: Exclude<CreationMode, null>, options?: { sticky?: boolean }) => {
     if (document.workspace === "geometry3d") {
       // 预置条件不足时给左下角指引，而不是弹一条不知道该怎么做的报错。
       if (mode === "line") {
@@ -66,12 +67,20 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
       }
       return
     }
-    setCreationStep({ mode, center: null })
+    setCreationStep({ mode, center: null, sticky: options?.sticky ?? true })
     setGuidance(guidanceFor({ kind: "creation", mode }))
   }
 
   const handleCanvasClick = (coordinate: { x: number; y: number }) => {
     if (!creationStep) return
+    if (creationStep.mode === "point") {
+      const id = nextPrimitiveId(document, "point")
+      apply({ op: "addPrimitive", primitive: { id, type: "point", x: coordinate.x, y: coordinate.y, ...cadLayerFields(), label: nextPointLabel(document) } })
+      setSelectedIds([id])
+      setCreationStep(creationStep.sticky !== false ? { mode: "point", center: null, sticky: true } : null)
+      setGuidance(null)
+      return
+    }
     if (creationStep.mode === "polyline") {
       const points = creationStep.points ?? []
       if (!points.length || Math.hypot(coordinate.x - points.at(-1)!.x, coordinate.y - points.at(-1)!.y) >= 0.05) setCreationStep({ ...creationStep, points: [...points, coordinate] })
@@ -87,7 +96,8 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
       const id = nextPrimitiveId(document, type)
       apply({ op: "addPrimitive", primitive: { id, type, a: creationStep.center, b: coordinate, ...cadLayerFields(), label: `${type === "line" ? "直线" : type === "ray" ? "射线" : "线段"} ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
-      setCreationStep(null)
+      setCreationStep(creationStep.sticky !== false ? { mode: creationStep.mode, center: null, sticky: true } : null)
+      setGuidance(null)
       return
     }
     if (creationStep.mode === "circle") {
@@ -96,7 +106,8 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
       const id = nextPrimitiveId(document, "circle")
       apply({ op: "addPrimitive", primitive: { id, type: "circle", center: creationStep.center, radius, ...cadLayerFields(), label: `圆 ${id.split("-").at(-1)}` } })
       setSelectedIds([id])
-      setCreationStep(null)
+      setCreationStep(creationStep.sticky !== false ? { mode: "circle", center: null, sticky: true } : null)
+      setGuidance(null)
       return
     }
     if (!creationStep.start) {
@@ -110,7 +121,8 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
     const id = nextPrimitiveId(document, "arc")
     apply({ op: "addPrimitive", primitive: { id, type: "arc", center: creationStep.center, radius, startAngle, endAngle, ...cadLayerFields(), label: `圆弧 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
-    setCreationStep(null)
+    setCreationStep(creationStep.sticky !== false ? { mode: "arc", center: null, sticky: true } : null)
+    setGuidance(null)
   }
 
   const handleCanvasCreationClick = (coordinate: { x: number; y: number }) => {
@@ -125,7 +137,8 @@ export function createDraftingCommands({ document, creationStep, addLine3, addPl
     const id = nextPrimitiveId(document, "polyline")
     apply({ op: "addPrimitive", primitive: { id, type: "polyline", points: finalPoints, ...cadLayerFields(), label: `折线 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
-    setCreationStep(null)
+    setCreationStep(creationStep.sticky !== false ? { mode: "polyline", center: null, points: [], sticky: true } : null)
+    setGuidance(null)
   }
 
   /**

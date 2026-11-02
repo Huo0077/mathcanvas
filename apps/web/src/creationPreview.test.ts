@@ -71,5 +71,13 @@ describe("creationPreview and snapping", () => {
       kind: "polyline",
       points: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 3 }]
     })
+
+    // Point creation preview displays anchor dot at pointer
+    const pointShapes = creationPreviewShapes({ mode: "point", center: null }, { x: 7, y: 8 }, 100)
+    expect(pointShapes).toEqual([{ kind: "anchor", point: { x: 7, y: 8 } }])
+
+    // Step 1 before placing first point displays anchor dot at pointer
+    const initialShapes = creationPreviewShapes({ mode: "segment", center: null }, { x: 9, y: 10 }, 100)
+    expect(initialShapes).toEqual([{ kind: "anchor", point: { x: 9, y: 10 } }])
   })
 })

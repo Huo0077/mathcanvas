@@ -75,6 +75,7 @@ describe("feature button guidance", () => {
     const actions: GuidanceAction[] = [
       { kind: "point", workspace: "conics" },
       { kind: "point", workspace: "geometry3d" },
+      { kind: "creation", mode: "point" },
       { kind: "creation", mode: "line" },
       { kind: "creation", mode: "segment" },
       { kind: "creation", mode: "ray" },

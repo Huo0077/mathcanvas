@@ -1,5 +1,16 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 UI/UX 第二阶段实施：连续作图心流（Sticky Tools）与统一画布落点
+
+全面落地连续做图心流（Sticky Tools & 统一画布落点 + Esc/右键解脱）：
+
+- **连续绘图机制（Sticky Continuous Drafting）**：平面作图工具（点 `point`、直线 `line`、线段 `segment`、射线 `ray`、圆 `circle`、圆弧 `arc`、折线 `polyline`）及 3D 作图工具在完成一个图元创建后保持激活状态（`center: null`, `sticky: true`），工具按钮保持高亮，支持一气呵成连续绘制多个几何图元（如连线构成三角形），消除画完单图元即强制重置的断点阻碍；
+- **统一空白画布点放置**：统一平面画布空白处/曲线上直接点击添加点图元（`creationMode === "point"`），补齐与线/圆同构的直观落点交互；
+- **轻量退出与解脱**：支持 `Esc` 键、画布右键（`contextmenu`）直接解脱取消当前工具模式或撤回正在拉拽的橡皮筋第一落点，退回自由选择/平移模式；
+- **橡皮筋端点与交点预览自适应互锁**：完善 `GraphicsView.tsx` 中 `handlePreviewClick` 与创建状态的互锁逻辑——处于拉拽中途时精准吸附端点，处于初始或选择态时准确固化交点并解除粘滞。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 全仓审查与四组回归修复（明确实体、IR 往返、矩形单/双折、仓库与文档门禁）
 
 针对 `5bb6819c` 基线开展全仓审查与实跑探针验证，按 TDD 逐项完成四组修复：

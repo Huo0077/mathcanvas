@@ -387,8 +387,8 @@ export function App() {
     if ("error" in result) { setGuidance(result.error); return }
     if (result.operations.length > 0) applyBatch(result.operations)
     setSelectedIds([result.selectedId])
-    updateSpatialSession(null)
-    setActiveCommand(null)
+    updateSpatialSession({ tool: session.tool, anchors: [] })
+    setActiveCommand(`draw-${session.tool}`)
     setGuidance(null)
   }
   const handleSpatialAnchor = (anchor: SpatialAnchor) => {
@@ -717,7 +717,7 @@ export function App() {
    * 入口撤掉之后它没有任何调用者，因此一并删除 —— 功能区那四个按钮仍然照旧工作。
    */
 
-  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
+  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**

@@ -47,7 +47,7 @@ const session = (workspace: "cad" | "geometry3d" = "cad", overrides: Partial<Par
     guidances,
     forwarded,
     step: () => step,
-    start: (mode: Parameters<ReturnType<typeof build>["startCreation"]>[0]) => build().startCreation(mode),
+    start: (mode: Parameters<ReturnType<typeof build>["startCreation"]>[0], options?: Parameters<ReturnType<typeof build>["startCreation"]>[1]) => build().startCreation(mode, options),
     click: (coordinate: { x: number; y: number }) => build().handleCanvasCreationClick(coordinate),
     doubleClick: (coordinate: { x: number; y: number }) => build().handleCanvasDoubleClick(coordinate)
   }
@@ -63,7 +63,7 @@ describe("drafting commands", () => {
   it("starts a 2D creation step and explains it in the status bar", () => {
     const s = session()
     s.start("circle")
-    expect(s.step()).toEqual({ mode: "circle", center: null })
+    expect(s.step()).toEqual({ mode: "circle", center: null, sticky: true })
     expect(s.guidances).toHaveLength(1)
   })
 
@@ -85,12 +85,12 @@ describe("drafting commands", () => {
     s.start("line")
     s.click({ x: 0, y: 0 })
     expect(s.applied).toHaveLength(0)
-    expect(s.step()).toEqual({ mode: "line", center: { x: 0, y: 0 } })
+    expect(s.step()).toEqual({ mode: "line", center: { x: 0, y: 0 }, sticky: true })
 
     s.click({ x: 3, y: 4 })
     expect(firstPrimitive(s.applied)).toMatchObject({ type: "line", a: { x: 0, y: 0 }, b: { x: 3, y: 4 }, layerId: "layer-1" })
-    // 建完就退出创建流程（否则下一次点击会莫名其妙再建一个）。
-    expect(s.step()).toBeNull()
+    // 连续作图模式（Sticky Tools）：画完一条后保持工具激活（等待下一条起点），按 Esc 或选择工具退出
+    expect(s.step()).toEqual({ mode: "line", center: null, sticky: true })
   })
 
   it("refuses a degenerate line when the two clicks are on top of each other", () => {
@@ -134,5 +134,38 @@ describe("drafting commands", () => {
     s.click({ x: 1, y: 1 })
     s.doubleClick({ x: 1, y: 1 })
     expect(s.applied).toHaveLength(0)
+  })
+
+  it("supports continuous creation (sticky tools) and one-shot exit when sticky is false", () => {
+    const s = session()
+    s.start("segment")
+    s.click({ x: 0, y: 0 })
+    s.click({ x: 2, y: 0 })
+    expect(s.applied).toHaveLength(1)
+    expect(s.step()).toEqual({ mode: "segment", center: null, sticky: true })
+
+    // Second segment created without re-activating the tool from toolbar
+    s.click({ x: 2, y: 0 })
+    s.click({ x: 2, y: 2 })
+    expect(s.applied).toHaveLength(2)
+    expect(s.step()).toEqual({ mode: "segment", center: null, sticky: true })
+
+    // When sticky is explicitly false, exits creation step
+    const oneshot = session()
+    oneshot.start("segment", { sticky: false })
+    oneshot.click({ x: 0, y: 0 })
+    oneshot.click({ x: 2, y: 0 })
+    expect(oneshot.step()).toBeNull()
+  })
+
+  it("creates points continuously when in point mode", () => {
+    const s = session()
+    s.start("point")
+    s.click({ x: 1, y: 2 })
+    s.click({ x: 3, y: 4 })
+    expect(s.applied).toHaveLength(2)
+    expect(s.applied[0]).toMatchObject({ op: "addPrimitive", primitive: { type: "point", x: 1, y: 2 } })
+    expect(s.applied[1]).toMatchObject({ op: "addPrimitive", primitive: { type: "point", x: 3, y: 4 } })
+    expect(s.step()).toEqual({ mode: "point", center: null, sticky: true })
   })
 })

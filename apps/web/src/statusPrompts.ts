@@ -1,6 +1,6 @@
 import { DEFAULT_MAX_BOOLEAN_PAIRS, DEFAULT_MAX_FACES_PER_PAIR, MAX_PAIRS } from "./intersectionPreviews3d"
 
-export type PromptCreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
+export type PromptCreationMode = "point" | "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
 /** Display control currently switched on in the 3D scene. They are temporary display state, never document state. */
 export type SceneControlMode = "normals" | "dihedral-demo" | "free-drag"
@@ -105,6 +105,7 @@ export function resolvePreviewInventoryPrompt(inventory: { lines: number; points
 }
 
 export function resolveStatusPrompt({ mode, selectedCount, selectedLabel, hasCenter, hasStart, pointCount, sceneControl = null, pointBinding = null, pathSelected = false, rotationAnchor = null, movingCircleSelected = false }: StatusPromptState): string {
+  if (mode === "point") return "点击画布空白处或曲线上添加点（按 Esc 退出）"
   if (mode === "line") return hasCenter ? "第2步：点击确定直线的第二个点（按住 Shift 锁定水平/垂直）" : "第1步：点击确定直线的第一个点"
   if (mode === "segment") return hasCenter ? "第2步：点击确定线段的终点" : "第1步：点击确定线段的起点"
   if (mode === "ray") return hasCenter ? "第2步：点击确定射线的经过点" : "第1步：点击确定射线的起点"

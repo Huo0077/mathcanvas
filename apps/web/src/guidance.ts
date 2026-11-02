@@ -6,7 +6,7 @@ import type { ConstraintType, Measurement3Metric, Workspace } from "@draw/dsl"
  * 这些文案是产品语气的一部分，所以放在纯函数里：没有 DOM 依赖、可以被测试逐条钉住长度，也不会因为
  * 组件重渲染而变。键位提示（Esc / Alt / Shift）必须写清楚，二面角这类功能的卡点几乎都在键位上。
  */
-export type PlanarCreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc"
+export type PlanarCreationMode = "point" | "line" | "segment" | "ray" | "polyline" | "circle" | "arc"
 
 export type GuidanceAction =
   | { kind: "point"; workspace: Workspace }
@@ -28,6 +28,7 @@ export type GuidanceAction =
   | { kind: "point3Tool"; tool: "line" | "plane" | "face" | "circle"; outcome: "created" | "blocked"; point3Count?: number }
 
 const creationGuidance: Record<PlanarCreationMode, string> = {
+  point: "点：在空白处或曲线上点击添加点；按 Esc 退出",
   line: "直线：先点起点，再点终点；按 Esc 取消",
   segment: "线段：先点起点，再点终点；按 Esc 取消",
   ray: "射线：先点起点，再点经过点；按 Esc 取消",

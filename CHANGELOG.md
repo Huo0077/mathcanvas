@@ -8,6 +8,14 @@
 
 
 
+## 2026-11-02 —— UI/UX 体验重构第二阶段：连续作图心流（Sticky Tools）与轻量解脱落地（开发版）
+
+- **连续绘图机制（Sticky Continuous Drafting）**：平面作图工具（点 `point`、直线 `line`、线段 `segment`、射线 `ray`、圆 `circle`、圆弧 `arc`、折线 `polyline`）及 3D 作图工具在完成一个图元创建后保持激活状态（`center: null`, `sticky: true`），工具按钮保持高亮，支持一气呵成连续绘制多个图元（如连续画线构成三角形或多边形），无需画完一个图元反复回到 Ribbon 重新点击。
+- **统一空白画布点放置**：统一平面画布空白处/曲线上直接点击添加点图元（`creationMode === "point"`），补齐与线/圆同构的直观落点交互，消除此前只能通过 Ribbon 强制在固定位置插入点的不便。
+- **轻量退出与解脱机制**：在画布任意位置按 `Esc` 键或点击鼠标右键（`contextmenu`）直接解脱取消当前工具模式或撤回正在拉拽的橡皮筋第一落点，退回自由选择/平移模式，保持与主流桌面设计软件操作习惯高度一致。
+- **橡皮筋端点与交点预览自适应互锁**：完善 `GraphicsView.tsx` 中 `handlePreviewClick` 与创建状态的互锁逻辑——当用户正在拉橡皮筋中途（已有第一落点）点击交点时，端点精准吸附至交点坐标；当处于新建起始（`center === null`）或未激活工具时点击交点预览，准确固化为持久化交点图元并平滑退出粘滞态。
+- **读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（`draftingCommands.test.ts` 10 项全过、`creationPreview.test.ts` 3 项全过、`guidance.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0（0 错误）；`npm run lint` 0 错误 / 16 警告。
+
 ## 2026-11-02 —— 全仓代码审查与四组回归修复（开发版）
 
 - **明确球体/棱柱解析、词法与规划/草稿对齐**：`directlyRequestsPrism` 对齐前置定语、省略动词、其他创建动词与 `\d+` 多位数边数，并排除带顶点名（`ABC-A₁B₁C₁`）或 `在…中` 的复杂多面体题面；`readPrismShape` 新增多处不同边数、`< 3` 非法边数以及 `斜` 与 `直/正` 同现的矛盾检测（归入 `prism.shape` issue）；`scanNumericToken` 消费并拒绝上标幂（`2²`）与字母/单位后缀（`5a`、`5cm`），同时保留原文精确切片 `sourceText`（修复 `半径 = 5` 的假 `unverified` 与 `start: 0` 偏移错误）；`localPlanner` 与 `DraftStore.stage` 统一调用 `normalizeGeometryPrompt` 与 `solidDimensionGate`。

@@ -60,13 +60,16 @@ export function creationPreviewShapes(step: CreationStep | null | undefined, poi
   if (!step) return []
   if (step.mode === "polyline") {
     const placed = step.points ?? []
-    if (placed.length === 0) return []
+    if (placed.length === 0) return pointer ? [{ kind: "anchor", point: pointer }] : []
     const shapes: CreationPreviewShape[] = placed.map((point) => ({ kind: "anchor", point }))
     shapes.push({ kind: "polyline", points: pointer ? [...placed, pointer] : [...placed] })
     return shapes
   }
+  if (step.mode === "point") {
+    return pointer ? [{ kind: "anchor", point: pointer }] : []
+  }
   const center = step.center
-  if (!center) return []
+  if (!center) return pointer ? [{ kind: "anchor", point: pointer }] : []
   const shapes: CreationPreviewShape[] = [{ kind: "anchor", point: center }]
   if (!pointer) return shapes
   const dx = pointer.x - center.x

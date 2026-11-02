@@ -10,6 +10,18 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— UI/UX 第二阶段实施：连续作图心流（Sticky Tools）与轻量解脱（Block 1）
+
+**目标**：落地连续作图心流，解决绘图工具一次性强制退出（One-Shot Reset）打断连贯作图流的反人类交互。
+
+**实施与证据**：
+1. **连续绘图机制（Sticky Continuous Drafting）**：平面作图工具（点 `point`、直线 `line`、线段 `segment`、射线 `ray`、圆 `circle`、圆弧 `arc`、折线 `polyline`）及 3D 作图工具在完成一个图元创建后保持激活状态（`center: null`, `sticky: true`），工具按钮保持高亮，支持一气呵成连续绘制多个图元（如连续画线构成三角形或多边形），无需画完一个图元反复回到 Ribbon 重新点击。
+2. **统一空白画布点放置**：统一平面画布空白处/曲线上直接点击添加点图元（`creationMode === "point"`），补齐与线/圆同构的直观落点交互，消除此前只能通过 Ribbon 强制在固定位置插入点的不便。
+3. **轻量退出与解脱机制**：在画布任意位置按 `Esc` 键或点击鼠标右键（`contextmenu`）直接解脱取消当前工具模式或撤回正在拉拽的橡皮筋第一落点，退回自由选择/平移模式，保持与主流桌面设计软件操作习惯高度一致。
+4. **橡皮筋端点与交点预览自适应互锁**：完善 `GraphicsView.tsx` 中 `handlePreviewClick` 与创建状态的互锁逻辑——当用户正在拉橡皮筋中途（已有第一落点）点击交点时，端点精准吸附至交点坐标；当处于新建起始（`center === null`）或未激活工具时点击交点预览，准确固化为持久化交点图元并平滑退出粘滞态。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（其中 `draftingCommands.test.ts` 10 项全过、`creationPreview.test.ts` 3 项全过、`guidance.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
 ## 2026-11-02 —— 全仓审查与四组 TDD 修复（明确实体、IR 往返、矩形单/双折、门禁卫生）
 
 **目标**：对全仓做系统性审查并按 TDD（Red → Green → Refactor）逐项修复查实的缺陷。
