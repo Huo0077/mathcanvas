@@ -63,7 +63,9 @@ export function pointHostOptions(primitives: PrimitiveSpec[]): PointHostOption[]
 export function pointHostValue(binding: Point3Binding | undefined): string {
   if (!binding) return ""
   if (binding.kind === "onHost") return `host:${binding.hostId}`
+  if (binding.kind === "onLine") return `host:${binding.lineId}`
   if (binding.kind === "onFace") return `face:${binding.faceId}`
+  if (binding.kind === "onPlane") return `face:${binding.planeId}`
   if (binding.kind === "onSurface") return `surface:${binding.solidId}`
   if (binding.kind === "inSolid") return `solid:${binding.solidId}`
   return ""
