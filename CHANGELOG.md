@@ -19,8 +19,9 @@
   - **自由点几何辅助按键**：为 2D 与 3D 自由点卡片增设 `原点归零`（`(0,0)` / `(0,0,0)`）与 `坐标取整` 实用辅助按钮；
   - **卡片与框体触感质感升级**：升级 `.property-subcard` 为带微阴影与清晰内边框的立体仪表分区底板，新增小标装饰条（`::before`），升级滑轨与 `.preset-pills` 的弹簧回弹微动效与触感反馈。
 - **测试覆盖与门禁验证**：
-  - 端到端测试：`e2e/geometry3d-host-drag.spec.ts` 新增空间线段动点直抓拖拽与滑轨/预设按钮调节用例，2 项全过；`three-orbit-tracks.spec.ts`、`three-intersection-previews.spec.ts`、`geometry3d-drag.spec.ts` 17 项全绿通过；
-  - 单元与规范门禁：`npm run typecheck` 0 错误（exit 0）；`npm run lint` 0 错误 / 15 警告；`npm run test:docs` 8 文件 / 22 项全过。
+  - 端到端测试：`e2e/geometry3d-host-drag.spec.ts` 新增空间线段动点直抓拖拽与滑轨/预设按钮调节用例，2 项全过；`three-orbit-tracks.spec.ts`、`three-intersection-previews.spec.ts`、`geometry3d-drag.spec.ts` 17 项全绿通过；修复 `e2e/agent-flow.spec.ts` 状态文本匹配；
+  - 离线评测门禁：在 `test-fixtures/reliability/dev-smoke.json` 与 `reliabilityEval.eval.test.ts` 中对齐 `rect-fold-false-goal` 的 `"answer"` 终态断言，离线评测 3/3 项全绿通过；
+  - CI 与桌面 Release：GitHub Actions 四项门禁（`checks`、`build`、`e2e`、`rust`）全量 100% 绿灯（Success）；重打包 Release v4.1.0 桌面端安装包与免安装独立程序。
 
 ## 2026-11-02 —— Agent 数学答复与矩形折叠核验修复（开发版）
 

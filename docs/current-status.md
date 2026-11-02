@@ -13,7 +13,11 @@
   - **自由点几何辅助按键**：为 2D 与 3D 自由点卡片增设 `原点归零`（`(0,0)` / `(0,0,0)`）与 `坐标取整` 实用辅助按钮；
   - **卡片与框体触感质感升级**：升级 `.property-subcard` 为带微阴影与清晰内边框的立体仪表分区底板，新增小标装饰条（`::before`），升级滑轨与 `.preset-pills` 的弹簧回弹微动效与触感反馈。
 
-**验证读数（2026-11-02 本机）**：Playwright 端到端测试（`geometry3d-host-drag.spec.ts` 2 项、`three-orbit-tracks.spec.ts` 3 项、`three-intersection-previews.spec.ts` 4 项、`geometry3d-drag.spec.ts` 10 项）共 19 项全过；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 15 警告**。
+**验证读数（2026-11-02 本机与 GitHub Actions）**：
+- GitHub Actions CI：四门禁（`checks`、`build`、`e2e`、`rust`）**全量 100% 绿灯（Success）**；
+- Playwright 端到端测试（`geometry3d-host-drag.spec.ts` 2 项、`three-orbit-tracks.spec.ts` 3 项、`three-intersection-previews.spec.ts` 4 项、`geometry3d-drag.spec.ts` 10 项）共 19 项全过；
+- `npm run eval:reliability -- --offline` 3 项全过；`npm run eval:explicit-solid -- --offline` 2 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 15 警告**。
 
 ## 2026-11-02 同步远端并重建桌面端
 
