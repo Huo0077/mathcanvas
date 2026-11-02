@@ -1288,6 +1288,25 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 .status-bar-dock-btn:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent); }
 .status-bar-dock-btn[data-copilot-toggle="true"][aria-expanded="true"] { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent); font-weight: 600; }
 
+@media (min-width: 1101px) {
+  .status-bar {
+    flex-wrap: nowrap;
+  }
+  .status-bar-prompt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .status-bar-item {
+    flex-shrink: 0;
+  }
+  .status-bar-dock-toggles {
+    flex-shrink: 0;
+  }
+}
+
 /* AI Copilot 同屏人机共创抽屉（规格 §7.1） */
 .copilot-drawer {
   display: flex;

@@ -108,7 +108,15 @@ jobs:
       - name: Install the Chromium build Playwright drives
         run: npx playwright install --with-deps chromium
       # `e2e/global-setup.mjs` 负责构建 + preview；这里只跑用例。
-      - run: npm run test:e2e
+      - name: Run e2e tests
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee e2e.log
+      - name: Surface Playwright failure as an annotation
+        if: failure()
+        run: |
+          detail=$(grep -m1 -E 'Error:' e2e.log | tr '\n' ' ' | cut -c1-500)
+          echo "::error title=Playwright e2e failed::${detail:-见日志与 artifact}"
       - name: Keep the trace and screenshot of a failed case
         if: failure()
         uses: actions/upload-artifact@v4

@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-02 —— CI Playwright 审查报错修复与视口状态栏防挤压回归（开发版）
+
+- **CAD 绘图视口框选交互恢复（DrawingViewport & selectionCommands）**：在粘滞连续作图心流（Sticky Tools）引入后，CAD 二维制图视口（`DrawingViewport.tsx`）在绘制完线段后仍处于待画状态，导致随后的相交框选（Crossing Select）因 `creation` 非空而被 `beginBoxSelect` 拒绝。修复为仅在正处于中间落点（`creation.center !== null`）时互斥，在未落第一点时允许平滑拖拽框选；同时在 `selectionCommands.ts` 的 `selectBox` 逻辑中显式重置创建态，并防止拖选抬起时误触画布落点，彻底修复 `e2e/engineering-workbench.spec.ts:119`。
+- **桌面宽屏状态栏单行防挤压布局（global.css）**：在 Block 5 引入工作台侧栏折叠药丸按钮后，当 3D 视口悬停于复杂剖切面时，超长操作提示（79 字符）在 1280px 桌面视口下导致状态栏弹性换行，导致 56px 固定高度内部产生 16px 滚动差值并违背视口高度防挤压不变量。在 `global.css` 中为大屏桌面端（`min-width: 1101px`）声明 `.status-bar { flex-wrap: nowrap }` 并为 `.status-bar-prompt` 设置文本省略截断与侧栏按钮不可压缩，确保 `element.scrollHeight === element.clientHeight`（`overflow <= 1`），彻底修复 `e2e/three-canvas-size.spec.ts:72`。
+- **CI e2e 门禁公开注解增强（ci.yml）**：为 `.github/workflows/ci.yml` 的 `e2e` 作业新增与 `rust` 门禁同构的失败注解提取步骤（`Surface Playwright failure as an annotation`），当用例失败时直接将第一条失败用例与断言提升为公开可见的 GitHub Check Run Annotation，避免排查时受限于私有日志访问权限。
+- **读数（2026-11-02 本机）**：Playwright `three-canvas-size.spec.ts` 4/4 通过、`engineering-workbench.spec.ts` 13/13 通过、`agent-*.spec.ts` 70/70 通过、`three-*.spec.ts` 32/32 通过；`npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` exit 0（0 错误）；`npm run lint` 0 错误 / 16 警告。
+
 ## 2026-11-02 —— UI/UX 体验重构第二阶段：画布右键上下文菜单与双击内联重命名（Block 5，开发版）
 
 - **画布图元原生风格上下文菜单（Context Menu）**：实现微拟物浮动菜单组件 `apps/web/src/components/ContextMenu.tsx`。在 2D/3D 画布图元上右键单击，在光标位置弹出带毛玻璃与微拟物柔和阴影的上下文操作菜单：

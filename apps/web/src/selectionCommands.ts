@@ -54,6 +54,7 @@ export function createSelectionCommands({ document, selectedIds, allSelectedLock
    */
   const planarBoxTypes = new Set(["point", "line", "segment", "ray", "polyline", "circle", "arc"])
   const selectBox = (bounds: { minX: number; minY: number; maxX: number; maxY: number }, mode: BoxSelectionMode = "window") => {
+    setCreationStep(null)
     const planar = selectPrimitivesInBox(document.primitives, bounds, mode)
     const rest = document.primitives.filter((primitive) => {
       if (planarBoxTypes.has(primitive.type)) return false

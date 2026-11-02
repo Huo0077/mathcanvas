@@ -10,6 +10,29 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— CI Playwright 审查报错排查与全量端到端测试绿灯修复
+
+**目标**：排查并彻底修复 GitHub Actions CI 中 `e2e` 作业报错失败问题，确保全量端到端自动化测试全部通过绿灯。
+
+**排查与根因**：
+通过本地逐批运行 Playwright 79 个测试文件及 252 个用例，成功复现并定位出两条回归用例：
+1. `e2e/engineering-workbench.spec.ts:119`（`box-selects draft geometry with the drag direction deciding the mode`）：
+   - **根因**：Block 1 引入连续作图心流（Sticky Tools）后，CAD 二维制图视口（`DrawingViewport.tsx`）在绘制完线段后仍处于粘滞待画状态（`creation.center === null`），而旧版 `beginBoxSelect` 严格判断 `if (creation) return`，将未落首点的待画状态也一并拦截，导致后续的相交框选（Crossing Select）无法启动。
+   - **修复**：更新 `DrawingViewport.tsx` 的 `beginBoxSelect` 判定为仅在正处于中间落点（`creation && creation.center !== null`）时互斥，在未落首点时允许平滑拖拽框选；同时在 `selectionCommands.ts` 的 `selectBox` 逻辑中显式调用 `setCreationStep(null)` 重置创建态，并防止拖选抬起时误触画布落点，彻底修复该用例。
+2. `e2e/three-canvas-size.spec.ts:72`（`keeps the canvas size when the status text changes`）：
+   - **根因**：Block 5 引入工作台侧栏折叠药丸按钮后，在 1280px 桌面视口下当 3D 悬停触发超长操作提示（79 字符复杂剖切文案）时，文案与新增的右侧按钮总宽度超过单行可用宽度，触发 `.status-bar` 的 `flex-wrap: wrap` 折入第二行；由于 56px 固定高度仅容纳单行文本，内部产生 16px 纵向滚动差值，导致 `bar.overflow <= 1`（视口高度防挤压不变量）断言失败。
+   - **修复**：在 `global.css` 中为大屏桌面端（`min-width: 1101px`）声明 `.status-bar { flex-wrap: nowrap }` 并为 `.status-bar-prompt` 设置 `text-overflow: ellipsis` 文本省略截断与侧栏按钮不可压缩（`flex-shrink: 0`），确保 `element.scrollHeight === element.clientHeight`（`overflow <= 1`），彻底修复该用例。
+3. **CI e2e 门禁可观测性加固**：在 `.github/workflows/ci.yml` 的 `e2e` 作业中新增失败注解提取步骤，用例失败时直接提取关键断言信息作为 GitHub Check Run Annotation 展示。
+
+**验证读数（2026-11-02 本机）**：
+- Playwright `three-canvas-size.spec.ts` **4/4 全部通过**；
+- Playwright `engineering-workbench.spec.ts` **13/13 全部通过**；
+- Playwright `agent-*.spec.ts` **70/70 全部通过**；
+- Playwright `three-*.spec.ts` **32/32 全部通过**；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— UI/UX 第二阶段实施：画布右键上下文菜单与双击内联重命名（Block 5）
 
 **目标**：彻底消除此前隐藏、锁定、删除、重命名与样式修改必须去右侧面板甚至找不到直观入口的繁琐交互，落地原生微拟物风格的画布右键上下文菜单（Context Menu）与双击/F2 原位内联重命名（Inline Renaming）。

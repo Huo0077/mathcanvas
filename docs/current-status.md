@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 CI Playwright 审查报错排查与全量端到端测试绿灯修复
+
+排查并彻底修复 GitHub Actions CI 中 `e2e` 作业报错失败问题（定位于 `three-canvas-size.spec.ts` 与 `engineering-workbench.spec.ts` 两处回归）：
+
+- **CAD 绘图视口框选恢复（DrawingViewport.tsx & selectionCommands.ts）**：修复在引入粘滞连续作图心流（Sticky Tools）后，CAD 二维制图视口在绘制完线段后待画状态导致相交框选（Crossing Select）被 `creation` 拦截的缺陷。更新为仅在正处于中间落点（`creation.center !== null`）时互斥，在未落第一点时允许平滑拖拽框选；同时在 `selectionCommands.ts` 的 `selectBox` 逻辑中显式重置创建态，并防止拖选抬起时误触画布落点，彻底修复 `e2e/engineering-workbench.spec.ts:119`；
+- **桌面宽屏状态栏单行防挤压布局（global.css）**：修复 Block 5 引入工作台侧栏折叠药丸按钮后，在 1280px 桌面视口下 3D 悬停超长操作提示（79 字符）触发弹性换行，导致 56px 固定高度内部产生 16px 滚动差值违背视口高度防挤压不变量的缺陷。在 `global.css` 中为大屏桌面端（`min-width: 1101px`）声明 `.status-bar { flex-wrap: nowrap }` 并为 `.status-bar-prompt` 设置文本省略截断与侧栏按钮不可压缩，确保 `element.scrollHeight === element.clientHeight`（`overflow <= 1`），彻底修复 `e2e/three-canvas-size.spec.ts:72`；
+- **CI e2e 门禁公开注解增强（ci.yml）**：为 `.github/workflows/ci.yml` 的 `e2e` 作业新增与 `rust` 门禁同构的失败注解提取步骤（`Surface Playwright failure as an annotation`），当用例失败时直接将第一条失败用例与断言提升为公开可见的 GitHub Check Run Annotation，避免排查时受限于私有日志访问权限。
+
+**验证读数（2026-11-02 本机）**：Playwright `three-canvas-size.spec.ts` **4/4 通过**、`engineering-workbench.spec.ts` **13/13 通过**、`agent-*.spec.ts` **70/70 通过**、`three-*.spec.ts` **32/32 通过**；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 UI/UX 第二阶段实施：画布右键上下文菜单与双击内联重命名（Block 5）
 
 全面落地画布右键原生上下文操作菜单与双击/F2 原位内联重命名（Context Menu & Inline Renaming）：

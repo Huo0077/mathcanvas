@@ -430,7 +430,7 @@ export function DrawingViewport({ view, sheetName, mode, document, selectedIds, 
    * 否则会把"点第一个点"或"拖夹点"误判成框选。
    */
   const beginBoxSelect = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode !== "draft" || !onBoxSelect || creation || drag || event.button !== 0) return
+    if (mode !== "draft" || !onBoxSelect || (creation && creation.center !== null) || drag || event.button !== 0) return
     const target = event.target as Element | null
     if (target?.closest("[data-primitive-id], [data-draft-handle]")) return
     const rect = event.currentTarget.getBoundingClientRect()
