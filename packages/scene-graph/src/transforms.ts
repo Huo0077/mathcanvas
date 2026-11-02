@@ -204,6 +204,7 @@ export function templateTopologyIds(document: GeometryDocument): Set<string> {
   const ids = new Set<string>()
   for (const primitive of document.primitives) {
     if (primitive.type !== "polyhedron3" || primitive.construction?.kind !== "template") continue
+    ids.add(primitive.id)
     for (const childId of [...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds]) ids.add(childId)
   }
   return ids
@@ -218,6 +219,15 @@ export function isFreeDraggable3(primitive: PrimitiveSpec, points: Map<string, P
   if (primitive.locked) return false
   if (primitive.type === "point3") return !primitive.binding || primitive.binding.kind === "free"
   if (generated.has(primitive.id)) return false
+  if (
+    primitive.type === "polyhedron3" &&
+    (primitive.construction?.kind === "template" ||
+      (primitive.construction?.kind === "fromFaces" &&
+        Boolean(primitive.construction.sourceId) &&
+        primitive.construction.sourceId !== primitive.id))
+  ) {
+    return false
+  }
   if (primitive.type === "cube" || primitive.type === "pyramid" || primitive.type === "cylinder" || primitive.type === "cone") return true
   // 球与模板实体同类：几何是**它自己的**（球心坐标 + 半径），不依赖任何点能不能动。
   // **但派生球不是**：球心与半径由宿主算出来（`derivedFrom`），拖它只会被下一次重算覆盖 ——
