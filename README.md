@@ -79,7 +79,7 @@ npm run dev
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3 与延迟**已有小样本读数**（2026-10-05 / 10-06，见 [当前状态](docs/current-status.md) §一），但**成本仍没有价目表**，这些读数**也还不足以形成放行依据**。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
 - **其他已知边界**：没有云端同步；球体能力已在 **v3.1.0** 整体交付（画布创建、解析截面、工程投影、Agent 动作都在），但**球不参与布尔运算**（明确拒绝并留诊断）；部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。用户侧走查与正式发布余项见 [当前状态](docs/current-status.md) §四。
 
-远端可见最新版本标签为 **`v4.0.1`**（[v4.0.1 发布说明](docs/release/v4.0.1.md)，2026-10-20 发布）；仓内声明的版号同为 **`4.0.1`**（`apps/desktop/src-tauri/tauri.conf.json` 与 `Cargo.toml`）。v4.0 是跨大版本（题面读入、解析式构造器、空间原子动作与核验判据四条主线，相对 v3.2.0 共 567 个提交，见 [v4.0 发布说明](docs/release/v4.0.md)）；**v4.0.1 是把 v4.0 之后十余轮"题面读取与核验判据"的补齐收成一个可下载的补丁版**（不改契约、纯增量）。历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
+远端可见最新版本标签为 **`v4.1.0`**（[v4.1.0 发布说明](docs/release/v4.1.0.md)，2026-11-02 发布）；仓内声明的版号同为 **`4.1.0`**（`apps/desktop/src-tauri/tauri.conf.json` 与 `Cargo.toml`）。v4.1.0 聚焦 UI/UX 深度重构与人机交互手感全面升级（连续作图心流 Sticky Tools、智能级联删除、动点在轨直绑、AI Copilot 同屏人机共创抽屉与实时 Ghost 草稿预览、右键上下文菜单与双击内联改名、工作台单行紧凑顶栏与双侧栏一键折叠）；历史版本见 `docs/release/`。过程记录见 [CHANGELOG](CHANGELOG.md) 与 [项目进度归档](docs/project-progress.md)，历史数字不能直接当作当前测试结果。
 
 ## 开发者进度与参与开发
 
