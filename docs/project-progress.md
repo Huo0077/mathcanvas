@@ -10,6 +10,24 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10）
+
+**目标**：替换原有的通用求和字符 `∑`，为 MathCanvas 设计一枚一眼就能看出“2D 解析几何与圆锥曲线 + 3D 空间立体与截面 + 动态顶点交互与 AI 智能推理”特色的专属品牌与网页/桌面图标。
+
+**实施与证据**：
+1. **视觉与几何结构设计（BrandMarkIcon.tsx / favicon.svg / icon.svg）**：
+   - 以冷调深板岩蓝圆角方片为底座，中心绘制三维等轴测六面体（含顶面/左侧面半透明明暗面片与内部虚线剖切三角形）；
+   - 外围绘制 2D 内接解析基准虚线圆与 `-24°` 倾角的椭圆圆锥曲线轨迹环，与三维立体在空间交汇；
+   - 在关键交汇处标出高对比度几何控制顶点，并在正上方顶点处融合一枚 AI 智慧四芒星，精准传达“代数解析 + 立体几何 + AI 共创”的三位一体特色。
+2. **全端挂载与弹簧动效（WorkspaceHeader.tsx / ModuleRail.tsx / index.html / global.css）**：
+   - 接入顶栏 `.brand-mark`、侧栏 `.app-rail-mark` 与 `index.html` 的 `/favicon.svg`，并在 `WorkspaceHeader.test.tsx` 中新增 `[data-brand-icon="mathcanvas-prism"]` 单元测试守卫。
+
+**验证读数（2026-11-02 本机）**：
+- `WorkspaceHeader.test.tsx`、`ModuleRail.test.tsx`、`AppChrome.test.tsx` 全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变）
 
 **目标**：在不修改任何既有色彩令牌（冷白画布与深板岩蓝体系）的前提下，消除界面切换与按钮点击的生硬感，赋予全工作台物理弹簧级的灵动微交互、柔和舒适的卡片过渡以及明确的 3D 抓取光标反馈。

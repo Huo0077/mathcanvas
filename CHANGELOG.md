@@ -8,6 +8,18 @@
 
 
 
+## 2026-11-02 —— MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10，开发版）
+
+- **专属多层几何品牌徽标组件（BrandMarkIcon.tsx）**：设计并实现展现 MathCanvas 核心特色的矢量徽标组件 `apps/web/src/components/BrandMarkIcon.tsx`（`data-brand-icon="mathcanvas-prism"`），替换原有的通用文本符号 `∑`。图标在 32×32 视口内精准融合三大产品基因：
+  1. **三维等轴测六面体与虚线剖切对角面**：象征立体几何显式拓扑、截面求交与多面体展开内核；
+  2. **2D 内接解析基准圆与 -24° 倾角圆锥曲线椭圆轨道**：象征平面解析几何、圆锥曲线与在轨动点参数约束；
+  3. **高亮几何控制顶点与顶部顶点 AI 四芒星**：象征直觉化顶点拖拽形变与 AI Copilot 智能数学推理共创。
+- **独立矢量应用图标与桌面端母版资产（favicon.svg / icon.svg / index.html）**：新增高精度独立矢量图标 `apps/web/public/favicon.svg` 与桌面端图标母版 `apps/desktop/src-tauri/icons/icon.svg`，并在 `apps/web/index.html` 中挂载 `<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`。
+- **顶栏与模块侧栏徽标微动效集成（WorkspaceHeader.tsx / ModuleRail.tsx / global.css）**：将 `<BrandMarkIcon />` 接入顶部品牌栏（`.brand-mark`）与最左侧全局模块栏（`.app-rail-mark`），配合 `global.css` 赋予内沿高光、星芒呼吸微脉动（`mc-brand-spark-pulse`）及悬停时的物理弹簧微旋托举反馈（含 `prefers-reduced-motion` 无障碍保护）。
+- **测试覆盖与门禁验证**：
+  - 单元测试：`WorkspaceHeader.test.tsx`、`ModuleRail.test.tsx` 与 `AppChrome.test.tsx` 全部通过（新增专属几何徽标 `[data-brand-icon="mathcanvas-prism"]` 渲染断言）；
+  - `npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 —— 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变，开发版）
 
 - **物理弹簧缓动令牌体系（tokens.css，零配色改动）**：在不改动任何色彩变量的前提下，于 `tokens.css` 中新增物理阻尼弹簧缓动曲线 `--ease-spring`（基于现代 CSS `linear()` 多点采样）、三次贝塞尔回退 `--ease-spring-fallback`、柔和出画曲线 `--ease-soft-out` 及三档标准时长令牌（`--duration-fast` / `--duration-normal` / `--duration-spring`）。

@@ -1,6 +1,7 @@
 import type { Workspace } from "@draw/dsl"
 
 import { APP_MODULES, WORKSPACE_DEFINITIONS, isWorkspaceId, type AppModuleId } from "../shellModules"
+import { BrandMarkIcon } from "./BrandMarkIcon"
 
 /**
  * 应用最左侧的**顶级模块**导航（模块 A 传统工作区 / 模块 B Agent 工作区 / 模块 C 模型服务）。
@@ -33,7 +34,7 @@ function RailIcon({ name }: { name: "drafting" | "agent" | "settings" }) {
 
 export function ModuleRail({ activeModule, onModuleChange, activeWorkspace, onWorkspaceChange }: ModuleRailProps) {
   return <nav className="app-rail" aria-label="全局模块">
-    <span className="app-rail-mark" aria-hidden="true">∑</span>
+    <span className="app-rail-mark" aria-hidden="true"><BrandMarkIcon /></span>
     <ul className="app-rail-modules">
       {APP_MODULES.map((module) => {
         const current = module.id === activeModule

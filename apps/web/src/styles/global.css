@@ -1852,3 +1852,66 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
     transform: none !important;
   }
 }
+
+/* ==========================================================================
+   Block 10: Characteristic MathCanvas Geometric Emblem (.brand-mark-svg)
+   ========================================================================== */
+.brand-mark,
+.app-rail-mark {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 22%),
+    0 6px 16px -6px rgb(15 23 42 / 45%);
+  transition:
+    transform var(--duration-spring) var(--ease-spring-fallback),
+    box-shadow var(--duration-normal) var(--ease-soft-out);
+  transition-timing-function: var(--ease-spring), var(--ease-soft-out);
+}
+.brand-mark-svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: #f8fafc;
+  transition: transform var(--duration-spring) var(--ease-spring-fallback);
+  transition-timing-function: var(--ease-spring);
+}
+.app-rail-mark .brand-mark-svg {
+  width: 24px;
+  height: 24px;
+}
+.brand-mark-spark {
+  transform-origin: 16px 6.2px;
+  animation: mc-brand-spark-pulse 3.6s ease-in-out infinite alternate;
+}
+.brand:hover .brand-mark,
+.app-rail-mark:hover {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 32%),
+    0 10px 22px -6px rgb(15 23 42 / 55%);
+}
+.brand:hover .brand-mark-svg,
+.app-rail-mark:hover .brand-mark-svg {
+  transform: rotate(-4deg) scale(1.06);
+}
+@keyframes mc-brand-spark-pulse {
+  0% {
+    opacity: 0.86;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark,
+  .app-rail-mark,
+  .brand-mark-svg,
+  .brand-mark-spark {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+}

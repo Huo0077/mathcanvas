@@ -50,6 +50,9 @@ describe("workspace top bar", () => {
     expect(particles.querySelectorAll("i").length).toBeGreaterThan(0)
 
     // 光标「里」的文字就是品牌名：文字是可读文本，光标是纯装饰。
+    const mark = banner.querySelector(".brand-mark [data-brand-icon='mathcanvas-prism']")
+    expect(mark).not.toBeNull()
+
     const type = banner.querySelector(".brand-type")!
     expect(type.getAttribute("aria-label")).toBe(BRAND_TEXT)
     expect(type.querySelector(".brand-text")?.textContent).toBe("MathCanvas")

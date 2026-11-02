@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10）
+
+完成展现 MathCanvas 学科特色与产品辨识度的专属几何图标设计及全端集成：
+
+- **多层几何品牌徽标（BrandMarkIcon.tsx）**：将顶栏（`WorkspaceHeader.tsx`）与全局模块侧栏（`ModuleRail.tsx`）的品牌徽标由纯文本符号 `∑` 升级为定制矢量组件 `BrandMarkIcon`（`data-brand-icon="mathcanvas-prism"`），集“三维等轴测多面体 + 虚线剖切面 + 2D 解析圆与倾角椭圆轨道 + 几何控制顶点 + 顶部 AI 智慧四芒星”于一体；
+- **全端矢量图标资产（favicon.svg / icon.svg）**：新增 `apps/web/public/favicon.svg`（于 `apps/web/index.html` 挂载）与桌面端 `apps/desktop/src-tauri/icons/icon.svg`，保持深板岩蓝（`#3d5a80 → #2c3e50 → #0f172a`）与冰晶蓝（`#cfe0f5`）统一冷色调视觉语言；
+- **徽标灵动交互与无障碍降级（global.css）**：为 `.brand-mark` 与 `.app-rail-mark` 增加内沿微光、顶部星芒柔和呼吸动画（`mc-brand-spark-pulse`）及悬停时的弹簧微倾浮起效果，并在 `prefers-reduced-motion: reduce` 下自动静止。
+
+**验证读数（2026-11-02 本机）**：`WorkspaceHeader.test.tsx`、`ModuleRail.test.tsx`、`AppChrome.test.tsx` 全部通过；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
+
 ## 2026-11-02 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变）
 
 严格遵循“让 UI 有动感一点、柔和舒适一点，注意不是改颜色”的设计要求，在不触碰任何现有色彩令牌的前提下完成动效与交互触感升级：

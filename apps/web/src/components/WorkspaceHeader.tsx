@@ -1,6 +1,7 @@
 import type { Workspace } from "@draw/dsl"
 
 import { BRAND_TEXT, brandParticles } from "../brandParticles"
+import { BrandMarkIcon } from "./BrandMarkIcon"
 
 /**
  * 顶部导航栏。
@@ -48,7 +49,7 @@ export function WorkspaceHeader(_props: WorkspaceHeaderProps) {
           />
         })}
       </span>
-      <span className="brand-mark" aria-hidden="true">∑</span>
+      <span className="brand-mark" aria-hidden="true"><BrandMarkIcon /></span>
       {/* 打字 + 方块光标：宽度按字符数推进，光标跟在可见字符之后。 */}
       <span className="brand-type" aria-label={BRAND_TEXT}>
         <span className="brand-text" aria-hidden="true">{BRAND_TEXT}</span>
