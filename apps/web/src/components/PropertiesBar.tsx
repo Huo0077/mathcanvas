@@ -254,8 +254,8 @@ export function PropertiesBar(props: PropertiesBarProps) {
       <h3>空间点坐标</h3>
       <Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || point3Binding?.kind !== "free"} onChange={updatePoint3} />
       {(!point3Binding || point3Binding.kind === "free") && <div className="property-actions">
-        <button type="button" aria-label="原点归零" disabled={!editable} onClick={() => updatePoint3({ x: 0, y: 0, z: 0 })}>原点 (0,0,0)</button>
-        <button type="button" aria-label="坐标取整" disabled={!editable} onClick={() => updatePoint3({ x: Math.round(selectedPoint3.position.x), y: Math.round(selectedPoint3.position.y), z: Math.round(selectedPoint3.position.z) })}>坐标取整</button>
+        <button type="button" aria-label="原点归零" disabled={!editable} onClick={() => onUpdatePrimitive({ position3: { x: 0, y: 0, z: 0 } })}>原点 (0,0,0)</button>
+        <button type="button" aria-label="坐标取整" disabled={!editable} onClick={() => onUpdatePrimitive({ position3: { x: Math.round(selectedPoint3.position.x), y: Math.round(selectedPoint3.position.y), z: Math.round(selectedPoint3.position.z) } })}>坐标取整</button>
       </div>}
       <Field label="宿主绑定">
         <select aria-label="点宿主绑定" disabled={!editable} value={pointHostValue(point3Binding)} onChange={(event) => onBindPointHost?.(event.target.value === "" ? null : event.target.value)}>
