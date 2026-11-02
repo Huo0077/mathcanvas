@@ -235,7 +235,7 @@ export type EnvelopeAssumptions = string[]
 export type PromptNormalisations = { original: string; normalized: string }[]
 
 export type PlanEnvelope =
-  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; normalisations?: PromptNormalisations; actions: DraftAction[] }
+  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; normalisations?: PromptNormalisations; answer?: string; actions: DraftAction[] }
   | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; questions: string[] }
   | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; toolResultRefs: string[] }
 

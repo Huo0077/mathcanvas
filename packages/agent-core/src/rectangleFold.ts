@@ -66,7 +66,7 @@ export interface RectangleSpec {
 
 export type RectangleFoldRead =
   | { status: "none" }
-  | { status: "unsupported"; reason: string; sourceText?: string }
+  | { status: "unsupported"; reason: string; sourceText?: string; code?: "inconsistent_conditions" }
   | { status: "ok"; spec: RectangleSpec }
 
 export interface RectangleFoldGeometry {
@@ -186,7 +186,13 @@ export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
     if (given.kind !== "fixedLength" || given.value === undefined) continue
     const pair = given.targets
     if (pair.length !== 2) continue
-    lengths.set(segmentKey(canonicalPointName(pair[0]!), canonicalPointName(pair[1]!)), { value: Number(given.value), sourceText: given.sourceText })
+    const key = segmentKey(canonicalPointName(pair[0]!), canonicalPointName(pair[1]!))
+    if (!ring.some((name, index) => segmentKey(name, ring[(index + 1) % 4]!) === key)) continue
+    const previous = lengths.get(key)
+    if (previous !== undefined && !close(previous.value, Number(given.value))) {
+      return { status: "unsupported", code: "inconsistent_conditions", reason: `题设条件矛盾：${previous.sourceText} 与 ${given.sourceText} 给同一线段不同长度。`, sourceText: given.sourceText }
+    }
+    lengths.set(key, { value: Number(given.value), sourceText: given.sourceText })
   }
   const edgeOf = (first: string, second: string): { value: number; segment: string } | null => {
     // 矩形的对边相等：`AB` 与 `CD`、`BC` 与 `DA` 各是同一长度。
@@ -249,6 +255,25 @@ export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
       status: "unsupported",
       reason: `矩形要按边长确定，但缺少边 ${missing} 的长度（它与其对边都没有给）。只给一条边或只给对角线都不够。`,
       sourceText: rectangle[0]
+    }
+  }
+
+  // Every stated side and adjacent-side ratio must agree, including opposite sides.
+  for (const [key, given] of lengths) {
+    const side = sideOf(key.match(new RegExp(P, "g")) ?? [])
+    const expected = side === 0 ? a.value : side === 1 ? b.value : undefined
+    if (expected !== undefined && !close(expected, given.value)) {
+      return { status: "unsupported", code: "inconsistent_conditions", reason: `题设条件矛盾：${given.sourceText} 与矩形对边相等不一致。`, sourceText: given.sourceText }
+    }
+  }
+  for (const given of givens) {
+    if (given.kind !== "segmentRatio" || given.value === undefined) continue
+    const first = sideOf(given.targets.slice(0, 2))
+    const second = sideOf(given.targets.slice(2, 4))
+    if (first === null || second === null) continue
+    const values = [a.value, b.value]
+    if (!close(values[first]! / values[second]!, Number(given.value))) {
+      return { status: "unsupported", code: "inconsistent_conditions", reason: `题设条件矛盾：${given.sourceText} 与矩形边长不一致。`, sourceText: given.sourceText }
     }
   }
 
@@ -485,17 +510,25 @@ export function postPointsOf(geometry: RectangleFoldGeometry): PointTable {
 }
 
 /** `(A−B)·(D−C)`：用来判断"某两条线垂直"是否成立，并给出残差。 */
-export function evaluatePerpendicular(points: PointTable, first: [string, string], second: [string, string]): { holds: boolean; residual: number; detail: string } {
+export function evaluatePerpendicular(points: PointTable, first: [string, string], second: [string, string]): { status: "holds" | "disproved" | "unverified"; holds: boolean | undefined; residual: number; detail: string } {
   const [a1, b1] = first
   const [a2, b2] = second
   if (points[a1] === undefined || points[b1] === undefined || points[a2] === undefined || points[b2] === undefined) {
-    return { holds: false, residual: Number.NaN, detail: `缺少点名：${[a1, b1, a2, b2].filter((name) => points[name] === undefined).join("、")}。` }
+    return { status: "unverified", holds: undefined, residual: Number.NaN, detail: `缺少点名：${[a1, b1, a2, b2].filter((name) => points[name] === undefined).join("、")}，尚未核验。` }
   }
-  const residual = dot(sub(points[a1]!, points[b1]!), sub(points[b2]!, points[a2]!))
+  const u = sub(points[a1]!, points[b1]!)
+  const v = sub(points[b2]!, points[a2]!)
+  const scale = norm(u) * norm(v)
+  const residual = dot(u, v)
+  if (!(scale > 0) || !Number.isFinite(scale) || !Number.isFinite(residual)) {
+    return { status: "unverified", holds: undefined, residual, detail: "线段退化或坐标无效，尚未核验垂直关系。" }
+  }
+  const holds = Math.abs(residual / scale) <= EPS
   return {
-    holds: close(residual, 0),
+    status: holds ? "holds" : "disproved",
+    holds,
     residual,
-    detail: `(${a1}−${b1})·(${b2}−${a2})=${residual}${close(residual, 0) ? "（垂直）" : "（不垂直）"}。`
+    detail: `(${a1}−${b1})·(${b2}−${a2})≈${Number(residual.toPrecision(10))}${holds ? "（垂直）" : "（不垂直）"}。`
   }
 }
 
@@ -506,5 +539,5 @@ export function evaluateLength(points: PointTable, segment: [string, string]): {
     return { value: Number.NaN, detail: `缺少点名：${[first, second].filter((name) => points[name] === undefined).join("、")}。` }
   }
   const value = norm(sub(points[first]!, points[second]!))
-  return { value, detail: `${first}${second}=${value}。` }
+  return { value, detail: `${first}${second}≈${Number(value.toPrecision(10))}。` }
 }

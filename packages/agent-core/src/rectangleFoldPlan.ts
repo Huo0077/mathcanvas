@@ -33,8 +33,8 @@ import {
  * ## 什么时候**不**出计划
  *
  * - 折角未知（既没给角、也没给"两平面垂直"）⇒ `clarification`，问折角；
- * - **目标被确定性否定**（用户案例 `BD⊥AC` 的残差是 12）⇒ `clarification`，
- *   把"该问不成立"和可给的距离一起说出来，**不产出可提交草稿**。
+ * - **目标被确定性否定**（用户案例 `BD⊥AC` 的残差是 12）⇒ `answer`，
+ *   按子问交付结论、理由和距离；未核验目标单独披露，**不产出证明草稿**。
  *
  * ## 这一层**不**做什么
  *
@@ -47,7 +47,8 @@ export interface PerpendicularGoalFinding {
   kind: "perpendicular"
   sourceText: string
   segments: [[string, string], [string, string]]
-  holds: boolean
+  status: "holds" | "disproved" | "unverified"
+  holds: boolean | undefined
   residual: number
   detail: string
 }
@@ -64,15 +65,16 @@ export type RectangleFoldGoalFinding = PerpendicularGoalFinding | LengthGoalFind
 
 export type RectangleFoldSolution =
   | { status: "none" }
-  | { status: "unsupported"; reason: string; sourceText?: string }
+  | { status: "unsupported"; reason: string; sourceText?: string; code?: "inconsistent_conditions" }
   | {
       status: "clarification"
       questions: string[]
       spec?: RectangleSpec
       geometry?: RectangleFoldGeometry
       findings: RectangleFoldGoalFinding[]
-      reason: "needs_fold_angle" | "goal_does_not_hold"
+      reason: "needs_fold_angle"
     }
+  | { status: "answer"; answer: string; spec: RectangleSpec; geometry: RectangleFoldGeometry; findings: RectangleFoldGoalFinding[] }
   | {
       status: "plan"
       plan: Extract<PlanEnvelope, { kind: "plan" }>
@@ -82,7 +84,7 @@ export type RectangleFoldSolution =
     }
 
 const P = POINT_NAME_SOURCE
-const PERPENDICULAR_GOAL = new RegExp(`(${P})(${P})\\s*[⊥]\\s*(${P})(${P})`, "g")
+const PERPENDICULAR_GOAL = new RegExp(`(${P})(${P})\\s*(?:⊥|垂直于|垂直)\\s*(${P})(${P})`, "g")
 const LENGTH_GOAL = new RegExp(`(${P})(${P})\\s*的?\\s*长(?:度)?`, "g")
 
 /**
@@ -91,9 +93,14 @@ const LENGTH_GOAL = new RegExp(`(${P})(${P})\\s*的?\\s*长(?:度)?`, "g")
  * 注意 `平面 ABC ⊥ 平面 ACD` **不会**被认成目标：它说的是三点的平面，
  * 而这里要求 `⊥` 两边各是一条**两点的线段**；平面名会让这个匹配直接失败（已由用例钉住）。
  */
-export function readRectangleFoldGoals(prompt: string): { kind: "perpendicular" | "length"; sourceText: string; segments: [[string, string], [string, string]] | [[string, string]]; start: number }[] {
-  const goals: { kind: "perpendicular" | "length"; sourceText: string; segments: [[string, string], [string, string]] | [[string, string]]; start: number }[] = []
+export function readRectangleFoldGoals(prompt: string): { kind: "perpendicular" | "length"; sourceText: string; segments: [[string, string], [string, string]] | [[string, string]]; start: number; state: "pre" | "post" }[] {
+  const goals: ReturnType<typeof readRectangleFoldGoals> = []
   const seen = new Set<string>()
+  const stateAt = (index: number): "pre" | "post" => {
+    const prefix = prompt.slice(0, index)
+    const clause = prefix.slice(Math.max(prefix.lastIndexOf("。"), prefix.lastIndexOf("；"), prefix.lastIndexOf(";"), prefix.lastIndexOf("\n")) + 1)
+    return /折前|折叠前/.test(clause) && !/折后|折叠后/.test(clause) ? "pre" : "post"
+  }
   /**
    * **只把"问句区"里的垂直/长度当目标**：题设区里的 `BD⊥AC` 是**条件**，不是要证的结论。
    * 没有 `求证 / 证明 / 求` 就说明这道题没有提目标 —— 那时既不该答，也不该因此拒绝出图。
@@ -109,24 +116,25 @@ export function readRectangleFoldGoals(prompt: string): { kind: "perpendicular" 
     const p2 = canonicalPointName(match[2]!)
     const p3 = canonicalPointName(match[3]!)
     const p4 = canonicalPointName(match[4]!)
-    const key = `${p1}${p2}|${p3}${p4}`
+    const key = `${stateAt(match.index)}:${p1}${p2}|${p3}${p4}`
     if (seen.has(key)) continue
     seen.add(key)
     goals.push({
       kind: "perpendicular",
       sourceText: match[0],
       segments: [[p1, p2], [p3, p4]],
-      start: match.index
+      start: match.index,
+      state: stateAt(match.index)
     })
   }
   for (const match of prompt.matchAll(LENGTH_GOAL)) {
     if (match.index < goalStart) continue
     const p1 = canonicalPointName(match[1]!)
     const p2 = canonicalPointName(match[2]!)
-    const key = `${p1}${p2}`
+    const key = `${stateAt(match.index)}:${p1}${p2}`
     if (seen.has(key)) continue
     seen.add(key)
-    goals.push({ kind: "length", sourceText: match[0], segments: [[p1, p2]], start: match.index })
+    goals.push({ kind: "length", sourceText: match[0], segments: [[p1, p2]], start: match.index, state: stateAt(match.index) })
   }
   return goals.sort((left, right) => left.start - right.start)
 }
@@ -151,28 +159,81 @@ export function evaluateRectangleFoldGoals(
 ): RectangleFoldGoalFinding[] {
   const findings: RectangleFoldGoalFinding[] = []
   for (const goal of readRectangleFoldGoals(prompt)) {
+    const points = goal.state === "pre" ? geometry.pre : geometry.post
+    const resolve = (name: string): string => goal.state === "pre" ? name : postNameOf(spec, geometry, name, renames)
     if (goal.kind === "perpendicular") {
       const [first, second] = goal.segments as [[string, string], [string, string]]
       const result = evaluatePerpendicular(
-        geometry.post,
-        [postNameOf(spec, geometry, first[0], renames), postNameOf(spec, geometry, first[1], renames)],
-        [postNameOf(spec, geometry, second[0], renames), postNameOf(spec, geometry, second[1], renames)]
+        points,
+        [resolve(first[0]), resolve(first[1])],
+        [resolve(second[0]), resolve(second[1])]
       )
       findings.push({
         kind: "perpendicular",
         sourceText: goal.sourceText,
         segments: [first, second],
         holds: result.holds,
+        status: result.status,
         residual: result.residual,
         detail: result.detail
       })
       continue
     }
     const segment = (goal.segments as [[string, string]])[0]
-    const result = evaluateLength(geometry.post, [postNameOf(spec, geometry, segment[0], renames), postNameOf(spec, geometry, segment[1], renames)])
-    findings.push({ kind: "length", sourceText: goal.sourceText, segment, value: result.value, detail: result.detail })
+    const result = evaluateLength(points, [resolve(segment[0]), resolve(segment[1])])
+    const exact = goal.state === "post" && Object.keys(renames).length > 0 ? undefined : exactDiagonalLength(spec, geometry, segment, goal.state)
+    findings.push({ kind: "length", sourceText: goal.sourceText, segment, value: result.value, detail: `${goal.state === "pre" ? "折前" : "折后"} ${exact === undefined ? result.detail : `${segment.join("")}=${exact}≈${Number(result.value.toPrecision(10))}。`}` })
   }
   return findings
+}
+
+/** Exact radicals from integer side data; never infer symbolic values from rounded coordinates. */
+function exactDiagonalLength(spec: RectangleSpec, geometry: RectangleFoldGeometry, segment: [string, string], state: "pre" | "post"): string | undefined {
+  const { a, b } = spec.sides
+  if (![a, b].every((value) => Number.isInteger(value) && value > 0 && value <= 100)) return undefined
+  const free = spec.ring.filter((name) => !spec.hinge.includes(name))
+  if ([...segment].sort().join("|") !== free.sort().join("|")) return undefined
+  // Only the single-fold table has exactly the original four points under these names.
+  if (state === "post" && (Math.abs(geometry.angleDegrees - 90) > 1e-9 || !geometry.post[spec.fixed.find((name) => !spec.hinge.includes(name))!])) return undefined
+  let numerator = state === "pre" ? a * a + b * b : a ** 4 + b ** 4
+  let denominator = state === "pre" ? 1 : a * a + b * b
+  const gcd = (x: number, y: number): number => y === 0 ? x : gcd(y, x % y)
+  const divisor = gcd(numerator, denominator)
+  numerator /= divisor
+  denominator /= divisor
+  let radicand = numerator * denominator
+  let coefficient = 1
+  for (let factor = 2; factor * factor <= radicand; factor += 1) {
+    while (radicand % (factor * factor) === 0) { coefficient *= factor; radicand /= factor * factor }
+  }
+  const common = gcd(coefficient, denominator)
+  coefficient /= common
+  denominator /= common
+  const root = radicand === 1 ? `${coefficient}` : `${coefficient === 1 ? "" : coefficient}√${radicand}`
+  return denominator === 1 ? root : `${root}/${denominator}`
+}
+
+/** A conclusion is an answer, including a negative or explicitly unverified conclusion. */
+function answerForGoals(findings: RectangleFoldGoalFinding[], spec: RectangleSpec, singleFold = true): string {
+  const lines = findings.map((finding, index) => {
+    if (finding.kind === "length") return `（${index + 1}）${Number.isFinite(finding.value) ? finding.detail : `「${finding.sourceText}」尚未核验：${finding.detail}`}`
+    const conclusion = finding.status === "unverified" ? "尚未核验" : finding.status === "disproved" ? "不成立" : "在所构造的折叠状态中成立（坐标核验）"
+    return `（${index + 1}）「${finding.sourceText}」${conclusion}：${finding.detail}`
+  })
+  const free = spec.ring.filter((name) => !spec.hinge.includes(name)).sort().join("|")
+  const hinge = [...spec.hinge].sort().join("|")
+  if (singleFold && spec.sides.a !== spec.sides.b && findings.some((finding) => finding.kind === "perpendicular" && finding.status === "disproved" && finding.segments.map((pair) => [...pair].sort().join("|")).sort().join(";") === [free, hinge].sort().join(";"))) {
+    lines.push(`原因：沿 ${spec.hinge.join("")} 折叠不改变顶点在折痕上的投影。另两个顶点的投影间距为 |${spec.sides.a}²−${spec.sides.b}²|/√(${spec.sides.a}²+${spec.sides.b}²)>0，因此其连线不垂直于折痕。`)
+  }
+  const acrossFold = findings.find((finding) => finding.kind === "length" && finding.detail.startsWith("折后 ") && [...finding.segment].sort().join("|") === free)
+  if (singleFold && acrossFold?.kind === "length" && spec.angle.kind === "given" && spec.angle.degrees === 90) {
+    lines.push(`长度推导：设 a=${spec.sides.a}，b=${spec.sides.b}。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 ${acrossFold.segment.join("")}²=t²+2h²=(a⁴+b⁴)/(a²+b²)。`)
+  }
+  return lines.join("\n")
+}
+
+function needsReadOnlyAnswer(findings: RectangleFoldGoalFinding[]): boolean {
+  return findings.some((finding) => finding.kind === "perpendicular" ? finding.status !== "holds" : !Number.isFinite(finding.value))
 }
 
 function foldPlanOf(spec: RectangleSpec, geometry: RectangleFoldGeometry, disclosure?: string): Extract<PlanEnvelope, { kind: "plan" }> {
@@ -220,7 +281,7 @@ function foldPlanOf(spec: RectangleSpec, geometry: RectangleFoldGeometry, disclo
 }
 
 /**
- * 题面 → 计划 / 澄清。这是 A3 的**模块级入口**（还没有接进 planner）。
+ * 题面 → 计划 / 澄清。这是 A3 的**模块级入口**（本地与模型规划器共用）。
  *
  * 判定顺序：
  * 1. 不是矩形对角线折叠题 ⇒ `none`；
@@ -379,7 +440,7 @@ export function solveRectangleFoldAngle(prompt: string, spec: RectangleSpec): Fo
  *
  * 与单折的差别**只有状态**：第二笔折的是**第一笔折后的那张面**，所以它的点名可以是折后名（`B′`）。
  * 其余口径与单折一致：两笔都要明确的折角、逐步自检（折痕不动 / 刚体 / 角度）、
- * 目标在**最终**点表上回代（带改名表）。
+ * 目标按折前 / 最终状态回代（带改名表）。
  *
  * ## 为什么不去"只画一笔"
  *
@@ -389,7 +450,7 @@ export function solveRectangleFoldAngle(prompt: string, spec: RectangleSpec): Fo
 export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | -1 } = {}): RectangleFoldSolution {
   const read = readRectangleFoldCore(prompt)
   if (read.status === "none") return { status: "none" }
-  if (read.status === "unsupported") return { status: "unsupported", reason: read.reason, ...(read.sourceText === undefined ? {} : { sourceText: read.sourceText }) }
+  if (read.status === "unsupported") return read
   const spec = read.spec
 
   const folds = readNamedFolds(prompt)
@@ -466,16 +527,9 @@ export function solveRectangleFoldChain(prompt: string, options: { branch?: 1 | 
   const geometry: RectangleFoldGeometry = { ...built.geometry, post: state2, apexPostName: apexAs1 }
   const renames = { [spec.apex]: apexAs1, [apex2]: apexAs2 } as Record<string, string>
   const findings = evaluateRectangleFoldGoals(prompt, spec, geometry, renames)
-  const disproved = findings.filter((finding): finding is PerpendicularGoalFinding => finding.kind === "perpendicular" && !finding.holds)
-  if (disproved.length > 0) {
-    const explanation = [
-      `按两笔折起的回代，「${disproved.map((finding) => finding.sourceText).join("」「")}」**不成立**：${disproved.map((finding) => finding.detail).join(" ")}`,
-      `这条结论是对题设（矩形边长 + 两笔折角）的直接回代，不是"没搜到"；因此本轮不会生成可提交的草稿。`
-    ].join("\n")
-    return { status: "clarification", reason: "goal_does_not_hold", questions: [explanation], spec, geometry, findings }
-  }
-
-  return { status: "plan", plan: chainPlanOf(spec, built.geometry.pre, state1, normalizedSecond, apexAs1, apexAs2), spec, geometry, findings }
+  const answer = answerForGoals(findings, spec, false)
+  if (needsReadOnlyAnswer(findings)) return { status: "answer", answer, spec, geometry, findings }
+  return { status: "plan", plan: { ...chainPlanOf(spec, built.geometry.pre, state1, normalizedSecond, apexAs1, apexAs2), ...(answer ? { answer } : {}) }, spec, geometry, findings }
 }
 
 /** 第二笔折起的三条判据：折痕不动、折片刚性、转过给定角度；其余点一个都不许动。 */
@@ -608,7 +662,7 @@ export function solveRectangleFold(prompt: string, options: { branch?: 1 | -1; a
   if (readNamedFolds(prompt).length > 1) return solveRectangleFoldChain(prompt, options)
   const read = readRectangleFold(prompt)
   if (read.status === "none") return { status: "none" }
-  if (read.status === "unsupported") return { status: "unsupported", reason: read.reason, ...(read.sourceText === undefined ? {} : { sourceText: read.sourceText }) }
+  if (read.status === "unsupported") return read
   const spec = read.spec
   const built = buildRectangleFold(spec, options.branch === undefined ? {} : { branch: options.branch })
   /**
@@ -643,18 +697,6 @@ export function solveRectangleFold(prompt: string, options: { branch?: 1 | -1; a
 
   const geometry = solvedAngle !== null && "geometry" in solvedAngle ? solvedAngle.geometry : (built as { geometry: RectangleFoldGeometry }).geometry
   const angleDisclosure = solvedAngle !== null && "disclosure" in solvedAngle ? solvedAngle.disclosure : undefined
-  const findings = evaluateRectangleFoldGoals(prompt, spec, geometry)
-  const disproved = findings.filter((finding): finding is PerpendicularGoalFinding => finding.kind === "perpendicular" && !finding.holds)
-  if (disproved.length > 0) {
-    const lengths = findings.filter((finding): finding is LengthGoalFinding => finding.kind === "length")
-    const explanation = [
-      `按题设核验后，「${disproved.map((finding) => finding.sourceText).join("」「")}」**不成立**：${disproved.map((finding) => finding.detail).join(" ")}`,
-      `这条结论是对题设（矩形边长 + 折角来源）的直接回代，不是"没搜到"；因此本轮不会生成可提交的草稿。`,
-      ...lengths.map((finding) => `可以给出的是距离：${finding.detail}`)
-    ].join("\n")
-    return { status: "clarification", reason: "goal_does_not_hold", questions: [explanation], spec, geometry, findings }
-  }
-
   // 出计划之前先自检：构造本身必须通过折前/折后两份点表的全部判据。
   // 解出来的折角也要让自检知道（`spec.angle` 那一侧是"未知"，不传就等于拿不到折角这条判据）。
   const verified = verifyRectangleFold(spec, { pre: geometry.pre, post: geometry.post }, angleDisclosure === undefined ? {} : { angleDegrees: geometry.angleDegrees })
@@ -680,5 +722,8 @@ export function solveRectangleFold(prompt: string, options: { branch?: 1 | -1; a
     }
   }
   const withName: RectangleFoldGeometry = { ...geometry, apexPostName: apexAs, post }
-  return { status: "plan", plan: foldPlanOf(spec, withName, angleDisclosure), spec, geometry: withName, findings }
+  const findings = evaluateRectangleFoldGoals(prompt, spec, withName)
+  const answer = answerForGoals(findings, spec)
+  if (needsReadOnlyAnswer(findings)) return { status: "answer", answer, spec, geometry: withName, findings }
+  return { status: "plan", plan: { ...foldPlanOf(spec, withName, angleDisclosure), ...(answer ? { answer } : {}) }, spec, geometry: withName, findings }
 }

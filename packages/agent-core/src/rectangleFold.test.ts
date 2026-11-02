@@ -7,6 +7,17 @@ import {
   readRectangleFold,
   verifyRectangleFold
 } from "./rectangleFold"
+
+describe("perpendicular evidence", () => {
+  it("is invariant under scale and refuses zero-length directions", () => {
+    for (const scale of [1e-8, 1, 1e8]) {
+      const points = { A: { x: 0, y: 0, z: 0 }, B: { x: scale, y: 0, z: 0 }, C: { x: scale, y: scale, z: 0 } }
+      expect(evaluatePerpendicular(points, ["A", "B"], ["B", "C"]).status).toBe("holds")
+      expect(evaluatePerpendicular(points, ["A", "B"], ["A", "C"]).status).toBe("disproved")
+      expect(evaluatePerpendicular(points, ["A", "A"], ["B", "C"]).status).toBe("unverified")
+    }
+  })
+})
 import { countNamedFolds, readNamedFold, uniqueFoldDisplayName } from "./namedFold"
 
 /**

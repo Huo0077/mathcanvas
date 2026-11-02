@@ -265,7 +265,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   }
 
   const allowed = kind === "plan"
-    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "actions"]
+    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "answer", "actions"]
     : kind === "clarification"
       ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "questions"]
       : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
@@ -346,6 +346,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const normalisations = !rawNormalisations || rawNormalisations.length === 0 ? undefined : rawNormalisations
 
   if (kind === "plan") {
+    const answer = input.answer === undefined ? undefined : boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true }) ?? undefined
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
     if (rawActions && rawActions.length === 0) errors.push(fail("empty_actions", "envelope.actions", "a plan needs at least one action"))
     if (rawActions && rawActions.length > MAX_ACTIONS) errors.push(fail("array_too_long", "envelope.actions", `max ${MAX_ACTIONS} actions`))
@@ -362,7 +363,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), actions }, ...(notes.length === 0 ? {} : { notes }) }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), ...(answer === undefined ? {} : { answer }), actions }, ...(notes.length === 0 ? {} : { notes }) }
   }
 
   if (kind === "clarification") {

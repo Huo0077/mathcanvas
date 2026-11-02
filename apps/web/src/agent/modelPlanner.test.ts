@@ -1141,6 +1141,17 @@ describe("T3 — output mode follows the channel and never over-claims", () => {
  * 命中时**一次 provider 请求都不发**；不属于这一族的题面照旧走模型。
  */
 describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
+  it.each([
+    ["AB=4，AB=5，BC=2", "求证 BD⊥AC。", "条件矛盾"],
+    ["AB=4，BC=2", "设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。", "尚未核验"]
+  ])("returns determined diagnostics without asking a model to invent missing evidence", async (sides, goal, expected) => {
+    const runModel = vi.fn(async () => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    const outcome = await planner.plan(request({ userMessage: `矩形 ABCD 中，${sides}，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。${goal}` }))
+    if (!("plan" in outcome) || outcome.plan.kind !== "answer") throw new Error("expected answer")
+    expect(outcome.plan.answer).toContain(expected)
+    expect(runModel).not.toHaveBeenCalled()
+  })
   it("缺折角 ⇒ 直接澄清问折角，不发请求（不默认 90°）", async () => {
     const runModel = vi.fn(async () => deltas(goodEnvelope))
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
@@ -1154,7 +1165,7 @@ describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
     expect(runModel).not.toHaveBeenCalled()
   })
 
-  it("目标被题设否定 ⇒ 直接澄清并给出距离，不发请求", async () => {
+  it("目标被题设否定 ⇒ 直接回答并给出距离，不发请求", async () => {
     const runModel = vi.fn(async () => deltas(goodEnvelope))
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
     const outcome = await planner.plan(request({
@@ -1163,10 +1174,10 @@ describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
 
     expect("plan" in outcome).toBe(true)
     if (!("plan" in outcome)) return
-    expect(outcome.plan.kind).toBe("clarification")
-    if (outcome.plan.kind !== "clarification") return
-    expect(outcome.plan.questions.join(" ")).toContain("不成立")
-    expect(outcome.plan.questions.join(" ")).toContain("BD")
+    expect(outcome.plan.kind).toBe("answer")
+    if (outcome.plan.kind !== "answer") return
+    expect(outcome.plan.answer).toContain("不成立")
+    expect(outcome.plan.answer).toContain("BD")
     expect(runModel).not.toHaveBeenCalled()
   })
 

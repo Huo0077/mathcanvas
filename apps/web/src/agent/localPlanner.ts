@@ -453,17 +453,19 @@ function solidShapeIntentFor(prompt: string): LocalIntent | null {
  * **矩形沿对角线折起**（A3，2026-10-26）：题面 → 确定性动作链 / 澄清。
  *
  * 与固定夹具的区别是**不匹配原题字符串**：边长、点名、折痕、折角都从 `solveRectangleFold`
- * 读出来。缺折角或目标被否定时返回澄清（前者问角度、后者说明哪条不成立），
+ * 读出来。缺折角返回澄清；目标被否定或未核验时返回只读回答，
  * 读不全时把原因原样交给用户 —— 三种终态都不猜。
  */
 const RECTANGLE_FOLD = (input: LocalIntentInput): PlanEnvelope => {
   const solved = solveRectangleFold(input.prompt)
+  if (solved.status === "unsupported" && solved.code === "inconsistent_conditions") return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "矩形折叠：题设条件矛盾", factIds: [], toolResultRefs: [], answer: solved.reason }
   if (solved.status === "plan") return solved.plan
+  if (solved.status === "answer") return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "矩形折叠：目标核验结果", factIds: [], toolResultRefs: [], answer: solved.answer }
   if (solved.status === "clarification") {
     return {
       schemaVersion: PLAN_SCHEMA_VERSION,
       kind: "clarification",
-      goal: solved.reason === "needs_fold_angle" ? "矩形沿对角线折起：缺折角" : "矩形沿对角线折起：目标不成立",
+      goal: "矩形沿对角线折起：缺折角",
       factIds: [],
       questions: [...solved.questions]
     }
@@ -604,7 +606,7 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [  { all: ["圆台"], exact
   { all: ["点"], any: ["画一个点", "画个点", "作一个点", "建一个点", "添加一个点", "画一点", "画点", "添加点"], skillIds: ["planar-basics"], build: (input) => PLANAR_POINT({ ...input, size: sizeFrom(input.prompt, 1) }) },
   /**
    * **矩形沿对角线折起**（A3，2026-10-26）：**通用族意图**，不逐字匹配原题 ——
-   * 边长、点名、折痕（AC 或 BD）、折角都从题面读。缺折角 / 目标被否定 ⇒ 澄清；
+   * 边长、点名、折痕（AC 或 BD）、折角都从题面读。缺折角 ⇒ 澄清；目标被否定 ⇒ 只读回答；
    * 读不全（缺边、折痕不是对角线）⇒ 说明原因，不猜。
    *
    * 放在既有翻折夹具**之后**：代表题仍走它们原来的路径（不抢）。

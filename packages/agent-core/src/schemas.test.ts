@@ -47,6 +47,19 @@ function expectRejected(result: { ok: boolean; errors?: { code: string; path: st
 }
 
 describe("plan envelope parsing", () => {
+  it("keeps mathematical answer text alongside drawing actions", () => {
+    const result = parsePlanEnvelope({ ...(validPlan() as object), answer: "BD=2√85/5" })
+    expect(result.ok).toBe(true)
+    if (!result.ok || result.value.kind !== "plan") throw new Error("expected plan")
+    expect(result.value.answer).toBe("BD=2√85/5")
+    expect(result.value.actions).toHaveLength(2)
+  })
+
+  it.each([null, 42, {}])("rejects an invalid optional plan answer: %s", (answer) => {
+    const result = parsePlanEnvelope({ ...(validPlan() as object), answer })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errors.some((error) => error.path === "envelope.answer")).toBe(true)
+  })
   it("accepts the appendix A plan", () => {
     const result = parsePlanEnvelope(validPlan())
     expect(result.ok).toBe(true)

@@ -58,6 +58,18 @@ describe("explicit progress", () => {
 })
 
 describe("status never relies on colour alone", () => {
+  it("shows a single formatted clarification and a waiting state", () => {
+    const { container } = render(<RunStatus message={message({ failure: { code: "needs_more_information", message: "请补充 **折角**，例如 `60°`。", retryable: false } })} />)
+    expect(screen.getByText("等待补充信息")).toBeTruthy()
+    expect(screen.getAllByText(/请补充/)).toHaveLength(1)
+    expect(container.querySelector("strong")?.textContent).toBe("折角")
+    expect(container.querySelector("code")?.textContent).toBe("60°")
+  })
+
+  it("labels completed read-only mathematical results as answered", () => {
+    render(<RunStatus message={message({ text: "BD=2√85/5", commit: { status: "no_change" } })} />)
+    expect(screen.getByText("已回答")).toBeTruthy()
+  })
   it("gives every trace entry a word, not just a coloured dot", () => {
     render(<RunStatus message={message({
       pending: true,

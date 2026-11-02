@@ -918,11 +918,11 @@ describe("矩形沿对角线折起：本地通用意图", () => {
     expect(envelope.questions.join(" ")).toContain("折角")
   })
 
-  it("假目标 ⇒ 澄清说明不成立，并保留可给的距离", async () => {
+  it("假目标 ⇒ 回答说明不成立，并保留可给的距离", async () => {
     const envelope = await plan("矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。")
-    if (envelope.kind !== "clarification") throw new Error(`expected clarification, got ${envelope.kind}`)
-    expect(envelope.questions.join(" ")).toContain("不成立")
-    expect(envelope.questions.join(" ")).toContain("BD")
+    if (envelope.kind !== "answer") throw new Error(`expected answer, got ${envelope.kind}`)
+    expect(envelope.answer).toContain("不成立")
+    expect(envelope.answer).toContain("BD")
   })
 
   it("换一组点名与边长仍然走这条（不是逐字夹具）", async () => {

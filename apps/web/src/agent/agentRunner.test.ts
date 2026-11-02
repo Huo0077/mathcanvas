@@ -27,6 +27,43 @@ function resetAgent() {
   useAgentStore.getState().clearAll()
 }
 
+describe("answer delivery independently of document changes", () => {
+  beforeEach(() => { resetScene(); resetAgent() })
+
+  it("retains a validated read-only answer through completed and persistence", async () => {
+    const answer = "第（1）问不成立；第（2）问 BD=2√85/5。"
+    const runner = createAgentRunner({ planner: { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "数学答复", factIds: [], answer, toolResultRefs: [] }, requestId: "answer-request", attemptId: "answer-attempt" }) } })
+    expect((await runAndWait(runner, "解释计算结果")).phase).toBe("completed")
+    const conversation = useAgentStore.getState().activeConversation!
+    expect(conversation.messages.at(-1)?.text).toBe(answer)
+    expect(conversation.messages.at(-1)?.failure).toBeUndefined()
+    const stored = await conversationRepository().readRecord(conversation.id)
+    expect(JSON.stringify(stored)).toContain(answer)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("completes the original mixed question without asking for information", async () => {
+    const runner = createAgentRunner()
+    const result = await runAndWait(runner, "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。")
+    expect(result.phase).toBe("completed")
+    const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(reply.text).toContain("不成立")
+    expect(reply.text).toContain("2√85/5")
+    expect(reply.failure).toBeUndefined()
+    expect(runner.hasDraft()).toBe(false)
+  })
+
+  it("keeps the computed length through preview, confirmation and commit", async () => {
+    const runner = createAgentRunner()
+    const result = await runAndWait(runner, "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。")
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
+    await runner.confirm()
+    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
+  })
+})
+
 async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: string) {
   useAgentStore.getState().sendPrompt(prompt)
   const conversation = useAgentStore.getState().activeConversation!

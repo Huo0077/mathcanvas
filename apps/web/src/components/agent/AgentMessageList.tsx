@@ -4,6 +4,7 @@ import { highlightCode } from "../../codeHighlight"
 import { EmptyStateArt } from "../EmptyStateArt"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { RunStatus } from "./RunStatus"
+import { TranscriptText } from "./TranscriptText"
 import { proofDraftForScene } from "../../agent/proofViewBinding"
 import { useSceneStore } from "../../store"
 
@@ -42,7 +43,7 @@ function AssistantBody({ message }: { message: AgentMessage }) {
           不生成 HTML 字符串，所以代码内容永远不会被当成标记解析。 */}
       <pre className="agent-code-body"><code>{highlightCode(section.code, section.language).map((token, tokenIndex) => <span className={`code-${token.kind}`} key={tokenIndex}>{token.value}</span>)}</code></pre>
     </div>
-    : <p className="agent-bubble-text" key={`${message.id}-text-${index}`}>{section.text}</p>
+    : <p className="agent-bubble-text" key={`${message.id}-text-${index}`}><TranscriptText text={section.text} /></p>
   )}</>
 }
 

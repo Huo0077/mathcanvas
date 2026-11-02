@@ -802,6 +802,10 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const phase = active.coordinator.phase()
       const draftId = active.draftId()
 
+      if ((phase === "completed" || phase === "awaiting_confirmation") && active.answer() !== undefined) {
+        await useAgentStore.getState().recordAnswer(active.answer()!, eventRunId, generation())
+      }
+
       if (draftId && phase === "awaiting_confirmation") {
         // 草稿**只是视图**（标识 + 计数）；候选文档留在宿主侧，不进聊天记录。
         // 计数由宿主侧的 `preview()` 从**真实文档**算出（界面不自己数）。
@@ -947,7 +951,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           retryable: false
         }, eventRunId, generation())
       } else if (phase === "completed") {
-        useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
+        await useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
       }
 
       // A failed verification may have staged an isolated preview, but it must

@@ -197,6 +197,8 @@ export interface AgentRuntime {
    *（模型真的问了"半径是多少"，界面却说"没有模型服务"）。
    */
   questions(): string[] | undefined
+  /** Validated answer text, retained independently of document changes. */
+  answer(): string | undefined
   /**
    * 用户点了确认之后**真正落盘**。
    *
@@ -407,6 +409,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   let declaredAssumptions: string[] | undefined
   /** 规划器要问用户的问题（同上，一条路径）。 */
   let declaredQuestions: string[] | undefined
+  let declaredAnswer: string | undefined
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
@@ -433,6 +436,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       declaredAssumptions = plan.assumptions
       // 只有澄清分支才有问题；另外两个分支即使带 `questions` 也不是合法的信封（schema 会拒）。
       declaredQuestions = plan.kind === "clarification" ? [...plan.questions] : undefined
+      declaredAnswer = plan.kind === "clarification" ? undefined : plan.answer
     },
     requestedSkillIds,
     availableActions,
@@ -470,6 +474,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       return merged.length > 0 ? merged : undefined
     },
     questions: () => declaredQuestions,
+    answer: () => declaredAnswer,
     confirmDraft(): ConfirmOutcome {
       const id = committer.draftIdFor()
       /**

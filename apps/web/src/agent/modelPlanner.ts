@@ -410,10 +410,10 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       /**
        * **矩形沿对角线折起的安全闸**（A3，2026-10-26）。
        *
-       * 这一族题有两个"必须问、不能让模型猜"的终态：
+       * 这一族题先做确定性核验：
        * - 题面只说了折起，既没给折角、也没给"两平面垂直" ⇒ 折后点不唯一，问折角；
        * - 题干里的目标（例如 `求证 BD⊥AC`）在题设下被直接回代否定 ⇒ 说明不成立，
-       *   **不生成**看起来像"证明了"的草稿。
+       *   用只读回答交付结论和可解子问；未核验的目标明确披露。
        *
        * 判定来自确定性的 `solveRectangleFold`（坐标由内核算，不匹配原题字符串），
        * 命中时**不发出 provider 请求** —— 既能省一次调用，也不会让模型把不成立的目标圆过去。
@@ -421,12 +421,18 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
        */
       if (request.run.target.workspace === "geometry3d") {
         const rectangleFold = solveRectangleFold(request.userMessage)
+        if (rectangleFold.status === "unsupported" && rectangleFold.code === "inconsistent_conditions") {
+          return { plan: { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "矩形折叠：题设条件矛盾", factIds: [], toolResultRefs: [], answer: rectangleFold.reason }, requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
+        }
+        if (rectangleFold.status === "answer") {
+          return { plan: { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "矩形折叠：目标核验结果", factIds: [], toolResultRefs: [], answer: rectangleFold.answer }, requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
+        }
         if (rectangleFold.status === "clarification") {
           return {
             plan: {
               schemaVersion: PLAN_SCHEMA_VERSION,
               kind: "clarification",
-              goal: rectangleFold.reason === "needs_fold_angle" ? "矩形沿对角线折起：缺折角" : "矩形沿对角线折起：目标不成立",
+              goal: "矩形沿对角线折起：缺折角",
               factIds: [],
               questions: [...rectangleFold.questions]
             },

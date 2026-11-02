@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test"
  *
  * 三条终态各一条用例：
  * 1. 题设完整 + 长度目标 ⇒ 预览/确认/撤销（确认前主文档不变）；
- * 2. 目标 `BD⊥AC` 在题设下不成立 ⇒ 澄清说明不成立，**没有**可提交草稿；
+ * 2. 目标 `BD⊥AC` 在题设下不成立 ⇒ 只读回答说明不成立，**没有**可提交草稿；
  * 3. 只说了折起、没给折角也没给两平面垂直 ⇒ 澄清问折角，**不默认 90°**。
  *
  * 这一条**不是**模型质量证据：没有 provider，走的是本地确定性构造。
@@ -64,10 +64,13 @@ test("矩形沿对角线折起：隔离预览 → 一次提交 → 一步撤销"
 test("目标 BD⊥AC 在题设下不成立 ⇒ 说明不成立，不生成可提交草稿", async ({ page }) => {
   await send(page, FALSE_GOAL)
 
-  // 澄清走 `needs_more_information`：正文由题面回代算出来，必须说"不成立"，并给得出距离。
-  const alert = page.getByRole("alert")
-  await expect(alert.getByText(/不成立/)).toBeVisible({ timeout: 90_000 })
-  await expect(alert.getByText(/BD/).first()).toBeVisible()
+  // 数学结论正常交付，不再进入等待补充信息。
+  const answer = page.locator('.agent-message[data-message-role="assistant"] .agent-bubble')
+  await expect(answer).toContainText("不成立", { timeout: 90_000 })
+  await expect(answer).toContainText("2√85/5")
+  await expect(answer).toContainText("投影")
+  await expect(page.getByRole("alert")).toHaveCount(0)
+  await expect(page.locator(".agent-run-state")).toHaveText("已回答")
   // 没有确认面板、也没有"确认并提交"按钮 —— 假目标不许变成可提交草稿。
   await expect(page.getByRole("region", { name: "确认改动" })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)

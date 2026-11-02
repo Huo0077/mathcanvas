@@ -1,5 +1,6 @@
 import type { AgentCommitView, AgentMessage } from "../../agentStore"
 import { ToolTracePanel } from "./ToolTracePanel"
+import { TranscriptText } from "./TranscriptText"
 
 /**
  * **运行状态卡**（Task 2.5 Step 3/4）。
@@ -63,8 +64,8 @@ function progressOf(message: AgentMessage): { label: string; detail: string } | 
     const latest = message.trace?.at(-1)
     return { label: "进行中", detail: latest ? phaseLabel(latest.phase) : "正在开始" }
   }
-  if (message.commit) return { label: message.commit.status === "committed" ? "已提交" : "无需改动", detail: "" }
-  if (message.failure) return { label: "没有完成", detail: message.failure.message }
+  if (message.commit) return { label: message.commit.status === "committed" ? "已提交" : message.text && message.text !== "这次没有需要改动的地方。" ? "已回答" : "无需改动", detail: "" }
+  if (message.failure) return { label: message.failure.code === "needs_more_information" ? "等待补充信息" : "没有完成", detail: "" }
   /**
    * **草稿已暂存但运行不再 pending**：这是"等你确认"的状态，不是"没有状态"。
    *
@@ -105,7 +106,7 @@ export function RunStatus({ message, onRetry, onRevise, onStop }: RunStatusProps
     {message.commit?.status === "failed" && <p className="agent-run-failure" role="alert">提交失败：{message.commit.detail ?? "原因未知"}</p>}
 
     {message.failure && <div className="agent-run-error" role="alert">
-      <p className="agent-run-error-message">{message.failure.message}</p>
+      <p className="agent-run-error-message"><TranscriptText text={message.failure.message} /></p>
       <p className="agent-run-error-code">原因码：{message.failure.code}</p>
       <div className="agent-run-actions">
         {message.failure.retryable && onRetry && <button type="button" onClick={onRetry}>重试</button>}

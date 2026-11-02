@@ -442,6 +442,7 @@ interface AgentState {
   recordDraft: (draft: AgentDraftView, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
   recordReceipt: (receipt: AgentCommitView, runId?: string, documentGeneration?: number) => Promise<boolean>
+  recordAnswer: (text: string, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 运行失败：保留原因与"能不能重试"，而不是给一条空回复。 */
   failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string, documentGeneration?: number) => Promise<boolean>
   /**
@@ -686,11 +687,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     : message, runId),
   recordDiagnosticFor: (target, line) => updateMessageAt(get, set, target, (message) => ({ ...message, diagnostics: [...(message.diagnostics ?? []), line] })),
   recordDraft: (draft, runId, documentGeneration) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId, documentGeneration }),
+  recordAnswer: (text, runId, documentGeneration) => commitPending(get, set, (message) => ({ ...message, text }), { runId, documentGeneration }),
   recordReceipt: (receipt, runId, documentGeneration) => commitPending(get, set, (message) => ({
     ...message,
     pending: false,
     commit: receipt,
-    text: receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : ""
+    text: message.text || (receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : "")
   }), { finish: true, runId, documentGeneration }),
   failPendingReply: (failure, runId, documentGeneration) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true, runId, documentGeneration }),
   recordCommittedRun: async (input) => {

@@ -16,6 +16,51 @@ import { readRectangleFoldGoals, solveRectangleFold } from "./rectangleFoldPlan"
 const USER_CASE = "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。"
 const LENGTH_ONLY = `${USER_CASE}求折后 BD 的长。`
 
+describe("fold goal correctness regressions", () => {
+  it("answers equivalent perpendicular phrasing consistently", () => {
+    for (const claim of ["BD⊥AC", "BD 垂直于 AC", "BD垂直AC"]) {
+      const solved = solveRectangleFold(`${USER_CASE}求证${claim}；求折后 BD 的长。`)
+      expect(solved.status).toBe("answer")
+      if (solved.status !== "answer") throw new Error("expected answer")
+      expect(solved.answer).toContain("不成立")
+      expect(solved.answer).toContain("2√85/5")
+      expect(solved.answer).toContain("投影")
+      expect(solved.answer).toContain("勾股定理")
+    }
+  })
+
+  it("retains both pre-fold and post-fold length questions", () => {
+    const solved = solveRectangleFold(`${USER_CASE}求折前 BD 的长；求折后 BD 的长。`)
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") throw new Error("expected plan")
+    expect(solved.findings.map((finding) => finding.kind === "length" ? finding.value : null)).toEqual([expect.closeTo(Math.sqrt(20), 10), expect.closeTo(Math.sqrt(13.6), 10)])
+    expect(solved.plan.answer).toContain("折前 BD=2√5")
+    expect(solved.plan.answer).toContain("折后 BD=2√85/5")
+  })
+
+  it("does not refute a claim when a defined foot has not been constructed", () => {
+    const solved = solveRectangleFold(`${USER_CASE}设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。`)
+    expect(solved.status).toBe("answer")
+    if (solved.status !== "answer") throw new Error("expected answer")
+    expect(solved.answer).toContain("尚未核验")
+    expect(solved.answer).not.toContain("不成立")
+    expect(solved.findings[0]).toMatchObject({ status: "unverified", holds: undefined })
+  })
+
+  it.each(["AB=4，AB=5，BC=2", "AB=4，CD=5，BC=2", "AB=4，BC=2，AB:BC=3:1"])("checks inconsistent givens before refuting the goal: %s", (sides) => {
+    const solved = solveRectangleFold(`${USER_CASE.replace("AB=4，BC=2", sides)}求证 BD⊥AC。`)
+    expect(solved).toMatchObject({ status: "unsupported", code: "inconsistent_conditions" })
+    expect("findings" in solved).toBe(false)
+  })
+
+  it("recognizes perpendicular diagonals at large scale", () => {
+    const solved = solveRectangleFold(`${USER_CASE.replace("AB=4，BC=2", "AB=1000000，BC=1000000")}求证 BD⊥AC。`)
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") throw new Error("expected plan")
+    expect(solved.findings[0]).toMatchObject({ status: "holds", holds: true })
+  })
+})
+
 function compile(plan: Parameters<typeof compilePlan>[0]) {
   return compilePlan(plan, { document: createEmptyDocument("geometry3d"), conversationId: "a3-rectangle", documentGeneration: 0 })
 }
@@ -86,11 +131,10 @@ describe("A3 题面 → 计划 / 澄清", () => {
     expect(readRectangleFoldGoals(USER_CASE)).toEqual([])
   })
 
-  it("用户案例：BD⊥AC 被否定 ⇒ 澄清而不是可提交计划，并给出距离", () => {
+  it("用户案例：BD⊥AC 被否定 ⇒ 只读回答而不是澄清，并给出距离", () => {
     const solved = solveRectangleFold(`${USER_CASE}（1）求证 BD⊥AC；（2）求折后 BD 的长。`)
-    expect(solved.status).toBe("clarification")
-    if (solved.status !== "clarification") return
-    expect(solved.reason).toBe("goal_does_not_hold")
+    expect(solved.status).toBe("answer")
+    if (solved.status !== "answer") return
     expect(solved.findings).toHaveLength(2)
 
     const perpendicular = solved.findings.find((finding) => finding.kind === "perpendicular")
@@ -100,8 +144,8 @@ describe("A3 题面 → 计划 / 澄清", () => {
     const length = solved.findings.find((finding) => finding.kind === "length")
     expect(length?.kind === "length" ? length.value : undefined).toBeCloseTo((2 * Math.sqrt(85)) / 5, 12)
 
-    expect(solved.questions[0]).toContain("不成立")
-    expect(solved.questions[0]).toContain("BD")
+    expect(solved.answer).toContain("不成立")
+    expect(solved.answer).toContain("BD")
   })
 
   it("只有长度目标 ⇒ 出计划；动作链编出的折后 B′ 与模块算的坐标一致", () => {
