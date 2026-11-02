@@ -76,6 +76,12 @@ pub fn run() {
     tauri::Builder::default()
         .setup(move |app| {
             app.manage(exam_run);
+            if let (Some(window), Some(icon)) = (
+                app.get_webview_window("main"),
+                app.default_window_icon().cloned(),
+            ) {
+                let _ = window.set_icon(icon);
+            }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -178,4 +184,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

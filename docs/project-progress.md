@@ -10,6 +10,23 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-02 —— 桌面端图标 PE 资源重编译生效与右侧属性栏人机工程重排（Block 11）
+
+**目标**：彻底解决 Windows 桌面端 `.exe` 图标因 Cargo `resource.lib` 缓存未重编而未生效的问题，并按照符合直觉的操作逻辑重构右侧属性栏（`PropertiesBar`）的分区层次、控件顺序与 3D 图元覆盖。
+
+**实施与证据**：
+1. **桌面图标 PE 资源与运行时窗口图标修复（build.rs / lib.rs / BrandMarkIcon.tsx）**：
+   - 在 `build.rs` 中补充 `icons/icon.ico` 等 `cargo:rerun-if-changed` 规则，清除旧构建缓存后重跑 `tauri build`，确认 `resource.lib` 由 `38,852` 字节更新为 `56,592` 字节；在 `lib.rs` 中增加 `window.set_icon(icon)`；同步将免安装可执行文件复制至 `target/release/MathCanvas_4.1.0_x64.exe` 与 `target/release/bundle/MathCanvas_4.1.0_x64.exe`。
+2. **右侧属性栏三级手风琴与卡片内部人机工程重排（PropertiesBar.tsx / inspectorFields.tsx / inspectorModel.ts / global.css）**：
+   - 修复 `<InspectorAccordion>` 容器包裹关系与 `外观样式` 分区顺序；
+   - 按“名称标识 → 核心坐标/尺寸输入 → 约束绑定与滑轨 → 只读几何读数 → 快捷派生作图 → 简明尾注”重排全部 2D/3D 图元卡片，并将 3D `(X, Y, Z)` 升级为 3 列网格（`.vector3-grid`），新增 `selectedLinear3`、`face3Metrics` 与 `polyhedron3Metrics` 卡片及单测。
+
+**验证读数（2026-11-02 本机）**：
+- `inspectorModel.test.tsx`（9 项）、`EngineeringInspector.test.tsx`（20 项）、`App.test.tsx`（116 项）145 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 15 警告**。
+
 ## 2026-11-02 —— MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10）
 
 **目标**：替换原有的通用求和字符 `∑`，为 MathCanvas 设计一枚一眼就能看出“2D 解析几何与圆锥曲线 + 3D 空间立体与截面 + 动态顶点交互与 AI 智能推理”特色的专属品牌与网页/桌面图标。

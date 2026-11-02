@@ -1,5 +1,15 @@
 # MathCanvas 当前状态
 
+## 2026-11-02 桌面端图标 PE 资源重编译生效与右侧属性栏人机工程重排（Block 11）
+
+针对用户反馈的“图标没有应用上”与“右侧选择图元后的属性栏太乱、条理不清”两大问题完成根因修复与全量重排：
+
+- **桌面端图标 PE 资源重编译与运行时窗口图标绑定（build.rs / lib.rs / BrandMarkIcon.tsx）**：排查定位到 Cargo `tauri_build::build()` 默认仅监听 `tauri.conf.json` 而未监听 `icons/icon.ico`，导致此前 `resource.lib` 仍停留在旧版 `38,852` 字节缓存。在 `apps/desktop/src-tauri/build.rs` 中显式注册 `cargo:rerun-if-changed=icons/icon.ico` 等全套图标监听，强制 `rc.exe` 重新编译生成 `56,592` 字节的多分辨率新图标 PE 资源；在 `apps/desktop/src-tauri/src/lib.rs` 的 `.setup()` 中调用 `window.set_icon(icon)` 显式设置主窗口与任务栏图标；并同步升级应用内 `BrandMarkIcon.tsx` 呈现三面立体明暗、琥珀金在轨动点（`#f59e0b`）与 AI 星芒细节；
+- **右侧属性栏（PropertiesBar）三级折叠架构与操作流重排（PropertiesBar.tsx / inspectorFields.tsx / global.css）**：修复此前 `<InspectorAccordion>` 自闭合空标签与“外观样式夹在 3D 与 2D 几何参数之间”的排版错乱，将全部卡片真正纳入「几何参数 → 外观样式 → 标注与工程」三级可折叠手风琴容器；按**“图元标识 → 核心可编辑坐标/尺寸 → 路径/宿主约束 → 只读测量指标（`.metric-grid`）→ 快捷关联作图（`.property-subcard`）→ 精炼底注”**的自然操作逻辑重排全部 2D/3D 图元卡片，消除重复的「图元名称」与「锁定图元」开关；
+- **3D 坐标三列网格与点线面体全类型属性覆盖（inspectorModel.ts / inspectorFields.tsx）**：将 3D 坐标与旋转角 `(X, Y, Z)` 升级为紧凑的 3 列网格（`.vector3-grid`），并新增 3D 线段/直线/射线/棱（`selectedLinear3` 长度、方向向量、端点坐标）、3D 多边形面（`face3Metrics` 顶点环、周长、面积）与多面体（`polyhedron3Metrics` 顶/棱/面计数与中心）专属属性卡片。
+
+**验证读数（2026-11-02 本机）**：`inspectorModel.test.tsx`（9 项）、`EngineeringInspector.test.tsx`（20 项）、`App.test.tsx`（116 项）共 145 项全过；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 15 警告**。
+
 ## 2026-11-02 MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10）
 
 完成展现 MathCanvas 学科特色与产品辨识度的专属几何图标设计及全端集成：

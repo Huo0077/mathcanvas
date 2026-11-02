@@ -84,4 +84,37 @@ describe("inspector model", () => {
     // 找不到时退回 id：界面宁可显示一个 id，也不能显示 undefined。
     expect(model.sourceLabel("missing")).toBe("missing")
   })
+
+  it("computes 3D linear length, direction, and resolved endpoints for segment3/edge3", () => {
+    const p1 = { id: "p3-1", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" } as PrimitiveSpec
+    const p2 = { id: "p3-2", type: "point3", position: { x: 3, y: 4, z: 0 }, label: "B" } as PrimitiveSpec
+    const edge = { id: "edge-1", type: "edge3", a: { x: 0, y: 0, z: 0 }, b: { x: 3, y: 4, z: 0 }, pointIds: ["p3-1", "p3-2"] } as PrimitiveSpec
+    seed([p1, p2, edge])
+    const { model } = run(edge, ["edge-1"])
+    expect(model.selectedLinear3).not.toBeNull()
+    expect(model.selectedLinear3?.length).toBeCloseTo(5, 6)
+    expect(model.selectedLinear3?.direction?.x).toBeCloseTo(0.6, 6)
+    expect(model.selectedLinear3?.direction?.y).toBeCloseTo(0.8, 6)
+  })
+
+  it("computes 3D face area, perimeter, and vertex labels for face3", () => {
+    const p1 = { id: "v1", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" } as PrimitiveSpec
+    const p2 = { id: "v2", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" } as PrimitiveSpec
+    const p3 = { id: "v3", type: "point3", position: { x: 2, y: 2, z: 0 }, label: "C" } as PrimitiveSpec
+    const p4 = { id: "v4", type: "point3", position: { x: 0, y: 2, z: 0 }, label: "D" } as PrimitiveSpec
+    const face = {
+      id: "face-1",
+      type: "face3",
+      points: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 }],
+      pointIds: ["v1", "v2", "v3", "v4"],
+      normal: { x: 0, y: 0, z: 1 }
+    } as PrimitiveSpec
+    seed([p1, p2, p3, p4, face])
+    const { model } = run(face, ["face-1"])
+    expect(model.face3Metrics).not.toBeNull()
+    expect(model.face3Metrics?.vertexCount).toBe(4)
+    expect(model.face3Metrics?.vertexLabels).toBe("A → B → C → D")
+    expect(model.face3Metrics?.perimeter).toBeCloseTo(8, 6)
+    expect(model.face3Metrics?.area).toBeCloseTo(4, 6)
+  })
 })

@@ -41,12 +41,14 @@ export function useInspectorModel(props: InspectorModelInput) {
   /** 已经定了绕哪个定点旋转的圆 / 椭圆：检查器多出一块"绕定点旋转"。 */
   const selectedPlacedCurve = selectedPrimitive && (selectedPrimitive.type === "circle" || selectedPrimitive.type === "ellipse") && selectedPrimitive.rotationAbout ? selectedPrimitive : null
   const selectedSolid = selectedPrimitive && ["cube", "pyramid", "cylinder", "cone", "sphere"].includes(selectedPrimitive.type) ? selectedPrimitive as SolidPrimitive : null
+  const selectedPolyhedron3 = selectedPrimitive?.type === "polyhedron3" ? selectedPrimitive : null
   const selectedPlane3 = selectedPrimitive?.type === "plane3" ? selectedPrimitive : null
   const selectedSection = selectedPrimitive?.type === "section" ? selectedPrimitive : null
   const selectedIntersectionLine = selectedPrimitive?.type === "intersectionLine" ? selectedPrimitive : null
   const selectedIntersectionSolid = selectedPrimitive?.type === "intersectionSolid" ? selectedPrimitive : null
   const selectedIntersectionFace = selectedPrimitive?.type === "intersectionFace" ? selectedPrimitive : null
   const selectedIntersectionPoint = selectedPrimitive?.type === "intersectionPoint3" ? selectedPrimitive : null
+  const sceneDocument = useSceneStore((state) => state.document)
   /** 交线 / 交面的来源在检查器里要显示成用户认得出的名字，而不是 id。 */
   const sourceLabel = (id: string) => sceneDocument.primitives.find((primitive) => primitive.id === id)?.label ?? id
 
@@ -64,16 +66,108 @@ export function useInspectorModel(props: InspectorModelInput) {
   /** 插入模板后要等一帧再定位光标：把这一帧记下来，面板卸载时取消，避免对着已经不在的输入框聚焦。 */
   const formulaFocusFrameRef = useRef<number | null>(null)
   const [annotationText, setAnnotationText] = useState("")
-  const sceneDocument = useSceneStore((state) => state.document)
   /** 空间圆轨道：圆心、半径、法向都是它**自己**的几何（不再引用点），所以三项都可读可编。 */
   const selectedCircle3 = selectedPrimitive?.type === "circle3" ? selectedPrimitive : null
   /** 空间面：朝向要现算（法向是从点环 Newell 出来的，不是存下来的字段）。 */
   const selectedFace3 = selectedPrimitive?.type === "face3" ? selectedPrimitive : null
-  const face3Normal = selectedFace3
-    ? polygonNormal3(selectedFace3.pointIds.map((id) => {
+  const face3Points = selectedFace3
+    ? selectedFace3.pointIds.map((id) => {
       const point = sceneDocument.primitives.find((primitive) => primitive.id === id)
       return point?.type === "point3" ? point.position : null
-    }).filter((position): position is Vector3 => position !== null))
+    }).filter((position): position is Vector3 => position !== null)
+    : []
+  const face3Normal = selectedFace3 && face3Points.length >= 3 ? polygonNormal3(face3Points) : null
+  const face3Metrics = selectedFace3 && face3Points.length >= 3
+    ? (() => {
+      let perimeter = 0
+      for (let i = 0; i < face3Points.length; i += 1) {
+        const current = face3Points[i]!
+        const next = face3Points[(i + 1) % face3Points.length]!
+        perimeter += Math.hypot(next.x - current.x, next.y - current.y, next.z - current.z)
+      }
+      const p0 = face3Points[0]!
+      let area = 0
+      for (let i = 1; i + 1 < face3Points.length; i += 1) {
+        const u = { x: face3Points[i]!.x - p0.x, y: face3Points[i]!.y - p0.y, z: face3Points[i]!.z - p0.z }
+        const v = { x: face3Points[i + 1]!.x - p0.x, y: face3Points[i + 1]!.y - p0.y, z: face3Points[i + 1]!.z - p0.z }
+        const cx = u.y * v.z - u.z * v.y
+        const cy = u.z * v.x - u.x * v.z
+        const cz = u.x * v.y - u.y * v.x
+        area += 0.5 * Math.hypot(cx, cy, cz)
+      }
+      return {
+        vertexCount: selectedFace3.pointIds.length,
+        vertexLabels: selectedFace3.pointIds.map((id) => sourceLabel(id)).join(" → "),
+        perimeter,
+        area
+      }
+    })()
+    : null
+  /** 空间线 / 线段 / 射线 / 棱的几何特征读数。 */
+  const selectedLinear3 = selectedPrimitive && (
+    selectedPrimitive.type === "line3"
+    || selectedPrimitive.type === "segment3"
+    || selectedPrimitive.type === "ray3"
+    || selectedPrimitive.type === "edge3"
+  )
+    ? (() => {
+      const pointIdPair: [string, string | null] =
+        selectedPrimitive.type === "segment3" || selectedPrimitive.type === "edge3"
+          ? selectedPrimitive.pointIds
+          : selectedPrimitive.type === "ray3"
+            ? [selectedPrimitive.originId, selectedPrimitive.throughId]
+            : selectedPrimitive.definition.kind === "throughPoints"
+              ? selectedPrimitive.definition.pointIds
+              : [selectedPrimitive.definition.pointId, null]
+      const resolvePoint3 = (id: string | null) => {
+        if (!id) return null
+        const found = sceneDocument.primitives.find((p) => p.id === id)
+        return found?.type === "point3" && found.position ? { id, label: found.label ?? id, position: found.position } : null
+      }
+      const pointA = resolvePoint3(pointIdPair[0])
+      const pointB = resolvePoint3(pointIdPair[1])
+      const rawDirection =
+        selectedPrimitive.type === "line3" && selectedPrimitive.definition.kind === "pointDirection"
+          ? selectedPrimitive.definition.direction
+          : pointA && pointB
+            ? { x: pointB.position.x - pointA.position.x, y: pointB.position.y - pointA.position.y, z: pointB.position.z - pointA.position.z }
+            : null
+      const length = pointA && pointB
+        ? Math.hypot(pointB.position.x - pointA.position.x, pointB.position.y - pointA.position.y, pointB.position.z - pointA.position.z)
+        : null
+      const direction = rawDirection ? normalizeVector3(rawDirection) : null
+      return {
+        primitive: selectedPrimitive,
+        pointA,
+        pointB,
+        length,
+        direction
+      }
+    })()
+    : null
+  /** 多面体（四面体、棱柱或变形后的立体）的拓扑与中心读数。 */
+  const polyhedron3Metrics = selectedPolyhedron3
+    ? (() => {
+      const positions = selectedPolyhedron3.vertexIds
+        .map((id) => {
+          const found = sceneDocument.primitives.find((p) => p.id === id)
+          return found?.type === "point3" ? found.position : null
+        })
+        .filter((pos): pos is Vector3 => pos !== null)
+      const center = positions.length > 0
+        ? {
+          x: positions.reduce((sum, p) => sum + p.x, 0) / positions.length,
+          y: positions.reduce((sum, p) => sum + p.y, 0) / positions.length,
+          z: positions.reduce((sum, p) => sum + p.z, 0) / positions.length
+        }
+        : null
+      return {
+        vertexCount: selectedPolyhedron3.vertexIds.length,
+        edgeCount: selectedPolyhedron3.edgeIds.length,
+        faceCount: selectedPolyhedron3.faceIds.length,
+        center
+      }
+    })()
     : null
   const objectOrientationNormal = selectedCircle3 ? normalizeVector3(selectedCircle3.normal) : face3Normal
   const applySceneOperation = useSceneStore((state) => state.apply)
@@ -240,9 +334,11 @@ export function useInspectorModel(props: InspectorModelInput) {
     setExpressionError(null)
   }, [selectedFunction?.id, selectedFunction?.expression])
 
+  const selectedPrimitiveId = selectedPrimitive?.id
+  const selectedPrimitiveLabel = selectedPrimitive?.label
   useEffect(() => {
-    setAnnotationText(selectedPrimitive ? selectedPrimitive.label ?? selectedPrimitive.id : "")
-  }, [selectedPrimitive?.id, selectedPrimitive?.label])
+    setAnnotationText(selectedPrimitiveId ? selectedPrimitiveLabel ?? selectedPrimitiveId : "")
+  }, [selectedPrimitiveId, selectedPrimitiveLabel])
 
   useEffect(() => () => {
     if (formulaFocusFrameRef.current !== null) window.cancelAnimationFrame(formulaFocusFrameRef.current)
@@ -475,7 +571,93 @@ export function useInspectorModel(props: InspectorModelInput) {
   /** 只交出**视图真正要用的那一部分**：模型内部还有 12 个中间量（`setExpressionDraft`、`needsDomain` 一类），
    *  它们留在里面 —— 交出去只会让"外面能改的东西"变多。
    */
-  return { 
-selectedPoint, selectedPoint3, point3Binding, selectedLinear, selectedPolyline, selectedParabola, selectedEllipseOrHyperbola, selectedFunction, selectedCircleOrArc, selectedPlacedCurve, selectedSolid, selectedPlane3, selectedSection, selectedIntersectionLine, selectedIntersectionSolid, selectedIntersectionFace, selectedIntersectionPoint, sourceLabel, selectedDerivedPoint, selectedIntersection, selectedSlope, showSlopeParameter, editable, expressionDraft, selectedFunctionPresetId, expressionError, logBase, setLogBase, formulaRef, annotationText, setAnnotationText, sceneDocument, selectedCircle3, selectedFace3, objectOrientationNormal, applySceneOperation, derivedReadings, pointHasMovingCircle, annotationOptions, selectedAnnotations, pathPrimitives, selectedPointBinding, selectedPointWindow, pointTangentSource, selectedCenterDrivenCircle, radiusDriverCandidates, updateRadiusDriver, updateRadiusFactor, selectedCurveTangent, tangentAnchorParameters, tangentAnchorPoints, updateTangentParameter, updateTangentAnchorPoint, updateTangentLength, setTangentAnchorKind, selectedFacePair, visibleMeasurementOptions, engineeringAnnotationOptions, updatePoint, updatePoint3, updatePointBinding, updatePointParameter, createLocus, updateCenter, updateEndpoint, updateSlope, updatePolylinePoint, updateFunctionDomain, updateConicCenter, updateParabolaVertex, updateRotation, updatePlacementAngle, updatePlacementPivot, updateMovingRadius, parabolaFocus, conicFoci, ellipseMetrics, hyperbolaMetrics, arcAngle, updateFunctionExpression, applyFunctionPreset, insertFunctionTemplate, functionMetrics
- }
+  return {
+    selectedPoint,
+    selectedPoint3,
+    point3Binding,
+    selectedLinear,
+    selectedLinear3,
+    selectedPolyline,
+    selectedParabola,
+    selectedEllipseOrHyperbola,
+    selectedFunction,
+    selectedCircleOrArc,
+    selectedPlacedCurve,
+    selectedSolid,
+    selectedPolyhedron3,
+    polyhedron3Metrics,
+    selectedPlane3,
+    selectedSection,
+    selectedIntersectionLine,
+    selectedIntersectionSolid,
+    selectedIntersectionFace,
+    selectedIntersectionPoint,
+    sourceLabel,
+    selectedDerivedPoint,
+    selectedIntersection,
+    selectedSlope,
+    showSlopeParameter,
+    editable,
+    expressionDraft,
+    selectedFunctionPresetId,
+    expressionError,
+    logBase,
+    setLogBase,
+    formulaRef,
+    annotationText,
+    setAnnotationText,
+    sceneDocument,
+    selectedCircle3,
+    selectedFace3,
+    face3Metrics,
+    objectOrientationNormal,
+    applySceneOperation,
+    derivedReadings,
+    pointHasMovingCircle,
+    annotationOptions,
+    selectedAnnotations,
+    pathPrimitives,
+    selectedPointBinding,
+    selectedPointWindow,
+    pointTangentSource,
+    selectedCenterDrivenCircle,
+    radiusDriverCandidates,
+    updateRadiusDriver,
+    updateRadiusFactor,
+    selectedCurveTangent,
+    tangentAnchorParameters,
+    tangentAnchorPoints,
+    updateTangentParameter,
+    updateTangentAnchorPoint,
+    updateTangentLength,
+    setTangentAnchorKind,
+    selectedFacePair,
+    visibleMeasurementOptions,
+    engineeringAnnotationOptions,
+    updatePoint,
+    updatePoint3,
+    updatePointBinding,
+    updatePointParameter,
+    createLocus,
+    updateCenter,
+    updateEndpoint,
+    updateSlope,
+    updatePolylinePoint,
+    updateFunctionDomain,
+    updateConicCenter,
+    updateParabolaVertex,
+    updateRotation,
+    updatePlacementAngle,
+    updatePlacementPivot,
+    updateMovingRadius,
+    parabolaFocus,
+    conicFoci,
+    ellipseMetrics,
+    hyperbolaMetrics,
+    arcAngle,
+    updateFunctionExpression,
+    applyFunctionPreset,
+    insertFunctionTemplate,
+    functionMetrics
+  }
 }

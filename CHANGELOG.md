@@ -8,6 +8,20 @@
 
 
 
+## 2026-11-02 —— 桌面端图标 PE 资源重编译生效与右侧属性栏人机工程重排（Block 11，v4.1.0 更新）
+
+- **桌面端图标 PE 资源重编译与窗口图标运行时绑定（build.rs / lib.rs / BrandMarkIcon.tsx）**：
+  - 在 `apps/desktop/src-tauri/build.rs` 中显式声明 `cargo:rerun-if-changed=icons/icon.ico`、`icons/32x32.png`、`icons/128x128.png` 等资源依赖，清理旧 `resource.lib`（`38,852` B）并重新编译嵌入 `56,592` B 的多尺寸高清图标 PE 资源；
+  - 在 `apps/desktop/src-tauri/src/lib.rs` 的 `.setup()` 钩子中通过 `window.set_icon` 显式绑定 `"main"` 窗口图标，确保 Windows 标题栏、Alt+Tab 与任务栏图标即时生效；
+  - 升级 `apps/web/src/components/BrandMarkIcon.tsx`，完整还原三面立体明暗分面（`#bfdbfe` / `#60a5fa` / `#1e3a5f`）、琥珀金在轨动点（`#f59e0b`）与顶部 AI 四芒星细节。
+- **右侧属性栏（PropertiesBar）三级折叠架构与自然操作逻辑重排（PropertiesBar.tsx / inspectorFields.tsx / inspectorModel.ts / global.css）**：
+  - 修复 `<InspectorAccordion>` 自闭合空标签及 `外观样式` 穿插于 3D 与 2D `几何参数` 之间的结构缺陷，统一收敛为「几何参数 → 外观样式 → 标注与工程」三级折叠分区；
+  - 重排 `点坐标`、`直线性图元`、`圆/圆弧`、`抛物线`、`椭圆/双曲线`、`函数`、`空间点`、`空间实体` 等全部属性卡片内部顺序：将高频编辑的坐标与尺寸输入置于首行，约束与在轨滑轨居中，只读统计指标与关联作图按钮沉底，并移除冗余重复的 `图元名称` 与 `锁定图元` 控件；
+  - 将 3D 向量 `(X, Y, Z)` 升级为 3 列紧凑网格 `.vector3-grid`，并在 `inspectorModel.ts` 与 `PropertiesBar.tsx` 中补齐 3D 线/棱（`selectedLinear3`）、3D 面（`face3Metrics`）与多面体（`polyhedron3Metrics`）属性卡片。
+- **测试覆盖与门禁验证**：
+  - 单元测试：`inspectorModel.test.tsx` 9 项全过（新增 3D 线段/棱长度与方向、3D 多边形面面积与周长断言）、`EngineeringInspector.test.tsx` 20 项全过、`App.test.tsx` 116 项全过；
+  - `npm run test:docs` **8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 15 警告**。
+
 ## 2026-11-02 —— MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10，开发版）
 
 - **专属多层几何品牌徽标组件（BrandMarkIcon.tsx）**：设计并实现展现 MathCanvas 核心特色的矢量徽标组件 `apps/web/src/components/BrandMarkIcon.tsx`（`data-brand-icon="mathcanvas-prism"`），替换原有的通用文本符号 `∑`。图标在 32×32 视口内精准融合三大产品基因：

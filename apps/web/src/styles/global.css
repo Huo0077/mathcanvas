@@ -1915,3 +1915,241 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
     transform: none !important;
   }
 }
+
+
+/* ==========================================================================
+   Block 11: Inspector & Properties Panel Ergonomic Layout Optimization
+   ========================================================================== */
+.inspector-selected-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 var(--space-4);
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  box-shadow: var(--shadow-card);
+}
+.inspector-selected-identity {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.inspector-selected-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.inspector-selected-heading h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-accordion {
+  margin: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.inspector-accordion-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-align: left;
+}
+.inspector-accordion-trigger:hover {
+  background: var(--color-panel);
+  color: var(--color-accent-strong);
+}
+.inspector-accordion-indicator {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+.inspector-accordion-content {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-2) 0 var(--space-3);
+}
+.properties .primitive-properties,
+.properties .batch-properties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0 var(--space-4);
+  padding: 14px;
+  background: var(--color-panel);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  animation: mc-card-soft-enter var(--duration-normal) var(--ease-soft-out);
+  transition:
+    box-shadow var(--duration-normal) var(--ease-soft-out),
+    border-color var(--duration-fast) var(--ease-soft-out),
+    transform var(--duration-normal) var(--ease-soft-out);
+}
+.inspector-accordion-content > .primitive-properties,
+.inspector-accordion-content > .batch-properties {
+  margin: 0;
+}
+.properties .primitive-properties.primitive-identity-card {
+  padding: 10px 14px;
+  gap: var(--space-2);
+}
+.properties .primitive-properties:focus-within,
+.properties .batch-properties:focus-within {
+  box-shadow: 0 14px 32px -16px rgb(44 62 80 / 18%), 0 2px 8px -2px rgb(44 62 80 / 6%);
+}
+.properties .primitive-properties h3,
+.properties .batch-properties h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  letter-spacing: -0.01em;
+}
+.properties .primitive-properties > .property-card-heading,
+.properties .primitive-properties > p,
+.properties .primitive-properties > button,
+.properties .primitive-properties > .property-actions,
+.properties .primitive-properties > .metric-grid,
+.properties .primitive-properties > .formula-keyboard,
+.properties .primitive-properties > .endpoint-group,
+.properties .primitive-properties > .annotation-list,
+.properties .primitive-properties > .property-subcard,
+.properties .primitive-properties > .derived-reading,
+.properties .primitive-properties > .colour-field,
+.properties .primitive-properties > .footer-note,
+.properties .batch-properties > * {
+  grid-column: 1 / -1;
+}
+.properties .primitive-properties > label:has(textarea),
+.properties .primitive-properties > label:has(select),
+.properties .primitive-properties > label:has(input[type="text"]) {
+  grid-column: 1 / -1;
+}
+.properties .primitive-properties label {
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+.properties .primitive-properties input,
+.properties .primitive-properties select,
+.properties .primitive-properties textarea {
+  min-height: var(--control-height);
+  border-color: transparent;
+  background: var(--color-surface-subtle);
+}
+.properties .primitive-properties input:focus,
+.properties .primitive-properties select:focus,
+.properties .primitive-properties textarea:focus {
+  border-color: var(--color-accent);
+  background: var(--color-panel);
+}
+.properties .primitive-properties input:disabled,
+.properties .primitive-properties select:disabled,
+.properties .primitive-properties textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.properties .function-properties {
+  border-color: rgb(61 90 128 / 24%);
+}
+.metric-grid.vector3-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+.property-actions button {
+  min-height: 36px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.property-actions.property-actions-4col {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+.property-actions.property-actions-4col button {
+  min-height: 34px;
+  padding-inline: var(--space-1);
+  font-size: var(--text-xs);
+}
+.property-axis-pair {
+  display: contents;
+}
+.property-subcard {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+}
+.property-subcard > .property-subheading,
+.property-subcard > .property-actions,
+.property-subcard > .metric-grid,
+.property-subcard > .inspector-slider-row,
+.property-subcard > p,
+.property-subcard > label:has(select),
+.property-subcard > label:has(input[type="text"]) {
+  grid-column: 1 / -1;
+}
+.property-subcard > .property-subheading {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+.inspector-slider-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-2);
+}
+.inspector-slider-row > button {
+  min-height: 36px;
+  padding-inline: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.inspector-slider-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.inspector-slider-field span {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+.primitive-properties > .footer-note,
+.property-subcard > .footer-note {
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--color-muted);
+  background: transparent;
+  border-top: 1px solid var(--color-border);
+}
+@media (prefers-reduced-motion: reduce) {
+  .properties .primitive-properties,
+  .properties .batch-properties {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+}

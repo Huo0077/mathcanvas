@@ -29,9 +29,9 @@ export function InspectorAccordion({ title, open, onToggle, children }: { title:
   return <section className={`inspector-accordion${open ? " is-open" : ""}`}>
     <button className="inspector-accordion-trigger" type="button" aria-expanded={open} onClick={onToggle}>
       <span>{title}</span>
-      <span aria-hidden="true">{open ? "−" : "+"}</span>
+      <span className="inspector-accordion-indicator" aria-hidden="true">{open ? "−" : "+"}</span>
     </button>
-    {open && <div className="inspector-accordion-content">{children}</div>}
+    {open && children && <div className="inspector-accordion-content">{children}</div>}
   </section>
 }
 
@@ -51,12 +51,12 @@ export function CurveTangentAction({ sourceId, editable, onCreateCurveTangent }:
     <div className="property-actions" aria-label="曲线切线">
       <button type="button" aria-label="创建切线" disabled={!editable || !onCreateCurveTangent} onClick={() => onCreateCurveTangent?.(sourceId)}>创建切线</button>
     </div>
-    <p className="footer-note">创建切线：切点默认落在曲线顶点，之后可以在切线的属性里拖「切点参数」沿曲线滑动，或改成跟随某个动点。</p>
+    <p className="footer-note">创建切线：切点默认落在曲线顶点，之后可在切线属性中调整切点参数或跟随动点。</p>
   </>
 }
 
 export function Vector3Fields({ prefix, value, disabled, onChange }: { prefix: string; value: Vector3; disabled: boolean; onChange: (axis: keyof Vector3, value: number) => void }) {
-  return <div className="metric-grid"><CoordinateField label={`${prefix} X`} value={value.x} disabled={disabled} onChange={(next) => onChange("x", next)} /><CoordinateField label={`${prefix} Y`} value={value.y} disabled={disabled} onChange={(next) => onChange("y", next)} /><CoordinateField label={`${prefix} Z`} value={value.z} disabled={disabled} onChange={(next) => onChange("z", next)} /></div>
+  return <div className="metric-grid vector3-grid"><CoordinateField label={`${prefix} X`} value={value.x} disabled={disabled} onChange={(next) => onChange("x", next)} /><CoordinateField label={`${prefix} Y`} value={value.y} disabled={disabled} onChange={(next) => onChange("y", next)} /><CoordinateField label={`${prefix} Z`} value={value.z} disabled={disabled} onChange={(next) => onChange("z", next)} /></div>
 }
 
 /**
@@ -69,14 +69,16 @@ export function SolidRotationFields({ rotation, disabled, onChange }: { rotation
   const setDegrees = (axis: "x" | "y" | "z", degrees: number) => onChange({ ...current, [axis]: rotationRadians(degrees) })
 
   return <>
-    {axes.map(([axis, label]) => <Field key={axis} label={`绕 ${label} 轴（度）`}>
-      <input aria-label={`绕 ${label} 轴旋转角度`} type="number" step="15" disabled={disabled} value={displayDegrees(current[axis])} onChange={(event) => setDegrees(axis, numberValue(event))} />
-    </Field>)}
-    <div className="property-actions" aria-label="朝向快捷角度">
+    <div className="metric-grid vector3-grid">
+      {axes.map(([axis, label]) => <Field key={axis} label={`绕 ${label} 轴（度）`}>
+        <input aria-label={`绕 ${label} 轴旋转角度`} type="number" step="15" disabled={disabled} value={displayDegrees(current[axis])} onChange={(event) => setDegrees(axis, numberValue(event))} />
+      </Field>)}
+    </div>
+    <div className="property-actions property-actions-4col" aria-label="朝向快捷角度">
       <button type="button" aria-label="复位朝向" disabled={disabled} onClick={() => onChange({ x: 0, y: 0, z: 0 })}>归零</button>
       {axes.map(([axis, label]) => <button key={axis} type="button" aria-label={`绕 ${label} 轴加 90 度`} disabled={disabled} onClick={() => setDegrees(axis, displayDegrees(current[axis]) + 90)}>{label} +90°</button>)}
     </div>
-    <p className="footer-note">角度以度为单位，按 X → Y → Z 依次绕图形自身中心旋转；快捷按钮每次叠加 90°。</p>
+    <p className="footer-note">角度按 X → Y → Z 依次绕图形中心旋转；快捷按钮每次叠加 90°。</p>
   </>
 }
 
@@ -96,7 +98,7 @@ export function ObjectRotationFields({ normal, disabled, onRotate }: { normal: V
   return <>
     <Field label="旋转轴"><select aria-label="旋转轴" disabled={blocked} value={axis} onChange={(event) => setAxis(event.target.value as "x" | "y" | "z")}>{axes.map((value) => <option key={value} value={value}>{value.toUpperCase()} 轴</option>)}</select></Field>
     <Field label="再转角度（度）"><input aria-label="再转角度" type="number" step="15" disabled={blocked} value={degrees} onChange={(event) => setDegrees(numberValue(event))} /></Field>
-    <div className="property-actions" aria-label="旋转朝向">
+    <div className="property-actions property-actions-4col" aria-label="旋转朝向">
       <button type="button" aria-label="应用旋转" disabled={blocked || degrees === 0} onClick={() => onRotate?.(axis, degrees)}>旋转</button>
       {axes.map((value) => <button key={value} type="button" aria-label={`绕 ${value.toUpperCase()} 轴加 90 度`} disabled={blocked} onClick={() => onRotate?.(value, 90)}>{value.toUpperCase()} +90°</button>)}
     </div>
@@ -104,7 +106,7 @@ export function ObjectRotationFields({ normal, disabled, onRotate }: { normal: V
       <span>当前法向<strong>{normal ? `(${normal.x.toFixed(2)}, ${normal.y.toFixed(2)}, ${normal.z.toFixed(2)})` : "—"}</strong></span>
       <span>与 +Z 夹角<strong>{tilt === null ? "—" : `${tilt.toFixed(2)}°`}</strong></span>
     </div>
-    <p className="footer-note">空间面与圆轨道的朝向由它们的点 / 法向决定，不能像实体那样"存三个角"，所以这里是**相对**旋转：选轴、填角度、点「旋转」执行一次（一次撤销），快捷按钮每次 90°。法向是文档里的实时读数。</p>
+    <p className="footer-note">选定坐标轴与角度后点击「旋转」即可执行相对旋转（支持一步撤销）。</p>
   </>
 }
 
