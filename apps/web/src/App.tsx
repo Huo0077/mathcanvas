@@ -406,8 +406,8 @@ export function App() {
     if ("error" in result) { setGuidance(result.error); return }
     if (result.operations.length > 0) applyBatch(result.operations)
     setSelectedIds([result.selectedId])
-    updateSpatialSession({ tool: session.tool, anchors: [] })
-    setActiveCommand(`draw-${session.tool}`)
+    updateSpatialSession(null)
+    setActiveCommand(null)
     setGuidance(null)
   }
   const handleSpatialAnchor = (anchor: SpatialAnchor) => {

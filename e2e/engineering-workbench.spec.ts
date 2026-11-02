@@ -126,6 +126,7 @@ test("box-selects draft geometry with the drag direction deciding the mode", asy
   await page.getByRole("button", { name: "添加线段", exact: true }).click()
   await surface.click({ position: { x: 140, y: 120 } })
   await surface.click({ position: { x: 260, y: 200 } })
+  await page.keyboard.press("Escape")
   const box = (await surface.boundingBox())!
   const revision = async () => Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))
   const before = await revision()

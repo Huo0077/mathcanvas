@@ -10,25 +10,25 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
-## 2026-11-02 —— CI Playwright 审查报错排查与全量端到端测试绿灯修复
+## 2026-11-02 —— CI 审查报错排查与 3D 绘图会话状态修复
 
-**目标**：排查并彻底修复 GitHub Actions CI 中 `e2e` 作业报错失败问题，确保全量端到端自动化测试全部通过绿灯。
+**目标**：排查并彻底修复 GitHub Actions CI 中 `checks`（Vitest 单元测试）与 `e2e`（Playwright 自动化测试）作业报错问题，确保全量门禁 100% 绿色通过。
 
 **排查与根因**：
-通过本地逐批运行 Playwright 79 个测试文件及 252 个用例，成功复现并定位出两条回归用例：
-1. `e2e/engineering-workbench.spec.ts:119`（`box-selects draft geometry with the drag direction deciding the mode`）：
-   - **根因**：Block 1 引入连续作图心流（Sticky Tools）后，CAD 二维制图视口（`DrawingViewport.tsx`）在绘制完线段后仍处于粘滞待画状态（`creation.center === null`），而旧版 `beginBoxSelect` 严格判断 `if (creation) return`，将未落首点的待画状态也一并拦截，导致后续的相交框选（Crossing Select）无法启动。
-   - **修复**：更新 `DrawingViewport.tsx` 的 `beginBoxSelect` 判定为仅在正处于中间落点（`creation && creation.center !== null`）时互斥，在未落首点时允许平滑拖拽框选；同时在 `selectionCommands.ts` 的 `selectBox` 逻辑中显式调用 `setCreationStep(null)` 重置创建态，并防止拖选抬起时误触画布落点，彻底修复该用例。
-2. `e2e/three-canvas-size.spec.ts:72`（`keeps the canvas size when the status text changes`）：
+1. `DrawingViewport.test.tsx`（`does not start a box selection while a creation is pending`）：
+   - **根因**：此前在尝试让 `e2e/engineering-workbench.spec.ts` 的框选用例通过时，将 `DrawingViewport.tsx` 的 `beginBoxSelect` 判定放宽为 `(creation && creation.center !== null)`，破坏了"处于创建工具状态下不得框选"的业务不变式，导致该单元测试报错失败。
+   - **修复**：恢复 `DrawingViewport.tsx` 中 `if (creation) return` 的严格互斥逻辑；在 `e2e/engineering-workbench.spec.ts` 中针对粘滞连续作图心流（Sticky Tools）场景，在绘制完线段后显式触发 `Escape` 键退出连续画线模式回归选择模式，使单元测试与端到端测试两端均 100% 绿灯。
+2. `e2e/geometry3d-creation.spec.ts`（3 项用例失败：`draws a spatial segment directly on the canvas and undoes it in one step` 等）：
+   - **根因**：在 Block 1 引入连续作图心流时，误将 3D 空间绘制提交（`commitSpatialDrawing` in `App.tsx`）改写为粘滞保留模式（`updateSpatialSession({ tool: session.tool, anchors: [] })`），导致 `data-creation-tool` 属性在空间线段/面完成后残留为 `"segment3"` 而未重置为空字符串，阻碍了后续图元选中与撤销断言。
+   - **修复**：在 `App.tsx` 中将 `commitSpatialDrawing` 恢复为原子化完成会话清理（`updateSpatialSession(null)` 与 `setActiveCommand(null)`），使用户在完成三维图元绘制后立即进入自由选择与视角旋转状态，3 项用例全部恢复通过。
+3. `e2e/three-canvas-size.spec.ts:72`（`keeps the canvas size when the status text changes`）：
    - **根因**：Block 5 引入工作台侧栏折叠药丸按钮后，在 1280px 桌面视口下当 3D 悬停触发超长操作提示（79 字符复杂剖切文案）时，文案与新增的右侧按钮总宽度超过单行可用宽度，触发 `.status-bar` 的 `flex-wrap: wrap` 折入第二行；由于 56px 固定高度仅容纳单行文本，内部产生 16px 纵向滚动差值，导致 `bar.overflow <= 1`（视口高度防挤压不变量）断言失败。
    - **修复**：在 `global.css` 中为大屏桌面端（`min-width: 1101px`）声明 `.status-bar { flex-wrap: nowrap }` 并为 `.status-bar-prompt` 设置 `text-overflow: ellipsis` 文本省略截断与侧栏按钮不可压缩（`flex-shrink: 0`），确保 `element.scrollHeight === element.clientHeight`（`overflow <= 1`），彻底修复该用例。
-3. **CI e2e 门禁可观测性加固**：在 `.github/workflows/ci.yml` 的 `e2e` 作业中新增失败注解提取步骤，用例失败时直接提取关键断言信息作为 GitHub Check Run Annotation 展示。
+4. **CI e2e 门禁可观测性加固**：在 `.github/workflows/ci.yml` 的 `e2e` 作业中新增失败注解提取步骤，用例失败时直接提取关键断言信息作为 GitHub Check Run Annotation 展示。
 
 **验证读数（2026-11-02 本机）**：
-- Playwright `three-canvas-size.spec.ts` **4/4 全部通过**；
-- Playwright `engineering-workbench.spec.ts` **13/13 全部通过**；
-- Playwright `agent-*.spec.ts` **70/70 全部通过**；
-- Playwright `three-*.spec.ts` **32/32 全部通过**；
+- 全量单元测试 **505 文件 / 5372 通过 + 1 todo / 0 失败**（含 `DrawingViewport.test.tsx` 35 项全过）；
+- Playwright e2e `geometry3d-creation.spec.ts`、`three-canvas-size.spec.ts` 与 `engineering-workbench.spec.ts` **全部通过**；
 - `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
 - `npm run typecheck` **0 错误**（exit 0）；
 - `npm run lint` **0 错误 / 16 警告**。
