@@ -1009,3 +1009,5 @@ T08 的"真实模型路径"仍然没跑（没有凭据）。
   每一步是一次**刚体旋转**，判据是"折痕不动 / 折片刚性 / 角度对"，不是"整张纸不撕开"。
   这一点必须写清，否则会被读成物理折纸的完整模型。
 - 真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑（改动在矩形族与核验的折前状态重建）。
+
+> **2026-11-02 后续回归修复补记（`16279284`）**：针对本台账引入的矩形单/双折、`obligationIR` 与文档门禁完成四处加固：① `diagramVerification` 在别名覆盖前保留 `rawPoints` 并结合 `solid.fold` 折前顶点核验 `foldChecks`（修复显式折角并命名目标面时 `B` 被提前覆写为 `B′` 导致实测报 `0°` 的缺陷），同时区分折起动词后的折后距离条件（修复 `使 BD=3` 误用折前对角线核验）；② `readRectangleFoldCore` 跳过 `求证/证明/求` 目标段中的两平面垂直；③ `solveRectangleFoldChain` 补齐第一笔未显式给折后名时的原名回退与第二笔折片合法性校验，统一规范化 ASCII 撇号 `'`；④ `obligationIR` R4 无损往返补齐 `solid` / `prismShape` / `line` / `expectation` / `expressions` 并同步 `JUDGED_KINDS`。复跑 `eval:reliability -- --offline` **29/29 通过、incomplete 0**，`rectangleFold*.test.ts` 3 文件 **49 passed**，`obligationIR.test.ts` **12 passed**，全量单测 **499 文件 / 5338 通过 + 1 todo / 0 失败**，`docs-consistency` **8 文件 / 22 项通过**，`eslint` **0 error / 16 warning**。详见 [`docs/current-status.md`](../current-status.md) 顶部 `2026-11-02` 小节。

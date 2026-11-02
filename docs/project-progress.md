@@ -19,6 +19,9 @@
 2. **`obligationIR` R4 无损往返**：在 `ObligationGeometry`、`claimOf`、`toLegacyObligationSet` 中补齐 `solid`、`prismShape`、`line`、`expectation`、`expressions`，并同步 `JUDGED_KINDS`。
 3. **矩形单/双折与折前/折后状态核验**：修复 `foldChecks` 被折后别名污染报 `0°` 的缺陷、修复折起句后 `使 BD=3` 被误判为折前对角线的缺陷、修复 `readRectangleFoldCore` 误扫 `求证` 段平面垂直、补齐 `solveRectangleFoldChain` 隐式命名回退与第二折面片校验，以及 ASCII 撇号 `'` 规范化。
 4. **仓库卫生与文档门禁**：清理 `audit-20261016/` 未跟踪产物与外层散落探针，更新 `.gitignore`、`eslint.config.mjs`、CI 门禁与 `docs-consistency` 的日期不落后判据。
+5. **UI 界面与交互体验（UX）调研与第一阶段落地**：全量审计 `apps/web/src` 交互反模式并输出对标重构方案 [`docs/superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md`](superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md)；落地 2D `Space` 漫游文本框隔离、2D 橡皮筋实时拉伸预览与 12px 磁吸捕捉（`creationPreview.ts`）、3D 空间点直抓拖拽与 `Esc` 退出粘滞状态机（`threeSceneEffect.ts` / `threeSceneInteraction.ts` / `threeScene.tsx`）、功能区激活工具高亮下划线（`Ribbon.tsx`）、激活顶栏 `Ctrl+K` 实时模糊搜索命令面板（`CommandSearch.tsx` / `commandSearchModel.ts`）、桌面端工作台左右侧栏一键折叠（`App.tsx`）与 2D 画布响应式高度撑满（`global.css`），以及 Agent 输入框 IME 安全回车提交（`AgentComposer.tsx`）。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5344 通过 + 1 todo / 0 失败**（其中新增 `creationPreview.test.ts` 3 项、`CommandSearch.test.tsx` 3 项；明确实体定向 4 文件 59 项、`obligationIR.test.ts` 12 项、矩形单/双折状态核验 2 文件 25 项、完整 `rectangleFold*.test.ts` 3 文件 49 项）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**（21 条独立 oracle 全 `passed`）；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
 
 ## 2026-11-01 —— 明确球体 / 棱柱尺寸、形状语义与 54 题离线验收
 

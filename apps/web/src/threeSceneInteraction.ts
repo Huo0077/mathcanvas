@@ -188,7 +188,14 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           return
         }
       }
-      if (dragModeRef.current && event.button === 0) {
+      /**
+       * **不必先开"自由拖动"就能抓点**（UI/UX 优化规格 §3D 直抓）。
+       * 主流 3D 几何软件里，按住一个点就是拖它；旋转视角是按在空白处 / 实体上。
+       * 这里只放行**点**（`hit.kind === "point"` 且解析出来是 point3）：实体 / 棱 / 面仍然是旋转视角，
+       * 原来"左键拖动旋转"的手感不变。带修饰键（Shift 平移 / Ctrl 纵深 / Alt）时一律不抓。
+       */
+      const directPointDrag = !dragModeRef.current && !panModeRef.current && event.button === 0 && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey
+      if ((dragModeRef.current || directPointDrag) && event.button === 0) {
         /**
          * **拖动只抓"能拖的那个"**（S5 拖动那一半挖出来的）。
          *
@@ -203,15 +210,17 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           accept: (primitiveId) => {
             const resolved = resolveSelectableHit(primitiveId, topologyOwners)
             const candidate = resolved === null ? undefined : documentRef.current.primitives.find((primitive) => primitive.id === resolved)
-            return canStartDragSession(candidate, points, generated)
+            return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
           }
         })
         const targetId = resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners)
         const target = targetId ? documentRef.current.primitives.find((primitive) => primitive.id === targetId) : undefined
         // 拖动排查用读数：这一次按下到底抓到了什么。
-        if (sceneShell) sceneShell.dataset.dragTarget = `${hit?.kind ?? "none"}:${hit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
+        // 直抓只认"真的按在点上"；自由拖动模式下沿用原来的判据。
+        const grabAllowed = dragModeRef.current || hit?.kind === "point"
+        if (sceneShell && (dragModeRef.current || (grabAllowed && target))) sceneShell.dataset.dragTarget = `${hit?.kind ?? "none"}:${hit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
         // 截面要单独判定：它画在实体内部，按深度永远排不到，但用户指向那圈线时就是要挪刀口。
-        const sectionId = pickSectionAt(scene, camera, point, pickTolerance(), hit?.kind === "point" || hit?.kind === "edge")
+        const sectionId = dragModeRef.current ? pickSectionAt(scene, camera, point, pickTolerance(), hit?.kind === "point" || hit?.kind === "edge") : null
         const section = sectionId ? documentRef.current.primitives.find((primitive) => primitive.id === sectionId) : undefined
         if (section && section.type === "section") {
           // 拖动一个截面 = 沿法向平移剖切面。截面没有自己的实体几何，拖它就是挪刀口。
@@ -225,7 +234,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               dragSessionRef.current = { targetId: section.id, family: new Set([section.id]), anchor, origin: anchor.clone(), total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false, slideNormal: normal }
             }
           }
-        } else if (hit && target && target.type === "point3" && target.binding && target.binding.kind !== "free") {
+        } else if (grabAllowed && hit && target && target.type === "point3" && target.binding && target.binding.kind !== "free") {
           /**
            * 绑定点的拖动：指针位置投影回**宿主的参数域**，点由参数算出坐标，所以永远贴住宿主
            * （不像自由拖动那样"叠加屏幕位移"，拖久了也不会漂离）。拖动期间只更新参数与受影响对象。
@@ -256,12 +265,13 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               reactiveHost: buildHostPointGraph(target.id, hostConstraint)
             }
           }
-        } else if (hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
+        } else if (grabAllowed && hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
           const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
           dragSessionRef.current = { targetId: target.id, family: dragFamilyIds(documentRef.current, target.id), anchor, origin, total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false }
         }
       }
+      if (!dragModeRef.current && dragSessionRef.current) dragSessionRef.current.direct = true
       renderer.domElement.setPointerCapture(event.pointerId)
     }
     const handlePointerMove = (event: PointerEvent) => {
@@ -272,6 +282,8 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
       const deltaY = point.y - pointerState.lastY
       pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
       const session = dragSessionRef.current
+      // 直抓的会话在指针真正移动之前什么都不改：原地点一下仍然是"选中"，不会顺手把点挪一丝。
+      if (session?.direct && !pointerState.moved) return
       if (session) {
         /**
          * 拖**半径手柄**（缩放）：指针落在圆所在平面上的点到圆心的距离。拖动期间**不提交文档**——
@@ -434,7 +446,10 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)
       const session = dragSessionRef.current
-      if (session) {
+      /** 直抓但没拖动：当作一次普通点击，走下面完全不变的拾取 / 预览优先级分支。 */
+      const directClick = Boolean(session?.direct && !session.applied && !pointerState.moved)
+      if (directClick) dragSessionRef.current = null
+      if (session && !directClick) {
         dragSessionRef.current = null
         /**
          * 抬手前先量一次"画面与位移是否一致"：拖动期间文档不提交，画面全靠临时偏移，

@@ -211,6 +211,8 @@ export function App() {
   }, [document, wizardConstruction])
   const [cadMode, setCadMode] = useState<CadMode>("projection")
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
+  const [leftDockOpen, setLeftDockOpen] = useState(true)
+  const [rightDockOpen, setRightDockOpen] = useState(true)
   const [showProjectionDiagnostics, setShowProjectionDiagnostics] = useState(false)
   const [activeSheetId, setActiveSheetId] = useState<string | null>(null)
   const [activeViewId, setActiveViewId] = useState<string | null>(null)
@@ -458,7 +460,10 @@ export function App() {
    */
   const pendingCreationRef = useRef(false)
   useEffect(() => {
-    if (pendingCreationRef.current && !creationStep) setGuidance(null)
+    if (pendingCreationRef.current && !creationStep) {
+      setGuidance(null)
+      setActiveCommand(null)
+    }
     pendingCreationRef.current = creationStep !== null
   }, [creationStep])
 
@@ -712,7 +717,7 @@ export function App() {
    * 入口撤掉之后它没有任何调用者，因此一并删除 —— 功能区那四个按钮仍然照旧工作。
    */
 
-  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
+  const planarCanvas = <GraphicsView document={document} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onDragEnd={handleDragEnd} onCreateIntersection={createIntersectionFromPreview} onPointerCoordinate={setPointerCoordinate} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -844,6 +849,14 @@ export function App() {
     {showProjectionDiagnostics && <details className="engineering-drawing-diagnostics workbench-diagnostics" open><summary>投影诊断 {cadDiagnosticCount} 条</summary>{cadDiagnosticCount > 0 ? <ul>{engineeringDrawings.flatMap((drawing) => drawing.diagnostics).map((diagnostic, index) => <li key={`${index}-${diagnostic}`}>{diagnostic}</li>)}</ul> : <p role="status">当前四个投影视图没有诊断信息。</p>}</details>}
   </>
 
+  const effectiveActiveCommand = creationStep
+    ? `create-${creationStep.mode}`
+    : spatialSession
+      ? `draw-${spatialSession.tool}`
+      : activeCommand && (activeCommand.startsWith("create-") || activeCommand.startsWith("draw-"))
+        ? activeCommand
+        : "select-tool"
+
   const cadWorkbench = <EngineeringWorkbench
     document={document}
     mode={cadMode}
@@ -871,8 +884,9 @@ export function App() {
       {/* 顶栏只剩品牌（含动态粒子与打字光标）；文件命令 / 搜索 / 设置下沉到标签栏右端。 */}
       <WorkspaceHeader />
       <AppChrome
-      onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} />
-      {document.workspace === "cad" ? cadWorkbench : <div className="workbench">
+      onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
+      {document.workspace === "cad" ? cadWorkbench : (
+        <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"}>
         <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
           <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
@@ -888,8 +902,9 @@ export function App() {
           else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
         }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
         {inspectorPanel}
-        <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span></div>
-      </div>}
+        <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span><span className="status-bar-spacer" /><div className="status-bar-dock-toggles" role="group" aria-label="工作台侧栏折叠"><button type="button" className="status-bar-dock-btn" aria-expanded={leftDockOpen} onClick={() => setLeftDockOpen((open) => !open)} title={leftDockOpen ? "收起左侧对象列表（增大画布）" : "展开左侧对象列表"}>{leftDockOpen ? "◀ 左栏" : "▶ 左栏"}</button><button type="button" className="status-bar-dock-btn" aria-expanded={rightDockOpen} onClick={() => setRightDockOpen((open) => !open)} title={rightDockOpen ? "收起右侧属性栏（增大画布）" : "展开右侧属性栏"}>{rightDockOpen ? "右栏 ▶" : "右栏 ◀"}</button></div></div>
+      </div>
+      )}
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
       {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
       {/* 项目包（`.mcanvas` 导出/导入 + 附件）：文件级动作，与"打开/保存 .mgeo"同一组入口。

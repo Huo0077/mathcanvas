@@ -1214,6 +1214,7 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
 /* 图标本身是 SVG，`stroke-width` 是元素属性，只能用 CSS 覆盖；1.35 在 22px 下读作极细线条。 */
 .ribbon-icon, .ui-icon, .row-icon, .row-lock-icon, .header-icon, .rail-icon { stroke-width: 1.35; }
 .ribbon-command:hover { border-color: transparent; background: var(--color-accent-soft); }
+.ribbon-command[data-active="true"] { border-color: rgb(61 90 128 / 32%); background: var(--color-accent-soft); color: var(--color-accent-strong); box-shadow: inset 0 -2px 0 var(--color-accent); font-weight: 650; }
 .topbar-commands button { min-height: 32px; border-color: transparent; background: transparent; color: var(--color-muted); font-weight: 600; }
 .topbar-commands button:hover { border-color: transparent; background: var(--color-accent-soft); color: var(--color-accent-strong); }
 .topbar-icon { color: var(--color-muted); }
@@ -1237,14 +1238,46 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
    但文件更早处给 `.canvas-card` 写了 `align-self: start` —— 那会让卡片在**行**方向收缩成内容尺寸，
    于是画布在宽阔的工作台里只占中间一小块（实测截图里左右各空着约 170px）。
    这里显式拉满：卡片占满绘图区宽度，SVG 再把卡片填满，`height: auto` 由 viewBox 的 800:440 定高。 */
-.canvas-card { align-self: stretch; justify-self: stretch; width: 100%; margin: 0; }
-.canvas-card svg { width: 100%; }
-.graphics { padding: var(--space-5); }
+.canvas-card { align-self: stretch; justify-self: stretch; width: 100%; margin: 0; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; position: relative; }
+.canvas-card svg { width: 100%; flex: 1 1 auto; min-height: 0; max-height: 100%; border-radius: var(--radius-md); }
+.graphics { padding: var(--space-5); display: flex; flex-direction: column; height: 100%; min-height: 0; box-sizing: border-box; }
 .canvas-card { padding: var(--space-3); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
-.canvas-card svg { border-radius: var(--radius-md); }
 @media (max-width: 900px) { .graphics { padding: var(--space-3); } }
 
 /* ---------- 右侧：模块化折叠属性卡片 ---------- */
 .properties .primitive-properties, .properties .batch-properties { border-radius: var(--radius-md); }
 .inspector-accordion-trigger { color: var(--color-ink); font-weight: 620; letter-spacing: 0.01em; }
 .inspector-accordion { border-bottom-color: var(--color-border); }
+
+/* ============================================================================
+   UI/UX 细节与整体手感交互优化（2026-11-02）
+   ============================================================================ */
+
+/* 2D 橡皮筋绘制预览与磁吸环 */
+.creation-preview-stroke { stroke: var(--color-accent); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.creation-preview-anchor { fill: var(--color-accent); pointer-events: none; }
+.creation-preview-label { fill: var(--color-accent-strong); font-size: 11px; font-weight: 600; paint-order: stroke; stroke: var(--color-paper); stroke-width: 3px; font-family: var(--font-math); pointer-events: none; }
+.creation-snap-ring { stroke: var(--color-accent); stroke-width: 1.75; stroke-dasharray: 3 2; pointer-events: none; animation: snap-ring-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes snap-ring-pulse { from { opacity: 0.75; } to { opacity: 1; } }
+
+/* 顶部命令搜索面板 */
+.command-search { position: relative; }
+.command-search .search-box { position: relative; display: flex; align-items: center; }
+.search-shortcut { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; line-height: 1; padding: 2px 4px; border-radius: var(--radius-xs); background: var(--color-panel); color: var(--color-muted); border: 1px solid var(--color-border); pointer-events: none; font-family: inherit; }
+.command-search-results { position: absolute; top: calc(100% + 4px); left: 0; width: max(260px, 100%); max-height: 320px; overflow-y: auto; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: var(--shadow-panel); z-index: 100; padding: 4px; }
+.command-search-option { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: var(--radius-xs); font-size: var(--text-xs); color: var(--color-ink); cursor: pointer; }
+.command-search-option[data-active="true"], .command-search-option:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); }
+.command-search-option[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.command-search-group { font-size: 10px; color: var(--color-muted); margin-left: 8px; }
+.command-search-empty { padding: 8px 12px; margin: 0; font-size: var(--text-xs); color: var(--color-muted); text-align: center; }
+
+/* 桌面端工作台侧栏折叠 */
+.workbench[data-left-open="false"] { grid-template-columns: 0px minmax(0, 1fr) var(--panel-right-width); }
+.workbench[data-right-open="false"] { grid-template-columns: var(--panel-left-width) minmax(0, 1fr) 0px; }
+.workbench[data-left-open="false"][data-right-open="false"] { grid-template-columns: 0px minmax(0, 1fr) 0px; }
+.workbench[data-left-open="false"] > .panel:not(.right) { display: none; }
+.workbench[data-right-open="false"] > .panel.right { display: none; }
+.status-bar-spacer { flex: 1 1 auto; }
+.status-bar-dock-toggles { display: inline-flex; gap: var(--space-1); margin-left: auto; }
+.status-bar-dock-btn { height: 24px; min-height: 24px; padding: 0 8px; border: 1px solid var(--color-border); border-radius: var(--radius-xs); background: var(--color-surface-subtle); color: var(--color-muted); font-size: 11px; cursor: pointer; }
+.status-bar-dock-btn:hover { background: var(--color-accent-soft); color: var(--color-accent-strong); border-color: var(--color-accent); }

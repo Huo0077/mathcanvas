@@ -18,6 +18,9 @@ import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../prim
 import { planarMeasurementVisuals } from "../planarMeasurementVisuals"
 import { DEFAULT_VIEWPORT, VIEWBOX, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 import { GRID_CELL, GRID_MAJOR_EVERY } from "../sceneGrid"
+import { isTextEditingTarget } from "../documentIds"
+import type { CreationStep } from "../draftingCommands"
+import { creationPreviewShapes, creationSnapTarget, snapCandidatesOf } from "../creationPreview"
 
 type CreationMode = "line" | "segment" | "ray" | "polyline" | "circle" | "arc" | null
 
@@ -41,6 +44,12 @@ interface GraphicsViewProps {
   onDragEnd: (id: string, action: DragAction) => void
   onCreateIntersection: (preview: IntersectionPreview) => void
   onPointerCoordinate?: (coordinate: Coordinate | null) => void
+  /**
+   * 当前多步创建进行到哪一步（已放下的圆心 / 起点 / 折线顶点）。
+   * 给了它，画布就画"橡皮筋"预览：第一下点完之后，线 / 圆随指针实时拉伸，
+   * 而不是一直空白到第二下点完才突然出现（主流几何软件的基本手感）。
+   */
+  creationStep?: CreationStep | null
   /** 用户口径：空白画布上**不要**任何说明文字或快捷入口，画布保持干净。 */
 }
 
@@ -90,7 +99,7 @@ function pointsAttribute(points: Coordinate[], viewport: Viewport): string {
   return points.map((point) => `${worldToSvg({ x: point.x, y: 0 }, viewport).x},${worldToSvg({ x: 0, y: point.y }, viewport).y}`).join(" ")
 }
 
-export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate }: GraphicsViewProps) {
+export function GraphicsView({ document, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate, creationStep = null }: GraphicsViewProps) {
   const workspace = document.workspace
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)
@@ -361,9 +370,19 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const functionSegments = (primitive: Extract<PrimitiveSpec, { type: "function" }>) => {
     try { return clipFunctionSegmentsToBounds(adaptiveSampleFunctionSegments((x) => evaluateParameterExpression(primitive.expression, { x }), primitive.domain, { initialSteps: primitive.samples ?? 128, maxSteps: Math.max(primitive.samples ?? 128, 2048) }), worldBounds) } catch { return [] }
   }
+  /**
+   * **创建时的磁吸**：指针离已有点 / 交点 / 交点预览不到 12px 时，落点直接取那个点的精确坐标。
+   * 没有它，"从 A 点连一条线段到 B 点"只能靠手对准，端点总差一丝（与主流几何软件的手感完全不同）。
+   * 只在创建模式里生效：选择 / 拖动的拾取规则一字不变。
+   */
+  const snapCandidates = useMemo(() => creationMode ? snapCandidatesOf(displayPrimitives, intersectionPreviews) : [], [creationMode, displayPrimitives, intersectionPreviews])
+  const snapCoordinate = (coordinate: Coordinate) => creationSnapTarget(snapCandidates, coordinate, viewport.scale) ?? coordinate
+  const snapTarget = creationMode && hoverCoordinate ? creationSnapTarget(snapCandidates, hoverCoordinate, viewport.scale) : null
+  const creationPointer = creationMode && hoverCoordinate ? snapTarget ?? hoverCoordinate : null
+  const creationShapes = creationMode ? creationPreviewShapes(creationStep, creationPointer, Math.hypot(worldBounds.maxX - worldBounds.minX, worldBounds.maxY - worldBounds.minY) * 2) : []
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => {
     event.stopPropagation()
-    if (creationMode) { onCanvasClick(eventToWorld(event, viewport)); return }
+    if (creationMode) { onCanvasClick(snapCoordinate(eventToWorld(event, viewport))); return }
     // 按下时已经选过了：这里再按"加选=切换"处理一次会把刚加进来的对象又删掉。
     if (selectionHandled.current) { selectionHandled.current = false; return }
     // 拖动（而不是点击）结束时不改选择：`finishDrag` 已经判定过这次手势是拖动。
@@ -457,7 +476,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
     // 这三样就是"画出来的东西"的全部输入：内容、视野变换、选中态（影响描边宽度）。
   }, [document, viewport, selectedIds])
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => { if (event.code === "Space") { event.preventDefault(); setSpacePressed(true) } }
+    const handleKeyDown = (event: KeyboardEvent) => { if (event.code === "Space" && !isTextEditingTarget(event.target)) { event.preventDefault(); setSpacePressed(true) } }
     const handleKeyUp = (event: KeyboardEvent) => { if (event.code === "Space") setSpacePressed(false) }
     const handleBlur = () => setSpacePressed(false)
     window.addEventListener("keydown", handleKeyDown)
@@ -526,6 +545,8 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
    */
   const handlePreviewClick = (event: React.MouseEvent<SVGGElement>, preview: IntersectionPreview) => {
     event.stopPropagation()
+    // 创建模式里点到交点预览 = 把线 / 圆的端点落在这个交点上（而不是另建一个交点对象）。
+    if (creationMode) { onCanvasClick({ x: preview.point.x, y: preview.point.y }); return }
     const svg = event.currentTarget.ownerSVGElement
     // jsdom 的 SVG 元素没有 `getScreenCTM` / `DOMPoint`：那里退回"被点到的那个"，
     // 浏览器里才用 CTM 把光标换算进 SVG 坐标系做就近判定。
@@ -562,7 +583,7 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
   const measurementLabels = planarMeasurementVisuals(document, selectedIds)
   const gridStroke = { minor: "var(--color-graph-grid-minor)", major: "var(--color-graph-grid-major)", axis: "var(--color-graph-axis)" }
   return <main className="graphics" data-canvas-surface={graphPaper ? "graph-paper" : "workbench"}><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="presentation">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}
-<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, document))} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(eventToWorld(event, viewport))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(eventToWorld(event, viewport)); else if (!dragStart) onSelect(null) }}>
+<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, document))} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => creationMode === "polyline" && onCanvasDoubleClick(snapCoordinate(eventToWorld(event, viewport)))} onClick={(event) => { if (suppressClick.current) { suppressClick.current = false; return }; if (creationMode) onCanvasClick(snapCoordinate(eventToWorld(event, viewport))); else if (!dragStart) onSelect(null) }}>
     <g data-grid-layer="minor" stroke={gridStroke.minor} strokeWidth="1">{verticalGrid.filter((x) => !isMajorGridLine(x)).map((x) => <line key={`v-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter((y) => !isMajorGridLine(y)).map((y) => <line key={`h-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <g data-grid-layer="major" stroke={gridStroke.major} strokeWidth="1">{verticalGrid.filter(isMajorGridLine).map((x) => <line key={`vm-${x}`} x1={toX(x)} y1={VIEWBOX.top} x2={toX(x)} y2={VIEWBOX.bottom} />)}{horizontalGrid.filter(isMajorGridLine).map((y) => <line key={`hm-${y}`} x1={VIEWBOX.left} y1={toY(y)} x2={VIEWBOX.right} y2={toY(y)} />)}</g>
     <line x1={VIEWBOX.left} y1={toY(0)} x2={VIEWBOX.right} y2={toY(0)} stroke={gridStroke.axis} strokeWidth="1.25" /><line x1={toX(0)} y1={VIEWBOX.top} x2={toX(0)} y2={VIEWBOX.bottom} stroke={gridStroke.axis} strokeWidth="1.25" />
@@ -627,6 +648,26 @@ export function GraphicsView({ document, selectedIds, creationMode, onSelect, on
        * 不如把点的命中区补在最上面：点始终赢，派生曲线与预览中段照旧可选。
        */}
     {displayPrimitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "point" }> => primitive.type === "point" && primitive.visible !== false).map((point) => <circle key={`${point.id}-hit-top`} data-primitive-type="point" data-point-hit="top" data-hit-target="true" cx={toX(point.x)} cy={toY(point.y)} r="12" fill="transparent" pointerEvents="all" onPointerDown={(event) => beginDrag(event, point.id)} onClick={(event) => handleObjectClick(event, point.id)} />)}
+    {/**
+      * **橡皮筋预览层**：第一下点完之后，线 / 射线 / 直线 / 圆 / 圆弧 / 折线随指针实时拉伸，
+      * 并带长度 / 半径读数；靠近已有点时出现吸附环。整层 `pointerEvents="none"`，不抢任何点击。
+      */}
+    {creationMode && (creationShapes.length > 0 || snapTarget) && <g className="creation-preview-layer" data-creation-preview={creationStep?.mode ?? creationMode} pointerEvents="none">
+      {creationShapes.map((shape, index) => {
+        switch (shape.kind) {
+          case "segment": return <line key={index} className="creation-preview-stroke" x1={toX(shape.a.x)} y1={toY(shape.a.y)} x2={toX(shape.b.x)} y2={toY(shape.b.y)} />
+          case "circle": return <circle key={index} className="creation-preview-stroke" cx={toX(shape.center.x)} cy={toY(shape.center.y)} r={shape.radius * viewport.scale} fill="none" />
+          case "polyline": return <polyline key={index} className="creation-preview-stroke" points={pointsAttribute(shape.points, viewport)} fill="none" />
+          case "arc": {
+            const d = `M ${toX(shape.center.x + shape.radius * Math.cos(shape.startAngle))} ${toY(shape.center.y + shape.radius * Math.sin(shape.startAngle))} A ${shape.radius * viewport.scale} ${shape.radius * viewport.scale} 0 ${Math.abs(shape.endAngle - shape.startAngle) > Math.PI ? 1 : 0} ${shape.endAngle >= shape.startAngle ? 0 : 1} ${toX(shape.center.x + shape.radius * Math.cos(shape.endAngle))} ${toY(shape.center.y + shape.radius * Math.sin(shape.endAngle))}`
+            return <path key={index} className="creation-preview-stroke" d={d} fill="none" />
+          }
+          case "anchor": return <circle key={index} className="creation-preview-anchor" cx={toX(shape.point.x)} cy={toY(shape.point.y)} r="3.5" />
+          case "label": return <text key={index} className="creation-preview-label" x={toX(shape.at.x) + 8} y={toY(shape.at.y) - 8}>{shape.text}</text>
+        }
+      })}
+      {snapTarget && <circle data-snap-indicator="true" className="creation-snap-ring" cx={toX(snapTarget.x)} cy={toY(snapTarget.y)} r="7" fill="none" />}
+    </g>}
     {selectionRect && <rect className="selection-rect" data-selection-mode={selectionRect.mode} x={selectionRect.x} y={selectionRect.y} width={selectionRect.width} height={selectionRect.height} />}
     {/**
       * 测量数字**常驻画布**（最上层，压在图形之上）：不需要选中任何对象就能看到有效测量的数值。

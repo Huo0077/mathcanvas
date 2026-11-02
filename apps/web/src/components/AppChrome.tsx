@@ -1,6 +1,8 @@
+import { useMemo } from "react"
 import type { Workspace } from "@draw/dsl"
 
 import type { RibbonGroup, RibbonTabId } from "../uiState"
+import type { SearchableCommand } from "./commandSearchModel"
 import { Ribbon } from "./Ribbon"
 import { WorkspaceTabs } from "./WorkspaceTabs"
 
@@ -32,11 +34,24 @@ interface AppChromeProps {
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  /** 当前生效的工具 id（传给 Ribbon 高亮当前正在画的工具或选择工具）。 */
+  activeCommandId?: string | null
 }
 
-export function AppChrome({ onSettings, activeWorkspace, onWorkspaceChange, ribbonGroups, activeRibbonTab, ribbonExpanded, ribbonPinned, onRibbonTabChange, onRibbonCommand = () => {}, onRibbonExpandedChange, onRibbonPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo }: AppChromeProps) {
+export function AppChrome({ onSettings, activeWorkspace, onWorkspaceChange, ribbonGroups, activeRibbonTab, ribbonExpanded, ribbonPinned, onRibbonTabChange, onRibbonCommand = () => {}, onRibbonExpandedChange, onRibbonPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo, activeCommandId = null }: AppChromeProps) {
+  const searchableCommands = useMemo<SearchableCommand[]>(
+    () => ribbonGroups.flatMap((group) => group.commands.map((cmd) => ({
+      id: cmd.id,
+      label: cmd.label,
+      prompt: cmd.prompt,
+      group: group.label,
+      disabled: cmd.disabled,
+      disabledReason: cmd.disabledReason
+    }))),
+    [ribbonGroups]
+  )
   return <>
-    <WorkspaceTabs onSettings={onSettings} activeWorkspace={activeWorkspace} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onWorkspaceChange={onWorkspaceChange} onTabChange={onRibbonTabChange} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} onOpen={onOpen} onSave={onSave} onPackage={onPackage} onUndo={onUndo} onRedo={onRedo} canUndo={canUndo} canRedo={canRedo} />
-    <Ribbon groups={ribbonGroups} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onTabChange={onRibbonTabChange} onCommand={onRibbonCommand} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} showControls={false} />
+    <WorkspaceTabs onSettings={onSettings} activeWorkspace={activeWorkspace} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onWorkspaceChange={onWorkspaceChange} onTabChange={onRibbonTabChange} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} onOpen={onOpen} onSave={onSave} onPackage={onPackage} onUndo={onUndo} onRedo={onRedo} canUndo={canUndo} canRedo={canRedo} searchableCommands={searchableCommands} onCommand={onRibbonCommand} />
+    <Ribbon groups={ribbonGroups} activeTab={activeRibbonTab} expanded={ribbonExpanded} pinned={ribbonPinned} onTabChange={onRibbonTabChange} onCommand={onRibbonCommand} onExpandedChange={onRibbonExpandedChange} onPinnedChange={onRibbonPinnedChange} showControls={false} activeCommandId={activeCommandId} />
   </>
 }

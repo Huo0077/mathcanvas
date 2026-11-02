@@ -25,6 +25,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false }: AgentC
   const [value, setValue] = useState("")
   const [refusal, setRefusal] = useState<string | null>(null)
   const composingRef = useRef(false)
+  const lastCompositionEndRef = useRef(Number.NEGATIVE_INFINITY)
   const canSend = value.trim().length > 0 && !busy && !disabled
 
   const submit = () => {
@@ -50,9 +51,12 @@ export function AgentComposer({ onSend, busy = false, disabled = false }: AgentC
       placeholder="描述你要做的几何图形或数学问题…（Enter 发送，Shift + Enter 换行）"
       onChange={(event) => setValue(event.target.value)}
       onCompositionStart={() => { composingRef.current = true }}
-      onCompositionEnd={() => { composingRef.current = false }}
+      onCompositionEnd={() => { composingRef.current = false; lastCompositionEndRef.current = performance.now() }}
       onKeyDown={(event) => {
-        if (event.key !== "Enter" || event.shiftKey || composingRef.current || event.nativeEvent.isComposing) return
+        // IME 安全的 Enter（modern-web-guidance `ime-safe-enter-submit`）：Safari 里选字那一下 Enter 会在
+        // `compositionend` 之后才到、`isComposing` 已是 false，所以再补 keyCode 229 与"刚结束组合 50ms 内"两道闸。
+        const native = event.nativeEvent
+        if (event.key !== "Enter" || event.shiftKey || composingRef.current || native.isComposing || native.keyCode === 229 || performance.now() - lastCompositionEndRef.current < 50) return
         event.preventDefault()
         submit()
       }}

@@ -89,13 +89,16 @@ npm run dev
 npm run typecheck
 npm run lint
 npm test
+npm run test:docs
 npm run build
 npm run test:e2e
 npm run test:rust
 npm run eval:agent
+npm run eval:reliability -- --offline
+npm run eval:explicit-solid -- --offline
 ```
 
-`test:e2e` 运行 Playwright 浏览器测试；`test:rust` 需要桌面端 Rust 工具链。`eval:agent` 是**离线确定性**评估，不代表真实模型通过率。按改动范围选择相关检查；提交前至少运行对应的类型检查、测试与构建。最新读数请以当次命令结果为准，不沿用历史文档中的用例总数。CI 配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
+`test:docs` 运行文档与版本一致性门禁（8 个测试文件 / 22 项检查）；`test:e2e` 运行 Playwright 浏览器测试；`test:rust` 需要桌面端 Rust 工具链。`eval:agent`、`eval:reliability -- --offline`（29 题可靠性冒烟与独立 oracle）与 `eval:explicit-solid -- --offline`（54 题明确球体/棱柱离线验收）均为**离线确定性**评估，不代表真实模型通过率。按改动范围选择相关检查；提交前至少运行对应的类型检查、测试与构建。最新读数请以当次命令结果为准，不沿用历史文档中的用例总数。CI 配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
 
 ### 当前开发重点
 

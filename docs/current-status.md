@@ -8,6 +8,9 @@
 - **`obligationIR` R4 无损往返**：`ObligationGeometry`、`claimOf` 与 `toLegacyObligationSet` 完整保留 `solid`、`prismShape`、`line`、`expectation`、`expressions`；`JUDGED_KINDS` 与 `diagramVerification.calculate` 对齐。
 - **矩形折起与状态感知核验**：`diagramVerification` 修复折后同名点别名污染 `foldChecks` 导致显式折角报 `0°` 的缺陷，并区分折起动词后的折后条件（`使 BD=3` 不再误用折前对角线）；`readRectangleFoldCore` 忽略 `求证/证明/求` 目标段中的平面垂直；`solveRectangleFoldChain` 补齐第一折隐式命名回退与第二折面片合法性校验；`lengthEquality`、`figureIntent` 与 `rectangleFoldPlan` 统一规范化 ASCII 撇号 `'`。
 - **仓库卫生与门禁**：清理未跟踪探针与二进制残留，加固 `.gitignore`、`eslint.config.mjs`、CI 门禁及 `docs-consistency`（新增 `current-status.md` 页头更新日期与 `CHANGELOG.md` / `project-progress.md` 最新章节日期一致性校验）。
+- **UI 界面与交互体验（UX）深度调研及第一阶段重构落地**：针对“工具栏与画布交互反直觉”梳理出 6 大维度 20 项查实交互缺陷与改造路线图（[`docs/superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md`](superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md)）；全面落地 2D `Space` 漫游文本框隔离、2D 橡皮筋实时拉伸预览与 12px 磁吸捕捉（`creationPreview.ts`）、3D 空间点直抓拖拽与 `Esc` 退出粘滞状态机（`threeSceneEffect.ts` / `threeSceneInteraction.ts` / `threeScene.tsx`）、功能区激活工具高亮下划线（`Ribbon.tsx`）、激活顶栏 `Ctrl+K` 实时模糊搜索命令面板（`CommandSearch.tsx` / `commandSearchModel.ts`）、桌面端工作台左右侧栏一键折叠（`App.tsx`）与 2D 画布响应式高度撑满（`global.css`），以及 Agent 输入框 IME 安全回车提交（`AgentComposer.tsx`）。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5344 通过 + 1 todo / 0 失败**（其中新增 `creationPreview.test.ts` 3 项、`CommandSearch.test.tsx` 3 项；明确实体定向 4 文件 **59 项**、`obligationIR.test.ts` **12 项**、矩形单/双折状态核验 2 文件 **25 项**，完整 `rectangleFold*.test.ts` 3 文件 **49 项**）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**（错误图被接受 **0**、incomplete **0**）；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**（21 条独立 oracle 全 `passed`）；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 16 警告**。
 
 ## 2026-11-01 棱柱形状语义与完整数值词法修复（外部复核）
 
@@ -74,7 +77,7 @@
 | # | 做了什么 | 关键证据 |
 | --- | --- | --- |
 | 1 | **v4.0 发布**（`3.3.14 → 4.0.0`、tag `v4.0`、Release 三个资产核 SHA-256）→ **v4.0.1 补丁版**（把 v4.0 之后十余轮的读取与判据补齐收成可下载版本） | Release `417498043`（v4.0）/ `v4.0.1` 见 [发布说明](release/v4.0.1.md)；exe 启动 smoke |
-| 2 | **文档门禁 4 → 7 条**（版本真值 / 状态快照唯一 / CHANGELOG 不落后），并做变异验证 | `docs-consistency` 8 文件 / 20 项（2026-10-24 新增文本完整性判据） |
+| 2 | **文档门禁 4 → 7 条**（版本真值 / 状态快照唯一 / CHANGELOG 不落后），并做变异验证 | `docs-consistency` 8 文件 / 22 项（2026-10-24 新增文本完整性判据；2026-11-02 新增日期同步判据） |
 | 3 | **联考方程读入**：`椭圆C：…`、函数式抛物线 `y=x²/4`、圆的一般方程、曲线过点 | `joint-24/26/27/28/30` 的写法 |
 | 4 | **修复提示**：`host_not_found`、面环不共面 / 自交（内核仍拒得对） | `joint-06/11/13` |
 | 5 | **多只闭合多面体**按执行顺序配点名 | `joint-02` |
@@ -90,7 +93,7 @@
 | 15 | **中位线**：存在性地判"两端各是某两条边的中点" | 8 条用例 |
 | 16 | **安装 / 断网证据**：MSI 装不上（`Error 1925`）但载荷与发布资产同尺寸且断网可启动；**NSIS 装 → 启动 → 卸载**闭环走通 | `docs/audit/2026-10-20-install-offline-evidence.md` |
 
-**每一条的门禁读数都记在下面各轮的条目里**（`typecheck` / 单测文件数与条数 / `docs-consistency` / e2e）。截至 2026-10-20 复盘当时：**479 文件 / 5054 通过 + 1 todo / 0 失败**（最新全量单测读数见本页顶部 2026-11-01 / 2026-11-02 条目与下方状态摘要）；`docs-consistency` **8 个测试文件**；全量 e2e **239 通过 / 0 失败**（2026-10-24 于 HEAD 复跑，4.6 min；2026-10-27 复跑为 246 通过）。
+**每一条的门禁读数都记在下面各轮的条目里**（`typecheck` / 单测文件数与条数 / `docs-consistency` / e2e）。截至 2026-10-20 复盘当时：**479 文件 / 5054 通过 + 1 todo / 0 失败**（最新 2026-11-02 读数为 **501 文件 / 5344 通过 + 1 todo / 0 失败**，见本页顶部 2026-11-02 条目与下方状态摘要）；`docs-consistency` **8 个测试文件 / 22 项**；全量 e2e **239 通过 / 0 失败**（2026-10-24 于 HEAD 复跑，4.6 min；2026-10-27 复跑为 246 通过）。
 
 ### B. 仍然**没有做**、而且我知道为什么没做的
 
@@ -907,7 +910,7 @@
 
 ## 一、门禁读数档案（按行内日期；当前值见页首「现状总览」）
 
-> **本节是历史读数档案，不是当前状态**：每一行按它自己的记录日期读。当前值：479 文件 / 5054 通过 + 1 todo、`docs-consistency` 8 条判据 / 20 项、全量 e2e 239 通过 / 0 失败（2026-10-24 复跑）。
+> **本节是历史读数档案，不是当前状态**：每一行按它自己的记录日期读。当前值（2026-11-02）：全量单测 **501 文件 / 5344 通过 + 1 todo / 0 失败**、`docs-consistency`（`npm run test:docs`）**8 文件 / 22 项通过**、`eval:explicit-solid -- --offline` **54/54 通过**、`eval:reliability -- --offline` **29/29 通过、incomplete 0**、`typecheck` **0 错误**、`lint` **0 错误 / 16 警告**；全量 e2e **246 通过 / 0 失败**（2026-10-27 复跑）。
 
 ### 1. 最近逐项实测读数（**按每行日期阅读**；旧读数不代表本次文档对应源码已重跑，以下「本批实测」均为过程）
 

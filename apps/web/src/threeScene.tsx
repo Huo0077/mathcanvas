@@ -12,6 +12,7 @@ import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftS
 import { sceneContentKey, sceneSyncDecision } from "./sceneContentKey"
 import { createCameraState, type CameraState } from "./threeCamera"
 import { creationHoverReadout } from "./creationHoverReadout"
+import { isTextEditingTarget } from "./documentIds"
 import { loadRememberedCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 import { prefersReducedMotion, nextUnfoldProgress } from "./threePrimitives"
@@ -244,6 +245,27 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
     statusPromptChangeRef.current?.(lastControlRef.current)
   }
 
+  /**
+   * **Esc 退出粘滞模式**（UI/UX 优化）："自由拖动 / 平移视角 / 取面"开了就一直生效，
+   * 以前只能回去再点一次按钮才能关 —— 用户常常忘了它还开着，于是"左键怎么不转视角了"。
+   * 与 2D 的 Esc 分级同一口径：先退模式。文本框里的 Esc 不拦。
+   */
+  useEffect(() => {
+    if (!panMode && !dragMode && !facePickMode) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTextEditingTarget(event.target)) return
+      setPanMode(false)
+      setDragMode(false)
+      setFacePickMode(false)
+      if (lastControlRef.current === "free-drag") {
+        lastControlRef.current = null
+        statusPromptChangeRef.current?.(null)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [panMode, dragMode, facePickMode])
+
   useEffect(() => {
     const target = unfolded ? 1 : 0
     if (prefersReducedMotion()) {
@@ -387,5 +409,5 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
     {creationSession.anchors.length > 0 && <button type="button" onClick={onStepBackCreation}>撤回一点</button>}
     {creationSession.tool === "face3" && <button type="button" disabled={creationSession.anchors.length < 3} onClick={onFinishCreation}>完成空间面</button>}
     <button type="button" onClick={onCancelCreation}>取消绘制</button>
-  </div>}{webglAvailable && creationSession && creationReadout && <div className="creation-readout" data-creation-readout="true" role="presentation">{creationReadout}</div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} disabled={solidWizardOpen} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · 关掉按钮后左键拖动恢复为旋转视角 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · 滚轮缩放" : "左键拖动旋转 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  </div>}{webglAvailable && creationSession && creationReadout && <div className="creation-readout" data-creation-readout="true" role="presentation">{creationReadout}</div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} disabled={solidWizardOpen} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · Esc 或再点按钮退出 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · Esc 退出 · 滚轮缩放" : "左键拖动旋转 · 按住点直接拖动 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

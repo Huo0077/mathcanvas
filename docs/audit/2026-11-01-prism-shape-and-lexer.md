@@ -166,3 +166,5 @@ eval-results/explicit-solid-acceptance/offline-2026-11-01T14-19-38.060Z-24812/
 本轮实现与首版报告提交：`e8a2b9be`（`fix(agent): 核验棱柱形状语义与完整数值词法`）。
 
 本节的 SHA 记录在随后一次纯文档提交中；远端同步状态以 `git log` 与 `origin/main` 为准。
+
+> **2026-11-02 后续收口补记（`16279284`）**：在 `5bb6819c` 之上进一步补齐 `readPrismShape` 多处不同边数 / `< 3` 非法边数 / `斜` 与 `直·正` 同现矛盾检测（归入 `prism.shape` issue）、`scanNumericToken` 上标幂（`2²`）与字母/单位后缀（`5a`、`5cm`）拒绝及原文 `sourceText` 切片、`directlyRequestsPrism` 句式对齐（排除含顶点名或 `在…中` 的复杂多面体）、`localPlanner` / `DraftStore.stage` 的 `normalizeGeometryPrompt` + `solidDimensionGate` 对齐，以及 `obligationIR` R4 `pointOnLine3` / `pointOnPlane3` 无损往返。复跑 `eval:explicit-solid -- --offline` **54/54**、全量单测 **499 文件 / 5338 通过 + 1 todo / 0 失败**、`docs-consistency` **8 文件 / 22 项通过**。详见 [`docs/current-status.md`](../current-status.md) 顶部 `2026-11-02` 小节。

@@ -167,3 +167,4 @@
 - 2026-11-01 的推送失败是**历史故障记录**：当时 Git 报 `Recv failure: Connection was reset`，`git ls-remote` 报 `curl 28`。
 - 网络恢复后，`842e6845..6ee90a17` 已成功推送到 `origin/main`；**远程当时已更新**。
 - 后续“棱柱形状语义与完整数值词法”修复见[新报告](2026-11-01-prism-shape-and-lexer.md)。
+- 2026-11-02（`16279284`）进一步加固棱柱形状矛盾检测、上标幂/单位后缀词法拒绝、原文 `sourceText` 切片、`localPlanner` / `DraftStore.stage` 门禁同构与 `obligationIR` R4 往返；54/54 离线验收保持全绿，全量单测升至 **499 文件 / 5338 通过 + 1 todo / 0 失败**，`docs-consistency` **8 文件 / 22 项通过**，详见 [`docs/current-status.md`](../current-status.md)。

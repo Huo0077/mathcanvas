@@ -2,6 +2,8 @@ import type { Workspace } from "@draw/dsl"
 
 import type { RibbonTabId } from "../uiState"
 import { HeaderIcon } from "./HeaderIcon"
+import { CommandSearch } from "./CommandSearch"
+import type { SearchableCommand } from "./commandSearchModel"
 
 /**
  * 工作区标签栏。
@@ -35,6 +37,10 @@ interface WorkspaceTabsProps {
   canRedo?: boolean
   /** 打开**设置**模块（N3 的第一个产品入口）。这个按钮此前是死的：没有 onClick，也没有这个 prop。 */
   onSettings?: () => void
+  /** 功能区所有可用命令（由 AppChrome 从功能区配置平铺得来），供搜索框自动完成与执行。 */
+  searchableCommands?: readonly SearchableCommand[]
+  /** 在搜索框里按 Enter 执行某个命令。 */
+  onCommand?: (commandId: string) => void
 }
 
 const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
@@ -45,7 +51,7 @@ const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
   { id: "cad", label: "工程制图" }
 ]
 
-export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo, onSettings }: WorkspaceTabsProps) {
+export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo, onSettings, searchableCommands, onCommand }: WorkspaceTabsProps) {
   const handleTab = (id: RibbonTabId | Workspace) => {
     if (id === "file") {
       onTabChange(activeTab === "file" ? null : "file")
@@ -65,7 +71,7 @@ export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, on
       return <button key={tab.id} type="button" aria-pressed={isActive} data-active={isActive} onClick={() => handleTab(tab.id)}>{tab.label}</button>
     })}</div>
     <div className="workspace-tabs-actions">
-      <label className="search-box"><HeaderIcon name="search" /><input aria-label="搜索" placeholder="搜索工具、命令或定理..." /></label>
+      <CommandSearch commands={searchableCommands ?? []} onRun={onCommand ?? (() => {})} />
       <div className="topbar-commands" role="group" aria-label="文件与历史">
         {onOpen && <button type="button" onClick={onOpen}>打开 .mgeo</button>}
         {onSave && <button type="button" onClick={onSave}>保存 .mgeo</button>}

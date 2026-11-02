@@ -14,6 +14,11 @@ interface RibbonProps {
   onExpandedChange: (expanded: boolean) => void
   onPinnedChange: (pinned: boolean) => void
   showControls?: boolean
+  /**
+   * 当前生效的工具（"选择" / 正在画的直线 / 圆…）。被高亮的按钮回答"我现在点画布会发生什么"——
+   * 以前所有按钮看起来一模一样，点完"线段"之后完全看不出自己是不是处在画线状态。
+   */
+  activeCommandId?: string | null
 }
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
@@ -49,7 +54,7 @@ function RibbonGlyph({ name }: { name: RibbonIcon }): ReactNode {
   return <svg className="ribbon-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
 }
 
-export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCommand, onExpandedChange, onPinnedChange, showControls = true }: RibbonProps) {
+export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCommand, onExpandedChange, onPinnedChange, showControls = true, activeCommandId = null }: RibbonProps) {
   const visible = expanded || activeTab !== null
   const ribbonRef = useRef<HTMLElement>(null)
   /**
@@ -150,7 +155,7 @@ export function Ribbon({ groups, activeTab, expanded, pinned, onTabChange, onCom
             <span className="ribbon-group-label">{group.label}</span>
             <svg className="ribbon-group-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d={collapsed ? "m4.5 2.5 3.5 3.5-3.5 3.5" : "m2.5 4.5 3.5 3.5 3.5-3.5"} /></svg>
           </button>
-          {!collapsed && <div className="ribbon-group-commands">{group.commands.map((command) => <button key={command.id} type="button" className="ribbon-command" aria-label={command.label} title={command.disabled ? command.disabledReason : command.prompt} disabled={command.disabled} onClick={() => { onCommand(command.id); if (!expanded && !pinned) onTabChange(null) }}><RibbonGlyph name={command.icon} /><span>{command.label}</span></button>)}</div>}
+          {!collapsed && <div className="ribbon-group-commands">{group.commands.map((command) => { const isActive = activeCommandId !== null && command.id === activeCommandId; return <button key={command.id} type="button" className="ribbon-command" data-command-id={command.id} data-active={isActive ? "true" : undefined} aria-pressed={isActive ? true : undefined} aria-label={command.label} title={command.disabled ? command.disabledReason : command.prompt} disabled={command.disabled} onClick={() => { onCommand(command.id); if (!expanded && !pinned) onTabChange(null) }}><RibbonGlyph name={command.icon} /><span>{command.label}</span></button> })}</div>}
         </div>
       })}
     </div>}

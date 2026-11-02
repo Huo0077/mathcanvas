@@ -114,6 +114,11 @@ export interface DragSessionState {
   /** 拖动截面时：把屏幕位移投影到该法向上，得到剖切面要走的世界距离。 */
   slideNormal?: THREE.Vector3
   /**
+   * **直抓点**（UI/UX 优化）：没开"自由拖动"时，左键直接按在可拖的点上也能拖它。
+   * 这种会话在指针真正移动之前不改任何东西；原地抬手则按普通点击处理（选中 / 预览优先级不变）。
+   */
+  direct?: boolean
+  /**
    * 拖动**绑定点**时：宿主约束（evaluate / closestParameter / residual）、它的下游对象 id，
    * 以及这次拖动最新的宿主参数。参数是唯一真值——每帧只更新参数与受影响对象，抬手才提交文档。
    */
