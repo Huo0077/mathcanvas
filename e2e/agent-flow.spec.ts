@@ -175,7 +175,7 @@ test("asks for information instead of inventing an answer", async ({ page }) => 
   await sendPrompt(page, "把这个四面体的外接球半径和外心都算出来并画出来")
 
   const status = page.getByRole("region", { name: "运行状态" })
-  await expect(status.locator(".agent-run-state")).toHaveText("没有完成")
+  await expect(status.locator(".agent-run-state")).toHaveText("等待补充信息")
   await expect(status).toContainText("needs_more_information")
 
   // 没有任何草稿，也没有任何对象被创建。

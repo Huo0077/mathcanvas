@@ -58,10 +58,10 @@
     {
       "id": "rect-fold-false-goal",
       "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。",
-      "expected": "clarification",
+      "expected": "answer",
       "contains": "不成立",
       "provenance": { "source": "2026-10-26 任务书用户案例；该目标在题设下不成立（残差 12）", "reviewStatus": "unreviewed" },
-      "requiredOutputs": ["clarification"]
+      "requiredOutputs": ["answer"]
     },
     {
       "id": "rect-fold-no-angle",
