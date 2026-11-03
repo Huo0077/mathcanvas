@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -70,8 +71,8 @@ test("switches between the canvas module and the agent module from the left rail
    *
    * 改法：不再依赖"能点添加点"，而是断言**画布仍然可用**（3D 工作区的命令在）。
    */
-  await expect(page.getByRole("button", { name: "添加空间点" })).toBeVisible()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await expect((await commandButton(page, "添加空间点"))).toBeVisible()
+  await (await commandButton(page, "添加空间点")).click()
   await expect.poll(() => page.locator(".algebra-panel .object-row").count()).toBeGreaterThan(0)
 })
 

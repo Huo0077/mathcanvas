@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 /**
@@ -10,7 +11,7 @@ import { expect, test, type Page } from "@playwright/test"
 test("returns to the 3D workspace with the camera the user left", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
 
   const scene = page.locator("[data-3d-scene]")
   const canvas = scene.locator("canvas")

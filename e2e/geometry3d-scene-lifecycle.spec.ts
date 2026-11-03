@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Locator } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -23,7 +24,7 @@ async function readSync(scene: Locator) {
 test("keeps one renderer alive across edits, selection and unfold", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-scene-builds", "1")
@@ -33,13 +34,13 @@ test("keeps one renderer alive across edits, selection and unfold", async ({ pag
   })
 
   // 显示开关：过去每次点击都会重建整个场景。
-  await page.getByRole("button", { name: "透明面" }).click()
-  await page.getByRole("button", { name: "隐藏边" }).click()
+  await (await commandButton(page, "透明面")).click()
+  await (await commandButton(page, "隐藏边")).click()
   // 新增图元与选中变化：过去同样会重建。
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   // 展开动画：过去每帧重建一次（一次展开约 15-20 个 WebGL 上下文）。
-  await page.getByRole("button", { name: "展开", exact: true }).click()
+  await (await commandButton(page, "展开")).click()
   await expect(scene).toHaveAttribute("data-unfold-progress", "1.00")
 
   await expect(scene).toHaveAttribute("data-scene-builds", "1")
@@ -60,7 +61,7 @@ test("keeps one renderer alive across edits, selection and unfold", async ({ pag
 test("does not rebuild or resync while a solid is being dragged", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await page.getByRole("button", { name: "自由拖动" }).click()
 
   const scene = page.locator("[data-3d-scene]")
@@ -91,8 +92,8 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
 test("rebuilds only the object whose selection changed", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加立方体")).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   const scene = page.locator("[data-3d-scene]")
   // 把点挪出立方体：否则它和实体在同一个位置，点选时说不清选中的是谁。
@@ -123,10 +124,10 @@ test("rebuilds only the object whose selection changed", async ({ page }) => {
 test("keeps the rest of the scene while the unfold animation runs", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "展开", exact: true }).click()
+  await (await commandButton(page, "展开")).click()
   await expect(scene).toHaveAttribute("data-unfold-progress", "1.00")
   // 展开确实发生了，避免"什么都没展开"式的假通过
   expect(Number(await scene.getAttribute("data-unfold-faces"))).toBeGreaterThan(0)

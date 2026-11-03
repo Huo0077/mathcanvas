@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -70,7 +71,7 @@ test("creates a moving circle from the selected point, without a centre marker, 
 
   // 删掉定点：动圆跟着消失。（"删除对象"在功能区与控制条各有一处，取功能区那个。）
   await page.mouse.click(pointBox.x + pointBox.width / 2, pointBox.y + pointBox.height / 2)
-  await page.getByRole("button", { name: "删除对象" }).first().click()
+  await (await commandButton(page, "删除对象")).first().click()
   await expect(svg.locator('[data-primitive-type="circle"]')).toHaveCount(0)
 })
 
@@ -119,7 +120,7 @@ test("anchors a circle on a selected point and keeps it there while rotating", a
   expect(Math.abs(Math.hypot(beforePoint.x - beforeCircle.cx, beforePoint.y - beforeCircle.cy) - beforeCircle.r)).toBeGreaterThan(5)
 
   // 没选中合适组合时命令禁用；选「一个点 + 一条圆」后可用。
-  const command = page.getByRole("button", { name: "绕定点旋转" })
+  const command = (await commandButton(page, "绕定点旋转"))
   await expect(command).toBeDisabled()
   await algebraRow("P").click()
   await algebraRow("圆 c").click({ modifiers: ["Shift"] })

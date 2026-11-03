@@ -1,34 +1,18 @@
 import { expect, test } from "@playwright/test"
 
-test("keeps workspace navigation in the tab bar and supports Ribbon fold, popup and pin", async ({ page }) => {
+test("keeps the compact toolbar visible and opens secondary commands on demand", async ({ page }) => {
   await page.goto("/")
-
-  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
-  await expect(page.getByRole("banner").getByRole("button", { name: "立体几何" })).toHaveCount(0)
-
-  const ribbon = page.getByRole("region", { name: "功能区" })
-  await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
-  await page.getByRole("button", { name: "收起功能区" }).click()
-  await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "false")
-  await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
-
-  await page.getByRole("button", { name: "平面几何" }).click()
-  await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
-  await page.getByRole("button", { name: "添加点" }).click()
-  await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
-
-  await page.keyboard.press("Control+F1")
-  await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
-
-  await page.getByRole("button", { name: "收起功能区" }).click()
-  await page.getByRole("button", { name: "平面几何" }).click()
-  await page.getByRole("button", { name: "固定功能区" }).click()
-  await page.getByRole("button", { name: "添加点" }).click()
-  await expect(ribbon.getByRole("button", { name: "添加点" })).toBeVisible()
-
-  await page.getByRole("button", { name: "取消固定功能区" }).click()
-  await page.getByRole("status", { name: "操作提示" }).click()
-  await expect(ribbon.getByRole("button", { name: "添加点" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "平面几何", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("toolbar", { name: "绘图工具" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "工具菜单" })).toHaveCount(0)
+  await page.getByRole("button", { name: "更多工具", exact: true }).click()
+  await expect(page.getByRole("button", { name: "添加椭圆", exact: true })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("region", { name: "工具菜单" })).toHaveCount(0)
+  await page.getByRole("button", { name: "文件", exact: true }).click()
+  await expect(page.getByRole("button", { name: "导出 SVG", exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "工程制图", exact: true }).click()
+  await expect(page.getByRole("region", { name: "文件菜单" })).toHaveCount(0)
 })
 
 test("keeps the workbench content within the viewport at desktop, tablet and phone widths", async ({ page }) => {
@@ -53,8 +37,8 @@ test("keeps the workbench content within the viewport at desktop, tablet and pho
     expect(metrics.shellHeight).toBe(metrics.viewportHeight)
     expect(metrics.workbenchScrollHeight).toBeLessThanOrEqual(metrics.workbenchHeight)
     expect(metrics.statusBottom).toBeLessThanOrEqual(metrics.viewportHeight)
-    if (width === 1440) expect(metrics.inspectorWidth).toBeGreaterThanOrEqual(280)
-    if (width === 1440) expect(metrics.inspectorWidth).toBeLessThanOrEqual(300)
+    if (width === 1440) expect(metrics.inspectorWidth).toBeGreaterThanOrEqual(248)
+    if (width === 1440) expect(metrics.inspectorWidth).toBeLessThanOrEqual(252)
 
     if (width === 390) {
       await page.getByRole("button", { name: "对象列表" }).click()

@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -19,7 +20,7 @@ test("scales the track by dragging its radius handle, keeping bound points on th
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
   const placePoint = async (label: string, position: [string, string, string]) => {
-    await page.getByRole("button", { name: "添加空间点" }).click()
+    await (await commandButton(page, "添加空间点")).click()
     await algebra.getByText(label, { exact: true }).click()
     for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
       await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
@@ -30,7 +31,7 @@ test("scales the track by dragging its radius handle, keeping bound points on th
   await placePoint("B", ["3", "0", "0"])
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
 
   await placePoint("C", ["3", "0", "0"])
   const hostSelect = page.getByRole("combobox", { name: "点宿主绑定" })
@@ -112,7 +113,7 @@ test("turns the track with the world-axis rings, keeping its centre", async ({ p
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
   const placePoint = async (label: string, position: [string, string, string]) => {
-    await page.getByRole("button", { name: "添加空间点" }).click()
+    await (await commandButton(page, "添加空间点")).click()
     await algebra.getByText(label, { exact: true }).click()
     for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
       await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
@@ -122,7 +123,7 @@ test("turns the track with the world-axis rings, keeping its centre", async ({ p
   await placePoint("B", ["3", "0", "0"])
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
   await algebra.getByText("圆轨道 1", { exact: true }).click()
 
   // 圆轨道是**可转对象**：三个环照旧出现（它不再拥有点，环的几何按它自己的圆心与半径算）。
@@ -170,9 +171,9 @@ test("leaves the radius alone when the pointer is not on the handle", async ({ p
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   await algebra.getByText("A", { exact: true }).click()
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
   await expect(scene).toHaveAttribute("data-track-radius", "1.5000")
 
   // 从圆心往外拖一段：那里没有手柄，半径必须原样不动。

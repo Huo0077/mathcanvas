@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -6,7 +7,7 @@ test("previews a rectangular box without saving it, then confirms exact dimensio
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
   await expect(wizard).toBeVisible()
   await expect(scene).toHaveAttribute("data-solid-preview", "true")
@@ -19,7 +20,7 @@ test("previews a rectangular box without saving it, then confirms exact dimensio
   await expect(scene).toHaveAttribute("data-solid-preview", "false")
   await expect(page.locator(".algebra-panel").getByText("长方体 1")).toHaveCount(0)
 
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   await wizard.getByRole("spinbutton", { name: "高度" }).fill("2")
   await wizard.getByRole("button", { name: "确认创建" }).click()
   await expect(page.locator(".algebra-panel").getByText("长方体 1").first()).toBeVisible()
@@ -34,12 +35,12 @@ test("creates an oblique triangular prism and a quadrilateral pyramid from the c
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("tri-prism")
   await wizard.getByRole("spinbutton", { name: "倾斜 X" }).fill("1")
   await wizard.getByRole("button", { name: "确认创建" }).click()
   await expect(page.locator(".algebra-panel").getByText("三棱柱 1").first()).toBeVisible()
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("quad-pyramid")
   await wizard.getByRole("button", { name: "确认创建" }).click()
   await expect(page.locator(".algebra-panel").getByText("四棱锥 2").first()).toBeVisible()
@@ -48,14 +49,14 @@ test("creates an oblique triangular prism and a quadrilateral pyramid from the c
 test("can reuse a hand-drawn face as an independent prism base", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "绘制空间面" }).click()
+  await (await commandButton(page, "绘制空间面")).click()
   for (const point of [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }]) {
     const { x, y } = await projectWorldPoint(page, point)
     await page.mouse.click(x, y)
   }
   await page.keyboard.press("Enter")
   await expect(page.locator(".algebra-panel").getByText("空间面 1")).toBeVisible()
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("tri-prism")
   await wizard.getByRole("checkbox", { name: /选中面/ }).check()
@@ -66,11 +67,11 @@ test("opens the solid form on a narrow screen instead of hiding it in the inspec
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   await expect(page.getByRole("dialog", { name: "常用立体" })).toBeVisible()
   await expect(page.locator("[data-mobile-dock='properties']")).toHaveClass(/is-mobile-open/)
   await page.keyboard.press("Escape")
   await expect(page.getByRole("dialog", { name: "常用立体" })).toHaveCount(0)
   await expect(page.locator("[data-mobile-dock='properties']")).not.toHaveClass(/is-mobile-open/)
-  await expect(page.getByRole("button", { name: "常用立体" })).toBeFocused()
+  await expect((await commandButton(page, "常用立体"))).toBeFocused()
 })

@@ -133,8 +133,8 @@ export function createThreeSceneGrid({ grid, camera, cameraStateRef, sceneBounds
       // （着色器版的径向淡出撤回了：它编译通过却没画出来，见 CHANGELOG 同日一节）
       // 读数 data-grid-fade 仍然照给，供排查用
     }
-    styleLayer(grid.helper, gridLayerOpacity(pixelsPerUnit))
-    styleLayer(grid.majorHelper, gridLayerOpacity(pixelsPerUnit * placement.majorEvery))
+    styleLayer(grid.helper, gridLayerOpacity(pixelsPerUnit) * 0.35)
+    styleLayer(grid.majorHelper, gridLayerOpacity(pixelsPerUnit * placement.majorEvery) * 0.45)
     if (grid.axes) {
       /**
        * **只缩放，不挪位置。** 坐标轴就是"世界原点在哪"的标记：栅格可以跟着内容走（覆盖范围要够），

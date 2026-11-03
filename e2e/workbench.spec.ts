@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFile } from "node:fs/promises"
 
 import { expect, test } from "@playwright/test"
@@ -58,15 +59,15 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
 
   const svgDownload = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 SVG" }).click()
+  await (await commandButton(page, "导出 SVG")).click()
   await expect((await svgDownload).suggestedFilename()).toMatch(/\.svg$/)
 
   const csvDownload = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 CSV" }).click()
+  await (await commandButton(page, "导出 CSV")).click()
   await expect((await csvDownload).suggestedFilename()).toMatch(/\.csv$/)
 
   const pngDownload = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 PNG" }).click()
+  await (await commandButton(page, "导出 PNG")).click()
   await expect((await pngDownload).suggestedFilename()).toMatch(/\.png$/)
 
   // The retired calculus workspace must not come back as a tab; 立体几何 is the other planar-free workspace.
@@ -130,7 +131,7 @@ test("zooms the conics canvas and keeps every crossing of a line and a curve", a
   const initial = await scale()
 
   // 添加函数 + 正弦预设：这条曲线与下面的水平线在视口内有 5 个交点。
-  await page.getByRole("button", { name: "添加函数" }).click()
+  await (await commandButton(page, "添加函数")).click()
   await page.getByRole("combobox", { name: "函数预设" }).selectOption("sine")
 
   await page.getByRole("button", { name: "添加直线" }).click()

@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -12,7 +13,7 @@ test("draft geometry is visible and has a forgiving hit band", async ({ page }) 
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 120, y: 160 } })
   await surface.click({ position: { x: 300, y: 160 } })
   await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)

@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 test.use({ viewport: { width: 1280, height: 900 } })
@@ -12,7 +13,7 @@ test.use({ viewport: { width: 1280, height: 900 } })
 test("shows only the four quadrant points per circle on a cylinder", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene.locator(".three-point-label")).toHaveCount(8)
@@ -34,7 +35,7 @@ test("shows only the four quadrant points per circle on a cylinder", async ({ pa
 test("shows only the four quadrant points plus the apex on a cone", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加圆锥" }).click()
+  await (await commandButton(page, "添加圆锥")).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene.locator(".three-point-label")).toHaveCount(5)

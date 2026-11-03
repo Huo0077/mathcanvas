@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 test.use({ viewport: { width: 1280, height: 900 } })
@@ -14,13 +15,13 @@ test.use({ viewport: { width: 1280, height: 900 } })
 test("draws a section of a cylinder as an exact circle that gains detail when zooming in", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
 
   const scene = page.locator("[data-3d-scene]")
   // 圆柱的上下底圆就是两圈真圆（替代原来的 96 段弦）。
   await expect(scene).toHaveAttribute("data-rim-curves", "2")
 
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   // 默认剖切面过包围盒中心、法向 +Z，与圆柱轴垂直 ⇒ 精确的圆。

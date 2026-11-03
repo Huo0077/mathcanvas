@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 /**
@@ -68,7 +69,7 @@ test("shows a solid's exact and undefined derived readings side by side in the p
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 默认新建的是 4×4×4 正方体；显式把 Z 尺寸改为 2，构成有外接球但无内切球的长方体。
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await page.getByRole("spinbutton", { name: "尺寸 Z" }).fill("2")
 
   const panel = page.locator("[data-derived-panel]")
@@ -132,7 +133,7 @@ test("shows an oblique prism's undefined readings with their reasons, and carrie
    * 必须立刻看得见（Fix round 1 / M2）—— 前一版在这里什么都不显示，用户得先点回实体。
    * 读数的 `data-derived-source` 就是那条截面图元，归属是精确的（不是"按顺序猜"）。
    */
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-section-count", "1")
   await expect(derivedRow(page, "derived.section")).toHaveAttribute("data-derived-status", "exact")
   await expect(derivedRow(page, "derived.section")).toHaveAttribute("data-derived-source", "section-1")

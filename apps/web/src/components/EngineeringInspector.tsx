@@ -36,8 +36,8 @@ export function EngineeringInspector({ activeTab, onTabChange, context, sources 
   return <div className="engineering-inspector" role="region" aria-label="工程上下文检查器">
     <InspectorTabs activeTab={activeTab} onTabChange={onTabChange} />
     <div className="inspector-panel" role="tabpanel" id="inspector-panel" aria-label={`${tabLabels[activeTab]}面板`}>
-      {activeTab === "data" && !hasSelection && <div className="inspector-context" aria-label="当前上下文">
-        <h3>当前上下文</h3>
+      {activeTab === "data" && !hasSelection && <details className="inspector-context" aria-label="当前上下文">
+        <summary>图纸信息</summary>
         <ul>
           <li data-context="sheet"><span>当前图纸</span><strong>{context.sheetName}</strong></li>
           <li data-context="view"><span>当前视图</span><strong>{context.viewName ?? "全部视图"}</strong></li>
@@ -45,7 +45,7 @@ export function EngineeringInspector({ activeTab, onTabChange, context, sources 
           <li data-context="unit"><span>单位</span><strong>{context.unit}</strong></li>
           <li data-context="command"><span>命令</span><strong>{context.commandPrompt}</strong></li>
         </ul>
-      </div>}
+      </details>}
       {activeTab === "data" && hasSelection && context.selectedLayerName && <div className="inspector-context" aria-label="对象图层">
         <ul><li data-context="selected-layer"><span>所在图层</span><strong>{context.selectedLayerName}</strong></li></ul>
       </div>}

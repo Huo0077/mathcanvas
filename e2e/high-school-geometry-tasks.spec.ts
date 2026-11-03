@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFile } from "node:fs/promises"
 
 import { expect, test } from "@playwright/test"
@@ -78,7 +79,7 @@ test.beforeEach(async ({ page }) => {
 
 /** 打开「常用立体」并按标签填参数：高度那一栏的名字随预设变（棱长 / 高度 / 拉伸向量 Z / 法向高度）。 */
 async function createSolid(page: Page, preset: string, values: Array<[string, string]>) {
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption(preset)
   for (const [label, value] of values) await wizard.getByRole("spinbutton", { name: label }).fill(value)
@@ -259,8 +260,8 @@ test("圆锥截面：水平切得圆（半径按锥面算出），斜切按 e = 
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   // 默认圆锥：底心 (-5,-5,0)、底半径 1.5、高 3、轴为 +Z ⇒ 半顶角 α 满足 tanα = 1.5 / 3 = 0.5
-  await page.getByRole("button", { name: "添加圆锥" }).click()
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "添加圆锥")).click()
+  await (await commandButton(page, "创建截面")).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-section-count", "1")
@@ -312,7 +313,7 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
 
   // 用**精确坐标**放点：画布投影只到 1e-2 量级，不足以判定"线是否真的落在面内"
   const placePoint = async (label: string, position: [string, string, string]) => {
-    await page.getByRole("button", { name: "添加空间点" }).click()
+    await (await commandButton(page, "添加空间点")).click()
     await algebra.getByText(label, { exact: true }).click()
     for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
       await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
@@ -329,13 +330,13 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
   await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "由选中点创建空间平面", exact: true }).click()
+  await (await commandButton(page, "由选中点创建空间平面")).click()
   await expect(algebra.getByText("空间平面 1").first()).toBeVisible()
 
   const createLine = async (first: string, second: string) => {
     await algebra.getByText(first, { exact: true }).click()
     await algebra.getByText(second, { exact: true }).click({ modifiers: ["Shift"] })
-    await page.getByRole("button", { name: "由选中点创建空间直线", exact: true }).click()
+    await (await commandButton(page, "由选中点创建空间直线")).click()
   }
   await createLine("D", "E")
   await createLine("F", "G")
@@ -460,7 +461,7 @@ test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后�
   // ---- 恢复后的**第一次**改动必须落草稿 ----
   // 这条曾经是缺陷（已修）：恢复自身那次变化没消费掉"跳过一次"，于是被**用户的第一次改动**吃掉 ——
   // 真机上表现为"刷新后只改一次就关页面，那次改动从草稿里丢了"。
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(algebra.getByText("立方体 1").first()).toBeVisible()
   await expect.poll(async () => (await ids()).length, { message: "恢复后第一次改动必须写回草稿" }).toBe(beforeReload.length + 28)
 

@@ -1,3 +1,4 @@
+import { HeaderIcon, type HeaderIconName } from "../HeaderIcon"
 import type { AgentConversation, AgentMessage } from "../../agentStore"
 import { formatMessageTime, splitTranscript } from "../../agentTranscript"
 import { highlightCode } from "../../codeHighlight"
@@ -47,10 +48,10 @@ function AssistantBody({ message }: { message: AgentMessage }) {
   )}</>
 }
 
-const examples = [
-  { label: "探索空间折叠", prompt: "矩形 ABCD 中，AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，画出折后示意图并求 BD 的长。" },
-  { label: "观察函数与切线", prompt: "绘制函数 y = 0.1x³ − 0.7x，并画出它在 x=2 处的切线。" },
-  { label: "绘制圆与直线", prompt: "绘制以原点为圆心、半径为 3 的圆和直线 y=1，标出交点。" },
+const examples: { label: string; prompt: string; icon: HeaderIconName; description: string }[] = [
+  { label: "探索空间折叠", icon: "cube", description: "矩形折叠后的距离", prompt: "矩形 ABCD 中，AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，画出折后示意图并求 BD 的长。" },
+  { label: "观察函数与切线", icon: "curve", description: "函数图像与切线", prompt: "绘制函数 y = 0.1x³ − 0.7x，并画出它在 x=2 处的切线。" },
+  { label: "绘制圆与直线", icon: "grid", description: "圆与直线的交点", prompt: "绘制以原点为圆心、半径为 3 的圆和直线 y=1，标出交点。" },
 ]
 
 export function AgentMessageList({ conversation, onExample, onRetry, onRevise, onStop, onConfirm, onDiscard }: AgentMessageListProps) {
@@ -64,8 +65,8 @@ export function AgentMessageList({ conversation, onExample, onRetry, onRevise, o
           <h2 className="agent-empty-title">把数学想法，画出来。</h2>
           <p className="agent-empty-text">描述你的问题，或从一个例题开始。</p>
           {onExample && <ul className="agent-empty-samples">
-            {examples.map(({ label, prompt }) => <li key={label}>
-              <button type="button" onClick={() => onExample(prompt)}>{label}</button>
+            {examples.map(({ label, prompt, icon, description }) => <li key={label}>
+              <button type="button" aria-label={label} onClick={() => onExample(prompt)}><HeaderIcon name={icon} /><span>{label}</span><small>{description}</small></button>
             </li>)}
           </ul>}
         </div>

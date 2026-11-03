@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -17,11 +18,11 @@ test("creates a circle track and slides a bound point along it", async ({ page }
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 两个空间点：第一个当圆心，第二个当圆周上的点。
-  await page.getByRole("button", { name: "添加空间点" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
+  await (await commandButton(page, "添加空间点")).click()
   await page.getByText("A", { exact: true }).first().click()
   await page.getByText("B", { exact: true }).first().click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
 
   // (1) 建出来的轨道落在文档里，半径 = 两点距离（点 A (0,0,0)、点 B (3,0,0) ⇒ 3）。
   await expect(page.getByRole("spinbutton", { name: "圆轨道半径" })).toBeVisible()
@@ -29,7 +30,7 @@ test("creates a circle track and slides a bound point along it", async ({ page }
   await expect(radiusInput).toHaveValue("3")
 
   // (2) 再来一个点，绑到这条轨道上（下拉里那一条写着"圆轨道"）。
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   const select = page.getByRole("combobox", { name: "点宿主绑定" })
   const orbitValue = await select.locator("option").filter({ hasText: "圆轨道" }).first().getAttribute("value")
   expect(orbitValue).toBeTruthy()
@@ -80,14 +81,14 @@ test("shows the bound point moving while the pointer is still down", async ({ pa
   await page.getByRole("button", { name: "重置3D视角" }).click()
   await settleCamera(scene)
 
-  await page.getByRole("button", { name: "添加空间点" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
+  await (await commandButton(page, "添加空间点")).click()
   await page.getByText("A", { exact: true }).first().click()
   await page.getByText("B", { exact: true }).first().click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
 
   // 第三个点 C 绑到这条轨道上，它就是要被拖的动点。
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   const select = page.getByRole("combobox", { name: "点宿主绑定" })
   const orbitValue = await select.locator("option").filter({ hasText: "圆轨道" }).first().getAttribute("value")
   await select.selectOption(orbitValue!)
@@ -140,14 +141,14 @@ test("connects a point that rides the track with a fixed point by a line", async
   const algebra = page.locator(".algebra-panel")
 
   // 定点 A（圆心）+ 圆周点 B ⇒ 半径 3 的轨道。
-  await page.getByRole("button", { name: "添加空间点" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
+  await (await commandButton(page, "添加空间点")).click()
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
 
   // 动点 C 绑到轨道上（这一步以前会让后续所有新建失效）。
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   const select = page.getByRole("combobox", { name: "点宿主绑定" })
   const orbitValue = await select.locator("option").filter({ hasText: "圆轨道" }).first().getAttribute("value")
   await select.selectOption(orbitValue!)
@@ -156,7 +157,7 @@ test("connects a point that rides the track with a fixed point by a line", async
   // 动点 + 定点 ⇒ 空间直线：真的建出来了（被拒时这里一行都不会有）。
   await algebra.getByText("C", { exact: true }).click()
   await algebra.getByText("A", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "由选中点创建空间直线" }).click()
+  await (await commandButton(page, "由选中点创建空间直线")).click()
   await expect(algebra.getByText("空间直线 1", { exact: true })).toBeVisible()
   // 如实断言"没有报错"：宿主绑定校验失败时会往这里写一句话。
   await expect(page.locator(".status-bar-prompt")).not.toContainText("host binding")

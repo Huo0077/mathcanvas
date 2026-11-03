@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -17,7 +18,7 @@ test("moves the track by itself and leaves the construction points alone", async
 
   const algebra = page.locator(".algebra-panel")
   const placePoint = async (label: string, position: [string, string, string]) => {
-    await page.getByRole("button", { name: "添加空间点" }).click()
+    await (await commandButton(page, "添加空间点")).click()
     await algebra.getByText(label, { exact: true }).click()
     for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
       await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)
@@ -27,7 +28,7 @@ test("moves the track by itself and leaves the construction points alone", async
   await placePoint("B", ["3", "0", "0"])
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
   await expect(page.getByRole("spinbutton", { name: "圆轨道半径" })).toHaveValue("3")
 
   // 记住两个点的坐标：拖圆之后它们必须**一个字都没变**。
@@ -60,9 +61,9 @@ test("lets the point that used to define the centre be deleted, and keeps the ed
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const algebra = page.locator(".algebra-panel")
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   await algebra.getByText("A", { exact: true }).click()
-  await page.getByRole("button", { name: "添加空间圆轨道" }).click()
+  await (await commandButton(page, "添加空间圆轨道")).click()
 
   // 圆心是**可编辑的真实字段**（以前是只读读数，因为它是别人的坐标）。
   const centreX = page.getByRole("spinbutton", { name: "圆心 X" })

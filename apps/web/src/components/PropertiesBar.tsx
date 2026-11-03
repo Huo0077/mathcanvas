@@ -760,7 +760,7 @@ export function PropertiesBar(props: PropertiesBarProps) {
     <div className="inspector-heading">
       <div>
         <span className="panel-kicker">选中对象</span>
-        <h2 className="panel-title">属性面板</h2>
+        <h2 className="panel-title">属性</h2>
       </div>
       <span className="inspector-indicator" aria-hidden="true" />
     </div>

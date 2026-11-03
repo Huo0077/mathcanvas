@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 /**
@@ -14,8 +15,8 @@ import { expect, test, type Page } from "@playwright/test"
 test("brings a point set to x = 20 back inside the view", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加立方体")).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   const scene = page.locator("[data-3d-scene]")
   const toggleAutoFit = () => page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())

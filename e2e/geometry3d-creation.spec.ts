@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -25,7 +26,7 @@ test("draws a spatial segment directly on the canvas and undoes it in one step",
 test("can cancel an unfinished face without changing the document", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "绘制空间面" }).click()
+  await (await commandButton(page, "绘制空间面")).click()
   const scene = page.locator("[data-3d-scene]")
   const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
   await page.mouse.click(first.x, first.y)
@@ -45,7 +46,7 @@ test("places a point on the chosen XZ work plane and reuses it in a line", async
   expect(Number(await page.getByRole("spinbutton", { name: "坐标 Y" }).inputValue())).toBeCloseTo(0, 2)
   expect(Number(await page.getByRole("spinbutton", { name: "坐标 Z" }).inputValue())).toBeCloseTo(2, 2)
 
-  await page.getByRole("button", { name: "绘制空间直线", exact: true }).click()
+  await (await commandButton(page, "绘制空间直线")).click()
   const oldPoint = await projectWorldPoint(page, { x: 1, y: 0, z: 2 })
   await page.mouse.click(oldPoint.x, oldPoint.y)
   const newPoint = await projectWorldPoint(page, { x: 3, y: 0, z: 2 })
@@ -57,7 +58,7 @@ test("places a point on the chosen XZ work plane and reuses it in a line", async
 test("finishes a three-vertex spatial face with Enter", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "绘制空间面" }).click()
+  await (await commandButton(page, "绘制空间面")).click()
   for (const point of [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }]) {
     const { x, y } = await projectWorldPoint(page, point)
     await page.mouse.click(x, y)
@@ -91,7 +92,7 @@ async function loadOverlappingCubes(page: import("@playwright/test").Page) {
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-preview-face-count", "6")
   await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
-  await expect(page.getByRole("button", { name: "自动取景" })).toHaveAttribute("aria-pressed", "false")
+  await expect((await commandButton(page, "自动取景"))).toHaveAttribute("aria-pressed", "false")
   await page.getByRole("button", { name: "重置3D视角" }).click()
   let previous = ""
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -209,14 +210,14 @@ test("leaves the drawing session through the select tool", async ({ page }) => {
 test("does not snap to a locked point, and snaps again once it is unlocked", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   const readout = page.locator("[data-creation-readout]")
   const point = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
   const lockToggle = (name: string) => page.locator(".inspector-quick-actions").getByRole("button", { name })
 
   await page.locator(".algebra-panel").getByText("A", { exact: true }).click()
-  await page.getByRole("button", { name: "绘制空间直线", exact: true }).click()
+  await (await commandButton(page, "绘制空间直线")).click()
 
   // 对照①：未锁定时吸到那个点
   await page.mouse.move(point.x, point.y)
@@ -250,10 +251,10 @@ test("tells what the next click would land on, without writing anything", async 
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 先放一个空间点（默认落在 (0,0,0)），用来验"吸附到已有点"那一路
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
   const rowsBefore = await page.locator(".algebra-panel .object-row").count()
 
-  await page.getByRole("button", { name: "绘制空间直线", exact: true }).click()
+  await (await commandButton(page, "绘制空间直线")).click()
   const readout = page.locator("[data-creation-readout]")
   // 还没悬停过：不凭空显示一个落点
   await expect(readout).toHaveCount(0)

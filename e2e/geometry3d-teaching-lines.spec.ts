@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -16,10 +17,10 @@ test("keeps a teacher's dashed spatial segment separate from view-only hidden ed
   await expect(style).toHaveValue("solid")
   await style.selectOption("8 6")
   await expect(style).toHaveValue("8 6")
-  await page.getByRole("button", { name: "隐藏边" }).click()
+  await (await commandButton(page, "隐藏边")).click()
   await expect(style).toHaveValue("8 6")
   await expect(page.getByText(/教学虚线.*隐藏边/)).toBeVisible()
-  await page.getByRole("button", { name: "隐藏边" }).click()
+  await (await commandButton(page, "隐藏边")).click()
   await expect(style).toHaveValue("8 6")
 })
 
@@ -36,7 +37,7 @@ test("keeps every vertex label on its own vertex after the camera rotates", asyn
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 钉住原点：默认落点会随模板策略漂，而这条用例要的是**已知坐标**
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-2"]] as const) {
     await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
   }

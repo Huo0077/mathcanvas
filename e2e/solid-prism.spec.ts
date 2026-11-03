@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFileSync, readdirSync } from "node:fs"
 import { basename, join } from "node:path"
 
@@ -261,7 +262,7 @@ test("cuts a section through the oblique prism", async ({ page }) => {
   // 提交之后没有自动选中任何对象（Agent 只改文档、不动选择），所以先点对象列表里的那一行。
   await objectRows(page).first().click()
   await expect(objectRows(page).first()).toHaveClass(/selected/)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
   // 默认刀口是水平的、过实体中心的，四棱柱的截面是四边形。
   await expect(scene).toHaveAttribute("data-section-point-count", "4")
@@ -413,7 +414,7 @@ test("edits one prism vertex through the inspector, undoes, and reopens the tria
   await page.locator('[aria-label="三维测量工具"]').getByRole("button", { name: "体积", exact: true }).click()
   await expect(page.locator(".algebra-panel .measurement-row .measurement-status")).toHaveAttribute("data-status", "valid")
   await objectRows(page).first().click()
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
   await expect.poll(async () => Number(await scene.getAttribute("data-section-point-count"))).toBeGreaterThanOrEqual(3)
 })
@@ -422,7 +423,7 @@ test("edits one prism vertex through the inspector, undoes, and reopens the tria
 test("edits one template cube vertex and restores its explicit faces from mgeo", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   const scene = page.locator("[data-3d-scene]")
   const beforeBounds = await scene.getAttribute("data-content-bounds")
   const algebra = page.locator(".algebra-panel")

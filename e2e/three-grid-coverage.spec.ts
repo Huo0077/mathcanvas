@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -13,7 +14,7 @@ import { expect, test } from "@playwright/test"
 test("background grid reaches a point placed far from the origin", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   const xField = page.getByRole("spinbutton", { name: "坐标 X" })
   await xField.fill("20")
@@ -36,7 +37,7 @@ test("background grid reaches a point placed far from the origin", async ({ page
 test("keeps the coordinate plane covering the view when zoomed out", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
 
   const scene = page.locator("[data-3d-scene]")
   const readExtent = async () => Number(await scene.getAttribute("data-grid-extent"))
@@ -60,7 +61,7 @@ test("keeps the coordinate plane covering the view when zoomed out", async ({ pa
 test("holds the grid at one world unit per cell while zooming", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
 
   const scene = page.locator("[data-3d-scene]")
   const readGrid = async () => ({

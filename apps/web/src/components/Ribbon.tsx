@@ -28,7 +28,7 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
     || (target instanceof HTMLElement && target.isContentEditable)
 }
 
-function RibbonGlyph({ name }: { name: RibbonIcon }): ReactNode {
+export function RibbonGlyph({ name }: { name: RibbonIcon }): ReactNode {
   const paths: Record<RibbonIcon, ReactNode> = {
     select: <path d="m5 4 10 8-5 1 3 6-2 1-3-6-3 4Z" />,
     point: <circle cx="12" cy="12" r="4" />,

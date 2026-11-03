@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -13,8 +14,8 @@ import { projectWorldPoint } from "./helpers/projection"
 test("drags a host-bound point along its host", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加立方体")).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   /**
    * 绑定到立方体的**一条棱**上（下拉里那一项的标签带「棱」），然后把**宿主参数**设到 0.5。
@@ -66,7 +67,7 @@ test("drags a dynamic point on a 3D line directly and via inspector controls", a
   const second = await projectWorldPoint(page, { x: 3, y: 0, z: 0 })
   await page.mouse.click(second.x, second.y)
   await expect(page.locator(".algebra-panel").getByText("空间线段 1")).toBeVisible()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
 
   const select = page.getByRole("combobox", { name: "点宿主绑定" })
   const segment = await select.locator("option").filter({ hasText: "线段" }).first().getAttribute("value")

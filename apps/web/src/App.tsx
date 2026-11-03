@@ -1,3 +1,4 @@
+import { SettingsWorkspace } from "./components/settings/SettingsWorkspace"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
@@ -38,9 +39,6 @@ import { AgentWorkspace } from "./components/agent/AgentWorkspace"
 import { CopilotDrawer } from "./components/agent/CopilotDrawer"
 import { useActiveGhostDraft } from "./agent/useActiveGhostDraft"
 import { isTextEditingTarget } from "./documentIds"
-import { ExperimentalFeatures } from "./components/settings/ExperimentalFeatures"
-import { ProviderEval } from "./components/settings/ProviderEval"
-import { ProviderSettings } from "./components/settings/ProviderSettings"
 import { ProjectPackagePanel } from "./components/ProjectPackagePanel"
 import { readDesktopRuntime, type DesktopRuntimeInfo } from "./services/desktopRuntime"
 import { agentRunner } from "./agent/agentRunner"
@@ -50,7 +48,6 @@ import { useDraftPersistence } from "./useDraftPersistence"
 import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
-import type { RibbonTabId } from "./uiState"
 import { resolveGeometryEdit, type GeometryEditRequest } from "./draftEditing"
 import { createFileExports } from "./persistence/fileExports"
 import { selectExportableDrawings } from "./persistence/exportableDrawings"
@@ -285,9 +282,6 @@ export function App() {
    */
   const hoveredPreview = hoveredPreviewKey ? scenePreviews.find((item) => item.key === hoveredPreviewKey) ?? null : null
   const previewStatus = hoveredPreview ?? selectionPreview
-  const [activeRibbonTab, setActiveRibbonTab] = useState<RibbonTabId | null>("home")
-  const [ribbonExpanded, setRibbonExpanded] = useState(true)
-  const [ribbonPinned, setRibbonPinned] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const activeGhostDraft = useActiveGhostDraft(document)
   /**
@@ -703,10 +697,9 @@ export function App() {
     setCreationStep(null)
     updateSpatialSession(null)
     setSolidWizardOpen(false)
-    setGuidance(workspace === "geometry3d" ? guidanceFor({ kind: "point3Tool", tool: "line", outcome: "blocked", point3Count: 0 }) : null)
+    setGuidance(null)
     setMobileDock(null)
     setActiveCommand(null)
-    if (!ribbonExpanded) setActiveRibbonTab("home")
     switchWorkspace(workspace)
   }
 
@@ -999,9 +992,8 @@ export function App() {
       onModuleChange={setActiveModule}
     />
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
-      <WorkspaceHeader />
       <AppChrome
-      onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
+      activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} onRibbonCommand={handleRibbonCommand} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
       {document.workspace === "cad" ? cadWorkbench : (
         <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"} data-copilot-open={copilotOpen ? "true" : "false"}>
         {activeGhostDraft && (
@@ -1139,6 +1131,7 @@ export function App() {
         unavailableReason={desktopRuntimeHint}
       />}
     </div> : activeModule === "agent" ? <div className="app-module" data-module="agent">
+      <WorkspaceHeader title="Agent 工作区" />
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}
       <AgentWorkspace
@@ -1152,15 +1145,8 @@ export function App() {
       />
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
     </div> : <div className="app-module" data-module="settings">
-      <WorkspaceHeader />
-      <div className="settings-page">
-        <ProviderSettings unavailableReason={desktopRuntimeHint} />
-        <details className="settings-advanced">
-          <summary>高级设置</summary>
-          <ExperimentalFeatures />
-          <ProviderEval />
-        </details>
-      </div>
+      <WorkspaceHeader title="应用设置" />
+      <SettingsWorkspace unavailableReason={desktopRuntimeHint} onBack={() => setActiveModule("traditional")} />
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>

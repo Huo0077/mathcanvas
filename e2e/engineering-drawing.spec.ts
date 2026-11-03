@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 test("opens the CAD workspace with four accessible engineering views", async ({ page }) => {
@@ -11,7 +12,7 @@ test("opens the CAD workspace with four accessible engineering views", async ({ 
   await expect(page.getByRole("button", { name: "添加点" })).toHaveCount(0)
   await expect(page.getByRole("region", { name: "工程状态栏" })).toContainText("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  await expect(page.getByRole("button", { name: "导出 SVG", exact: true })).toBeEnabled()
+  await expect((await commandButton(page, "导出 SVG"))).toBeEnabled()
 })
 
 test("links CAD views with temporary projection lines and shared source selection", async ({ page }) => {
@@ -56,7 +57,7 @@ test("exports CAD views as SVG, DXF, and PDF", async ({ page }) => {
   await page.getByRole("button", { name: "工程制图" }).click()
   for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
     const download = page.waitForEvent("download")
-    await page.getByRole("button", { name: label, exact: true }).click()
+    await (await commandButton(page, label)).click()
     await expect((await download).suggestedFilename()).toMatch(new RegExp(`${extension.replace(".", "\\.")}$`))
   }
 })
@@ -86,7 +87,7 @@ test("projects a sphere as an outline in all four CAD views and exports it", asy
 
   for (const [label, extension] of [["导出 SVG", ".svg"], ["导出 DXF", ".dxf"], ["导出 PDF", ".pdf"]] as const) {
     const download = page.waitForEvent("download")
-    await page.getByRole("button", { name: label, exact: true }).click()
+    await (await commandButton(page, label)).click()
     await expect((await download).suggestedFilename()).toMatch(new RegExp(`${extension.replace(".", "\\.")}$`))
   }
 })

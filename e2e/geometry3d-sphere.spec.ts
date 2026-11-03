@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 import { buildSolidTemplate } from "@draw/geometry-kernel"
@@ -70,7 +71,7 @@ test("keeps an analytic sphere through reload and a camera orbit, and names it i
   await page.getByRole("button", { name: "立体几何" }).click()
 
   // 借应用自己的入口落一份**合法**草稿，再把图元换成球。
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
 
   await page.evaluate(({ key, sphere }) => {
@@ -138,7 +139,7 @@ test("keeps an analytic sphere through reload and a camera orbit, and names it i
 test("creates a sphere from the common-solid wizard: preview first, one commit on confirm", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "常用立体" }).click()
+  await (await commandButton(page, "常用立体")).click()
 
   const wizard = page.getByRole("dialog", { name: "常用立体" })
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("sphere")
@@ -179,7 +180,7 @@ test("creates a sphere from the common-solid wizard: preview first, one commit o
 test("edits a sphere's centre and radius from the inspector, one undo step", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {
     const raw = window.localStorage.getItem(key)
@@ -224,7 +225,7 @@ test("edits a sphere's centre and radius from the inspector, one undo step", asy
 test("cuts the selected sphere from the toolbar and records an exact circle", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {
     const raw = window.localStorage.getItem(key)
@@ -240,7 +241,7 @@ test("cuts the selected sphere from the toolbar and records an exact circle", as
   const projected = await projectWorldPoint(page, SPHERE.center)
   await page.mouse.click(projected.x, projected.y)
 
-  const sectionButton = page.getByRole("button", { name: "创建截面" })
+  const sectionButton = (await commandButton(page, "创建截面"))
   // 按钮**可用**本身就是一条判据：`canCreateSection` 与 `addSection` 共用 `solidTypes`，
   // 名单里没有球时这里会是 disabled（点了也什么都不发生）。
   await expect(sectionButton).toBeEnabled()
@@ -278,7 +279,7 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
 
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
 
   const scene = page.locator("[data-3d-scene]")
@@ -389,7 +390,7 @@ test("drafts a sphere from one sentence and commits it in one undo step", async 
 test("walks a sphere section from an exact circle to a tangent point and then to empty", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {
     const raw = window.localStorage.getItem(key)
@@ -404,7 +405,7 @@ test("walks a sphere section from an exact circle to a tangent point and then to
   // 选中球并从工具栏切一刀：默认过球心 ⇒ 大圆。
   const projected = await projectWorldPoint(page, SPHERE.center)
   await page.mouse.click(projected.x, projected.y)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-section-count", "1")

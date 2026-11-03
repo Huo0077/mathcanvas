@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test, type Page } from "@playwright/test"
 
 /**
@@ -96,8 +97,8 @@ test("keeps a spatial measurement number on the 3D canvas without any selection"
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加空间点" }).click()
-  await page.getByRole("button", { name: "添加空间点" }).click()
+  await (await commandButton(page, "添加空间点")).click()
+  await (await commandButton(page, "添加空间点")).click()
   const algebra = page.locator(".algebra-panel")
   await algebra.getByText("A", { exact: true }).click()
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
@@ -134,7 +135,7 @@ test("reads a spatial angle in radians, the same unit the planar canvas uses", a
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")
   const placePoint = async (label: string, position: [string, string, string]) => {
-    await page.getByRole("button", { name: "添加空间点" }).click()
+    await (await commandButton(page, "添加空间点")).click()
     await algebra.getByText(label, { exact: true }).click()
     for (const [axis, value] of [["X", position[0]], ["Y", position[1]], ["Z", position[2]]] as const) {
       await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).fill(value)

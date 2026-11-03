@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -16,7 +17,7 @@ test("keeps the origin marker at the world origin while the grid follows the con
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   // 一开始内容就在原点附近：坐标轴当然在原点，栅格中心也在原点。
   await expect(scene).toHaveAttribute("data-axes-origin", "0.000,0.000,0.000")
 

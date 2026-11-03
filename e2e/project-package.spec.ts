@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -15,7 +16,7 @@ import { expect, test } from "@playwright/test"
 test("opens the project package panel from the file commands", async ({ page }) => {
   await page.goto("/")
 
-  await page.getByRole("button", { name: "项目包…" }).click()
+  await (await commandButton(page, "项目包…")).click()
 
   const panel = page.getByRole("dialog", { name: "项目包" })
   await expect(panel).toBeVisible()
@@ -31,7 +32,7 @@ test("opens the project package panel from the file commands", async ({ page }) 
 
 test("says the export needs the desktop build instead of failing vaguely", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "项目包…" }).click()
+  await (await commandButton(page, "项目包…")).click()
 
   const panel = page.getByRole("dialog", { name: "项目包" })
   await panel.getByLabel("导出到").fill("D:\\out\\demo")
@@ -44,7 +45,7 @@ test("says the export needs the desktop build instead of failing vaguely", async
 
 test("does not pretend an attachment was stored when there is no project library", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "项目包…" }).click()
+  await (await commandButton(page, "项目包…")).click()
 
   const panel = page.getByRole("dialog", { name: "项目包" })
   await panel.getByLabel("选择附件").setInputFiles({ name: "abc.png", mimeType: "image/png", buffer: Buffer.from([0x61, 0x62, 0x63]) })

@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFile } from "node:fs/promises"
 
 import { expect, test } from "@playwright/test"
@@ -15,7 +16,7 @@ test("exports a self-contained HTML snapshot of a planar figure", async ({ page 
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/planar-demo.mgeo")
 
   const download = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 HTML", exact: true }).click()
+  await (await commandButton(page, "导出 HTML")).click()
   const file = await download
   expect(file.suggestedFilename()).toMatch(/\.html$/)
 
@@ -41,7 +42,7 @@ test("exports the four CAD views as a self-contained HTML snapshot", async ({ pa
   await page.getByRole("button", { name: "工程制图" }).click()
 
   const download = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 HTML", exact: true }).click()
+  await (await commandButton(page, "导出 HTML")).click()
   const file = await download
   expect(file.suggestedFilename()).toBe("CAD-linear-dimension-A-B.html")
   const html = await readFile(await file.path(), "utf8")
@@ -66,7 +67,7 @@ test("refuses HTML export in the 3D workspace instead of writing an empty file",
 
   let downloaded = false
   page.on("download", () => { downloaded = true })
-  await page.getByRole("button", { name: "导出 HTML", exact: true }).click()
+  await (await commandButton(page, "导出 HTML")).click()
 
   await expect(page.getByRole("alert")).toContainText("立体几何")
   expect(downloaded).toBe(false)

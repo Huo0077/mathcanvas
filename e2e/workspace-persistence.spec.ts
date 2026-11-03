@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFile } from "node:fs/promises"
 import { expect, test, type Page } from "@playwright/test"
 
@@ -10,7 +11,7 @@ interface SavedDocument {
 // Inspect the real in-memory document through the application's export action.
 async function exportedDocument(page: Page): Promise<SavedDocument> {
   const pending = page.waitForEvent("download")
-  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo", exact: true }).click()
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo", exact: true }).click()
   const path = await (await pending).path()
   if (!path) throw new Error("Document export produced no file")
   return (JSON.parse(await readFile(path, "utf8")) as { document: SavedDocument }).document
@@ -33,7 +34,7 @@ test("restores active and inactive drawings across reloads without replacing lat
   expect(planar.primitives).toHaveLength(2)
 
   await page.getByRole("button", { name: "立体几何", exact: true }).click()
-  await page.getByRole("button", { name: "添加空间点", exact: true }).click()
+  await (await commandButton(page, "添加空间点")).click()
   const spatial = await exportedDocument(page)
   expect(spatial.primitives).toHaveLength(1)
   expect(spatial.metadata.id).not.toBe(planar.metadata.id)

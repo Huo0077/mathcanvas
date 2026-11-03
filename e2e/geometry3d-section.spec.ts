@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -20,7 +21,7 @@ test.beforeEach(async ({ page }) => {
  * 所以这些用例把自己依赖的几何**显式钉住**——它们测的是剖切与拾取，不该跟着默认落点漂。
  */
 async function addPinnedCube(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-2"]] as const) await page.getByRole("spinbutton", { name: `原点 ${axis}` }).fill(value)
 }
 
@@ -79,7 +80,7 @@ test("moves the cutting plane with the arrow keys while free dragging is on", as
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   const planeConstant = async () => Number(await scene.getAttribute("data-section-plane-constant"))
@@ -110,7 +111,7 @@ test("tilts the cutting plane from the properties panel", async ({ page }) => {
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   const normal = async () => (await scene.getAttribute("data-section-plane-normal")) ?? ""
@@ -140,7 +141,7 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   const normal = async () => (await scene.getAttribute("data-section-plane-normal")) ?? ""
@@ -149,7 +150,7 @@ test("uses a face of the solid as the cutting plane", async ({ page }) => {
   // 开启一次性取面模式，再点实体上的一个面。
   // 这一步用 DOM 直接派发点击：按钮在显示控制那一排里，Playwright 的"稳定"检查会和场景重建互相等待，
   // 而这里要验的是取面逻辑本身。
-  const facePick = page.getByRole("button", { name: "以面为剖切面" })
+  const facePick = (await commandButton(page, "以面为剖切面"))
   await expect(facePick).toBeEnabled()
   await facePick.evaluate((button) => (button as HTMLButtonElement).click())
   await expect(facePick).toHaveAttribute("aria-pressed", "true")
@@ -180,7 +181,7 @@ for (const template of ["立方体", "棱锥", "圆柱", "圆锥"]) {
 
     const scene = page.locator("[data-3d-scene]")
     await page.getByRole("button", { name: `添加${template}` }).click()
-    await page.getByRole("button", { name: "创建截面" }).click()
+    await (await commandButton(page, "创建截面")).click()
     await expect(scene).toHaveAttribute("data-section-count", "1")
 
     const pointCount = async () => Number(await scene.getAttribute("data-section-point-count"))
@@ -202,7 +203,7 @@ test("moves the drawing section when dragged while free dragging is on", async (
 
   const scene = page.locator("[data-3d-scene]")
   await addPinnedCube(page)
-  await page.getByRole("button", { name: "创建截面" }).click()
+  await (await commandButton(page, "创建截面")).click()
   await expect(scene).toHaveAttribute("data-section-count", "1")
 
   await page.getByRole("button", { name: "自由拖动" }).click()

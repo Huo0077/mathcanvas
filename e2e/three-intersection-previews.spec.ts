@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -36,7 +37,7 @@ async function loadFixture(page: import("@playwright/test").Page) {
    * 见 `geometry3d-drag.spec.ts` 里的同款注释）。这是既有布局问题，不属于本轮改动，这里绕开它。
    */
   await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement | null)?.click())
-  const autoFit = page.getByRole("button", { name: "自动取景" })
+  const autoFit = (await commandButton(page, "自动取景"))
   await expect(autoFit).toHaveAttribute("aria-pressed", "false")
   // 重置视角：之后的世界点投影是稳定的（相机不会再被取景抢走）。
   await page.getByRole("button", { name: "重置3D视角" }).click()

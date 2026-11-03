@@ -1,3 +1,4 @@
+import { applyReducedMotion, loadReducedMotion } from "./uiPreferences"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 
@@ -9,6 +10,8 @@ import "./styles/agent.css"
 // 模型服务（模块 C）：配置表单的版式，同样与画布那套规则互不干扰。
 import "./styles/settings.css"
 import "./styles/workspace-layout.css"
+
+applyReducedMotion(loadReducedMotion())
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

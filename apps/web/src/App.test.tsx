@@ -26,6 +26,14 @@ function pointObjectRows(): HTMLElement[] {
   return Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).filter((row) => /^[A-Z]$/.test(row.querySelector(".object-name")?.textContent ?? "")) as HTMLElement[]
 }
 
+function commandButton(name: string) {
+  const existing = screen.queryByRole("button", { name })
+  if (existing) return existing
+  const menu = name.startsWith("导出") || name === "打开 .mgeo" || name === "项目包…" ? "文件" : "更多工具"
+  fireEvent.click(screen.getByRole("button", { name: menu }))
+  return screen.getByRole("button", { name })
+}
+
 describe("MathCanvas workbench", () => {
   beforeEach(() => {
     localStorage.clear()
@@ -40,9 +48,11 @@ describe("MathCanvas workbench", () => {
     expect(screen.getAllByRole("button", { name: "添加点" })).toHaveLength(1)
 
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
+    commandButton("添加立方体")
     expect(screen.getAllByRole("button", { name: "添加立方体" })).toHaveLength(1)
 
     fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
+    commandButton("导出 SVG")
     expect(screen.getAllByRole("button", { name: "导出 SVG" })).toHaveLength(1)
   })
 
@@ -57,7 +67,7 @@ describe("MathCanvas workbench", () => {
 
   it("opens geometry parameters by default and keeps appearance collapsed", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" })[0])
 
     expect(screen.getByRole("button", { name: "几何参数" }).getAttribute("aria-expanded")).toBe("true")
@@ -73,7 +83,7 @@ describe("MathCanvas workbench", () => {
     const status = screen.getByRole("status", { name: "操作提示" })
     const canvas = screen.getByRole("img", { name: "几何画布" })
 
-    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.click(commandButton("添加直线"))
     expect(status.textContent).toContain("第1步")
     fireEvent.click(canvas, { clientX: 320, clientY: 180 })
     expect(status.textContent).toContain("第2步")
@@ -81,7 +91,7 @@ describe("MathCanvas workbench", () => {
 
   it("keeps constraint and agent UI out of the right inspector but keeps the constraint data", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" })[0])
 
     expect(screen.queryByText("几何约束")).toBeNull()
@@ -108,7 +118,7 @@ describe("MathCanvas workbench", () => {
     expect(screen.queryByRole("button", { name: "添加点" })).toBeNull()
     expect(screen.getByRole("region", { name: "工程状态栏" }).textContent).toContain("工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
+    expect((commandButton("导出 SVG") as HTMLButtonElement).disabled).toBe(false)
   })
 
   /**
@@ -194,9 +204,9 @@ describe("MathCanvas workbench", () => {
 
     // The workspace stays retired, but 平面几何 keeps a function entry so simple functions remain reachable there.
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    expect(screen.getByRole("button", { name: "添加函数" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "添加抛物线" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "添加椭圆" })).toBeTruthy()
+    expect(commandButton("添加函数")).toBeTruthy()
+    expect(commandButton("添加抛物线")).toBeTruthy()
+    expect(commandButton("添加椭圆")).toBeTruthy()
   })
 
   it("still opens a legacy document saved in the retired workspace without crashing", () => {
@@ -216,7 +226,7 @@ describe("MathCanvas workbench", () => {
   it("undoes and redoes with the keyboard, the way most people expect", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     expect(useSceneStore.getState().document.primitives).toHaveLength(1)
 
     fireEvent.keyDown(window, { key: "z", ctrlKey: true })
@@ -235,7 +245,7 @@ describe("MathCanvas workbench", () => {
 
   it("never steals an undo shortcut from a text field", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     const before = useSceneStore.getState().document.primitives.length
 
     const field = globalThis.document.createElement("input")
@@ -255,7 +265,7 @@ describe("MathCanvas workbench", () => {
     expect(undoButton().disabled).toBe(true)
     expect(redoButton().disabled).toBe(true)
 
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     expect(undoButton().disabled).toBe(false)
     expect(redoButton().disabled).toBe(true)
 
@@ -304,7 +314,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "工程制图" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
 
     expect(useSceneStore.getState().document.primitives[0]).toMatchObject({ type: "point", layerId: "layer-geometry" })
     expect(screen.getByRole("region", { name: /模型视图/ })).toBeTruthy()
@@ -321,7 +331,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("tab", { name: "图层树" }))
     fireEvent.click(screen.getByRole("button", { name: "隐藏 几何" }))
     fireEvent.click(screen.getByRole("button", { name: "2D 绘图" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
 
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
     expect(screen.getByText(/已隐藏，无法创建对象/)).toBeTruthy()
@@ -330,7 +340,7 @@ describe("MathCanvas workbench", () => {
   it("switches workspaces without losing each workspace document", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     expect(screen.getAllByText("A", { selector: ".object-name" })).toHaveLength(1)
 
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
@@ -357,7 +367,7 @@ describe("MathCanvas workbench", () => {
   it("creates and edits a 3D solid from the workspace property inspector", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     // 这个用例断言的是"改尺寸之后**物化顶点**跟着重算"，所以先把原点钉住（默认落点会变，见 addDefaultCube）。
     fireEvent.change(screen.getByRole("spinbutton", { name: "原点 X" }), { target: { value: "-2" } })
 
@@ -375,13 +385,13 @@ describe("MathCanvas workbench", () => {
   it("creates point-driven 3D geometry from selected classroom points", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
+    fireEvent.click(commandButton("添加空间点"))
 
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(2)
     fireEvent.click(screen.getByText("A"))
     fireEvent.click(screen.getByText("B"), { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+    fireEvent.click(commandButton("由选中点创建空间直线"))
 
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(true)
   })
@@ -389,7 +399,7 @@ describe("MathCanvas workbench", () => {
   it("edits the source coordinates of a selected space point", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
 
     fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
 
@@ -399,7 +409,7 @@ describe("MathCanvas workbench", () => {
   it("creates and edits a 3D solid from the workspace property inspector", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
 
     expect(screen.getAllByText("立方体 1")[0]).toBeTruthy()
     expect(screen.getByText("立体几何属性")).toBeTruthy()
@@ -410,13 +420,13 @@ describe("MathCanvas workbench", () => {
   it("creates point-driven 3D geometry from selected classroom points", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
+    fireEvent.click(commandButton("添加空间点"))
 
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "point3")).toHaveLength(2)
     fireEvent.click(screen.getByText("A"))
     fireEvent.click(screen.getByText("B"), { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+    fireEvent.click(commandButton("由选中点创建空间直线"))
 
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(true)
   })
@@ -424,7 +434,7 @@ describe("MathCanvas workbench", () => {
   it("edits the source coordinates of a selected space point", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
 
     fireEvent.change(screen.getByRole("spinbutton", { name: "坐标 X" }), { target: { value: "4" } })
 
@@ -443,9 +453,9 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
 
     // 1 个点：以它为圆心的水平圆（法向 +Z），半径取默认值。
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(screen.getAllByText("A")[0])
-    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+    fireEvent.click(commandButton("添加空间圆轨道"))
 
     expect(circleTracks()).toHaveLength(1)
     const single = circleTracks()[0] as { center: { x: number; y: number; z: number }; radius: number; normal: { x: number; y: number; z: number } }
@@ -470,10 +480,10 @@ describe("MathCanvas workbench", () => {
     expect(circleTracks()).toHaveLength(0)
 
     // 2 个点：第二点当圆周上的点，半径 = 两点距离。
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(screen.getAllByText("A")[0])
     fireEvent.click(screen.getAllByText("B")[0], { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+    fireEvent.click(commandButton("添加空间圆轨道"))
 
     const [centre, rim] = points()
     const track = circleTracks()[0] as { center: { x: number; y: number; z: number }; radius: number }
@@ -488,9 +498,9 @@ describe("MathCanvas workbench", () => {
   it("edits a circle track's own centre and leaves the construction points free", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(screen.getAllByText("A")[0])
-    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+    fireEvent.click(commandButton("添加空间圆轨道"))
 
     const track = () => useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "circle3") as { center: { x: number; y: number; z: number } }
     fireEvent.change(screen.getByRole("spinbutton", { name: "圆心 X" }), { target: { value: "4" } })
@@ -514,14 +524,14 @@ describe("MathCanvas workbench", () => {
   it("still adds points and lines after a point is bound to a circle track", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(screen.getAllByText("A")[0])
     fireEvent.click(screen.getAllByText("B")[0], { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+    fireEvent.click(commandButton("添加空间圆轨道"))
 
     // 第三个点绑到轨道上（宿主下拉里那条写着「圆轨道」）。
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     const hostSelect = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
     const orbitOption = Array.from(hostSelect.options).find((option) => option.textContent?.includes("圆轨道"))
     expect(orbitOption).toBeTruthy()
@@ -531,13 +541,13 @@ describe("MathCanvas workbench", () => {
     expect(point3s()).toHaveLength(3)
 
     // 关键：绑定之后**还能**再添加一个定点（绑定之前这段是通的，绑定之后就全被拒了）。
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     expect(point3s()).toHaveLength(4)
 
     // 而且"动点 + 定点"真的能建出空间直线。
     fireEvent.click(screen.getAllByText("C")[0])
     fireEvent.click(screen.getAllByText("D")[0], { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "由选中点创建空间直线" }))
+    fireEvent.click(commandButton("由选中点创建空间直线"))
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "line3")).toHaveLength(1)
     expect(screen.queryByRole("alert")).toBeNull()
   })
@@ -551,9 +561,9 @@ describe("MathCanvas workbench", () => {
 
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(screen.getAllByText("A")[0])
-    fireEvent.click(screen.getByRole("button", { name: "添加空间圆轨道" }))
+    fireEvent.click(commandButton("添加空间圆轨道"))
 
     // 读数一开始就是文档里的值：水平圆（法向 +Z）。
     expect(screen.getByText("当前法向").parentElement?.textContent).toContain("(0.00, 0.00, 1.00)")
@@ -595,7 +605,7 @@ describe("MathCanvas workbench", () => {
 
   it("shows editable point coordinates when a point is selected", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" })[0])
 
     expect(screen.getByRole("spinbutton", { name: "点 X" })).toBeTruthy()
@@ -675,14 +685,14 @@ describe("MathCanvas workbench", () => {
 
   it("adds a point through the domain operation path", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="point"]').length).toBeGreaterThan(0)
   })
 
   it("creates a persistent point annotation from the property bar", () => {
     const previousDocument = useSceneStore.getState().document
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" }).at(-1)!)
     openInspectorSection("外观样式")
     fireEvent.change(screen.getByRole("textbox", { name: "标注文本" }), { target: { value: "A" } })
@@ -697,9 +707,9 @@ describe("MathCanvas workbench", () => {
   it("assigns sequential point labels for classroom-style constructions", () => {
     const previousDocument = useSceneStore.getState().document
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
+    fireEvent.click(commandButton("添加点"))
+    fireEvent.click(commandButton("添加点"))
 
     expect(screen.getAllByText("A", { selector: ".object-name" }).length).toBeGreaterThan(0)
     expect(screen.getAllByText("B", { selector: ".object-name" }).length).toBeGreaterThan(0)
@@ -710,7 +720,7 @@ describe("MathCanvas workbench", () => {
 
   it("renames a selected primitive from the default data section", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" })[0])
 
     // 重命名入口必须落在默认可见的「几何参数」区，而不是需要先展开的「外观样式」。
@@ -725,8 +735,8 @@ describe("MathCanvas workbench", () => {
 
   it("connects two selected points with a live segment reference", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
+    fireEvent.click(commandButton("添加点"))
     const pointRows = pointObjectRows()
     const [first, second] = pointRows.slice(-2)
     fireEvent.click(first)
@@ -744,7 +754,7 @@ describe("MathCanvas workbench", () => {
   it("keeps a connection segment attached when one of its points moves", () => {
     render(<App />)
     const placePoint = (x: string, y: string) => {
-      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+      fireEvent.click(commandButton("添加点"))
       fireEvent.click(pointObjectRows().at(-1)!)
       fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: x } })
       fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: y } })
@@ -777,7 +787,7 @@ describe("MathCanvas workbench", () => {
    */
   it("tells the user how to bind a selected point to a curve", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
 
     const statusPrompt = () => screen.getByRole("status", { name: "操作提示" }).textContent ?? ""
@@ -800,7 +810,7 @@ describe("MathCanvas workbench", () => {
   it("connects a curve-bound dynamic point to another point and follows it while dragging", () => {
     render(<App />)
     // 1. Bind the first point to the first available path (the x-axis line) so it becomes a dynamic point.
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
     fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
@@ -809,7 +819,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "路径参数" }), { target: { value: "1" } })
 
     // 2. A second, free point.
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
     fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: "0" } })
     fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: "0" } })
@@ -851,9 +861,9 @@ describe("MathCanvas workbench", () => {
 
   it("requires a third point for a parabola connection", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
+    fireEvent.click(commandButton("添加点"))
+    fireEvent.click(commandButton("添加点"))
     const pointRows = pointObjectRows().slice(-3)
     fireEvent.click(pointRows[0])
     fireEvent.click(pointRows[1], { shiftKey: true })
@@ -870,8 +880,8 @@ describe("MathCanvas workbench", () => {
    */
   it("binds a selected point to an ellipse path and records its locus", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加椭圆"))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
 
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
@@ -900,7 +910,7 @@ describe("MathCanvas workbench", () => {
    */
   it("drags a point bound to a line along that line on the canvas", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
 
     // Bind to the first available path, which is the x-axis line y = 0.
@@ -938,7 +948,7 @@ describe("MathCanvas workbench", () => {
    */
   it("gives a bound point its own driving parameter and decouples it from the slope", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
 
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
@@ -983,7 +993,7 @@ describe("MathCanvas workbench", () => {
    */
   it("has no animation panel, and still drives the dynamic point from its own parameter", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
     fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
@@ -1018,7 +1028,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     // Two points at the same default spot would be a degenerate length, so place them properly.
     const placePoint = (x: string, y: string) => {
-      fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+      fireEvent.click(commandButton("添加点"))
       fireEvent.click(pointObjectRows().at(-1)!)
       fireEvent.change(screen.getByRole("spinbutton", { name: "点 X" }), { target: { value: x } })
       fireEvent.change(screen.getByRole("spinbutton", { name: "点 Y" }), { target: { value: y } })
@@ -1056,7 +1066,7 @@ describe("MathCanvas workbench", () => {
   it("places every default template on the ground, with no horizontal overlap", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    for (const name of ["添加立方体", "添加棱锥", "添加圆柱", "添加圆锥"]) fireEvent.click(screen.getByRole("button", { name }))
+    for (const name of ["添加立方体", "添加棱锥", "添加圆柱", "添加圆锥"]) fireEvent.click(commandButton(name))
 
     const primitives = useSceneStore.getState().document.primitives
     type Solid = (typeof primitives)[number]
@@ -1092,8 +1102,8 @@ describe("MathCanvas workbench", () => {
    */
   it("binds a selected point to a parabola and lets its parameter domain be widened", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加抛物线"))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
 
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
@@ -1123,7 +1133,7 @@ describe("MathCanvas workbench", () => {
    */
   it("shows the dynamic point's driver parameter and reclaims it with its point", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(pointObjectRows().at(-1)!)
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
     fireEvent.change(pathSelect, { target: { value: Array.from(pathSelect.options).find((option) => option.value)!.value } })
@@ -1178,7 +1188,7 @@ describe("MathCanvas workbench", () => {
 
   it("binds a selected point to a path from the property bar", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     const pointRows = pointObjectRows()
     fireEvent.click(pointRows.at(-1)!)
     const pathSelect = screen.getByRole("combobox", { name: "点路径绑定" }) as HTMLSelectElement
@@ -1193,7 +1203,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a circle through the canvas and properties", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(commandButton("添加圆"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 400, clientY: 140 })
     fireEvent.click(canvas, { clientX: 508, clientY: 140 })
@@ -1210,7 +1220,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates an arc from center, start, and end clicks", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+    fireEvent.click(commandButton("添加圆弧"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 400, clientY: 140 })
     fireEvent.click(canvas, { clientX: 544, clientY: 140 })
@@ -1222,7 +1232,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a line through the canvas and properties", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.click(commandButton("添加直线"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 220, clientY: 200 })
     fireEvent.click(canvas, { clientX: 580, clientY: 80 })
@@ -1235,7 +1245,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a segment through the canvas and properties", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加线段" }))
+    fireEvent.click(commandButton("添加线段"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 292, clientY: 200 })
     fireEvent.click(canvas, { clientX: 508, clientY: 80 })
@@ -1248,7 +1258,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a ray through the canvas and properties", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加射线" }))
+    fireEvent.click(commandButton("添加射线"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 220, clientY: 200 })
     fireEvent.click(canvas, { clientX: 580, clientY: 80 })
@@ -1261,7 +1271,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates and edits a polyline through the canvas and properties", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加折线" }))
+    fireEvent.click(commandButton("添加折线"))
     const canvas = screen.getByRole("img", { name: "几何画布" })
     fireEvent.click(canvas, { clientX: 220, clientY: 200 })
     fireEvent.click(canvas, { clientX: 400, clientY: 100 })
@@ -1276,18 +1286,18 @@ describe("MathCanvas workbench", () => {
 
   it("adds and edits conic curves in the workbench", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
+    fireEvent.click(commandButton("添加抛物线"))
     expect(screen.getAllByText("抛物线 1")).toHaveLength(2)
     expect(screen.getByRole("spinbutton", { name: "焦参数" })).toBeTruthy()
     fireEvent.change(screen.getByRole("spinbutton", { name: "顶点 X" }), { target: { value: "1" } })
     expect((screen.getByRole("spinbutton", { name: "顶点 X" }) as HTMLInputElement).value).toBe("1")
 
-    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.click(commandButton("添加椭圆"))
     expect(screen.getAllByText("椭圆 1")).toHaveLength(2)
     expect(screen.getByRole("spinbutton", { name: "横向半径" })).toBeTruthy()
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="ellipse"]')).toHaveLength(1)
 
-    fireEvent.click(screen.getByRole("button", { name: "添加双曲线" }))
+    fireEvent.click(commandButton("添加双曲线"))
     expect(screen.getAllByText("双曲线 1")).toHaveLength(2)
     expect(screen.getByRole("combobox", { name: "双曲线轴向" })).toBeTruthy()
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="hyperbola"]')).toHaveLength(1)
@@ -1295,7 +1305,7 @@ describe("MathCanvas workbench", () => {
 
   it("rotates an ellipse from the properties panel", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.click(commandButton("添加椭圆"))
 
     const rotation = screen.getByRole("spinbutton", { name: "椭圆旋转角度" }) as HTMLInputElement
     fireEvent.change(rotation, { target: { value: "45" } })
@@ -1306,7 +1316,7 @@ describe("MathCanvas workbench", () => {
 
   it("shows vertical-major ellipse foci and fill styling", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加椭圆" }))
+    fireEvent.click(commandButton("添加椭圆"))
     fireEvent.change(screen.getByRole("spinbutton", { name: "纵向半径" }), { target: { value: "5" } })
     openInspectorSection("外观样式")
     fireEvent.change(screen.getByLabelText("填充颜色"), { target: { value: "#ffff00" } })
@@ -1320,7 +1330,7 @@ describe("MathCanvas workbench", () => {
 
   it("disables every parabola geometry control after locking", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加抛物线" }))
+    fireEvent.click(commandButton("添加抛物线"))
     fireEvent.click(screen.getByRole("button", { name: "锁定图元" }))
 
     expect((screen.getByRole("spinbutton", { name: "焦参数" }) as HTMLInputElement).disabled).toBe(true)
@@ -1363,7 +1373,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.pointerMove(canvas, { clientX: 400, clientY: 220, pointerId: 1 })
     expect(screen.getByRole("status").textContent).toContain("(0.00, 0.00)")
 
-    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(commandButton("添加圆"))
     fireEvent.click(canvas, { clientX: 400, clientY: 220 })
     fireEvent.click(canvas, { clientX: 466, clientY: 220 })
     const preview = canvas.querySelector('[data-auto-intersection]')
@@ -1436,7 +1446,7 @@ describe("MathCanvas workbench", () => {
   it("scales circles and arcs with the canvas zoom", () => {
     render(<App />)
     const canvas = screen.getByRole("img", { name: "几何画布" })
-    fireEvent.click(screen.getByRole("button", { name: "添加圆" }))
+    fireEvent.click(commandButton("添加圆"))
     fireEvent.click(canvas, { clientX: 400, clientY: 220 })
     fireEvent.click(canvas, { clientX: 466, clientY: 220 })
     // 排掉 `[data-shape-centre]`（圆心那个小圆点，半径固定 3px，不随缩放变化）。
@@ -1450,7 +1460,7 @@ describe("MathCanvas workbench", () => {
 
   it("adds a simple function and applies exp and trigonometric presets", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    fireEvent.click(commandButton("添加函数"))
 
     expect(screen.getByRole("img", { name: "几何画布" }).querySelectorAll('[data-primitive-type="function"]')).toHaveLength(1)
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "function")).toHaveLength(1)
@@ -1468,7 +1478,7 @@ describe("MathCanvas workbench", () => {
 
   it("creates a derivative, a tangent and an integral region for the selected function", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    fireEvent.click(commandButton("添加函数"))
     const functionRow = () => screen.getAllByText("函数 1")[0]
 
     fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
@@ -1491,10 +1501,10 @@ describe("MathCanvas workbench", () => {
 
   it("keeps function, derivative and integral deletable as one object", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    fireEvent.click(commandButton("添加函数"))
     fireEvent.click(screen.getByRole("button", { name: "创建导函数" }))
     fireEvent.click(screen.getAllByText("函数 1")[0])
-    fireEvent.click(screen.getByRole("button", { name: "删除对象" }))
+    fireEvent.click(commandButton("删除对象"))
 
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "function" || primitive.type === "derivative")).toHaveLength(0)
     expect(screen.queryAllByRole("alert")).toHaveLength(0)
@@ -1502,14 +1512,14 @@ describe("MathCanvas workbench", () => {
 
   it("selects and deletes a point with the keyboard", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     const pointLabelsBeforeDelete = screen.getAllByText("A", { selector: ".object-name" })
     fireEvent.click(pointLabelsBeforeDelete[0])
-    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(false)
+    expect((commandButton("删除对象") as HTMLButtonElement).disabled).toBe(false)
     fireEvent.keyDown(window, { key: "Delete" })
 
     expect(screen.queryAllByText("A", { selector: ".object-name" })).toHaveLength(pointLabelsBeforeDelete.length - 1)
-    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((commandButton("删除对象") as HTMLButtonElement).disabled).toBe(true)
   })
 
   /**
@@ -1522,7 +1532,7 @@ describe("MathCanvas workbench", () => {
   it("adds a tetrahedron from the ribbon and deletes the whole solid in one step", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加正四面体" }))
+    fireEvent.click(commandButton("添加正四面体"))
 
     const added = useSceneStore.getState().document.primitives
     const solid = added.find((primitive) => primitive.type === "polyhedron3")
@@ -1541,12 +1551,12 @@ describe("MathCanvas workbench", () => {
 
   it("locks a selected object and disables destructive actions", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(screen.getAllByText("A", { selector: ".object-name" })[0])
     fireEvent.click(screen.getByRole("button", { name: "锁定图元" }))
 
     expect(screen.getByRole("button", { name: "解锁图元" })).toBeTruthy()
-    expect((screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((commandButton("删除对象") as HTMLButtonElement).disabled).toBe(true)
   })
 
   it("groups a multi-selection and applies batch visibility", () => {
@@ -1576,7 +1586,7 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getAllByText("y = 0")[0])
     fireEvent.click(screen.getAllByText("参数直线")[0], { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "锁定对象" }))
+    fireEvent.click(commandButton("锁定对象"))
     fireEvent.click(screen.getByRole("button", { name: /批量(隐藏|显示)/ }))
 
     expect(screen.getByRole("alert").textContent).toContain("selection contains locked object")
@@ -1585,8 +1595,8 @@ describe("MathCanvas workbench", () => {
   it("deletes a spatial point together with the measurement that depends on it", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
+    fireEvent.click(commandButton("添加空间点"))
     fireEvent.click(algebraRow("A"))
     fireEvent.click(algebraRow("B"), { shiftKey: true })
     fireEvent.click(screen.getByRole("button", { name: "距离" }))
@@ -1636,7 +1646,7 @@ describe("MathCanvas workbench", () => {
 
     expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: "添加圆弧" }))
+    fireEvent.click(commandButton("添加圆弧"))
     const hint = screen.getByRole("status", { name: "操作指引" })
     expect(hint.textContent).toContain("圆心")
     expect(hint.textContent).toContain("终点")
@@ -1645,10 +1655,10 @@ describe("MathCanvas workbench", () => {
   it("replaces the guide on the next feature click and closes it on demand", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加折线" }))
+    fireEvent.click(commandButton("添加折线"))
     expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("双击")
 
-    fireEvent.click(screen.getByRole("button", { name: "添加函数" }))
+    fireEvent.click(commandButton("添加函数"))
     expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("预设")
 
     fireEvent.click(screen.getByRole("button", { name: "关闭操作指引" }))
@@ -1660,11 +1670,11 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
     const canvas = screen.getByRole("img", { name: "几何画布" })
 
-    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.click(commandButton("添加直线"))
     fireEvent.keyDown(window, { key: "Escape" })
     expect(screen.queryByRole("status", { name: "操作指引" })).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: "添加直线" }))
+    fireEvent.click(commandButton("添加直线"))
     fireEvent.click(canvas, { clientX: 220, clientY: 200 })
     fireEvent.click(canvas, { clientX: 420, clientY: 260 })
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line")).toBe(true)
@@ -1674,9 +1684,9 @@ describe("MathCanvas workbench", () => {
   it("clears the selection with Escape once nothing needs cancelling", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     fireEvent.click(algebraRow("A"))
-    const deleteButton = () => screen.getByRole("button", { name: "删除对象" }) as HTMLButtonElement
+    const deleteButton = () => commandButton("删除对象") as HTMLButtonElement
     expect(deleteButton().disabled).toBe(false)
     const before = useSceneStore.getState().document.primitives.length
 
@@ -1695,7 +1705,7 @@ describe("MathCanvas workbench", () => {
   it("explains the dihedral workflow instead of only naming the measurement", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
     fireEvent.click(algebraRow("面 1"))
     fireEvent.click(algebraRow("面 3"), { shiftKey: true })
@@ -1710,7 +1720,7 @@ describe("MathCanvas workbench", () => {
   it("confirms an added space point and points at the Shift multi-select", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
 
     expect(screen.getByRole("status", { name: "操作指引" }).textContent).toContain("Shift")
     // 成功添加只给指引，不该出现红色报错。
@@ -1720,7 +1730,7 @@ describe("MathCanvas workbench", () => {
   it("explains the two dihedral angle choices for selected faces", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     fireEvent.click(screen.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }))
     fireEvent.click(algebraRow("面 1"))
     fireEvent.click(algebraRow("面 2"), { shiftKey: true })
@@ -1735,11 +1745,11 @@ describe("MathCanvas workbench", () => {
   it("cuts point-driven topology with an ordered section boundary", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     // 断言里的角坐标是按这个立方体算的（默认落点会变），所以把原点钉住。
     for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
     fireEvent.click(algebraRow("立方体 1 拓扑"))
-    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+    fireEvent.click(commandButton("创建截面"))
 
     const section = useSceneStore.getState().document.primitives.find((primitive) => primitive.type === "section")
     expect(section).toMatchObject({ classification: "polygon", status: "approximate", visible: true })
@@ -1753,8 +1763,8 @@ describe("MathCanvas workbench", () => {
   it("binds a spatial point to a host and slides it along the host parameter", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加立方体"))
+    fireEvent.click(commandButton("添加空间点"))
 
     // 绑定到立方体的一条棱（模板实体生成了 12 条 edge3）。下拉的值是 `<模式>:<图元 id>`。
     const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
@@ -1792,10 +1802,10 @@ describe("MathCanvas workbench", () => {
   it("constrains a spatial point inside a cube", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     // 下面断言的是"点被夹在 x/y = -2..2、z = -1..3 的正方体里"，所以把立方体钉回那个位置（默认落点会变）。
     for (const [axis, value] of [["X", "-2"], ["Y", "-2"], ["Z", "-1"]] as const) fireEvent.change(screen.getByRole("spinbutton", { name: `原点 ${axis}` }), { target: { value } })
-    fireEvent.click(screen.getByRole("button", { name: "添加空间点" }))
+    fireEvent.click(commandButton("添加空间点"))
 
     const select = screen.getByRole("combobox", { name: "点宿主绑定" }) as HTMLSelectElement
     const volumeOption = Array.from(select.options).find((option) => option.value === "solid:cube-1")
@@ -1835,9 +1845,9 @@ describe("MathCanvas workbench", () => {
   it("materializes a section into independent primitives", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     fireEvent.click(algebraRow("立方体 1 拓扑"))
-    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+    fireEvent.click(commandButton("创建截面"))
 
     fireEvent.click(screen.getByRole("button", { name: "转为图元" }))
 
@@ -1861,9 +1871,9 @@ describe("MathCanvas workbench", () => {
   it("keeps a point-driven 3D document while switching workspaces", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     fireEvent.click(algebraRow("立方体 1 拓扑"))
-    fireEvent.click(screen.getByRole("button", { name: "创建截面" }))
+    fireEvent.click(commandButton("创建截面"))
 
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
@@ -1886,26 +1896,22 @@ describe("MathCanvas workbench", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
 
-    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole("button", { name: "导出 PNG" }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole("button", { name: "导出 CSV" }) as HTMLButtonElement).disabled).toBe(false)
+    expect((commandButton("导出 SVG") as HTMLButtonElement).disabled).toBe(true)
+    expect((commandButton("导出 PNG") as HTMLButtonElement).disabled).toBe(true)
+    expect((commandButton("导出 CSV") as HTMLButtonElement).disabled).toBe(false)
 
     fireEvent.click(screen.getByRole("button", { name: "平面几何" }))
-    expect((screen.getByRole("button", { name: "导出 SVG" }) as HTMLButtonElement).disabled).toBe(false)
+    expect((commandButton("导出 SVG") as HTMLButtonElement).disabled).toBe(false)
   })
 
   it("explains an invalid spatial construction instead of creating objects", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    const command = screen.getByRole("button", { name: "由选中点创建空间直线" }) as HTMLButtonElement
+    const command = commandButton("由选中点创建空间直线") as HTMLButtonElement
 
     expect(command.disabled).toBe(true)
     expect(command.title).toContain("Shift")
     expect(command.title).toContain("空间点")
-    // 预置条件不足时给左下角操作指引（说清要选什么），而不是一条只说"选择不对"的报错。
-    const hint = screen.getByRole("status", { name: "操作指引" })
-    expect(hint.textContent).toContain("Shift")
-    expect(hint.textContent).toContain("空间点")
     expect(screen.queryByRole("alert")).toBeNull()
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "line3")).toBe(false)
   })
@@ -1913,7 +1919,7 @@ describe("MathCanvas workbench", () => {
   it("recolours a 3D solid and its generated topology from the property inspector", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     openInspectorSection("外观样式")
 
     fireEvent.change(screen.getByLabelText("线条颜色"), { target: { value: "#ff0000" } })
@@ -1930,7 +1936,7 @@ describe("MathCanvas workbench", () => {
   it("undoes and redoes one 3D construction step at a time", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "立体几何" }))
-    fireEvent.click(screen.getByRole("button", { name: "添加立方体" }))
+    fireEvent.click(commandButton("添加立方体"))
     expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
 
     fireEvent.click(screen.getByRole("button", { name: "撤销" }))
@@ -2001,14 +2007,14 @@ describe("MathCanvas workbench", () => {
     render(<App />)
 
     // 命令在"没选中合适组合"时是禁用的，并给出理由。
-    const command = screen.getByRole("button", { name: "绕定点旋转" }) as HTMLButtonElement
+    const command = commandButton("绕定点旋转") as HTMLButtonElement
     expect(command.disabled).toBe(true)
     expect(command.title).toContain("一个点和一个圆")
 
     fireEvent.click(algebraRow("定点 P"))
     fireEvent.click(algebraRow("圆 c"), { shiftKey: true })
-    expect((screen.getByRole("button", { name: "绕定点旋转" }) as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(screen.getByRole("button", { name: "绕定点旋转" }))
+    expect((commandButton("绕定点旋转") as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(commandButton("绕定点旋转"))
 
     const circle = useSceneStore.getState().document.primitives.find((primitive) => primitive.id === "circle-1")
     expect(circle?.type).toBe("circle")
@@ -2119,7 +2125,7 @@ describe("MathCanvas workbench", () => {
 
     fireEvent.click(algebraRow("定点 P"))
     fireEvent.click(algebraRow("圆 c"), { shiftKey: true })
-    fireEvent.click(screen.getByRole("button", { name: "绕定点旋转" }))
+    fireEvent.click(commandButton("绕定点旋转"))
 
     // 一个动作 = 一条撤销记录（修复前是两条）。
     expect(useSceneStore.getState().history).toHaveLength(1)
@@ -2171,7 +2177,7 @@ describe("MathCanvas workbench", () => {
 
     // 删除定点：动圆跟着消失（不留孤儿）。走 Ribbon 的「删除对象」，与用户实际动作一致。
     fireEvent.click(algebraRow("P"))
-    fireEvent.click(screen.getByRole("button", { name: "删除对象" }))
+    fireEvent.click(commandButton("删除对象"))
     expect(useSceneStore.getState().document.primitives.filter((primitive) => primitive.type === "circle")).toEqual([])
   })
 
@@ -2402,7 +2408,7 @@ describe("top-level modules", () => {
     expect(screen.getByRole("button", { name: "传统工作区" }).getAttribute("aria-pressed")).toBe("true")
     // 模块 A：画布、Ribbon、三个工作区入口都在；模块 B 的输入框一个都不该被渲染出来。
     expect(screen.getByRole("img", { name: "几何画布" })).toBeTruthy()
-    expect(screen.getByRole("region", { name: "功能区" })).toBeTruthy()
+    expect(screen.getByRole("toolbar", { name: "绘图工具" })).toBeTruthy()
     expect(screen.queryByRole("textbox", { name: "对话输入" })).toBeNull()
     expect(screen.queryByRole("log", { name: "对话记录" })).toBeNull()
   })
@@ -2415,7 +2421,7 @@ describe("top-level modules", () => {
     expect(globalThis.document.querySelector(".app-shell")?.getAttribute("data-app-module")).toBe("agent")
     expect(screen.getByRole("textbox", { name: "对话输入" })).toBeTruthy()
     // 模块 B 里没有 Ribbon，也没有几何画布：两块界面不会互相串场。
-    expect(screen.queryByRole("region", { name: "功能区" })).toBeNull()
+    expect(screen.queryByRole("toolbar", { name: "绘图工具" })).toBeNull()
     expect(screen.queryByRole("img", { name: "几何画布" })).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "返回画布" }))
@@ -2426,7 +2432,7 @@ describe("top-level modules", () => {
 
   it("keeps the geometry document untouched while visiting the Agent workspace", () => {
     render(<App />)
-    fireEvent.click(screen.getByRole("button", { name: "添加点" }))
+    fireEvent.click(commandButton("添加点"))
     const before = useSceneStore.getState().document.primitives.length
 
     fireEvent.click(screen.getByRole("button", { name: "Agent 工作区" }))

@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { readFile } from "node:fs/promises"
 
 import { expect, test } from "@playwright/test"
@@ -55,7 +56,7 @@ test("drafts with a fixed window, live preview and object snap", async ({ page }
   // 坐标窗口是固定的：画之前先记下来，画完必须一模一样（旧实现按内容自适应，点一下整个坐标系就跳）。
   const windowBefore = await surface.getAttribute("viewBox")
 
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 80, y: 140 } })
   await surface.hover({ position: { x: 240, y: 140 } })
 
@@ -91,7 +92,7 @@ test("edits a draft primitive by dragging its grip", async ({ page }) => {
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 80, y: 140 } })
   await surface.click({ position: { x: 240, y: 140 } })
   await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
@@ -123,7 +124,7 @@ test("box-selects draft geometry with the drag direction deciding the mode", asy
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 140, y: 120 } })
   await surface.click({ position: { x: 260, y: 200 } })
   await page.keyboard.press("Escape")
@@ -157,7 +158,7 @@ test("places drafting points from typed coordinates", async ({ page }) => {
   await page.getByRole("button", { name: "2D 绘图" }).click()
 
   const surface = page.getByRole("img", { name: /模型视图/ })
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 100, y: 140 } })
 
   // 第二个点用极坐标敲进去：@40<0 应该是"从基点向右 40mm"，也就是窗口宽度的 40%。
@@ -188,7 +189,7 @@ test("offsets, trims and extends selected draft geometry", async ({ page }) => {
 
   const surface = page.getByRole("img", { name: /模型视图/ })
   const revision = async () => Number(await page.locator(".engineering-workbench").getAttribute("data-revision"))
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 120, y: 200 } })
   await surface.click({ position: { x: 320, y: 200 } })
   await expect(page.locator(".engineering-drawing-draft")).toHaveCount(1)
@@ -220,7 +221,7 @@ test("offsets, trims and extends selected draft geometry", async ({ page }) => {
   const heightOf = async (id: string) => (await surface.locator(`[data-primitive-id="${id}"] line`).first().boundingBox())!.height
 
   // 延伸：先选边界（segment-1），Shift 加选目标（短竖线段），把目标 b 端拉到边界上。
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 220, y: 110 } })
   await surface.click({ position: { x: 220, y: 165 } })
   const shortHeight = await heightOf("segment-3")
@@ -235,7 +236,7 @@ test("offsets, trims and extends selected draft geometry", async ({ page }) => {
   expect(await heightOf("segment-3")).toBeGreaterThan(shortHeight)
 
   // 修剪：画一条穿过边界的竖线段，选中边界 + 目标后剪掉 a 端之外的一半。
-  await page.getByRole("button", { name: "添加线段", exact: true }).click()
+  await (await commandButton(page, "添加线段")).click()
   await surface.click({ position: { x: 275, y: 110 } })
   await surface.click({ position: { x: 275, y: 250 } })
   const longHeight = await heightOf("segment-4")
@@ -260,7 +261,7 @@ test("undoes and redoes from both the buttons and the keyboard", async ({ page }
   await expect(undo).toBeDisabled()
   await expect(redo).toBeDisabled()
 
-  await page.getByRole("button", { name: "添加空间点", exact: true }).click()
+  await (await commandButton(page, "添加空间点")).click()
   await expect.poll(revision).toBe(1)
   await expect(undo).toBeEnabled()
   await expect(redo).toBeDisabled()
@@ -292,7 +293,7 @@ test("keeps hidden views out of the exported SVG", async ({ page }) => {
   await tree.getByRole("button", { name: "隐藏 主视图" }).click()
 
   const download = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
+  await (await commandButton(page, "导出 SVG")).click()
   const path = await (await download).path()
   const svg = await readFile(path, "utf8")
 
@@ -312,7 +313,7 @@ test("exports the switched projection source instead of the drawing's own docume
 
   // 先在立体几何里建一个立方体：两个工作区的文档相互独立，工程制图默认看不到它。
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await page.getByRole("button", { name: "工程制图" }).click()
 
   await expect(page.getByText("本图纸没有可投影对象；立体几何里已有模型").first()).toBeVisible()
@@ -320,7 +321,7 @@ test("exports the switched projection source instead of the drawing's own docume
 
   // 来源仍是"本图纸"时，导出的 SVG 里除了四个视图分组不该有任何图元。
   const emptyDownload = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
+  await (await commandButton(page, "导出 SVG")).click()
   const emptySvg = await readFile(await (await emptyDownload).path(), "utf8")
   expect((emptySvg.match(/data-drawing-view=/g) ?? []).length).toBe(4)
   expect(emptySvg).not.toContain("data-source-id=")
@@ -332,7 +333,7 @@ test("exports the switched projection source instead of the drawing's own docume
 
   // **导出必须跟着来源走**：文件里要出现只有空间文档才有的立方体投影来源。
   const spatialDownload = page.waitForEvent("download")
-  await page.getByRole("button", { name: "导出 SVG", exact: true }).click()
+  await (await commandButton(page, "导出 SVG")).click()
   const spatialSvg = await readFile(await (await spatialDownload).path(), "utf8")
   expect((spatialSvg.match(/data-source-id=/g) ?? []).length).toBeGreaterThan(0)
   expect(spatialSvg).toMatch(/data-source-id="(cube|point3|line3|polyhedron3)[^"]*"/)
@@ -437,7 +438,7 @@ test("projects the spatial workspace model instead of claiming there is nothing 
 
   // 在立体几何里建一个立方体：工作区文档是独立的，工程制图默认看不到它。
   await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await page.getByRole("button", { name: "工程制图" }).click()
 
   // 空状态要说明原因，而不是只说"暂无可投影的空间对象"。

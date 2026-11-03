@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -15,7 +16,7 @@ test("drags a solid freely without turning the camera", async ({ page }) => {
   await expect(scene).toBeVisible()
   await expect(scene).toHaveAttribute("data-drag-mode", "false")
 
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
 
   const dragButton = page.getByRole("button", { name: "自由拖动" })
@@ -43,7 +44,7 @@ test("undoes one free drag in a single step", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
   await page.getByRole("button", { name: "自由拖动" }).click()
 
@@ -62,7 +63,7 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
 
   const dragButton = page.getByRole("button", { name: "自由拖动" })
@@ -180,14 +181,14 @@ test("drags only the solid under the pointer", async ({ page }) => {  await page
   // 用 DOM 派发点击：显示控制那一排在窄视口下会换行，locator.click 会等"位置稳定"而超时。
   await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
 
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
   // 新立方体都建在同一处，先把第一个挪开，两个实体才各自可点
   await setOrigin(page, [8, 8, 0])
   const firstCubeOrigin = await cubeOrigin(page)
 
   // 新建的实体就是当前选中对象，所以可以直接拖它，不必经由对象树
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 2").first()).toBeVisible()
   // 默认落点：坐在地面上、在 (−7, 3) 那个象限（见 `addDefaultCube`）。
   expect(await cubeOrigin(page)).toEqual([-7, 3, 0])
@@ -247,7 +248,7 @@ test("keeps a round solid's rim circles glued to it while dragging", async ({ pa
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()
   // 圆柱的上下底由**解析圆**画（`createRimCircles3`），它们是画布上另一份对象、不在实体网格里。
   await expect(scene).toHaveAttribute("data-rim-curves", "2")
@@ -283,7 +284,7 @@ test("carries the point labels along while a solid is being dragged", async ({ p
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()
   await page.getByRole("button", { name: "自由拖动" }).click()
 
@@ -323,7 +324,7 @@ test("repaints the scene while a solid is being dragged", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
   await page.getByRole("button", { name: "自由拖动" }).click()
 
@@ -373,7 +374,7 @@ test("drags a single vertex of a cube without moving the entire cube or displaci
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
   await page.getByRole("button", { name: "自由拖动" }).click()
 

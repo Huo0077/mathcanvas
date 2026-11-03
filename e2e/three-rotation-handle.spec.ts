@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
@@ -17,7 +18,7 @@ test("rotates a solid by dragging the X ring, in one undoable step", async ({ pa
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()
 
   // (1) 选中恰好一个可转对象 ⇒ 打开「旋转环」后出现三个环（X / Y / Z）。
@@ -112,7 +113,7 @@ test("follows the pointer exactly while Alt is held", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
@@ -159,7 +160,7 @@ test("does not start a rotation when the pointer is off the rings", async ({ pag
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
@@ -180,8 +181,8 @@ test("offers no rings when more than one object is selected", async ({ page }) =
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  await page.getByRole("button", { name: "添加圆柱" }).click()
-  await page.getByRole("button", { name: "添加立方体" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
+  await (await commandButton(page, "添加立方体")).click()
   await showRotationRings(page)
   await expect(scene).toHaveAttribute("data-rotation-handles", "3")
 
@@ -204,7 +205,7 @@ test("keeps the rings off the canvas until the view switch is turned on", async 
 
   const scene = page.locator("[data-3d-scene]")
   const toggle = page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" })
-  await page.getByRole("button", { name: "添加圆柱" }).click()
+  await (await commandButton(page, "添加圆柱")).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()
 
   // (1) 条件满足、环却不在；枢轴与半径读数也不许谎报一个手柄（e2e 会照着它去抓环）。
