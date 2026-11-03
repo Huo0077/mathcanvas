@@ -1,0 +1,235 @@
+[
+  {
+    "id": "E01",
+    "name": "原题两问",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。（1）求证 BD⊥AC；（2）求折后 BD 的长。",
+    "expectedKind": "refute",
+    "expected": "第一问不成立；第二问 2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E02",
+    "name": "单独求长",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "BD=2√85/5，并可预览折叠图。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E03",
+    "name": "换点名和尺寸",
+    "prompt": "矩形 PQRS 中，PQ=6，QR=3，沿对角线 PR 把 △PQR 折起，使平面 PQR ⊥ 平面 PRS。求折后 QS 的长。",
+    "expectedKind": "numeric",
+    "expected": "QS=3√85/5。",
+    "values": [
+      5.531726674375733
+    ]
+  },
+  {
+    "id": "E04",
+    "name": "交换长短边",
+    "prompt": "矩形 ABCD 中，AB=3，BC=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "BD=√337/5。",
+    "values": [
+      3.671511950137164
+    ]
+  },
+  {
+    "id": "E05",
+    "name": "相邻边相等",
+    "prompt": "矩形 ABCD 中，AB=4，BC=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "expectedKind": "true",
+    "expected": "垂直关系成立，BD=4。",
+    "values": [
+      4
+    ]
+  },
+  {
+    "id": "E06",
+    "name": "正方形常见说法",
+    "prompt": "正方形 ABCD 的边长为4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "expectedKind": "true",
+    "expected": "同 E05，垂直且 BD=4。",
+    "values": [
+      4
+    ]
+  },
+  {
+    "id": "E07",
+    "name": "明确60度折角",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起60°。求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "BD=√(84/5)。",
+    "values": [
+      4.09878030638384
+    ]
+  },
+  {
+    "id": "E08",
+    "name": "换另一条折痕",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 BD 把 △ABD 折起，使平面 ABD ⊥ 平面 BCD。求折后 AC 的长。",
+    "expectedKind": "numeric",
+    "expected": "AC=2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E09",
+    "name": "分开问折前折后",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折前 BD 的长；求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "两问分别是 2√5、2√85/5。",
+    "values": [
+      4.47213595499958,
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E10",
+    "name": "合并问折前折后",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。分别求折前和折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "仍应交付两个长度。",
+    "values": [
+      4.47213595499958,
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E11",
+    "name": "中文垂直表述",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD 垂直于 AC；求折后 BD 的长。",
+    "expectedKind": "refute",
+    "expected": "与原题同义，第一问不成立，第二问 2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E12",
+    "name": "逗号分隔两问",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折前 BD 的长，求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "两问分别是 2√5、2√85/5。",
+    "values": [
+      4.47213595499958,
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E13",
+    "name": "口语问长度",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。折后 BD 多长？",
+    "expectedKind": "numeric",
+    "expected": "应回答 2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E14",
+    "name": "缺少折角",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折后 BD 的长。",
+    "expectedKind": "clarify",
+    "expected": "需要补充折角，不能给唯一折后长度。",
+    "values": []
+  },
+  {
+    "id": "E15",
+    "name": "只问折前无需折角",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折前 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "无需折角即可得到 2√5。",
+    "values": [
+      4.47213595499958
+    ]
+  },
+  {
+    "id": "E16",
+    "name": "重复边长矛盾",
+    "prompt": "矩形 ABCD 中，AB=4，AB=5，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC。",
+    "expectedKind": "inconsistent",
+    "expected": "应指出 AB=4 与 AB=5 冲突，不作后续数学结论。",
+    "values": []
+  },
+  {
+    "id": "E17",
+    "name": "对边长度矛盾",
+    "prompt": "矩形 ABCD 中，AB=4，CD=5，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "expectedKind": "inconsistent",
+    "expected": "应指出矩形 AB=CD 与给定长度冲突。",
+    "values": []
+  },
+  {
+    "id": "E18",
+    "name": "对角线条件矛盾",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，AC=6，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "expectedKind": "inconsistent",
+    "expected": "AB=4、BC=2 意味着 AC=√20，与 AC=6 矛盾。",
+    "values": []
+  },
+  {
+    "id": "E19",
+    "name": "定义辅助垂足",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。",
+    "expectedKind": "true",
+    "expected": "由垂足定义成立；若当前无法构造，需明确未核验，不能否定。",
+    "values": []
+  },
+  {
+    "id": "E20",
+    "name": "边比确定矩形",
+    "prompt": "矩形 ABCD 中，AB:BC=2:1，AB=4，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "由边比得 BC=2，BD=2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  },
+  {
+    "id": "E21",
+    "name": "小数尺度",
+    "prompt": "矩形 ABCD 中，AB=0.4，BC=0.2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "expectedKind": "numeric",
+    "expected": "BD=√85/25。",
+    "values": [
+      0.3687817782917155
+    ]
+  },
+  {
+    "id": "E22",
+    "name": "大尺度正方形",
+    "prompt": "矩形 ABCD 中，AB=1000000，BC=1000000，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "expectedKind": "true",
+    "expected": "垂直关系成立，BD=1000000。",
+    "values": [
+      1000000.0
+    ]
+  },
+  {
+    "id": "E23",
+    "name": "由长度反求折角",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=3。求折角。",
+    "expectedKind": "angle",
+    "expected": "θ=arccos(-23/32)，约135.95°。",
+    "values": [
+      135.95137432591568
+    ]
+  },
+  {
+    "id": "E24",
+    "name": "连续两折保留距离",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，先沿对角线 AC 把 △ABC 折起90°至 △AB′C，再沿 B′C 把 △AB′C 折起60°至 △A′B′C。求折后 B′D 的长。",
+    "expectedKind": "numeric",
+    "expected": "第二折不动 B′ 和 D，距离仍为 2√85/5。",
+    "values": [
+      3.687817782917155
+    ]
+  }
+]

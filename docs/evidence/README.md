@@ -44,3 +44,7 @@
   更**不是**"原题已被形式证明"。
 - **人看图确认（教师/学生走查）仍是 §四 A 的独立验收，尚未完成** ——
   这份目录只是把"看图"这件事变得可执行，不代替它。
+
+## 2026-11-03 Agent 折叠例题验证
+
+[24 道例题评估](../audit/2026-11-03-agent-example-validation.md) 附 [逐题浏览器结果](agent-answer-validation-20261103.json)，以及 [单折](agent-answer-validation-20261103-E02.png) 和 [两次折叠](agent-answer-validation-20261103-E24.png) 提交后的真实画布截图。本批使用 Playwright CLI 实际输入题目、提交和撤销，未新增 spec；复测方法及数值／证明的范围区别见评估报告。
