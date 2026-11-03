@@ -347,15 +347,19 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
           <div className="provider-row-badges">
             <span className="provider-badge" data-badge="key" data-present={keyed}>{keyed ? "已配置密钥" : "未配置密钥"}</span>
             <span className="provider-badge" data-badge="health" data-health={record?.status ?? "unknown"}>{HEALTH_LABELS[record?.status ?? "unknown"]}</span>
-            {["tools", "json", "vision", "streaming"].map((feature) => {
-              const verified = isVerified(profile, feature, record ?? null)
-              return <span key={feature} className="provider-badge" data-badge="capability" data-feature={feature} data-verified={verified}>
-                {FEATURE_LABELS[feature]}{verified ? "已验证" : "未验证"}
-              </span>
-            })}
           </div>
-
-          <p className="provider-row-note" data-note={state}>{noteOf(profile)}</p>
+          <details className="provider-capabilities">
+            <summary>查看能力详情</summary>
+            <div className="provider-row-badges">
+              {["tools", "json", "vision", "streaming"].map((feature) => {
+                const verified = isVerified(profile, feature, record ?? null)
+                return <span key={feature} className="provider-badge" data-badge="capability" data-feature={feature} data-verified={verified}>
+                  {FEATURE_LABELS[feature]}{verified ? "已验证" : "未验证"}
+                </span>
+              })}
+            </div>
+            <p className="provider-row-note" data-note={state}>{noteOf(profile)}</p>
+          </details>
 
           <div className="provider-row-actions">
             <button

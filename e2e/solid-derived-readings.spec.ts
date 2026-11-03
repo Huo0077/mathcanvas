@@ -65,7 +65,7 @@ test.beforeEach(async ({ page }) => {
 
 test("shows a solid's exact and undefined derived readings side by side in the property inspector", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   // 默认新建的是 4×4×4 正方体；显式把 Z 尺寸改为 2，构成有外接球但无内切球的长方体。
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -95,7 +95,7 @@ test("shows a solid's exact and undefined derived readings side by side in the p
 
 test("shows an oblique prism's undefined readings with their reasons, and carries them into the Agent's observation", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await draftAndConfirmPrism(page)
   await expect.poll(() => objectRows(page).count()).toBe(1)
 

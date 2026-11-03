@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="mc-bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3d5a80" />
+      <stop offset="55%" stop-color="#2c3e50" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="mc-face-top" x1="16" y1="14" x2="48" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.30" />
+      <stop offset="100%" stop-color="#cfe0f5" stop-opacity="0.10" />
+    </linearGradient>
+    <linearGradient id="mc-face-left" x1="16" y1="22" x2="32" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#cfe0f5" stop-opacity="0.20" />
+      <stop offset="100%" stop-color="#3d5a80" stop-opacity="0.06" />
+    </linearGradient>
+    <linearGradient id="mc-orbit" x1="8" y1="42" x2="56" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#cfe0f5" stop-opacity="0.35" />
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#94b8d8" stop-opacity="0.4" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded Squircle Chassis -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#mc-bg)" stroke="#cfe0f5" stroke-opacity="0.22" stroke-width="1.5" />
+
+  <!-- Subtle Analytic Coordinate Hairlines -->
+  <line x1="32" y1="7" x2="32" y2="57" stroke="#cfe0f5" stroke-opacity="0.12" stroke-width="1" stroke-dasharray="2 2" />
+  <line x1="7" y1="32" x2="57" y2="32" stroke="#cfe0f5" stroke-opacity="0.12" stroke-width="1" stroke-dasharray="2 2" />
+
+  <!-- 2D Inscribed Analytic Circle -->
+  <circle cx="32" cy="32" r="21" stroke="#cfe0f5" stroke-opacity="0.28" stroke-width="1.2" stroke-dasharray="3 2.5" />
+
+  <!-- 3D Isometric Hexahedron Shaded Facets -->
+  <polygon points="32,13 48,22.2 32,31.5 16,22.2" fill="url(#mc-face-top)" />
+  <polygon points="16,22.2 32,31.5 32,50 16,40.8" fill="url(#mc-face-left)" />
+
+  <!-- 3D Hidden Back Edges & Section Plane Diagonal (Dashed) -->
+  <path d="M16 40.8 L32 31.5 L48 40.8 M32 13 L32 31.5" stroke="#cfe0f5" stroke-opacity="0.42" stroke-width="1.35" stroke-dasharray="2.5 2.5" stroke-linecap="round" />
+  <polygon points="16,22.2 48,22.2 32,50" fill="#cfe0f5" fill-opacity="0.09" stroke="#cfe0f5" stroke-opacity="0.5" stroke-width="1.2" stroke-dasharray="2 2" stroke-linejoin="round" />
+
+  <!-- 3D Outer Isometric Polyhedron Wireframe -->
+  <polygon points="32,13 48,22.2 48,40.8 32,50 16,40.8 16,22.2" stroke="#f8fafc" stroke-width="2" stroke-linejoin="round" />
+  <path d="M16 22.2 L32 31.5 L48 22.2 M32 31.5 L32 50" stroke="#cfe0f5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Conic Orbital Locus Ring -->
+  <ellipse cx="32" cy="31.5" rx="23.5" ry="9.2" transform="rotate(-24 32 31.5)" stroke="url(#mc-orbit)" stroke-width="1.85" stroke-linecap="round" />
+
+  <!-- Dynamic Control Vertices -->
+  <circle cx="16" cy="22.2" r="2.5" fill="#f8fafc" stroke="#2c3e50" stroke-width="1" />
+  <circle cx="48" cy="22.2" r="2.5" fill="#f8fafc" stroke="#2c3e50" stroke-width="1" />
+  <circle cx="32" cy="50" r="2.5" fill="#f8fafc" stroke="#2c3e50" stroke-width="1" />
+  <circle cx="32" cy="31.5" r="2.8" fill="#cfe0f5" stroke="#1e293b" stroke-width="1" />
+  <circle cx="51.8" cy="22.8" r="2.4" fill="#e39a48" stroke="#1e293b" stroke-width="0.9" />
+
+  <!-- Apex AI Spark Star at Top Vertex (32, 13) -->
+  <path d="M32 6.8 L33.6 11.4 L38.2 13 L33.6 14.6 L32 19.2 L30.4 14.6 L25.8 13 L30.4 11.4 Z" fill="#ffffff" />
+</svg>

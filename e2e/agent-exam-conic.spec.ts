@@ -22,7 +22,7 @@ const CHORD_MISMATCH = "椭圆 x²/9+y²/4=1 与直线 y=1 相交于 A、B 两�
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

@@ -21,7 +21,7 @@ const RHOMBUS = "在四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，AA
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

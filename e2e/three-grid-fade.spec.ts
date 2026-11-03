@@ -20,7 +20,7 @@ test("fades the grid out beyond the visible ground, and its shader compiles", as
   page.on("pageerror", (error) => problems.push(String(error)))
 
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
 
   const scene = page.locator("[data-3d-scene]")

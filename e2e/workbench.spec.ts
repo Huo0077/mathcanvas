@@ -51,11 +51,11 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
   await page.goto("/")
 
   // A fresh session opens on 平面几何 (the internal `conics` workspace) and 微积分 is not offered at all.
-  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
 
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
-  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await page.getByRole("button", { name: "平面几何" }).click()
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
 
   const svgDownload = page.waitForEvent("download")
   await page.getByRole("button", { name: "导出 SVG" }).click()
@@ -71,7 +71,7 @@ test("switches workspaces and exports SVG and CSV files", async ({ page }) => {
 
   // The retired calculus workspace must not come back as a tab; 立体几何 is the other planar-free workspace.
   await expect(page.getByRole("button", { name: "微积分" })).toHaveCount(0)
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
 })
 
@@ -114,7 +114,7 @@ test("keeps constraint data in the document without a constraint panel", async (
 
 test("restores the latest workspace draft after reload", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "添加点" }).click()
   await expect(page.getByText("A", { exact: true }).first()).toBeVisible()
   await page.reload()
@@ -124,7 +124,7 @@ test("restores the latest workspace draft after reload", async ({ page }) => {
 
 test("zooms the conics canvas and keeps every crossing of a line and a curve", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   const canvas = page.getByRole("img", { name: "几何画布" })
   const scale = async () => Number(await canvas.getAttribute("data-viewport-scale"))
   const initial = await scale()

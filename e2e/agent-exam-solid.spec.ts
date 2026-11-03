@@ -25,7 +25,7 @@ const USER_FOLD = [
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

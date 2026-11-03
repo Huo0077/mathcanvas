@@ -180,7 +180,7 @@ function sectionSignature(points: readonly { x: number; y: number; z: number }[]
 test("refreshes a solid section when one of its vertices is moved", async ({ page }) => {
   await page.addInitScript(() => localStorage.clear())
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.locator('input[aria-label="加载 .mgeo 文件"]').setInputFiles("e2e/fixtures/reactive-section.mgeo")

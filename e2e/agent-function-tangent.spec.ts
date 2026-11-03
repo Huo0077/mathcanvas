@@ -19,7 +19,7 @@ const FUNCTION_TANGENT = "画出 f(x)=x³−3x 的图像与它在 x=1 处的切�
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

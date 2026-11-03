@@ -9,7 +9,7 @@ import { projectWorldPoint } from "./helpers/projection"
 
 test("drags a solid freely without turning the camera", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toBeVisible()
@@ -40,7 +40,7 @@ test("drags a solid freely without turning the camera", async ({ page }) => {
 
 test("undoes one free drag in a single step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -59,7 +59,7 @@ test("undoes one free drag in a single step", async ({ page }) => {
 
 test("returns left-drag to orbiting when the toggle is off", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -102,7 +102,7 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
  */
 test("stops an in-flight auto-fit as soon as the user starts dragging", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toBeVisible()
 
@@ -174,7 +174,7 @@ test("stops an in-flight auto-fit as soon as the user starts dragging", async ({
 })
 
 test("drags only the solid under the pointer", async ({ page }) => {  await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   // 这个用例按**固定屏幕位移**拖动，依赖相机稳定：关掉自动取景（把第一个立方体挪到 (8,8,0)
   // 会让内容越界，自动取景会重新构图，于是下面那次固定位移的拖动就落空了）。
   // 用 DOM 派发点击：显示控制那一排在窄视口下会换行，locator.click 会等"位置稳定"而超时。
@@ -222,7 +222,7 @@ async function setOrigin(page: import("@playwright/test").Page, origin: number[]
 
 test("keeps pan mode and drag mode from being on at once", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const dragButton = page.getByRole("button", { name: "自由拖动" })
@@ -244,7 +244,7 @@ test("keeps pan mode and drag mode from being on at once", async ({ page }) => {
 
 test("keeps a round solid's rim circles glued to it while dragging", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
@@ -280,7 +280,7 @@ test("keeps a round solid's rim circles glued to it while dragging", async ({ pa
 
 test("carries the point labels along while a solid is being dragged", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加圆柱" }).click()
@@ -320,7 +320,7 @@ test("carries the point labels along while a solid is being dragged", async ({ p
 
 test("repaints the scene while a solid is being dragged", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -370,7 +370,7 @@ function distance(first: number[], second: number[]) {
 
 test("drags a single vertex of a cube without moving the entire cube or displacing other vertices", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加立方体" }).click()

@@ -102,7 +102,7 @@ const CONFLICT_AB: ConstraintSeed = { id: "fixed-ab-two", type: "fixedDistance",
  */
 async function seedPair(page: Page, options: { constrainedDrag: boolean; constraints?: ConstraintSeed[]; coincidentLines?: boolean }): Promise<void> {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/tetrahedron.mgeo")
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
 

@@ -19,7 +19,7 @@ const PLANAR_TRIANGLE = "在三角形ABC中，AB⊥AC，画示意图"
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

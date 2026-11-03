@@ -53,7 +53,7 @@ test("keeps two conversations' transcripts, facts and object references apart", 
   await page.addInitScript(() => localStorage.clear())
   await page.goto("/")
   // 从**立体几何**起步：这一轮不会触发工作区自动切换，A/B 落在同一份文档里。
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 
   // ---- 会话 A：建一个立方体并**真的提交**（对象落在文档里） ----
@@ -116,7 +116,7 @@ test("keeps two conversations' transcripts, facts and object references apart", 
 
   // ---- 换到**另一份文档**（平面几何）：列表是它的，A 的事实不许跟过来 ----
   await page.getByRole("button", { name: "返回画布" }).click()
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 
   const sidebar = page.getByRole("complementary", { name: "对话列表" })

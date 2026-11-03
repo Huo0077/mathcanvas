@@ -74,7 +74,7 @@ function expectObliqueExtents(bounds: number[]) {
 
 test("creates an oblique prism from one sentence and confirms only after the user says so", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   // 确认之前，画布上什么都没有：草稿是隔离的（规格 §1.2）。
   await expect(objectRows(page)).toHaveCount(0)
@@ -114,7 +114,7 @@ test("creates an oblique prism from one sentence and confirms only after the use
 
 test("moves the whole prism when it is dragged", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await draftAndConfirmPrism(page)
 
   const scene = page.locator("[data-3d-scene]")
@@ -189,7 +189,7 @@ test("opens every shipped .mgeo fixture and actually loads it", async ({ page })
      * 工作区先切到位：切工作区本身也会写回草稿（那正是这个信号的载体），
      * 所以"目标工作区的那份草稿等于这只夹具"只可能由**这次加载**造成。
      */
-    await page.getByRole("button", { name: workspace === "geometry3d" ? "跳转到立体几何" : workspace === "cad" ? "跳转到工程制图" : "跳转到平面几何" }).click()
+    await page.getByRole("button", { name: workspace === "geometry3d" ? "立体几何" : workspace === "cad" ? "工程制图" : "平面几何" }).click()
 
     await fileInput.setInputFiles({ name: basename(name), mimeType: "application/json", buffer: Buffer.from(serialized) })
 
@@ -232,7 +232,7 @@ test("opens every shipped .mgeo fixture and actually loads it", async ({ page })
  */
 test("refuses an unreadable .mgeo instead of pretending it loaded", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   await page.locator('input[aria-label="加载 .mgeo 文件"]').setInputFiles({
     name: "broken.mgeo",
@@ -254,7 +254,7 @@ test("refuses an unreadable .mgeo instead of pretending it loaded", async ({ pag
 
 test("cuts a section through the oblique prism", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await draftAndConfirmPrism(page)
 
   const scene = page.locator("[data-3d-scene]")
@@ -324,7 +324,7 @@ async function reopen(page: import("@playwright/test").Page, envelope: SavedEnve
  */
 test("measures the oblique prism by volume and reopens it with identical geometry", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await draftAndConfirmPrism(page)
 
   const scene = page.locator("[data-3d-scene]")
@@ -374,7 +374,7 @@ test("measures the oblique prism by volume and reopens it with identical geometr
 /** The same inspector action must persist valid triangular faces, undo in one step and survive a reload. */
 test("edits one prism vertex through the inspector, undoes, and reopens the triangulated solid", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await draftAndConfirmPrism(page)
 
   const scene = page.locator("[data-3d-scene]")
@@ -421,7 +421,7 @@ test("edits one prism vertex through the inspector, undoes, and reopens the tria
 /** Template topology must also switch to explicit triangular faces when one generated vertex is edited. */
 test("edits one template cube vertex and restores its explicit faces from mgeo", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   const scene = page.locator("[data-3d-scene]")
   const beforeBounds = await scene.getAttribute("data-content-bounds")

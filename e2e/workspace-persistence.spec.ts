@@ -32,7 +32,7 @@ test("restores active and inactive drawings across reloads without replacing lat
   const planar = await exportedDocument(page)
   expect(planar.primitives).toHaveLength(2)
 
-  await page.getByRole("button", { name: "跳转到立体几何", exact: true }).click()
+  await page.getByRole("button", { name: "立体几何", exact: true }).click()
   await page.getByRole("button", { name: "添加空间点", exact: true }).click()
   const spatial = await exportedDocument(page)
   expect(spatial.primitives).toHaveLength(1)
@@ -41,7 +41,7 @@ test("restores active and inactive drawings across reloads without replacing lat
   await page.reload()
   await expect(page.locator("[data-3d-scene]")).toBeVisible()
   await expectDocument(page, spatial)
-  await page.getByRole("button", { name: "跳转到平面几何", exact: true }).click()
+  await page.getByRole("button", { name: "平面几何", exact: true }).click()
   await expectDocument(page, planar)
   await page.getByRole("button", { name: "添加点", exact: true }).click()
   const editedPlanar = await exportedDocument(page)
@@ -49,8 +49,8 @@ test("restores active and inactive drawings across reloads without replacing lat
 
   await page.reload()
   await expectDocument(page, editedPlanar)
-  await page.getByRole("button", { name: "跳转到立体几何", exact: true }).click()
+  await page.getByRole("button", { name: "立体几何", exact: true }).click()
   await expectDocument(page, spatial)
-  await page.getByRole("button", { name: "跳转到平面几何", exact: true }).click()
+  await page.getByRole("button", { name: "平面几何", exact: true }).click()
   await expectDocument(page, editedPlanar)
 })

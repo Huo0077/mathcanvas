@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { useAgentStore } from "../../agentStore"
 import { AgentComposer } from "./AgentComposer"
@@ -57,6 +57,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
   const selectConversation = useAgentStore((state) => state.selectConversation)
   const deleteConversation = useAgentStore((state) => state.deleteConversation)
   const sendPrompt = useAgentStore((state) => state.sendPrompt)
+  const [draft, setDraft] = useState("")
   const scrollRef = useRef<HTMLDivElement | null>(null)
   /** 已经发起过运行的那条用户消息：StrictMode 的二次挂载不能让同一轮跑两遍。 */
   const startedRef = useRef<string | null>(null)
@@ -105,6 +106,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
       <div className="agent-stage-scroll" ref={scrollRef}>
         <AgentMessageList
           conversation={activeConversation}
+          onExample={setDraft}
           onStop={onStop}
           onRetry={onRetry}
           onConfirm={onConfirm}
@@ -112,7 +114,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
         />
       </div>
       <div className="agent-stage-composer">
-        <AgentComposer onSend={sendPrompt} busy={pendingMessage !== undefined} />
+        <AgentComposer draft={{ value: draft, onChange: setDraft }} onSend={sendPrompt} busy={pendingMessage !== undefined} />
       </div>
     </div>
   </div>

@@ -61,8 +61,8 @@ describe("background grid geometry", () => {
    */
   it("uses the same cool grid colours as the canvas tokens", () => {
     expect(GRAPH_PAPER_GRID_TOKENS).toEqual({ minor: "--color-graph-grid-minor", major: "--color-graph-grid-major" })
-    expect(GRID_MINOR_COLOR.toLowerCase()).toBe("#cdd8e6")
-    expect(GRID_MAJOR_COLOR.toLowerCase()).toBe("#aebccf")
+    expect(GRID_MINOR_COLOR.toLowerCase()).toBe("#e2e9f1")
+    expect(GRID_MAJOR_COLOR.toLowerCase()).toBe("#c2cfdf")
     // 冷色 = 蓝分量不低于红分量（旧的暖灰黄正好相反）。
     const coolness = (hex: string) => Number.parseInt(hex.slice(5, 7), 16) - Number.parseInt(hex.slice(1, 3), 16)
     expect(coolness(GRID_MINOR_COLOR)).toBeGreaterThanOrEqual(0)

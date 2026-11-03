@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => { await page.addInitScript(() => localStorag
 
 test("an underdetermined pyramid is verified, presented as an example, confirmed and undone", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await page.getByRole("textbox", { name: "对话输入" }).fill(PYRAMID_PROMPT)
   await page.getByRole("button", { name: "发送" }).click()
@@ -34,7 +34,7 @@ test("an underdetermined pyramid is verified, presented as an example, confirmed
 })
 test("an additional unsupported condition is visible and cannot be committed", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await page.getByRole("textbox", { name: "对话输入" }).fill(PYRAMID_UNVERIFIED_PROMPT)
   await page.getByRole("button", { name: "发送" }).click()

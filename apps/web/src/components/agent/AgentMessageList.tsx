@@ -1,7 +1,6 @@
 import type { AgentConversation, AgentMessage } from "../../agentStore"
 import { formatMessageTime, splitTranscript } from "../../agentTranscript"
 import { highlightCode } from "../../codeHighlight"
-import { EmptyStateArt } from "../EmptyStateArt"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { RunStatus } from "./RunStatus"
 import { TranscriptText } from "./TranscriptText"
@@ -20,6 +19,7 @@ import { useSceneStore } from "../../store"
 interface AgentMessageListProps {
   conversation: AgentConversation | undefined
   /** 运行状态卡上的动作；不传时只显示状态，不显示按钮。参数是**这条消息所属的那一轮**。 */
+  onExample?: (prompt: string) => void
   onRetry?: () => void
   onRevise?: () => void
   onStop?: (runId?: string) => void
@@ -47,7 +47,13 @@ function AssistantBody({ message }: { message: AgentMessage }) {
   )}</>
 }
 
-export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onConfirm, onDiscard }: AgentMessageListProps) {
+const examples = [
+  { label: "探索空间折叠", prompt: "矩形 ABCD 中，AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，画出折后示意图并求 BD 的长。" },
+  { label: "观察函数与切线", prompt: "绘制函数 y = 0.1x³ − 0.7x，并画出它在 x=2 处的切线。" },
+  { label: "绘制圆与直线", prompt: "绘制以原点为圆心、半径为 3 的圆和直线 y=1，标出交点。" },
+]
+
+export function AgentMessageList({ conversation, onExample, onRetry, onRevise, onStop, onConfirm, onDiscard }: AgentMessageListProps) {
   const messages = conversation?.messages ?? []
   const document = useSceneStore((state) => state.document)
 
@@ -55,14 +61,13 @@ export function AgentMessageList({ conversation, onRetry, onRevise, onStop, onCo
     <div className="agent-transcript-scroll" role="log" aria-label="对话记录" aria-live="polite">
       {messages.length === 0
         ? <div className="agent-empty">
-          <div className="agent-empty-art" aria-hidden="true"><EmptyStateArt name="agent" /></div>
-          <h2 className="agent-empty-title">有什么数学问题要一起做？</h2>
-          <p className="agent-empty-text">可以把要求写清楚，例如「以 A 为圆心作一个半径 3 的圆，并标出它与直线 l 的交点」。发送第一条指令后，回答、推理过程与代码会显示在这里。</p>
-          <ul className="agent-empty-samples">
-            <li>作一条过点 A 的抛物线切线</li>
-            <li>把正方体沿对角面剖开，标出截面</li>
-            <li>给我一段生成平面几何文档的脚本</li>
-          </ul>
+          <h2 className="agent-empty-title">把数学想法，画出来。</h2>
+          <p className="agent-empty-text">描述你的问题，或从一个例题开始。</p>
+          {onExample && <ul className="agent-empty-samples">
+            {examples.map(({ label, prompt }) => <li key={label}>
+              <button type="button" onClick={() => onExample(prompt)}>{label}</button>
+            </li>)}
+          </ul>}
         </div>
         : <ul className="agent-messages">
           {messages.map((message) => <li className="agent-message" key={message.id} data-message-role={message.role} data-pending={message.pending === true}>

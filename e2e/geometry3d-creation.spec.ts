@@ -4,7 +4,7 @@ import { projectWorldPoint } from "./helpers/projection"
 
 test("draws a spatial segment directly on the canvas and undoes it in one step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "绘制线段" }).click()
   await expect(scene).toHaveAttribute("data-creation-tool", "segment3")
@@ -24,7 +24,7 @@ test("draws a spatial segment directly on the canvas and undoes it in one step",
 
 test("can cancel an unfinished face without changing the document", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "绘制空间面" }).click()
   const scene = page.locator("[data-3d-scene]")
   const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
@@ -36,7 +36,7 @@ test("can cancel an unfinished face without changing the document", async ({ pag
 })
 test("places a point on the chosen XZ work plane and reuses it in a line", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "绘制空间点" }).click()
   await page.getByRole("group", { name: "立体绘制工作平面" }).getByRole("button", { name: "XZ" }).click()
   const first = await projectWorldPoint(page, { x: 1, y: 0, z: 2 })
@@ -56,7 +56,7 @@ test("places a point on the chosen XZ work plane and reuses it in a line", async
 
 test("finishes a three-vertex spatial face with Enter", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "绘制空间面" }).click()
   for (const point of [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }]) {
     const { x, y } = await projectWorldPoint(page, point)
@@ -69,7 +69,7 @@ test("finishes a three-vertex spatial face with Enter", async ({ page }) => {
 })
 test("keeps camera modes and drawing modes mutually exclusive", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "自由拖动" }).click()
   await expect(scene).toHaveAttribute("data-drag-mode", "true")
@@ -86,7 +86,7 @@ test("keeps camera modes and drawing modes mutually exclusive", async ({ page })
  */
 async function loadOverlappingCubes(page: import("@playwright/test").Page) {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/overlapping-cubes.mgeo")
   const scene = page.locator("[data-3d-scene]")
   await expect(scene).toHaveAttribute("data-preview-face-count", "6")
@@ -120,7 +120,7 @@ async function draftedTypes(page: import("@playwright/test").Page): Promise<stri
  */
 test("cancels an unfinished drawing when the workspace is switched", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   const rows = page.locator(".algebra-panel .object-row")
 
@@ -131,8 +131,8 @@ test("cancels an unfinished drawing when the workspace is switched", async ({ pa
   // 未提交的第一步**不落盘**：对象列表还是空的
   await expect(rows).toHaveCount(0)
 
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   await expect(scene).toHaveAttribute("data-creation-tool", "")
   await expect(scene).toHaveAttribute("data-creation-anchors", "0")
@@ -174,7 +174,7 @@ test("lets the drawing session win over a preview click", async ({ page }) => {
  */
 test("leaves the drawing session through the select tool", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   const rows = page.locator(".algebra-panel .object-row")
 
@@ -208,7 +208,7 @@ test("leaves the drawing session through the select tool", async ({ page }) => {
  */
 test("does not snap to a locked point, and snaps again once it is unlocked", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
   const readout = page.locator("[data-creation-readout]")
@@ -247,7 +247,7 @@ test("does not snap to a locked point, and snaps again once it is unlocked", asy
  */
 test("tells what the next click would land on, without writing anything", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   // 先放一个空间点（默认落在 (0,0,0)），用来验"吸附到已有点"那一路
   await page.getByRole("button", { name: "添加空间点" }).click()

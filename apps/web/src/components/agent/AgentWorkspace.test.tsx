@@ -27,9 +27,11 @@ describe("agent workspace", () => {
   it("keeps the empty state focused on the composer until the first prompt", () => {
     render(<AgentWorkspace onBackToWorkspace={() => {}} />)
 
-    expect(screen.getByRole("heading", { name: "有什么数学问题要一起做？" })).toBeTruthy()
-    expect(screen.getByRole("log", { name: "对话记录" }).textContent).toContain("发送第一条指令后")
+    expect(screen.getByRole("heading", { name: "把数学想法，画出来。" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "发送" }).hasAttribute("disabled")).toBe(true)
+    fireEvent.click(screen.getByRole("button", { name: "探索空间折叠" }))
+    expect((screen.getByRole("textbox", { name: "对话输入" }) as HTMLTextAreaElement).value).toContain("AB=4")
+    expect(screen.queryByText("正在生成回复…")).toBeNull()
   })
 
   it("does not restart a running or confirmable message after returning from the canvas", async () => {

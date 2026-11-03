@@ -118,11 +118,11 @@ export function buildGridGeometry(radius: number, options: GridGeometryOptions =
  * **2026-10-01 当天曾试过改回暖纸**（用户口径"整个 UI 风格换成淡黄色"＋"纸质感"），
  * 当天即按 **"太丑了，还是回退吧"整体回退**（调色改动留在 `git stash`，见 CHANGELOG 同日一节）。
  * 同日还有一条用户口径"网格怎么没了 / 我要的是网格无限延伸的感觉"：原先那组格线色
- * （`#eef2f7` 压在白纸上只差 6%）本来就看不清，格线提到 `#cdd8e6` / `#aebccf`，
+ * （`#eef2f7` 压在白纸上只差 6%）本来就看不清，格线提到 `#e2e9f1` / `#c2cfdf`，
  * 淡出改走**顶点色**（见 `buildGridGeometry`）。
  */
-export const GRID_MINOR_COLOR = "#cdd8e6"
-export const GRID_MAJOR_COLOR = "#aebccf"
+export const GRID_MINOR_COLOR = "#e2e9f1"
+export const GRID_MAJOR_COLOR = "#c2cfdf"
 
 /** 纸色（与 `--color-graph-paper` 同源）：顶点色淡出的终点色，等于"化进纸里"。 */
 export const GRAPH_PAPER_COLOR = "#ffffff"

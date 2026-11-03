@@ -38,7 +38,7 @@ test("exports a self-contained HTML snapshot of a planar figure", async ({ page 
 test("exports the four CAD views as a self-contained HTML snapshot", async ({ page }) => {
   await page.goto("/")
   await page.locator('input[type="file"]').setInputFiles("e2e/fixtures/cad-dimension.mgeo")
-  await page.getByRole("button", { name: "跳转到工程制图" }).click()
+  await page.getByRole("button", { name: "工程制图" }).click()
 
   const download = page.waitForEvent("download")
   await page.getByRole("button", { name: "导出 HTML", exact: true }).click()
@@ -62,7 +62,7 @@ test("exports the four CAD views as a self-contained HTML snapshot", async ({ pa
  */
 test("refuses HTML export in the 3D workspace instead of writing an empty file", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   let downloaded = false
   page.on("download", () => { downloaded = true })

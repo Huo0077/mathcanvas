@@ -150,7 +150,7 @@ async function conicNumber(page: Page, label: string): Promise<number> {
 
 test("三棱锥：底面三点与法向高度精确，拓扑可展开，一步撤销不留残留", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await createSolid(page, "tri-pyramid", [["底面宽", "4"], ["底面深", "3"], ["法向高度", "5"], ["顶点偏移 X", "1"], ["顶点偏移 Y", "-1"]])
 
   const algebra = page.locator(".algebra-panel")
@@ -185,7 +185,7 @@ test("三棱锥：底面三点与法向高度精确，拓扑可展开，一步�
 
 test("四棱锥：顶点偏移精确，保存后重新打开几何逐点不变", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await createSolid(page, "quad-pyramid", [["底面宽", "4"], ["底面深", "3"], ["法向高度", "5"], ["顶点偏移 X", "1"], ["顶点偏移 Y", "-1"]])
 
   const algebra = page.locator(".algebra-panel")
@@ -210,7 +210,7 @@ test("四棱锥：顶点偏移精确，保存后重新打开几何逐点不变",
 
 test("斜三棱柱：底面三点沿拉伸向量精确平移，一步撤销", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await createSolid(page, "tri-prism", [["底面宽", "4"], ["底面深", "3"], ["拉伸向量 Z", "5"], ["倾斜 X", "1"], ["倾斜 Y", "-2"]])
 
   const algebra = page.locator(".algebra-panel")
@@ -232,7 +232,7 @@ test("斜三棱柱：底面三点沿拉伸向量精确平移，一步撤销", as
 
 test("异长长方体：三边尺寸与原点精确落盘，保存往返后尺寸不变", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await createSolid(page, "box", [["底面宽", "4"], ["底面深", "3"], ["高度", "2"]])
 
   const algebra = page.locator(".algebra-panel")
@@ -257,7 +257,7 @@ test("异长长方体：三边尺寸与原点精确落盘，保存往返后尺�
 
 test("圆锥截面：水平切得圆（半径按锥面算出），斜切按 e = sinθ / cosα 判椭圆与双曲线", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   // 默认圆锥：底心 (-5,-5,0)、底半径 1.5、高 3、轴为 +Z ⇒ 半顶角 α 满足 tanα = 1.5 / 3 = 0.5
   await page.getByRole("button", { name: "添加圆锥" }).click()
   await page.getByRole("button", { name: "创建截面" }).click()
@@ -307,7 +307,7 @@ test("圆锥截面：水平切得圆（半径按锥面算出），斜切按 e = 
 
 test("空间直线与平面的关系：线在面内与平行不共面由平面方程判定，点到平面距离测得 3.000", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const algebra = page.locator(".algebra-panel")
 
   // 用**精确坐标**放点：画布投影只到 1e-2 量级，不足以判定"线是否真的落在面内"
@@ -410,7 +410,7 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
 
 test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后逐 id 恢复，撤销只撤新工作", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const algebra = page.locator(".algebra-panel")
   const ids = async () => (await draftPrimitives(page)).map((primitive) => primitive.id)
 
@@ -453,7 +453,7 @@ test("已有文档恢复与撤销：旧 .mgeo 迁移后几何不变，刷新后�
   await page.reload()
   // 先分清两件事：草稿本身还在不在（持久化），以及应用有没有把它装回文档（恢复）。
   await expect.poll(ids, { message: "刷新后草稿必须仍在 localStorage 里" }).toEqual(beforeReload)
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await expect(algebra.getByText("立方体 A").first()).toBeVisible()
   await expect.poll(ids, { message: "恢复后 id 列表必须与刷新前逐项相同" }).toEqual(beforeReload)
 

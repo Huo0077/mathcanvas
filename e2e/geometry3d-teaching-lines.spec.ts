@@ -4,7 +4,7 @@ import { projectWorldPoint } from "./helpers/projection"
 
 test("keeps a teacher's dashed spatial segment separate from view-only hidden edges", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "绘制线段" }).click()
   for (const point of [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }]) {
     const projected = await projectWorldPoint(page, point)
@@ -33,7 +33,7 @@ test("keeps a teacher's dashed spatial segment separate from view-only hidden ed
  */
 test("keeps every vertex label on its own vertex after the camera rotates", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   // 钉住原点：默认落点会随模板策略漂，而这条用例要的是**已知坐标**
   await page.getByRole("button", { name: "添加立方体" }).click()

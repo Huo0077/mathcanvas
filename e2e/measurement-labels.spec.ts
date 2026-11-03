@@ -93,7 +93,7 @@ test("keeps a planar measurement number on the canvas without any selection", as
 
 test("keeps a spatial measurement number on the 3D canvas without any selection", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "添加空间点" }).click()
@@ -129,7 +129,7 @@ test("keeps a spatial measurement number on the 3D canvas without any selection"
  */
 test("reads a spatial angle in radians, the same unit the planar canvas uses", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
   const algebra = page.locator(".algebra-panel")

@@ -67,7 +67,7 @@ test.beforeEach(async ({ page }) => {
 
 test("keeps an analytic sphere through reload and a camera orbit, and names it in the inspector", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
 
   // 借应用自己的入口落一份**合法**草稿，再把图元换成球。
   await page.getByRole("button", { name: "添加立方体" }).click()
@@ -137,7 +137,7 @@ test("keeps an analytic sphere through reload and a camera orbit, and names it i
  */
 test("creates a sphere from the common-solid wizard: preview first, one commit on confirm", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "常用立体" }).click()
 
   const wizard = page.getByRole("dialog", { name: "常用立体" })
@@ -178,7 +178,7 @@ test("creates a sphere from the common-solid wizard: preview first, one commit o
  */
 test("edits a sphere's centre and radius from the inspector, one undo step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {
@@ -223,7 +223,7 @@ test("edits a sphere's centre and radius from the inspector, one undo step", asy
  */
 test("cuts the selected sphere from the toolbar and records an exact circle", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {
@@ -277,7 +277,7 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
   }
 
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
 
@@ -334,7 +334,7 @@ test("offers no Boolean intersection preview when a sphere is involved, but does
  */
 test("drafts a sphere from one sentence and commits it in one undo step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await expect(page.locator(".algebra-panel .object-row")).toHaveCount(0)
 
   await page.getByRole("button", { name: "Agent 工作区" }).click()
@@ -388,7 +388,7 @@ test("drafts a sphere from one sentence and commits it in one undo step", async 
  */
 test("walks a sphere section from an exact circle to a tangent point and then to empty", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await expect.poll(async () => readPrimitiveCount(page)).toBeGreaterThan(0)
   await page.evaluate(({ key, sphere }) => {

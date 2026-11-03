@@ -8,6 +8,7 @@ import "./styles/global.css"
 import "./styles/agent.css"
 // 模型服务（模块 C）：配置表单的版式，同样与画布那套规则互不干扰。
 import "./styles/settings.css"
+import "./styles/workspace-layout.css"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

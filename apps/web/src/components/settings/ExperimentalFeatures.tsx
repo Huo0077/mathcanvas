@@ -41,7 +41,7 @@ export function ExperimentalFeatures() {
   return (
     <section className="experimental-features" aria-label="实验性功能">
       <h3>实验性功能</h3>
-      <p>这些开关会改变画布的行为。默认都关着，**只有「示意图见证搜索」默认开**（它可以关掉）。</p>
+      <p>这些开关会改变画布的行为。示意图见证搜索默认开启，其余功能默认关闭。</p>
       <label className="experimental-feature-row">
         <span className="experimental-feature-text">
           <strong>约束拖动</strong>

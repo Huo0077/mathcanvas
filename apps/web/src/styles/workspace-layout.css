@@ -1,0 +1,170 @@
+.app-shell {
+  --rail-width: 64px;
+  --topbar-height: 44px;
+}
+
+.app-shell > .app-rail {
+  background: var(--color-surface-subtle);
+  border-right: 1px solid var(--color-border);
+  padding: 10px 6px;
+  gap: 14px;
+}
+
+.app-rail .app-rail-button {
+  min-height: 50px;
+  padding: 5px 0;
+  gap: 3px;
+  color: var(--color-muted);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.app-rail .rail-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.app-rail .app-rail-button:hover,
+.app-rail .app-rail-button[data-active="true"] {
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+  border-color: transparent;
+}
+
+.app-module > .topbar {
+  display: flex;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: none;
+}
+
+.workspace-brand {
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.ribbon .ribbon-body {
+  padding-block: 4px;
+}
+
+.ribbon .ribbon-group {
+  border: 0;
+  border-inline-end: 1px solid var(--color-border);
+  border-radius: 0;
+  padding: 0 6px;
+}
+
+.ribbon .ribbon-group-commands {
+  min-height: 34px;
+  gap: 2px;
+}
+
+.ribbon .ribbon-command {
+  min-height: 34px;
+  min-width: 0;
+  flex-direction: row;
+  padding: 3px 6px;
+  gap: 4px;
+}
+
+.ribbon .ribbon-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-canvas);
+  padding: 24px clamp(14px, 4vw, 42px);
+}
+
+.settings-page > .provider-settings,
+.settings-advanced {
+  width: min(100%, 920px);
+  margin-inline: auto;
+}
+
+.settings-page > .provider-settings {
+  height: auto;
+  padding: 0;
+  overflow: visible;
+}
+
+.settings-advanced {
+  margin-block: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  padding: 16px;
+}
+
+.settings-advanced > summary,
+.provider-capabilities > summary {
+  cursor: pointer;
+  color: var(--color-accent-strong);
+}
+
+.experimental-feature-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.experimental-feature-hint {
+  display: block;
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+
+.agent-workspace .agent-stage {
+  --agent-canvas: var(--color-panel);
+}
+
+.agent-workspace .agent-empty {
+  width: min(100%, 680px);
+  justify-items: start;
+  text-align: left;
+}
+
+.agent-workspace .agent-empty-samples {
+  justify-content: start;
+}
+
+.agent-workspace .agent-empty-samples li {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.agent-empty-samples button {
+  min-height: 44px;
+  padding-inline: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  color: var(--color-accent-strong);
+}
+
+.agent-empty-samples button:hover {
+  background: var(--color-accent-soft);
+}
+
+.agent-workspace .agent-composer:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    --rail-width: 48px;
+  }
+
+  .app-shell > .app-rail {
+    padding-inline: 3px;
+  }
+}

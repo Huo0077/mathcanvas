@@ -4,7 +4,7 @@ import { projectWorldPoint } from "./helpers/projection"
 
 test("previews a rectangular box without saving it, then confirms exact dimensions in one undo step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "常用立体" }).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
@@ -32,7 +32,7 @@ test("previews a rectangular box without saving it, then confirms exact dimensio
 
 test("creates an oblique triangular prism and a quadrilateral pyramid from the classroom palette", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const wizard = page.getByRole("dialog", { name: "常用立体" })
   await page.getByRole("button", { name: "常用立体" }).click()
   await wizard.getByRole("combobox", { name: "立体类型" }).selectOption("tri-prism")
@@ -47,7 +47,7 @@ test("creates an oblique triangular prism and a quadrilateral pyramid from the c
 
 test("can reuse a hand-drawn face as an independent prism base", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "绘制空间面" }).click()
   for (const point of [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }]) {
     const { x, y } = await projectWorldPoint(page, point)
@@ -65,7 +65,7 @@ test("can reuse a hand-drawn face as an independent prism base", async ({ page }
 test("opens the solid form on a narrow screen instead of hiding it in the inspector dock", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "常用立体" }).click()
   await expect(page.getByRole("dialog", { name: "常用立体" })).toBeVisible()
   await expect(page.locator("[data-mobile-dock='properties']")).toHaveClass(/is-mobile-open/)

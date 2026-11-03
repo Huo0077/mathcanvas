@@ -19,10 +19,13 @@ interface AgentComposerProps {
   /** 有回复在途：发送键变成"回复中"并禁用，避免连点发出重复指令。 */
   busy?: boolean
   disabled?: boolean
+  draft?: { value: string; onChange: (value: string) => void }
 }
 
-export function AgentComposer({ onSend, busy = false, disabled = false }: AgentComposerProps) {
-  const [value, setValue] = useState("")
+export function AgentComposer({ onSend, busy = false, disabled = false, draft }: AgentComposerProps) {
+  const [localValue, setLocalValue] = useState("")
+  const value = draft?.value ?? localValue
+  const setValue = draft?.onChange ?? setLocalValue
   const [refusal, setRefusal] = useState<string | null>(null)
   const composingRef = useRef(false)
   const lastCompositionEndRef = useRef(Number.NEGATIVE_INFINITY)
@@ -48,7 +51,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false }: AgentC
       aria-label="对话输入"
       rows={1}
       value={value}
-      placeholder="描述你要做的几何图形或数学问题…（Enter 发送，Shift + Enter 换行）"
+      placeholder="描述你要做的几何图形或数学问题…"
       onChange={(event) => setValue(event.target.value)}
       onCompositionStart={() => { composingRef.current = true }}
       onCompositionEnd={() => { composingRef.current = false; lastCompositionEndRef.current = performance.now() }}
@@ -62,7 +65,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false }: AgentC
       }}
     />
     <div className="agent-composer-bar">
-      <p className="agent-composer-hint" id="agent-composer-hint">Enter 发送 · Shift + Enter 换行 · 结果与代码会显示在上方</p>
+      <p className="agent-composer-hint" id="agent-composer-hint">Enter 发送 · Shift + Enter 换行</p>
       <button type="submit" className="agent-send" name="send" disabled={!canSend}>{busy ? "回复中" : "发送"}</button>
     </div>
     {busy && <p className="agent-composer-status" role="status">正在生成回复…</p>}

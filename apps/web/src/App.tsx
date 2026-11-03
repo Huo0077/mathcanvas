@@ -997,11 +997,8 @@ export function App() {
     <ModuleRail
       activeModule={activeModule}
       onModuleChange={setActiveModule}
-      activeWorkspace={document.workspace}
-      onWorkspaceChange={handleWorkspaceChange}
     />
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
-      {/* 顶栏只剩品牌（含动态粒子与打字光标）；文件命令 / 搜索 / 设置下沉到标签栏右端。 */}
       <WorkspaceHeader />
       <AppChrome
       onSettings={() => setActiveModule("settings")} activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} activeRibbonTab={activeRibbonTab} ribbonExpanded={ribbonExpanded} ribbonPinned={ribbonPinned} onRibbonTabChange={setActiveRibbonTab} onRibbonCommand={handleRibbonCommand} onRibbonExpandedChange={setRibbonExpanded} onRibbonPinnedChange={setRibbonPinned} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
@@ -1155,18 +1152,15 @@ export function App() {
       />
       {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
     </div> : <div className="app-module" data-module="settings">
-      {/* 模块 C **模型服务**（G1 Task 1.3）：provider 配置与密钥是**应用级**的东西 ——
-          不属于任何一个工作区，也不属于对话区。
-          在桌面外壳里它是真的能存的地方；在浏览器里如实说明"需要桌面版"，
-          而不是让用户填完才发现存不下。 */}
-      <ProviderSettings unavailableReason={desktopRuntimeHint} />
-      {/* **实验性功能**（N3 的第一个产品入口）：这个面是用户在设置里打开"约束拖动"的地方。
-          它接的是 `agentNextPhaseFlags().constrainedDrag`，而 `App.tsx` 关着时走的是原来的 `translatePrimitive3`。 */}
-      <ExperimentalFeatures />
-      {/* **真实 provider 评测**（发布门禁第 2 条）：这里是应用里**会花钱**的地方 —— 面板里有**两个**会花钱的入口
-          （agent 工具环 8×3 = 24 次 / 题集 planning 3 次；**2026-10-05 N4b 起是两个**，此前只有一个）。
-          两段式（先解析配置、再显式确认），绝不在任何自动路径上跑。 */}
-      <ProviderEval />
+      <WorkspaceHeader />
+      <div className="settings-page">
+        <ProviderSettings unavailableReason={desktopRuntimeHint} />
+        <details className="settings-advanced">
+          <summary>高级设置</summary>
+          <ExperimentalFeatures />
+          <ProviderEval />
+        </details>
+      </div>
     </div>}
     <input ref={fileInputRef} hidden aria-label="加载 .mgeo 文件" type="file" accept=".mgeo,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then(load).catch(() => setFileError("无法读取 .mgeo 文件")); event.target.value = "" }} />
   </div>

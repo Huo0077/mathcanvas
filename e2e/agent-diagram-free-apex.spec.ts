@@ -4,7 +4,7 @@ const FREE_APEX = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示�
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 

@@ -61,8 +61,8 @@ test("keeps the symbolic parameter, labels the invariant as numeric sampling, an
    * 而 3D 文档接受平面图元，图照样画得出来 —— 单元与这条 e2e 都照样绿：
    * 第一版这句注释只是**写着**"工作区被切到圆锥曲线"，没有任何断言看向工作区本身。
    */
-  await expect(page.getByRole("button", { name: "跳转到平面几何" })).toHaveAttribute("aria-pressed", "true")
-  await expect(page.getByRole("button", { name: "跳转到立体几何" })).toHaveAttribute("aria-pressed", "false")
+  await expect(page.getByRole("button", { name: "平面几何" })).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByRole("button", { name: "立体几何" })).toHaveAttribute("aria-pressed", "false")
 
   /**
    * 6) **P、A、B 都由文档参数驱动**（Fix round 1 / C1）：

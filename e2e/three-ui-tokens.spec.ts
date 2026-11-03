@@ -18,7 +18,7 @@ test("dresses the 3D canvas in the planar paper tokens", async ({ page }) => {
   const gridMinorToken = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-graph-grid-minor").trim())
   const gridMajorToken = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-graph-grid-major").trim())
 
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   // 同一个标记名：两侧共用一套 CSS 规则，而不是各写一份"看起来差不多"的颜色。
   await expect(scene).toHaveAttribute("data-canvas-surface", "graph-paper")

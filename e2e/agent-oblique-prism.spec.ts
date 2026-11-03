@@ -34,7 +34,7 @@ test.beforeEach(async ({ page }) => {
 
 test("drafts the oblique prism with its section, then commits and undoes in one step", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await expect(objectRows(page)).toHaveCount(0)
 
   await page.getByRole("button", { name: "Agent 工作区" }).click()
@@ -78,7 +78,7 @@ test("the committed prism is oblique, and the batch is one undo step", async ({ 
    * 而且读数经过 `.toFixed(2)`。断言的是**那个偏移本身**。
    */
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await sendPrompt(page, OBLIQUE_PRISM_PROMPT)
   await page.getByRole("region", { name: "确认改动" }).last().getByRole("button", { name: "确认并提交" }).click()
@@ -103,7 +103,7 @@ test("its section is cut through the midpoints and shows up as its own object", 
    * 标签写着"中点"而参数其实是 0.4 这种回归，必须先被这条用例挡住。
    */
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await sendPrompt(page, OBLIQUE_PRISM_PROMPT)
   const draft = page.getByRole("region", { name: "确认改动" }).last()

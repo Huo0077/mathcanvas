@@ -12,7 +12,7 @@ import { projectWorldPoint } from "./helpers/projection"
  */
 test("drags a host-bound point along its host", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   await page.getByRole("button", { name: "添加立方体" }).click()
   await page.getByRole("button", { name: "添加空间点" }).click()
 
@@ -58,7 +58,7 @@ test("drags a host-bound point along its host", async ({ page }) => {
 
 test("drags a dynamic point on a 3D line directly and via inspector controls", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
   const scene = page.locator("[data-3d-scene]")
   await page.getByRole("button", { name: "绘制线段" }).click()
   const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })

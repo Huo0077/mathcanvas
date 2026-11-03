@@ -83,7 +83,7 @@ async function contentHash(page: Page, document: unknown): Promise<string> {
 
 async function openAgent(page: Page, workspace: "平面几何" | "立体几何"): Promise<void> {
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: `跳转到${workspace}` }).click()
+  await page.getByRole("button", { name: `${workspace}` }).click()
   await page.getByRole("button", { name: "Agent 工作区" }).click()
 }
 
@@ -303,8 +303,8 @@ test("a view-only change does not invalidate the figure evidence", async ({ page
 
   // 切到别的工作区再切回来：还是同一份内容、同一个哈希（"像没动过"不许被算成过期）。
   await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "跳转到立体几何" }).click()
-  await page.getByRole("button", { name: "跳转到平面几何" }).click()
+  await page.getByRole("button", { name: "立体几何" }).click()
+  await page.getByRole("button", { name: "平面几何" }).click()
   await expect.poll(async () => (await canvasEvidence(page)).hash).toBe(before.hash)
 
   await page.screenshot({ path: "test-results/task16-canvas-stale.png" })

@@ -257,7 +257,7 @@ export function ProviderEval({ dependencies }: { dependencies?: ProviderEvalDepe
           用<strong>真实模型</strong>跑 <strong>{PLANNING_EVAL_TOTAL_CASES} 条 benchmark 题集里的前 {PLANNING_EVAL_CASE_COUNT} 条</strong>
           （{PLANNING_EVAL_CASE_COUNT} 题 × {PLANNING_EVAL_TRIALS} 轮 = 至少 {PLANNING_EVAL_REQUESTS} 次请求），
           记录每条题的<strong>计划有没有被编译器接受</strong>（planned / rejected / error）。
-          它测的是"计划是否被编译接受"，**不需要金标准**，也<strong>不是</strong>上面那套 agent 工具环的
+          它测的是"计划是否被编译接受"，不需要金标准，也<strong>不是</strong>上面那套 agent 工具环的
           pass@1 —— 两套题集不同、坐标系不同，读的时候别混。
         </p>
 
