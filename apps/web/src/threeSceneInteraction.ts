@@ -10,7 +10,7 @@ import { solidVolumeHostFor } from "@draw/scene-graph"
 import { getAffectedPrimitiveIds, isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
 import { cameraDragMode, clampCameraTarget, panCameraState, rotateCameraState } from "./threeCamera"
 import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
-import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick } from "./threePicking"
+import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick, type RaycastHit3 } from "./threePicking"
 import { sectionUnitNormal } from "./threePrimitives"
 
 /**
@@ -28,7 +28,11 @@ import { sectionUnitNormal } from "./threePrimitives"
 function canStartDragSession(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>, generated: Set<string>): boolean {
   if (primitive === undefined) return false
   // 点：自由的走"自由拖动"，绑定的走"沿宿主 / 轨道拖" —— 两种都能开拖动会话。
-  if (primitive.type === "point3") return true
+  if (primitive.locked) return false
+  if (primitive.type === "point3") {
+    if (primitive.binding && primitive.binding.kind !== "free" && primitive.binding.kind !== "derived") return true
+    return isFreeDraggable3(primitive, points, generated)
+  }
   return isFreeDraggable3(primitive, points, generated)
 }
 
@@ -213,14 +217,44 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
           }
         })
-        const targetId = resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners)
+        const pointerRay = raycasterAt(point).ray
+        const tolerance = pickTolerance()
+        let priorityPointHit: RaycastHit3 | null = null
+        let bestDistance = tolerance
+        let bestPriority = -1
+
+        for (const candidate of documentRef.current.primitives) {
+          if (candidate.type !== "point3" || !canStartDragSession(candidate, points, generated)) continue
+          const pos = new THREE.Vector3(candidate.position.x, candidate.position.y, candidate.position.z)
+          const dist = pointerRay.distanceToPoint(pos)
+          if (dist <= tolerance) {
+            const isSelected = selectedIdsRef.current.includes(candidate.id)
+            const isBound = Boolean(candidate.binding && candidate.binding.kind !== "free" && candidate.binding.kind !== "derived")
+            const priority = isSelected ? 2 : isBound ? 1 : 0
+            if (priority > bestPriority || (priority === bestPriority && dist < bestDistance)) {
+              bestPriority = priority
+              bestDistance = dist
+              priorityPointHit = {
+                primitiveId: candidate.id,
+                kind: "point",
+                depth: pointerRay.origin.distanceTo(pos),
+                worldPoint: { x: pos.x, y: pos.y, z: pos.z }
+              }
+            }
+          }
+        }
+
+        const effectiveHit = priorityPointHit && (
+          !hit || hit.kind !== "point" || (bestPriority >= 1 && hit.primitiveId !== priorityPointHit.primitiveId)
+        ) ? priorityPointHit : hit
+        const targetId = resolveSelectableHit(effectiveHit?.primitiveId ?? null, topologyOwners)
         const target = targetId ? documentRef.current.primitives.find((primitive) => primitive.id === targetId) : undefined
         // 拖动排查用读数：这一次按下到底抓到了什么。
         // 直抓只认"真的按在点上"；自由拖动模式下沿用原来的判据。
-        const grabAllowed = dragModeRef.current || hit?.kind === "point"
-        if (sceneShell && (dragModeRef.current || (grabAllowed && target))) sceneShell.dataset.dragTarget = `${hit?.kind ?? "none"}:${hit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
+        const grabAllowed = dragModeRef.current || effectiveHit?.kind === "point"
+        if (sceneShell && (dragModeRef.current || (grabAllowed && target))) sceneShell.dataset.dragTarget = `${effectiveHit?.kind ?? "none"}:${effectiveHit?.primitiveId ?? "-"}->${target?.type ?? "none"}`
         // 截面要单独判定：它画在实体内部，按深度永远排不到，但用户指向那圈线时就是要挪刀口。
-        const sectionId = dragModeRef.current ? pickSectionAt(scene, camera, point, pickTolerance(), hit?.kind === "point" || hit?.kind === "edge") : null
+        const sectionId = dragModeRef.current ? pickSectionAt(scene, camera, point, pickTolerance(), effectiveHit?.kind === "point" || effectiveHit?.kind === "edge") : null
         const section = sectionId ? documentRef.current.primitives.find((primitive) => primitive.id === sectionId) : undefined
         if (section && section.type === "section") {
           // 拖动一个截面 = 沿法向平移剖切面。截面没有自己的实体几何，拖它就是挪刀口。
@@ -234,13 +268,13 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               dragSessionRef.current = { targetId: section.id, family: new Set([section.id]), anchor, origin: anchor.clone(), total: new THREE.Vector3(), visualApplied: new THREE.Vector3(), applied: false, slideNormal: normal }
             }
           }
-        } else if (grabAllowed && hit && target && target.type === "point3" && target.binding && target.binding.kind !== "free") {
+        } else if (grabAllowed && effectiveHit && target && target.type === "point3" && target.binding && target.binding.kind !== "free") {
           /**
            * 绑定点的拖动：指针位置投影回**宿主的参数域**，点由参数算出坐标，所以永远贴住宿主
            * （不像自由拖动那样"叠加屏幕位移"，拖久了也不会漂离）。拖动期间只更新参数与受影响对象。
            */
           const binding = target.binding
-          const hostId = binding.kind === "onHost" ? binding.hostId : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.solidId : null
+          const hostId = (binding.kind === "onHost" || binding.kind === "onLine") ? (binding.kind === "onHost" ? binding.hostId : binding.lineId) : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.solidId : null
           const hostPrimitive = hostId ? documentRef.current.primitives.find((candidate) => candidate.id === hostId) : undefined
           // 实体内不是"投影到低维宿主"，而是体积约束：由实体的物化拓扑构造（见 `solidVolumeHostFor`）。
           const hostConstraint = hostPrimitive
@@ -248,7 +282,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               ?? (binding.kind === "inSolid" ? solidVolumeHostFor(new Map(documentRef.current.primitives.map((primitive) => [primitive.id, primitive])), hostPrimitive.id) : null)
             : null
           if (hostConstraint) {
-            const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
+            const anchor = new THREE.Vector3(effectiveHit.worldPoint.x, effectiveHit.worldPoint.y, effectiveHit.worldPoint.z)
             const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
             const dependents = getAffectedPrimitiveIds(documentRef.current, [target.id])
             dependents.delete(target.id)
@@ -262,11 +296,12 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               applied: false,
               hostConstraint,
               hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? "")),
-              reactiveHost: buildHostPointGraph(target.id, hostConstraint)
+              reactiveHost: buildHostPointGraph(target.id, hostConstraint),
+              direct: directPointDrag
             }
           }
-        } else if (grabAllowed && hit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
-          const anchor = new THREE.Vector3(hit.worldPoint.x, hit.worldPoint.y, hit.worldPoint.z)
+        } else if (grabAllowed && effectiveHit && target && isFreeDraggable3(target, points, templateTopologyIds(documentRef.current))) {
+          const anchor = new THREE.Vector3(effectiveHit.worldPoint.x, effectiveHit.worldPoint.y, effectiveHit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
           const family = dragFamilyIds(documentRef.current, target.id)
           const movedPointIds = [...family].filter((memberId) => points.has(memberId))
@@ -322,7 +357,10 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
                 return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
               }
             })
-            hoveringDraggable = Boolean(hit && (dragModeRef.current || hit.kind === "point"))
+            const hoverRay = raycasterAt(point).ray
+            const hoverTol = pickTolerance()
+            const pointNear = Boolean(documentRef.current.primitives.some((candidate) => candidate.type === "point3" && canStartDragSession(candidate, points, generated) && hoverRay.distanceToPoint(new THREE.Vector3(candidate.position.x, candidate.position.y, candidate.position.z)) <= hoverTol))
+            hoveringDraggable = Boolean((hit && (dragModeRef.current || hit.kind === "point")) || pointNear)
           }
           sceneShell.dataset.hoverDraggable = hoveringDraggable ? "true" : "false"
         }

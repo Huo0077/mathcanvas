@@ -56,6 +56,52 @@ test("drags a host-bound point along its host", async ({ page }) => {
   expect(await readPointPosition(page)).toEqual(before)
 })
 
+test("drags a dynamic point on a 3D line directly and via inspector controls", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "跳转到立体几何" }).click()
+  const scene = page.locator("[data-3d-scene]")
+  await page.getByRole("button", { name: "绘制线段" }).click()
+  const first = await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  await page.mouse.click(first.x, first.y)
+  const second = await projectWorldPoint(page, { x: 3, y: 0, z: 0 })
+  await page.mouse.click(second.x, second.y)
+  await expect(page.locator(".algebra-panel").getByText("空间线段 1")).toBeVisible()
+  await page.getByRole("button", { name: "添加空间点" }).click()
+
+  const select = page.getByRole("combobox", { name: "点宿主绑定" })
+  const segment = await select.locator("option").filter({ hasText: "线段" }).first().getAttribute("value")
+  expect(segment).toBeTruthy()
+  await select.selectOption(segment!)
+
+  // 验证滑轨与快捷预设按钮呈现
+  const slider = page.getByRole("slider", { name: "宿主滑轨" })
+  await expect(slider).toBeVisible()
+  const midPreset = page.getByRole("button", { name: "中点 0.5" })
+  await expect(midPreset).toBeVisible()
+  await midPreset.click()
+
+  const paramInput = page.getByRole("spinbutton", { name: "宿主参数" })
+  expect(Number(await paramInput.inputValue())).toBeCloseTo(0.5, 2)
+
+  const before = await readPointPosition(page)
+  // 直抓拖动（不开启自由拖动按钮）
+  const start = await projectWorldPoint(page, { x: before[0], y: before[1], z: before[2] })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  for (let step = 1; step <= 10; step += 1) await page.mouse.move(start.x + step * 6, start.y + step * 3)
+
+  const residual = Number(await scene.getAttribute("data-host-residual"))
+  expect(residual).toBeCloseTo(0, 6)
+
+  await page.mouse.up()
+  const after = await readPointPosition(page)
+  expect(after).not.toEqual(before)
+
+  // 一次撤销回到原处
+  await page.keyboard.press("Control+z")
+  expect(await readPointPosition(page)).toEqual(before)
+})
+
 async function readPointPosition(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).inputValue())))
 }

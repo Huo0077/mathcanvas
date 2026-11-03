@@ -110,13 +110,20 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
       return
     }
     const projected = constraint.closestParameter(selectedPrimitive.position)
+    let parameterU = projected.u
+    if (target.mode === "host" && host.type !== "circle3") {
+      const residual = constraint.residual(selectedPrimitive.position)
+      if (residual > 1e-4 && (Math.abs(parameterU) < 1e-4 || Math.abs(parameterU - 1) < 1e-4)) {
+        parameterU = 0.5
+      }
+    }
     const binding3 = target.mode === "face"
       ? { kind: "onFace" as const, faceId: host.id, uv: [projected.u, projected.v ?? 0] as [number, number] }
       : target.mode === "surface"
         ? { kind: "onSurface" as const, solidId: host.id, uv: [projected.u, projected.v ?? 0] as [number, number] }
         : target.mode === "solid"
           ? { kind: "inSolid" as const, solidId: host.id, uvw: [projected.u, projected.v ?? 0, projected.w ?? 0] as [number, number, number] }
-          : { kind: "onHost" as const, hostId: host.id, parameter: projected.u }
+          : { kind: "onHost" as const, hostId: host.id, parameter: parameterU }
     apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3 } })
     setGuidance(target.mode === "solid"
       ? `已绑定到「${host.label ?? host.id}」的**内部**：点可以在实体内自由移动，但出不去——拖到外面会被夹回表面，实体移动时它跟着走。`
@@ -127,7 +134,7 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
     if (selectedPrimitive?.type !== "point3") return
     const binding = selectedPrimitive.binding
     if (!binding) return
-    if (binding.kind === "onHost") {
+    if (binding.kind === "onHost" || binding.kind === "onLine") {
       if (!Number.isFinite(u)) return
       apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, parameter: u } } })
       return

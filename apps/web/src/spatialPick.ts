@@ -6,7 +6,7 @@ import type { RaycastHit3 } from "./threePicking"
 export type WorkPlane = "xy" | "xz" | "yz" | { normal: Vector3; constant: number }
 
 export type SpatialPickResult =
-  | { position: Vector3; pointId?: string; source: "point" | "edge" | "face" | "work-plane" }
+  | { position: Vector3; pointId?: string; hostId?: string; source: "point" | "edge" | "face" | "work-plane" }
   | { reason: string }
 
 const unableToProject = "当前视角无法确定工作平面的落点，请旋转视角或切换工作平面"

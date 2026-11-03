@@ -39,7 +39,7 @@ import { evaluateOracle, type Oracle, type OracleResult } from "./reliabilityOra
 interface EvalCase {
   id: string
   prompt: string
-  expected: "plan" | "clarification"
+  expected: "plan" | "clarification" | "answer"
   /** `expected: "clarification"` 时，澄清正文必须包含的片段。 */
   contains?: string
   /** `expected: "plan"` 时，是否要求题设核验整体 `passed`（有题设的用例才要求）。 */
@@ -71,7 +71,7 @@ async function loadCases(): Promise<readonly EvalCase[]> {
   const parsed = (await readSolidReport(file)) as CaseFile
   if (parsed.version !== 1 || !Array.isArray(parsed.cases) || parsed.cases.length === 0) throw new Error(`invalid case file: ${file}`)
   for (const entry of parsed.cases) {
-    if (typeof entry.id !== "string" || typeof entry.prompt !== "string" || (entry.expected !== "plan" && entry.expected !== "clarification")) {
+    if (typeof entry.id !== "string" || typeof entry.prompt !== "string" || (entry.expected !== "plan" && entry.expected !== "clarification" && entry.expected !== "answer")) {
       throw new Error(`invalid case entry in ${file}: ${JSON.stringify(entry).slice(0, 120)}`)
     }
   }
@@ -249,7 +249,7 @@ function runtimeFor(planner: PlannerPort, runId: string, budget?: ReturnType<typ
 function phaseOf(entry: EvalCase, terminal: ReliabilityCaseReport["terminal"], passed: boolean, verificationStatus: string | null, error: string | null): ReliabilityCaseReport["phase"] {
   if (error !== null || terminal === "infrastructure") return "infrastructure"
   if (entry.expected === "clarification") return "input_reading"
-  if (passed) return "presentation_commit"
+  if (passed || entry.expected === "answer") return "presentation_commit"
   if (terminal === "failed" && verificationStatus === "failed") return "construction"
   if (terminal === "failed") return "output_format"
   return "infrastructure"
@@ -299,13 +299,16 @@ describe("完整的协调器链路评测（T01）", () => {
         output === "draft" ? draftPresent
           : output === "verification_passed" ? verification?.status === "passed"
             : output === "clarification" ? terminal === "waiting" && questions !== null && questions.length > 0
-              : false
+              : output === "answer" ? terminal === "completed"
+                : false
       )
       const passed = entry.expected === "plan"
         ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
           && (independent.status === "passed" || independent.status === "not_applicable")
-        : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "") && outputsSatisfied
-          && (independent.status === "passed" || independent.status === "not_applicable")
+        : entry.expected === "answer"
+          ? terminal === "completed" && outputsSatisfied && (entry.contains === undefined || rounds.some((r) => "answer" in r && typeof r.answer === "string" && r.answer.includes(entry.contains!)))
+          : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "") && outputsSatisfied
+            && (independent.status === "passed" || independent.status === "not_applicable")
 
       const report: ReliabilityCaseReport = {
         id: entry.id,
@@ -376,7 +379,13 @@ describe("完整的协调器链路评测（T01）", () => {
     expect(reports.every((report) => report.liveWrites === 0), JSON.stringify(reports.filter((report) => report.liveWrites !== 0))).toBe(true)
     // 每条用例的期望终态都要成立（passed 在报告里逐条可查）。
     expect(reports.map((report) => [report.id, report.passed, report.terminal, report.phase, report.error])).toEqual(
-      runnable.map((entry) => [entry.id, true, entry.expected === "plan" ? "awaiting_confirmation" : "waiting", entry.expected === "plan" ? "presentation_commit" : "input_reading", null])
+      runnable.map((entry) => [
+        entry.id,
+        true,
+        entry.expected === "plan" ? "awaiting_confirmation" : entry.expected === "answer" ? "completed" : "waiting",
+        entry.expected === "clarification" ? "input_reading" : "presentation_commit",
+        null
+      ])
     )
     // **独立判据**：有 oracle 的条目必须由独立回代通过；没有的必须是 not_applicable（不许假装验证过）。
     for (const report of reports) {

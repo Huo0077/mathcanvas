@@ -5,6 +5,7 @@ export type SpatialTool = "point3" | "segment3" | "line3" | "ray3" | "plane3" | 
 export interface SpatialAnchor {
   position: Vector3
   pointId?: string
+  hostId?: string
 }
 
 export interface SpatialCreationSession {

@@ -438,7 +438,11 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
        */
       if (hit?.kind === "point" && primitive?.type === "point3") return { position: { ...primitive.position }, pointId: primitive.id, source: "point" }
       const surfaceHit = hit && (hit.kind === "solid" || hit.kind === "plane") ? { ...hit, kind: "face" as const } : hit
-      return resolveSpatialAnchor(surfaceHit, raycasterAt(point).ray, workPlane)
+      const anchor = resolveSpatialAnchor(surfaceHit, raycasterAt(point).ray, workPlane)
+      if ("position" in anchor && hit && ["line", "edge"].includes(hit.kind) && hit.primitiveId) {
+        return { ...anchor, hostId: hit.primitiveId }
+      }
+      return anchor
     }
     const syncCreationPreview = () => {
       updateThreeCreationPreview(creationGuide, creationSessionRef.current, creationHover && "position" in creationHover ? creationHover.position : null, creationAccent)

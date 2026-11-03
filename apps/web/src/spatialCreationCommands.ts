@@ -1,4 +1,5 @@
-import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, Point3Binding, PrimitiveSpec, Vector3 } from "@draw/dsl"
+import { host3FromPrimitive } from "@draw/geometry-kernel"
 import { commitTransaction, planeThroughPoints, type DomainOperation } from "@draw/scene-graph"
 
 import { nextPoint3Label, nextPrimitiveId } from "./documentIds"
@@ -27,10 +28,23 @@ export function commitSpatialCreation(document: GeometryDocument, session: Spati
     } else {
       if (![anchor.position.x, anchor.position.y, anchor.position.z].every(Number.isFinite)) return { error: "请选择有效的空间位置" }
       const id = nextPrimitiveId(current(), "point3")
-      const primitive: PrimitiveSpec = { id, type: "point3", position: anchor.position, binding: { kind: "free" }, label: nextPoint3Label(current()) }
+      let binding: Point3Binding = { kind: "free" }
+      let pos = anchor.position
+      if (session.tool === "point3" && anchor.hostId) {
+        const host = document.primitives.find((p) => p.id === anchor.hostId)
+        if (host && ["line3", "segment3", "ray3", "edge3", "circle3"].includes(host.type)) {
+          const constraint = host3FromPrimitive(host, document.primitives)
+          if (constraint) {
+            const projected = constraint.closestParameter(anchor.position)
+            binding = { kind: "onHost", hostId: host.id, parameter: projected.u }
+            pos = constraint.evaluate(projected)
+          }
+        }
+      }
+      const primitive: PrimitiveSpec = { id, type: "point3", position: pos, binding, label: nextPoint3Label(current()) }
       added.push(primitive)
       pointIds.push(id)
-      positions.push(anchor.position)
+      positions.push(pos)
     }
   }
 

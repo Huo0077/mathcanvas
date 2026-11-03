@@ -175,6 +175,10 @@ export function PropertiesBar(props: PropertiesBarProps) {
       <h3>点坐标</h3>
       <CoordinateField label="点 X" value={selectedPoint.x} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("x", next)} />
       <CoordinateField label="点 Y" value={selectedPoint.y} disabled={!editable || selectedPoint.binding?.kind === "onPath"} onChange={(next) => updatePoint("y", next)} />
+      {(!selectedPoint.binding || selectedPoint.binding.kind === "free") && <div className="property-actions">
+        <button type="button" aria-label="原点归零" disabled={!editable} onClick={() => onUpdatePrimitive({ x: 0, y: 0 })}>原点 (0,0)</button>
+        <button type="button" aria-label="坐标取整" disabled={!editable} onClick={() => onUpdatePrimitive({ x: Math.round(selectedPoint.x), y: Math.round(selectedPoint.y) })}>坐标取整</button>
+      </div>}
       <Field label="路径绑定">
         <select aria-label="点路径绑定" disabled={!editable} value={selectedPoint.binding?.kind === "onPath" ? selectedPoint.binding.pathId : ""} onChange={(event) => updatePointBinding(event.target.value)}>
           <option value="">自由点</option>
@@ -207,6 +211,13 @@ export function PropertiesBar(props: PropertiesBarProps) {
             value={selectedPoint.binding.parameterId && sceneDocument.parameters[selectedPoint.binding.parameterId] ? sceneDocument.parameters[selectedPoint.binding.parameterId].value : selectedPoint.binding.parameter}
             onChange={(event) => updatePointParameter(numberValue(event))}
           />
+        </div>
+        <div className="preset-pills">
+          <button type="button" aria-label="起点 0" disabled={!editable} onClick={() => updatePointParameter(0)}>起点 0</button>
+          <button type="button" aria-label="分段 1/4" disabled={!editable} onClick={() => updatePointParameter(0.25)}>1/4</button>
+          <button type="button" aria-label="中点 0.5" disabled={!editable} onClick={() => updatePointParameter(0.5)}>中点 0.5</button>
+          <button type="button" aria-label="分段 3/4" disabled={!editable} onClick={() => updatePointParameter(0.75)}>3/4</button>
+          <button type="button" aria-label="终点 1" disabled={!editable} onClick={() => updatePointParameter(1)}>终点 1</button>
         </div>
         {selectedPointBinding?.domain && <div className="metric-grid">
           <Field label="参数域起"><input aria-label="参数域起" type="number" step="0.1" disabled={!editable} value={selectedPointBinding.domain[0]} onChange={(event) => onUpdatePrimitive({ binding: { ...selectedPointBinding, domain: [numberValue(event), selectedPointBinding.domain![1]] } })} /></Field>
@@ -242,21 +253,61 @@ export function PropertiesBar(props: PropertiesBarProps) {
     {selectedPoint3 && <div className="primitive-properties">
       <h3>空间点坐标</h3>
       <Vector3Fields prefix="坐标" value={selectedPoint3.position} disabled={!editable || point3Binding?.kind !== "free"} onChange={updatePoint3} />
+      {(!point3Binding || point3Binding.kind === "free") && <div className="property-actions">
+        <button type="button" aria-label="原点归零" disabled={!editable} onClick={() => onUpdatePrimitive({ position3: { x: 0, y: 0, z: 0 } })}>原点 (0,0,0)</button>
+        <button type="button" aria-label="坐标取整" disabled={!editable} onClick={() => onUpdatePrimitive({ position3: { x: Math.round(selectedPoint3.position.x), y: Math.round(selectedPoint3.position.y), z: Math.round(selectedPoint3.position.z) } })}>坐标取整</button>
+      </div>}
       <Field label="宿主绑定">
         <select aria-label="点宿主绑定" disabled={!editable} value={pointHostValue(point3Binding)} onChange={(event) => onBindPointHost?.(event.target.value === "" ? null : event.target.value)}>
           <option value="">自由点</option>
           {(pointHostCandidates ?? []).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}
         </select>
       </Field>
-      {point3Binding?.kind === "onHost" && <Field label="宿主参数"><input aria-label="宿主参数" type="number" step="0.01" disabled={!editable} value={point3Binding.parameter} onChange={(event) => onChangeHostParameter?.(numberValue(event))} /></Field>}
-      {(point3Binding?.kind === "onFace" || point3Binding?.kind === "onSurface") && <>
+      {(point3Binding?.kind === "onHost" || point3Binding?.kind === "onLine") && <div className="property-subcard">
+        <span className="property-subheading">空间在轨控制</span>
+        <Field label="宿主参数"><input aria-label="宿主参数" type="number" step="0.01" disabled={!editable} value={point3Binding.parameter} onChange={(event) => onChangeHostParameter?.(numberValue(event))} /></Field>
+        <div className="inspector-slider-row">
+          <span>滑轨</span>
+          <input
+            aria-label="宿主滑轨"
+            type="range"
+            min={0}
+            max={1}
+            step={0.005}
+            disabled={!editable}
+            value={point3Binding.parameter}
+            onChange={(event) => onChangeHostParameter?.(numberValue(event))}
+          />
+        </div>
+        <div className="preset-pills">
+          <button type="button" aria-label="起点 0" disabled={!editable} onClick={() => onChangeHostParameter?.(0)}>起点 0</button>
+          <button type="button" aria-label="分段 1/4" disabled={!editable} onClick={() => onChangeHostParameter?.(0.25)}>1/4</button>
+          <button type="button" aria-label="中点 0.5" disabled={!editable} onClick={() => onChangeHostParameter?.(0.5)}>中点 0.5</button>
+          <button type="button" aria-label="分段 3/4" disabled={!editable} onClick={() => onChangeHostParameter?.(0.75)}>3/4</button>
+          <button type="button" aria-label="终点 1" disabled={!editable} onClick={() => onChangeHostParameter?.(1)}>终点 1</button>
+        </div>
+        <div className="property-actions">
+          <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
+        </div>
+      </div>}
+      {(point3Binding?.kind === "onFace" || point3Binding?.kind === "onSurface") && <div className="property-subcard">
+        <span className="property-subheading">空间在面控制</span>
         <Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uv[1])} /></Field>
         <Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uv[0], numberValue(event))} /></Field>
-      </>}
-      {point3Binding?.kind === "inSolid" && <div className="metric-grid vector3-grid">
-        <Field label="体内参数 u"><input aria-label="体内参数 u" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uvw[1], point3Binding.uvw[2])} /></Field>
-        <Field label="体内参数 v"><input aria-label="体内参数 v" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], numberValue(event), point3Binding.uvw[2])} /></Field>
-        <Field label="体内参数 w"><input aria-label="体内参数 w" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[2]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], point3Binding.uvw[1], numberValue(event))} /></Field>
+        <div className="property-actions">
+          <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
+        </div>
+      </div>}
+      {point3Binding?.kind === "inSolid" && <div className="property-subcard">
+        <span className="property-subheading">空间体内控制</span>
+        <div className="metric-grid vector3-grid">
+          <Field label="体内参数 u"><input aria-label="体内参数 u" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uvw[1], point3Binding.uvw[2])} /></Field>
+          <Field label="体内参数 v"><input aria-label="体内参数 v" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], numberValue(event), point3Binding.uvw[2])} /></Field>
+          <Field label="体内参数 w"><input aria-label="体内参数 w" type="number" min="0" max="1" step="0.05" disabled={!editable} value={point3Binding.uvw[2]} onChange={(event) => onChangeHostParameter?.(point3Binding.uvw[0], point3Binding.uvw[1], numberValue(event))} /></Field>
+        </div>
+        <div className="property-actions">
+          <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
+        </div>
       </div>}
       <p className="footer-note">绑定到空间线、棱、面或实体后，点坐标由宿主参数实时约束并随宿主联动。</p>
     </div>}

@@ -6,6 +6,25 @@
 
 完整题面、参考答案、失败记录与改进顺序见 [24 题评估与可复制例题](audit/2026-11-03-agent-example-validation.md)。本轮新增夹具、可重复的核心评估脚本和浏览器证据，未修改产品实现。
 
+## 2026-11-02 3D 直线动点交互修复与属性栏触感丰富升级（Block 12）
+
+针对用户指出的“立体的动点功能好像出问题了，直线上的动点不能拖动了”与“右侧属性栏有点简陋，看起来有一种非常退时代的感觉，丰富按键、框体及内容”两大问题完成闭环修复与现代化升级：
+
+- **3D 直线/线段/棱/射线动点拖拽与创建链路闭环修复（threeSceneInteraction.ts / solidCommands.ts / spatialCreationCommands.ts / spatialCreationSession.ts / threeSceneEffect.ts / pointHostOptions.ts / App.tsx）**：
+  - **根除顶点重合判定遮蔽**：在 `threeSceneInteraction.ts` 中修正 `canStartDragSession`，对于 `point3` 仅当 `!locked` 且为非派生动点或自由点时允许开拖动会话；按下时通过指针射线容差检索引入优先级判定（已选点 > 在轨动点 > 普通端点），彻底解决动点与线端点重合时被端点网格吞没导致无法拖动的问题；
+  - **直线绘制动点即时自动绑定**：在 `spatialCreationSession.ts` 与 `spatialCreationCommands.ts` 中扩展 `SpatialAnchor.hostId`，使用「绘制空间点」工具落在空间线/线段/棱上时自动识别宿主并直接建立 `onHost` 参数约束；在 `solidCommands.ts` 绑定至线/棱时若投影与端点重合合理默认初始化为 `u = 0.5`，避免重合失焦；
+  - **全链路对齐 `onLine` 绑定模式**：在 `threeSceneInteraction.ts`、`App.tsx`、`solidCommands.ts`、`pointHostOptions.ts` 中补齐 `onLine` 模式在拖动会话、抬手提交与参数更新的全套支持。
+- **现代化丰富升级右侧属性栏（PropertiesBar.tsx / global.css）**：
+  - **动点在轨控制台强化**：为 3D 与 2D 动点控制卡片增设平滑交互滑轨（`宿主滑轨` / `路径滑轨`），配备 `起点 0`、`1/4`、`中点 0.5`、`3/4`、`终点 1` 快捷分段药丸按钮，并提供一键 `解绑为自由点` 快捷操作；
+  - **自由点几何辅助按键**：为 2D 与 3D 自由点卡片增设 `原点归零`（`(0,0)` / `(0,0,0)`）与 `坐标取整` 实用辅助按钮；
+  - **卡片与框体触感质感升级**：升级 `.property-subcard` 为带微阴影与清晰内边框的立体仪表分区底板，新增小标装饰条（`::before`），升级滑轨与 `.preset-pills` 的弹簧回弹微动效与触感反馈。
+
+**验证读数（2026-11-02 本机与 GitHub Actions）**：
+- GitHub Actions CI：四门禁（`checks`、`build`、`e2e`、`rust`）**全量 100% 绿灯（Success）**；
+- Playwright 端到端测试（`geometry3d-host-drag.spec.ts` 2 项、`three-orbit-tracks.spec.ts` 3 项、`three-intersection-previews.spec.ts` 4 项、`geometry3d-drag.spec.ts` 10 项）共 19 项全过；
+- `npm run eval:reliability -- --offline` 3 项全过；`npm run eval:explicit-solid -- --offline` 2 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` **0 错误**（exit 0）；`npm run lint` **0 错误 / 15 警告**。
+
 ## 2026-11-02 同步远端并重建桌面端
 
 本地 `HEAD` 与 `origin/main` 均为 `70dbe8a6`（包含 `v4.1.0` 发布、Block 11 图标/属性栏与后续修复）。按当前源码执行：
