@@ -10,6 +10,14 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-05 —— 四道立体几何题修复 T1：四题可重复基线与证据
+
+按 [实施计划](superpowers/plans/2026-11-05-solid-geometry-four-cases.md) 开工，T1 只建立基线、不修业务。四段原题固定进 `packages/agent-core/src/fixtures/solidGeometryFourCases.ts`（Case 4 的 `D→P` 与 `CD` 折前/折后歧义**保留**，另设独立 ID 的修订版）；oracle 是设计 §3 的人工坐标手抄，测试不拿实现生成期望值。
+
+新增 `solidGeometryFourCases.test.ts` 跑与产品同一条链路并逐阶段留证。实况：**Case 1** 解析 10 条、形状认对（pyramid/ABCD/P/A），卡在"`E` 没有落到 `PB` 上"；**Case 2** 解析 5 条，卡在顶环 `A₁B₁C₁` 与内核 `A′` 命名约定对不上 ⇒ 形状从句整句 `null`；**Case 3** 4 条题设 + **2 条残留**（`AC与BD相交于点O`、`底面ABCD是边长为2的菱形`），且 `PO⊥平面ABCD` 的 `O` 不是环顶点 ⇒ 拒绝；**Case 4** 原文与修订版都卡在入口词表不认"直角梯形"。原报告两条判断被实测推翻：`如图，` 前缀不影响识别；`PA=AB=AD=2` 的连等式**已经**展开成 3 条定长 + 2 条等长（只补回归，不重复实现）。
+
+定向基线 `lengthEquality / shapeGrammar / trapezoidPrism / examSolidVariants / pointNames` **5 文件 66 项通过**；新增 `solidGeometryFourCases.test.ts` **6 项通过**。模型入口离线桩、Playwright、在线模型本轮**未运行**，明确记为未运行而不是通过。逐阶段读数与"后续任务改哪一格"的对照表见 [实施证据](audit/2026-11-05-solid-four-cases-implementation-evidence.md)。
+
 ## 2026-11-04 —— 桌面题图识别与直三棱柱回归
 
 本地 HTTP 回归确认模型请求只发送一个 `Content-Type`。桌面端用带验证码的 PNG 验证图像读取，配置通过新版验证后可在题图识别面板选用。识别面板合并了发送步骤，配图参考与参与数学核验的题干分开。
