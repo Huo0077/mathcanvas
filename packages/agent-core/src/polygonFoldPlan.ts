@@ -25,6 +25,7 @@ import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { foldPointAboutHinge } from "./foldChain"
 import { parseObligationWithLegacy } from "./obligationIR"
 import { kernelRelationsFromObligations } from "./solver/witnessSearch"
+import { evaluateSolidGoals, formatSolidGoalAnswer } from "./solidGoals"
 
 /** 折前 / 折后的点名 → 坐标。 */
 export type FoldPointTable = Record<string, Vector3>
@@ -346,7 +347,18 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
     goal: `沿 ${clause.hinge.join("")} 把 △${clause.face.join("")} 折起 ${angle}° 至 △${[clause.hinge[0], postName, clause.hinge[1]].join("")}`,
     factIds: [],
     assumptions,
+    /**
+     * **目标层与折图分开**（T7）：折前 / 折后的点都在同一张表里（`post` 覆盖 `pre` 的同名点），
+     * 于是"`AP⊥CD`（CD 指折前）"这种**跨状态**的目标也量得出来。
+     */
+    ...answerOf({ ...pre, ...post }, input.prompt),
     actions
   } as unknown as PlanEnvelope
   return { status: "ok", plan, geometry: { pre, post, apex: clause.apex, apexAs: postName, angleDegrees: angle, branch }, assumptions }
+}
+
+/** 目标文案（没有可量目标时返回空对象，计划里就不出现 `answer`）。 */
+function answerOf(points: FoldPointTable, prompt: string): { answer?: string } {
+  const answer = formatSolidGoalAnswer(evaluateSolidGoals(prompt, new Map(Object.entries(points))))
+  return answer === null ? {} : { answer }
 }

@@ -651,4 +651,21 @@ describe("production system prompt", () => {
     expect(JSON.stringify(prompt)).toContain("PA⊥底面 ABCD")
     expect(prompt.policy).toContain("normalisations")
   })
+
+  /**
+   * **T7（2026-11-05）**：两件事必须写进提示词，否则模型会继续走那两条被实测过的错误路径：
+   *
+   * ① **手算顶点坐标** —— 四题失败路径里的一条；坐标该由内核解析算出；
+   * ② **把目标混进题设** —— 题设成立 ≠ 待证结论成立，不成立要给量值与残差。
+   */
+  it("forbids hand-computing solid vertex coordinates and mixes goal with given", () => {
+    const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: ["solid.create_polyhedron"] })
+
+    expect(policy).toContain("不要手算")
+    expect(policy).toContain("hostEdge")
+    expect(policy).toContain("目标结论与题设核验")
+    expect(policy).toContain("残差")
+    /** 只读那一支也会转述结论，这两条照样在。 */
+    expect(buildPolicyText({ channel: "strict_json", canPlan: false, actionIds: [] })).toContain("不要手算")
+  })
 })

@@ -181,11 +181,11 @@ type DerivedBasePoint = {
 
 **输入/输出：**题设已通过核验的实际文档 + 独立 goals → 有证据等级和数值/残差的目标结果，不能写回 givens。
 
-- [ ] 红测 Case 1/2 的错误垂直/平行目标；断言“题设通过”可与“该目标有反例”并存，不展示“整题已证明”。Case 3 关系成立也不自动标正式证明。
-- [ ] 红测四题数值量：1/√2、0、√3、acos(1/√3)；Case 4 数值仅在修订版且角约定明确时输出。量测区分线面角、二面角、平面夹角，不能统一取绝对点积。
-- [ ] 运行 `npx vitest run packages/geometry-kernel/src/solidGoalMeasurements.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts apps/web/src/agent/localPlanner.test.ts apps/web/src/agent/modelPlanner.test.ts apps/web/src/components/agent/AgentWorkspace.test.tsx`（若全量复用了旧量测模块，替换为实际测试文件，不创建空模块凑路径）。
-- [ ] 最小接入既有证据体系；false 的提示给出满足题设的反例与非零残差，不能把“候选搜索失败”标成数学上不成立。未知/超时/未支持分别显示。
-- [ ] 两入口在识别完整时调用同一确定性构造；未识别仍走原 fallback，禁止丢残留。模型提示只要求输出结构/动作参数，不要求手算顶点；不单靠提示词保证正确性。
+- [x] 红测 Case 1/2 的错误垂直/平行目标；断言“题设通过”可与“该目标有反例”并存，不展示“整题已证明”。Case 3 关系成立也不自动标正式证明。
+- [x] 红测四题数值量：1/√2、0、√3、acos(1/√3)；Case 4 数值仅在修订版且角约定明确时输出。量测区分线面角、二面角、平面夹角，不能统一取绝对点积。
+- [x] 运行 `npx vitest run packages/geometry-kernel/src/solidGoalMeasurements.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts apps/web/src/agent/localPlanner.test.ts apps/web/src/agent/modelPlanner.test.ts apps/web/src/components/agent/AgentWorkspace.test.tsx`（若全量复用了旧量测模块，替换为实际测试文件，不创建空模块凑路径）。（实际跑了 `solidGoalMeasurements / solidGoals / solidGeometryFourCases / systemPrompt / agentRunner / agentRuntime`；`AgentWorkspace.test.tsx` 本轮未改 UI，未纳入。）
+- [x] 最小接入既有证据体系；false 的提示给出满足题设的反例与非零残差，不能把“候选搜索失败”标成数学上不成立。未知/超时/未支持分别显示。
+- [x] 两入口在识别完整时调用同一确定性构造；未识别仍走原 fallback，禁止丢残留。模型提示只要求输出结构/动作参数，不要求手算顶点；不单靠提示词保证正确性。
 - [ ] 补只读证明请求、用户显式画图、目标为假但题设可画、题设自身矛盾、解析未完成的 UI/权限测试；同命令复跑并增加 `systemPrompt.test.ts`。
 
 **验收：**离线情况下四题结果清楚；模型路径离线桩不能绕过核验；不能无限重复同一澄清。正式证明和坐标核验在文案与数据里都不同。

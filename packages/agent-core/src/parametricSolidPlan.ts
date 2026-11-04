@@ -28,6 +28,7 @@
 import type { PlanEnvelope } from "./contracts"
 import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { parseObligationWithLegacy } from "./obligationIR"
+import { evaluateSolidGoals, formatSolidGoalAnswer } from "./solidGoals"
 import { searchWitness, solidWitnessActions, specForPrompt } from "./solver/witnessSearch"
 import type { PolyhedronWitness } from "./solver/solverContracts"
 
@@ -41,8 +42,7 @@ export interface ParametricSolidPlanInput {
   spatialPointConditions?: boolean
 }
 
-export type ParametricSolidPlanResult =
-  /** 题设通过独立核验，草稿可以提交。 */
+export type ParametricSolidPlanResult =  /** 题设通过独立核验，草稿可以提交。 */
   | { status: "ok"; plan: PlanEnvelope; candidate: PolyhedronWitness; assumptions: string[] }
   /** 入口认得出、但这组题设给不出可核验的图形：把搜索自己的理由带上。 */
   | { status: "clarification"; reason: string }
@@ -79,13 +79,36 @@ export function tryBuildParametricSolidPlan(input: ParametricSolidPlanInput): Pa
         ? "台体"
         : "平面图形"
   const alias = "parametric-solid"
+  /**
+   * **目标层与题设核验分开**（T7）：题设已经通过独立核验，这里只回答"所求结论"。
+   * 点表 = 多面体顶点 + 辅助点（`O` / `E` / `M` …）—— 目标里点名的每个点都必须在这张表里。
+   */
+  const points = new Map<string, { x: number; y: number; z: number }>()
+  for (const [index, name] of searched.candidate.names.entries()) points.set(name, searched.candidate.vertices[index]!)
+  for (const auxiliary of searched.candidate.auxiliaryPoints ?? []) points.set(auxiliary.name, auxiliary.point)
+  const findings = evaluateSolidGoals(input.prompt, points)
+  const answer = formatSolidGoalAnswer(findings)
   const plan = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
     goal: `按点名关系画一组${label}示意图`,
     factIds: [],
     assumptions: searched.assumptions,
+    ...(answer === null ? {} : { answer }),
     actions: solidWitnessActions(searched.candidate, alias)
   } as unknown as PlanEnvelope
   return { status: "ok", plan, candidate: searched.candidate, assumptions: searched.assumptions }
+}
+
+/**
+ * **两个规划入口共用的一份确定性前置**（T7）：识别完整、题设已独立核验时，
+ * 直接给出同一份计划；否则返回 `null`，调用方继续走它原来的路（模型 / 兜底）。
+ *
+ * 为什么只接受 `ok`：澄清与"不支持"交给各自入口按原口径呈现 ——
+ * 在这里替它们挑一个说法，等于把两个入口的文案分叉。
+ */
+export function deterministicPlanForPrompt(prompt: string): PlanEnvelope | null {
+  const parametric = tryBuildParametricSolidPlan({ prompt })
+  if (parametric.status === "ok") return parametric.plan
+  return null
 }

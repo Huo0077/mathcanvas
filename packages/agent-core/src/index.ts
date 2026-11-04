@@ -171,6 +171,11 @@ export * from "./parametricSolidPlan"
  * （`solid.fold`），不复制判据。
  */
 export * from "./polygonFoldPlan"
+/**
+ * **目标层**（T7）：题设核验通过之后，单独判断"所求结论"。数值量测在内核
+ * `solidGoalMeasurements`，本层只做"读目标 + 落文案"，证据状态与题设核验互不覆盖。
+ */
+export * from "./solidGoals"
 export * from "./toolContracts"
 export * from "./toolDispatch"
 export * from "./toolLoop"

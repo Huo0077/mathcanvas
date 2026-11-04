@@ -14,7 +14,7 @@ import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
-import { rightPrismMidpointsPlan } from "@draw/agent-core"
+import { deterministicPlanForPrompt, rightPrismMidpointsPlan } from "@draw/agent-core"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -523,6 +523,18 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     const prism = rightPrismMidpointsPlan(prompt)
     if (prism) return {
       planner: { plan: async () => ({ plan: prism, requestId: "right-prism-request", attemptId: "right-prism-attempt" }) },
+      requestedSkillIds: ["spatial-modeling"], textProfileId: "local-planner"
+    }
+
+    /**
+     * **两个入口共用同一份确定性构造**（T7，2026-11-05）：
+     * 题面能被确定性构造识别、且题设已**独立核验**时，模型入口也直接用这份计划 ——
+     * 模型只负责结构/动作参数，不手算顶点坐标（见 `systemPrompt` 的那条纪律）。
+     * 识别不出或核验不过 ⇒ 返回 null，继续走原来的模型/兜底路径。
+     */
+    const deterministic = deterministicPlanForPrompt(prompt)
+    if (deterministic) return {
+      planner: { plan: async () => ({ plan: deterministic, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
       requestedSkillIds: ["spatial-modeling"], textProfileId: "local-planner"
     }
 

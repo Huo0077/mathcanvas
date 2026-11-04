@@ -103,5 +103,6 @@ export { normalizeHostParameter } from "./reactive/constraints"
  * 核验器（`diagramVerification`）与内核自己的顶面命名要的是**同一份**判断，
  * 而这三处此前各写一份（`[...value]` 按码位拆字 / `/^[A-Z]$/` / 自己拼 `A′`）。
  */
+export * from "./solidGoalMeasurements"
 export * from "./pointNames"
 export * from "./foldSystem"

@@ -452,6 +452,78 @@ npx vitest run polygonFoldPlan.test.ts solidGeometryFourCases.test.ts localPlann
 - 折后的 `D` 不再作为图上的点出现（`apexAs = P`）；题面若要求同时保留折前 `D` 的显示，
   需要另立一个"折前状态"图层，本文档没有做。
 
+---
+
+## T7 —— 目标结果与题设核验分离，接通两种规划入口
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| 新增文件 | `packages/geometry-kernel/src/solidGoalMeasurements.ts`、`.test.ts`、`packages/agent-core/src/solidGoals.ts`、`.test.ts` |
+| 改动的文件 | `agent-core/src/parametricSolidPlan.ts`、`polygonFoldPlan.ts`、`agent-core/src/index.ts`、`geometry-kernel/src/index.ts`、`apps/web/src/agent/agentRunner.ts`、`systemPrompt.ts`（+ `.test.ts`） |
+
+### 2. 这一块的判据
+
+四道题的目标**不是同一类**：
+
+| 题 | 目标 | 真假 | 量 |
+|---|---|---|---|
+| Case 1 | `AE⊥平面PBC` | **假**（残差非零） | — |
+| Case 1 | `sin∠(PC, 平面ADE)` | 数值 | `1/√2` |
+| Case 2 | `A₁C∥平面B₁DE` | **假** | — |
+| Case 2 | `cos∠(A-DE-B₁)` | 数值 | `0` |
+| Case 3 | `PA∥平面BDM` | 真 | — |
+| Case 3 | `d(A, 平面PBD)` | 数值 | `√3` |
+| Case 4 修订版 | `AP⊥CD`（CD 指折前） | **假** | — |
+| Case 4 修订版 | `cos∠(P-AB-C)` | 数值 | `1/√3`（≈54.7356°） |
+
+**三种角不许共用一个数**：线面角用 `sin = |d·n|/(|d||n|)`、二面角用**半平面**夹角
+（**不取绝对值**，120° 就是 120°）、平面夹角才取锐角 `|n₁·n₂|`。
+
+### 3. 改了什么
+
+1. **内核 `solidGoalMeasurements.ts`（新）**：`linePlaneSine` / `pointPlaneDistance` /
+   `dihedralCosine` / `dihedralDegrees` / `planeAngleCosine` / `planeNormalOf`。
+   退化输入全部返回结构化拒绝（**不返回 NaN**）。先检索过既有量测：二面角复用
+   `dihedralAngleDetail3` 的同一套半平面口径，其余三个没有既有同义函数才新增。
+2. **`solidGoals.ts`（新）**：读目标（既有 obligation 里的线面垂直/平行、线段垂直，
+   加上四种数值写法）、对**已通过题设核验**的点表求值、产出 `holds / disproved / measured /
+   unverified` 四种状态与非零残差，再落成用户文案：
+   - 不成立 ⇒「**不成立**：…。题设本身仍然通过核验 —— 图形可以保留，但这条结论不成立。」
+   - 成立 ⇒「在所构造的图形中**成立**（坐标核验；**这是实例证据，不等于形式化证明**）」
+   - 数值 ⇒ 量测值；**从不出现 `formally_proved` / "整题已证明"**。
+3. **接线**：
+   - `parametricSolidPlan` 在题设核验通过后求目标，把文案放进计划的 `answer`（与 `assumptions` 分栏）；
+   - `polygonFoldPlan` 用**折前 ∪ 折后**的点表求目标，于是"`AP⊥CD`（CD 指折前）"这种跨状态目标也量得出来；
+   - `deterministicPlanForPrompt`：识别完整且题设已核验时，**模型入口也直接取这份计划**
+     （`agentRunner.selectPlanner` 在问 provider 之前先试它；返回 `null` 才走原路）；
+   - `systemPrompt` 新增两条纪律：**不要手算顶点坐标**（只报结构/参数）、
+     **目标结论与题设核验分开说**（不成立要给量值与残差）。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run packages/geometry-kernel/src/solidGoalMeasurements.test.ts \
+  packages/agent-core/src/solidGoals.test.ts \
+  packages/agent-core/src/solidGeometryFourCases.test.ts \
+  apps/web/src/agent/systemPrompt.test.ts apps/web/src/agent/agentRunner.test.ts
+```
+
+- `solidGoalMeasurements.test.ts` **6 项通过**（四个参考值 + 二面角不取绝对值 + 退化拒绝）；
+- `solidGoals.test.ts` **6 项通过**（四题目标真假与量值、文案口径、计划 `answer` 字段）；
+- `systemPrompt.test.ts` **30 项通过**（新增两条纪律）；
+- `agentRunner.test.ts` + `agentRuntime.test.ts` **93 项通过**（接入确定性前置后模型入口不回归）。
+
+### 5. 这一块**没有**做的
+
+- **UI/权限测试**（只读证明请求、目标为假但题设可画、题设自身矛盾、解析未完成的界面呈现）
+  本轮**没有**新增 —— `answer` 走既有的计划文案通道，但界面上的分栏呈现与权限断言未做。
+- 在线模型（真实 provider）未跑：`deterministicPlanForPrompt` 的接入用离线单测覆盖，
+  **不拿桩结果冒充在线准确性**。
+- `sampled` / `formally_proved` 的**证明产物**链路不在本期（本层只给实例证据）。
+
+
 
 
 

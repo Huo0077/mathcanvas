@@ -10,6 +10,16 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-05 —— 四道立体几何题修复 T7：目标结果与题设核验分离
+
+新增内核 `solidGoalMeasurements.ts`：`linePlaneSine`、`pointPlaneDistance`、`dihedralCosine`、`dihedralDegrees`、`planeAngleCosine`、`planeNormalOf`，退化输入结构化拒绝不返回 NaN。三种角**分开量**——线面角用 `sin=|d·n|/(|d||n|)`、二面角用半平面夹角且**不取绝对值**（120° 就是 120°）、平面夹角才取锐角。二面角复用既有 `dihedralAngleDetail3` 的半平面口径，其余三个没有既有同义函数才新增。
+
+新增 `solidGoals.ts`：读目标（既有 obligation 的线面垂直/平行、线段垂直 + 四种数值写法），对**已通过题设核验**的点表求值，产出 `holds/disproved/measured/unverified` 与非零残差，再落文案：不成立时明说「题设本身仍然通过核验、图形可以保留」；成立时明说「坐标核验、是实例证据、不等于形式化证明」；从不出现 `formally_proved`。
+
+接线：`parametricSolidPlan` 把目标文案放进计划的 `answer`（与 `assumptions` 分栏）；`polygonFoldPlan` 用**折前 ∪ 折后**点表求目标（跨状态的 `AP⊥CD` 也量得出来）；新增 `deterministicPlanForPrompt`，`agentRunner.selectPlanner` 在问 provider 之前先试它（识别完整且题设已核验才返回计划）；`systemPrompt` 新增两条纪律：**不要手算顶点坐标**（只报结构与参数）、**目标结论与题设核验分开说**。
+
+验证：`solidGoalMeasurements` 6 项、`solidGoals` 6 项、`systemPrompt` 30 项、`agentRunner`+`agentRuntime` 93 项全过。四题目标实况：Case 1 `AE⊥PBC` **假** / `sin=1/√2`；Case 2 `A₁C∥B₁DE` **假** / `cos=0`；Case 3 `PA∥BDM` **真** / `d=√3`；Case 4 修订版 `AP⊥CD` **假** / `cos=1/√3`。**未做**：UI/权限测试（只读证明请求、目标为假但题设可画、题设矛盾、解析未完成的界面呈现）、在线模型实跑、形式证明产物。
+
 ## 2026-11-05 —— 四道立体几何题修复 T6：梯形翻折、显式状态与一次澄清
 
 新增 `polygonFoldPlan.ts`。原题「将 △ACD 沿 AC 折起成 △PAC」按有序顶点读会移动折痕端点，且目标里的 `CD` 没说清是折前线段还是折后 `CP` —— 两者任一没说清就落成**一条**合并澄清、**不出计划**（`destinationExplicit` 只在"点 D 绕 AC 旋转 n° 得到点 P"这种语序为真；`折起成 △PAC` 不算把 D→P 说死）。修订版（写明 D→P 与 CD 指折前）才出计划：底面复用 T3 的 `rightTrapezoidEdges` / `rightTrapezoidPolygon`，折后位置复用既有 `foldPointAboutHinge`，折角取明写的 `n°` 或"平面…⊥平面…"的 90°，出计划前自检折痕不动 / 折片刚性 / 转过角相等。`M 为 PB 中点` 落成 `solid.create_segment` + `dynamic.create_bound_point`（参数 1/2）。
