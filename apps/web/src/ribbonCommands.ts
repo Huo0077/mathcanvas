@@ -161,9 +161,8 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       ? [{ id: "base" as const, label: "基础与图元", commands: planarBaseCommands }]
       : spatialPrefix),
     { id: "multimodal", label: "多模态输入", commands: [
-      // 只保留项目真正规划的两个入口；转换后端尚未接入，所以入口保持禁用并说明原因，不做假的成功反馈。
       command("input-text-conversion", "文字转换", "text", { disabled: true, disabledReason: "文字转换服务尚未接入，暂不可用" }),
-      command("input-image-conversion", "图片转换", "image", { disabled: true, disabledReason: "图片转换服务尚未接入，暂不可用" })
+      command("input-image-conversion", "图片识题", "image", { prompt: "上传题干截图和几何配图" })
     ] },
     { id: "edit", label: "作业操作", commands: editCommands },
     { id: "export", label: "文件输出", commands: exportCommands }

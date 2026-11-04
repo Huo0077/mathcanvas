@@ -556,16 +556,25 @@ fn drive<F: std::future::Future>(future: F) -> F::Output {
 
 impl Transport for HttpTransport {
     fn send(&self, request: &ProviderRequest, authorization: &[(String, String)], stop: &dyn Stop, on_update: &mut dyn FnMut(TransportUpdate)) -> Result<(), ProviderError> {
-        let mut builder = self.client.post(&request.endpoint).json(&request.body);
+        let mut builder = self.client.post(&request.endpoint);
         for (name, value) in authorization {
             // 空值的头**不发**：`Authorization: `（空）在有些网关上会被当成"提供了凭据但无效"。
             if !value.is_empty() {
                 builder = builder.header(name.as_str(), value.as_str());
             }
         }
+        // reqwest adds the JSON media type only if the header is absent.
+        // Setting the request headers first avoids a duplicate Content-Type.
+        let builder = builder.json(&request.body);
 
         let result = drive(async {
-            let response = builder.send().await.map_err(|error| ProviderError::Transport { detail: describe(&error) })?;
+            let wait = stop.wait();
+            tokio::pin!(wait);
+            let response = tokio::select! {
+                biased;
+                () = &mut wait => return Ok(()),
+                response = builder.send() => response.map_err(|error| ProviderError::Transport { detail: describe(&error) })?,
+            };
             // **对端是谁**（2026-09-21 加，诊断用）。
             //
             // 为什么值得永久留在错误里：一次实测里，**同一个请求**在控制台（同一份 `HttpTransport`）
@@ -576,7 +585,11 @@ impl Transport for HttpTransport {
             let status = response.status().as_u16();
             if !response.status().is_success() {
                 // 失败体也要读（诊断要用），但要**限长**：对端可能回一大坨 HTML。
-                let body = response.text().await.unwrap_or_default();
+                let body = tokio::select! {
+                    biased;
+                    () = &mut wait => return Ok(()),
+                    body = response.text() => body.unwrap_or_default(),
+                };
                 let detail: String = body.chars().take(200).collect();
                 let (failure, message) = classify_http_failure(status, Some(&detail));
                 // 对端地址放在**开头**：这条详情走到界面上会被截断到 200 字符（前端那条约束），
@@ -586,8 +599,6 @@ impl Transport for HttpTransport {
 
             let mut stream = response.bytes_stream();
             let mut total = 0usize;
-            let wait = stop.wait();
-            tokio::pin!(wait);
             loop {
                 // `biased`：取消优先于下一块。反过来的话，一块已经在路上的数据会先被处理，
                 // 而那时用户已经按了停止。

@@ -41,7 +41,7 @@ import {
   type ProviderProfile
 } from "../../services/providerProfileClient"
 import { ProviderForm, type ProviderDraft, type ProviderFormResult } from "./ProviderForm"
-import { FEATURE_LABELS, HEALTH_LABELS, reasonFor } from "./providerSettingsFields"
+import { FEATURE_LABELS, HEALTH_LABELS, providerProbeIssue, reasonFor } from "./providerSettingsFields"
 import { BoltIcon, CheckIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons"
 
 export interface ProviderSettingsProps {
@@ -171,13 +171,14 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
   /** 这一栏的说明句：说清"现在是什么状态、下一步该做什么"。 */
   const noteOf = useCallback((profile: ProviderProfile): string => {
     const record = health[profile.id]
-    if (probing === profile.id) return "正在验证：会发出 4 次请求（文本、JSON、一张 1×1 的图、一次工具调用）"
+    if (probing === profile.id) return "正在验证：会发出 4 次请求（文本、JSON、图像验证码、工具调用）"
     if (!record) return "还没验证过。按「验证」才知道这个模型真的支持哪些能力。"
     if (record.profileRevision !== profile.revision) return "配置改过了，上一次的验证结果已经过期。"
-    if (record.status === "failed") return "上次验证失败：接口连不上或凭据不对。"
     const verified = ["tools", "json", "vision", "streaming"].filter((feature) => isVerified(profile, feature, record))
-    if (verified.length === 0) return "已连通，但这次没能验证出任何能力（结论是「未知」，不是「不支持」）。"
-    return `已验证：${verified.map((feature) => FEATURE_LABELS[feature] ?? feature).join("、")}`
+    if (verified.length === 0) return providerProbeIssue(record) ?? "这次未能验证任何能力。请检查模型配置后重试。"
+    const summary = `已验证：${verified.map((feature) => FEATURE_LABELS[feature] ?? feature).join("、")}`
+    const imageIssue = verified.includes("vision") ? undefined : providerProbeIssue(record, "vision")
+    return imageIssue ? `${summary}。图像验证：${imageIssue}` : summary
   }, [health, probing])
 
   async function use(profile: ProviderProfile): Promise<void> {
@@ -208,10 +209,10 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
     setHealth((current) => ({ ...current, [profile.id]: result.health }))
     const verified = ["tools", "json", "vision", "streaming"].filter(feature => isVerified(profile, feature, result.health)).map(feature => FEATURE_LABELS[feature])
     setStatus({
-      kind: "ok",
+      kind: verified.length > 0 ? "ok" : "error",
       message: verified.length > 0
         ? `${profile.name} 通过验证：${verified.join("、")} 已验证`
-        : `${profile.name} 已连通，但没能验证出任何能力`
+        : `${profile.name} 未通过验证。${providerProbeIssue(result.health) ?? "请检查模型配置后重试。"}`
     })
     return undefined
   }
@@ -375,7 +376,7 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
               type="button"
               onClick={() => void verify(profile)}
               disabled={probing !== "" || !keyed}
-              title={keyed ? "会发出 4 次请求（文本、JSON、一张 1×1 的图、一次工具调用）" : "先配置密钥再验证"}
+              title={keyed ? "会发出 4 次请求（文本、JSON、图像验证码、工具调用）" : "先配置密钥再验证"}
               aria-label={`验证 ${profile.name}`}
             >
               <BoltIcon size={14} />{probing === profile.id ? "验证中…" : "验证"}

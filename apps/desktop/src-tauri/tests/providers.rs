@@ -304,6 +304,48 @@ fn forcing_a_tool_uses_the_word_each_dialect_actually_accepts() {
 }
 
 #[test]
+fn official_deepseek_can_force_a_tool_and_continue_the_tool_history() {
+    let mut deepseek = profile("openai_compatible", "deepseek", "https://api.deepseek.com");
+    deepseek.model_id = "deepseek-flash".into();
+    let mut options = RequestOptions {
+        allow_tools: true,
+        force_tool: true,
+        tools: vec![serde_json::json!({ "type": "function", "function": { "name": "lookup" } })],
+        ..RequestOptions::default()
+    };
+    let probe = build_request(&deepseek, vec![ChatMessage::text("user", "Call lookup")], false, options.clone());
+    assert_eq!(probe.endpoint, "https://api.deepseek.com/chat/completions");
+    assert_eq!(probe.body["tool_choice"], "required");
+    assert_eq!(probe.body["thinking"]["type"], "disabled");
+
+    options.force_tool = false;
+    let history = vec![
+        ChatMessage::text("user", "Call lookup"),
+        ChatMessage::tool_call("call_1", "lookup", serde_json::json!({})),
+        ChatMessage::tool_result("call_1", "lookup", "ok"),
+    ];
+    let continuation = build_request(&deepseek, history, false, options);
+    assert_eq!(continuation.body["thinking"]["type"], "disabled");
+    assert_eq!(continuation.body["messages"][2]["tool_call_id"], "call_1");
+}
+
+#[test]
+fn deepseek_flash_image_reading_uses_the_official_image_shape_and_leaves_proxy_options_alone() {
+    let mut deepseek = profile("openai_compatible", "deepseek", "https://api.deepseek.com/v1");
+    deepseek.model_id = "deepseek-flash".into();
+    let images = vec![ChatMessage::with_images("user", "read the image", vec!["iVBORw0KGgo=".into()])];
+    let request = build_request(&deepseek, images.clone(), false, RequestOptions::default());
+    assert_eq!(request.body["thinking"]["type"], "disabled");
+    assert_eq!(request.body["messages"][0]["content"][1]["image_url"]["url"], "data:image/png;base64,iVBORw0KGgo=");
+
+    let text = build_request(&deepseek, vec![ChatMessage::text("user", "hi")], false, RequestOptions::default());
+    assert!(text.body.get("thinking").is_none());
+    deepseek.base_url = "https://proxy.example.com/v1".into();
+    let proxy = build_request(&deepseek, images, false, RequestOptions::default());
+    assert!(proxy.body.get("thinking").is_none());
+}
+
+#[test]
 fn an_image_message_gets_each_dialects_own_shape() {
     // 三家的图片位置完全不同：OpenAI 用 content parts 里的 data URL、
     // Anthropic 用 base64 的 source block、Ollama 用消息上的裸 base64 数组。

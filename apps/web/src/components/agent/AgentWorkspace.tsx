@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import { useAgentStore } from "../../agentStore"
-import { AgentComposer } from "./AgentComposer"
+import { ProblemImageComposer } from "./ProblemImageComposer"
 import { AgentConversationSidebar } from "./AgentConversationSidebar"
 import { AgentMessageList } from "./AgentMessageList"
 
@@ -46,9 +46,10 @@ interface AgentWorkspaceProps {
   onDiscard?: (runId?: string) => void
   onStop?: (runId?: string) => void
   onRetry?: () => void
+  initialImageReaderOpen?: boolean
 }
 
-export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard, onStop, onRetry }: AgentWorkspaceProps) {
+export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard, onStop, onRetry, initialImageReaderOpen }: AgentWorkspaceProps) {
   const conversations = useAgentStore((state) => state.conversations)
   const activeConversation = useAgentStore((state) => state.activeConversation)
   const activeConversationId = useAgentStore((state) => state.activeConversationId)
@@ -114,7 +115,8 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
         />
       </div>
       <div className="agent-stage-composer">
-        <AgentComposer draft={{ value: draft, onChange: setDraft }} onSend={sendPrompt} busy={pendingMessage !== undefined} />
+        <ProblemImageComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
+          onSend={sendPrompt} busy={pendingMessage !== undefined} initialOpen={initialImageReaderOpen} />
       </div>
     </div>
   </div>

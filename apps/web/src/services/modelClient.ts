@@ -20,6 +20,8 @@ import type { ModelEvent } from "@draw/agent-core"
 export interface ModelChatMessage {
   role: string
   content: string
+  /** Base64 PNG bytes. Used by the image reader on its dedicated request. */
+  images?: string[]
   /** Native provider tool history, normalized by the Rust adapter. */
   toolCallId?: string
   toolName?: string

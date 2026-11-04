@@ -753,6 +753,13 @@ fn the_real_transport_reads_a_streamed_body_over_a_socket() {
     let raw = server.request.lock().expect("the record is not poisoned").clone();
     assert!(raw.to_lowercase().contains("authorization: bearer sk-live-secret"), "the credential must reach the wire: {raw}");
     assert!(raw.starts_with("POST /chat/completions"), "the endpoint path must be the constant one: {raw}");
+    let (head, body) = raw.split_once("\r\n\r\n").expect("headers followed by a body");
+    let content_types: Vec<_> = head.lines().filter_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.eq_ignore_ascii_case("content-type").then(|| value.trim())
+    }).collect();
+    assert_eq!(content_types, ["application/json"], "the gateway must receive one unambiguous media type");
+    assert_eq!(serde_json::from_str::<serde_json::Value>(body).expect("JSON request body")["model"], "local-model");
 }
 
 #[test]

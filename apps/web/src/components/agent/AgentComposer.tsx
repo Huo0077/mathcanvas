@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState, type ReactNode, type Ref } from "react"
 
 /**
  * Agent 区的输入框：整块界面的**视觉焦点**（页面中央），支持多行输入。
@@ -20,9 +20,11 @@ interface AgentComposerProps {
   busy?: boolean
   disabled?: boolean
   draft?: { value: string; onChange: (value: string) => void }
+  leadingAction?: ReactNode
+  inputRef?: Ref<HTMLTextAreaElement>
 }
 
-export function AgentComposer({ onSend, busy = false, disabled = false, draft }: AgentComposerProps) {
+export function AgentComposer({ onSend, busy = false, disabled = false, draft, leadingAction, inputRef }: AgentComposerProps) {
   const [localValue, setLocalValue] = useState("")
   const value = draft?.value ?? localValue
   const setValue = draft?.onChange ?? setLocalValue
@@ -47,6 +49,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false, draft }:
 
   return <form className="agent-composer" aria-label="对话输入框" onSubmit={(event) => { event.preventDefault(); submit() }}>
     <textarea
+      ref={inputRef}
       className="agent-composer-input"
       aria-label="对话输入"
       rows={1}
@@ -65,6 +68,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false, draft }:
       }}
     />
     <div className="agent-composer-bar">
+      {leadingAction}
       <p className="agent-composer-hint" id="agent-composer-hint">Enter 发送 · Shift + Enter 换行</p>
       <button type="submit" className="agent-send" name="send" disabled={!canSend}>{busy ? "回复中" : "发送"}</button>
     </div>

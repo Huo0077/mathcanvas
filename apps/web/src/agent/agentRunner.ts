@@ -13,6 +13,8 @@ import { deriveAcceptance } from "./acceptance"
 import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
+import { splitImagePrompt } from "../services/problemImagePrompt"
+import { rightPrismMidpointsPlan } from "@draw/agent-core"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -514,9 +516,15 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, runId?: string): Promise<PlannerSelection> {
+  async function selectPlanner(prompt: string, imageNotes: string, runId?: string): Promise<PlannerSelection> {
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
+
+    const prism = rightPrismMidpointsPlan(prompt)
+    if (prism) return {
+      planner: { plan: async () => ({ plan: prism, requestId: "right-prism-request", attemptId: "right-prism-attempt" }) },
+      requestedSkillIds: ["spatial-modeling"], textProfileId: "local-planner"
+    }
 
     const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
     if (!resolution.ok) {
@@ -528,6 +536,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     return {
       planner: createModelPlanner({
         ...dependencies.modelPlanner,
+        imageNotes,
         resolveProvider: async () => resolution,
         /**
          * **模型原话留在本机诊断里**（2026-09-22，用户现场）：界面上那句失败文案只说得出"形状不对"，
@@ -545,7 +554,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
-  async function runPrompt(prompt: string, promptMessageId: string): Promise<RunPromptResult> {
+  async function runPrompt(text: string, promptMessageId: string): Promise<RunPromptResult> {
+      const { prompt, imageNotes } = splitImagePrompt(text)
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       /**
@@ -558,7 +568,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const eventRunId = pinned ? runId : undefined
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const selection = await selectPlanner(prompt, eventRunId)
+      const selection = await selectPlanner(prompt, imageNotes, eventRunId)
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。

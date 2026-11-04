@@ -19,8 +19,7 @@ use crate::repository::provider_profiles::ProviderProfile;
 
 /// 一条归一化消息。三家 provider 的"消息"只有这两种角色，差异在适配器里处理。
 ///
-/// `images`：**base64 的图片字节**（不带 `data:` 前缀）。目前只有能力探针会带它 ——
-/// 真模型运行里的图片输入是另一条线（附件两阶段写），但请求形状是同一个位置。
+/// `images`：PNG 图片的 base64 字节（不带 `data:` 前缀）。能力探针和题图识别共用该字段。
 ///
 /// `Deserialize` 是给 IPC 用的：前端**只发消息**，密钥与端点都不在参数里
 ///（它们由 Rust 侧从 profile 与凭据库取）。
@@ -59,6 +58,25 @@ impl ChatMessage {
     pub fn tool_result(id: impl Into<String>, name: impl Into<String>, content: impl Into<String>) -> Self {
         Self { role: "tool_result".into(), content: content.into(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: None }
     }
+}
+
+/// Only bounded PNG attachments on user messages cross the provider boundary.
+pub fn valid_image_messages(messages: &[ChatMessage]) -> bool {
+    let mut count = 0;
+    let mut encoded_bytes = 0;
+    for message in messages {
+        for image in &message.images {
+            count += 1;
+            encoded_bytes += image.len();
+            if count > 2 || encoded_bytes > 5_600_000 || message.role != "user"
+                || image.len() % 4 != 0 || !image.starts_with("iVBORw0KGgo") || image.ends_with("===")
+                || !image.trim_end_matches('=').bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/')
+            {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// 一次 provider 请求的**计划**（还缺密钥 —— 密钥在 `Task 1.2` 的凭据库里，
@@ -306,7 +324,17 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
         }
     }
 
-    if options.allow_tools && !options.tools.is_empty() {
+    let sends_tools = options.allow_tools && !options.tools.is_empty();
+    let official_deepseek_v4 = profile.protocol == "openai_compatible"
+        && matches!(base, "https://api.deepseek.com" | "https://api.deepseek.com/v1")
+        && matches!(profile.model_id.as_str(), "deepseek-flash" | "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" | "deepseek-v4-pro");
+    if official_deepseek_v4 && (sends_tools || messages.iter().any(|message| !message.images.is_empty())) {
+        // The tool probe forces a tool, and the Agent's tool history doesn't carry
+        // reasoning_content. Image reads transcribe the source under a fixed output limit.
+        object.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
+    }
+
+    if sends_tools {
         if let Some(field) = &plan.tools_field {
             let native_tools: Vec<serde_json::Value> = if profile.protocol == "anthropic" {
                 options.tools.iter().map(|tool| match tool.get("function") {

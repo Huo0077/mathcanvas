@@ -100,6 +100,7 @@ export * from "./proof/lean4Toolchain"
  */
 export * from "./parameterAudit"
 export * from "./planCompiler"
+export * from "./rightPrismPlan"
 export * from "./promptNormalization"
 /**
  * Provider 配置契约（Task 1.3）。

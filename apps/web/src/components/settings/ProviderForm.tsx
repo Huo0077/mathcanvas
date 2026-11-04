@@ -165,9 +165,10 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
           value={presetIndex}
           onChange={(event) => {
             const next = Number(event.target.value)
+            const chosen = PRESETS[next]
             setPresetIndex(next)
-            // 预设只带协议与基址；模型名与名字留给用户 —— 猜一个模型名比留空更糟。
-            setBaseUrl(PRESETS[next].baseUrl)
+            setBaseUrl(chosen.baseUrl)
+            if (!modelId.trim() || modelId === preset.defaultModelId) setModelId(chosen.defaultModelId ?? "")
           }}
         >
           {PRESETS.map((candidate, index) => <option key={candidate.label} value={index}>{candidate.label}</option>)}
@@ -191,12 +192,14 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
         <span>模型名</span>
         <input
           value={modelId}
+          aria-label="模型名"
           onChange={(event) => setModelId(event.target.value)}
           aria-invalid={errors.modelId ? true : undefined}
-          aria-describedby={errors.modelId ? "provider-model-error" : undefined}
-          placeholder="gpt-4o-mini"
+          aria-describedby={errors.modelId ? "provider-model-error" : preset.defaultModelId ? "provider-model-hint" : undefined}
+          placeholder={preset.defaultModelId ?? "gpt-4o-mini"}
         />
         {errors.modelId && <small id="provider-model-error" className="provider-field-error" role="alert">{errors.modelId}</small>}
+        {!errors.modelId && preset.defaultModelId && <small id="provider-model-hint" className="provider-field-hint">DeepSeek 官方 Flash 模型 ID 为 {preset.defaultModelId}。</small>}
       </label>
 
       <label className="provider-field provider-field-wide">

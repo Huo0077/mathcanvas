@@ -7,6 +7,7 @@ import { RunStatus } from "./RunStatus"
 import { TranscriptText } from "./TranscriptText"
 import { proofDraftForScene } from "../../agent/proofViewBinding"
 import { useSceneStore } from "../../store"
+import { splitImagePrompt } from "../../services/problemImagePrompt"
 
 /**
  * 展示区：上方预留的**对话结果与代码输出**区域。
@@ -91,11 +92,22 @@ export function AgentMessageList({ conversation, onExample, onRetry, onRevise, o
               {message.pending
                 ? <p className="agent-bubble-pending" role="status">正在生成回复…</p>
                 : message.role === "user"
-                  ? <p className="agent-bubble-text">{message.text}</p>
+                  ? <UserBody text={message.text} />
                   : <AssistantBody message={message} />}
             </div>
           </li>)}
         </ul>}
     </div>
   </section>
+}
+
+function UserBody({ text }: { text: string }) {
+  const { prompt, imageNotes } = splitImagePrompt(text)
+  return <>
+    <p className="agent-bubble-text">{prompt}</p>
+    {imageNotes && <details className="problem-image-observations">
+      <summary>配图参考</summary>
+      <p className="agent-bubble-text">{imageNotes}</p>
+    </details>}
+  </>
 }

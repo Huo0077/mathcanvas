@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { ProviderHealth, ProviderProfile } from "../../services/providerProfileClient"
@@ -131,6 +131,15 @@ async function fillNewProfile(name = "DeepSeek", model = "deepseek-chat", secret
 afterEach(() => cleanup())
 
 describe("adding a model service", () => {
+  it("fills the official DeepSeek Flash model ID and endpoint from its preset", async () => {
+    const { client } = makeClient()
+    render(<ProviderSettings client={client} />)
+    fireEvent.click(await screen.findByRole("button", { name: "添加模型服务" }))
+    fireEvent.change(screen.getByLabelText("预设"), { target: { value: String(PRESETS.findIndex((preset) => preset.label === "DeepSeek")) } })
+    expect((screen.getByLabelText("模型名") as HTMLInputElement).value).toBe("deepseek-flash")
+    expect((screen.getByLabelText("接口地址") as HTMLInputElement).value).toBe("https://api.deepseek.com")
+  })
+
   it("saves the optional model output limit through the actual form", async () => {
     const { client, saved } = makeClient()
     render(<ProviderSettings client={client} />)
@@ -428,6 +437,24 @@ describe("the list of model services", () => {
 
     expect(verifyButton.disabled).toBe(true)
     expect(checked).toEqual([])
+  })
+
+  it("shows the saved HTTP error when no capability could be verified", async () => {
+    const { client } = makeClient({
+      profiles: [profile({ id: "ds", name: "DeepSeek" })],
+      keyed: { ds: true },
+      probe: { ds: { ok: true, health: health({
+        status: "failed",
+        capabilityEvidence: [{
+          feature: "vision", status: "failed",
+          detail: "the image request was rejected: [peer 127.0.0.1] the provider returned 415: raw response"
+        }]
+      }) } }
+    })
+    render(<ProviderSettings client={client} />)
+    fireEvent.click(await screen.findByRole("button", { name: "验证 DeepSeek" }))
+    await waitFor(() => expect(screen.getByText(/DeepSeek 未通过验证。.*HTTP 415/)).toBeTruthy())
+    expect(screen.queryByText(/raw response|已连通/)).toBeNull()
   })
 
   it("updates the badges from verification and reports a failure with its reason", async () => {

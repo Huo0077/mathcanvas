@@ -51,7 +51,26 @@ use crate::{providers, repository, runtime, RepositoryState};
 /// 阻塞它不会卡住界面 —— 而把它写成 `async` 再在里面阻塞，才会真的占住异步线程。
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn provider_run(
+pub async fn provider_run(
+    app: tauri::AppHandle,
+    run_id: String,
+    profile_id: String,
+    profile_revision: u32,
+    messages: Vec<providers::request::ChatMessage>,
+    stream: Option<bool>,
+    tools: Option<Vec<serde_json::Value>>,
+    output_mode: Option<String>,
+    response_schema: Option<serde_json::Value>,
+    max_output_tokens: Option<u32>,
+) -> Result<Vec<serde_json::Value>, serde_json::Value> {
+    // Keep the Tauri event loop available during model inference.
+    tauri::async_runtime::spawn_blocking(move || {
+        run_provider_request(app, run_id, profile_id, profile_revision, messages, stream, tools, output_mode, response_schema, max_output_tokens)
+    }).await.map_err(|_| missing_state("the provider request worker"))?
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_provider_request(
     app: tauri::AppHandle,
     run_id: String,
     profile_id: String,
@@ -64,17 +83,22 @@ pub fn provider_run(
     max_output_tokens: Option<u32>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
-    // 锁**一直持有到这次发送结束**：它保护的是 `ProxyHandle` 的生命周期，
-    // 而句柄正是这次转发的凭据来源。放开锁会让"代理被关掉"与"正在用它的令牌"重叠。
-    let session = proxy.session.lock().map_err(|_| missing_state("the proxy state is poisoned"))?;
-    // 取消句柄从代理的注册表里取（那里是权威的那一份）。没有代理时给一枚孤立句柄：
-    // 它永远不会被置位，于是那次运行会照常跑完 —— 这比"永远取消不了"要好。
-    let cancel = session.as_ref().map(|handle| handle.cancel_handle(&run_id)).unwrap_or_default();
+    let cancel = proxy.session.lock().map_err(|_| missing_state("the proxy state is poisoned"))?
+        .as_ref().map(|handle| handle.cancel_handle(&run_id)).unwrap_or_default();
 
+    let requested_tools = tools.unwrap_or_default();
+    let has_images = messages.iter().any(|message| !message.images.is_empty());
+    if has_images && (!providers::request::valid_image_messages(&messages) || !requested_tools.is_empty()) {
+        return Err(serde_json::json!({ "kind": "failed", "failure": "malformed_output", "message": "invalid image attachments", "retryable": false }));
+    }
     let profile = {
         let state = app.try_state::<ProfileStoreState>().ok_or_else(|| missing_state("the provider store"))?;
         let store = state.store.lock().map_err(|_| missing_state("the provider store is poisoned"))?;
-        store.get(&profile_id).ok_or_else(|| providers::adapter::ProviderError::NotFound { profile_id: profile_id.clone() }.to_json())?
+        let profile = store.get(&profile_id).ok_or_else(|| providers::adapter::ProviderError::NotFound { profile_id: profile_id.clone() }.to_json())?;
+        if has_images && !providers::capability::vision_verified(store.health(&profile_id).as_ref(), profile.revision) {
+            return Err(serde_json::json!({ "kind": "failed", "failure": "permission", "message": "the model has not passed image reading verification", "retryable": false }));
+        }
+        profile
     };
 
     // **工具表的出口判据**（Task 2.3："Do not send a tool schema to providers that failed
@@ -84,7 +108,6 @@ pub fn provider_run(
     // 这里再看一次**存下来的**证据：调用方说"这家支持工具"不算数，跑过一次能力验证才算数。
     // 证据没验过时**不是静默丢掉工具表**，而是拒绝 —— 静默丢掉会让调用方拿到一个"没带工具的请求"，
     // 于是"模型不会用工具"变成一个看起来像模型的问题。
-    let requested_tools = tools.unwrap_or_default();
     let allow_tools = if requested_tools.is_empty() {
         false
     } else {
@@ -118,8 +141,10 @@ pub fn provider_run(
     };
 
     // 留档：`/v1/runs/{runId}/events` 要看得到这一轮产出了什么。
-    if let Some(handle) = session.as_ref() {
-        handle.record_events(&run_id, &events, true);
+    if let Ok(session) = proxy.session.lock() {
+        if let Some(handle) = session.as_ref() {
+            handle.record_events(&run_id, &events, true);
+        }
     }
 
     Ok(events)
@@ -240,7 +265,7 @@ pub fn active_provider_profile(app: tauri::AppHandle) -> Result<Option<String>, 
  *
  * ## 它会花掉几次真请求（如实）
  *
- * 四发：文本、JSON、一张 1×1 的 PNG、一次带工具表的请求。所以这是一个**用户按下去才发生**
+ * 四发：文本、JSON、一张验证码 PNG、一次带工具表的请求。所以这是一个**用户按下去才发生**
  * 的动作，不是打开设置就自动跑的 —— 那会悄悄花掉别人的额度。
  *
  * ## 证据挂在修订号上

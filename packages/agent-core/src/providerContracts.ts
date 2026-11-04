@@ -379,6 +379,8 @@ export function isCapabilityVerified(evidence: readonly ProviderCapabilityEviden
   if (!health || health.profileRevision !== profileRevision) return false
   // Legacy `json` proved prompt compliance, not support for response_format.
   if (feature === "json") return health.capabilityEvidence.some(entry => entry.feature === "json_mode_v1" && entry.status === "verified")
+  // Older vision probes only verified that the provider accepted an image request.
+  if (feature === "vision") return health.capabilityEvidence.some(entry => entry.feature === "vision_read_v1" && entry.status === "verified")
   const fromHealth = health.capabilityEvidence.find((entry) => entry.feature === feature)
   if (fromHealth) return fromHealth.status === "verified"
   return evidence.some((entry) => entry.feature === feature && entry.status === "verified")

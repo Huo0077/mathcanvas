@@ -191,7 +191,7 @@ export async function readActiveProviderProfile(): Promise<ProviderResult<string
  *
  * ## 它会真的花掉四发请求
  *
- * 文本、JSON、一张 1×1 的 PNG、一次带工具表的请求。所以它**只能由用户按下去**，
+ * 文本、JSON、一张印有验证码的 PNG、一次带工具表的请求。所以它**只能由用户按下去**，
  * 不能在打开设置时自动跑 —— 那会悄悄花掉别人的额度。界面上的按钮要写明这一点。
  *
  * ## 与 `readProviderHealth` 的分工

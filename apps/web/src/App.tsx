@@ -299,6 +299,7 @@ export function App() {
    * 切模块时把文档草稿、工作区文档原样留着，所以来回切换不会丢任何几何内容。
    */
   const [activeModule, setActiveModule] = useState<AppModuleId>(DEFAULT_APP_MODULE)
+  const [openImageReader, setOpenImageReader] = useState(false)
   /**
    * 桌面自述（G1 Task 1.1/1.2）。
    *
@@ -689,6 +690,11 @@ export function App() {
    * 接下来多半就是要用命令，留一个空白的命令区只会让他以为切换失败了。
    */
   const handleRibbonCommand = (commandId: string) => {
+    if (commandId === "input-image-conversion") {
+      setOpenImageReader(true)
+      setActiveModule("agent")
+      return
+    }
     const spatialTool = commandId.startsWith("draw-") ? commandId.slice(5) as SpatialTool : null
     if (spatialTool && ["point3", "segment3", "line3", "ray3", "plane3", "face3"].includes(spatialTool) && document.workspace === "geometry3d") {
       startSpatialDrawing(spatialTool)
@@ -992,7 +998,7 @@ export function App() {
         所以"现在在哪个大板块、怎么换回去"永远看得见，而不是藏在 Agent 区内部的一个按钮里。 */}
     <ModuleRail
       activeModule={activeModule}
-      onModuleChange={setActiveModule}
+      onModuleChange={(module) => { setOpenImageReader(false); setActiveModule(module) }}
     />
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       <AppChrome
@@ -1139,7 +1145,8 @@ export function App() {
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}
       <AgentWorkspace
-        onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)}
+        onBackToWorkspace={() => { setOpenImageReader(false); setActiveModule(DEFAULT_APP_MODULE) }}
+        initialImageReaderOpen={openImageReader}
         onRun={runAgentPrompt}
         // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
         onConfirm={(runId) => { agentRunner.confirm(runId) }}

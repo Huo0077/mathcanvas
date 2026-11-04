@@ -31,9 +31,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mathcanvas_desktop_lib::providers::adapter::{ProviderError, SecretSource, Stop, Transport, TransportUpdate};
-use mathcanvas_desktop_lib::providers::capability::{tools_verified, CapabilityStatus, Feature, Probe, PROBE_FEATURES};
+use mathcanvas_desktop_lib::providers::capability::{tools_verified, vision_verified, CapabilityStatus, Feature, Probe, PROBE_FEATURES};
 use mathcanvas_desktop_lib::providers::events::FailureKind;
-use mathcanvas_desktop_lib::providers::request::ProviderRequest;
+use mathcanvas_desktop_lib::providers::request::{valid_image_messages, ChatMessage, ProviderRequest};
 use mathcanvas_desktop_lib::repository::provider_profiles::{ProviderHealth, ProviderProfile};
 
 // ---------------------------------------------------------------- 测试替身
@@ -172,6 +172,7 @@ impl Stop for NoStop {
 fn capable(shape: Shape, request: &ProviderRequest) -> Result<String, ProviderError> {
     match shape {
         Shape::Tools => Ok(sse_tool_call()),
+        Shape::Image => Ok(sse("4728")),
         // JSON 探针由**请求里那句话**认出来（它要的正是一个 JSON 对象）。
         _ if request.body.to_string().contains("JSON object") => Ok(sse("{\"ok\": true}")),
         _ => Ok(sse("pong")),
@@ -269,7 +270,7 @@ fn the_image_probe_carries_a_real_png_on_a_message() {
     let _ = Probe::new(&source, &transport, profile(), stop.as_ref()).run().expect("the profile must be probed");
     let image = transport.request_of(Shape::Image);
 
-    // 一张 1×1 的 PNG 必须真的在请求里（不然"看图"这件事根本没发生）。
+    // 一张带验证码的 PNG 必须真的在请求里。
     let serialized = image.body.to_string();
     assert!(serialized.contains("iVBORw0KGgo"), "the probe must send a real PNG: {serialized}");
     // 消息里存的是**裸 base64**，`data:` 前缀是拼请求时按方言加的（各家位置不同）。
@@ -277,6 +278,37 @@ fn the_image_probe_carries_a_real_png_on_a_message() {
     assert!(!message.images[0].starts_with("data:"), "the prefix belongs to the wire shape, not to the message");
     // OpenAI 兼容的线上形状用 data URL 讲图片在哪。
     assert!(serialized.contains("data:image/png;base64,"), "a compatible endpoint needs the data URL form: {serialized}");
+}
+
+#[test]
+fn image_reading_requires_the_code_and_current_probe_evidence() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let stop = NoStop::new();
+    let good = ByShape::new(capable);
+    let report = Probe::new(&source, &good, profile(), stop.as_ref()).run().expect("probe");
+    assert!(vision_verified(Some(&report.to_health(None)), 4));
+    assert!(!vision_verified(Some(&report.to_health(None)), 5));
+    assert!(!vision_verified(Some(&health(4, "vision", "verified")), 4));
+    let request = good.request_of(Shape::Image);
+    assert!(!request.messages[0].content.contains("4728"));
+
+    let text_only = ByShape::new(|shape: Shape, request: &ProviderRequest| {
+        if shape == Shape::Image { Ok(sse("pong")) } else { capable(shape, request) }
+    });
+    let report = Probe::new(&source, &text_only, profile(), stop.as_ref()).run().expect("probe");
+    assert_eq!(report.evidence(Feature::Vision), Some(CapabilityStatus::Failed));
+    assert!(!vision_verified(Some(&report.to_health(None)), 4));
+}
+
+#[test]
+fn image_input_accepts_only_bounded_png_attachments_on_user_messages() {
+    let png = include_str!("../src/providers/vision_probe.b64").trim().to_string();
+    assert!(valid_image_messages(&[ChatMessage::with_images("user", "read", vec![png.clone(), png.clone()])]));
+    assert!(!valid_image_messages(&[ChatMessage::with_images("user", "read", vec![png.clone(); 3])]));
+    assert!(!valid_image_messages(&[ChatMessage::with_images("assistant", "read", vec![png.clone()])]));
+    assert!(!valid_image_messages(&[ChatMessage::with_images("user", "read", vec![format!("data:image/png;base64,{png}")])]));
+    let oversized = "iVBORw0KGgoA".to_string() + &"A".repeat(5_600_000);
+    assert!(!valid_image_messages(&[ChatMessage::with_images("user", "read", vec![oversized])]));
 }
 
 #[test]
@@ -500,6 +532,10 @@ fn the_health_record_says_degraded_when_something_is_failed_and_never_says_ok_fo
     });
     let report = Probe::new(&source, &broken, profile(), stop.as_ref()).run().expect("the profile must be probed");
     assert_eq!(report.to_health(None).status, "degraded", "a failed capability must not read as healthy");
+
+    let rejected = ByShape::new(|_: Shape, _: &ProviderRequest| Err(http_failure(415)));
+    let report = Probe::new(&source, &rejected, profile(), stop.as_ref()).run().expect("a report must come back");
+    assert_eq!(report.to_health(None).status, "failed", "a rejected request must not read as partially usable");
 
     // **什么都没验出来时不许报 ok**：一次什么都没测成的检查显示成绿灯是最坏的读数。
     let nothing = FakeSource { secret: None };

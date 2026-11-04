@@ -27,7 +27,7 @@
 //!
 //! ## 探针的请求形状是**我们控制**的一件事，所以它也要被测
 //!
-//! 图片探针会真的发一张 1×1 的 PNG；工具探针会真的带工具表并设 `tool_choice`。
+//! 图片探针会发一张印有验证码的 PNG；工具探针会带工具表并设 `tool_choice`。
 //! 不强制工具时模型会跟你聊天，于是"没有工具调用"这个观测毫无意义 —— 而它会被
 //! 读成"不支持工具"。所以 `tests/provider_capability.rs` 连**请求形状**一起断言。
 //!
@@ -144,7 +144,9 @@ impl ProbeReport {
         // 全是 `unknown` 时**不报 ok** —— 什么都没验出来的检查不该显示成绿灯。
         let failed = self.evidence.iter().any(|entry| entry.status == CapabilityStatus::Failed);
         let verified = self.evidence.iter().filter(|entry| entry.status == CapabilityStatus::Verified).count();
-        let status = if failed {
+        let status = if failed && verified == 0 {
+            "failed"
+        } else if failed {
             "degraded"
         } else if verified > 0 {
             "ok"
@@ -156,6 +158,9 @@ impl ProbeReport {
             // A versioned marker distinguishes actual JSON-mode probes from legacy text probes.
             capability_evidence.push(CapabilityEvidence { feature: "json_mode_v1".to_string(), ..json });
         }
+        if let Some(vision) = capability_evidence.iter().find(|entry| entry.feature == "vision").cloned() {
+            capability_evidence.push(CapabilityEvidence { feature: VISION_READ_EVIDENCE.to_string(), ..vision });
+        }
         ProviderHealth {
             status: status.to_string(),
             latency_ms,
@@ -166,11 +171,10 @@ impl ProbeReport {
     }
 }
 
-/// 一张 **1×1 的 PNG**（白色）。base64，不带 `data:` 前缀。
-///
-/// 为什么是一张**真实存在**的图而不是随便一串字节：形状不对的话 provider 会在解析
-/// 图片时就 400，于是"看图"这件事根本没被测到，而我们得到的是一个假的 `failed`。
-const ONE_PIXEL_PNG_BASE64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+// The code is visible in the PNG and must never appear in the request text.
+const VISION_PROBE_PNG: &str = include_str!("vision_probe.b64");
+const VISION_PROBE_CODE: &str = "4728";
+const VISION_READ_EVIDENCE: &str = "vision_read_v1";
 
 /// 工具探针用的工具名。**带 `probe` 字样**：它在观测里出现时，
 /// 我们能确认那确实是"拿到了我们的工具表"，而不是模型自己编了个函数名。
@@ -236,12 +240,12 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> Probe<'a, S, T> {
             Evidence { feature: Feature::Json, status: CapabilityStatus::Unknown, detail: "JSON mode is not implemented for this protocol; use verified native tools".to_string() }
         } else { json_evidence(&json, json_ok) });
 
-        // 图片：发一张真的 1×1 PNG。
+        // 图片：只有从图里读对验证码，才算真的看到了图。
         //
         // 顺序上**排在工具探针之前**，理由是它与工具探针在有些 provider 上互斥
         //（带图 + 强制工具会 400）—— 而这里要的是"图片这件事单独能不能成"。
         let vision = self.send(
-            vec![ChatMessage::with_images("user", "Reply with the single word: white. Do not explain.", vec![ONE_PIXEL_PNG_BASE64.to_string()])],
+            vec![ChatMessage::with_images("user", "Read the four digits printed in the image. Reply with only those digits.", vec![VISION_PROBE_PNG.trim().to_string()])],
             RequestOptions { allow_tools: false, tools: Vec::new(), force_tool: false, tool_choice_field: None, ..RequestOptions::default() }
         );
         // 这一条的判据与别的不同：图片请求的**形状是我们拼的**，所以被 400/422 拒
@@ -371,6 +375,12 @@ pub fn tools_verified(health: Option<&ProviderHealth>, revision: u32) -> bool {
         .any(|evidence| evidence.feature == Feature::Tools.key() && evidence.status == "verified")
 }
 
+pub fn vision_verified(health: Option<&ProviderHealth>, revision: u32) -> bool {
+    health.is_some_and(|health| health.profile_revision == revision && health.capability_evidence.iter().any(|evidence| {
+        evidence.feature == VISION_READ_EVIDENCE && evidence.status == "verified"
+    }))
+}
+
 /// 这次失败对"支不支持某个能力"**说明不了任何事**吗。///
 /// 认证、权限、连接失败都属于这一类：它们说的是"这次请求没成"，不是"这个能力不行"。
 /// 把它们记成 `failed` 会让界面建议用户换模型 —— 而真正该做的是去设置里换密钥。
@@ -417,8 +427,8 @@ fn tools_evidence(result: &Result<Vec<ModelEvent>, ProviderError>, ok: bool) -> 
 /// 而认证/连接一类仍然是 `unknown`。
 fn vision_evidence(result: &Result<Vec<ModelEvent>, ProviderError>) -> Evidence {
     match result {
-        Ok(events) if replied_with_text(events) => Evidence { feature: Feature::Vision, status: CapabilityStatus::Verified, detail: "the provider answered a request that carried an image".to_string() },
-        Ok(_) => Evidence { feature: Feature::Vision, status: CapabilityStatus::Failed, detail: "the provider returned an empty reply to the image request".to_string() },
+        Ok(events) if joined_text(events).trim() == VISION_PROBE_CODE => Evidence { feature: Feature::Vision, status: CapabilityStatus::Verified, detail: "the provider read the verification code in the image".to_string() },
+        Ok(_) => Evidence { feature: Feature::Vision, status: CapabilityStatus::Failed, detail: "the provider did not read the verification code in the image".to_string() },
         Err(error) if inconclusive(error) => Evidence { feature: Feature::Vision, status: CapabilityStatus::Unknown, detail: format!("the probe could not reach the provider: {}", error.message()) },
         Err(error) => Evidence { feature: Feature::Vision, status: CapabilityStatus::Failed, detail: format!("the image request was rejected: {}", error.message()) },
     }
