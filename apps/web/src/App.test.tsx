@@ -598,7 +598,7 @@ describe("MathCanvas workbench", () => {
     fireEvent.click(screen.getAllByText("参数直线")[0])
 
     expect(screen.getByRole("region", { name: "属性检查器" })).toBeTruthy()
-    expect(screen.getByText("当前图元")).toBeTruthy()
+    expect((screen.getByRole("textbox", { name: "图元名称" }) as HTMLInputElement).value).toBe("参数直线")
     expect(screen.getByRole("button", { name: "外观样式" })).toBeTruthy()
     expect(screen.getByText("直线", { selector: ".property-type-badge" })).toBeTruthy()
   })

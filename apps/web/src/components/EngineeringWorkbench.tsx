@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react"
 
 import type { GeometryDocument } from "@draw/dsl"
+import { InspectorResizeHandle } from "./InspectorResizeHandle"
 
 export type CadMode = "projection" | "draft"
 
@@ -13,6 +14,8 @@ interface EngineeringWorkbenchProps {
   leftDock: ReactNode
   canvas: ReactNode
   inspector: ReactNode
+  inspectorWidth?: number
+  onInspectorResize?: (width: number) => void
   statusBar: ReactNode
 }
 
@@ -21,7 +24,7 @@ const modes: { value: CadMode; label: string }[] = [
   { value: "draft", label: "2D 绘图" }
 ]
 
-export function EngineeringWorkbench({ document, mode, onModeChange, commandBar, leftDock, canvas, inspector, statusBar }: EngineeringWorkbenchProps) {
+export function EngineeringWorkbench({ document, mode, onModeChange, commandBar, leftDock, canvas, inspector, inspectorWidth, onInspectorResize, statusBar }: EngineeringWorkbenchProps) {
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
@@ -45,7 +48,8 @@ export function EngineeringWorkbench({ document, mode, onModeChange, commandBar,
     <div className="workbench-body">
       {leftOpen && <div className="workbench-dock workbench-dock-left" role="region" aria-label="模型与图纸树">{leftDock}</div>}
       <div className="workbench-canvas-slot" role="region" aria-label="工程图视口">{canvas}</div>
-      {rightOpen && <div className="workbench-dock workbench-dock-right" role="region" aria-label="工程属性检查器">{inspector}</div>}
+      {rightOpen && <div id="engineering-properties-dock" className="workbench-dock workbench-dock-right" role="region" aria-label="工程属性检查器">{inspector}</div>}
+      {rightOpen && inspectorWidth !== undefined && onInspectorResize && <InspectorResizeHandle controls="engineering-properties-dock" width={inspectorWidth} onResize={onInspectorResize} />}
     </div>
     <div className="workbench-status-region" role="region" aria-label="工程状态栏">{statusBar}</div>
   </div>

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { commandButton } from "./command-menu"
 
 /**
  * 由动点引申出来的图元要成为一等图元（用户口径）：
@@ -14,8 +15,6 @@ import { expect, test } from "@playwright/test"
  */
 test("intersects a tangent with a line and measures the angle and the circle's area", async ({ page }) => {
   await page.goto("/")
-  const ribbon = page.getByRole("region", { name: "功能区" })
-  await page.getByRole("button", { name: "固定功能区" }).click()
   const algebra = page.locator(".algebra-panel")
   const canvas = page.locator("svg[aria-label='几何画布']")
 
@@ -36,7 +35,7 @@ test("intersects a tangent with a line and measures the angle and the circle's a
   }
 
   // 圆 1：先点出来，再改成圆心 (0,0)、半径 2（参数 0 的切点是 (2,0) ⇒ 切线竖直 x=2）。
-  await ribbon.getByRole("button", { name: "添加圆", exact: true }).click()
+  await (await commandButton(page, "添加圆")).click()
   await clickAt(0.35, 0.5)
   await clickAt(0.45, 0.5)
   await select("圆 1")
@@ -72,7 +71,7 @@ test("intersects a tangent with a line and measures the angle and the circle's a
   // 直线 1：改成水平 y=2.5，从 x=-5 到 x=5。
   // 刻意选 2.5 而不是 1：它**穿过切线**（切线半长 3，覆盖 y∈[-3,3]）但**不穿过圆**（半径 2），
   // 于是"画布上有交点"这件事只可能由切线产生 —— 切线不支持求交时这个计数必然是 0。
-  await ribbon.getByRole("button", { name: "添加直线", exact: true }).click()
+  await (await commandButton(page, "添加直线")).click()
   await clickAt(0.2, 0.75)
   await clickAt(0.8, 0.75)
   await select("直线 1")

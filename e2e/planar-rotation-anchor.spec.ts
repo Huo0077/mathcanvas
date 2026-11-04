@@ -124,6 +124,7 @@ test("anchors a circle on a selected point and keeps it there while rotating", a
   await expect(command).toBeDisabled()
   await algebraRow("P").click()
   await algebraRow("圆 c").click({ modifiers: ["Shift"] })
+  await commandButton(page, "绕定点旋转")
   await expect(command).toBeEnabled()
   // 状态栏得说出这件事，否则用户不知道有这个能力。
   await expect(page.getByRole("status", { name: "操作提示" })).toContainText("绕定点旋转")
@@ -150,7 +151,10 @@ test("anchors a circle on a selected point and keeps it there while rotating", a
   for (let step = 0; step < 24; step += 1) {
     const circleBox = (await svg.locator('[data-primitive-type="circle"] circle:not([data-hit-target]):not([data-shape-centre])').first().boundingBox())!
     const onCurve = { x: circleBox.x + circleBox.width / 2, y: circleBox.y + circleBox.height }
-    const pivot = await pointAttributes("P")
+    const pivot = await svg.locator('[data-primitive-type="point"]', { hasText: "P" }).locator("circle:not([data-hit-target])").first().evaluate((point: SVGCircleElement) => {
+      const position = new DOMPoint(point.cx.baseVal.value, point.cy.baseVal.value).matrixTransform(point.getScreenCTM()!)
+      return { x: position.x, y: position.y }
+    })
     // 从定点指向圆周上那一点，取其垂直方向作为切向（圆周运动的一步）。
     const outward = { x: onCurve.x - pivot.x, y: onCurve.y - pivot.y }
     const length = Math.hypot(outward.x, outward.y) || 1
@@ -167,6 +171,7 @@ test("anchors a circle on a selected point and keeps it there while rotating", a
   await expect.poll(() => distancePivotToCenter("P")).toBeCloseTo(turnedCircle.r, 1)
   expect(Math.hypot(turnedCircle.cx - beforeCircle.cx, turnedCircle.cy - beforeCircle.cy)).toBeGreaterThan(5)
   // 转角读数不再是 0。
+  await algebraRow("圆 c").click()
   await expect(page.getByRole("spinbutton", { name: "绕定点转角" })).not.toHaveValue("0")
 })
 

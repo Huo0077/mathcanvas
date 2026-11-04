@@ -24,6 +24,7 @@ import { useThreeSceneEffect, type DragSessionState, type PointerState, type Thr
 export interface ThreeSceneViewProps {  document: GeometryDocument
   selectedIds: string[]
   onSelect: (id: string | null, additive?: boolean) => void
+  onCanvasContextMenu?: (event: { clientX: number; clientY: number; targetId: string | null }) => void
   creationSession?: SpatialCreationSession | null
   solidWizardOpen?: boolean
   ghostActive?: boolean
@@ -59,7 +60,7 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, ghostActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContextMenu, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, ghostActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -381,6 +382,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect, creationSessio
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
   return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} data-ghost-active={ghostActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, false, document))} aria-label="3D 几何场景"
+    onContextMenu={(event) => {
+      if (!isCreationCanvasTarget(event.target)) return
+      event.preventDefault()
+      if (solidWizardOpen || ghostActive) return
+      if (creationSession) {
+        creationPressRef.current = null
+        onCancelCreation?.()
+        return
+      }
+      const { clientX, clientY, altKey } = event
+      const targetId = runtimeRef.current?.pickContextTarget(clientX, clientY, altKey) ?? null
+      onCanvasContextMenu?.({ clientX, clientY, targetId })
+    }}
     onPointerDownCapture={(event) => {
       if (!creationSession || event.button !== 0 || event.shiftKey || !isCreationCanvasTarget(event.target)) return
       event.stopPropagation()

@@ -167,6 +167,41 @@ async function readPointPosition(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `坐标 ${axis}` }).inputValue())))
 }
 
+test("direct drag follows the visible orbit and commits one undo step", async ({ page }) => {
+  await page.goto("/")
+  await page.getByRole("button", { name: "立体几何" }).click()
+  const algebra = page.locator(".algebra-panel")
+  await (await commandButton(page, "添加空间点")).click()
+  await (await commandButton(page, "添加空间点")).click()
+  await algebra.getByText("A", { exact: true }).click()
+  await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
+  await (await commandButton(page, "添加空间圆轨道")).click()
+  await (await commandButton(page, "添加空间点")).click()
+
+  const binding = page.getByRole("combobox", { name: "点宿主绑定" })
+  const orbit = binding.locator("option").filter({ hasText: "圆轨道" })
+  await binding.selectOption((await orbit.getAttribute("value"))!)
+  const slider = page.getByRole("slider", { name: "宿主滑轨" })
+  expect(Number(await slider.getAttribute("max"))).toBeCloseTo(2 * Math.PI, 8)
+  await page.getByRole("button", { name: "90°", exact: true }).click()
+  const [x, y, z] = await readPointPosition(page)
+  await page.getByRole("button", { name: "0°", exact: true }).click()
+  const before = await readPointPosition(page)
+  const start = await projectWorldPoint(page, { x: before[0], y: before[1], z: before[2] })
+  const target = await projectWorldPoint(page, { x, y, z })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(target.x, target.y, { steps: 16 })
+  const scene = page.locator("[data-3d-scene]")
+  await expect(scene).toHaveAttribute("data-host-residual", "0.000000")
+  expect(Number(await scene.getAttribute("data-drag-parameter"))).toBeCloseTo(Math.PI / 2, 2)
+  await page.mouse.up()
+  const after = await readPointPosition(page)
+  expect(Math.hypot(after[0] - x, after[1] - y, after[2] - z)).toBeLessThan(0.02)
+  await page.keyboard.press("Control+z")
+  expect(await readPointPosition(page)).toEqual(before)
+})
+
 /** 选中圆轨道后检查器里的圆心坐标读数（圆心现在是可编辑的**真实字段**）。 */
 async function readCircleCentre(page: Page): Promise<number[]> {
   return Promise.all(["X", "Y", "Z"].map(async (axis) => Number(await page.getByRole("spinbutton", { name: `圆心 ${axis}` }).inputValue())))

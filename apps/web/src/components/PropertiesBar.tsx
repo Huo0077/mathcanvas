@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { tangentAnchorLabel } from "../curveTangents"
 import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec } from "@draw/dsl"
-import { functionPresets } from "@draw/geometry-kernel"
+import { functionPresets, host3FromPrimitive } from "@draw/geometry-kernel"
 import { type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
@@ -109,6 +109,13 @@ export function PropertiesBar(props: PropertiesBarProps) {
   const {
     selectedPoint, selectedPoint3, point3Binding, selectedLinear, selectedLinear3, selectedPolyline, selectedParabola, selectedEllipseOrHyperbola, selectedFunction, selectedCircleOrArc, selectedPlacedCurve, selectedSolid, selectedPolyhedron3, polyhedron3Metrics, selectedPlane3, selectedSection, selectedIntersectionLine, selectedIntersectionSolid, selectedIntersectionFace, selectedIntersectionPoint, sourceLabel, selectedDerivedPoint, selectedIntersection, selectedSlope, showSlopeParameter, editable, expressionDraft, selectedFunctionPresetId, expressionError, logBase, setLogBase, formulaRef, annotationText, setAnnotationText, sceneDocument, selectedCircle3, selectedFace3, face3Metrics, objectOrientationNormal, applySceneOperation, derivedReadings, pointHasMovingCircle, annotationOptions, selectedAnnotations, pathPrimitives, selectedPointBinding, selectedPointWindow, pointTangentSource, selectedCenterDrivenCircle, radiusDriverCandidates, updateRadiusDriver, updateRadiusFactor, selectedCurveTangent, tangentAnchorParameters, tangentAnchorPoints, updateTangentParameter, updateTangentAnchorPoint, updateTangentLength, setTangentAnchorKind, selectedFacePair, visibleMeasurementOptions, engineeringAnnotationOptions, updatePoint, updatePoint3, updatePointBinding, updatePointParameter, createLocus, updateCenter, updateEndpoint, updateSlope, updatePolylinePoint, updateFunctionDomain, updateConicCenter, updateParabolaVertex, updateRotation, updatePlacementAngle, updatePlacementPivot, updateMovingRadius, parabolaFocus, conicFoci, ellipseMetrics, hyperbolaMetrics, arcAngle, updateFunctionExpression, applyFunctionPreset, insertFunctionTemplate, functionMetrics
   } = useInspectorModel(props)
+  const linearBinding = point3Binding?.kind === "onHost" || point3Binding?.kind === "onLine" ? point3Binding : null
+  const spatialHost = linearBinding && sceneDocument.primitives.find((primitive) =>
+    primitive.id === (linearBinding.kind === "onHost" ? linearBinding.hostId : linearBinding.lineId))
+  const spatialDomain = spatialHost ? host3FromPrimitive(spatialHost, sceneDocument.primitives)?.domain : undefined
+  const orbit = spatialDomain?.closedU === true
+  const sliderMin = spatialDomain && Number.isFinite(spatialDomain.u[0]) ? spatialDomain.u[0] : Math.min(0, Math.floor(linearBinding?.parameter ?? 0))
+  const sliderMax = spatialDomain && Number.isFinite(spatialDomain.u[1]) ? spatialDomain.u[1] : Math.max(1, Math.ceil(linearBinding?.parameter ?? 1))
   const teachingLine = sceneDocument.workspace === "geometry3d" && ["line3", "segment3", "ray3", "edge3"].includes(selectedPrimitive?.type ?? "")
   const showLineStyle = sceneDocument.workspace !== "geometry3d" || teachingLine
   const lineStyleLabel = teachingLine ? "教学线型" : "线型"
@@ -271,21 +278,23 @@ export function PropertiesBar(props: PropertiesBarProps) {
           <input
             aria-label="宿主滑轨"
             type="range"
-            min={0}
-            max={1}
-            step={0.005}
+            min={sliderMin}
+            max={sliderMax}
+            step="any"
             disabled={!editable}
             value={point3Binding.parameter}
             onChange={(event) => onChangeHostParameter?.(numberValue(event))}
           />
         </div>
-        <div className="preset-pills">
+        {orbit ? <div className="preset-pills" aria-label="圆轨道快捷角度">
+          {[0, 90, 180, 270].map((degrees) => <button type="button" key={degrees} disabled={!editable} onClick={() => onChangeHostParameter?.(degrees * Math.PI / 180)}>{degrees}°</button>)}
+        </div> : <div className="preset-pills">
           <button type="button" aria-label="起点 0" disabled={!editable} onClick={() => onChangeHostParameter?.(0)}>起点 0</button>
           <button type="button" aria-label="分段 1/4" disabled={!editable} onClick={() => onChangeHostParameter?.(0.25)}>1/4</button>
           <button type="button" aria-label="中点 0.5" disabled={!editable} onClick={() => onChangeHostParameter?.(0.5)}>中点 0.5</button>
           <button type="button" aria-label="分段 3/4" disabled={!editable} onClick={() => onChangeHostParameter?.(0.75)}>3/4</button>
           <button type="button" aria-label="终点 1" disabled={!editable} onClick={() => onChangeHostParameter?.(1)}>终点 1</button>
-        </div>
+        </div>}
         <div className="property-actions">
           <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
         </div>
@@ -767,7 +776,6 @@ export function PropertiesBar(props: PropertiesBarProps) {
     {selectedPrimitive && <div className="inspector-selected-heading">
       <div className="inspector-selected-identity">
         <div className="inspector-selected-meta">
-          <span className="panel-kicker">当前图元</span>
           <span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span>
         </div>
         <h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3>

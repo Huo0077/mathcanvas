@@ -61,6 +61,11 @@ interface GraphicsViewProps {
 
 /** Pointer position in the SVG's own coordinate system, which is fixed by `viewBox` and independent of zoom. */
 function pointToSvg(svg: SVGSVGElement, clientX: number, clientY: number): Coordinate {
+  const matrix = svg.getScreenCTM?.()
+  if (matrix && typeof DOMPoint !== "undefined") {
+    const point = new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+    if (Number.isFinite(point.x) && Number.isFinite(point.y)) return { x: point.x, y: point.y }
+  }
   const bounds = svg.getBoundingClientRect()
   const width = bounds.width || VIEWBOX.width
   const height = bounds.height || VIEWBOX.height
@@ -428,14 +433,13 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
    * 只在创建模式里生效：选择 / 拖动的拾取规则一字不变。
    */
   const snapCandidates = useMemo(() => creationMode ? snapCandidatesOf(displayPrimitives, intersectionPreviews) : [], [creationMode, displayPrimitives, intersectionPreviews])
-  const snapTarget = creationMode && hoverCoordinate ? creationSnapTarget(snapCandidates, hoverCoordinate, viewport.scale) : null
-  const snapCoordinate = (coordinate: Coordinate) => {
-    const pointTarget = creationSnapTarget(snapCandidates, coordinate, viewport.scale)
-    if (pointTarget) return pointTarget
-    const curveTarget = findNearestCurveTarget(document, coordinate, viewport.scale, { snapRadiusPx: 14 })
-    if (curveTarget) return curveTarget.point
-    return coordinate
-  }
+  const pointSnap = creationMode && hoverCoordinate ? creationSnapTarget(snapCandidates, hoverCoordinate, viewport.scale) : null
+  const curveSnap = useMemo(() => creationMode && hoverCoordinate && !pointSnap
+    ? findNearestCurveTarget(document, hoverCoordinate, viewport.scale, { snapRadiusPx: 14 })
+    : null, [creationMode, hoverCoordinate, pointSnap, document, viewport.scale])
+  const snapTarget = pointSnap ?? (creationMode === "point" ? null : curveSnap?.point ?? null)
+  const snapCoordinate = (coordinate: Coordinate) => creationSnapTarget(snapCandidates, coordinate, viewport.scale)
+    ?? findNearestCurveTarget(document, coordinate, viewport.scale, { snapRadiusPx: 14 })?.point ?? coordinate
   const activeCurveSnap = useMemo(() => {
     if (dragState && dragCurrent) {
       const dragged = document.primitives.find((p) => p.id === dragState.id)
@@ -443,12 +447,9 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
         return findNearestCurveTarget(document, dragCurrent, viewport.scale, { snapRadiusPx: 14, draggedPointId: dragged.id })
       }
     }
-    if (creationMode === "point" && hoverCoordinate && !snapTarget) {
-      return findNearestCurveTarget(document, hoverCoordinate, viewport.scale, { snapRadiusPx: 14 })
-    }
-    return null
-  }, [dragState, dragCurrent, creationMode, hoverCoordinate, snapTarget, document, viewport.scale])
-  const creationPointer = creationMode && hoverCoordinate ? snapTarget ?? hoverCoordinate : null
+    return creationMode === "point" ? curveSnap : null
+  }, [dragState, dragCurrent, creationMode, curveSnap, document, viewport.scale])
+  const creationPointer = creationMode && hoverCoordinate ? pointSnap ?? curveSnap?.point ?? hoverCoordinate : null
   const creationShapes = creationMode ? creationPreviewShapes(creationStep, creationPointer, Math.hypot(worldBounds.maxX - worldBounds.minX, worldBounds.maxY - worldBounds.minY) * 2) : []
   const handleObjectClick = (event: ReactMouseEvent<SVGElement>, id: string) => {
     event.stopPropagation()
@@ -629,9 +630,9 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
    */
   const handlePreviewClick = (event: React.MouseEvent<SVGGElement>, preview: IntersectionPreview) => {
     event.stopPropagation()
-    // 正在拉橡皮筋（已有第一点）时点到交点预览 = 把线 / 圆的端点落在这个交点上；否则点预览 = 固化该交点图元。
+    // 已经放下首点时，点击交点标记用它确定下一步；否则保留点击标记创建交点的行为。
     const isMidCreation = creationMode && creationMode !== "point" && Boolean(creationStep?.center || (creationStep?.points && creationStep.points.length > 0))
-    if (isMidCreation) { onCanvasClick({ x: preview.point.x, y: preview.point.y }); return }
+    if (isMidCreation) { onCanvasClick(preview.point); return }
     const svg = event.currentTarget.ownerSVGElement
     // jsdom 的 SVG 元素没有 `getScreenCTM` / `DOMPoint`：那里退回"被点到的那个"，
     // 浏览器里才用 CTM 把光标换算进 SVG 坐标系做就近判定。

@@ -7,7 +7,45 @@
 import * as THREE from "three"
 import type { GeometryDocument } from "@draw/dsl"
 import { getDependencyIndex, isRotatable3, managedPointIds, templateTopologyIds } from "@draw/scene-graph"
-import { circleHost3, templateSolidPivot } from "@draw/geometry-kernel"
+import { circleHost3, templateSolidPivot, type Host3 } from "@draw/geometry-kernel"
+
+/** Match the pointer to the visible projection of the orbit, including tilted and edge-on views. */
+export function orbitParameterAt(camera: THREE.PerspectiveCamera, host: Host3, pointer: { x: number; y: number }, previous: number): number {
+  const turn = 2 * Math.PI
+  const projected = new THREE.Vector3()
+  const score = (u: number) => {
+    const { x, y, z } = host.evaluate({ u })
+    projected.set(x, y, z).project(camera)
+    const dx = ((projected.x + 1) / 2 - pointer.x) * camera.aspect
+    const dy = (1 - projected.y) / 2 - pointer.y
+    // Prefer the current branch when two parts of an edge-on circle overlap on screen.
+    return dx * dx + dy * dy + 1e-6 * (1 - Math.cos(u - previous))
+  }
+  let step = turn / 48
+  let best = previous
+  let cost = score(best)
+  for (let index = 1; index < 48; index += 1) {
+    const candidate = previous + index * step
+    const distance = score(candidate)
+    if (distance < cost) {
+      best = candidate
+      cost = distance
+    }
+  }
+  for (let refinement = 0; refinement < 11; refinement += 1) {
+    step /= 2
+    const left = score(best - step)
+    const right = score(best + step)
+    if (left < cost && left <= right) {
+      best -= step
+      cost = left
+    } else if (right < cost) {
+      best += step
+      cost = right
+    }
+  }
+  return ((best % turn) + turn) % turn
+}
 
 /**
  * 自由拖动：被拖对象在屏幕平面上的落点。

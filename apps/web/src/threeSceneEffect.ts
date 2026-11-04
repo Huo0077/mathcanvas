@@ -66,7 +66,7 @@ import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "r
 import * as THREE from "three"
 
 import type { Point3Primitive, SectionPrimitive } from "@draw/dsl"
-import { pickRaycastHit3 } from "./threePicking"
+import { pickRaycastHit3, resolveSelectableHit } from "./threePicking"
 import { resolveSpatialAnchor, type SpatialPickResult, type WorkPlane } from "./spatialPick"
 import { updateThreeCreationPreview } from "./threeCreationPreview"
 import type { SpatialCreationSession } from "./spatialCreationSession"
@@ -134,6 +134,7 @@ export interface DragSessionState {
    * 坐标来自 evaluator —— 与 2D 的动点是同一条"参数是唯一真值"的路子。
    */
   reactiveHost?: { graph: reactive.ReactiveGraph; pointId: string; parameterIds: readonly [string, string, string] }
+  orbitGrabOffset?: { x: number; y: number }
   /**
    * 拖动**旋转环**：这次转的是哪根世界轴、枢轴在哪、已经转到哪儿，以及画面上要跟着转的族。
    * 与平移共用同一个会话（一次拖动仍然只提交一步），只是几何含义不同。
@@ -165,6 +166,7 @@ import type { ThreeSceneViewProps } from "./threeScene"
 
 export interface ThreeSceneRuntime {
   syncContent: () => void
+  pickContextTarget: (clientX: number, clientY: number, keepSubElement: boolean) => string | null
   resolveCreationAnchorAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
   previewCreationAt: (clientX: number, clientY: number, workPlane: WorkPlane) => SpatialPickResult
   syncCreationPreview: () => void
@@ -449,6 +451,10 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
       render()
     }
     runtimeRef.current = {
+      pickContextTarget: (clientX, clientY, keepSubElement) => {
+        const hit = pickRaycastHit3(scene, camera, pointFromEvent({ clientX, clientY }), { tolerance: pickTolerance() })
+        return resolveSelectableHit(hit?.primitiveId ?? null, topologyOwners, keepSubElement)
+      },
       resolveCreationAnchorAt: resolveCreationAt,
       previewCreationAt: (clientX, clientY, workPlane) => {
         creationHover = resolveCreationAt(clientX, clientY, workPlane)
@@ -492,7 +498,7 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
         }
       }
     }
-    const pointFromEvent = (event: PointerEvent) => {
+    const pointFromEvent = (event: Pick<MouseEvent, "clientX" | "clientY">) => {
       const bounds = renderer.domElement.getBoundingClientRect()
       return { x: (event.clientX - bounds.left) / Math.max(bounds.width, 1), y: (event.clientY - bounds.top) / Math.max(bounds.height, 1) }
     }

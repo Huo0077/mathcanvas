@@ -220,7 +220,7 @@ describe("Block 5: Canvas Context Menu & Hotkey Integration in App", () => {
     expect(screen.getByText("几何画布")).toBeTruthy()
 
     // Close menu by pressing Escape
-    fireEvent.keyDown(window, { key: "Escape" })
+    fireEvent.keyDown(canvasMenu, { key: "Escape" })
     expect(screen.queryByRole("menu", { name: "画布上下文菜单" })).toBeNull()
   })
 

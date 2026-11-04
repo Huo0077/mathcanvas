@@ -1,9 +1,11 @@
 import { SettingsWorkspace } from "./components/settings/SettingsWorkspace"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
 import { decodeMgeo, type DrawingSheetSpec, type PrimitiveSpec, type Vector3, type Workspace } from "@draw/dsl"
 import { commitPatch, commitTransaction, cascadeDeletionClosure } from "@draw/scene-graph"
 import { ContextMenu, type ContextMenuPosition, type ContextMenuTargetPrimitive } from "./components/ContextMenu"
+import { InspectorResizeHandle } from "./components/InspectorResizeHandle"
+import { loadInspectorWidth, saveInspectorWidth } from "./persistence/inspectorWidth"
 import { InlineRenameInput } from "./components/InlineRenameInput"
 import type { DomainOperation } from "@draw/scene-graph"
 
@@ -216,6 +218,11 @@ export function App() {
   const [activeCommand, setActiveCommand] = useState<string | null>(null)
   const [leftDockOpen, setLeftDockOpen] = useState(true)
   const [rightDockOpen, setRightDockOpen] = useState(true)
+  const [inspectorWidth, setInspectorWidth] = useState(loadInspectorWidth)
+  const resizeInspector = (width: number) => {
+    setInspectorWidth(width)
+    saveInspectorWidth(width)
+  }
   const [contextMenuState, setContextMenuState] = useState<{
     position: ContextMenuPosition
     targetId: string | null
@@ -717,11 +724,7 @@ export function App() {
   }
 
   const handleCanvasContextMenu = ({ clientX, clientY, targetId }: { clientX: number; clientY: number; targetId: string | null }) => {
-    if (targetId) {
-      if (!selectedIds.includes(targetId)) {
-        setSelectedIds([targetId])
-      }
-    }
+    if (targetId) setSelectedIds([targetId])
     setContextMenuState({ position: { x: clientX, y: clientY }, targetId })
   }
 
@@ -977,11 +980,11 @@ export function App() {
     commandBar={null}
     leftDock={documentTreePanel}
     canvas={cadCanvas}
-    inspector={cadInspector}
+    inspector={cadInspector} inspectorWidth={inspectorWidth} onInspectorResize={resizeInspector}
     statusBar={<StatusBar commandPrompt={cadStatusPrompt} activeLayerName={activeLayerName} unit="mm" scale={activeSheetScale} diagnosticCount={cadDiagnosticCount} notice={layerNotice} />}
   />
 
-  return <div className="app-shell" data-app-module={activeModule}>
+  return <div className="app-shell" data-app-module={activeModule} style={{ "--inspector-width": `${inspectorWidth}px` } as CSSProperties}>
     {/* 纸纹滤镜的定义。放在 App 里（而不是只放在入口）是因为整个界面的 CSS 都引用 `#paper-grain`，
         任何渲染 App 的地方（含测试与嵌入）都必须有这份定义，否则纹理层会渲染成空白。 */}
     <PaperTexture />
@@ -1031,7 +1034,7 @@ export function App() {
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
         </div>
         {algebraPanel}
-        {document.workspace === "geometry3d" ? <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+        {document.workspace === "geometry3d" ? <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
           const primitive = document.primitives.find((candidate) => candidate.id === id)
           if (primitive?.type !== "point3" || !primitive.binding) return
           // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
@@ -1041,6 +1044,7 @@ export function App() {
           else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
         }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
         {inspectorPanel}
+        {rightDockOpen && <InspectorResizeHandle controls="properties-dock" width={inspectorWidth} onResize={resizeInspector} />}
         <CopilotDrawer
           open={copilotOpen}
           onClose={() => setCopilotOpen(false)}
@@ -1063,7 +1067,7 @@ export function App() {
               if (!contextMenuState.targetId) return
               const p = document.primitives.find((item) => item.id === contextMenuState.targetId)
               if (!p) return
-              const pos = getPrimitiveScreenPosition(p.id)
+              const pos = contextMenuState.position
               setRenamingState({
                 primitiveId: p.id,
                 position: pos,
@@ -1100,7 +1104,7 @@ export function App() {
             onUndo={undo}
             onRedo={redo}
             onSelectAll={() => setSelectedIds(document.primitives.filter((p) => p.visible !== false).map((p) => p.id))}
-            onSelectTool={handleContextMenuSelectTool}
+            onSelectTool={document.workspace === "conics" ? handleContextMenuSelectTool : undefined}
           />
         )}
         {renamingState && (

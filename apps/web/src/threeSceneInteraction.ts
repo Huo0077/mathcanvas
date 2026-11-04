@@ -9,7 +9,7 @@ import { host3FromPrimitive, reactive, type Host3 } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
 import { getAffectedPrimitiveIds, isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
 import { cameraDragMode, clampCameraTarget, panCameraState, rotateCameraState } from "./threeCamera"
-import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
+import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, orbitParameterAt, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
 import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick, type RaycastHit3 } from "./threePicking"
 import { sectionUnitNormal } from "./threePrimitives"
 
@@ -26,7 +26,7 @@ import { sectionUnitNormal } from "./threePrimitives"
  * `data-drag-target` 读作 `line:circle3-1->circle3`）与 `geometry3d-host-drag`。**两条一起认才对。**
  */
 function canStartDragSession(primitive: PrimitiveSpec | undefined, points: Map<string, Point3Primitive>, generated: Set<string>): boolean {
-  if (primitive === undefined) return false
+  if (primitive === undefined || primitive.visible === false) return false
   // 点：自由的走"自由拖动"，绑定的走"沿宿主 / 轨道拖" —— 两种都能开拖动会话。
   if (primitive.locked) return false
   if (primitive.type === "point3") {
@@ -282,8 +282,9 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               ?? (binding.kind === "inSolid" ? solidVolumeHostFor(new Map(documentRef.current.primitives.map((primitive) => [primitive.id, primitive])), hostPrimitive.id) : null)
             : null
           if (hostConstraint) {
-            const anchor = new THREE.Vector3(effectiveHit.worldPoint.x, effectiveHit.worldPoint.y, effectiveHit.worldPoint.z)
+            const anchor = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
             const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
+            const projectedAnchor = anchor.clone().project(camera)
             const dependents = getAffectedPrimitiveIds(documentRef.current, [target.id])
             dependents.delete(target.id)
             dragSessionRef.current = {
@@ -295,6 +296,10 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               visualApplied: new THREE.Vector3(),
               applied: false,
               hostConstraint,
+              hostParameter: hostConstraint.closestParameter(target.position),
+              orbitGrabOffset: hostConstraint.kind === "circle"
+                ? { x: (1 + projectedAnchor.x) / 2 - point.x, y: (1 - projectedAnchor.y) / 2 - point.y }
+                : undefined,
               hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? "")),
               reactiveHost: buildHostPointGraph(target.id, hostConstraint),
               direct: directPointDrag
@@ -440,8 +445,12 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
              * u/v/w 是三个参数节点、"点"是约束节点。求一次闭包就拿到坐标与夹取标记，
              * 并且**同时**得到诊断（宿主解析不出来时不再是"悄悄不动"）。
              */
-            const worldPoint = session.origin.clone().add(world)
-            const parameter = session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
+            if (!pointerState.moved) return
+            const worldPoint = session.anchor.clone().add(world)
+            const offset = session.orbitGrabOffset
+            const parameter = offset
+              ? { u: orbitParameterAt(camera, session.hostConstraint, { x: point.x + offset.x, y: point.y + offset.y }, session.hostParameter?.u ?? 0) }
+              : session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
             session.hostParameter = parameter
             let projected: { x: number; y: number; z: number } | null = null
             let reactiveEvaluated = 0
