@@ -1625,3 +1625,252 @@ describe("constructPlanarWitness（乙案 Task 3A）", () => {
     expect(result.message).toContain("点名的角")
   })
 })
+
+/**
+ * **T3：底面解析构造**（2026-11-05 四题修复）。
+ *
+ * 两组此前**做不到**的输入：
+ *
+ * 1. `AB ∥ CD` + `AD ⊥ AB` 的直角梯形 —— 旧代码要求"环首直角 + B 处直角"，
+ *    这一组两条都没有，于是落进"矩形"分支把 `C` 放到 `(w, d)`，**静默建成矩形**，
+ *    题面给的 `CD` 长度根本没被用上。
+ * 2. 题面给了**显式菱形角**（`∠BAD=60°` / `75°`）—— 旧代码一律取代表角 60°，
+ *    恰好命中 60° 的题看不出问题，75° 的题会被静默画成 60°。
+ *
+ * 判据全部**自算**：长度用内核的向量运算，平行/垂直用叉积与点积，不读构造方的自述。
+ */
+describe("T3 底面解析构造（直角梯形 / 显式菱形角）", () => {
+  const at = (result: { witness: { points: Vector3[]; names: string[] } }, name: string): Vector3 => {
+    const index = result.witness.names.indexOf(name)
+    if (index < 0) throw new Error(`候选里没有 ${name}；现有：${result.witness.names.join("、")}`)
+    return result.witness.points[index]!
+  }
+
+  /** Case 1 那一组关系：`AB ∥ CD`、`AD ⊥ AB`、`PA = AB = AD = 2`、`CD = 1`。 */
+  const case1Relations = (): WitnessRelation[] => [
+    { kind: "parallel", segments: [["A", "B"], ["C", "D"]] },
+    { kind: "perpendicular", segments: [["A", "D"], ["A", "B"]] },
+    { kind: "segment-length", segments: [["P", "A"]], value: 2 },
+    { kind: "segment-length", segments: [["A", "B"]], value: 2 },
+    { kind: "segment-length", segments: [["A", "D"]], value: 2 },
+    { kind: "segment-length", segments: [["C", "D"]], value: 1 }
+  ]
+
+  it("Case 1 的直角梯形底面：AB=2、AD=2、CD=1，且**没有**被悄悄建成矩形", () => {
+    const result = constructPyramidWitness(pyramidRequest({
+      relations: case1Relations(),
+      apex: { at: "P", foot: "A", height: { kind: "lateral-edge", edge: ["P", "A"], length: 2 } }
+    }))
+    expect(result.status, JSON.stringify(result)).toBe("candidate")
+    if (result.status !== "candidate") return
+    const prefix = `${JSON.stringify(result.witness.assumptions)}`
+    const a = at(result, "A")
+    const b = at(result, "B")
+    const c = at(result, "C")
+    const d = at(result, "D")
+    expect(distanceVector3(a, b), `AB；${prefix}`).toBeCloseTo(2, 9)
+    expect(distanceVector3(a, d), `AD；${prefix}`).toBeCloseTo(2, 9)
+    expect(distanceVector3(c, d), `CD；${prefix}`).toBeCloseTo(1, 9)
+    // ① 题面那两条关系逐条成立。
+    const ab = subtractVector3(b, a)
+    const ad = subtractVector3(d, a)
+    const cd = subtractVector3(d, c)
+    expect(Math.abs(dotVector3(ab, ad)), "AD ⊥ AB").toBeLessThan(1e-9)
+    expect(Math.abs(crossVector3(ab, cd).z), "AB ∥ CD").toBeLessThan(1e-9)
+    // ② 没有多加题面没说的特殊性：`AD ≠ BC`（等长就是矩形），`CD ≠ AB`。
+    expect(Math.abs(distanceVector3(a, d) - distanceVector3(b, c)), "AD ≠ BC（等长就是矩形）").toBeGreaterThan(1e-6)
+    expect(Math.abs(distanceVector3(c, d) - distanceVector3(a, b)), "CD ≠ AB（等长就是矩形）").toBeGreaterThan(1e-6)
+    // ③ 底面严格共面（解析构造，z 全为 0），顶点在 A 正上方。
+    for (const point of [a, b, c, d]) expect(point.z).toBe(0)
+    const p = at(result, "P")
+    expect(Math.hypot(p.x - a.x, p.y - a.y)).toBeLessThan(1e-12)
+    expect(p.z - a.z).toBeCloseTo(2, 9)
+  })
+
+  it("循环点序 / 改名后照样认（不按字母 A 固定分支）", () => {
+    // 同一个四边形，环从 B 开始写：`BCDA`。直角顶点变成环上的第 4 个位置。
+    const rotated = constructPyramidWitness(
+      pyramidRequest({
+        base: ["B", "C", "D", "A"],
+        relations: [
+          { kind: "parallel", segments: [["A", "B"], ["C", "D"]] },
+          { kind: "perpendicular", segments: [["D", "A"], ["A", "B"]] },
+          { kind: "segment-length", segments: [["A", "B"]], value: 2 },
+          { kind: "segment-length", segments: [["A", "D"]], value: 2 },
+          { kind: "segment-length", segments: [["C", "D"]], value: 1 }
+        ]
+      })
+    )
+    expect(rotated.status, JSON.stringify(rotated)).toBe("candidate")
+    if (rotated.status !== "candidate") return
+    expect(distanceVector3(at(rotated, "A"), at(rotated, "B"))).toBeCloseTo(2, 9)
+    expect(distanceVector3(at(rotated, "A"), at(rotated, "D"))).toBeCloseTo(2, 9)
+    expect(distanceVector3(at(rotated, "C"), at(rotated, "D"))).toBeCloseTo(1, 9)
+  })
+
+  it("负测：三条边给得互相矛盾时不静默改题（零/负边长 → 结构化拒绝）", () => {
+    const result = constructPyramidWitness(
+      pyramidRequest({
+        relations: [
+          { kind: "parallel", segments: [["A", "B"], ["C", "D"]] },
+          { kind: "perpendicular", segments: [["A", "D"], ["A", "B"]] },
+          { kind: "segment-length", segments: [["A", "B"]], value: 2 },
+          { kind: "segment-length", segments: [["A", "D"]], value: 0 },
+          { kind: "segment-length", segments: [["C", "D"]], value: 1 }
+        ]
+      })
+    )
+    expect(result.status).toBe("rejected")
+    if (result.status !== "rejected") return
+    expect(result.code).toBe("degenerate-base")
+  })
+
+  const rhombusRelations = (angleDegrees: number | null): WitnessRelation[] => {
+    const relations: WitnessRelation[] = [
+      { kind: "equal-length", segments: [["A", "B"], ["B", "C"]] },
+      { kind: "equal-length", segments: [["B", "C"], ["C", "D"]] },
+      { kind: "equal-length", segments: [["C", "D"], ["D", "A"]] },
+      { kind: "segment-length", segments: [["A", "B"]], value: 2 }
+    ]
+    if (angleDegrees !== null) relations.push({ kind: "planarAngle", targets: ["B", "A", "D"], value: angleDegrees, unit: "degree" })
+    return relations
+  }
+
+  for (const degrees of [60, 75]) {
+    it(`菱形底面 + 题面点名 ∠BAD=${degrees}° ⇒ 用题面的角，不标成「系统自选」`, () => {
+      const result = constructPyramidWitness(pyramidRequest({ relations: rhombusRelations(degrees) }))
+      expect(result.status, JSON.stringify(result)).toBe("candidate")
+      if (result.status !== "candidate") return
+      const sides = ["A", "B", "C", "D"].map((name, index, all) => distanceVector3(at(result, name), at(result, all[(index + 1) % all.length]!)))
+      for (const side of sides) expect(side).toBeCloseTo(2, 9)
+      const ab = subtractVector3(at(result, "B"), at(result, "A"))
+      const ad = subtractVector3(at(result, "D"), at(result, "A"))
+      const cosine = dotVector3(ab, ad) / (Math.hypot(ab.x, ab.y, ab.z) * Math.hypot(ad.x, ad.y, ad.z))
+      const measured = (Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI
+      expect(measured, `自算 ∠BAD = ${measured.toFixed(4)}°`).toBeCloseTo(degrees, 8)
+      /** 题面给了角 ⇒ **不许**出现在"系统自选"那一列。 */
+      const freeText = result.witness.freeValues.join("；")
+      expect(freeText, `freeValues=${JSON.stringify(result.witness.freeValues)}`).not.toContain("代表角")
+      expect(result.witness.assumptions.join("；")).toContain("来自题面")
+    })
+  }
+
+  it("菱形底面没给角 ⇒ 代表角 60° 且如实写进 freeValues/assumptions（既有行为不变）", () => {
+    const result = constructPyramidWitness(pyramidRequest({ relations: rhombusRelations(null) }))
+    expect(result.status).toBe("candidate")
+    if (result.status !== "candidate") return
+    const ab = subtractVector3(at(result, "B"), at(result, "A"))
+    const ad = subtractVector3(at(result, "D"), at(result, "A"))
+    const cosine = dotVector3(ab, ad) / (Math.hypot(ab.x, ab.y, ab.z) * Math.hypot(ad.x, ad.y, ad.z))
+    expect((Math.acos(Math.max(-1, Math.min(1, cosine))) * 180) / Math.PI).toBeCloseTo(60, 8)
+    expect(result.witness.assumptions.join("；")).toContain("系统自选的代表角")
+  })
+
+  it("负测：两个互相矛盾的菱形角、以及对角线上的角 ⇒ 拒绝而不是静默挑一个", () => {
+    const conflicting = rhombusRelations(60)
+    conflicting.push({ kind: "planarAngle", targets: ["C", "B", "A"], value: 60, unit: "degree" })
+    // ∠ABC=60° ⇒ A 处是 120°，与 60° 矛盾。
+    const conflictResult = constructPyramidWitness(pyramidRequest({ relations: conflicting }))
+    expect(conflictResult.status).toBe("rejected")
+    if (conflictResult.status === "rejected") expect(conflictResult.message).toContain("矛盾")
+
+    const diagonal = rhombusRelations(60)
+    diagonal.push({ kind: "planarAngle", targets: ["B", "A", "C"], value: 30, unit: "degree" })
+    const diagonalResult = constructPyramidWitness(pyramidRequest({ relations: diagonal }))
+    expect(diagonalResult.status).toBe("rejected")
+    if (diagonalResult.status === "rejected") expect(diagonalResult.message).toContain("不是菱形的内角")
+
+    const degenerate = constructPyramidWitness(pyramidRequest({ relations: rhombusRelations(0) }))
+    expect(degenerate.status).toBe("rejected")
+  })
+})
+
+/**
+ * **T5：点名的中点 / 棱上定比分点**（2026-11-05）。
+ *
+ * 两件事必须钉住：
+ * 1. 它们**不进** `names` / `points`（那两列与 `faces` 共用下标空间），而是走 `auxiliaryPoints`；
+ * 2. 棱上点的参数**按宿主的方向**算：`BE=1`（`B→B₁`，长 3）⇒ `1/3`；反过来写 `B₁E=2` 且宿主
+ *    方向是 `B₁→B` ⇒ `2/3`。两种写法必须落到**同一个物理点**。
+ */
+describe("T5 点名的中点与棱上分点", () => {
+  const triangle = (): WitnessRelation[] => [
+    { kind: "segment-length", segments: [["A", "B"]], value: 2 },
+    { kind: "segment-length", segments: [["A", "C"]], value: 2 }
+  ]
+  const prism = (extra: WitnessRelation[]) =>
+    constructPrismWitness({
+      shape: "prism",
+      base: ["A", "B", "C"],
+      relations: [...triangle(), ...extra],
+      extrusion: { kind: "vector", vector: { x: 0, y: 0, z: 3 } },
+      topNames: ["A₁", "B₁", "C₁"]
+    })
+  const auxiliary = (result: ReturnType<typeof prism>, name: string) => {
+    expect(result.status).toBe("candidate")
+    if (result.status !== "candidate") throw new Error("expected a candidate")
+    const found = (result.witness.auxiliaryPoints ?? []).find((point) => point.name === name)
+    if (found === undefined) throw new Error(`${name} 不是辅助点；现有：${JSON.stringify(result.witness.auxiliaryPoints ?? [])}`)
+    return { found, witness: result.witness }
+  }
+
+  it("中点：D 为 AC 中点 ⇒ 参数 1/2，且**不在** names/points 里", () => {
+    const result = prism([{ kind: "midpoint", targets: ["D", "A", "C"] }])
+    const { found, witness } = auxiliary(result, "D")
+    expect(found.parameter).toBeCloseTo(0.5, 12)
+    expect(found.hostEdge).toEqual(["A", "C"])
+    expect(witness.names).not.toContain("D")
+    const a = witness.names.indexOf("A")
+    const c = witness.names.indexOf("C")
+    expect(found.point.x).toBeCloseTo((witness.points[a]!.x + witness.points[c]!.x) / 2, 12)
+  })
+
+  it("棱上点：`点E在棱BB₁上，且BE=1` ⇒ 参数 1/3（不是中点）", () => {
+    const result = prism([
+      { kind: "point-on-segment", targets: ["E", "B", "B₁"] },
+      { kind: "segment-length", segments: [["B", "E"]], value: 1 }
+    ])
+    const { found } = auxiliary(result, "E")
+    expect(found.hostEdge).toEqual(["B", "B₁"])
+    expect(found.parameter).toBeCloseTo(1 / 3, 12)
+  })
+
+  it("反向写法的参数是补数，但落到**同一个点**", () => {
+    const forward = prism([
+      { kind: "point-on-segment", targets: ["E", "B", "B₁"] },
+      { kind: "segment-length", segments: [["B", "E"]], value: 1 }
+    ])
+    const reversed = prism([
+      { kind: "point-on-segment", targets: ["E", "B₁", "B"] },
+      { kind: "segment-length", segments: [["B₁", "E"]], value: 2 }
+    ])
+    const a = auxiliary(forward, "E").found
+    const b = auxiliary(reversed, "E").found
+    expect(a.parameter).toBeCloseTo(1 / 3, 12)
+    expect(b.parameter).toBeCloseTo(2 / 3, 12)
+    expect(b.hostEdge).toEqual(["B₁", "B"])
+    expect(b.point.x).toBeCloseTo(a.point.x, 12)
+    expect(b.point.y).toBeCloseTo(a.point.y, 12)
+    expect(b.point.z).toBeCloseTo(a.point.z, 12)
+  })
+
+  it("负测：参数落在端点（BE=3=BB₁）⇒ 拒绝；辅助点与顶点重名 ⇒ 拒绝", () => {
+    const atEnd = prism([
+      { kind: "point-on-segment", targets: ["E", "B", "B₁"] },
+      { kind: "segment-length", segments: [["B", "E"]], value: 3 }
+    ])
+    expect(atEnd.status).toBe("rejected")
+    if (atEnd.status === "rejected") expect(atEnd.message).toContain("(0,1)")
+
+    const duplicate = prism([{ kind: "midpoint", targets: ["A", "B", "C"] }])
+    expect(duplicate.status).toBe("rejected")
+    if (duplicate.status === "rejected") expect(duplicate.code).toBe("duplicate-name")
+  })
+
+  it("只说『在棱上』、没给长度/比例 ⇒ **不落点**（位置不唯一，不替题面挑一个）", () => {
+    const result = prism([{ kind: "point-on-segment", targets: ["E", "B", "B₁"] }])
+    expect(result.status).toBe("candidate")
+    if (result.status !== "candidate") return
+    expect((result.witness.auxiliaryPoints ?? []).some((point) => point.name === "E")).toBe(false)
+  })
+})

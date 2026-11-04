@@ -156,6 +156,13 @@ export * from "./solver/solverContracts"
  */
 export * from "./solver/shapeGrammar"
 export * from "./solver/witnessSearch"
+/**
+ * **参数化立体的确定性计划适配**（T5）：题面 → spec → 见证候选 → 动作链（含辅助点）。
+ *
+ * 两个产品入口（`localPlanner` 的两支）都从这里取，"见证候选怎么变成可提交草稿"
+ * 只有**一处**答案。
+ */
+export * from "./parametricSolidPlan"
 export * from "./toolContracts"
 export * from "./toolDispatch"
 export * from "./toolLoop"

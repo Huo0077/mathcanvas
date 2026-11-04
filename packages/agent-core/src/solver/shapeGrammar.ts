@@ -59,11 +59,37 @@ export interface RecognisedShape {
 /** 中文数词 → 边数。只收首批范围内的 3–6。 */
 const NUMERALS: Record<string, number> = { 三: 3, 四: 4, 五: 5, 六: 6 }
 
+/** 下标字形（`A₁` 那一笔）。`pointNames` 的同一套后缀，只收 1–6。 */
+const SUBSCRIPT_DIGITS: Record<string, string> = { 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆" }
+
+/**
+ * **有边界的下标归一**（T2）：`A_1` / `A_{1}` → `A₁`。
+ *
+ * 只做**排版字形**这一件事，不碰 ASCII `A1`：`A1` 在 `pointNames` 里**不是点名**
+ * （2026-10-07 的裁决），它必须留在"读不出"那一侧，不能被这里顺手凑成 `A₁`。
+ *
+ * 两处边界：
+ * - `A_10` 不归一（`_1` 后面还跟着数字 —— 那不是一个合法的 1–6 下标）；
+ * - 只认 `_` 引导的下标写法，不碰别的字符。
+ */
+function normalizeSubscriptTypography(text: string): string {
+  return text
+    .replace(/_\{([1-6])\}/g, (_match, digit: string) => SUBSCRIPT_DIGITS[digit] ?? digit)
+    .replace(/_([1-6])(?![0-9])/g, (_match, digit: string) => SUBSCRIPT_DIGITS[digit] ?? digit)
+}
+
 /**
  * `在…中` 从句。点名表里**允许**撇 / 下标 / `-` 这些字符，但不允许空白与标点 ——
  * 遇到空白或逗号就说明点名表在那里结束了。
+ *
+ * **T2 补的三种写法**（设计 §4.2 第 1 步"入口只归一排版，不改题意"）：
+ * - **「在」可省**：`四棱锥P-ABCD中` 是联考题里最常见的写法；
+ * - **可插入底面描述**：`以直角梯形ABCD为底面的四棱锥P-ABCD中`（限 24 字，不吞后续题设）；
+ * - **下标/撇号归一**由 `normalizeSubscriptTypography` 先做，正则只认字形结果。
  */
-const SHAPE_CLAUSE = /在\s*(正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|棱台)\s*([A-Z][^\s，,。；;、]*?)\s*中/
+const SHAPE_CLAUSE =
+  /(?:在\s*)?(?:以[^\s，,。；;]{1,24}?为底面(?:的)?\s*)?(正|斜|直)?\s*([三四五六])?\s*(棱锥|棱柱|棱台)\s*([A-Z][^\s，,。；;、]*?)\s*中/
+
 
 /**
  * **裸的平面图形**（2026-10-11 用户现场；乙案 Task 1）：`平面四边形ABCD中` / `三角形ABC中`。
@@ -95,7 +121,38 @@ const MAX_RING = 6
 function ringOf(segment: string): string[] | null {
   const names = splitPointNames(segment)
   if (names.length < MIN_RING || names.length > MAX_RING) return null
-  return names.every((name) => isPointName(name)) ? names : null
+  if (!names.every((name) => isPointName(name))) return null
+  /** 同一个点在一个环里出现两次：这是自相矛盾的题面（`P-ABCA`），不猜它想说什么。 */
+  if (new Set(names.map((name) => canonicalPointName(name))).size !== names.length) return null
+  return names
+}
+
+/**
+ * **顶环与底环的对应后缀**（T2）：一致则返回那个后缀，说不清返回 `null`。
+ *
+ * 此前这里只认 `A′` 一种字形，于是题面写 `ABC-A₁B₁C₁`（联考卷排版里极常见）时整句返回 `null`。
+ * 现在的判据是**"底环点名 + 同一个后缀"**，后缀可以是撇或下标 1–6：
+ *
+ * - 后缀必须**逐一相同**：`A₁B′C₁` 这类混写说不清是哪一套对应关系，问路；
+ * - 后缀**原样保留**：`A₁B₁C₁` 就是 `A₁B₁C₁`，内核不许用默认 `A′` 覆盖题面已给的名字
+ *   （设计 §4.3"不让默认 `A′` 覆盖已给 `A₁`"）。
+ */
+function topRingSuffix(base: readonly string[], top: readonly string[]): string | null {
+  if (top.length !== base.length) return null
+  const allowed = ["′", "₁", "₂", "₃", "₄", "₅", "₆"]
+  let suffix: string | null = null
+  for (const [index, name] of top.entries()) {
+    const foot = base[index]
+    if (foot === undefined) return null
+    const seen = canonicalPointName(name)
+    const root = canonicalPointName(foot)
+    if (!seen.startsWith(root)) return null
+    const tail = seen.slice(root.length)
+    if (!allowed.includes(tail)) return null
+    if (suffix === null) suffix = tail
+    else if (suffix !== tail) return null
+  }
+  return suffix
 }
 
 /**
@@ -125,7 +182,7 @@ function parsePlanarClause(prompt: string): RecognisedShape | null {
  */
 export function parseShapeClause(prompt: string): RecognisedShape | null {
   if (typeof prompt !== "string") return null
-  const match = SHAPE_CLAUSE.exec(prompt)
+  const match = SHAPE_CLAUSE.exec(normalizeSubscriptTypography(prompt))
   /**
    * **立体那一支找不到时，才试平面图形那一支。**
    *
@@ -165,9 +222,6 @@ export function parseShapeClause(prompt: string): RecognisedShape | null {
    * 但"认不出"要在这里就说清楚，别让用户等到构造期。
    */
   if (top.length !== base.length) return null
-  for (const [index, name] of top.entries()) {
-    const foot = base[index]
-    if (foot === undefined || canonicalPointName(name) !== `${canonicalPointName(foot)}′`) return null
-  }
+  if (topRingSuffix(base, top) === null) return null
   return { family: keyword === "棱柱" ? "prism" : "frustum", phrase: match[0], base, top, ...stated }
 }

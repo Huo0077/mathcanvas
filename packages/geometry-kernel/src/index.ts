@@ -67,6 +67,7 @@ export * from "./exact-forms"
  * 内核依赖方向是单向的，反向 import 会成环）；题设验收仍在 `verifyDiagramObligations`。
  */
 export * from "./witness/constructors"
+export * from "./witness/basePolygons"
 export * from "./witness/residuals"
 /**
  * **形状数据化**（S2）：四层共用的 `SolidShapeSpec`。扁平导出 —— agent-core 的入口语法、

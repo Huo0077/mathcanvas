@@ -38,10 +38,33 @@ export interface FreeScalar {
   candidates: number[]
 }
 
+/**
+ * **底面上的派生点**（T4）：由底面自身的关系定出来的辅助点，**不是环顶点**。
+ *
+ * 本批只有一种来源：`diagonal-intersection`（`AC` 与 `BD` 的交点）。
+ * 只加这一种，是因为**只有它有消费方**（Case 3 的 `PO ⊥ 底面`）——
+ * 本文件的 YAGNI 约束写着"新增顶层字段必须先有一次对应的形状块落地"。
+ */
+export interface DerivedBasePoint {
+  /** 这个派生点的点名（`O`）。 */
+  name: string
+  kind: "diagonal-intersection"
+  /** 两条线，各两个点名；交点必须唯一且落在两条线段内部。 */
+  lines: readonly [readonly [string, string], readonly [string, string]]
+}
+
 export interface SolidShapeSpec {
   family: SolidShapeFamily
   /** 底面环，按题面点名顺序。 */
   base: string[]
+  /**
+   * **底面上的派生点**（T4，2026-11-05）：`AC 与 BD 相交于点 O` 这种"由底面的相交关系定出来的点"。
+   *
+   * 它**不进入** `base`：底面环仍然严格只有题面写的那些顶点。派生点只用于
+   * "顶点垂足落在它正上方"（`apex.foot`）以及后续分点（如 `M` 为 `PC` 中点）。
+   * 缺省 = 没有派生点，行为与改动前逐字相同。
+   */
+  derivedBasePoints?: readonly DerivedBasePoint[]
   /** 棱锥：顶点与垂足。 */
   apex?: { at: string; foot?: string }
   /** 棱柱 / 台体：顶面环。 */

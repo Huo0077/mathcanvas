@@ -29,6 +29,24 @@ export interface PolyhedronWitness {
   names: string[]
   /** 面环，元素是 `vertices` 的下标。 */
   faces: number[][]
+  /**
+   * **辅助点**（T4，2026-11-05）：不在多面体拓扑里、但题面点名了的点（对角线交点 `O`）。
+   *
+   * 它们**不在** `vertices` / `names` / `faces` 里 —— 那三列共用同一套下标空间，塞进去会让
+   * `buildFromPoints` 报 `unused-vertex`。物化时按 `hostEdge` + `parameter` 落成
+   * `dynamic.create_bound_point`（**绑定点**，不是"位置碰巧正确的自由点"）。
+   */
+  auxiliaryPoints?: readonly WitnessAuxiliaryPoint[]
+}
+
+/** 辅助点的来源：落在哪条线段上、参数多少。 */
+export interface WitnessAuxiliaryPoint {
+  name: string
+  point: Vector3
+  hostEdge: readonly [string, string]
+  parameter: number
+  /** 用户看得懂的来源（"AC 与 BD 的交点"）。 */
+  source: string
 }
 
 /**

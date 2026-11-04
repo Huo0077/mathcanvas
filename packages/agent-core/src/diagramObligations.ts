@@ -1488,10 +1488,12 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
      */
-    pattern: new RegExp(`(?:侧面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(正方形|矩形|长方形|菱形)`, "g"),
+    pattern: new RegExp(`(?:侧面|底面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(?:边长为\\s*([0-9.]+)\\s*的)?\\s*(正方形|矩形|长方形|菱形)`, "g"),
     read: (m) => {
       const [a, b, c, d] = names(m[1])
       if (a === undefined || b === undefined || c === undefined || d === undefined) return null
+      const shape = m[3]
+      const statedSide = m[2] === undefined ? null : finitePositive(m[2])
       /**
        * **同一句话的三种形状，判据全是已有的两种**（2026-10-15）：只按词分派，各写一条读取器
        * 就等于把"四边形是什么形状"这件事抄三遍。
@@ -1499,21 +1501,50 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
        * - **矩形 / 长方形**：三个相邻直角（三个直角才定死一个四边形）；
        * - **菱形**：四条边等长（取三对相邻边即可）；
        * - **正方形**：两者都要。
+       *
+       * **T4（2026-11-05）补了两处**：`底面` 这个前缀（联考卷写 `底面ABCD是边长为2的菱形`）
+       * 与 `边长为 N 的` 这个定语 —— 缺了它，Case 3 的那一句整条落进"未核验"。
+       * 边长给了就再补一条 `fixedLength`（否则"边长 2"这句话没有任何判据量得到它）。
        */
       const equalEdges = [
         { kind: "equalLength" as const, targets: [a, b, b, c] },
         { kind: "equalLength" as const, targets: [b, c, c, d] },
         { kind: "equalLength" as const, targets: [c, d, d, a] }
       ]
+      const statedLength = statedSide === null ? [] : [{ kind: "fixedLength" as const, targets: [a, b], value: statedSide }]
       const rightAngles = [
         { kind: "perpendicular" as const, targets: [a, b, b, c] },
         { kind: "perpendicular" as const, targets: [b, c, c, d] },
         { kind: "perpendicular" as const, targets: [c, d, d, a] }
       ]
-      if (m[2] === "菱形") return equalEdges
-      if (m[2] === "矩形" || m[2] === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
-      if (m[2] !== "正方形") return rightAngles
+      if (shape === "菱形") return [...equalEdges, ...statedLength]
+      if (shape === "矩形" || shape === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
+      if (shape !== "正方形") return rightAngles
       return [...equalEdges, ...rightAngles]
+    }
+  },
+  {
+    /**
+     * **对角线的交点**（T4，2026-11-05）：`AC 与 BD 相交于点 O`。
+     *
+     * 读成**两条** `pointOnSegment`（`O` 在 `AC` 上、`O` 在 `BD` 上）—— 不新增判据种类：
+     * 两条都成立时，"这两条线段相交于 O"就是它们的合取（菱形/矩形的对角线本来就相交）。
+     * 构造侧另有一支（`derivedBasePoints`）用它解出 `O` 的坐标。
+     *
+     * 顺序是刻意的：先 `AC`、再 `BD`，于是 `O` 的宿主边稳定是第一条线（`A→C`），
+     * 参数就是 `|AO| / |AC|` —— 落盘成绑定点时不需要再猜方向。
+     */
+    pattern: new RegExp(`(${SEGMENT_NAME})\\s*与\\s*(${SEGMENT_NAME})\\s*(?:相交|交)\\s*于点\\s*(${POINT_NAME})`, "g"),
+    read: (m) => {
+      const first = names(m[1]!)
+      const second = names(m[2]!)
+      const point = names(m[3]!)
+      if (first.length !== 2 || second.length !== 2 || point.length !== 1) return null
+      if (new Set([...first, ...second, ...point]).size !== 5) return null
+      return [
+        { kind: "pointOnSegment" as const, targets: [point[0]!, first[0]!, first[1]!] },
+        { kind: "pointOnSegment" as const, targets: [point[0]!, second[0]!, second[1]!] }
+      ]
     }
   },
   {

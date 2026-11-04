@@ -166,3 +166,71 @@ describe("平面图形从句（乙案 Task 1）", () => {
     expect(parseShapeClause("画一个四棱锥")).toBeNull()
   })
 })
+
+/**
+ * **T2：入口语法与关系保真**（2026-11-05 四题修复）。
+ *
+ * 这一组挡的是 T1 基线实测出来的两个入口缺口 + 计划点名要补的排版变体：
+ *
+ * 1. **棱柱顶环的 `A₁` 字形**：`在正三棱柱ABC-A₁B₁C₁中` 今天整句返回 `null` ——
+ *    顶环对应规则写死了 `A′`，于是题面用**下标**写的顶面点名一个都配不上。
+ *    设计 §4.3 的口径是"保留上下环一一对应及题面原名，**不让默认 `A′` 覆盖已给 `A₁`**"。
+ * 2. **没写「在」的形状从句**：`四棱锥P-ABCD中` / `以…为底面的四棱锥…中` 今天认不出。
+ * 3. **`A_1` / `A_{1}` 排版变体**：只做**有边界的下标归一**，不碰 ASCII `A1`
+ *   （`A1` 不是点名，仍须留在"读不出"那一侧 —— 那是 `pointNames` 的既有裁决）。
+ */
+describe("T2 入口语法：棱柱下标顶环、无「在」从句、排版变体", () => {
+  it("题面用下标写顶环（`A₁B₁C₁`）⇒ 认得出，且**保留原名**，不改成 `A′`", () => {
+    const shape = parseShapeClause("如图，在正三棱柱ABC-A₁B₁C₁中，底面边长AB=2，侧棱长AA₁=3")
+    expect(shape, "首选原句：`在正三棱柱ABC-A₁B₁C₁中`").not.toBeNull()
+    expect(shape?.family).toBe("prism")
+    expect(shape?.base).toEqual(["A", "B", "C"])
+    expect(shape?.top).toEqual(["A₁", "B₁", "C₁"])
+    expect(shape?.modifier).toBe("正")
+  })
+
+  it("排版变体 `A_1` / `A_{1}` 与 `A₁` 归一到同一个结果", () => {
+    const expected = { family: "prism", base: ["A", "B", "C"], top: ["A₁", "B₁", "C₁"] }
+    for (const written of ["ABC-A₁B₁C₁", "ABC-A_1B_1C_1", "ABC-A_{1}B_{1}C_{1}"]) {
+      const shape = parseShapeClause(`在正三棱柱${written}中，AB=2`)
+      expect(shape, `写法：${written}`).not.toBeNull()
+      expect(shape?.family, `写法：${written}`).toBe(expected.family)
+      expect(shape?.base, `写法：${written}`).toEqual(expected.base)
+      expect(shape?.top, `写法：${written}`).toEqual(expected.top)
+    }
+  })
+
+  it("撇号写法仍然认，且**原样保留**（不强制改写成某种字形）", () => {
+    const shape = parseShapeClause("在三棱柱ABC-A'B'C'中，AA'⊥平面ABC")
+    expect(shape?.family).toBe("prism")
+    expect(shape?.top).toEqual(["A'", "B'", "C'"])
+  })
+
+  it("没写「在」的形状从句也认（`四棱锥P-ABCD中`）", () => {
+    expect(parseShapeClause("四棱锥P-ABCD中，PA⊥平面ABCD")?.family).toBe("pyramid")
+    expect(parseShapeClause("四棱锥P-ABCD中，PA⊥平面ABCD")?.base).toEqual(["A", "B", "C", "D"])
+    expect(parseShapeClause("三棱柱ABC-A′B′C′中，AA′⊥平面ABC")?.family).toBe("prism")
+  })
+
+  it("插入底面描述（`以…为底面的四棱锥…中`）也认", () => {
+    const shape = parseShapeClause("如图，在以直角梯形ABCD为底面的四棱锥P-ABCD中，PA⊥平面ABCD")
+    expect(shape?.family).toBe("pyramid")
+    expect(shape?.base).toEqual(["A", "B", "C", "D"])
+    expect(shape?.apex).toBe("P")
+  })
+
+  it("负测：上下环后缀不一致 ⇒ 问路（不按顺序硬配）", () => {
+    // 顶环第 2 个用撇、其余用下标：说不出是哪一套对应关系。
+    expect(parseShapeClause("在三棱柱ABC-A₁B′C₁中，AB=2")).toBeNull()
+    // 顶环点数与底环不同。
+    expect(parseShapeClause("在三棱柱ABC-A₁B₁中，AB=2")).toBeNull()
+    // 顶环点名不是"底环点名 + 后缀"。
+    expect(parseShapeClause("在三棱柱ABC-A₁B₁D₁中，AB=2")).toBeNull()
+  })
+
+  it("负测：ASCII `A1` 仍不是点名（既有裁决不变），重复点与环数不符也问路", () => {
+    expect(parseShapeClause("在三棱柱ABC-A1B1C1中，AB=2")).toBeNull()
+    expect(parseShapeClause("在四棱锥P-ABCA中，PA⊥平面ABCD")).toBeNull()
+    expect(parseShapeClause("在四棱锥P-ABCDE中，PA⊥平面ABCDE")).toBeNull()
+  })
+})

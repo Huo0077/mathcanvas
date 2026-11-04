@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, normalizeGeometryPrompt, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solveRectangleFold, type ExplicitSolidIssue } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, normalizeGeometryPrompt, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solidWitnessActions, solveRectangleFold, tryBuildParametricSolidPlan, type ExplicitSolidIssue } from "@draw/agent-core"
 
 import { userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
@@ -377,21 +377,11 @@ function freeApexIntentFor(prompt: string): LocalIntent | null {
       return {
         schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "按点名关系画一组三棱锥示意图", factIds: [],
         assumptions: found.assumptions,
-        actions: [{
-          actionId: "solid.create_polyhedron", actionKey: "free-apex", factIds: [],
-          inputs: { alias: "free-apex", vertexNames: found.candidate.names, vertices: found.candidate.vertices, faces: found.candidate.faces }
-        }]
+        /** 多面体 + 辅助点（`O` 这类对角线交点）走**同一份**动作链（T4）。 */
+        actions: solidWitnessActions(found.candidate, "free-apex")
       }
     }
   }
-}
-
-/**
- * **这条题设为什么给不出可核验的图形**：把见证搜索自己的理由带上，不另写一句含糊的话。
- */
-function witnessRefusalQuestion(found: ReturnType<typeof searchWitnessForPrompt>): string {
-  const detail = found.status === "no_witness" ? found.failures.join("；") : found.status === "unverified_instance" ? found.reasons.join("；") : ""
-  return `这条题设目前给不出可核验的图形：${detail.length > 0 ? detail : "搜索没有给出原因文本。"}`
 }
 
 /**
@@ -430,20 +420,15 @@ function solidShapeIntentFor(prompt: string): LocalIntent | null {
     all: [keyword],
     skillIds: ["spatial-modeling"],
     build: ({ prompt: words }) => {
-      const found = searchWitnessForPrompt(words)
-      if (found.status !== "verified_instance") {
-        return {
-          schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: `${label}题设未核验`, factIds: [],
-          questions: [witnessRefusalQuestion(found)]
-        }
-      }
+      /**
+       * **一处产计划**（T5）：题面 → spec → 见证候选 → 动作链（含辅助点）全部在
+       * `tryBuildParametricSolidPlan` 里，两个入口不再各写一遍。
+       */
+      const built = tryBuildParametricSolidPlan({ prompt: words })
+      if (built.status === "ok") return built.plan
       return {
-        schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: `按点名关系画一组${label}示意图`, factIds: [],
-        assumptions: found.assumptions,
-        actions: [{
-          actionId: "solid.create_polyhedron", actionKey: "named-shape", factIds: [],
-          inputs: { alias: "named-shape", vertexNames: found.candidate.names, vertices: found.candidate.vertices, faces: found.candidate.faces }
-        }]
+        schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: `${label}题设未核验`, factIds: [],
+        questions: [built.reason]
       }
     }
   }

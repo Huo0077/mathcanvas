@@ -723,14 +723,39 @@ describe("witness search: unsupported inputs stay unsupported", () => {  it("doe
     expect(polyhedron.reasons.join(" ")).toContain("requires-candidates")
   })
 
-  it("reports a given the shared verifier cannot judge as unverified instead of passed", () => {
-    const result = search(PYRAMID_MIDPOINT)
+  it("中点题设现在**落到图上**（T5）：O 是 BD 上的绑定点；判性不明的那条仍不许升格成通过", () => {
+    /**
+     * **这一条在 T5（2026-11-05）里改了断言方向**：`O为BD的中点` 此前是"构造器不会生成的点"，
+     * 所以核验器只能报"未核验"。现在中点按最终坐标算出来、落成 `dynamic.create_bound_point`，
+     * 于是这条题设**真的被核验**了 —— 这是能力增加，不是放宽判据。
+     */
+    const midpointOnly = search(PYRAMID_MIDPOINT)
+    expect(midpointOnly.status, JSON.stringify(midpointOnly)).toBe("verified_instance")
+    if (midpointOnly.status === "verified_instance") {
+      const o = (midpointOnly.candidate.auxiliaryPoints ?? []).find((point) => point.name === "O")
+      expect(o, JSON.stringify(midpointOnly.candidate.auxiliaryPoints ?? [])).toBeDefined()
+      expect(o!.hostEdge).toEqual(["B", "D"])
+      expect(o!.parameter).toBeCloseTo(0.5, 12)
+    }
 
-    expect(result.status).toBe("unverified_instance")
-    if (result.status !== "unverified_instance") throw new Error("expected an unverified outcome")
-    const text = result.reasons.join(" ")
-    expect(text).toContain("unverified-obligation")
-    expect(text).toContain("O为BD的中点")
+    /**
+     * 而"判性不是 `supported`"的那条**仍然**不许升格成 `verified_instance`（R34 / M3）：
+     * 判据没变，变的是"中点有没有坐标"。
+     */
+    const unjudgeable: GeometryObligation = {
+      id: "obligation-extra",
+      role: "given",
+      kind: "proposition",
+      sourceText: "本题另有一个尚未支持的条件",
+      start: 0,
+      end: 0,
+      targets: ["B", "C", "A", "D"],
+      judgeability: "ambiguous"
+    }
+    const blocked = searchWitness({ ...SEARCH, obligations: obligationsOf(PYRAMID_MIDPOINT, [unjudgeable]) })
+    expect(blocked.status).toBe("unverified_instance")
+    if (blocked.status !== "unverified_instance") throw new Error("expected an unverified outcome")
+    expect(blocked.reasons.join(" ")).toContain("unjudgeable-obligation")
   })
 
   it("treats a given the verifier could only 'pass' by its unknown-kind fallback as unjudgeable", () => {

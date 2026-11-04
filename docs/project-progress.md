@@ -10,6 +10,40 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-05 —— 四道立体几何题修复 T5：确定性计划适配与命名分点（Case 1–3 全链路通过）
+
+内核关系词表补 `midpoint` 与 `point-on-segment` 两档；新增 `resolveNamedPointRelations` 按**最终坐标**算辅助点：中点参数 1/2，棱上点 `t = 距离/|宿主|`（题面从另一端给长度时换算成 `1−d/|宿主|`，`EB₁=2` 与 `BE=1` 必须落到同一处），只说"在棱上"、没给长度就**不落点**，参数不在 (0,1) 内 `degenerate-base`、与已有顶点重名 `duplicate-name`。派生点（T4 的 O）与命名点（T5 的 D/E/M）走同一条 `auxiliaryPoints` 通道，都不进 `names`/`points`/`faces` 的下标空间。
+
+落盘统一走 `auxiliaryPointActions` / `solidWitnessActions`：宿主是多面体的一条棱就直接 `hostEdge` 绑定，是底面对角线就先建线段再绑。新增 `parametricSolidPlan.ts`（`tryBuildParametricSolidPlan`）把"题面 → spec → 见证候选 → 动作链"收成**一处**，两个产品入口都从它取，`localPlanner` 里自己拼动作的代码随之删掉。
+
+**四题的终态**：Case 1 解析 10 条 / 0 残留 / `verified_instance`（E@PB:1/2）；Case 2 5 条 / 0 残留 / `verified_instance`（D@AC:1/2、E@BB₁:1/3，顶环保留 A₁B₁C₁）；Case 3 10 条 / 0 残留 / `verified_instance`（O@AC:1/2、M@PC:1/2，垂足 O 不是环顶点）。`parametricSolidPlan.test.ts` 8 项从**编译后的文档**自量：三题都 `compilePlan.ok` 且 `diagramVerification=passed`，四个辅助点 `binding.kind="onHost"`，整只实体沿 +z 平移 3 时 E 也跟 3、参数不变。
+
+两处既有测试的**断言方向**改了并写明理由：`witnessSearch.test.ts` 的 `O为BD的中点` 从"未核验"改为"已核验"（能力增加，同时保留"判性不明仍不许升格"那半条）；`planCompiler.test.ts` 的台体题面在 T2 已改。**未做**：`segmentRatio` 比例分点、参数滑块 `parameterId`、浏览器实测（T8）。
+
+## 2026-11-05 —— 四道立体几何题修复 T4：底面内部派生垂足（Case 3 的 O）
+
+`AC 与 BD 相交于点 O` 读成两条 `pointOnSegment`（`O∈AC`、`O∈BD`）——**不新增判据种类**，核验器零改动；`底面ABCD是边长为2的菱形` 补 `底面` 前缀与 `边长为 N 的` 定语，并补一条 `fixedLength`。内核新增 `derivedBasePoints`（`DerivedBasePoint.kind = "diagonal-intersection"`）：先解底面、再解对角线交点、最后放顶点；垂足可以是环顶点**或**派生点，底面环仍然严格只有 A/B/C/D。交点解析对引用缺失、重名、自引用、平行/重合、交点不在线段内、两线异面全部结构化拒绝，不回退到 A 或自由高度。
+
+`O` 作为 `auxiliaryPoints` 带 `hostEdge`+`parameter`+`source` 返回，**不进** `names`/`points`（那两列与 `faces` 共用下标空间，塞进去会报 `unused-vertex`）。落盘统一走新增的 `solidWitnessActions`：宿主是多面体的一条棱就直接 `hostEdge` 绑定，是对角线就先建线段再绑；见证搜索与 `localPlanner` 共用这一份动作链，所以 `O` 是**绑定点**而不是自由点。
+
+Case 3 阶段读数：解析 **10 条 / 0 残留**（原来 4 条 + 2 条残留），形状 `ok`（底环 ABCD、顶点 P、垂足 O），构造出四底点 + P + 辅助点 O（AC 上参数 1/2），核验只剩 `点名缺失：M`（T5）。内核层独立断言：四边=2、∠BAD=60°、O 同时是 AC 与 BD 的中点、PO=√3 且竖直、底面 z 全 0。定向 9 文件 **412 项通过**。
+
+## 2026-11-05 —— 四道立体几何题修复 T3：底面解析构造（直角梯形 / 显式菱形角）
+
+新增 `witness/basePolygons.ts`（纯数值 → 坐标）：`rightTrapezoidPolygon` 给 `A(0,0) B(w,0) C(top,h) D(0,h)`，`rhombusPolygon` 给 `A(0,0) B(s,0) D(s·cosθ,s·sinθ) C=B+D`，退化输入全部结构化拒绝、浮点噪声按回 0。`constructors.ts` 新增 `rightTrapezoidEdges`（按环上**任意顶点**找"直角 + 一组平行边 + 另一组不平行"，再点一个直角就跳过——那是矩形的活）、`deriveRightTrapezoidBase`（三个长度各自独立，坐标按直角顶点在环上的位置旋转回题面环序，`BCDA` 循环点序也认）、`deriveRegularTriangleBase`（`AB=BC=CA` ⇒ 正三角形）。菱形角度来源分成两路：题面给了角就用题面的角（**不写进 freeValues**），没给才取代表角 60°；邻角按 180°−θ 换算，矛盾角/对角线角/0°/90°/180° 全拒绝。
+
+`specForRightPrism` 在 `正` + 三角形底时补三条 `equal-length`（且先补关系再算自由标量，否则 `BC` 仍被说成系统自选）；`orderedBaseWithFreeEdges` 对直角梯形只把 AB/AD/CD 里题面没给的列为自由边。修掉了此前"Case 1 底面落进矩形分支、CD 长度根本没用上"与"正三棱柱底面 BC 是自由标量"两个缺口。
+
+验证：`packages/geometry-kernel` + `packages/agent-core` **240 文件 / 2724 项通过**。Case 1 断言 AB=2、AD=2、CD=1、AD⊥AB、AB∥CD、BC≠AD；Case 2 断言 AB=BC=CA=2、AA₁=3 且竖直、顶面点名保留 A₁B₁C₁。**未做**：`正四棱柱` 的正方形底面（四边相等在现有规则里先落到菱形 60°，不顺手改）。
+
+## 2026-11-05 —— 四道立体几何题修复 T2：入口语法与关系保真
+
+顶环对应规则从"必须等于 `A′`"改成"**底环点名 + 同一个后缀**"（撇号或下标 1–6），混写与点数不同仍然问路，**题面原名原样保留**；内核 `PrismConstructRequest` 新增可选 `topNames`，省略时 `withPrimes` 行为逐字不变。入口另补三处有边界的写法：`A_1`/`A_{1}` 归一为 `A₁`（ASCII `A1` 仍不认）、`在` 可省、`以…为底面的` 前缀（限 24 字）；`P-ABCA` 这类环内重复点直接问路。`正`/`直` 修饰词 + 两个环都写清的棱柱不再报"没有给出侧棱⊥底面"。
+
+Case 2 阶段读数推进：形状从 `unrecognised` 变为 `ok`，底环 `ABC`、顶环 **`A₁B₁C₁`**（不是默认 `A′B′C′`）；搜索停在 `点名缺失：D/E`（T5）。新增关系保真断言：连等式每条长度都进题设（Case 1 四条、Case 4 三条）、`BE=1` 是定长而非中点、目标不混进 givens、读不出的条件继续显形。
+
+验证：`shapeGrammar / lengthEquality / explicitSolidConditions / witnessSearch / examSolidVariants / trapezoidPrism / pointNames / constructors / solidGeometryFourCases` **9 文件 227 项通过**。**未做**：Case 2 底面还不是正三角形（T3）、Case 4 直角梯形入口、Case 3 菱形与交点、命名分点。
+
 ## 2026-11-05 —— 四道立体几何题修复 T1：四题可重复基线与证据
 
 按 [实施计划](superpowers/plans/2026-11-05-solid-geometry-four-cases.md) 开工，T1 只建立基线、不修业务。四段原题固定进 `packages/agent-core/src/fixtures/solidGeometryFourCases.ts`（Case 4 的 `D→P` 与 `CD` 折前/折后歧义**保留**，另设独立 ID 的修订版）；oracle 是设计 §3 的人工坐标手抄，测试不拿实现生成期望值。

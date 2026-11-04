@@ -1092,11 +1092,14 @@ describe("离线入口：入口语法接线", () => {
 
   it("读不出的台体题面：拒绝理由是**台体自己的**那句，不是『任意多面体』", () => {
     /**
-     * `A₁` 系列点名与内核的顶面命名约定（`A′`）对不上 ⇒ 入口语法认不出 ⇒ 走兜底。
      * 兜底**也报 `frustum`**，于是用户看到的是"台体需要底环 / 顶环 / 相似比"，
      * 而不是对台体来说是假话的"任意多面体的坐标要由调用方给"。
+     *
+     * **2026-11-05（T2）换了这条题面**：`A₁B₁C₁D₁` 现在**认得出**了（顶环按"同一个下标"对应
+     * 底环、并保留题面原名），所以原来那句"`A₁` 与 `A′` 对不上"的前提已不成立。改用
+     * **上下环后缀不一致**（`A₁B₁C₁D₂`）继续钉同一件事 —— 它仍然问路，兜底理由仍须是台体自己的。
      */
-    const result = searchWitnessForPrompt("在四棱台ABCD-A₁B₁C₁D₁中，AB⊥AD，画出这个四棱台")
+    const result = searchWitnessForPrompt("在四棱台ABCD-A₁B₁C₁D₂中，AB⊥AD，画出这个四棱台")
     expect(result.status).toBe("unverified_instance")
     if (result.status !== "unverified_instance") return
     expect(result.reasons.join(" "), JSON.stringify(result)).toContain("台体")

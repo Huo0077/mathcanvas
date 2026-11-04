@@ -107,11 +107,11 @@ type DerivedBasePoint = {
 
 **输入/输出：**原题/排版规范化文本 → 既有 RecognisedShape 与 IR；每条 given/goal 的角色、来源、残留可追踪。
 
-- [ ] 写参数化测试：原句、“如图，在…中”、“四棱锥…中”、插入底面描述、`A_1`/`A_{1}`/`A₁`、撇号；保持 ASCII A1 当前边界与上下环数量/重复点负测。
-- [ ] 对 Case 1 的 PA=AB=AD=2 和 Case 4 的 AD=CD=1 断言每条长度均进入题设；对 BE=1 断言不是“中点”。
-- [ ] 运行 `npx vitest run packages/agent-core/src/solver/shapeGrammar.test.ts packages/agent-core/src/lengthEquality.test.ts packages/agent-core/src/explicitSolidConditions.test.ts`，确认新增缺口红测。
-- [ ] 最小补归一化/语法边界；复用 `parseLengthChains`、`splitPointNames`、`canonicalPointName`。不得用贪婪匹配吞掉后续题设。
-- [ ] 同命令复跑；增加“目标不进入 givens”“无法理解内容继续显示残留”的断言；重跑 T1 检查失败阶段推进。
+- [x] 写参数化测试：原句、“如图，在…中”、“四棱锥…中”、插入底面描述、`A_1`/`A_{1}`/`A₁`、撇号；保持 ASCII A1 当前边界与上下环数量/重复点负测。
+- [x] 对 Case 1 的 PA=AB=AD=2 和 Case 4 的 AD=CD=1 断言每条长度均进入题设；对 BE=1 断言不是“中点”。
+- [x] 运行 `npx vitest run packages/agent-core/src/solver/shapeGrammar.test.ts packages/agent-core/src/lengthEquality.test.ts packages/agent-core/src/explicitSolidConditions.test.ts`，确认新增缺口红测。
+- [x] 最小补归一化/语法边界；复用 `parseLengthChains`、`splitPointNames`、`canonicalPointName`。不得用贪婪匹配吞掉后续题设。
+- [x] 同命令复跑；增加“目标不进入 givens”“无法理解内容继续显示残留”的断言；重跑 T1 检查失败阶段推进。
 
 **验收：**四题输入对应的点名、数值、角色与原文一致；“如图”原本能用的情况无无谓改动。
 
@@ -121,12 +121,12 @@ type DerivedBasePoint = {
 
 **输入/输出：**既有底面点序和关系 → 有序、有限、共面的底面顶点与来源说明，或既有结构化拒绝。内核计算，agent 不手算。
 
-- [ ] 写直角梯形红测：a=2、c=1、h=2（Case 1）；a=2、c=1、h=1（Case 4）；再测 a=5、c=2、h=3、改名/循环点序。
-- [ ] 写菱形红测：s=2、θ=60°，以及 θ=75°；断言显式角不标成自选。补无显式角时原代表形状行为不变的测试。
-- [ ] 写负测：零/负/非有限边、共线角、冲突边长/角度、已有未支持条件不得静默忽略。
-- [ ] 运行 `npx vitest run packages/geometry-kernel/src/witness/basePolygons.test.ts packages/geometry-kernel/src/witness/constructors.test.ts`，确认真正能力缺口。
-- [ ] 实现设计 §4.3 的解析公式，通过已解析关系判断坐标对应，不硬编码点名。接入现有分支，不删除已有两直角梯形或代表菱形行为。
-- [ ] 同命令复跑；再运行 `npx vitest run packages/geometry-kernel/src/solid-builders.test.ts packages/agent-core/src/solver/trapezoidPrism.test.ts packages/agent-core/src/solver/examSolidVariants.test.ts`。
+- [x] 写直角梯形红测：a=2、c=1、h=2（Case 1）；a=2、c=1、h=1（Case 4）；再测 a=5、c=2、h=3、改名/循环点序。
+- [x] 写菱形红测：s=2、θ=60°，以及 θ=75°；断言显式角不标成自选。补无显式角时原代表形状行为不变的测试。
+- [x] 写负测：零/负/非有限边、共线角、冲突边长/角度、已有未支持条件不得静默忽略。
+- [x] 运行 `npx vitest run packages/geometry-kernel/src/witness/basePolygons.test.ts packages/geometry-kernel/src/witness/constructors.test.ts`，确认真正能力缺口。
+- [x] 实现设计 §4.3 的解析公式，通过已解析关系判断坐标对应，不硬编码点名。接入现有分支，不删除已有两直角梯形或代表菱形行为。
+- [x] 同命令复跑；再运行 `npx vitest run packages/geometry-kernel/src/solid-builders.test.ts packages/agent-core/src/solver/trapezoidPrism.test.ts packages/agent-core/src/solver/examSolidVariants.test.ts`。
 
 **验收：**显式题设全部满足，z=0 解析共面；没有额外把梯形造为矩形；没有通过改容差使非法输入变绿。
 
@@ -136,12 +136,12 @@ type DerivedBasePoint = {
 
 **输入/输出：**底面点位 + 对角线交点 O 的定义 + apex.foot=O → 带 O、P 名字的候选；旧顶点垂足输入保持兼容。
 
-- [ ] 写 Case 3 红测，明确断言 O 不在 base 环里但可作为合法垂足，PO=√3 且垂直底面。
-- [ ] 写交点负测：引用缺失、直线不唯一相交、重名覆盖已有底点、自引用、非共面；不得回退到 A 或自由高度。
-- [ ] 运行 `npx vitest run packages/geometry-kernel/src/witness/derivedBasePoints.test.ts packages/geometry-kernel/src/witness/constructors.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts`。
-- [ ] 为现有 spec 增加最小派生定义；先求底面和 O，校验垂足，再构造 P。同步既有高度求解需要 foot 坐标的分支，防止只改入口检查却在后续仍用 base 下标取点。
-- [ ] 底面环仍严格只有 A/B/C/D；O 作为辅助点带可追踪来源，后续 M 由 PC 中点生成。witness 层继续调用独立核验器。
-- [ ] 同命令复跑，增加旧顶点垂足、侧棱定长/二面角求高分支回归，确保未破坏已有契约。
+- [x] 写 Case 3 红测，明确断言 O 不在 base 环里但可作为合法垂足，PO=√3 且垂直底面。
+- [x] 写交点负测：引用缺失、直线不唯一相交、重名覆盖已有底点、自引用、非共面；不得回退到 A 或自由高度。
+- [x] 运行 `npx vitest run packages/geometry-kernel/src/witness/derivedBasePoints.test.ts packages/geometry-kernel/src/witness/constructors.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts`。
+- [x] 为现有 spec 增加最小派生定义；先求底面和 O，校验垂足，再构造 P。同步既有高度求解需要 foot 坐标的分支，防止只改入口检查却在后续仍用 base 下标取点。
+- [x] 底面环仍严格只有 A/B/C/D；O 作为辅助点带可追踪来源，后续 M 由 PC 中点生成。witness 层继续调用独立核验器。
+- [x] 同命令复跑，增加旧顶点垂足、侧棱定长/二面角求高分支回归，确保未破坏已有契约。
 
 **验收：**Case 3 的已知条件编译后可独立核验；数值 A 到 PBD 距离为 √3；实现不以该答案反向调坐标。
 
@@ -151,12 +151,12 @@ type DerivedBasePoint = {
 
 **输入/输出：**经校验的既有形状/关系输入 → 现有计划与命名拓扑；编译后的实际文档必须能再次核验。
 
-- [ ] 写 Case 1/2/3 全链测试：主实体、辅助点、名字、宿主边、参数、编译后坐标和 given 核验，不能只查动作数量。
-- [ ] 对 E 断言 hostEdge 是 `{from:'B',to:'B₁'}` 对应的真实命名边，parameter=1/3；反向边测试为 2/3。PB、PC、AC 中点均为 1/2。
-- [ ] 运行 `npx vitest run packages/agent-core/src/parametricSolidPlan.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts` 观察失败。
-- [ ] 复用 `solid.create_prism` 或现有 polyhedron 构造动作与 `dynamic.create_bound_point`。明确 vertexNames，禁止默认名字覆盖题面；不得新增自由坐标点伪装绑定点。
-- [ ] 补参数 0、1、越界值、缺失边、重复点名负测；端点是否允许沿用动作现有契约。重建宿主后检查 E 仍在同一边同一比例。
-- [ ] 同命令复跑，并运行上述 3 个 planCompiler 回归文件；若旧路径已正确，不修改 actionRegistry/schema。
+- [x] 写 Case 1/2/3 全链测试：主实体、辅助点、名字、宿主边、参数、编译后坐标和 given 核验，不能只查动作数量。
+- [x] 对 E 断言 hostEdge 是 `{from:'B',to:'B₁'}` 对应的真实命名边，parameter=1/3；反向边测试为 2/3。PB、PC、AC 中点均为 1/2。
+- [x] 运行 `npx vitest run packages/agent-core/src/parametricSolidPlan.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts` 观察失败。
+- [x] 复用 `solid.create_prism` 或现有 polyhedron 构造动作与 `dynamic.create_bound_point`。明确 vertexNames，禁止默认名字覆盖题面；不得新增自由坐标点伪装绑定点。
+- [x] 补参数 0、1、越界值、缺失边、重复点名负测；端点是否允许沿用动作现有契约。重建宿主后检查 E 仍在同一边同一比例。
+- [x] 同命令复跑，并运行上述 3 个 planCompiler 回归文件；若旧路径已正确，不修改 actionRegistry/schema。
 
 **验收：**Case 1–3 均能在无模型手算坐标时得到满足题设的草稿；点名未丢失；错误目标不改变候选。
 

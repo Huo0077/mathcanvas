@@ -82,3 +82,305 @@ npx vitest run packages/agent-core/src/lengthEquality.test.ts \
 
 T1 的验收是"每项缺陷有固定题面、当前错误和期望，后续任务知道修哪一层"，**不要求**产品红测已修好。
 本节的表格满足它。checklist 的四条（固定题面 / 产品集成断言 / 保存失败阶段 / 66 基线）已落。
+
+---
+
+## T2 —— 入口与关系保真
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| T2 执行前 HEAD | `75059e23`（T1 提交） |
+| 改动的文件 | `packages/agent-core/src/solver/shapeGrammar.ts`、`packages/agent-core/src/solver/witnessSearch.ts`、`packages/geometry-kernel/src/witness/constructors.ts`、`packages/agent-core/src/solver/shapeGrammar.test.ts`、`packages/agent-core/src/solidGeometryFourCases.test.ts` |
+
+### 2. RED（先跑出来的缺口）
+
+```text
+npx vitest run packages/agent-core/src/solver/shapeGrammar.test.ts
+```
+
+5 条新用例失败：`ABC-A₁B₁C₁` 整句 `null`（顶环对应规则写死 `A′`）、`四棱锥P-ABCD中`（缺「在」）不认、
+`以…为底面的四棱锥…中` 不认、`A_1` / `A_{1}` 排版变体不认、`P-ABCA` 重复点被收下。
+
+### 3. 改了什么（只补入口与命名，不新造解析器）
+
+1. **顶环后缀规则**（`shapeGrammar.ts`）：判据从"必须等于 `A′`"改成"**底环点名 + 同一个后缀**"，
+   后缀收撇号与下标 1–6；混写（`A₁B′C₁`）与点数不同一律问路，**题面原名原样保留**
+   （设计 §4.3"不让默认 `A′` 覆盖已给 `A₁`"）。
+2. **有边界的下标归一**：`A_1` / `A_{1}` → `A₁`。ASCII `A1` **仍不认**（`pointNames` 的既有裁决），
+   `A_10` 不归一。
+3. **形状从句的两处语法边界**：`在` 可省；允许 `以…为底面的` 前缀（限 24 字，不吞后续题设）。
+   正则不再把修饰词与数词吃掉（既有行为不变）。
+4. **环内重复点**（`P-ABCA`）：`ringOf` 直接问路，不把同一个点收进环两次。
+5. **正 / 直棱柱的 spec**（`witnessSearch.ts` 的 `specForRightPrism`）：`正` / `直` 修饰词 +
+   入口语法给出的两个环 ⇒ 侧棱竖直是题面说的，不再报"没有给出侧棱⊥底面"。
+   **没写修饰词、也没有"侧棱 ⊥ 底面"时仍然问路**（不替题面挑形状）。
+6. **内核接受题面顶面点名**（`constructors.ts`）：`PrismConstructRequest.topNames` 可选；
+   省略 = 原有 `withPrimes` 行为逐字不变。`spec.top` 是完整顶环时才传。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run shapeGrammar.test.ts lengthEquality.test.ts explicitSolidConditions.test.ts \
+  witnessSearch.test.ts examSolidVariants.test.ts trapezoidPrism.test.ts \
+  pointNames.test.ts constructors.test.ts solidGeometryFourCases.test.ts
+```
+
+**9 文件 / 227 项通过，exit 0**（含 `constructors.test.ts` 71 项：顶面命名的既有契约没被打破）。
+
+`solidGeometryFourCases.test.ts` 里 Case 2 的阶段读数推进为：
+
+| 阶段 | T1 | T2 |
+|---|---|---|
+| 解析 | 5 条 / 0 残留 | 5 条 / 0 残留 |
+| 形状 | `unrecognised` | **`ok`**：prism，底环 `ABC`，顶环 **`A₁B₁C₁`** |
+| 搜索 | 未开始 | `unverified_instance`：`点名缺失：D`、`点名缺失：E`（T5 的活） |
+
+另外两条关系保真断言落了：**连等式每条长度都进题设**（Case 1 四条、Case 4 三条）、
+**`BE=1` 是定长而不是中点**（中点只有 `D`），以及**目标不进入 givens**、**读不出的条件继续显形**。
+
+### 5. 这一块**没有**做的
+
+- **Case 2 的底面还不是正三角形**：`正三棱柱` 的"正"目前只用于判定"侧棱竖直"，
+  底面仍走"普通三角形代表值"（`AC` 是自由标量）。这是 T3 的活（底面解析构造）。
+- Case 4 的 `直角梯形` 入口、Case 3 的菱形/交点两句、四题的命名分点，都仍未动。
+
+### 6. T2 判定
+
+计划 T2 的五条 checklist 全落：参数化入口测试、Case 1/4 连等式与 `BE=1` 断言、RED 记录、
+最小补语法（复用 `parseLengthChains` / `splitPointNames` / `canonicalPointName`，没有另造解析器）、
+同命令复跑 + 残留断言。
+
+---
+
+## T3 —— 扩展既有底面解析构造（直角梯形 / 显式菱形角）
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| T3 执行前 HEAD | `75059e23`（T1）＋ T2 的未提交改动 |
+| 新增文件 | `packages/geometry-kernel/src/witness/basePolygons.ts`、`basePolygons.test.ts` |
+| 改动的文件 | `witness/constructors.ts`、`witness/constructors.test.ts`、`geometry-kernel/src/index.ts`、`agent-core/src/solver/witnessSearch.ts`、`agent-core/src/solidGeometryFourCases.test.ts`、`agent-core/src/planCompiler.test.ts`（见 §5） |
+
+### 2. 这一块真正缺的是什么
+
+T1 的基线读数已经把两个缺口钉死，T3 就是把它们变成断言并修掉：
+
+| 输入 | 修之前的实况 | 为什么是缺陷 |
+|---|---|---|
+| Case 1 底面：`AB ∥ CD`、`AD ⊥ AB`、`AB=AD=2`、`CD=1` | 落进"环首直角 ⇒ 矩形"那一支，`C=(2,2)`、`CD=2` | **静默建成矩形**：`CD` 的长度在那个分支里根本没被用上，候选随后在核验器上因 `CD=1` 失败 |
+| `正三棱柱` 的底面 | 边长 `AB=2` 给定，`BC` 是**自由标量**（2 或 3 任选） | 题面说"正三棱柱"，画出来的却是斜三角形底 |
+| 菱形 + `∠BAD=75°` | 一律取代表角 60° | 75° 的题被静默画成 60°（60° 的题恰好命中，看不出问题） |
+
+RED 的形态：`basePolygons.test.ts` 的 9 条用例与 `constructors.test.ts` 的新增 7 条用例。
+（诚实记录：`basePolygons.ts` 与它的单测是同一步写的，其中 2 条失败是**我自己的期望值写错**
+——45°/135° 那个三角关系；真正的能力 RED 是 T1 基线里那三格，不是这两个单测。）
+
+### 3. 改了什么
+
+1. **`basePolygons.ts`（新）**：只做"数值 → 坐标"的纯计算，两类：
+   - `rightTrapezoidPolygon({ width, height, top })` ⇒ `A(0,0) B(w,0) C(top,h) D(0,h)`；
+   - `rhombusPolygon({ side, angleDegrees })` ⇒ `A(0,0) B(s,0) D(s·cosθ,s·sinθ) C=B+D`。
+   两者都对零/负/非有限/0°–180° 之外给出**结构化拒绝**，且把浮点噪声按回 0（不放宽内核守卫）。
+2. **`constructors.ts`**：
+   - `rightTrapezoidEdges(names, relations)`：**按环上任意顶点**找"直角 + 一组平行边 + 另一组不平行"，
+     返回 `AB`/`AD`/`CD` 三条成形边。**再点一个直角（`AB⊥BC`）就跳过** —— 那是矩形的活，不抢。
+   - `deriveRightTrapezoidBase`：三个长度各自独立（题面给就用题面，没给取代表值），
+     坐标按"直角顶点在环上的位置"**旋转回题面环序**，所以 `BCDA` 这种循环点序也认。
+   - `deriveRegularTriangleBase`：`AB=BC=CA` 链式关系 ⇒ 正三角形（`AB=2` 就三条边都是 2）。
+   - `deriveRhombusBase`：角度来源分成两路 —— 题面给了角就用题面的角（**不写进 `freeValues`**，
+     因为那一列的含义是"系统替你定了什么"），没给才取代表角 60°。邻角写法按 `180° − θ` 换算，
+     矛盾的角、对角线上的角、0°/90°/180° 全部拒绝。
+3. **`witnessSearch.ts`**：`specForRightPrism` 在 `正` + 三角形底时补三条 `equal-length`，
+   并且**先补齐关系再算自由标量**（否则 `BC` 仍会被说成系统自选）；
+   `orderedBaseWithFreeEdges` 对直角梯形只把 `AB`/`AD`/`CD` 里**题面没给**的列为自由边，
+   对正三角形只留一条边。
+4. **`planCompiler.test.ts`**：那条"读不出的台体题面"原以 `ABCD-A₁B₁C₁D₁` 举例，
+   而 T2 之后 `A₁` 顶环**已经能认** —— 前提不成立，改用后缀不一致的 `ABCD-A₁B₁C₁D₂`，
+   断言本身（兜底理由必须是台体自己的）不变。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run packages/geometry-kernel packages/agent-core --maxWorkers=3
+```
+
+**240 文件 / 2724 项通过，exit 0**（其中 `constructors.test.ts` 78、`basePolygons.test.ts` 9、
+`solidGeometryFourCases.test.ts` 10）。
+
+`solidGeometryFourCases.test.ts` 新增的 T3 断言（**自己量**，不读构造方自述）：
+
+| 题 | 断言 |
+|---|---|
+| Case 1 | `AB=2`、`AD=2`、`CD=1`、`AD⊥AB`、`AB∥CD`、`BC≠AD`（不是矩形）、底面 z=0、`P` 在 A 正上方 2 |
+| Case 2 | `AB=BC=CA=2`（正三角形）、`AA₁=3` 且竖直、顶面点名是 `A₁B₁C₁` 而不是 `A′B′C′` |
+
+### 5. 这一块**没有**做的
+
+- **`正四棱柱` 的底面（正方形）**：四边相等在现有规则里先落到"菱形"那一支（代表角 60°），
+  那是另一个形状。本批只在**三角形**底上补"正 ⇒ 正三角形"，四边形的"正"留给后续。
+- 直角梯形的**其它平行组合**（`AD ∥ BC` 那一种已有独立分支，不是本期目标）未动。
+- 菱形 + 显式角只覆盖**底环上的内角**；对角线上的角按"不支持"如实拒绝（不猜）。
+
+### 6. T3 判定
+
+计划 T3 的六条 checklist 全落；能力边界如实写在上面。原报告"必须新增两种公开宏动作"的判断
+没有采用 —— 这一批全部走既有 `solid.create_polyhedron` / 既有 spec，没有新增动作。
+
+---
+
+## T4 —— 底面内部派生垂足（Case 3 的 `O`）
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| 新增文件 | `packages/geometry-kernel/src/witness/derivedBasePoints.ts`、`.test.ts` |
+| 改动的文件 | `witness/solidShapeSpec.ts`、`witness/constructors.ts`、`agent-core/src/solver/witnessSearch.ts`、`solver/solverContracts.ts`、`diagramObligations.ts`、`apps/web/src/agent/localPlanner.ts`、`solidGeometryFourCases.test.ts` |
+
+### 2. 这一块真正缺的是什么
+
+修之前 Case 3 的读数（T1 记录）：**4 条题设 + 2 条残留**，形状描述 `unrecognised`，
+理由是"`PO ⊥ 平面ABCD` 的两个端点都不在所点名的平面内"。两层缺口：
+
+1. **解析层**：`AC 与 BD 相交于点 O` 与 `底面 ABCD 是边长为 2 的菱形` 两句都读不出（残留）；
+2. **构造层**：`constructPyramidWitness` 要求垂足**必须是底面环顶点**，`O` 不是环顶点 ⇒ 拒绝。
+
+把 `O` 换成 `A`（顶点位置变了）或把 `O` 塞进底环（底面多一个顶点）都是改题面 —— 这条纪律写在
+`derivedBasePoints.ts` 的头注释里。
+
+### 3. 改了什么
+
+1. **解析层（`diagramObligations.ts`）**：
+   - 菱形读取器补两处语法：`底面` 前缀、`边长为 N 的` 定语；给了边长再补一条 `fixedLength`。
+   - 新增"对角线交点"读取器：`AC 与 BD 相交于点 O` ⇒ **两条** `pointOnSegment`（`O∈AC`、`O∈BD`）。
+     **不新增判据种类** —— 两条都成立就是"这两条线段相交于 O"，核验器零改动。
+2. **spec 层（`solidShapeSpec.ts`）**：新增 `DerivedBasePoint`（`name` + `kind` + `lines`）与
+   可选字段 `derivedBasePoints`。**底面环不变**。
+3. **内核（`derivedBasePoints.ts`）**：解对角线交点。拒绝：引用缺失、重名、自引用、
+   平行/重合、交点不在两条线段内部、两条线异面。
+4. **内核（`constructors.ts`）**：`constructPyramidWitness` 先解底面 → 再解派生点 → 再放顶点；
+   垂足可以是环顶点**或**派生点。派生点作为 `auxiliaryPoints` 带 `hostEdge` + `parameter` + `source`
+   返回，**不进 `names`/`points`**（那两列与 `faces` 共用下标空间，塞进去会报 `unused-vertex`）。
+   `deriveApexHeight` 的侧棱定长分支改成按"已知点"判（派生点也算已知），
+   `PO=√3` 于是走 `h = √(L² − 0²) = L`。
+5. **落盘（`witnessSearch.ts` + `localPlanner.ts`）**：新增 `auxiliaryPointActions` /
+   `solidWitnessActions`，把辅助点落成 `dynamic.create_bound_point`：
+   - 宿主是多面体的一条棱 ⇒ 直接 `hostEdge` 绑定；
+   - 宿主是对角线 ⇒ 先建那条线段再绑定（O 落在 `A→C` 上、参数 1/2）。
+   见证搜索（`envelopeFor`）与产品入口（`localPlanner` 两处）**共用同一份**动作链。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run witnessSearch.test.ts diagramObligations.test.ts solidGeometryFourCases.test.ts \
+  planCompiler.test.ts apps/web/src/agent/localPlanner.test.ts packages/geometry-kernel/src/witness
+```
+
+**9 文件 / 412 项通过，exit 0**。
+
+`solidGeometryFourCases.test.ts` 的 Case 3 读数推进为：
+
+| 阶段 | T1 | T4 |
+|---|---|---|
+| 解析 | 4 条 / **2 条残留** | 10 条 / **0 条残留**（菱形 ⇒ 3 等长 + 1 边长；交点 ⇒ 2 条点在线上） |
+| 形状 | `unrecognised` | **`ok`**：pyramid，底环 `ABCD`，顶点 `P`，垂足 **`O`** |
+| 构造 | 未开始 | 四个底点 + `P`；**辅助点 `O`** 在 `AC` 上参数 1/2 |
+| 核验 | 未开始 | 只有 `点名缺失：M`（T5 的活）—— 其余题设全部通过 |
+
+内核层另有独立断言（不看构造方自述）：底面四边都等于 2、`∠BAD=60°`、
+`O` 同时是 `AC` 与 `BD` 的中点（两条对角线交点）、`P` 在 `O` 正上方且 `PO=√3`、底面 z 全为 0。
+
+### 5. 这一块**没有**做的
+
+- `M 为 PC 的中点` 仍未被构造（T5 的命名分点）。
+- 派生点只在**菱形底情形**走通了整条链；一般四边形的对角线交点没有单独回归。
+- 浏览器里"辅助点可见、绑定点跟随宿主"未验（T8）。
+
+---
+
+## T5 —— 确定性计划适配与命名分点
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| 新增文件 | `packages/agent-core/src/parametricSolidPlan.ts`、`parametricSolidPlan.test.ts` |
+| 改动的文件 | `witness/constructors.ts`（+ `.test.ts`）、`agent-core/src/solver/witnessSearch.ts`、`solver/solverContracts.ts`、`agent-core/src/index.ts`、`apps/web/src/agent/localPlanner.ts`、`solidGeometryFourCases.test.ts`、`witnessSearch.test.ts`（见 §5） |
+
+### 2. 这一块真正缺的是什么
+
+T4 之后，Case 1/2/3 的搜索仍然停在 `点名缺失：E / D / M`。缺的不是坐标，而是**"题面点名的
+辅助点"没有任何出口**：
+
+- 内核的候选只有 `A…D`（+ 顶点），`E` 为 `PB` 中点这件事**不进候选**；
+- 见证候选 → 动作用的是**单个** `solid.create_polyhedron`，没有地方放第二个点；
+- 两个产品入口（`localPlanner` 的两支）各写一遍这条动作链。
+
+### 3. 改了什么
+
+1. **内核关系词表 +2**（`WitnessRelation`）：`midpoint` 与 `point-on-segment`。
+   `kernelRelations` 把 `midpoint` / `pointOnSegment` 义务翻过去。它们**不参与底面定形**
+   （`deriveBasePolygon` 只读它认得的那几档）。
+2. **内核 `resolveNamedPointRelations`**：按**最终坐标**算辅助点：
+   - 中点 ⇒ 参数 `1/2`；
+   - 棱上点 ⇒ `t = 距离 / |宿主|`；题面从**另一端**给长度时换算成 `1 − d/|宿主|`
+     （`EB₁=2` 与 `BE=1` 必须落到同一处）。题面只说"在棱上"、没给长度 ⇒ **不落点**；
+   - 参数不在 `(0,1)` 内 ⇒ `degenerate-base`；与已有顶点重名 ⇒ `duplicate-name`。
+3. **`assembleCandidate` 统一挂辅助点**：派生点（T4 的 `O`）与命名点（T5 的 `D/E/M`）走
+   **同一条** `auxiliaryPoints` 通道 —— 都不进 `names`/`points`/`faces` 的下标空间。
+4. **落盘统一**（`auxiliaryPointActions` / `solidWitnessActions`）：
+   宿主是多面体的一条棱 ⇒ 直接 `hostEdge` 绑定；是底面对角线 ⇒ 先建线段再绑定。
+5. **`parametricSolidPlan.ts`（新）**：题面 → spec → 见证候选 → 动作链收成**一处**，
+   两个产品入口都从 `tryBuildParametricSolidPlan` 取。`solidShapeIntentFor` 里那段
+   自己拼动作的代码删掉，改调它（`localPlanner` 的行为因此与见证搜索完全同步）。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run packages/agent-core/src/parametricSolidPlan.test.ts \
+  packages/agent-core/src/solidGeometryFourCases.test.ts \
+  packages/geometry-kernel/src/witness/constructors.test.ts
+```
+
+- `parametricSolidPlan.test.ts` **8 项通过**（Case 1/2/3 全链、反向边、宿主跟随、负测）；
+- `solidGeometryFourCases.test.ts` **11 项通过** —— **Case 1/2/3 全部 `verified_instance`**；
+- `constructors.test.ts` **83 项通过**（含 T5 新增 5 项）。
+
+四题阶段读数（终态）：
+
+| 题 | 解析 | 形状 | 搜索 | 辅助点 |
+|---|---|---|---|---|
+| Case 1 | 10 条 / 0 残留 | `ok` pyramid ABCD/P | **`verified_instance`** | `E@PB:1/2` |
+| Case 2 | 5 条 / 0 残留 | `ok` prism ABC/A₁B₁C₁ | **`verified_instance`** | `D@AC:1/2`、`E@BB₁:1/3` |
+| Case 3 | 10 条 / 0 残留 | `ok` pyramid ABCD/P(foot O) | **`verified_instance`** | `O@AC:1/2`、`M@PC:1/2` |
+
+`parametricSolidPlan.test.ts` 从**编译后的文档**里自己量：
+
+- 三个案例都 `compilePlan.ok === true` 且 `diagramVerification.status === "passed"`；
+- `E`/`D`/`M`/`O` 的 `binding.kind === "onHost"`（**绑定点**，不是自由点），参数分别是
+  `1/2`、`1/2`、`1/2`、`1/2`、`1/3`；
+- 动作链里 `E` 的 `hostEdge` 就是 `{from:"B", to:"B₁"}`；
+- **宿主动了绑定点跟着走**：整只实体沿 +z 平移 3，`E` 也沿 +z 移动 3，参数不变。
+
+### 5. 两处既有测试的断言**方向**改了（说明理由）
+
+1. `witnessSearch.test.ts` 的 `PYRAMID_MIDPOINT`（`O为BD的中点`）原先钉的是"中点没有出口 ⇒
+   未核验"。T5 把它变成了可核验 —— 断言改为 `verified_instance` + 绑定在 `BD` 上参数 1/2，
+   **同时保留**"判性不明的条件仍然不许升格"那半条（合成一条 `judgeability: "ambiguous"` 的
+   `proposition` 义务，结果仍是 `unverified_instance`）。
+2. `planCompiler.test.ts` 的台体题面在 T2 已改（见 T3 §3.4）。
+
+这两处都是**能力变化**，不是为了让测试变绿而放宽判据。
+
+### 6. 这一块**没有**做的
+
+- `segmentRatio`（`AE:AD=2:5` 这类**比例**写法）还没有映射成辅助点；当前只认中点与
+  "定长/边长"两种。
+- 辅助点的**参数滑块**（`parameterId`）没有接 —— 落盘用的是固定 `parameter`。
+- 浏览器里"辅助点可见、拖动宿主后仍正确"未验（T8）。
+
+
+

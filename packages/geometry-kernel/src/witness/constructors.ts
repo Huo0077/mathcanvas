@@ -38,7 +38,9 @@ import { crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVect
 import { dihedralAngleDetail3 } from "../markers3d"
 import { canonicalPointName, POINT_NAME_SUFFIXES, pointNameSuffixCount } from "../pointNames"
 import { hasSelfIntersectingPolygon } from "../solid-builders"
-import type { ShapeScalarChoice, SolidShapeSpec } from "./solidShapeSpec"
+import { rhombusPolygon, rightTrapezoidPolygon, snapToZero } from "./basePolygons"
+import { resolveDerivedBasePoints, type ResolvedDerivedPoint } from "./derivedBasePoints"
+import type { DerivedBasePoint, ShapeScalarChoice, SolidShapeSpec } from "./solidShapeSpec"
 import { candidateResiduals, polygonResiduals, type WitnessResidualDiagnostic } from "./residuals"
 
 /** 题目已给出的数值：`value` 是数值本身，`raw` 保留题面写法（进 freeValues / trace）。 */
@@ -87,6 +89,21 @@ export type WitnessRelation =
    */
   | { kind: "area"; targets: readonly string[]; value?: number | WitnessStatedValue }
   | { kind: "dihedral"; segments: readonly WitnessPlaneTarget[]; value?: number | WitnessStatedValue; unit?: string }
+  /**
+   * **点名的中点**（T5，2026-11-05）：`E 为 PB 的中点` ⇒ `targets: ["E", "P", "B"]`
+   *（被定义的点在先，线段两端在后 —— 与 `pointOnSegment` 同一条约定）。
+   *
+   * 它**不参与底面构造**：中点是构造完成之后、按最终坐标算出来的**辅助点**，
+   * 与 `derivedBasePoints` 走同一条 `auxiliaryPoints` 通道（见 `assembleCandidate`）。
+   */
+  | { kind: "midpoint"; targets: readonly string[] }
+  /**
+   * **点名的棱上点**（T5）：`E 在 BB₁ 上，且 BE = 1` ⇒ `targets: ["E", "B", "B₁"]`。
+   *
+   * 参数由**题面给的那条定长**算出来（`t = |BE| / |BB₁|`），不是系统挑的；
+   * 题面只说"在棱上"、没给长度/比例时**不落点**（位置不唯一，留给核验器如实显示未核验）。
+   */
+  | { kind: "point-on-segment"; targets: readonly string[] }
 
 /** 高（棱锥）的来源。 */
 export type WitnessHeightSpec =
@@ -129,6 +146,8 @@ export interface PyramidConstructRequest {
   base: readonly string[]
   apex: WitnessApexSpec | null
   relations: readonly WitnessRelation[]
+  /** 底面上的派生点（T4）：垂足可以落在它们身上，但**它们不是环顶点**。 */
+  derivedBasePoints?: readonly DerivedBasePoint[]
 }
 
 export interface PrismConstructRequest {
@@ -136,6 +155,16 @@ export interface PrismConstructRequest {
   base: readonly string[]
   relations: readonly WitnessRelation[]
   extrusion: WitnessExtrusionSpec
+  /**
+   * **题面已经给出的顶面点名**（T2，2026-11-05）。
+   *
+   * 联考卷常写 `ABC-A₁B₁C₁`（下标），而内核的默认顶面命名是"底面名 + `′`"。
+   * 没有这一栏时，题面写 `A₁` 就会被默认的 `A′` **覆盖** —— 那是"悄悄改题面"。
+   * 给了就必须与底环**逐一对应**（同一个后缀），否则拒绝。
+   *
+   * 省略 = 保持原有行为（`withPrimes` 自动派生 `A′`）；既有调用点一个都不用改。
+   */
+  topNames?: readonly string[]
 }
 
 /**
@@ -194,6 +223,14 @@ export interface WitnessShapeCandidate {
   /** 系统**自选**的值（题面没给的），必须原样进 `assumptions` 给用户看。 */
   freeValues: string[]
   assumptions: string[]
+  /**
+   * **辅助点**（T4）：不在多面体拓扑里、但题面点名了的点（当前只有对角线交点 `O`）。
+   *
+   * 它们**不在** `names` / `points` 里 —— 那两列与 `faces` 共用下标空间，塞进去会让
+   * `buildFromPoints` 报 `unused-vertex`。物化时由编排层按 `hostEdge` + `parameter`
+   * 落成 `dynamic.create_bound_point`（绑定点，不是自由点）。
+   */
+  auxiliaryPoints?: readonly ResolvedDerivedPoint[]
 }
 
 /** 拒绝码：机器可读，供 2b 分类与排序。 */
@@ -371,8 +408,20 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
      * 由本层**如实拒**成缺拉伸，而不是替题面猜一个高度。
      */
     const height = heightValue ?? statedLateralHeight(spec)
+    /**
+     * **题面已给的顶面点名原样交给构造器**（T2）：`spec.top` 是顶环时才传；
+     * 只有 1 个名字的老写法（`derivePrismStructure` 读出的"那一条侧棱的顶面端点"）
+     * 继续走 `withPrimes` 的默认命名 —— 两条语义不能混。
+     */
+    const declaredTop = spec.top !== undefined && spec.top.length === spec.base.length ? [...spec.top] : undefined
     if (height === null) {
-      return constructWitnessShape({ shape: "prism", base: [...spec.base], relations, extrusion: { kind: "unknown" } })
+      return constructWitnessShape({
+        shape: "prism",
+        base: [...spec.base],
+        relations,
+        extrusion: { kind: "unknown" },
+        ...(declaredTop === undefined ? {} : { topNames: declaredTop })
+      })
     }
     /**
      * **斜棱柱**（S3）：题面说"斜"，斜向由入口层给（`spec.lateralTiltDegrees`，代表值）。
@@ -384,7 +433,13 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
     const vector = tilt === undefined
       ? { x: 0, y: 0, z: height }
       : { x: height * Math.sin((tilt * Math.PI) / 180), y: 0, z: height * Math.cos((tilt * Math.PI) / 180) }
-    const constructed = constructWitnessShape({ shape: "prism", base: [...spec.base], relations, extrusion: { kind: "vector", vector } })
+    const constructed = constructWitnessShape({
+      shape: "prism",
+      base: [...spec.base],
+      relations,
+      extrusion: { kind: "vector", vector },
+      ...(declaredTop === undefined ? {} : { topNames: declaredTop })
+    })
     if (constructed.status !== "candidate" || tilt === undefined) return constructed
     /**
      * **代表斜向必须让用户看见**（与"系统自选"同一条纪律）：题面只说了"斜"，
@@ -461,7 +516,8 @@ export function constructShapeFromSpec(spec: SolidShapeSpec, choices: readonly S
     shape: "pyramid",
     base: [...spec.base],
     apex: { at: apex.at, foot: apex.foot ?? spec.base[0] ?? apex.at, height },
-    relations
+    relations,
+    ...(spec.derivedBasePoints === undefined ? {} : { derivedBasePoints: spec.derivedBasePoints })
   })
 }
 
@@ -479,18 +535,35 @@ export function constructPyramidWitness(request: PyramidConstructRequest): Witne
     return reject("duplicate-name", `顶点 ${apexName} 与底面顶点重名，无法区分。`, [apexName])
   }
   const foot = request.apex.foot ?? base.names[0]
-  if (!base.names.includes(foot)) {
-    return reject("missing-height-reference", `垂足 ${foot} 不是底面环上的点名顶点。`, [foot])
-  }
 
   const derived = deriveBasePolygon(base.names, request.relations)
   if (derived.status === "rejected") return derived
   const baseResiduals = polygonResiduals(derived.polygon)
   if (baseResiduals.diagnostics.length > 0) return rejectFromDiagnostics(baseResiduals.diagnostics, base.names)
+  /**
+   * **底面上的派生点**（T4）：先解底面，再解派生点，最后才放顶点 —— 顺序不能反。
+   * 派生点由底面坐标算出（不是题面给的数），所以"底面错了"必须先在底面那一层被拒。
+   */
+  const derivedPoints = resolveDerivedBasePoints({
+    baseNames: base.names,
+    basePoints: derived.polygon,
+    definitions: request.derivedBasePoints ?? []
+  })
+  if (derivedPoints.status === "rejected") return reject(derivedPoints.code, derivedPoints.message, derivedPoints.points)
+  const footIsDerived = derivedPoints.points.find((point) => point.name === foot)
+  if (!base.names.includes(foot) && footIsDerived === undefined) {
+    return reject("missing-height-reference", `垂足 ${foot} 既不是底面环上的点名顶点，也不是本题解出的底面派生点。`, [foot])
+  }
+  const knownPoints = new Map<string, Vector3>()
+  for (const [index, name] of base.names.entries()) knownPoints.set(name, derived.polygon[index]!)
+  for (const point of derivedPoints.points) knownPoints.set(point.name, point.point)
+  const footPoint = knownPoints.get(foot)!
 
   const height = deriveApexHeight({
     apexName,
     foot,
+    footPoint,
+    knownPoints,
     heightSpec: request.apex.height ?? { kind: "free" },
     relations: request.relations,
     base: derived.polygon,
@@ -499,8 +572,6 @@ export function constructPyramidWitness(request: PyramidConstructRequest): Witne
   if (height.status === "rejected") return height
   const { value: heightValue, note: heightNote, assumed: heightAssumed, derived: heightDerived } = height
 
-  const footIndex = base.names.indexOf(foot)
-  const footPoint = derived.polygon[footIndex]
   const apexPoint: Vector3 = { x: footPoint.x, y: footPoint.y, z: footPoint.z + heightValue }
 
   /**
@@ -531,8 +602,11 @@ export function constructPyramidWitness(request: PyramidConstructRequest): Witne
     freeValues: [...derived.freeValues, ...(heightNote ? [heightNote] : [])],
     assumptions: [
       ...derived.assumptions,
+      ...derivedPoints.assumptions,
       `顶点 ${apexName} 取在垂足 ${foot} 正上方、高 ${formatNumber(heightValue)}${heightOrigin}。`
-    ]
+    ],
+    ...(derivedPoints.points.length > 0 ? { auxiliaryPoints: derivedPoints.points } : {}),
+    relations: request.relations
   })
 }
 export function constructPrismWitness(request: PrismConstructRequest): WitnessConstructResult {
@@ -609,8 +683,29 @@ export function constructPrismWitness(request: PrismConstructRequest): WitnessCo
    * 走到这里意味着底面点名把该字母的一层与两层后缀**全占满了** —— 罕见，但一旦发生，
    * 硬拼 `A′2` 这种名字的后果是核验器判整张表不可靠、用户拿到一张永远核验不了的图。
    * 明确拒绝好过那样。
+   *
+   * **题面已给顶面点名时用题面的**（T2）：`ABC-A₁B₁C₁` 就必须造出 `A₁B₁C₁`，
+   * 不能用默认 `A′` 覆盖它。对应关系（同一个后缀）由调用方校验，这里再守一次长度与重名。
    */
-  const extraNames = withPrimes(base.names)
+  const declaredTop = request.topNames
+  if (declaredTop !== undefined) {
+    if (declaredTop.length !== base.names.length) {
+      return reject(
+        "invalid-input",
+        `题面给的顶面点名 ${declaredTop.join("、")} 与底环 ${base.names.join("、")} 点数不同，说不清对应关系。`,
+        [...base.names, ...declaredTop]
+      )
+    }
+    const seen = new Set(base.names.map((name) => canonicalPointName(name)))
+    for (const name of declaredTop) {
+      const canonical = canonicalPointName(name)
+      if (seen.has(canonical)) {
+        return reject("duplicate-name", `顶面点名 ${name} 与底面点名重名，无法区分。`, [...base.names, ...declaredTop])
+      }
+      seen.add(canonical)
+    }
+  }
+  const extraNames = declaredTop === undefined ? withPrimes(base.names) : [...declaredTop]
   if (extraNames === null) {
     return reject(
       "unsupported-base-shape",
@@ -629,7 +724,8 @@ export function constructPrismWitness(request: PrismConstructRequest): WitnessCo
     assumptions: [
       ...derived.assumptions,
       `顶面由底面沿向量 (${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}) 平移得到（棱柱定义）。`
-    ]
+    ],
+    relations: request.relations
   })
 }
 
@@ -719,7 +815,8 @@ export function constructFrustumWitness(request: FrustumConstructRequest): Witne
     assumptions: [
       ...derived.assumptions,
       `顶面是底面按**质心**相似缩小 ${formatNumber(ratio)} 倍、再沿向量 (${formatNumber(vector.x)}, ${formatNumber(vector.y)}, ${formatNumber(vector.z)}) 平移得到的平行截面（台体定义）。`
-    ]
+    ],
+    relations: request.relations
   })
 }
 
@@ -1275,7 +1372,10 @@ const PLANAR_CONDITION_NAMES: Record<WitnessRelation["kind"], string> = {
   "equal-length": "等长",
   dihedral: "二面角",
   /** Task 11：面积的"写出来的样子"是「△ABC 的面积」—— 与题面同一套字形。 */
-  area: "面积"
+  area: "面积",
+  /** T5：这两档是**点名的辅助点**，不是平面图形能解的约束（`constructPlanarWitness` 不收）。 */
+  midpoint: "中点",
+  "point-on-segment": "棱上点"
 }
 
 function planarConditionName(relation: WitnessRelation): string {
@@ -1287,6 +1387,7 @@ function planarWrittenForm(relation: WitnessRelation): string {
   if (relation.kind === "planarAngle") return `∠${relation.targets.join("")}`
   if (relation.kind === "dihedral") return "二面角"
   if (relation.kind === "area") return `△${relation.targets.join("")} 的面积`
+  if (relation.kind === "midpoint" || relation.kind === "point-on-segment") return relation.targets.join("")
   return relation.segments.map((segment) => (segment.length >= 2 ? `${segment[0]}${segment[1]}` : segment.join(""))).join("、")
 }
 
@@ -1496,6 +1597,88 @@ function validateNames(names: readonly string[], label: string): { status: "ok";
  * **候选的组装与自检**（棱锥 / 棱柱共用）：点集守卫 → 面环规则生成 → 绕向归一化 →
  * 全量残差（点 + 面）→ 输出。任何一步失败都返回结构化拒绝，绝不返回"悄悄坏掉"的候选。
  */
+/**
+ * **点名的辅助点**（T5）：中点与"棱上定比分点"按**最终坐标**算出来。
+ *
+ * 为什么放在构造之后：它们是构造的**产物**，不是底面的输入 —— `E 为 PB 中点` 不影响
+ * `A/B/C/D/P` 在哪，只决定 `E` 在哪。所以它们与 `derivedBasePoints` 走同一条
+ * `auxiliaryPoints` 通道，落盘时由编排层变成 `dynamic.create_bound_point`。
+ *
+ * 三种"给不出位置"的情形**不落点**（也不编一个参数）：题面只说"在棱上"没给长度/比例、
+ * 参数落在 `(0,1)` 之外、宿主线段不存在。它们会在核验器里如实显示"未核验"。
+ */
+function resolveNamedPointRelations(
+  known: ReadonlyMap<string, Vector3>,
+  relations: readonly WitnessRelation[],
+  alreadyResolved: ReadonlySet<string>
+): { status: "ok"; points: ResolvedDerivedPoint[]; assumptions: string[] } | WitnessConstructRejection {
+  const resolved: ResolvedDerivedPoint[] = []
+  const assumptions: string[] = []
+  const used = new Set(alreadyResolved)
+  const segmentLength = (from: string, to: string): number | null => {
+    const lookup = statedLength(relations, [from, to])
+    return lookup.kind === "value" ? lookup.stated.value : null
+  }
+  for (const relation of relations) {
+    if (relation.kind !== "midpoint" && relation.kind !== "point-on-segment") continue
+    const [name, from, to] = relation.targets
+    if (name === undefined || from === undefined || to === undefined) continue
+    if (from === to) continue
+    const start = known.get(from)
+    const end = known.get(to)
+    if (start === undefined || end === undefined) continue
+    if (used.has(name)) continue
+    /**
+     * **与已有顶点重名 ⇒ 拒绝**（T5）：`点 A 为棱 PB 的中点` 这种题面要么是笔误、
+     * 要么在说"这两个点重合"—— 两种都不该被静默忽略（`A` 已经在图上了，不能再定义一个）。
+     */
+    if (known.has(name)) {
+      return reject("duplicate-name", `辅助点 ${name} 与已有顶点重名，无法区分。`, [name])
+    }
+    const length = distanceVector3(start, end)
+    if (!(length > DEGENERATE_TOLERANCE)) continue
+    let parameter: number
+    if (relation.kind === "midpoint") {
+      parameter = 0.5
+    } else {
+      /**
+       * **参数来自题面给的定长**：`BE = 1` 与 `|BB₁|` 一除就得到 `t = 1/3`。
+       * 两个端点各试一次（题面可能写 `BE` 也可能写 `EB₁`）；读不到就**不落点**。
+       */
+      const viaStart = segmentLength(from, name)
+      const viaEnd = segmentLength(to, name)
+      const fromStart = viaStart !== null
+      const distance = viaStart ?? viaEnd
+      if (distance === null) continue
+      /**
+       * **方向要放进参数里**：题面写 `EB₁ = 2` 时量到的是"从 `to` 那一端出发"的长度，
+       * 换算成 `from → to` 的参数就是 `1 − d/|from→to|`。漏掉这一步会让同一个点
+       * 在两种写法下落到线段的**两端**（1/3 与 2/3 颠倒）。
+       */
+      parameter = (fromStart ? distance : length - distance) / length
+    }
+    if (!(parameter > 0) || !(parameter < 1)) {
+      return reject(
+        "degenerate-base",
+        `点 ${name} 在 ${from}${to} 上的参数是 ${formatNumber(parameter)}：必须严格落在 (0,1) 内（端点是已知点，不是"分点"）。`,
+        [name, from, to]
+      )
+    }
+    used.add(name)
+    const point: Vector3 = {
+      x: snapToZero(start.x + (end.x - start.x) * parameter),
+      y: snapToZero(start.y + (end.y - start.y) * parameter),
+      z: snapToZero(start.z + (end.z - start.z) * parameter)
+    }
+    const source = relation.kind === "midpoint"
+      ? `${from}${to} 的中点`
+      : `${from}${to} 上的点（参数 ${formatNumber(parameter)}）`
+    resolved.push({ name, point, hostEdge: [from, to], parameter, source })
+    assumptions.push(`辅助点 ${name} 取 ${source}。`)
+  }
+  return { status: "ok", points: resolved, assumptions }
+}
+
 function assembleCandidate(input: {
   baseNames: readonly string[]
   basePoints: readonly Vector3[]
@@ -1504,6 +1687,10 @@ function assembleCandidate(input: {
   apex: boolean
   freeValues: string[]
   assumptions: string[]
+  /** 派生辅助点（T4）：不进 `names` / `points`，见 `WitnessShapeCandidate.auxiliaryPoints`。 */
+  auxiliaryPoints?: readonly ResolvedDerivedPoint[]
+  /** 题面关系（T5）：中点 / 棱上定比分点由这一层按最终坐标算成辅助点。 */
+  relations?: readonly WitnessRelation[]
 }) {
   const names = [...input.baseNames, ...input.extraNames]
   const points = [...input.basePoints, ...input.extraPoints]
@@ -1513,6 +1700,16 @@ function assembleCandidate(input: {
   for (const point of points) {
     if (!isFiniteVector(point)) return reject("non-finite-value", "构造出的候选坐标里出现非有限数值。", [...names])
   }
+  /**
+   * **点名的中点 / 棱上分点**（T5）：按**最终坐标**算，与底面构造解耦。
+   * 派生点（`O`）也可能同时出现在 `pointOnSegment` 里（解析层就是那么读的），按点名去重。
+   */
+  const known = new Map<string, Vector3>()
+  for (const [index, name] of names.entries()) known.set(name, points[index]!)
+  const derivedAuxiliary = input.auxiliaryPoints ?? []
+  const named = resolveNamedPointRelations(known, input.relations ?? [], new Set(derivedAuxiliary.map((point) => point.name)))
+  if (named.status === "rejected") return named
+  const auxiliaryPoints = [...derivedAuxiliary, ...named.points]
 
   const baseCount = input.baseNames.length
   const rawFaces = input.apex ? pyramidRings(baseCount) : prismRings(baseCount)
@@ -1552,7 +1749,8 @@ function assembleCandidate(input: {
       buildOrder: Array.from({ length: names.length }, (_, index) => index),
       faces,
       freeValues: [...input.freeValues],
-      assumptions: [...input.assumptions]
+      assumptions: [...input.assumptions, ...named.assumptions],
+      ...(auxiliaryPoints.length === 0 ? {} : { auxiliaryPoints: [...auxiliaryPoints] })
     }
   }
   return candidate
@@ -1961,7 +2159,7 @@ function freeLength(stated: WitnessStatedValue | null, other: WitnessStatedValue
  * 由系统取一个**代表值**并**如实声明**，而不是假装题面说了。**不许取 90°**：
  * 四边相等 + 直角 = 正方形，那是题面没说的额外特殊性（与候选池里"两条自由底边不许取相等"同一条账）。
  */
-const RHOMBUS_REPRESENTATIVE_ANGLE = Math.PI / 3
+const RHOMBUS_REPRESENTATIVE_ANGLE_DEGREES = 60
 
 /**
  * **四边形的四条边两两相等**（题面的「底面 ABCD 是菱形」拆出来的三条链式 `equal-length`）。
@@ -1988,13 +2186,205 @@ export function hasEqualSideChain(names: readonly string[], relations: readonly 
 }
 
 /**
- * **菱形底面**（S3）：边长自由（或题面给定）+ 代表角 60°，四边相等由构造保证。
+ * **正三角形底面**（T3）：`AB = BC = CA` 的链式关系 + 一条边长。
+ *
+ * 顶点放法与"正 n 边形代表"同一条口径：`A = (0,0)`、`B = (s,0)`、`C = (s/2, s√3/2)`，
+ * 三条边 `s`、三个内角 60°。**边长来自题面就用题面**（不写进 `freeValues`）；
+ * 题面没给才取代表值并如实声明。
+ */
+function deriveRegularTriangleBase(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection {
+  const sides = names.map((name, index) => [name, names[(index + 1) % names.length]!] as [string, string])
+  const lookups = sides.map((side) => statedLength(relations, side))
+  for (const lookup of lookups) if (lookup.kind === "invalid") return lookup.rejection
+  const values = lookups.flatMap((lookup) => (lookup.kind === "value" ? [lookup.stated] : []))
+  const distinct = [...new Set(values.map((value) => Number(value.value.toFixed(9))))]
+  if (distinct.length > 1) {
+    return reject(
+      "unsupported-base-shape",
+      `底面取正三角形（三边相等），题面却给了不同的边长（${distinct.map((value) => formatNumber(value)).join(" / ")}）：这两条对不上。`,
+      [...names]
+    )
+  }
+  const side = distinct.length === 1 ? distinct[0]! : DEFAULT_FREE_BASE_WIDTH
+  if (!Number.isFinite(side) || !(side > 0)) return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  return {
+    status: "ok",
+    polygon: [
+      { x: 0, y: 0, z: 0 },
+      { x: side, y: 0, z: 0 },
+      { x: snapToZero(side / 2), y: snapToZero((side * Math.sqrt(3)) / 2), z: 0 }
+    ],
+    freeValues: distinct.length === 0 ? [`底面边长（正三角形）= ${formatNumber(side)}（系统自选）`] : [],
+    assumptions: [`底面 ${names.join("")} 取**正三角形**：三边相等、内角都是 60°（"正"是题面说的，不是系统自选的代表形状）。`]
+  }
+}
+
+/**
+ * **直角梯形的三条"成形边"**（T3）：直角在 `v` 处（`AD ⊥ AB`）、`AB ∥ CD`，
+ * 而且**另一组对边不平行**（`BC ∦ AD`）—— 后者是"真梯形"而不是平行四边形/矩形的判据。
+ *
+ * 返回的 `widthEdge` / `heightEdge` / `topEdge` 分别是 `AB`、`AD`、`CD` 这三条边；
+ * 认不出来返回 `null`（交给既有分支去拒绝或按别的形状处理），**不猜**。
+ *
+ * 为什么要按**环上任意顶点**找、而不是固定环首：设计 §4.3 要求"由关系确定哪个点对应该坐标，
+ * 不按字母 A 固定分支"。`BCDA` 这种环序与 `ABCD` 是同一个四边形，构造不该因此失败。
+ */
+export function rightTrapezoidEdges(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { rightAngleVertex: string; widthEdge: [string, string]; heightEdge: [string, string]; topEdge: [string, string] } | null {
+  if (names.length !== 4) return null
+  const edge = (index: number): [string, string] => [names[index % 4]!, names[(index + 1) % 4]!]
+  for (let index = 0; index < 4; index += 1) {
+    const previous = edge((index + 3) % 4)
+    const outgoing = edge(index)
+    const next = edge((index + 1) % 4)
+    const far = edge((index + 2) % 4)
+    if (!baseEdgePerpendicular(relations, names, previous)) continue
+    if (!baseEdgePerpendicular(relations, names, outgoing)) continue
+    if (!baseEdgeParallel(relations, names, outgoing, far)) continue
+    /**
+     * **再点一个直角就不是梯形了**：`AB ⊥ BC` 与 `AB ⊥ AD`、`AB ∥ DC` 合起来把底面推成矩形
+     * （`BC ∥ AD`），那是既有"环首直角 + B 处直角"那一支的活。这里跳过，别抢它的输入。
+     */
+    if (baseEdgePerpendicular(relations, names, next)) continue
+    /** 另一组对边也平行 ⇒ 那是平行四边形（配直角就是矩形），交给既有分支。 */
+    if (baseEdgeParallel(relations, names, next, previous)) continue
+    return {
+      rightAngleVertex: names[index]!,
+      widthEdge: outgoing,
+      heightEdge: previous,
+      topEdge: far
+    }
+  }
+  return null
+}
+
+/**
+ * **直角梯形底面**（T3，2026-11-05 四题修复）：`AB ∥ CD` + `AD ⊥ AB` 这一组输入。
+ *
+ * 与既有那一支（`AB ⊥ AD` + `AB ⊥ BC` + `BC ∥ AD`，即 `C=(w,c)`、`D=(0,d)`）**不是**同一个形状：
+ * 那一支的 `AB` 是两条平行边的公垂线，而这一支的 `AB` 与 `CD` 平行、`AD` 才是公垂线
+ * （`A=(0,0)`、`B=(a,0)`、`C=(c,h)`、`D=(0,h)`）。前者此前已能构造，后者此前会被
+ * **静默建成矩形**（`CD` 的长度在矩形分支里根本没被用上）—— 这正是 Case 1 / Case 4 的底面。
+ *
+ * 三个长度各自独立：题面给就用题面，没给就取**互不相等**的代表值（取相等会顺手做成矩形，
+ * 那是题面没说的额外特殊性）。
+ */
+function deriveRightTrapezoidBase(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; polygon: Vector3[]; freeValues: string[]; assumptions: string[] } | WitnessConstructRejection | null {
+  const pattern = rightTrapezoidEdges(names, relations)
+  if (pattern === null) return null
+  const statedWidth = statedLength(relations, pattern.widthEdge)
+  const statedHeight = statedLength(relations, pattern.heightEdge)
+  const statedTop = statedLength(relations, pattern.topEdge)
+  for (const stated of [statedWidth, statedHeight, statedTop]) if (stated.kind === "invalid") return stated.rejection
+  const widthStated = statedWidth.kind === "value" ? statedWidth.stated : null
+  const heightStated = statedHeight.kind === "value" ? statedHeight.stated : null
+  const topStated = statedTop.kind === "value" ? statedTop.stated : null
+  const width = freeLength(widthStated, heightStated, 0)
+  const height = freeLength(heightStated, widthStated, 1)
+  if (width === null || height === null) return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  /** `CD` 的代表值取 `AB` 的一半：**不为 1 倍**（1 倍就是矩形，那是题面没说的特殊性）。 */
+  const top = topStated === null ? { value: width.value * 0.5 } : { value: topStated.value }
+  if (!(width.value > 0) || !(height.value > 0) || !(top.value > 0)) {
+    return reject("degenerate-base", "底面自由边长必须为有限正数。", [...names])
+  }
+  const math = rightTrapezoidPolygon({ width: width.value, height: height.value, top: top.value })
+  if (math.status === "rejected") return reject(math.code, math.message, [...names])
+  /**
+   * 局部坐标是 `[直角顶点, 下一条边的端点, 对角点, 另一条邻边端点]`，
+   * 按"直角顶点在环上的位置"旋转回**题面的环序**（不按字母 A 固定）。
+   */
+  const pivot = names.indexOf(pattern.rightAngleVertex)
+  const polygon = names.map((_, index) => math.polygon[(index - pivot + names.length) % names.length]!)
+  const freeValues: string[] = []
+  if (widthStated === null) freeValues.push(`底面边长 ${pattern.widthEdge.join("")} = ${formatNumber(width.value)}（系统自选）`)
+  if (heightStated === null) freeValues.push(`底面边长 ${pattern.heightEdge.join("")} = ${formatNumber(height.value)}（系统自选）`)
+  if (topStated === null) freeValues.push(`底面边长 ${pattern.topEdge.join("")} = ${formatNumber(top.value)}（系统自选）`)
+  return {
+    status: "ok",
+    polygon,
+    freeValues,
+    assumptions: [
+      `底面 ${names.join("")} 取**直角梯形**：${pattern.heightEdge.join("")} ⊥ ${pattern.widthEdge.join("")}、` +
+      `${pattern.widthEdge.join("")} ∥ ${pattern.topEdge.join("")}（题面点名的那一组），` +
+      `于是 ${pattern.widthEdge.join("")} 是两条平行边的公垂线，三条边各自独立。`
+    ]
+  }
+}
+
+/**
+ * **菱形底面**（S3）：边长自由（或题面给定）+ 角度（题面给就用题面，没给取代表角 60°），
+ * 四边相等由构造保证。
  *
  * 三条拒绝都是 fail-closed，理由各不相同（用户看到的句子必须对得上）：
  * - 同时点名直角 ⇒ 那是**正方形**，题面说的是菱形，不画一个更强的形状；
  * - 题面给了两个不同的边长 ⇒ 与"四边相等"自相矛盾；
  * - 边长零或负 ⇒ 围不出面积。
+ *
+ * **T3 补的那一条**：题面点名了底面上的数值角（`∠BAD=60°`）时，**必须用题面的角**。
+ * 此前一律取代表角 60° —— 恰好命中 60° 的题看不出问题，75° 的题就会被静默画成 60°。
  */
+function statedRhombusBaseAngle(
+  names: readonly string[],
+  relations: readonly WitnessRelation[]
+): { status: "ok"; degrees: number | null } | { status: "rejected"; rejection: WitnessConstructRejection } {
+  const ring = names.map((name) => canonicalPointName(name))
+  const stated: number[] = []
+  for (const relation of relations) {
+    if (relation.kind !== "planarAngle") continue
+    const targets = relation.targets
+    if (targets.length !== 3) continue
+    /** 只有**全部落在底环上**的角才归这一支管：环外的角（`∠PBA`）说的是别的事。 */
+    if (!targets.every((target) => ring.includes(canonicalPointName(target)))) continue
+    const [first, vertex, third] = targets as [string, string, string]
+    const canonicalVertex = canonicalPointName(vertex)
+    const position = ring.indexOf(canonicalVertex)
+    const neighbours = [ring[(position + 1) % 4], ring[(position + 3) % 4]]
+    const arms = [canonicalPointName(first), canonicalPointName(third)]
+    const isInterior = arms.every((arm) => neighbours.includes(arm))
+    if (!isInterior) {
+      return {
+        status: "rejected",
+        rejection: reject(
+          "unsupported-base-shape",
+          `底面是菱形，但题面点名的角 ${targets.join("")} 不是菱形的内角（它连了对角线或环外点）：本层不把它当成底面的定形条件，也不静默忽略它。`,
+          [...names]
+        )
+      }
+    }
+    const statedValue = interpretValue(relation.value, null)
+    if (statedValue === null || !Number.isFinite(statedValue.value)) {
+      return { status: "rejected", rejection: reject("unsupported-base-shape", `底面点名的角 ${targets.join("")} 没有可用的度数。`, [...names]) }
+    }
+    /**
+     * `A` 处的内角就是菱形参数 `θ`；其余三个顶点处是 `180° − θ`（邻角互补）。
+     * 这一步**不能省**：把 `∠ABC=120°` 直接当 `θ` 会把底面翻成 60° 的那个镜像。
+     */
+    const atOrigin = position === 0
+    stated.push(atOrigin ? statedValue.value : 180 - statedValue.value)
+  }
+  if (stated.length === 0) return { status: "ok", degrees: null }
+  const distinct = [...new Set(stated.map((value) => Number(value.toFixed(9))))]
+  if (distinct.length > 1) {
+    return {
+      status: "rejected",
+      rejection: reject(
+        "unsupported-base-shape",
+        `底面是菱形，题面却给了互相矛盾的角（换算到 ${names[0]} 处分别是 ${distinct.map((value) => formatNumber(value)).join("° / ")}°）：不替它挑一个。`,
+        [...names]
+      )
+    }
+  }
+  return { status: "ok", degrees: distinct[0]! }
+}
+
 function deriveRhombusBase(
   names: readonly string[],
   relations: readonly WitnessRelation[]
@@ -2028,25 +2418,31 @@ function deriveRhombusBase(
   const side = values.length > 0 ? values[0]! : freeLength(null, null, 0)
   if (side === null || !(side.value > 0)) return reject("degenerate-base", "底面点名了零或负的边长，围不出面积。", [...names])
 
-  const angle = RHOMBUS_REPRESENTATIVE_ANGLE
-  const freeValues: string[] = []
-  const assumptions: string[] = []
-  if (values.length === 0) freeValues.push(`底面边长 ${sides[0]![0]}${sides[0]![1]} = ${formatNumber(side.value)}（系统自选）`)
-  assumptions.push(`底面 ${names.join("")} 取菱形：四边相等，取 ${first} 处 ${formatNumber((angle * 180) / Math.PI)}°（系统自选的代表角 —— 题面只说"菱形"，没说角）。`)
-
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return {
-    status: "ok",
-    polygon: [
-      { x: 0, y: 0, z: 0 },
-      { x: side.value, y: 0, z: 0 },
-      { x: side.value + side.value * cos, y: side.value * sin, z: 0 },
-      { x: side.value * cos, y: side.value * sin, z: 0 }
-    ],
-    freeValues,
-    assumptions
+  /**
+   * **角度来源必须分得开**（T3）：题面写了角 ⇒ 用题面的角，**不写进 `freeValues`**
+   * （那一列的含义是"系统替你定了什么"）；题面没写 ⇒ 取代表值 60° 并如实声明。
+   */
+  const angle = statedRhombusBaseAngle(names, relations)
+  if (angle.status === "rejected") return angle.rejection
+  const degrees = angle.degrees ?? RHOMBUS_REPRESENTATIVE_ANGLE_DEGREES
+  if (degrees === 90) {
+    return reject(
+      "unsupported-base-shape",
+      `底面四边相等、题面又给了 90° 的角：那要求把它做成**正方形**，而题面说的是菱形 —— 首批不造正方形。`,
+      [...names]
+    )
   }
+  const math = rhombusPolygon({ side: side.value, angleDegrees: degrees })
+  if (math.status === "rejected") return reject(math.code, math.message, [...names])
+
+  const freeValues: string[] = []
+  if (values.length === 0) freeValues.push(`底面边长 ${sides[0]![0]}${sides[0]![1]} = ${formatNumber(side.value)}（系统自选）`)
+  const assumptions = [
+    angle.degrees === null
+      ? `底面 ${names.join("")} 取菱形：四边相等，取 ${first} 处 ${formatNumber(degrees)}°（系统自选的代表角 —— 题面只说"菱形"，没说角）。`
+      : `底面 ${names.join("")} 取菱形：四边相等，${first} 处 ${formatNumber(degrees)}° 来自题面点名的角（不是系统自选的代表角）。`
+  ]
+  return { status: "ok", polygon: math.polygon, freeValues, assumptions }
 }
 
 /**
@@ -2114,17 +2510,6 @@ function deriveRepresentativeTriangle(
  * 与 3/4 边那套的关系：那条路靠"点名的直角"把底面**解出来**；这里没有可解的约束，
  * 于是明说"这是一张代表图"——假设文案里写清楚，用户不会把它当成题面唯一确定的图形。
  */
-/**
- * 把浮点噪声按回 0。
- *
- * `cos(π/2)` / `sin(π)` 算出来是 6.1e-17 / 1.2e-16 这种量级。正六边形若留着它，内核的
- * "候选坐标量级跨度过大"守卫会**如实拒绝**这张图 —— 那条守卫是对的（双精度下拿 1e-16 与 1
- * 去比距离和角度不可靠），所以修在**构造侧**：把噪声按回 0，而不是去放宽守卫。
- */
-function snapToZero(value: number): number {
-  return Math.abs(value) < 1e-12 ? 0 : value
-}
-
 function deriveRepresentativePolygon(
   names: readonly string[],
   relations: readonly WitnessRelation[]
@@ -2200,6 +2585,8 @@ function deriveAngledTriangleBase(
     if (relation.kind === "planarAngle") return true
     // 面积同样点名了底环上的三个点 ⇒ 也是联立问题，本支不管（它属于平面图形那一支）。
     if (relation.kind === "area") return true
+    /** T5 的两档是**辅助点定义**，与底面定形无关（`constructPlanarWitness` 那一支不收它们）。 */
+    if (relation.kind === "midpoint" || relation.kind === "point-on-segment") return true
     return relation.segments.some((segment) => segment.every((name) => names.includes(name)))
   })
   if (otherBaseCondition) return null
@@ -2298,12 +2685,28 @@ function deriveBasePolygon(
    */
   if (names.length >= 5) return deriveRepresentativePolygon(names, relations)
   /**
+   * **正三角形底面**（T3）：题面说"正三棱柱 / 正三棱锥"时，三条边由同一个长度决定。
+   * 排在"环首直角 ⇒ 矩形"之前：正三角形没有直角，落进那一支只会被拒。
+   */
+  if (names.length === 3 && hasEqualSideChain(names, relations)) return deriveRegularTriangleBase(names, relations)
+  /**
    * **菱形**（S3）：四边两两相等时**先**走这一支。
    *
    * 必须排在"环首直角 ⇒ 矩形"**之前**：`菱形 + 直角` 落进矩形那一支会构造出**四边不等**的图形
    * —— 题面明说的"菱形"被静默画成矩形（本批的 RED 里实测过：那条反例当时是 `candidate`）。
    */
   if (names.length === 4 && hasEqualSideChain(names, relations)) return deriveRhombusBase(names, relations)
+  /**
+   * **`AB ∥ CD` + `AD ⊥ AB` 的直角梯形**（T3，2026-11-05 四题修复）。
+   *
+   * 必须排在"环首直角 ⇒ 矩形"**之前**：那一支要求 `AB ⊥ BC`，Case 1 / Case 4 的底面没有它，
+   * 于是旧代码会把 `C` 直接放到 `(w, d)` —— **静默建成矩形**，`CD` 的长度根本没被用上。
+   * 这一支按"直角顶点 + 一组平行边"认形状，**不限环首**，所以循环点序（`BCDA`）也照样认。
+   */
+  if (names.length === 4) {
+    const trapezoid = deriveRightTrapezoidBase(names, relations)
+    if (trapezoid !== null) return trapezoid
+  }
   /**
    * **归一化后环首直角的两条边**：三角形可先循环旋转到该角；四边形仍只收原环首。
    *
@@ -2497,16 +2900,17 @@ function deriveBasePolygon(
 function deriveApexHeight(input: {
   apexName: string
   foot: string
+  /** 垂足坐标：`foot` 可能是环顶点，也可能是底面上的派生点（T4）。 */
+  footPoint: Vector3
+  /** 底面环 + 派生点的已知坐标（按点名查）。 */
+  knownPoints: ReadonlyMap<string, Vector3>
   heightSpec: WitnessHeightSpec
   relations: readonly WitnessRelation[]
   base: readonly Vector3[]
   baseNames: readonly string[]
 }): { status: "ok"; value: number; note: string | null; assumed: boolean; derived: "none" | "lateral-edge" | "dihedral" | "planar-angle" } | WitnessConstructRejection {
   const { apexName, foot, base, baseNames } = input
-  const at = (name: string): Vector3 | null => {
-    const index = baseNames.indexOf(name)
-    return index >= 0 ? base[index] : null
-  }
+  const at = (name: string): Vector3 | null => input.knownPoints.get(name) ?? null
 
   switch (input.heightSpec.kind) {
     case "free": {
@@ -2549,10 +2953,17 @@ function deriveApexHeight(input: {
        */
       const firstOnBase = baseNames.includes(first)
       const secondOnBase = baseNames.includes(second)
-      if (firstOnBase === secondOnBase) {
+      /**
+       * **派生点也算"已知点"**（T4）：`PO = √3` 的 `O` 不是环顶点，但它是本题解出来的
+       * 底面派生点 —— 这条侧棱的两个端点分别是顶点 `P` 与垂足 `O`，水平距离为 0，
+       * 于是 `h = √(L² − 0) = L`。这与"环上垂足"那一路是同一个公式，不分叉。
+       */
+      const firstKnown = firstOnBase || input.knownPoints.has(first)
+      const secondKnown = secondOnBase || input.knownPoints.has(second)
+      if (firstKnown === secondKnown) {
         return reject(
           "missing-height-reference",
-          `侧棱 ${first}${second} 的两个端点里应恰有一个在底面环上（另一个是顶点 ${apexName}）。`,
+          `侧棱 ${first}${second} 的两个端点里应恰有一个在底面上（另一个是顶点 ${apexName}）。`,
           [first, second]
         )
       }
@@ -2569,7 +2980,7 @@ function deriveApexHeight(input: {
           [first, second, apexName]
         )
       }
-      const horizontal = distanceVector3(at(foot) as Vector3, at(firstOnBase ? first : second) as Vector3)
+      const horizontal = distanceVector3(input.footPoint, at(firstOnBase ? first : second) as Vector3)
       const squared = length.value * length.value - horizontal * horizontal
       if (!(squared > 0)) {
         return reject(
@@ -2599,8 +3010,8 @@ function deriveApexHeight(input: {
       if (!hinge || !hingePoints || hingePoints.some((point) => !point)) {
         return reject("missing-height-reference", `二面角 ${spec.angleRelation} 的两个平面没有共享的点名棱。`, [apexName, foot])
       }
-      const footPoint = at(foot)
-      if (!footPoint) return reject("missing-height-reference", `垂足 ${foot} 不是底面环上的点名顶点。`, [foot])
+      const hingeFoot = at(foot)
+      if (!hingeFoot) return reject("missing-height-reference", `垂足 ${foot} 不是底面上的已知点。`, [foot])
       /**
        * 垂距只写进说明文字（让用户看懂"高是怎么来的"），**不再是判据**。
        *
@@ -2609,7 +3020,7 @@ function deriveApexHeight(input: {
        * —— 只要**顶点不在铰链上**（例如垂足取 B、铰链取 BD、另一个平面是 PBD），角度照样随高变化。
        * 现在由求根器判断有没有解：有解就接受，没有就结构化拒绝。
        */
-      const distance = perpendicularDistanceToLine(footPoint, hingePoints[0] as Vector3, hingePoints[1] as Vector3)
+      const distance = perpendicularDistanceToLine(hingeFoot, hingePoints[0] as Vector3, hingePoints[1] as Vector3)
       /**
        * **高度的求解方式：在 `h ∈ (0, H]` 上对内核自己的二面角度量做有界确定性扫描 + 二分。**
        *
@@ -2630,7 +3041,7 @@ function deriveApexHeight(input: {
         baseNames,
         basePoints: base,
         apexName,
-        footPoint,
+        footPoint: hingeFoot,
         planes: [planes[0], planes[1]],
         targetDegrees: degrees.value,
         scale: base.reduce((largest, point) => Math.max(largest, Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)), 1)

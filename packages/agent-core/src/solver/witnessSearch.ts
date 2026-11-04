@@ -1,10 +1,11 @@
-import { buildFromPoints, canonicalPointName, constructShapeFromSpec, createBuilderContext, hasEqualSideChain, namedRightTriangleBase, shapeHeightIsFree, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
+import { buildFromPoints, canonicalPointName, constructShapeFromSpec, createBuilderContext, hasEqualSideChain, namedRightTriangleBase, rightTrapezoidEdges, shapeHeightIsFree, type DerivedBasePoint, type FreeScalar, type ShapeScalarChoice, type SolidShapeSpec, type Vector3, type WitnessRelation, type WitnessShapeCandidate } from "@draw/geometry-kernel"
 
 import { parseShapeClause, type RecognisedShape } from "./shapeGrammar"
 import { createEmptyDocument } from "@draw/dsl"
 
 import { evidenceStatusForWitness, type ClaimEvidence, type ClaimEvidenceStatus, type GeometryObligation, type SolverStatus, type WitnessResultStatus } from "../claimEvidence"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
+import type { DraftAction } from "@draw/scene-graph"
 import type { DiagramObligationSet } from "../diagramObligations"
 import { verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
 import { toLegacyObligationSet, type ObligationIR } from "../obligationIR"
@@ -15,6 +16,7 @@ import {
   type PolyhedronWitness,
   type PolyhedronWitnessSelection,
   type PolyhedronWitnessSelectionInput,
+  type WitnessAuxiliaryPoint,
   type WitnessSearchInput,
   type WitnessSearchResult
 } from "./solverContracts"
@@ -243,6 +245,17 @@ function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation
       relations.push({ kind: "segment-length", segments: [[targets[0], targets[1]]], value: obligation.expected })
     }
     /**
+     * **点名的中点 / 棱上分点**（T5）：它们是**构造完成之后**的辅助点，不参与底面定形；
+     * 内核按最终坐标把参数算出来（中点 1/2；棱上点用题面那条定长除以宿主边长）。
+     * 不映射的话，`E 为棱 PB 的中点` 就永远只是"图上缺一个点"。
+     */
+    if (obligation.kind === "midpoint" && targets.length === 3) {
+      relations.push({ kind: "midpoint", targets: [targets[0], targets[1], targets[2]] })
+    }
+    if (obligation.kind === "pointOnSegment" && targets.length === 3) {
+      relations.push({ kind: "point-on-segment", targets: [targets[0], targets[1], targets[2]] })
+    }
+    /**
      * **平面上的数值角**（§3-F）：三个点名原样交给内核，顶点是中间那个。
      * 内核那一侧只支持三角形底面闭式造出来（四边形与涉及环外点的角会拒绝）——
      * 这里不替它筛，否则"读得出但造不出"这件事就没有一行文案说得出口。
@@ -292,6 +305,35 @@ interface PyramidStructure {
   relations: WitnessRelation[]
   /** 题面**没有**给长度的底面两条边（`AB` 与 `AD`）：它们才是网格可以扫的自由标量。 */
   freeBaseEdges: [string, string][]
+  /** 底面上的派生点（T4）：`AC 与 BD 相交于点 O` ⇒ 垂足可以落在 `O` 上。 */
+  derivedBasePoints: DerivedBasePoint[]
+}
+
+/**
+ * **从题设里认出"对角线的交点"**（T4）：同一个点名出现在**两条** `pointOnSegment` 里，
+ * 四条端点互不相同。这就是 `AC 与 BD 相交于点 O` 的解析结果（见 `diagramObligations` 那条读取器）。
+ *
+ * 为什么不在解析层直接产一个专用 kind：两条 `pointOnSegment` **本身就是可核验的判据**
+ *（`O ∈ AC`、`O ∈ BD`），再产一个"交点"义务就等于把同一件事说两遍；而构造侧只需要
+ * "这两条线是谁"这一个信息，从这里读得出来。
+ */
+function derivedBasePointsFrom(givens: readonly GeometryObligation[]): DerivedBasePoint[] {
+  const byPoint = new Map<string, [string, string][]>()
+  for (const obligation of givens) {
+    if (obligation.kind !== "pointOnSegment" || obligation.targets.length !== 3) continue
+    const [point, from, to] = obligation.targets as [string, string, string]
+    const list = byPoint.get(point) ?? []
+    list.push([from, to])
+    byPoint.set(point, list)
+  }
+  const result: DerivedBasePoint[] = []
+  for (const [name, segments] of byPoint) {
+    if (segments.length < 2) continue
+    const [first, second] = segments as [[string, string], [string, string]]
+    if (new Set([...first, ...second]).size !== 4) continue
+    result.push({ name, kind: "diagonal-intersection", lines: [first, second] })
+  }
+  return result
 }
 
 type StructureResult = { status: "ok"; structure: PyramidStructure } | { status: "rejected"; code: string; message: string }
@@ -362,7 +404,15 @@ function derivePrismStructure(givens: readonly GeometryObligation[]): StructureR
  */
 function derivePyramidStructure(givens: readonly GeometryObligation[]): StructureResult {
   const entries = givens.map(lineAndPlane).filter((entry): entry is LineAndPlane => entry !== null)
+  const derivedBasePoints = derivedBasePointsFrom(givens)
+  const derivedNames = new Set(derivedBasePoints.map((point) => point.name))
+  /**
+   * **垂足可以是一个底面派生点**（T4）：`PO ⊥ 平面 ABCD` 里 `O` 不在环上，
+   * 于是"两个端点都不在平面内"这条旧判据会把它当成"读不出"。
+   * 派生点由 `AC 与 BD 相交于点 O` 那一句定义 —— 这里只负责认出"哪一头是垂足"。
+   */
   const usable = entries.find((entry) => entry.plane.includes(entry.line[0]) !== entry.plane.includes(entry.line[1]))
+    ?? entries.find((entry) => derivedNames.has(entry.line[0]) !== derivedNames.has(entry.line[1]))
   if (!usable) {
     return {
       status: "rejected",
@@ -374,14 +424,23 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
   }
 
   const base = usable.plane
-  const foot = base.includes(usable.line[0]) ? usable.line[0] : usable.line[1]
+  /**
+   * 三个端点谁是谁：优先"在平面内 = 垂足"；派生点路线则是"派生点 = 垂足"。
+   */
+  const foot = base.includes(usable.line[0])
+    ? usable.line[0]
+    : base.includes(usable.line[1])
+      ? usable.line[1]
+      : derivedNames.has(usable.line[0])
+        ? usable.line[0]
+        : usable.line[1]
   const apex = foot === usable.line[0] ? usable.line[1] : usable.line[0]
   const relations = kernelRelations(givens)
   const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
 
   return {
     status: "ok",
-    structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges }
+    structure: { base: [...orderedBase], apex, foot, relations, freeBaseEdges, derivedBasePoints }
   }
 }
 
@@ -413,8 +472,23 @@ function orderedBaseWithFreeEdges(base: readonly string[], relations: readonly W
    * 与上面 n ≥ 5 那条"没有可选底边"同源：自由标量必须真的自由。
    */
   const rhombus = orderedBase.length === 4 && hasEqualSideChain(orderedBase, relations)
-  const candidates = (rhombus ? [[first, second]] : [[first, second], [first, third]]) as [string, string][]
-  const freeBaseEdges = candidates.filter((edge) => !stated.has([...edge].sort().join("|")))
+  /**
+   * **正三棱柱的底面是正三角形**（T3）：三条边由同一个长度决定，
+   * 把 `AC` 也说成"系统自选"是**假的自由** —— 与菱形那条同源。
+   */
+  const regularTriangle = orderedBase.length === 3 && hasEqualSideChain(orderedBase, relations)
+  /**
+   * **直角梯形（`AB ∥ CD` + `AD ⊥ AB`）的三条成形边**（T3）：`AB`、`AD`、`CD` 各自独立，
+   * 自由标量必须正好是其中**题面没给**的那几条。用旧的 `[first,second]`/`[first,third]`
+   * 规则会在环首不是直角顶点时把**斜边**当成自由边（那里几何上由前三条决定）。
+   */
+  const trapezoid = rightTrapezoidEdges(orderedBase, relations)
+  const candidates = trapezoid !== null
+    ? [trapezoid.widthEdge, trapezoid.heightEdge, trapezoid.topEdge]
+    : rhombus || regularTriangle
+      ? [[first, second]]
+      : [[first, second], [first, third]]
+  const freeBaseEdges = (candidates as [string, string][]).filter((edge) => !stated.has([...edge].sort().join("|")))
   return { orderedBase, freeBaseEdges }
 }
 
@@ -476,7 +550,14 @@ function specFor(structure: PyramidStructure | PrismStructure): SolidShapeSpec {
   const isPrism = "top" in structure
   const skeleton: SolidShapeSpec = isPrism
     ? { family: "prism", base: [...structure.base], top: [structure.top], relations: [...structure.relations], freeScalars }
-    : { family: "pyramid", base: [...structure.base], apex: { at: structure.apex, foot: structure.foot }, relations: [...structure.relations], freeScalars }
+    : {
+        family: "pyramid",
+        base: [...structure.base],
+        apex: { at: structure.apex, foot: structure.foot },
+        relations: [...structure.relations],
+        freeScalars,
+        ...(structure.derivedBasePoints.length > 0 ? { derivedBasePoints: structure.derivedBasePoints } : {})
+      }
   /**
    * "高是不是自由的"**问内核**（`shapeHeightIsFree`）：它才是"`relations` → `WitnessHeightSpec`"
    * 那份判断的持有者。编排层再写一遍就是同一个判断写两遍，而两处迟早会分叉。
@@ -512,6 +593,60 @@ function specForPlanarFigure(recognised: RecognisedShape, relations: readonly Wi
  * `1` 是棱柱、`0` 是棱锥顶点，两个端点都**不是**台体（内核会拒），所以一个都不放。
  */
 const FREE_TOP_SCALE_VALUES: readonly number[] = [0.5, 0.6, 0.75]
+
+/**
+ * **正 / 直棱柱：两个环都由入口语法给出**（T2，2026-11-05 四题修复）。
+ *
+ * 与台体同一条理由：**几何不是从"侧棱 ⊥ 底面"那一句读出来的** —— 联考卷里的
+ * `在正三棱柱ABC-A₁B₁C₁中` 把两个环都写清楚了，`正` 这个修饰词已经在入口层被读出来
+ * （`RecognisedShape.modifier`），它就是"侧棱垂直于底面"的同义说法。
+ *
+ * 三条纪律：
+ * - **题面原名原样保留**：`top` 是 `A₁B₁C₁` 就交给内核 `A₁B₁C₁`，不许被默认 `A′` 覆盖；
+ * - **没写 `正` / `直` 就不猜**（调用方只在修饰词明确时才走这一支）—— 斜棱柱另有分支；
+ * - 自由标量与别的族同一个口径：题面没定长的底边（`base-edge`）+ 题面没定的高（`height`）。
+ */
+function specForRightPrism(rings: RecognisedShape, relations: readonly WitnessRelation[]): SolidShapeSpec {
+  /**
+   * **`正` 棱柱的底面是正多边形**（T3）：Case 2 的 `正三棱柱` 底面必须是**正三角形** ——
+   * 三条边都等于 2。此前"正"这个修饰词只用于判定"侧棱竖直"，底面仍取任意三角形代表值，
+   * 于是 `AB=2` 量得到、`BC` 却是一个系统自选数：题面说的"正三棱柱"被画成斜三棱柱。
+   *
+   * 三条链式 `equal-length` 就是"三边相等"的既有编码（与菱形同一套）。
+   * **只补三角形**：`正四棱柱` 的底面是正方形，而四边相等在现有规则里先落到"菱形"那一支
+   * （代表角 60°）—— 那是另一个形状，本批不在这里顺手改它。
+   *
+   * 关系必须先补齐**再**算自由标量：`orderedBaseWithFreeEdges` 正是按"三边相等 ⇒ 只有一条
+   * 自由边"来判断的，补晚了就会把 `BC` 也说成系统自选。
+   */
+  const baseRelations: WitnessRelation[] = [...relations]
+  if (rings.modifier === "正" && rings.base.length === 3) {
+    for (let index = 0; index < rings.base.length - 1; index += 1) {
+      const left: [string, string] = [rings.base[index]!, rings.base[(index + 1) % rings.base.length]!]
+      const right: [string, string] = [rings.base[(index + 1) % rings.base.length]!, rings.base[(index + 2) % rings.base.length]!]
+      baseRelations.push({ kind: "equal-length", segments: [left, right] })
+    }
+  }
+  const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(rings.base, baseRelations)
+  const top = [...(rings.top ?? [])]
+  const freeScalars: FreeScalar[] = freeBaseEdges.map((edge, index) => ({
+    id: `base-edge-${index + 1}`,
+    kind: "base-edge" as const,
+    targets: [...edge],
+    candidates: [...FREE_BASE_VALUES]
+  }))
+  const skeleton: SolidShapeSpec = {
+    family: "prism",
+    base: orderedBase,
+    ...(top.length > 0 ? { top } : {}),
+    relations: baseRelations,
+    freeScalars
+  }
+  if (shapeHeightIsFree(skeleton)) {
+    freeScalars.push({ id: "height", kind: "height", targets: [top[0] ?? orderedBase[0]!], candidates: [...FREE_HEIGHT_VALUES] })
+  }
+  return skeleton
+}
 
 /**
  * **台体：由入口语法给的底环 / 顶环 + 解析器给的关系组出 spec**（S6 的接线）。
@@ -684,7 +819,24 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
     return { status: "ok", spec: specForPlanarFigure(recognised, relations), recognised }
   }
   const derived = recognised.family === "prism" ? derivePrismStructure(givens) : derivePyramidStructure(givens)
-  if (derived.status === "rejected") return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }
+  if (derived.status === "rejected") {
+    /**
+     * **正 / 直棱柱的两环由入口语法给出**（T2）：`在正三棱柱ABC-A₁B₁C₁中` 已经写清底环与顶环，
+     * 而 `正` / `直` 这两个修饰词就是"侧棱垂直于底面"的同义说法 —— 题面并没有欠定。
+     * 此前这一支直接返回 `unrecognised`（理由写的是"没有给出侧棱⊥底面"），
+     * 于是联考卷里最常见的三棱柱题一句都读不出来。
+     *
+     * **只有 `正` / `直` 才走这里**：没写修饰词、也没有"侧棱 ⊥ 底面"时，"直不直"仍是未知，
+     * 由下面的 `unrecognised` 如实问路（不替题面挑一个形状）。
+     */
+    const rightPrism = recognised.family === "prism"
+      && (recognised.modifier === "正" || recognised.modifier === "直")
+      && recognised.top !== undefined
+    if (rightPrism) {
+      return { status: "ok", spec: specForRightPrism(recognised, kernelRelations(givens)), recognised }
+    }
+    return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }
+  }
   const spec = specFor(derived.structure)
   const key = (names: readonly string[]): string => [...names].sort().join("|")
   if (key(spec.base) !== key(recognised.base)) {
@@ -771,42 +923,101 @@ type CandidateJudgement =
  * 用户现场看到的就是这一句，`planCompiler.face.test.ts` 记着同一个读数）。
  * 两条路都在**产品用的那一条**物化路径上（`compilePlan`），不另造文档。
  */
-function envelopeFor(spec: SolidShapeSpec, names: readonly string[], vertices: readonly Vector3[], faces: readonly (readonly number[])[]): PlanEnvelope {
-  if (spec.family === "planar-figure") {
-    return {
-      schemaVersion: PLAN_SCHEMA_VERSION,
-      kind: "plan",
-      goal: "按题设关系构造一组候选坐标（见证搜索）",
+/**
+ * **辅助点的动作链**（T4）：把 `O = AC ∩ BD` 这类点落成**绑定点**。
+ *
+ * 与 `envelopeFor` 共用同一份判断，`localPlanner` 也从这里取 —— 两处各写一遍必然分叉。
+ */
+export function auxiliaryPointActions(
+  hostAlias: string,
+  names: readonly string[],
+  faces: readonly (readonly number[])[],
+  auxiliaryPoints: readonly WitnessAuxiliaryPoint[]
+): DraftAction[] {
+  const edges = new Set<string>()
+  for (const ring of faces) {
+    for (const [index, vertexIndex] of ring.entries()) {
+      const nextIndex = ring[(index + 1) % ring.length]!
+      const first = names[vertexIndex]
+      const second = names[nextIndex]
+      if (first === undefined || second === undefined) continue
+      edges.add([first, second].sort().join("|"))
+    }
+  }
+  const actions: DraftAction[] = []
+  for (const point of auxiliaryPoints) {
+    const [from, to] = point.hostEdge
+    const shared = { alias: point.name, parameter: point.parameter, label: point.name }
+    if (edges.has([from, to].sort().join("|"))) {
+      actions.push({
+        actionId: "dynamic.create_bound_point",
+        actionKey: point.name,
+        factIds: [],
+        inputs: { ...shared, host: { scope: "draft", alias: hostAlias }, hostEdge: { from, to } }
+      } as unknown as DraftAction)
+      continue
+    }
+    const segmentAlias = `aux-segment-${from}${to}`
+    actions.push({
+      actionId: "solid.create_segment",
+      actionKey: segmentAlias,
       factIds: [],
-      actions: [{
-        actionId: "solid.create_face",
-        actionKey: "witness-search",
+      inputs: { alias: segmentAlias, vertexNames: [from, to] }
+    } as unknown as DraftAction)
+    actions.push({
+      actionId: "dynamic.create_bound_point",
+      actionKey: point.name,
+      factIds: [],
+      inputs: { ...shared, host: { scope: "draft", alias: segmentAlias } }
+    } as unknown as DraftAction)
+  }
+  return actions
+}
+
+/** 见证候选 → 动作链（多面体 + 辅助点）。产品入口（`localPlanner`）与见证搜索共用这一份。 */
+export function solidWitnessActions(candidate: PolyhedronWitness, alias: string): DraftAction[] {
+  return [
+    {
+      actionId: "solid.create_polyhedron",
+      actionKey: alias,
+      factIds: [],
+      inputs: { alias, vertexNames: candidate.names, vertices: candidate.vertices, faces: candidate.faces }
+    } as unknown as DraftAction,
+    ...auxiliaryPointActions(alias, candidate.names, candidate.faces, candidate.auxiliaryPoints ?? [])
+  ]
+}
+
+function envelopeFor(spec: SolidShapeSpec, names: readonly string[], vertices: readonly Vector3[], faces: readonly (readonly number[])[], auxiliaryPoints: readonly WitnessAuxiliaryPoint[] = []): PlanEnvelope {
+  const alias = "witness-search"
+  const solidAction = spec.family === "planar-figure"
+    ? {
+        actionId: "solid.create_face" as const,
+        actionKey: alias,
         factIds: [],
         inputs: {
-          alias: "witness-search",
+          alias,
           vertexNames: [...names],
           vertices: vertices.map((point) => ({ ...point }))
         }
-      }]
-    }
-  }
+      }
+    : {
+        actionId: "solid.create_polyhedron" as const,
+        actionKey: alias,
+        factIds: [],
+        inputs: {
+          alias,
+          vertexNames: [...names],
+          vertices: vertices.map((point) => ({ ...point })),
+          faces: faces.map((ring) => [...ring])
+        }
+      }
   return {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
     goal: "按题设关系构造一组候选坐标（见证搜索）",
     factIds: [],
-    actions: [{
-      actionId: "solid.create_polyhedron",
-      actionKey: "witness-search",
-      factIds: [],
-      inputs: {
-        alias: "witness-search",
-        vertexNames: [...names],
-        vertices: vertices.map((point) => ({ ...point })),
-        faces: faces.map((ring) => [...ring])
-      }
-    }]
-  }
+    actions: [solidAction, ...auxiliaryPointActions(alias, names, faces, auxiliaryPoints)]
+  } as unknown as PlanEnvelope
 }
 
 function residualsOf(report: DiagramVerificationReport): Record<string, number | null> {
@@ -825,7 +1036,11 @@ function toWitness(witness: WitnessShapeCandidate): PolyhedronWitness {
     // 按 buildOrder 同时重排坐标与名字，面环原样交给内核 —— 只搬其中一边会把顶点认错。
     vertices: witness.buildOrder.map((index) => ({ ...witness.points[index] })),
     names: witness.buildOrder.map((index) => witness.names[index]),
-    faces: witness.faces.map((ring) => [...ring])
+    faces: witness.faces.map((ring) => [...ring]),
+    /** 辅助点不在下标空间里，原样带过去（T4）。 */
+    ...(witness.auxiliaryPoints === undefined || witness.auxiliaryPoints.length === 0
+      ? {}
+      : { auxiliaryPoints: witness.auxiliaryPoints.map((point) => ({ ...point, point: { ...point.point } })) })
   }
 }
 
@@ -875,7 +1090,13 @@ function judgeCandidate(plan: CandidatePlan, legacy: DiagramObligationSet): Cand
     }
   }
 
-  const envelope = envelopeFor(plan.spec, witness.buildOrder.map((index) => witness.names[index]), vertices, witness.faces)
+  const envelope = envelopeFor(
+    plan.spec,
+    witness.buildOrder.map((index) => witness.names[index]),
+    vertices,
+    witness.faces,
+    witness.auxiliaryPoints ?? []
+  )
   const compiled = compilePlan(envelope, { document: createEmptyDocument("geometry3d"), conversationId: "witness-search" })
   if (compiled.draftDocument === null) {
     const detail = compiled.diagnostics.map((entry) => `${entry.code}@${entry.path}: ${entry.detail}`).join("；")
