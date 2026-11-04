@@ -10,6 +10,14 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-05 —— 四道立体几何题修复 T8：浏览器闭环、回归与发布证据
+
+新增 `e2e/agent-solid-four-cases.spec.ts`（5 条用例）。首跑 **4 通过 / 1 失败**：失败的是 Case 4 原题那条的 locator（`.agent-bubble` 为空），而失败 trace 的 `error-context.md` 证明澄清**已经渲染**在运行状态那一栏——改的是用例，不是 oracle；同时把澄清文案里"折后 ACD 变成的那条边"改成"折后 CP"。复跑 **5/5 通过**：Case 1/2/3 各走"隔离草稿 → 确认前主文档 0 对象 → 提交 → 对象数 > 0 → `Ctrl+Z` 一步回到 0"；Case 4 原题显示「等待补充信息」+ `D→P`/`折前线段`/`CP` 且**没有**「确认改动」区域；Case 4 修订版同样能出草稿、提交、撤销。
+
+截图 `test-results/solid-four-cases-case-{1,2,3}.png` 已人工查看：Case 1 画布上 A/B/C/D/P 与 **E** 都在（对象列表 `solid-1` + `E`，20 个对象）；Case 3 有 **O**（对角线交点）与 **M**（PC 中点），对象列表 `solid-1`/`segment-1`/`O`/`M`（22 个对象）。既有折叠链浏览器回归 `agent-rectangle-fold` + `agent-fold-chain` **4/4 通过**。
+
+验证矩阵：`npm run typecheck` exit 0；`npm run build` 首跑因我自己测试文件里的 `import type` 路径（`../geometry3d`，Vite 擦掉类型导入所以 vitest 没暴露）失败，改成 `./geometry3d` 后 **exit 0**；`npm run test:docs` 22 项通过。**未报告**：重试不重复实体、Case 4 多轮澄清闭环、在线 provider、桌面端、全量 Playwright。
+
 ## 2026-11-05 —— 四道立体几何题修复 T7：目标结果与题设核验分离
 
 新增内核 `solidGoalMeasurements.ts`：`linePlaneSine`、`pointPlaneDistance`、`dihedralCosine`、`dihedralDegrees`、`planeAngleCosine`、`planeNormalOf`，退化输入结构化拒绝不返回 NaN。三种角**分开量**——线面角用 `sin=|d·n|/(|d||n|)`、二面角用半平面夹角且**不取绝对值**（120° 就是 120°）、平面夹角才取锐角。二面角复用既有 `dihedralAngleDetail3` 的半平面口径，其余三个没有既有同义函数才新增。

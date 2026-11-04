@@ -255,7 +255,7 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
       parts.push(`「${clause.face.join("")} 沿 ${clause.hinge.join("")} 折起」按有序顶点读会移动折痕端点，通常意图是 ${clause.apex}→${clause.statedPostName ?? "折后点"}，但题面没有明说`)
     }
     if (referencedSegment !== null && reference === null) {
-      parts.push(`目标里的 ${referencedSegment.join("")} 指的是折前线段，还是折后 ${clause.hinge.join("")}${clause.apex} 变成的那条边`)
+      parts.push(`目标里的 ${referencedSegment.join("")} 指的是折前线段，还是折后 ${referencedSegment[0]}${clause.statedPostName ?? clause.apex}`)
     }
     return {
       status: "clarification",

@@ -523,7 +523,83 @@ npx vitest run packages/geometry-kernel/src/solidGoalMeasurements.test.ts \
   **不拿桩结果冒充在线准确性**。
 - `sampled` / `formally_proved` 的**证明产物**链路不在本期（本层只给实例证据）。
 
+---
 
+## T8 —— 浏览器闭环、回归与发布证据
 
+### 1. 执行基线
 
+| 项 | 值 |
+|---|---|
+| T8 执行前 HEAD | `7d31282d`（T7） |
+| 新增文件 | `e2e/agent-solid-four-cases.spec.ts` |
+| 改动 | 仅本用例（产品代码在 T1–T7 已经落地；T8 只做验收） |
 
+### 2. 首跑（红测记录）
+
+```text
+npx playwright test e2e/agent-solid-four-cases.spec.ts
+→ 4 passed / 1 failed
+```
+
+失败的是 **Case 4 原题那条的 locator**（`.agent-message .agent-bubble` 为空），不是产品行为：
+失败 trace 的 `error-context.md` 里能读到澄清**确实渲染了**，位置在**运行状态**那一栏：
+
+> 这条题面有两处需要你确认：「ACD 沿 AC 折起」按有序顶点读会移动折痕端点，通常意图是 D→P，
+> 但题面没有明说；另外，目标里的 CD 指的是折前线段，还是折后 CP？请分别回答，确认后我再出图。
+
+**处理**：改的是用例（断言 `RunStatus` 区域），**没有**改 oracle、没有放宽判据。
+同时把澄清文案里的 "折后 ACD 变成的那条边" 改成 "折后 CP"（原文措辞不准）。
+
+### 3. 复跑
+
+```text
+npx playwright test e2e/agent-solid-four-cases.spec.ts
+→ 5 passed (28.1s)
+```
+
+| 用例 | 断言 | 结果 |
+|---|---|---|
+| Case 1 / 2 / 3 | 隔离草稿 → 确认前主文档 0 对象 → 提交 → 对象数 > 0 → `Ctrl+Z` 一步回到 0 | ✔ |
+| Case 4 原题 | 运行状态显示「等待补充信息」+ 含 `D→P`、`折前线段`、`CP`；**没有**「确认改动」区域 | ✔ |
+| Case 4 修订版 | 草稿 → 提交 → 撤销 | ✔ |
+
+截图：`test-results/solid-four-cases-case-1.png`（Case 1）、`-case-2.png`（Case 2）、
+`-case-3.png`（Case 3）。**截图已人工查看并记下读数**：
+
+- Case 1：画布上 A/B/C/D/P 与 **E** 都在，左侧对象列表 `solid-1` + `E`（对象数 20）；
+- Case 3：A/B/C/D/P + **O**（对角线交点）+ **M**（`PC` 中点）可见，对象列表
+  `solid-1` / `segment-1` / `O` / `M`（对象数 22）。
+
+### 4. 既有折叠链回归
+
+```text
+npx playwright test e2e/agent-rectangle-fold.spec.ts e2e/agent-fold-chain.spec.ts
+→ 4 passed (27.8s)
+```
+
+### 5. 类型 / 单元 / 文档 / 构建
+
+| 命令 | 读数 |
+|---|---|
+| `npm run typecheck` | **exit 0** |
+| `npm test` | 见下方最终读数 —— **513 文件 / 5463 项通过**（T7 后全量；T8 只改了 e2e 与一句澄清文案，定向测试复跑通过） |
+| `npm run test:docs` | **8 文件 / 22 项通过** |
+| `npm run build` | 首次 **失败**：`solidGoalMeasurements.test.ts` 里有个 `import type` 指向 `../geometry3d`（Vite 把纯类型 import 擦掉了，所以测试跑得过、`tsc` 报错）。改成 `./geometry3d` 后重跑 —— **exit 0** |
+| `git diff --check` | 无空白错误 |
+
+### 6. 这一块**没有**做的
+
+- **"重试不重复实体"未单独覆盖**：本轮的浏览器用例覆盖"一次提交 + 一步撤销"，
+  没有覆盖"失败后重试同一份计划"这条路径。计划 §4 的矩阵把它列在"画布行为"里，
+  这里如实记为**未报告**。
+- Case 4 的**多轮澄清闭环**（用户回答后自动接回修订版）未验：用例用的是两种固定题面。
+- 在线 provider、桌面端（Tauri）、全量 Playwright（511+ 项）本轮**未跑**；
+  本轮只跑四题用例与两条折叠链回归。
+
+### 7. 环境与失败记录（不藏）
+
+- `npm run build` 第一次失败是**我自己的测试文件 import 路径错误**（类型导入被 Vite 擦掉，
+  所以 vitest 没暴露它）。修好后重跑，结果见上表。
+- Playwright 的 `NO_COLOR` 警告是环境变量冲突，不影响结果。
+- 首跑那条失败是**用例 locator** 写错，不是产品缺陷；trace 与截图都已经归档。

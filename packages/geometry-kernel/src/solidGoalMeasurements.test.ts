@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { Vector3 } from "../geometry3d"
+import type { Vector3 } from "./geometry3d"
 import { dihedralCosine, dihedralDegrees, linePlaneSine, planeAngleCosine, planeNormalOf, pointPlaneDistance } from "./solidGoalMeasurements"
 
 /**
