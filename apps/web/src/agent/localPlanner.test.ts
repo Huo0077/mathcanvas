@@ -222,6 +222,35 @@ describe("local planner translates the commands it knows", () => {
   })
 
   /**
+   * **直角梯形沿对角线折起**（T6，2026-11-05）：三个终态各自都要能从**产品入口**到达。
+   *
+   * 这件事必须在本层验：求解器认得题面，但意图表不认，用户拿到的仍然是"请换一种说法"。
+   * 原题（没说 `D→P`、没说 `CD` 指哪一态）⇒ **一条合并澄清**；修订版 ⇒ 出计划。
+   */
+  it("routes a 直角梯形 fold prompt: the original asks once, the explicit revision plans", async () => {
+    const original =
+      "如图，在直角梯形ABCD中，AB∥CD，AD⊥AB，AB=2，AD=CD=1。将△ACD沿AC折起成△PAC，使得平面PAC⊥平面ABC。点M为PB的中点。证明：AP⊥CD；求二面角P-AB-C的大小。"
+    expect(matchLocalIntent(original), "梯形折叠意图应该已经登记").not.toBeNull()
+    const clarified = await plan(original)
+    expect(clarified.kind).toBe("clarification")
+    if (clarified.kind === "clarification") {
+      /** **一次问完**：一条问题里同时提到 D→P 与 CD。 */
+      expect(clarified.questions).toHaveLength(1)
+      expect(clarified.questions[0]).toContain("D→P")
+      expect(clarified.questions[0]).toContain("CD")
+    }
+
+    const revised =
+      "如图，在直角梯形ABCD中，AB∥CD，AD⊥AB，AB=2，AD=CD=1。固定A、C，将点D绕直线AC旋转90°得到点P，使得平面PAC⊥平面ABC，且题中引用的CD指折前线段。点M为PB的中点。证明：AP⊥CD；求二面角P-AB-C的大小。"
+    const planned = await plan(revised)
+    expect(planned.kind).toBe("plan")
+    if (planned.kind === "plan") {
+      expect(planned.actions.some((action) => action.actionId === "solid.fold")).toBe(true)
+      expect(planned.actions.some((action) => action.actionId === "dynamic.create_bound_point")).toBe(true)
+    }
+  })
+
+  /**
    * **正四面体**（用户口径直接要它）。
    *
    * 以前动作层没有这个形状，模型只能拿三棱柱冒充（用户现场：要正四面体，拿到三棱柱）。现在：

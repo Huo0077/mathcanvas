@@ -163,6 +163,14 @@ export * from "./solver/witnessSearch"
  * 只有**一处**答案。
  */
 export * from "./parametricSolidPlan"
+/**
+ * **多边形（梯形）沿对角线翻折**（T6）：题面 → 计划 / 一次澄清。
+ *
+ * 与 `solveRectangleFold` 是**两条不同题面语法**的入口：那一条认"矩形 + 对角线"，
+ * 这一条认"直角梯形 + 沿 AC 折起"，复用同一套几何（`foldPointAboutHinge`）与同一个动作
+ * （`solid.fold`），不复制判据。
+ */
+export * from "./polygonFoldPlan"
 export * from "./toolContracts"
 export * from "./toolDispatch"
 export * from "./toolLoop"

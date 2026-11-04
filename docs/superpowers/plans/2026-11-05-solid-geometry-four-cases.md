@@ -166,12 +166,12 @@ type DerivedBasePoint = {
 
 **输入/输出：**折前梯形 + AC 铰链 + D→P + 90°/面垂直条件 → 既有翻折动作和前后状态，或具体歧义说明。
 
-- [ ] 红测原 Case 4：不得把 △PAC 的有序顶点对应静默用于变换，且不得给 CD 默认绑定折后边；输出一个合并澄清问题。
-- [ ] 红测明确修订版：A/C 固定，D_pre→P_post，P=(1/2,1/2,±1/√2)，M 为 PB 中点；通过不变量允许刚体等价朝向。
-- [ ] 运行 `npx vitest run packages/agent-core/src/polygonFoldPlan.test.ts packages/agent-core/src/foldChain.sequence.test.ts`。
-- [ ] 复用 T3 底面，复用已有轴旋转生成折后位置。记录移动面、固定面、铰链、角度来源与镜像分支；不覆写 D_pre 的历史身份。
-- [ ] 保留显式折前 CD 与折后 CP 两种不同引用；目标层无法确定状态则为 ambiguous，不假称题设不一致。
-- [ ] 同命令复跑；增加 `rectangleFold.test.ts`、`rectangleFoldPlan.test.ts`、`rectangleFoldStateVerification.test.ts` 回归，以及顺逆旋转/不可用铰链/缺面负测。
+- [x] 红测原 Case 4：不得把 △PAC 的有序顶点对应静默用于变换，且不得给 CD 默认绑定折后边；输出一个合并澄清问题。
+- [x] 红测明确修订版：A/C 固定，D_pre→P_post，P=(1/2,1/2,±1/√2)，M 为 PB 中点；通过不变量允许刚体等价朝向。
+- [x] 运行 `npx vitest run packages/agent-core/src/polygonFoldPlan.test.ts packages/agent-core/src/foldChain.sequence.test.ts`。
+- [x] 复用 T3 底面，复用已有轴旋转生成折后位置。记录移动面、固定面、铰链、角度来源与镜像分支；不覆写 D_pre 的历史身份。
+- [x] 保留显式折前 CD 与折后 CP 两种不同引用；目标层无法确定状态则为 ambiguous，不假称题设不一致。
+- [x] 同命令复跑；增加 `rectangleFold.test.ts`、`rectangleFoldPlan.test.ts`、`rectangleFoldStateVerification.test.ts` 回归，以及顺逆旋转/不可用铰链/缺面负测。
 
 **验收：**原题有明确待澄清结果；修订版满足刚性不变量和面垂直；老矩形翻折行为不变。
 

@@ -382,5 +382,76 @@ npx vitest run packages/agent-core/src/parametricSolidPlan.test.ts \
 - 辅助点的**参数滑块**（`parameterId`）没有接 —— 落盘用的是固定 `parameter`。
 - 浏览器里"辅助点可见、拖动宿主后仍正确"未验（T8）。
 
+---
+
+## T6 —— 梯形翻折、显式状态及一次澄清
+
+### 1. 执行基线
+
+| 项 | 值 |
+|---|---|
+| 新增文件 | `packages/agent-core/src/polygonFoldPlan.ts`、`polygonFoldPlan.test.ts` |
+| 改动的文件 | `agent-core/src/index.ts`、`agent-core/src/solver/witnessSearch.ts`（导出 `kernelRelationsFromObligations`）、`apps/web/src/agent/localPlanner.ts`（+ `.test.ts`）、`solidGeometryFourCases.test.ts` |
+
+### 2. 这一块的判据（为什么原题**不能**出图）
+
+原题有两处必须由用户说清：
+
+1. 「将 △ACD 沿 AC 折起成 △PAC」按**有序顶点**读会移动折痕端点（`A→P`、`C→A`、`D→C`）；
+   通常意图是 `D→P`，但题面没有明说；
+2. 目标里的 `CD`：折前的那条线段，还是折后 `CP`？
+
+两者任一没说清 ⇒ **一条**合并澄清（不是两轮追问），且**不出计划**。明确修订版
+（"点 D 绕 AC 旋转 90° 得到 P" + "CD 指折前"）才建立数值验收。
+
+### 3. 改了什么
+
+1. **`polygonFoldPlan.ts`（新）**：
+   - 只认 3 种折起写法，`destinationExplicit` 只在 **apex-to-point** 语序（"点 D 绕 AC 旋转
+     n° 得到点 P"）为真 —— `折起成 △PAC` 只说明折后三角形的三点，**不算**把 `D→P` 说死；
+   - 折角：明写 `n°`，或"平面…⊥平面…"这条确定的 `90°`；两样都没有 ⇒ 问折角（不默认）；
+   - 底面复用 **T3** 的 `rightTrapezoidEdges` + `rightTrapezoidPolygon`，不另写一套梯形；
+   - 折后位置用既有的 `foldPointAboutHinge`（Rodrigues）；镜像由 `branch = ±1` 决定；
+   - 出计划前**自检**：折痕不动、折片刚性、转过的角等于给定角（不通过就澄清，不出半对的图）；
+   - 动作：`solid.create_face`（固定片）+ `solid.fold`（折片）。`M 为 PB 中点` 落成
+     `solid.create_segment` + `dynamic.create_bound_point`（**绑定点**，参数 1/2）。
+2. **`localPlanner`**：新增 `POLYGON_FOLD` 意图（`梯形` + 折起/翻折/旋转/折前，`allowWhenAsking`），
+   三种终态（plan / clarification / 不支持）各自翻译成信封。
+3. **`kernelRelationsFromObligations` 导出**：翻折层读的是**同一份**题设翻译，不另抄一张表。
+
+### 4. GREEN 读数
+
+```text
+npx vitest run polygonFoldPlan.test.ts solidGeometryFourCases.test.ts localPlanner.test.ts
+```
+
+**3 文件 / 90 项通过，exit 0**；矩形折叠回归
+`rectangleFold / rectangleFoldPlan / rectangleFoldStateVerification / foldChain.sequence / userFoldClauses`
+**5 文件 / 66 项通过**。
+
+`polygonFoldPlan.test.ts`（5 项）从**编译后的文档**自己量：
+
+| 断言 | 结果 |
+|---|---|
+| 原题 ⇒ 一条澄清、无 `plan` | ✔（同时含 `D→P` 与 `CD`，`reason = ambiguous-destination`） |
+| 修订版 ⇒ `compilePlan.ok` | ✔ |
+| 折痕两端不动 | ✔（与折前坐标差 < 1e-9） |
+| 折片刚性 `|AP|=|AD|=1`、`|CP|=|CD|=1` | ✔ |
+| 折角 90° | ✔ |
+| 平面 `PAC` ⊥ 平面 `ABC` | ✔（法向点积 < 1e-9） |
+| `P = (1/2, 1/2, ±1/√2)` | ✔（与设计 §3 的参考坐标一致） |
+| `M = (P+B)/2` | ✔ |
+| 镜像分支 | ✔（`z` 互为相反数；落盘动作只带折角，执行层按自己的规则选一侧） |
+| 折角缺失 ⇒ 问折角；折痕不在折片上 / 无梯形底面 ⇒ `not-applicable` | ✔ |
+
+### 5. 这一块**没有**做的
+
+- 原题**不出图**是刻意的（设计 §3 的验收口径）；本次没有实现"用户答完之后把澄清答案接回计划"
+  的多轮会话闭环（那属于会话层，T7/T8 只验两种固定题面）。
+- 目标层（`AP⊥CD` 是假、二面角 `acos(1/√3)`）留给 T7。
+- 折后的 `D` 不再作为图上的点出现（`apexAs = P`）；题面若要求同时保留折前 `D` 的显示，
+  需要另立一个"折前状态"图层，本文档没有做。
+
+
 
 

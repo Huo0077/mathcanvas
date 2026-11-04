@@ -1,5 +1,5 @@
 import type { PlanEnvelope, PlannerPort } from "@draw/agent-core"
-import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, normalizeGeometryPrompt, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solidWitnessActions, solveRectangleFold, tryBuildParametricSolidPlan, type ExplicitSolidIssue } from "@draw/agent-core"
+import { PLAN_SCHEMA_VERSION, DEFAULT_PRISM_HEIGHT, DEFAULT_PRISM_SPAN, DEFAULT_SOLID_SIZE, defaultPrismBasePolygon, cubeCenterFrom, cubeEdgeLengthFrom, normalizeGeometryPrompt, parseShapeClause, readExplicitSolidConditions, roundFrustumPolyhedron, searchWitnessForPrompt, solidWitnessActions, solveRectangleFold, tryBuildParametricSolidPlan, tryBuildPolygonFoldPlan, type ExplicitSolidIssue } from "@draw/agent-core"
 
 import { userChainPyramidPlan, CONIC_CHORD_MISMATCH_PROMPT, CONIC_CHORD_PROMPT, CONIC_ELLIPSE_PROMPT, EXAM_TRIANGLE_PROMPT, FUNCTION_CORNER_PROMPT, FUNCTION_DOMAIN_PROMPT, FUNCTION_TANGENT_PROMPT, HYPERBOLA_PROMPT, PARABOLA_PROMPT, PLANAR_TRIANGLE_PROMPT, PROOF_GOAL_PROMPT, PYRAMID_CIRCUMSPHERE_PROMPT, PYRAMID_PROMPT, PYRAMID_UNVERIFIED_PROMPT, conicChordPlan, conicInvariantPlan, ellipsePlan, examTrianglePlan, functionCornerPlan, functionDomainPlan, functionTangentPlan, hyperbolaPlan, obliquePrismSectionPlan, parabolaPlan, planarRightTrianglePlan, pyramidCircumspherePlan, pyramidPlan, userFoldChainPlan, userFoldPlan } from "./representativeFixtures"
 
@@ -459,8 +459,34 @@ const RECTANGLE_FOLD = (input: LocalIntentInput): PlanEnvelope => {
   return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "矩形折叠：暂不支持", factIds: [], questions: [reason] }
 }
 
-export const LOCAL_INTENTS: readonly LocalIntent[] = [  { all: ["圆台"], exact: ROUND_FRUSTUM_PROMPT, skillIds: ["spatial-modeling"], build: () => ROUND_FRUSTUM() },
-  { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
+/**
+ * **直角梯形沿对角线折起**（T6，2026-11-05）：题面 → 确定性动作链 / **一次**澄清。
+ *
+ * 与 `RECTANGLE_FOLD` 是两条题面语法；判据与几何都在 `tryBuildPolygonFoldPlan` 里，
+ * 这里只把三种终态翻译成信封。原题（没说 `D→P`、没说 `CD` 指哪一态）必须落成一条合并澄清。
+ */
+const POLYGON_FOLD = (input: LocalIntentInput): PlanEnvelope => {
+  const built = tryBuildPolygonFoldPlan({ prompt: input.prompt })
+  if (built.status === "ok") return built.plan
+  if (built.status === "clarification") {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: "梯形沿对角线折起：需要澄清",
+      factIds: [],
+      questions: [built.question]
+    }
+  }
+  return {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "clarification",
+    goal: "梯形沿对角线折起：暂不支持",
+    factIds: [],
+    questions: [built.reason]
+  }
+}
+
+export const LOCAL_INTENTS: readonly LocalIntent[] = [  { all: ["圆台"], exact: ROUND_FRUSTUM_PROMPT, skillIds: ["spatial-modeling"], build: () => ROUND_FRUSTUM() },  { all: ["四棱锥", "PA", "BC", "AD"], exact: PYRAMID_PROMPT, skillIds: ["spatial-modeling"], build: () => pyramidPlan() },
   /**
    * **同一张图 + 一句可形式化的目标**（Task 18）：浏览器里证明通道不存在，
    * 而"不在也不挡作图"要有真实读数 ⇒ 需要一道目标句读得出来的题面。
@@ -597,6 +623,11 @@ export const LOCAL_INTENTS: readonly LocalIntent[] = [  { all: ["圆台"], exact
    * 放在既有翻折夹具**之后**：代表题仍走它们原来的路径（不抢）。
    */
   { all: ["矩形"], any: ["折起", "翻起", "翻折", "折叠"], allowWhenAsking: true, skillIds: ["spatial-modeling"], build: RECTANGLE_FOLD },
+  /**
+   * **直角梯形沿对角线折起**（T6）：`梯形` + 折起/翻折。放在矩形那一条之后 ——
+   * 两族触发词不重叠，顺序只影响"同一句同时命中两族"这种不可能的情形。
+   */
+  { all: ["梯形"], any: ["折起", "翻起", "翻折", "折叠", "旋转", "折前"], allowWhenAsking: true, skillIds: ["spatial-modeling"], build: POLYGON_FOLD },
   // 只读提问不产生动作，因此**不请求任何技能** —— 上下文里不该出现用不上的动作菜单。
   { all: ["有什么"], skillIds: [], build: () => COUNT_ANSWER() }
 ]

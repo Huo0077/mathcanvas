@@ -224,8 +224,8 @@ function findContradiction(givens: readonly GeometryObligation[]): { code: strin
   return null
 }
 
-/** 交给内核构造器的两两写法。 */
-function kernelRelations(givens: readonly GeometryObligation[]): WitnessRelation[] {
+/** 交给内核构造器的两两写法。**导出**是为了让别的确定性计划（如翻折）读同一份翻译，不再抄一遍。 */
+export function kernelRelationsFromObligations(givens: readonly GeometryObligation[]): WitnessRelation[] {
   const relations: WitnessRelation[] = []
   for (const obligation of givens) {
     const targets = obligation.targets
@@ -387,7 +387,7 @@ function derivePrismStructure(givens: readonly GeometryObligation[]): StructureR
       message: `顶面点名 ${top} 与内核的顶面命名约定（${foot}′）不一致；本批不做名字映射，请按 ${foot}′ 出题。`
     }
   }
-  const relations = kernelRelations(givens)
+  const relations = kernelRelationsFromObligations(givens)
   const { freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
   // 侧棱长度**不在这一层判**：它就在 `relations` 里，由内核的 `shapeHeightIsFree` 读（一份判断，一处写）。
   return { status: "ok", structure: { base: [...base], top: normalized, foot, relations, freeBaseEdges } }
@@ -435,7 +435,7 @@ function derivePyramidStructure(givens: readonly GeometryObligation[]): Structur
         ? usable.line[0]
         : usable.line[1]
   const apex = foot === usable.line[0] ? usable.line[1] : usable.line[0]
-  const relations = kernelRelations(givens)
+  const relations = kernelRelationsFromObligations(givens)
   const { orderedBase, freeBaseEdges } = orderedBaseWithFreeEdges(base, relations)
 
   return {
@@ -798,9 +798,9 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
      * `在斜三棱柱ABC-A′B′C′中` 已经把底环与顶环都写清楚了；"斜多少"题面没说，
      * 由 `OBLIQUE_TILT_DEGREES` 取一个**代表值**并写进 assumptions（系统自选，不是题面说的）。
      */
-    return { status: "ok", spec: specForObliquePrism(recognised, kernelRelations(givens), statedLateralTilt(givens, recognised.base)), recognised }
+    return { status: "ok", spec: specForObliquePrism(recognised, kernelRelationsFromObligations(givens), statedLateralTilt(givens, recognised.base)), recognised }
   }
-  const relations = kernelRelations(givens)
+  const relations = kernelRelationsFromObligations(givens)
   if (recognised.family === "frustum") return { status: "ok", spec: specForFrustum(recognised, relations), recognised }
   /**
    * **平面图形：由度量条件钉死的环**（2026-10-11 用户现场；乙案 Task 2）。
@@ -833,7 +833,7 @@ export function specForPrompt(prompt: string, givens: readonly GeometryObligatio
       && (recognised.modifier === "正" || recognised.modifier === "直")
       && recognised.top !== undefined
     if (rightPrism) {
-      return { status: "ok", spec: specForRightPrism(recognised, kernelRelations(givens)), recognised }
+      return { status: "ok", spec: specForRightPrism(recognised, kernelRelationsFromObligations(givens)), recognised }
     }
     return { status: "unrecognised", reason: `${derived.code}: ${derived.message}` }
   }

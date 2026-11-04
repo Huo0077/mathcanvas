@@ -10,6 +10,14 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-05 —— 四道立体几何题修复 T6：梯形翻折、显式状态与一次澄清
+
+新增 `polygonFoldPlan.ts`。原题「将 △ACD 沿 AC 折起成 △PAC」按有序顶点读会移动折痕端点，且目标里的 `CD` 没说清是折前线段还是折后 `CP` —— 两者任一没说清就落成**一条**合并澄清、**不出计划**（`destinationExplicit` 只在"点 D 绕 AC 旋转 n° 得到点 P"这种语序为真；`折起成 △PAC` 不算把 D→P 说死）。修订版（写明 D→P 与 CD 指折前）才出计划：底面复用 T3 的 `rightTrapezoidEdges` / `rightTrapezoidPolygon`，折后位置复用既有 `foldPointAboutHinge`，折角取明写的 `n°` 或"平面…⊥平面…"的 90°，出计划前自检折痕不动 / 折片刚性 / 转过角相等。`M 为 PB 中点` 落成 `solid.create_segment` + `dynamic.create_bound_point`（参数 1/2）。
+
+`localPlanner` 新增 `POLYGON_FOLD` 意图（`梯形` + 折起/翻折/旋转/折前），三个终态各自翻译成信封；`kernelRelationsFromObligations` 导出，翻折层与见证搜索读**同一份**题设翻译。
+
+验证：`polygonFoldPlan / solidGeometryFourCases / localPlanner` **3 文件 90 项通过**；矩形折叠回归 `rectangleFold / rectangleFoldPlan / rectangleFoldStateVerification / foldChain.sequence / userFoldClauses` **5 文件 66 项通过**。修订版从编译后的文档自量：折痕不动、`|AP|=|AD|=1`、`|CP|=|CD|=1`、折角 90°、`PAC⊥ABC`、`P=(1/2,1/2,±1/√2)`、`M=(P+B)/2`；镜像分支 `z` 互为相反数；折角缺失 ⇒ 问折角；折痕不在折片上/无梯形底面 ⇒ `not-applicable`。**未做**：澄清答案接回计划的多轮闭环、目标层（T7）、保留折前 D 的显示状态。
+
 ## 2026-11-05 —— 四道立体几何题修复 T5：确定性计划适配与命名分点（Case 1–3 全链路通过）
 
 内核关系词表补 `midpoint` 与 `point-on-segment` 两档；新增 `resolveNamedPointRelations` 按**最终坐标**算辅助点：中点参数 1/2，棱上点 `t = 距离/|宿主|`（题面从另一端给长度时换算成 `1−d/|宿主|`，`EB₁=2` 与 `BE=1` 必须落到同一处），只说"在棱上"、没给长度就**不落点**，参数不在 (0,1) 内 `degenerate-base`、与已有顶点重名 `duplicate-name`。派生点（T4 的 O）与命名点（T5 的 D/E/M）走同一条 `auxiliaryPoints` 通道，都不进 `names`/`points`/`faces` 的下标空间。

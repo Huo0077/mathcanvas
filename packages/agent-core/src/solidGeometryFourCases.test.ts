@@ -18,8 +18,11 @@
 
 import { describe, expect, it } from "vitest"
 
+import { createEmptyDocument } from "@draw/dsl"
 import { constructShapeFromSpec, type Vector3 } from "@draw/geometry-kernel"
 import { parseObligationWithLegacy } from "./obligationIR"
+import { compilePlan } from "./planCompiler"
+import { tryBuildPolygonFoldPlan } from "./polygonFoldPlan"
 import { searchWitness, specForPrompt } from "./solver/witnessSearch"
 import {
   CASE_1,
@@ -171,18 +174,29 @@ describe("11-05 四道立体几何题：阶段基线（T1）", () => {
     expect(detail, summary(report)).toMatch(/M@PC:0\.500000/)
   })
 
-  it("Case 4 原题：入口层认不出『直角梯形』，正确结局应是澄清而不是断言", () => {
+  it("Case 4 原题：入口层认不出『直角梯形』，折叠入口给出**一条合并澄清**（不出计划）", () => {
     const report = original.get(CASE_4_ORIGINAL.id)!
     expect(report.parse.givens, summary(report)).toBe(8)
     /** `AD=CD=1` 的连等式同样已展开；三条长度都在。 */
     expect(report.parse.kinds.filter((kind) => kind === "fixedLength")).toHaveLength(3)
+    /** 立体形状描述仍然认不出（它是平面图形 + 翻折，不属于棱锥/棱柱那条链）。 */
     expect(report.shape.status, summary(report)).toBe("unrecognised")
     expect(report.search.status, summary(report)).toBe("not-run")
     /** 原题**必须**带着歧义说明；没有这一句就不许说"题面读全了"。 */
     expect(CASE_4_ORIGINAL.ambiguity, "原题必须保留 D→P 与 CD 折前/折后的歧义说明").not.toBeNull()
+    /**
+     * **T6 的入口**：原题落成**一条**澄清（`D→P` 与 `CD` 指哪一态一起问），
+     * 而不是一张自称符合原题的图。
+     */
+    const built = tryBuildPolygonFoldPlan({ prompt: CASE_4_ORIGINAL.prompt })
+    expect(built.status, JSON.stringify(built)).toBe("clarification")
+    if (built.status === "clarification") {
+      expect(built.question).toContain("D→P")
+      expect(built.question).toContain("CD")
+    }
   })
 
-  it("Case 4 修订版：与原题是不同的固定题面（不覆盖原题）", () => {
+  it("Case 4 修订版：与原题是两份固定题面，且**修订版可作图**", () => {
     const report = revised.get(CASE_4_REVISED.id)!
     expect(report.parse.givens, summary(report)).toBe(8)
     expect(report.shape.status, summary(report)).toBe("unrecognised")
@@ -191,6 +205,12 @@ describe("11-05 四道立体几何题：阶段基线（T1）", () => {
     expect(CASE_4_REVISED.prompt).toContain("固定A、C")
     expect(CASE_4_REVISED.prompt).toContain("指折前")
     expect(CASE_4_REVISED.ambiguity).toBeNull()
+    /** **T6**：明确修订版出计划，且能编译。 */
+    const built = tryBuildPolygonFoldPlan({ prompt: CASE_4_REVISED.prompt })
+    expect(built.status, JSON.stringify(built)).toBe("ok")
+    if (built.status !== "ok") return
+    const compiled = compilePlan(built.plan, { document: createEmptyDocument("geometry3d"), prompt: CASE_4_REVISED.prompt, conversationId: "four-cases", documentGeneration: 0 })
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("；")).toBe(true)
   })
 
   /**
