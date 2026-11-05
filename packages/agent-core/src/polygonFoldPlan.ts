@@ -69,9 +69,9 @@ interface FoldClause {
 
 const POINT = "[A-Z](?:[′]|[₁₂₃₄₅₆])?"
 
-/** `将△ACD沿AC折起成△PAC` / `把 △ACD 沿对角线 AC 折起 90°`。 */
+/** `将△ACD沿AC折起成△PAC` / `将△ACD沿AC折起60°成△PAC` / `把 △ACD 沿对角线 AC 折起 90°`。 */
 const FACE_FIRST = new RegExp(
-  `(?:将|把)?\\s*△\\s*(${POINT})(${POINT})(${POINT})\\s*沿\\s*(?:对角线\\s*)?(${POINT})(${POINT})\\s*折起(?:\\s*成\\s*△\\s*(${POINT}${POINT}${POINT}))?(?:\\s*([0-9.]+)\\s*°)?`,
+  `(?:将|把)?\\s*△\\s*(${POINT})(${POINT})(${POINT})\\s*沿\\s*(?:对角线\\s*)?(${POINT})(${POINT})\\s*折起(?:\\s*([0-9.]+)\\s*°)?(?:\\s*成\\s*△\\s*(${POINT}${POINT}${POINT}))?(?:\\s*([0-9.]+)\\s*°)?`,
   "g"
 )
 /** `将点D绕直线AC旋转90°得到点P`（明确的 D→P）。 */
@@ -110,10 +110,10 @@ function readFoldClause(prompt: string): FoldClause | null {
   const apex = face.find((name) => !hinge.includes(name))
   if (apex === undefined) return null
   /** 折后三角形里除折痕外的那个点（可能是 `P`，也可能是折前名本身）。 */
-  const target = faceFirst[6] === undefined ? null : faceFirst[6]
+  const target = faceFirst[7] === undefined ? null : faceFirst[7]
   const remaining = target === null ? null : (target.match(new RegExp(POINT, "g")) ?? []).filter((name) => !hinge.includes(name))
   const statedPostName = remaining !== null && remaining.length === 1 && remaining[0] !== apex ? remaining[0]! : null
-  const statedAngle = faceFirst[7] === undefined ? FOLD_ANGLE.exec(prompt)?.[1] : faceFirst[7]
+  const statedAngle = faceFirst[6] ?? faceFirst[8] ?? FOLD_ANGLE.exec(prompt)?.[1]
   const angle = statedAngle === undefined ? null : Number(statedAngle)
   return {
     face,
@@ -247,22 +247,20 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
     .find((segment) => segment.includes(clause.apex))) ?? null
 
   /**
-   * **一次澄清**：把还没说清的子问题合在一句里。顺序与设计一致（先 D→P，再 CD 的状态）。
+   * 拓扑不动轴解析：
+   * 只要题面写明了折后三角形（如「折起成△PAC」），且该三角形在折痕外的动点存在（P），
+   * 依据折痕 AC 固定原则，动点映射自动确定为 apex -> statedPostName（即 D -> P）。
+   * 仅在完全没有指定折后名称时才发起澄清。
    */
-  if (!clause.destinationExplicit || (referencedSegment !== null && reference === null)) {
-    const parts: string[] = []
-    if (!clause.destinationExplicit) {
-      parts.push(`「${clause.face.join("")} 沿 ${clause.hinge.join("")} 折起」按有序顶点读会移动折痕端点，通常意图是 ${clause.apex}→${clause.statedPostName ?? "折后点"}，但题面没有明说`)
-    }
-    if (referencedSegment !== null && reference === null) {
-      parts.push(`目标里的 ${referencedSegment.join("")} 指的是折前线段，还是折后 ${referencedSegment[0]}${clause.statedPostName ?? clause.apex}`)
-    }
+  const postName = clause.statedPostName ?? clause.apex
+  if (postName === clause.apex) {
     return {
       status: "clarification",
-      reason: clause.destinationExplicit ? "ambiguous-reference" : "ambiguous-destination",
-      question: `这条题面有两处需要你确认：${parts.join("；另外，")}？请分别回答，确认后我再出图。`
+      question: `折后点名与折前相同（${clause.apex}），无法区分两个位置；请给折后的点名。`,
+      reason: "unsupported"
     }
   }
+
   if (angle === null) {
     return {
       status: "clarification",
@@ -270,9 +268,6 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
       question: `题面没有给出 ${clause.hinge.join("")} 这条折痕上的折角（既没写“折起 n°”，也没写“平面…⊥平面…”）。请补充折角后再出图。`
     }
   }
-
-  const postName = clause.statedPostName ?? clause.apex
-  if (postName === clause.apex) return { status: "clarification", question: `折后点名与折前相同（${clause.apex}），无法区分两个位置；请给折后的点名。`, reason: "unsupported" }
 
   const branch = input.branch ?? 1
   const rotated = foldPointAboutHinge(pre[clause.apex]!, pre[clause.hinge[0]]!, pre[clause.hinge[1]]!, branch * angle)
@@ -311,6 +306,28 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
     }
   ]
   /**
+   * **折前参考线框与叠影**：在底面保留折前动点及其相连棱，便于几何直观对照。
+   */
+  actions.push({
+    actionId: "solid.create_point",
+    actionKey: `pre_${clause.apex}`,
+    factIds: [],
+    inputs: { alias: `pre_${clause.apex}`, position: pre[clause.apex]!, label: clause.apex }
+  })
+  actions.push({
+    actionId: "solid.create_segment",
+    actionKey: `seg_pre_${clause.hinge[0]}${clause.apex}`,
+    factIds: [],
+    inputs: { alias: `seg_pre_${clause.hinge[0]}${clause.apex}`, vertexNames: [clause.hinge[0], clause.apex], label: `${clause.hinge[0]}${clause.apex}(折前)` }
+  })
+  actions.push({
+    actionId: "solid.create_segment",
+    actionKey: `seg_pre_${clause.hinge[1]}${clause.apex}`,
+    factIds: [],
+    inputs: { alias: `seg_pre_${clause.hinge[1]}${clause.apex}`, vertexNames: [clause.hinge[1], clause.apex], label: `${clause.hinge[1]}${clause.apex}(折前)` }
+  })
+
+  /**
    * **折后的中点**（`M 为 PB 的中点`）：折后点 `P` 与固定点 `B` 之间的分点。
    * 落成 `solid.create_segment` + `dynamic.create_bound_point`（绑定点），
    * 宿主是被折出来的那条线段，不是一组手算坐标。
@@ -321,8 +338,12 @@ export function tryBuildPolygonFoldPlan(input: { prompt: string; branch?: 1 | -1
   )
   const assumptions: string[] = [
     `沿 ${clause.hinge.join("")} 把 △${clause.face.join("")} 折起 ${angle}°，取${branch === 1 ? "" : "反"}向分支（镜像分支满足同一组刚性不变量）。`,
-    `${clause.apex} 的折后位置记作 ${postName}；折前的 ${clause.apex} 不再作为图上的点出现。`
+    `依据折痕 ${clause.hinge.join("")} 固定原则，自动推导动点对应为 ${clause.apex} → ${postName}。`,
+    `保留折前位置点 ${clause.apex} 及参考线段 ${clause.hinge[0]}${clause.apex}、${clause.hinge[1]}${clause.apex} 作为平面叠影参考。`
   ]
+  if (referencedSegment !== null && reference === null) {
+    assumptions.push(`目标中引用的 ${referencedSegment.join("")} 按折前平面线段参与核验与展示。`)
+  }
   if (midpoint !== undefined) {
     const pointName = midpoint.targets[0]!
     const segmentAlias = `fold-segment-${postName}${other}`

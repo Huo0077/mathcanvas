@@ -174,7 +174,7 @@ describe("11-05 四道立体几何题：阶段基线（T1）", () => {
     expect(detail, summary(report)).toMatch(/M@PC:0\.500000/)
   })
 
-  it("Case 4 原题：入口层认不出『直角梯形』，折叠入口给出**一条合并澄清**（不出计划）", () => {
+  it("Case 4 原题：折叠入口依据折痕轴不动推导 D→P，保留折前叠影线，直接成功出图", () => {
     const report = original.get(CASE_4_ORIGINAL.id)!
     expect(report.parse.givens, summary(report)).toBe(8)
     /** `AD=CD=1` 的连等式同样已展开；三条长度都在。 */
@@ -182,18 +182,15 @@ describe("11-05 四道立体几何题：阶段基线（T1）", () => {
     /** 立体形状描述仍然认不出（它是平面图形 + 翻折，不属于棱锥/棱柱那条链）。 */
     expect(report.shape.status, summary(report)).toBe("unrecognised")
     expect(report.search.status, summary(report)).toBe("not-run")
-    /** 原题**必须**带着歧义说明；没有这一句就不许说"题面读全了"。 */
-    expect(CASE_4_ORIGINAL.ambiguity, "原题必须保留 D→P 与 CD 折前/折后的歧义说明").not.toBeNull()
     /**
-     * **T6 的入口**：原题落成**一条**澄清（`D→P` 与 `CD` 指哪一态一起问），
-     * 而不是一张自称符合原题的图。
+     * 原题直接出图：依据轴不动拓扑映射 D→P，保留折前叠影线，且能编译通过。
      */
     const built = tryBuildPolygonFoldPlan({ prompt: CASE_4_ORIGINAL.prompt })
-    expect(built.status, JSON.stringify(built)).toBe("clarification")
-    if (built.status === "clarification") {
-      expect(built.question).toContain("D→P")
-      expect(built.question).toContain("CD")
-    }
+    expect(built.status, JSON.stringify(built)).toBe("ok")
+    if (built.status !== "ok") return
+    const compiled = compilePlan(built.plan, { document: createEmptyDocument("geometry3d"), prompt: CASE_4_ORIGINAL.prompt, conversationId: "four-cases-orig", documentGeneration: 0 })
+    expect(compiled.ok, compiled.diagnostics.map((entry) => `${entry.code}: ${entry.detail}`).join("；")).toBe(true)
+    expect(compiled.diagramVerification?.status).toBe("passed")
   })
 
   it("Case 4 修订版：与原题是两份固定题面，且**修订版可作图**", () => {

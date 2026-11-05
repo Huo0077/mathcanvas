@@ -231,13 +231,11 @@ describe("local planner translates the commands it knows", () => {
     const original =
       "如图，在直角梯形ABCD中，AB∥CD，AD⊥AB，AB=2，AD=CD=1。将△ACD沿AC折起成△PAC，使得平面PAC⊥平面ABC。点M为PB的中点。证明：AP⊥CD；求二面角P-AB-C的大小。"
     expect(matchLocalIntent(original), "梯形折叠意图应该已经登记").not.toBeNull()
-    const clarified = await plan(original)
-    expect(clarified.kind).toBe("clarification")
-    if (clarified.kind === "clarification") {
-      /** **一次问完**：一条问题里同时提到 D→P 与 CD。 */
-      expect(clarified.questions).toHaveLength(1)
-      expect(clarified.questions[0]).toContain("D→P")
-      expect(clarified.questions[0]).toContain("CD")
+    const originalPlan = await plan(original)
+    expect(originalPlan.kind).toBe("plan")
+    if (originalPlan.kind === "plan") {
+      expect(originalPlan.actions.some((action) => action.actionId === "solid.fold")).toBe(true)
+      expect(originalPlan.actions.some((action) => action.actionId === "dynamic.create_bound_point")).toBe(true)
     }
 
     const revised =

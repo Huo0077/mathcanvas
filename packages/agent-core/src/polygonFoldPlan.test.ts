@@ -51,25 +51,26 @@ const norm = (value: Vector3) => Math.hypot(value.x, value.y, value.z)
 const unit = (value: Vector3): Vector3 => ({ x: value.x / norm(value), y: value.y / norm(value), z: value.z / norm(value) })
 
 describe("T6 梯形翻折：原题一次澄清、修订版可作图", () => {
-  it("原题（`折起成△PAC`，没说 D→P、没说 CD 指哪一态）⇒ **一条**合并澄清，不出计划", () => {
+  it("原题（`折起成△PAC`）⇒ 自动依据折痕轴不动推导 D→P，保留折前叠影线，成功出计划", () => {
     const built = tryBuildPolygonFoldPlan({ prompt: CASE_4_ORIGINAL.prompt })
-    expect(built.status, JSON.stringify(built)).toBe("clarification")
-    if (built.status !== "clarification") return
-    /** 一次问完：两处都在同一条问题里。 */
-    expect(built.question).toContain("D→P")
-    expect(built.question).toContain("CD")
-    expect(built.question).toContain("折前")
-    expect(built.reason).toBe("ambiguous-destination")
-    /** 不许"先生成一张自称符合原题的图"。 */
-    expect(built).not.toHaveProperty("plan")
+    expect(built.status, JSON.stringify(built)).toBe("ok")
+    if (built.status !== "ok") return
+    const { compiled } = compile(CASE_4_ORIGINAL.prompt)
+    expect(compiled.ok).toBe(true)
+    const points = pointsOf(compiled.draftDocument)
+    for (const name of ["A", "B", "C", "P", "D", "M"]) {
+      expect(points.has(name), `必须包含点 ${name}`).toBe(true)
+    }
+    expect(built.assumptions.some(a => a.includes("D → P"))).toBe(true)
+    expect(built.assumptions.some(a => a.includes("平面叠影参考"))).toBe(true)
   })
 
-  it("修订版（写明 D→P 与 CD 指折前）⇒ 出计划：折痕不动、折片刚性、折角 90°", () => {
+  it("修订版（写明 D→P 与 CD 指折前）⇒ 出计划：折痕不动、折片刚性、折角 90°、保留折前叠影", () => {
     const { built, compiled } = compile(CASE_4_REVISED.prompt)
     const points = pointsOf(compiled.draftDocument)
-    for (const name of ["A", "B", "C", "P", "M"]) expect(points.has(name), `缺 ${name}`).toBe(true)
-    /** 折前的 `D` 不再作为图上的点出现（不是"同一个名字两个位置"）。 */
-    expect(points.has("D")).toBe(false)
+    for (const name of ["A", "B", "C", "P", "D", "M"]) expect(points.has(name), `缺 ${name}`).toBe(true)
+    /** 折前的 `D` 作为参考叠影点保留在底面上 */
+    expect(points.has("D")).toBe(true)
 
     const a = points.get("A")!
     const b = points.get("B")!

@@ -77,20 +77,15 @@ for (const [index, [label, prompt]] of ([
   })
 }
 
-test("Case 4 原题：一次合并澄清，不生成草稿", async ({ page }) => {
-  // 用例自身要给出 `waitFor` 的余地：澄清是一句完整的话，不是一串动作。
-  test.setTimeout(120_000)
+test("Case 4 原题：出草稿 → 一次提交 → 一步撤销", async ({ page }) => {
   await send(page, CASE_4_ORIGINAL)
-
-  /** 澄清渲染在**运行状态**那一栏（`RunStatus`），不是资产气泡。 */
-  const status = page.getByRole("region", { name: "运行状态" })
-  await expect(status).toBeVisible()
-  await expect(status).toContainText("等待补充信息", { timeout: 90_000 })
-  await expect(status).toContainText("D→P", { timeout: 90_000 })
-  await expect(status).toContainText("折前线段")
-  await expect(status).toContainText("CP")
-  // **没有**可提交草稿：澄清阶段不该出现"确认改动"那块。
-  await expect(page.getByRole("region", { name: "确认改动" })).toHaveCount(0)
+  await expectDraft(page)
+  await page.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交")).toBeVisible()
+  await page.getByRole("button", { name: "返回画布" }).click()
+  await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
+  await page.keyboard.press("Control+z")
+  await expect.poll(() => objectRows(page).count()).toBe(0)
 })
 
 test("Case 4 修订版：出草稿 → 一次提交 → 一步撤销", async ({ page }) => {
