@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import { createEmptyDocument, type GeometryDocument, type Point3Primitive, type PrimitiveSpec } from "@draw/dsl"
+import { applyOperation } from "@draw/scene-graph"
 import { applyCameraState, createCameraState } from "./threeCamera"
 import { createThreeSceneContent, type ThreeSceneContentDeps } from "./threeSceneContent"
 
@@ -285,5 +286,68 @@ describe("rotation handle view switch", () => {
     expect(radiusHandlesOnCanvas(scene)).toHaveLength(1)
     expect(deps.trackRadiusHandleRef.current?.id).toBe("orbit-1")
     expect(ringsOnCanvas(scene)).toHaveLength(0)
+  })
+})
+
+
+describe("temporary drag document rendering", () => {
+  it("renders the recomputed dependency closure without mutating the saved document or rebuilding static content", () => {
+    const primitives: PrimitiveSpec[] = [
+      { id: "a", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "b", type: "point3", position: { x: 4, y: 0, z: 0 } },
+      { id: "track", type: "line3", definition: { kind: "throughPoints", pointIds: ["a", "b"] } },
+      { id: "c", type: "point3", position: { x: 2, y: 0, z: 0 }, binding: { kind: "onHost", hostId: "track", parameter: 0.5 } },
+      { id: "cd", type: "segment3", pointIds: ["c", "b"] },
+      { id: "d", type: "point3", position: { x: 3, y: 0, z: 0 }, binding: { kind: "onHost", hostId: "cd", parameter: 0.5 } }
+    ]
+    const { syncContent, deps, scene, objectsOf } = harness(primitives)
+    syncContent()
+    const base = deps.documentRef.current
+    const snapshot = JSON.stringify(base)
+    const grid = scene.children.find(object => object instanceof THREE.LineSegments && !object.userData.primitiveId)
+    const unchangedB = objectsOf("b")[0]
+    const preview = applyOperation(base, { op: "translatePrimitive3", id: "a", delta: { x: 0, y: 2, z: 0 } }).document
+    syncContent(preview)
+    expect(deps.points.get("c")!.position).toEqual({ x: 2, y: 1, z: 0 })
+    expect(deps.points.get("d")!.position).toEqual({ x: 3, y: 0.5, z: 0 })
+    expect(objectsOf("c")[0].position.toArray()).toEqual([2, 1, 0])
+    expect(objectsOf("d")[0].position.toArray()).toEqual([3, 0.5, 0])
+    expect(objectsOf("b")[0]).toBe(unchangedB)
+    expect(scene.children).toContain(grid)
+    expect(deps.documentRef.current).toBe(base)
+    expect(JSON.stringify(base)).toBe(snapshot)
+    syncContent()
+    expect(deps.points.get("c")!.position).toEqual({ x: 2, y: 0, z: 0 })
+  })
+})
+
+
+describe("live spatial and embedded planar geometry", () => {
+  it("updates actual face, plane, solid and derived sphere render objects during a vertex preview", () => {
+    const primitives: PrimitiveSpec[] = [
+      ...TETRAHEDRON.map(p => p.type === "polyhedron3" ? { ...p, unfoldProgress: 0 } : p),
+      { id: "plane", type: "plane3", definition: { kind: "throughPoints", pointIds: ["tetra-a", "tetra-b", "tetra-c"] }, halfSize: 3 },
+      { id: "sphere", type: "sphere", center: { x: 1, y: 1, z: 1 }, radius: Math.sqrt(3), derivedFrom: { kind: "circumsphere", solidId: "tetra-solid" } }
+    ]
+    const { syncContent, deps, objectsOf } = harness(primitives)
+    syncContent()
+    const ids = ["tetra-face-abc", "tetra-face-adb", "tetra-face-acd", "plane", "sphere"]
+    const before = new Map(ids.map(id => [id, objectsOf(id)[0]]))
+    // Pull a non-coplanar vertex: the dependent face/plane tilt, tetrahedron
+    // deforms, and its circumsphere must be rebuilt from the new vertices.
+    const preview = applyOperation(deps.documentRef.current, { op: "translatePrimitive3", id: "tetra-a", delta: { x: 0, y: 0, z: -1 } }).document
+    syncContent(preview, true)
+    for (const id of ids) {
+      expect(objectsOf(id).length, id).toBeGreaterThan(0)
+      expect(objectsOf(id)[0], id).not.toBe(before.get(id))
+    }
+    const normal = new THREE.Vector3(1, 1, -2).normalize()
+    const plane = objectsOf("plane")[0] as THREE.Mesh
+    const normals = plane.geometry.getAttribute("normal")
+    const planeNormal = new THREE.Vector3().fromBufferAttribute(normals, 0).normalize()
+    expect(Math.abs(planeNormal.dot(normal))).toBeCloseTo(1, 6)
+    const sphere = preview.primitives.find(p => p.id === "sphere")
+    if (sphere?.type !== "sphere") throw new Error("Expected derived sphere")
+    expect(objectsOf("sphere")[0].position.toArray()).toEqual([sphere.center.x, sphere.center.y, sphere.center.z])
   })
 })

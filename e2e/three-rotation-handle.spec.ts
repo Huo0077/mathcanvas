@@ -91,6 +91,7 @@ function parseTriple(text: string | null): number[] {
  * 顺便钉住"默认是关的"：点之前 `aria-pressed` 必须是 `false`。
  */
 async function showRotationRings(page: import("@playwright/test").Page): Promise<void> {
+  await page.locator(".three-scene-options").evaluate(element => { (element as HTMLDetailsElement).open = true })
   const toggle = page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" })
   await expect(toggle).toHaveAttribute("aria-pressed", "false")
   await toggle.click()
@@ -204,6 +205,7 @@ test("keeps the rings off the canvas until the view switch is turned on", async 
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
+  await page.locator(".three-scene-options").evaluate(element => { (element as HTMLDetailsElement).open = true })
   const toggle = page.locator(".three-scene-controls").getByRole("button", { name: "旋转环" })
   await (await commandButton(page, "添加圆柱")).click()
   await expect(page.getByText("圆柱 1").first()).toBeVisible()

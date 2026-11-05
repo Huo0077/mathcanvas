@@ -46,6 +46,43 @@ export function orbitParameterAt(camera: THREE.PerspectiveCamera, host: Host3, p
   }
   return ((best % turn) + turn) % turn
 }
+/**
+ * 沿一维宿主（直线 / 线段 / 射线 / 棱）拖动动点时，把指针射线直接求交到异面直线最近点。
+ * 相比于「过锚点屏幕平面求交再投影」，本函数在宿主倾斜于视线纵深时不会失敏或卡顿。
+ */
+export function lineParameterAtRay(ray: THREE.Ray, host: Host3): number | null {
+  const p0 = host.evaluate({ u: 0 })
+  const p1 = host.evaluate({ u: 1 })
+  const vx = p1.x - p0.x
+  const vy = p1.y - p0.y
+  const vz = p1.z - p0.z
+  const lenSq = vx * vx + vy * vy + vz * vz
+  if (lenSq < 1e-12) return null
+
+  const ox = ray.origin.x
+  const oy = ray.origin.y
+  const oz = ray.origin.z
+  const dx = ray.direction.x
+  const dy = ray.direction.y
+  const dz = ray.direction.z
+
+  const w0x = p0.x - ox
+  const w0y = p0.y - oy
+  const w0z = p0.z - oz
+
+  const a = lenSq
+  const b = dx * vx + dy * vy + dz * vz
+  const d = w0x * vx + w0y * vy + w0z * vz
+  const e = w0x * dx + w0y * dy + w0z * dz
+
+  const denom = a - b * b
+  if (denom < 1e-8) return null
+
+  const u = (b * e - d) / denom
+  const domain = host.domain.u
+  return Math.min(Math.max(u, domain[0]), domain[1])
+}
+
 
 /**
  * 自由拖动：被拖对象在屏幕平面上的落点。

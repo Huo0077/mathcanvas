@@ -54,11 +54,8 @@ test("keeps one renderer alive across edits, selection and unfold", async ({ pag
   expect(syncs).toBeGreaterThanOrEqual(2)
 })
 
-/**
- * 拖动期间既不该重建渲染器，也不该同步内容：画面完全由临时偏移负责，
- * 抬手才提交文档（提交本身会同步一次内容，那是预期的，所以采样点放在抬手之前）。
- */
-test("does not rebuild or resync while a solid is being dragged", async ({ page }) => {
+/** Preview snapshots refresh dependencies incrementally without committing the canonical document. */
+test("incrementally previews dependencies without rebuilding or committing while dragging", async ({ page }) => {
   await page.goto("/")
   await page.getByRole("button", { name: "立体几何" }).click()
   await (await commandButton(page, "添加立方体")).click()
@@ -75,6 +72,7 @@ test("does not rebuild or resync while a solid is being dragged", async ({ page 
   // 采样点：仍在按住的状态下。
   await expect(scene).toHaveAttribute("data-scene-builds", "1")
   expect(Number(await scene.getAttribute("data-scene-syncs"))).toBe(syncsBefore)
+  expect(Number(await scene.getAttribute("data-scene-preview-syncs"))).toBeGreaterThan(0)
   // 拖动确实发生了，否则这条断言会因为"根本没抓到图形"而假通过。
   expect(Number(await scene.getAttribute("data-drag-frames"))).toBeGreaterThan(0)
 

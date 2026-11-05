@@ -97,7 +97,7 @@ export interface PointerState {
 }
 
 /**
- * 一次自由拖动。拖动期间文档完全不提交，只把位移按帧画到场景里的对象上；抬手时才提交唯一一次操作。
+ * 一次自由拖动。拖动期间文档完全不提交，只把累计操作求出的临时几何按帧画到场景里；抬手时才提交唯一一次操作。
  * 这正是"一次拖动 = 一步撤销"的保证：中途每提交一次，撤销栈里就多一步，用户要按好几次 Ctrl+Z 才能回到原状
  * （实测：一次 90px 的拖动会留下 4 步）。`total` 是这次拖动的总位移，`applied` 表示画面已经动过。
  */
@@ -125,9 +125,6 @@ export interface DragSessionState {
   hostConstraint?: Host3
   hostDependents?: string[]
   hostParameter?: Host3Parameter
-  /** 自由拖动顶点或线/面时，未整体刚体平移但共享了移动顶点的下游边/面，拖动期间逐帧实时拉伸。 */
-  deformDependents?: string[]
-  originalPositions?: Map<string, { x: number; y: number; z: number }>
   /**
    * 绑定点的坐标由 **Reactive DAG** 求出（Reactive DAG 切片 Task 4）：宿主是来源节点、
    * 宿主参数（u/v/w）是三个参数节点、点本身是约束节点。每帧只写参数、求一次闭包，
@@ -351,15 +348,15 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
     const { render, syncPointHandleScales } = createThreeSceneRender({ renderer, scene, camera, cameraStateRef, sceneShell, autoFitRef, selectedIdsRef, measurementOverlayRef, pointLabelOverlayRef, measurementVisuals, visiblePointLabels, objectIndex, pointHandles, viewport, curveToleranceBucketRef, setCurveToleranceBucket, applyGridPlacement })
     /**
      * **内容同步**已切到 `./threeSceneContent`：按内容签名增量重建场景对象，并把这一轮的重建 / 沿用 /
-     * 释放计数写进 `data-scene-*`；`refreshPrimitiveObject`（拖动绑定点时只重建那一个对象）与它共用
-     * 同一张记录表，所以一起切了过去。它读写的那批跨阶段共享量都是上面那些**稳定容器**
+     * 释放计数写进 `data-scene-*`；正式文档与拖动临时文档共用同一张记录表。
+     * 它读写的那批跨阶段共享量都是上面那些**稳定容器**
      *（就地 `clear` / `push` / `copy`），因此传引用是安全的。
      *
      * **工厂调用排在这里**（而不是紧跟在容器声明之后）：同步里要用 `syncPointHandleScales` 先把点手柄
      * 按屏幕尺寸缩放、再算内容包围盒与面片尺寸，而那个函数由上面那行工厂交出 —— 排在它前面会撞上
      * 暂时性死区。
      */
-    const { syncContent, refreshPrimitiveObject } = createThreeSceneContent({
+    const { syncContent } = createThreeSceneContent({
       documentRef, selectedIdsRef, displayFlagsRef, previewsRef, previewHoverKeyRef, previewHoverRef,
       curveToleranceBucketRef, circleRadiusPreviewRef, rotationHandleRef, trackRadiusHandleRef,
       sceneSyncsRef, cameraStateRef, scene, camera, sceneShell, viewportSize, syncPointHandleScales,
@@ -410,9 +407,8 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 拖动期间的画面（半径预览 / 手柄落位 / 场景重建后补画）在 `./threeSceneDragVisuals`。
      * 调用方照旧把它挂进 `resumeDragVisualRef`：内容同步效应在签名变化时调它补画。
      */
-    const { applyTrackRadiusPreview, clearTrackRadiusPreview, moveRotationHandles, resumeDragVisual } = createThreeSceneDragVisuals({
-      scene, documentRef, dragSessionRef, trackRadiusHandleRef, rotationHandleRef, circleRadiusPreviewRef,
-      points, refreshPrimitiveObject, render
+    const { previewDrag, clearDragPreview, resumeDragVisual } = createThreeSceneDragVisuals({
+      documentRef, dragSessionRef, syncContent, render
     })
     resumeDragVisualRef.current = resumeDragVisual
     /**
@@ -512,7 +508,7 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 依赖面宽是这一层的性质；三个监听器由下面的注册行使用。
      */
     const { handlePointerDown, handlePointerMove, handlePointerUp } = createThreeSceneInteraction({ 
-cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, setFacePickMode, facePickModeRef, onSelectRef, previewClickRef, scene, camera, renderer, sceneShell, sceneBounds, points, topologyOwners, refreshPrimitiveObject, render, pickTolerance, dragDeltaFor, setCameraState, applyTrackRadiusPreview, clearTrackRadiusPreview, moveRotationHandles, pointFromEvent, raycasterAt, previewHitAt
+cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, setFacePickMode, facePickModeRef, onSelectRef, previewClickRef, scene, camera, renderer, sceneShell, sceneBounds, points, topologyOwners, previewDrag, clearDragPreview, render, pickTolerance, dragDeltaFor, setCameraState, pointFromEvent, raycasterAt, previewHitAt
  })
     renderer.domElement.addEventListener("pointermove", handlePointerMoveForPreview)
     renderer.domElement.addEventListener("pointerleave", handlePointerLeaveForPreview)

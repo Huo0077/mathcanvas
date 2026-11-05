@@ -66,6 +66,7 @@ import { useSceneStore } from "./store"
  * 判据全在内核，所以能脱离整棵 App 单独测。开关来自 `./agent/featureFlags` 的那一份。
  */
 import { planConstrainedDrag3 } from "./constrainedDrag3"
+import { hostPointDragOperations } from "./hostPointDrag"
 import { agentNextPhaseFlags } from "./agent/featureFlags"
 /**
  * id 与自动标签的分配、以及键盘判据（Esc / 撤销快捷键 / 焦点是否在输入框）都在
@@ -1041,13 +1042,7 @@ export function App() {
         </div>
         {algebraPanel}
         {document.workspace === "geometry3d" ? <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
-          const primitive = document.primitives.find((candidate) => candidate.id === id)
-          if (primitive?.type !== "point3" || !primitive.binding) return
-          // 只提交参数：坐标由重算从参数算出，所以点永远精确落在宿主上。
-          if (primitive.binding.kind === "onHost" || primitive.binding.kind === "onLine") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, parameter: parameter.u } } })
-          else if (primitive.binding.kind === "onFace" || primitive.binding.kind === "onSurface") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uv: [parameter.u, parameter.v ?? primitive.binding.uv[1]] } } })
-          // 实体内：三个比例都提交（拖动时夹取已经把点限制在体内，提交的参数就是夹取后的位置）。
-          else if (primitive.binding.kind === "inSolid") apply({ op: "updatePrimitive", id, patch: { binding3: { ...primitive.binding, uvw: [parameter.u, parameter.v ?? primitive.binding.uvw[1], parameter.w ?? primitive.binding.uvw[2]] } } })
+          applyBatch(hostPointDragOperations(document, id, parameter))
         }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
         {inspectorPanel}
         {rightDockOpen && <InspectorResizeHandle controls="properties-dock" width={inspectorWidth} onResize={resizeInspector} />}

@@ -1,6 +1,6 @@
 import * as THREE from "three"
 
-import type { IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive } from "@draw/dsl"
+import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive } from "@draw/dsl"
 import { unfoldPolyhedron3 } from "@draw/geometry-kernel"
 import { resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices } from "@draw/scene-graph"
 import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
@@ -164,8 +164,10 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       contentRecords.set(key, { object, signature })
       return object
     }
-    const syncContent = () => {
-    sceneSyncsRef.current += 1
+    const syncContent = (document: GeometryDocument = documentRef.current, preview = false) => {
+    if (preview) {
+      if (sceneShell) sceneShell.dataset.scenePreviewSyncs = String(Number(sceneShell.dataset.scenePreviewSyncs ?? 0) + 1)
+    } else sceneSyncsRef.current += 1
     /**
      * 本次同步"活着"的 key（`alive`）与它们在场景里的顺序（`order`）。
      *
@@ -191,7 +193,6 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     previewByKey.clear()
     objectIndex.clear()
     if (sceneShell) sceneShell.dataset.sceneSyncs = String(sceneSyncsRef.current)
-    const document = documentRef.current
     const selectedIds = selectedIdsRef.current
     const { showHiddenEdges, showNormals, transparentFaces, showRotationHandles, unfoldProgress } = displayFlagsRef.current
     const signer = createContentSigner(document)

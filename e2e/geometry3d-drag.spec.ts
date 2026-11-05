@@ -74,7 +74,14 @@ test("returns left-drag to orbiting when the toggle is off", async ({ page }) =>
 
   const centreBefore = parseVector(await scene.getAttribute("data-content-bounds"))
   const anglesBefore = await cameraAngles(scene)
-  await dragBy(page, 60, 30)
+  // Direct point dragging works even with free-drag off. Start on blank canvas,
+  // not the cube vertex which may now be projected at the canvas centre.
+  await projectWorldPoint(page, { x: 0, y: 0, z: 0 })
+  const box = (await scene.locator("canvas").boundingBox())!
+  await page.mouse.move(box.x + 100, box.y + box.height - 100)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 160, box.y + box.height - 70, { steps: 8 })
+  await page.mouse.up()
 
   // 关掉之后同样的左键拖动恢复成旋转视角：视角转了，图形不动。
   await expect.poll(async () => cameraAngles(scene)).not.toEqual(anglesBefore)
@@ -192,18 +199,27 @@ test("drags only the solid under the pointer", async ({ page }) => {  await page
   await expect(page.getByText("立方体 2").first()).toBeVisible()
   // 默认落点：坐在地面上、在 (−7, 3) 那个象限（见 `addDefaultCube`）。
   expect(await cubeOrigin(page)).toEqual([-7, 3, 0])
+  // Auto-fit is disabled: keep the actual grab point inside the canvas instead
+  // of projecting the default cube into/behind the property sidebar.
+  await setOrigin(page, [-2, -2, 0])
   await page.getByRole("button", { name: "自由拖动" }).click()
   /**
    * 从**立方体自己身上**按下（默认落点不在画布正中，所以不能再用固定屏幕位移）：
    * 原点 + 尺寸的一半就是它的中心，用实时相机读数投影过去。
    */
   const [originX, originY, originZ] = await cubeOrigin(page)
-  const grab = await projectWorldPoint(page, { x: originX + 2, y: originY + 2, z: originZ + 1 })
+  const grab = await projectWorldPoint(page, { x: originX + 2.7, y: originY + 4, z: originZ + 1.7 })
+  const canvas = (await page.locator("[data-3d-scene] canvas").boundingBox())!
+  expect(grab.x).toBeGreaterThan(canvas.x)
+  expect(grab.x).toBeLessThan(canvas.x + canvas.width)
+  expect(grab.y).toBeGreaterThan(canvas.y)
+  expect(grab.y).toBeLessThan(canvas.y + canvas.height)
   await page.mouse.move(grab.x, grab.y)
   await page.mouse.down()
+  await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-drag-target", /->cube$/)
   await page.mouse.move(grab.x + 70, grab.y + 25, { steps: 6 })
   await page.mouse.up()
-  expect(await cubeOrigin(page)).not.toEqual([-7, 3, 0])
+  expect(await cubeOrigin(page)).not.toEqual([-2, -2, 0])
 
   // 再选第一个立方体：原点仍是拖动前设的读数，说明拖动没有波及无关对象
   await page.getByText("立方体 1").first().click()

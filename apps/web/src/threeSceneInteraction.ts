@@ -2,14 +2,14 @@ import * as THREE from "three"
 
 import type { PrimitiveSpec, Point3Primitive } from "@draw/dsl"
 import type { CameraState } from "./threeCamera"
-import type { ThreeSceneEffectDeps } from "./threeSceneEffect"
+import type { DragSessionState, ThreeSceneEffectDeps } from "./threeSceneEffect"
 import type { ThreeScenePreview } from "./threeScenePreview"
 import type { SectionPrimitive, Vector3 } from "@draw/dsl"
-import { host3FromPrimitive, reactive, type Host3 } from "@draw/geometry-kernel"
+import { host3FromPrimitive, reactive, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
 import { getAffectedPrimitiveIds, isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
 import { cameraDragMode, clampCameraTarget, panCameraState, rotateCameraState } from "./threeCamera"
-import { advanceRotationDrag, applyRotationSkew, applyDragOffsets, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, offsetSceneObjects, orbitParameterAt, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
+import { advanceRotationDrag, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, lineParameterAtRay, orbitParameterAt, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
 import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick, type RaycastHit3 } from "./threePicking"
 import { sectionUnitNormal } from "./threePrimitives"
 
@@ -50,7 +50,7 @@ function canStartDragSession(primitive: PrimitiveSpec | undefined, points: Map<s
  *
  * 1. **拖动期间不提交文档**：只改画面，抬手才回调一次（`dragEndRef` / `rotateEndRef` /
  *    `trackRadiusEndRef` 都是"抬手报一次"）—— 这样一次拖动就是一步撤销。
- * 2. **点驱动对象就地重建**（`refreshPrimitiveObject`）：拖动绑定点时只重建受影响的那一个。
+ * 2. **完整依赖预览**：临时文档复用正式几何计算，渲染时只重建签名变化的对象。
  * 3. **拾取按"模板子元素 → 模板实体"归属**（`topologyOwners`）：点到的是子元素，选中的是实体。
  */
 
@@ -82,27 +82,28 @@ export interface ThreeSceneInteractionDeps {
   sceneBounds: THREE.Box3
   points: Map<string, Point3Primitive>
   topologyOwners: Map<string, string>
-  refreshPrimitiveObject: (id: string) => void
+  previewDrag: (session: DragSessionState) => boolean | void
+  clearDragPreview: () => void
   render: () => void
   pickTolerance: () => number
   dragDeltaFor: (session: { anchor: THREE.Vector3; origin: THREE.Vector3 }, point: { x: number; y: number }) => THREE.Vector3 | null
   setCameraState: (nextState: CameraState) => void
-  applyTrackRadiusPreview: (id: string, trackPrimitive: Extract<PrimitiveSpec, { type: "circle3" }>, radius: number) => void
-  clearTrackRadiusPreview: (id: string) => void
-  moveRotationHandles: (delta: THREE.Vector3) => void
   pointFromEvent: (event: PointerEvent) => { x: number; y: number }
   raycasterAt: (normalizedPoint: { x: number; y: number }) => THREE.Raycaster
   previewHitAt: (normalizedPoint: { x: number; y: number }) => { hovering: boolean; depth: number | null; preview: ThreeScenePreview | null }
 }
 
 export function createThreeSceneInteraction({ 
-cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, setFacePickMode, facePickModeRef, onSelectRef, previewClickRef, scene, camera, renderer, sceneShell, sceneBounds, points, topologyOwners, refreshPrimitiveObject, render, pickTolerance, dragDeltaFor, setCameraState, applyTrackRadiusPreview, clearTrackRadiusPreview, moveRotationHandles, pointFromEvent, raycasterAt, previewHitAt
+cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, selectedIdsRef, dragEndRef, moveSectionRef, hostDragEndRef, rotateEndRef, trackRadiusEndRef, rotationHandleRef, trackRadiusHandleRef, circleRadiusPreviewRef, pickSectionFaceRef, documentRef, setFacePickMode, facePickModeRef, onSelectRef, previewClickRef, scene, camera, renderer, sceneShell, sceneBounds, points, topologyOwners, previewDrag, clearDragPreview, render, pickTolerance, dragDeltaFor, setCameraState, pointFromEvent, raycasterAt, previewHitAt
  }: ThreeSceneInteractionDeps) {
-function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.ReactiveGraph; pointId: string; parameterIds: readonly [string, string, string] } {
+function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveSpec): { graph: reactive.ReactiveGraph; pointId: string; parameterIds: readonly [string, string, string] } {
   const graph = reactive.createReactiveGraph()
   const hostNodeId = `${pointId}:host`
   const parameterIds = [`${pointId}:u`, `${pointId}:v`, `${pointId}:w`] as const
-  graph.addNode(reactive.sourceNode(hostNodeId, host))
+  // Store the finite DSL source, not Host3: unbounded hosts legitimately have
+  // infinite domain limits, which the graph rejects as non-finite source data.
+  // hostPointNode captures the resolved host for this immutable drag session.
+  graph.addNode(reactive.sourceNode(hostNodeId, primitive))
   for (const parameterId of parameterIds) graph.addNode(reactive.parameterNode(parameterId, 0))
   graph.addNode(reactive.hostPointNode(pointId, { host, parameterIds, hostIds: [hostNodeId] }))
   graph.evaluate()
@@ -159,7 +160,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             scale: { id: radiusHandle.id, original: trackPrimitive.radius, current: trackPrimitive.radius }
           }
           if (sceneShell) sceneShell.dataset.trackRadius = trackPrimitive.radius.toFixed(4)
-          renderer.domElement.setPointerCapture(event.pointerId)
+          try { renderer.domElement.setPointerCapture(event.pointerId) } catch {}
           return
         }
       }
@@ -217,23 +218,35 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
           }
         })
+        const domRect = renderer.domElement.getBoundingClientRect()
+        const viewW = Math.max(domRect.width, 1)
+        const viewH = Math.max(domRect.height, 1)
         const pointerRay = raycasterAt(point).ray
         const tolerance = pickTolerance()
+        const POINT_SCREEN_TOLERANCE_PX = 18
         let priorityPointHit: RaycastHit3 | null = null
-        let bestDistance = tolerance
+        let bestDistancePx = POINT_SCREEN_TOLERANCE_PX
         let bestPriority = -1
 
         for (const candidate of documentRef.current.primitives) {
           if (candidate.type !== "point3" || !canStartDragSession(candidate, points, generated)) continue
-          const pos = new THREE.Vector3(candidate.position.x, candidate.position.y, candidate.position.z)
-          const dist = pointerRay.distanceToPoint(pos)
-          if (dist <= tolerance) {
+          const live = points.get(candidate.id)
+          const pos = new THREE.Vector3(live?.position.x ?? candidate.position.x, live?.position.y ?? candidate.position.y, live?.position.z ?? candidate.position.z)
+          const ndc = pos.clone().project(camera)
+          if (ndc.z > 1) continue
+          const screenX = (ndc.x + 1) * 0.5 * viewW
+          const screenY = (1 - ndc.y) * 0.5 * viewH
+          const cursorX = point.x * viewW
+          const cursorY = point.y * viewH
+          const distPx = Math.hypot(screenX - cursorX, screenY - cursorY)
+          const rayDist = pointerRay.distanceToPoint(pos)
+          if (distPx <= POINT_SCREEN_TOLERANCE_PX || rayDist <= tolerance) {
             const isSelected = selectedIdsRef.current.includes(candidate.id)
             const isBound = Boolean(candidate.binding && candidate.binding.kind !== "free" && candidate.binding.kind !== "derived")
-            const priority = isSelected ? 2 : isBound ? 1 : 0
-            if (priority > bestPriority || (priority === bestPriority && dist < bestDistance)) {
+            const priority = isSelected ? 3 : isBound ? 2 : 1
+            if (priority > bestPriority || (priority === bestPriority && distPx < bestDistancePx)) {
               bestPriority = priority
-              bestDistance = dist
+              bestDistancePx = distPx
               priorityPointHit = {
                 primitiveId: candidate.id,
                 kind: "point",
@@ -281,7 +294,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             ? host3FromPrimitive(hostPrimitive, documentRef.current.primitives)
               ?? (binding.kind === "inSolid" ? solidVolumeHostFor(new Map(documentRef.current.primitives.map((primitive) => [primitive.id, primitive])), hostPrimitive.id) : null)
             : null
-          if (hostConstraint) {
+          if (hostConstraint && hostPrimitive) {
             const anchor = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
             const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
             const projectedAnchor = anchor.clone().project(camera)
@@ -300,8 +313,8 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               orbitGrabOffset: hostConstraint.kind === "circle"
                 ? { x: (1 + projectedAnchor.x) / 2 - point.x, y: (1 - projectedAnchor.y) / 2 - point.y }
                 : undefined,
-              hostDependents: [...dependents].filter((id) => ["line3", "segment3", "ray3", "edge3", "face3"].includes(documentRef.current.primitives.find((candidate) => candidate.id === id)?.type ?? "")),
-              reactiveHost: buildHostPointGraph(target.id, hostConstraint),
+              hostDependents: [...dependents],
+              reactiveHost: buildHostPointGraph(target.id, hostConstraint, hostPrimitive),
               direct: directPointDrag
             }
           }
@@ -309,18 +322,6 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           const anchor = new THREE.Vector3(effectiveHit.worldPoint.x, effectiveHit.worldPoint.y, effectiveHit.worldPoint.z)
           const origin = dragWorldPoint(camera, anchor, point) ?? anchor.clone()
           const family = dragFamilyIds(documentRef.current, target.id)
-          const movedPointIds = [...family].filter((memberId) => points.has(memberId))
-          const originalPositions = new Map<string, Vector3>()
-          for (const ptId of movedPointIds) {
-            const pt = points.get(ptId)
-            if (pt) originalPositions.set(ptId, { ...pt.position })
-          }
-          const affected = movedPointIds.length > 0 ? getAffectedPrimitiveIds(documentRef.current, movedPointIds) : new Set<string>()
-          const deformDependents = [...affected].filter((depId) => {
-            if (family.has(depId)) return false
-            const dep = documentRef.current.primitives.find((candidate) => candidate.id === depId)
-            return Boolean(dep && ["line3", "segment3", "ray3", "edge3", "face3"].includes(dep.type))
-          })
           dragSessionRef.current = {
             targetId: target.id,
             family,
@@ -328,9 +329,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             origin,
             total: new THREE.Vector3(),
             visualApplied: new THREE.Vector3(),
-            applied: false,
-            deformDependents,
-            originalPositions
+            applied: false
           }
         }
       }
@@ -362,9 +361,23 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
                 return canStartDragSession(candidate, points, generated) && (dragModeRef.current || candidate?.type === "point3")
               }
             })
+            const domRect = renderer.domElement.getBoundingClientRect()
+            const viewW = Math.max(domRect.width, 1)
+            const viewH = Math.max(domRect.height, 1)
+            const cursorX = point.x * viewW
+            const cursorY = point.y * viewH
             const hoverRay = raycasterAt(point).ray
             const hoverTol = pickTolerance()
-            const pointNear = Boolean(documentRef.current.primitives.some((candidate) => candidate.type === "point3" && canStartDragSession(candidate, points, generated) && hoverRay.distanceToPoint(new THREE.Vector3(candidate.position.x, candidate.position.y, candidate.position.z)) <= hoverTol))
+            const pointNear = Boolean(documentRef.current.primitives.some((candidate) => {
+              if (candidate.type !== "point3" || !canStartDragSession(candidate, points, generated)) return false
+              const live = points.get(candidate.id)
+              const pos = new THREE.Vector3(live?.position.x ?? candidate.position.x, live?.position.y ?? candidate.position.y, live?.position.z ?? candidate.position.z)
+              const ndc = pos.clone().project(camera)
+              if (ndc.z > 1) return false
+              const screenX = (ndc.x + 1) * 0.5 * viewW
+              const screenY = (1 - ndc.y) * 0.5 * viewH
+              return Math.hypot(screenX - cursorX, screenY - cursorY) <= 18 || hoverRay.distanceToPoint(pos) <= hoverTol
+            }))
             hoveringDraggable = Boolean((hit && (dragModeRef.current || hit.kind === "point")) || pointNear)
           }
           sceneShell.dataset.hoverDraggable = hoveringDraggable ? "true" : "false"
@@ -375,7 +388,9 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
       const point = pointFromEvent(event)
       const deltaX = point.x - pointerState.lastX
       const deltaY = point.y - pointerState.lastY
-      pointerState.moved ||= Math.hypot(point.x - pointerState.x, point.y - pointerState.y) > 0.008
+      const domRect = renderer.domElement.getBoundingClientRect()
+      const movePx = Math.hypot((point.x - pointerState.x) * Math.max(domRect.width, 1), (point.y - pointerState.y) * Math.max(domRect.height, 1))
+      pointerState.moved ||= movePx > 2
       const session = dragSessionRef.current
       // 直抓的会话在指针真正移动之前什么都不改：原地点一下仍然是"选中"，不会顺手把点挪一丝。
       if (session?.direct && !pointerState.moved) return
@@ -391,9 +406,9 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             const center = new THREE.Vector3(trackPrimitive.center.x, trackPrimitive.center.y, trackPrimitive.center.z)
             const radius = trackRadiusAt(camera, center, new THREE.Vector3(trackPrimitive.normal.x, trackPrimitive.normal.y, trackPrimitive.normal.z), point)
             if (radius !== null && Math.abs(radius - session.scale.current) > 1e-9) {
+              const previousRadius = session.scale.current
               session.scale.current = radius
-              circleRadiusPreviewRef.current = { id: session.targetId, radius }
-              applyTrackRadiusPreview(session.targetId, trackPrimitive, radius)
+              if (previewDrag(session) === false) { session.scale.current = previousRadius; return }
               session.applied = true
               render()
               scaleFrames += 1
@@ -417,9 +432,10 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           const angle = handle ? rotationAngleAt(camera, handle.center, session.rotation.state.axis, point) : null
           if (angle !== null) {
             const advanced = advanceRotationDrag(session.rotation.state, angle, event.altKey ? null : (ROTATION_SNAP_DEGREES * Math.PI) / 180)
+            const previousRotation = session.rotation.state
             session.rotation.state = advanced.state
             if (Math.abs(advanced.step) > 1e-12) {
-              applyRotationSkew(scene, session.rotation.family, advanced.state.pivot, advanced.state.axis, advanced.step)
+              if (previewDrag(session) === false) { session.rotation.state = previousRotation; return }
               session.applied = true
               render()
               rotationFrames += 1
@@ -446,11 +462,19 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
              * 并且**同时**得到诊断（宿主解析不出来时不再是"悄悄不动"）。
              */
             if (!pointerState.moved) return
-            const worldPoint = session.anchor.clone().add(world)
             const offset = session.orbitGrabOffset
-            const parameter = offset
-              ? { u: orbitParameterAt(camera, session.hostConstraint, { x: point.x + offset.x, y: point.y + offset.y }, session.hostParameter?.u ?? 0) }
-              : session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
+            let parameter: Host3Parameter | null = null
+            if (offset) {
+              parameter = { u: orbitParameterAt(camera, session.hostConstraint, { x: point.x + offset.x, y: point.y + offset.y }, session.hostParameter?.u ?? 0) }
+            } else if (["line", "segment", "ray", "edge"].includes(session.hostConstraint.kind)) {
+              const u = lineParameterAtRay(raycasterAt(point).ray, session.hostConstraint)
+              if (u !== null) parameter = { u }
+            }
+            if (!parameter) {
+              const worldPoint = session.anchor.clone().add(world)
+              parameter = session.hostConstraint.closestParameter({ x: worldPoint.x, y: worldPoint.y, z: worldPoint.z })
+            }
+            const previousParameter = session.hostParameter
             session.hostParameter = parameter
             let projected: { x: number; y: number; z: number } | null = null
             let reactiveEvaluated = 0
@@ -470,11 +494,8 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
               projected = session.hostConstraint.evaluate(parameter)
             }
             if (projected) {
+              if (previewDrag(session) === false) { session.hostParameter = previousParameter; return }
               session.applied = true
-              const current = points.get(session.targetId)
-              if (current) points.set(session.targetId, { ...current, position: projected })
-              refreshPrimitiveObject(session.targetId)
-              for (const dependentId of session.hostDependents ?? []) refreshPrimitiveObject(dependentId)
               if (sceneShell) {
                 sceneShell.dataset.reactiveEvaluated = String(reactiveEvaluated)
                 sceneShell.dataset.reactiveDiagnostics = String(reactiveDiagnostics)
@@ -497,38 +518,14 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
           // 截面只认法向分量：屏幕位移先投影到法向，切向拖动不会让剖切面乱跑。
           if (session.slideNormal) session.total.copy(session.slideNormal).multiplyScalar(world.dot(session.slideNormal))
           else session.total.copy(world)
-          // 只画"还没画的那一段"：画面跟手，文档在整次拖动期间保持不动。
+          // 累计位移变化时重算临时文档，正式文档在整次拖动期间保持不动。
           const step = session.total.clone().sub(session.visualApplied)
           if (step.lengthSq() > 1e-12) {
-            if (session.slideNormal) {
-              // 截面：屏幕位移投影到法向，画面上把截面与剖切面片一起挪，抬手再提交文档。
-              const distance = step.dot(session.slideNormal)
-              if (Math.abs(distance) > 1e-12) offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(distance))
-            } else {
-              applyDragOffsets(scene, session.family, step)
-              if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
-                for (const [ptId, orig] of session.originalPositions) {
-                  const current = points.get(ptId)
-                  if (current) {
-                    points.set(ptId, {
-                      ...current,
-                      position: {
-                        x: orig.x + session.total.x,
-                        y: orig.y + session.total.y,
-                        z: orig.z + session.total.z
-                      }
-                    })
-                  }
-                }
-                for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
-              }
-            }
-            // 手柄的位置跟着图形走（环的**朝向**不变：它是世界轴的参照）。
-            moveRotationHandles(session.slideNormal ? session.slideNormal.clone().multiplyScalar(step.dot(session.slideNormal)) : step)
+            if (previewDrag(session) === false) { session.total.copy(session.visualApplied); return }
             session.visualApplied.copy(session.total)
             session.applied = true
             /**
-             * 立刻重画。这些偏移只是改了 Three.js 对象的位置，**不会自己触发渲染**；
+             * 立刻重画。同步后的几何与标注**不会自己触发渲染**；
              * 少了这一句，画面就要等到下一次别的渲染（相机、尺寸、提交后的场景重建）才更新，
              * 拖动看起来就是"一帧一帧"跳（实测：20 次 pointermove 里只有 3 次真的重画）。
              */
@@ -536,11 +533,7 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
             dragFrames += 1
             if (sceneShell) sceneShell.dataset.dragFrames = String(dragFrames)
           }
-          /**
-           * 拖动期间**不提交文档**：每次提交都会重建整个 3D 场景（几何与材质全部重建），
-           * 那正是拖动中"顿一下"的来源，而且一次拖动会变成多步撤销。画面由上面的临时偏移负责，
-           * 抬手时再一次性提交（见 handlePointerUp）。
-           */
+          // 临时文档仅用于预览；抬手时再提交唯一一次正式操作。
         }
         pointerState.lastX = point.x
         pointerState.lastY = point.y
@@ -568,72 +561,35 @@ function buildHostPointGraph(pointId: string, host: Host3): { graph: reactive.Re
       if (session && !directClick) {
         dragSessionRef.current = null
         /**
-         * 抬手前先量一次"画面与位移是否一致"：拖动期间文档不提交，画面全靠临时偏移，
-         * 偏移被重复画一层（组 + 子对象同 id）在文档里看不出来、只能看画布。读数 0 表示一致。
+         * 抬手前检查是否残留旧式对象偏移：几何已由临时文档求出，不能再叠加一层偏移。
          */
         if (sceneShell && session.applied) {
-          const appliedOffset = session.slideNormal ? session.slideNormal.clone().multiplyScalar(session.total.dot(session.slideNormal)) : session.visualApplied
+          // Geometry is recomputed in place, not represented by object offsets.
+          // Any residual legacy dragOffset would now be a double transform.
+          const appliedOffset = new THREE.Vector3()
           sceneShell.dataset.dragOffsetDrift = dragOffsetDrift(scene, session.family, appliedOffset).toFixed(4)
         }
-        // 拖动期间一次都没提交，所以这里的一次提交就是整次拖动唯一的一步撤销。
+        if (session.applied) clearDragPreview()
         if (session.scale) {
-          const radius = session.scale.current
-          // 先把画面交还给文档（清预览 + 按文档值重建），再提交——否则提交后重建会把预览半径叠一次。
-          clearTrackRadiusPreview(session.targetId)
-          render()
-          if (sceneShell) sceneShell.dataset.trackRadius = radius.toFixed(4)
-          // 半径真的变了才提交：一次误触不该多出一步撤销。
-          if (Math.abs(radius - session.scale.original) > 1e-9) trackRadiusEndRef.current?.(session.targetId, radius)
+          circleRadiusPreviewRef.current = null
+          if (session.applied && Math.abs(session.scale.current - session.scale.original) > 1e-9) trackRadiusEndRef.current?.(session.targetId, session.scale.current)
         } else if (session.rotation) {
           const rotation = session.rotation.state
-          /**
-           * 先把画面上的临时旋转**撤掉**，再把角度交给文档。少了这一步，提交后场景按新朝向重建，
-           * 而临时旋转还挂在对象上——用户会看到实体转了**两倍**。
-           */
-          if (Math.abs(rotation.applied) > 1e-12) {
-            applyRotationSkew(scene, session.rotation.family, rotation.pivot, rotation.axis, -rotation.applied)
-            render()
-          }
           if (sceneShell) sceneShell.dataset.rotationDegrees = rotationDragDegrees(rotation).toFixed(2)
-          // 没转过（吸附回 0°）就不提交：一次误触不该多出一步撤销。
           if (hasRotationMovement(rotation)) rotateEndRef.current?.(session.targetId, rotation.axis, rotationDragDegrees(rotation))
         } else if (session.hostConstraint && session.hostParameter && session.applied) {
-          // 绑定点：提交的是**宿主参数**；坐标由重算派生，所以点不会因为浮点累积而漂离宿主。
           hostDragEndRef.current?.(session.targetId, session.hostParameter)
         } else if (session.applied && session.total.lengthSq() > 1e-8) {
-          if (session.slideNormal) {
-            const distance = session.total.dot(session.slideNormal)
-            offsetSceneObjects(scene, session.targetId, session.slideNormal.clone().multiplyScalar(-distance))
-            render()
-            moveSectionRef.current?.(session.targetId, distance)
-          } else {
-            if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
-              for (const [ptId, orig] of session.originalPositions) {
-                const current = points.get(ptId)
-                if (current) points.set(ptId, { ...current, position: { ...orig } })
-              }
-              for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
-            }
-            if (session.visualApplied.lengthSq() > 1e-12) {
-              applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
-              session.visualApplied.set(0, 0, 0)
-              render()
-            }
-            dragEndRef.current?.(session.targetId, session.total)
-          }
-        } else if (session.applied && session.visualApplied.lengthSq() > 1e-12) {
-          if (session.originalPositions && session.deformDependents && session.deformDependents.length > 0) {
-            for (const [ptId, orig] of session.originalPositions) {
-              const current = points.get(ptId)
-              if (current) points.set(ptId, { ...current, position: { ...orig } })
-            }
-            for (const depId of session.deformDependents) refreshPrimitiveObject(depId)
-          }
-          applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())
-          session.visualApplied.set(0, 0, 0)
+          if (session.slideNormal) moveSectionRef.current?.(session.targetId, session.total.dot(session.slideNormal))
+          else dragEndRef.current?.(session.targetId, session.total)
+        } else if (session.applied) {
+          // Returning to the origin is a no-op and may not trigger a React sync.
           render()
         }
         // 选中放在抬手：拖动本身不该因为高亮重建而多一次场景重建。
+        // Commit may be refused or a no-op, with no document sync to repaint.
+        // Wait until the next frame so a successful React commit can sync first.
+        if (session.applied) requestAnimationFrame(render)
         if (!selectedIdsRef.current.includes(session.targetId)) onSelectRef.current(session.targetId, false)
       } else if (!pointerState.moved && pointerState.button === 0) {
         /**
