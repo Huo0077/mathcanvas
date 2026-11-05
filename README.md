@@ -79,7 +79,7 @@ npm run dev
 - **仍有限制**：增量草稿工具尚未作为模型可用工具开放；真实场景截图/相机证据与完整视觉检查尚未接通；代表任务的真实 provider pass@1、pass@3 与延迟**已有小样本读数**（2026-10-05 / 10-06，见 [当前状态](docs/current-status.md) §一），但**成本仍没有价目表**，这些读数**也还不足以形成放行依据**。因此类型化工具循环**尚未满足默认启用的发布门禁**。当前门禁及缺口见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)，过程见 [Agent tool-loop 进度记录](docs/research/2026-09-28-agent-tool-loop-progress.md)。
 - **其他已知边界**：没有云端同步；球体能力已在 **v3.1.0** 整体交付（画布创建、解析截面、工程投影、Agent 动作都在），但**球不参与布尔运算**（明确拒绝并留诊断）；部分高级几何输入、精确曲面互交、DWG/B-rep 导入和自动尺寸布局仍未提供。用户侧走查与正式发布余项见 [当前状态](docs/current-status.md) §四。
 
-最新版本标签为 **`v4.2.0`**（[发布说明](docs/release/v4.2.0.md)）。这一版改进属性栏、右键菜单、平面落点和立体动点拖动。Windows x64 安装包和免安装版见 [GitHub Release](https://github.com/Huo0077/mathcanvas/releases/tag/v4.2.0)，历史记录见 [CHANGELOG](CHANGELOG.md)。
+最新版本标签为 **`v4.3.0`**（[发布说明](docs/release/v4.3.0.md)）。这一版修复立体拖动联动和体积测量，新增外接球与内切球作图，并包含桌面题图识别和立体题解析改进。Windows x64 安装包和免安装版见 [GitHub Release](https://github.com/Huo0077/mathcanvas/releases/tag/v4.3.0)，历史记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 开发者进度与参与开发
 

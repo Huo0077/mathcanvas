@@ -1,10 +1,11 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
+import { ownerOfTopology } from "@draw/scene-graph"
 import { buildSolidTemplate, templateEdgeLabel, templatePointLabel, type SolidBuildResult } from "@draw/geometry-kernel"
 
 type LegacySolid = Extract<PrimitiveSpec, { type: "cube" | "pyramid" | "cylinder" | "cone" }>
 
-function hasTemplateFor(primitives: PrimitiveSpec[], sourceId: string): boolean {
-  return primitives.some((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template" && primitive.construction.sourceIds.includes(sourceId))
+function hasTopologyFor(primitives: PrimitiveSpec[], sourceId: string): boolean {
+  return primitives.some((primitive) => primitive.type === "polyhedron3" && ownerOfTopology(primitive) === sourceId)
 }
 
 /**
@@ -56,7 +57,7 @@ export function migrateLegacySolids(document: GeometryDocument): GeometryDocumen
   for (const legacy of legacySolids) {
     const result = buildSolidTemplate(legacy)
     if (result.diagnostics.length > 0) continue
-    if (!hasTemplateFor(migrated.primitives, legacy.id)) {
+    if (!hasTopologyFor(migrated.primitives, legacy.id)) {
       migrated.primitives.push(...result.primitives)
       continue
     }

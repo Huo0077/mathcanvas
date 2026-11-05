@@ -364,7 +364,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
  * 四个状态各有各的颜色 —— `approximate` 与 `exact` 一眼看得出来的差别不止是文案。
  */
 .derived-reading { grid-column: 1 / -1; display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
-.derived-reading-head { display: flex; align-items: center; gap: var(--space-2); }
+.derived-reading-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .derived-reading-label { color: var(--color-ink); font-size: var(--text-sm); font-weight: 600; }
 .derived-status { margin-left: auto; padding: 1px 6px; border-radius: 999px; color: var(--color-muted); background: var(--color-accent-soft); font-size: var(--text-2xs); font-weight: 700; }
 .derived-status[data-status="exact"] { color: var(--color-success); background: var(--color-success-soft); }
@@ -2210,3 +2210,5 @@ button:hover { border-color: var(--color-accent); background: var(--color-accent
     transform: none !important;
   }
 }
+
+.derived-drawing-button { flex-shrink: 0; min-height: 28px; padding: 2px var(--space-2); font-size: var(--text-xs); }

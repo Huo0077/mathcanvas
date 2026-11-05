@@ -160,7 +160,7 @@ function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveS
             scale: { id: radiusHandle.id, original: trackPrimitive.radius, current: trackPrimitive.radius }
           }
           if (sceneShell) sceneShell.dataset.trackRadius = trackPrimitive.radius.toFixed(4)
-          try { renderer.domElement.setPointerCapture(event.pointerId) } catch {}
+          try { renderer.domElement.setPointerCapture(event.pointerId) } catch { /* Pointer capture may be unavailable after the pointer is released. */ }
           return
         }
       }

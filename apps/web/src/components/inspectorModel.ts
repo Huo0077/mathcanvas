@@ -10,6 +10,7 @@ import { insertFormulaTemplate } from "../formulaEditor"
 import { useSceneStore } from "../store"
 import { placementPivot, resizedPlacement } from "../curveRotation"
 import { derivedSolidIdsOf, type ConicPrimitive, type SolidPrimitive } from "./inspectorLabels"
+import { derivedSphereDrawing } from "./derivedSphereDrawing"
 import { lineSlope, rotatePoint, rotationRadians } from "./inspectorMath"
 
 /**
@@ -613,6 +614,16 @@ export function useInspectorModel(props: InspectorModelInput) {
     objectOrientationNormal,
     applySceneOperation,
     derivedReadings,
+    sphereDrawingFor: (entry: (typeof derivedReadings)[number]) => {
+      const action = derivedSphereDrawing(sceneDocument, entry)
+      return action && { ...action, onClick: () => {
+        // Read the latest document to avoid duplicate creation on rapid clicks.
+        const current = useSceneStore.getState()
+        const result = derivedSphereDrawing(current.document, entry)?.operations()
+        if (result?.error) useSceneStore.setState({ error: result.error })
+        else if (result && result.operations.length > 0) current.applyBatch(result.operations)
+      } }
+    },
     pointHasMovingCircle,
     annotationOptions,
     selectedAnnotations,

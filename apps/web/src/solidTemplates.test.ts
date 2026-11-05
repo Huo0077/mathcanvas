@@ -2,6 +2,7 @@ import { canonicalContentHash } from "@draw/agent-core"
 import { createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
 import { buildSolidTemplate, templateEdgeLabel, templatePointLabel } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
+import { commitPatch, patchPoint3 } from "@draw/scene-graph"
 
 import { migrateLegacySolids } from "./solidTemplates"
 
@@ -93,6 +94,21 @@ describe("solid template migration", () => {
     expect(hidden.every((primitive) => !Object.prototype.hasOwnProperty.call(primitive, "label"))).toBe(true)
     // 迁移之后的文档必须还能被规范化哈希（Agent 的预览哈希走的就是它）。
     expect(() => canonicalContentHash(migrated)).not.toThrow()
+  })
+
+  it("preserves an edited solid on reload without materializing a duplicate topology", () => {
+    const pyramid = { id: "pyramid", type: "pyramid" as const, baseCenter: { x: 0, y: 0, z: 0 }, baseSize: { x: 2, y: 2 }, height: 2 }
+    const document = createEmptyDocument("geometry3d")
+    const built = buildSolidTemplate(pyramid)
+    document.primitives = [pyramid, ...built.primitives]
+    const apex = document.primitives.find(p => p.type === "point3" && p.position.z === 2)
+    if (apex?.type !== "point3") throw new Error("Missing apex")
+    const edited = commitPatch(document, patchPoint3(apex.id, { ...apex.position, z: 4 }))
+    expect(edited.error).toBeUndefined()
+    const migrated = migrateLegacySolids(edited.document)
+    expect(migrated.primitives).toEqual(edited.document.primitives)
+    expect(new Set(migrated.primitives.map(p => p.id)).size).toBe(migrated.primitives.length)
+    expect(migrateLegacySolids(migrated)).toEqual(migrated)
   })
 
   it("leaves ordinary solids exactly as they were", () => {    const cube = { id: "cube-2", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } }

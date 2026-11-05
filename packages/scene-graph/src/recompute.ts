@@ -6,6 +6,7 @@ import { recomputeIntersectionFace, recomputeIntersectionLine, recomputeIntersec
 import { MIN_DYNAMIC_CIRCLE_RADIUS, recomputeAnalysisSet, recomputeCurveTangent, recomputeDerivative, recomputeIntegral, recomputeSecant, recomputeTangent, sampledSource } from "./analysisRecompute"
 import { resolveBoundPoint, resolveBoundPoint3, resolveIntersection, syncTemplateTopology } from "./resolve3d"
 import { getAffectedPrimitiveIds, topologicalRecomputeOrder } from "./graph"
+import { ownerOfTopology } from "./solidGeometry"
 
 /**
  * **重算主族**（从 `operations.ts` 拆出，评审方案 2）。
@@ -292,8 +293,19 @@ const recomputePrimitive = (primitive: PrimitiveSpec): PrimitiveSpec | undefined
   }
   // 测量只在它的来源对象真的进了脏集时才重算 —— 这是依赖图剪枝在测量上的体现。
   // 来源都没变时保留上一次的读数（值本身就存在文档里），所以"拖一个和它无关的点"不会触发它。
+  const measurementSources = new Set(affected)
+  if (evaluatedDocument.workspace === "geometry3d") {
+    // 顶点编辑使物化拓扑变脏，但不会反向把参数模板加入脏集；仅为测量补上归属。
+    // 一次收集，避免为每条未变化的测量都扫描整份文档。
+    for (const id of affected) {
+      const primitive = primitiveMap.get(id)
+      if (primitive?.type !== "polyhedron3") continue
+      const ownerId = ownerOfTopology(primitive)
+      if (ownerId) measurementSources.add(ownerId)
+    }
+  }
   const measurements = evaluatedDocument.measurements.map((measurement) => {
-    if (changedIds !== undefined && !measurement.sourceIds.some((id) => affected.has(id))) return measurement
+    if (changedIds !== undefined && !measurement.sourceIds.some((id) => measurementSources.has(id))) return measurement
     return evaluatedDocument.workspace === "geometry3d"
       ? calculateMeasurement3(measurement, primitives)
       : calculatePlanarMeasurement(measurement, primitives)

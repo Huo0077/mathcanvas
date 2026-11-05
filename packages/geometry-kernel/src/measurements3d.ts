@@ -214,7 +214,15 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
     return points.length >= 3 && points.every(Boolean) ? measureArea3(measurement.id, measurement.sourceIds, points as Vector3[], "exact-input") : invalidMeasurement(measurement.id, measurement.sourceIds, "area", "insufficient-data", "面积需要一个空间面、空间圆或有序顶点。")
   }
   if (measurement.metric === "volume") {
-    const source = sources[0]
+    let source = sources[0]
+    // 拖动模板顶点后，实体以显式面拓扑为准，原尺寸参数不再描述实际形状。
+    // 未编辑的模板仍使用闭式公式，不能用显示网格替代圆柱、圆锥的精确体积。
+    if (source && ["cube", "pyramid", "cylinder", "cone"].includes(source.type)) {
+      const ownerId = source.id
+      const topology = [...primitives.values()].find((primitive) => primitive.type === "polyhedron3"
+        && primitive.construction?.kind === "fromFaces" && primitive.construction.sourceId === ownerId)
+      if (topology) source = topology
+    }
     if (source?.type === "polyhedron3") {
       const volume = volumeOfPolyhedron(source, primitives)
       // 多面体体积是**网格求和**：对立方体精确，对圆柱 / 圆锥的 48 边形近似就不精确了——一律如实标近似。

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument, type PrimitiveSpec } from "@draw/dsl"
@@ -275,6 +275,62 @@ describe("engineering inspector", () => {
       expect(built.diagnostics).toEqual([])
       return { cube, built }
     }
+
+    it("creates linked translucent spheres and toggles visibility without duplicates", () => {
+      const { cube, built } = cubeSetup()
+      storeDocument([cube, ...built.primitives])
+      renderInspector({ properties: { selectedPrimitive: cube, selectedIds: [cube.id], selectedCount: 1 } })
+      const before = useSceneStore.getState().history.length
+      fireEvent.click(screen.getByRole("button", { name: "作图外接球" }))
+      const sphere = useSceneStore.getState().document.primitives.find(p => p.type === "sphere")
+      expect(sphere).toMatchObject({ type: "sphere", center: { x: 1, y: 1, z: 1 }, radius: Math.sqrt(3), derivedFrom: { kind: "circumsphere", solidId: built.polyhedronId }, style: { opacity: 0.25 } })
+      expect(useSceneStore.getState().history).toHaveLength(before + 1)
+      fireEvent.click(screen.getByRole("button", { name: "隐藏外接球" }))
+      expect(useSceneStore.getState().document.primitives.find(p => p.id === sphere!.id)?.visible).toBe(false)
+      fireEvent.click(screen.getByRole("button", { name: "显示外接球" }))
+      expect(useSceneStore.getState().document.primitives.filter(p => p.type === "sphere")).toHaveLength(1)
+      fireEvent.click(screen.getByRole("button", { name: "作图内切球" }))
+      expect(useSceneStore.getState().document.primitives.filter(p => p.type === "sphere")).toHaveLength(2)
+      act(() => useSceneStore.getState().undo())
+      expect(screen.getByRole("button", { name: "作图内切球" })).toBeTruthy()
+      expect(useSceneStore.getState().document.primitives.filter(p => p.type === "sphere")).toHaveLength(1)
+    })
+
+    it("keeps inspector-created spheres linked when the host moves", () => {
+      const { cube, built } = cubeSetup()
+      storeDocument([cube, ...built.primitives])
+      renderInspector({ properties: { selectedPrimitive: cube, selectedIds: [cube.id], selectedCount: 1 } })
+      fireEvent.click(screen.getByRole("button", { name: "作图外接球" }))
+      fireEvent.click(screen.getByRole("button", { name: "作图内切球" }))
+      act(() => useSceneStore.getState().apply({ op: "translatePrimitive3", id: cube.id, delta: { x: 3, y: 4, z: 5 } }))
+      const spheres = useSceneStore.getState().document.primitives.filter(p => p.type === "sphere")
+      expect(spheres).toHaveLength(2)
+      for (const sphere of spheres) expect(sphere).toMatchObject({ center: { x: 4, y: 5, z: 6 }, derivedFrom: { solidId: built.polyhedronId } })
+      expect(useSceneStore.getState().error).toBeNull()
+    })
+
+    it("does not reshow an old sphere after its host stops admitting that sphere", () => {
+      const { cube, built } = cubeSetup()
+      storeDocument([cube, ...built.primitives])
+      renderInspector({ properties: { selectedPrimitive: cube, selectedIds: [cube.id], selectedCount: 1 } })
+      fireEvent.click(screen.getByRole("button", { name: "作图外接球" }))
+      fireEvent.click(screen.getByRole("button", { name: "隐藏外接球" }))
+      act(() => useSceneStore.getState().apply(patchPoint3(built.vertexIds[0]!, { x: -3, y: -1, z: -1 })))
+      expect(globalThis.document.querySelector('[data-derived-code="derived.circumsphere"]')?.getAttribute("data-derived-status")).toBe("undefined")
+      const show = screen.getByRole("button", { name: "显示外接球" })
+      expect(show.hasAttribute("disabled")).toBe(true)
+      fireEvent.click(show)
+      expect(useSceneStore.getState().document.primitives.find(p => p.type === "sphere")?.visible).toBe(false)
+    })
+
+    it("disables drawing when an insphere does not exist and retains the reason", () => {
+      const cube = { id: "brick", type: "cube" as const, origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 4, z: 6 } }
+      storeDocument([cube, ...buildSolidTemplate(cube).primitives])
+      renderInspector({ properties: { selectedPrimitive: cube, selectedIds: [cube.id], selectedCount: 1 } })
+      expect(screen.getByRole("button", { name: "作图内切球" }).hasAttribute("disabled")).toBe(true)
+      expect(screen.getByRole("button", { name: "作图外接球" }).hasAttribute("disabled")).toBe(false)
+      expect(globalThis.document.querySelector('[data-derived-code="derived.insphere"] .derived-reading-message')?.textContent).toBeTruthy()
+    })
 
     /**
      * **拖一个顶点之后读数不许整块消失**（Fix round 1 / I2）。

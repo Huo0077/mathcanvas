@@ -24,16 +24,26 @@ import { DERIVED_REASON_MISSING, derivedCodeLabels, derivedStatusLabels } from "
  * 直接喂进去断言 —— `approximate` 目前没有生产来源（内核那三个求解器还不会给），
  * 只靠真实文档测不到它。
  */
-export function SolidDerivedReadings({ entries, labelFor }: { entries: readonly SolidDerivedStatus[]; labelFor?: (entry: SolidDerivedStatus) => string | undefined }) {
+export function SolidDerivedReadings({ entries, labelFor, sphereDrawingFor }: {
+  entries: readonly SolidDerivedStatus[]
+  labelFor?: (entry: SolidDerivedStatus) => string | undefined
+  sphereDrawingFor?: (entry: SolidDerivedStatus) => {
+    text: string; label: string; disabled: boolean; onClick: () => void
+  } | undefined
+}) {
   if (entries.length === 0) return null
   return <div className="primitive-properties" data-derived-panel="true"><h3>派生读数</h3>
-    {entries.map((entry) => <div className="derived-reading" key={`${entry.solidId}:${entry.code}:${entry.sourceId ?? "solid"}`} data-derived-code={entry.code} data-derived-status={entry.status} data-derived-solid={entry.solidId} data-derived-source={entry.sourceId}>
+    {entries.map((entry) => {
+      const action = sphereDrawingFor?.(entry)
+      return <div className="derived-reading" key={`${entry.solidId}:${entry.code}:${entry.sourceId ?? "solid"}`} data-derived-code={entry.code} data-derived-status={entry.status} data-derived-solid={entry.solidId} data-derived-source={entry.sourceId}>
       <div className="derived-reading-head">
         <span className="derived-reading-label">{labelFor?.(entry) ?? derivedCodeLabels[entry.code] ?? entry.code}</span>
         <span className="derived-status" data-status={entry.status}>{derivedStatusLabels[entry.status]}</span>
+        {action && <button type="button" className="derived-drawing-button" aria-label={action.label} disabled={action.disabled} title={action.disabled ? entry.message : action.label} onClick={action.onClick}>{action.text}</button>}
       </div>
       <p className="derived-reading-message">{entry.message.trim().length > 0 ? entry.message : DERIVED_REASON_MISSING}</p>
-    </div>)}
+      </div>
+    })}
     <p className="footer-note">外接球 / 内切球 / 截面都是**内核算出来的结论**（不是估计）：精确的给确定的结论（闭式解或已核验的解），数值近似的带残差，"不存在"表示这只实体根本没有对应的球，"退化"表示输入本身不成立，而"不再成立"表示那只派生球还在画面上、但已经不是这只实体的球了（改动顶点之后没跟上重算，或有人改过它）。改动实体的顶点或截面朝向，这些读数会立刻重算。</p>
   </div>
 }
