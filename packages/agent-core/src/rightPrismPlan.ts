@@ -3,7 +3,8 @@ import { normalizeGeometryPrompt } from "./latexNormalisation"
 
 // Match the full midpoint/line-plane angle problem. Extra givens and other target planes go to the planner.
 const RIGHT_PRISM = new RegExp([
-  String.raw`^(?:\d+\.)?(?:如图[,，])?在直三棱柱(?<a>[A-Z])(?<b>[A-Z])(?<c>[A-Z])[-−–]\k<a>(?<top>[1′])\k<b>\k<top>\k<c>\k<top>中[,，]`,
+  // Geometry normalization can turn a numbered heading such as "15. 如图" into "15,如图".
+  String.raw`^(?:\d+[.,])?(?:如图[,，])?在直三棱柱(?<a>[A-Z])(?<b>[A-Z])(?<c>[A-Z])[-−–]\k<a>(?<top>[1′])\k<b>\k<top>\k<c>\k<top>中[,，]`,
   String.raw`∠\k<a>\k<c>\k<b>=90°[,，]\k<a>\k<c>=\k<b>\k<c>[,，](?<d>[A-Z])[,，、](?<e>[A-Z])分别为\k<a>\k<b>[,，、]\k<a>\k<c>\k<top>的中点[.。]`,
   String.raw`\(1\)(?:求证|证明)[:：]?\k<d>\k<e>(?:∥|平行于)平面\k<b>\k<c>\k<c>\k<top>\k<b>\k<top>[;；.。]`,
   String.raw`\(2\)设\k<c>\k<c>\k<top>=(?<height>\d+(?:\.\d+)?)[,，](?:直线)?\k<d>\k<e>与平面\k<a>\k<c>\k<c>\k<top>\k<a>\k<top>所成的角为(?<angle>\d+(?:\.\d+)?)°[,，]求(?:直线)?\k<d>\k<e>到平面\k<b>\k<c>\k<c>\k<top>\k<b>\k<top>的距离[.。]?$`

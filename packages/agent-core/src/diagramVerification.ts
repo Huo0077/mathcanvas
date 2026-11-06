@@ -581,6 +581,7 @@ function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?
 interface FigureFunction {
   expression: string
   domain: [number, number]
+  label?: string
 }
 
 /** **候选图里那条唯一的、新画出来的函数曲线**（V0d）。与其它几类同一条"恰好一条"纪律。 */
@@ -615,15 +616,29 @@ function candidateCommonTangents(plan: PlanEnvelope, candidate: GeometryDocument
   })
 }
 
-function candidateCurve(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureFunction | null {
-  if (plan.kind !== "plan") return null
-  if (!plan.actions.some((action) => action.actionId === "function.create_graph")) return null
+function candidateCurves(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureFunction[] {
+  if (plan.kind !== "plan" || !plan.actions.some((action) => action.actionId === "function.create_graph")) return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
-  const curves = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "function" }> => primitive.type === "function" && !priorIds.has(primitive.id))
-  if (curves.length !== 1) return null
-  const [curve] = curves
-  if (!Number.isFinite(curve.domain[0]) || !Number.isFinite(curve.domain[1]) || !(curve.domain[0] < curve.domain[1])) return null
-  return { expression: curve.expression, domain: [curve.domain[0], curve.domain[1]] }
+  return candidate.primitives.flatMap((curve): FigureFunction[] =>
+    curve.type === "function" && !priorIds.has(curve.id) && Number.isFinite(curve.domain[0]) && Number.isFinite(curve.domain[1]) && curve.domain[0] < curve.domain[1]
+      ? [{ expression: curve.expression, domain: curve.domain, label: curve.label }]
+      : [])
+}
+
+function functionLabel(label: string): string | undefined {
+  return /^([fgh])(?:\(x\)(?:=.*)?)?$/.exec(label.replace(/\s+/g, ""))?.[1]
+}
+
+function selectStatedCurve(item: DiagramObligation, curves: FigureFunction[]): { curve: FigureFunction } | { code: string; reason: string } {
+  const name = /^([fgh])\s*\(/.exec(item.sourceText.trim())?.[1]
+  const named = name === undefined ? [] : curves.filter(curve => functionLabel(curve.label ?? "") === name)
+  const singleton = curves.length === 1 && (name === undefined || functionLabel(curves[0].label ?? "") === undefined)
+  const curve = named.length === 1 ? named[0] : singleton ? curves[0] : undefined
+  if (curve) return { curve }
+  if (curves.length > 1) {
+    return { code: "function_binding_ambiguous", reason: `无法唯一找到题面的 ${name ?? "目标函数"}。请为主函数保留题面标签，并给辅助曲线使用不同标签。` }
+  }
+  return { code: "function_missing", reason: `候选图里缺少题面的 ${name ?? "目标函数"}。` }
 }
 
 /** 采样点数。判的是**函数值**，不是字符串。 */
@@ -1885,11 +1900,14 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const right = dotVector3(subtractVector3(rhsB, rhsA), subtractVector3(rhsB, rhsA))
     return { actual: left, expected: right, tolerance: 1e-6 }
   }
-  if (item.kind === "dihedral") {
+  if (item.kind === "dihedral" || item.kind === "dihedralSine") {
     if (numeric === undefined) return null
     const [e, b, c, d] = vertices as Vector3[]
     const detail = dihedralAngleDetail3([b, c, e], [b, c, d], b, c)
-    return detail === null ? null : { actual: detail.interiorDegrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
+    if (detail === null) return null
+    return item.kind === "dihedralSine"
+      ? { actual: Math.sin(detail.interiorDegrees * Math.PI / 180), expected: numeric, tolerance: UNITLESS_TOLERANCE }
+      : { actual: detail.interiorDegrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
   }
   /**
    * **平面上的数值角**（§3-F）：`targets` 恰好三个点名、中间那个是顶点，量的是**内部角**。
@@ -2418,11 +2436,12 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     if (folded !== undefined) points.set(preFold.apex, folded)
   }
   const foldClauseMatch = options.prompt === undefined ? null : /(?:翻折|折叠|折起|翻起)/.exec(options.prompt)
+  const curves = candidateCurves(plan, candidate, base)
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
     commonTangents: candidateCommonTangents(plan, candidate, base),
-    curve: candidateCurve(plan, candidate, base),
+    curve: curves.length === 1 ? curves[0] : null,
     solid: candidateSolid(plan, candidate, base),
     circle: candidateCircle(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
@@ -2449,7 +2468,18 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     const usePre = !isPostFoldClause && preFold !== null && PRE_FOLD_KINDS.has(item.kind) && item.targets.includes(preFold.apex)
       && item.targets.every((name) => preFold.points.has(name))
     const statePoints = usePre ? preFold.points : (points ?? new Map())
-    const result = calculate(item, statePoints, figures)
+    let itemFigures = figures
+    if (item.kind === "functionGraph") {
+      try {
+        compileExpression(item.expression ?? "")
+      } catch {
+        return { kind: item.kind, sourceText: item.sourceText, status: "unverified", code: "function_expression_unreadable", reason: "题面函数表达式无法解析。请检查公式的括号、运算符或分式范围。" }
+      }
+      const selected = selectStatedCurve(item, curves)
+      if ("code" in selected) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", ...selected }
+      itemFigures = { ...figures, curve: selected.curve }
+    }
+    const result = calculate(item, statePoints, itemFigures)
     if (result === null) {
       /**
        * **先说清缺谁**（2026-10-10）：原先只有一句把三种成因混起来的
@@ -2475,7 +2505,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
               : item.kind === "pointOnConic"
                 ? "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。"
                 : item.kind === "functionGraph"
-                ? "候选图里没有唯一、可读的函数曲线（少了或多了一条），或题面表达式解析不了，未核验。"
+                ? "在主函数的绘图区间内无法对两条表达式取样，未核验。"
               : item.kind === "chordCenterDistance"
                 ? "候选图里没有唯一、可读的圆（少了或多了一条），或弦的两个端点在图上没有点名，未核验。"
                 : item.kind === "arcLength"

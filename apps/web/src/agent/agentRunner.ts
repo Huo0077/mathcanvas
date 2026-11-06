@@ -1,5 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, routeDeterministicProblem, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -14,7 +14,6 @@ import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
-import { deterministicPlanForPrompt, rightPrismMidpointsPlan } from "@draw/agent-core"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -434,6 +433,7 @@ export interface PlannerSelection {
   planner: PlannerPort
   requestedSkillIds: readonly string[]
   textProfileId: string
+  diagramPrompt?: string
 }
 
 /**
@@ -520,22 +520,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
 
-    const prism = rightPrismMidpointsPlan(prompt)
-    if (prism) return {
-      planner: { plan: async () => ({ plan: prism, requestId: "right-prism-request", attemptId: "right-prism-attempt" }) },
-      requestedSkillIds: ["spatial-modeling"], textProfileId: "local-planner"
-    }
-
     /**
      * **两个入口共用同一份确定性构造**（T7，2026-11-05）：
      * 题面能被确定性构造识别、且题设已**独立核验**时，模型入口也直接用这份计划 ——
      * 模型只负责结构/动作参数，不手算顶点坐标（见 `systemPrompt` 的那条纪律）。
      * 识别不出或核验不过 ⇒ 返回 null，继续走原来的模型/兜底路径。
      */
-    const deterministic = deterministicPlanForPrompt(prompt)
+    const deterministic = routeDeterministicProblem(prompt)
     if (deterministic) return {
-      planner: { plan: async () => ({ plan: deterministic, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
-      requestedSkillIds: ["spatial-modeling"], textProfileId: "local-planner"
+      planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
+      diagramPrompt: deterministic.diagramPrompt,
+      requestedSkillIds: [deterministic.family], textProfileId: "local-planner"
     }
 
     const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
@@ -567,7 +562,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
   async function runPrompt(text: string, promptMessageId: string): Promise<RunPromptResult> {
-      const { prompt, imageNotes } = splitImagePrompt(text)
+      const { prompt, imageNotes, imageEvidence } = splitImagePrompt(text)
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       /**
@@ -578,9 +573,22 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const pinned = useAgentStore.getState().pinRun({ runId, promptMessageId })
       // 钉不住（那条消息已经不在了）时退回"当前在途"那条老路径，而不是把事件丢掉。
       const eventRunId = pinned ? runId : undefined
+      if (import.meta.env.VITE_MATHCANVAS_BUILD) {
+        useAgentStore.getState().recordDiagnostic(`应用构建 ${import.meta.env.VITE_MATHCANVAS_BUILD}`, eventRunId)
+      }
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const selection = await selectPlanner(prompt, imageNotes, eventRunId)
+      const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
+      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId) : {
+        requestedSkillIds: [], textProfileId: "local-planner",
+        planner: { plan: async () => ({
+          plan: {
+            schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "核对题图疑点", factIds: [],
+            questions: unresolved.slice(0, 4).map(item => `请核对${item.image === null ? "原图的" : `图 ${item.image} 的`}疑点并重新发送题干：${item.text}`)
+          },
+          requestId: "image-review-request", attemptId: "image-review-attempt"
+        }) }
+      }
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
@@ -701,7 +709,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
 
       for await (const event of active.coordinator.start({
         run: runContext,
-        userMessage: prompt,
+        userMessage: selection.diagramPrompt ?? prompt,
         // 计划 N4：把这一轮的开关状态一并交给 trace（开关由应用层持有，协调器只负责记下来）。
         nextPhaseFlags: agentNextPhaseFlags(),
         promptVersion,

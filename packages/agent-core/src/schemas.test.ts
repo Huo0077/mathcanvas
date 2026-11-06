@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { auditEntryFor, canonicalContentHash, describeDefaultPolicies, isRegisteredActionId, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction, repairRequestFor, sha256HexBytes, unsupportedActionReason } from "./schemas"
 import { DRAFT_ACTION_IDS } from "./actionIds"
-import { PLAN_SCHEMA_VERSION, type DocumentHandle } from "./contracts"
+import { MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, type DocumentHandle } from "./contracts"
 
 const HANDLE: DocumentHandle = {
   projectId: "project-1",
@@ -53,6 +53,16 @@ describe("plan envelope parsing", () => {
     if (!result.ok || result.value.kind !== "plan") throw new Error("expected plan")
     expect(result.value.answer).toBe("BD=2√85/5")
     expect(result.value.actions).toHaveLength(2)
+  })
+
+  it.each([
+    validPlan() as object,
+    { schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "解题", factIds: [], toolResultRefs: [] }
+  ])("allows multi-part solutions up to the answer-specific limit", (envelope) => {
+    const answer = "解".repeat(MAX_PLAN_ANSWER_LENGTH)
+    const result = parsePlanEnvelope({ ...envelope, answer })
+    expect(result.ok && "answer" in result.value && result.value.answer).toBe(answer)
+    expectRejected(parsePlanEnvelope({ ...envelope, answer: answer + "。" }), "string_too_long")
   })
 
   it.each([null, 42, {}])("rejects an invalid optional plan answer: %s", (answer) => {

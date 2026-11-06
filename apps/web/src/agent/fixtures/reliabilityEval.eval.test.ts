@@ -1,7 +1,7 @@
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument, type GeometryDocument, type Workspace } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import type { PlanEnvelope, PlannerPort, RunPhase } from "@draw/agent-core"
-import { createBudget } from "@draw/agent-core"
+import { createBudget, routeDeterministicProblem } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { createAgentRuntime } from "../agentRuntime"
@@ -167,16 +167,18 @@ function countingPlanner(inner: PlannerPort): { planner: PlannerPort; requests: 
   }
 }
 
-function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): { planner: PlannerPort; requests: () => number; rounds: PlanEnvelope[]; notRun: string | null } {
+function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): { planner: PlannerPort; requests: () => number; rounds: PlanEnvelope[]; notRun: string | null; workspace?: Workspace; diagramPrompt?: string } {
+  const route = MODE === "live" ? null : routeDeterministicProblem(entry.prompt)
+  const workspace = route?.family === "functions" ? "calculus" : undefined
   if (MODE === "replay") {
     const rounds = recorded[entry.id]
     if (rounds === undefined || rounds.length === 0) return { planner: replayPlanner([]), requests: () => 0, rounds: [], notRun: `replay has no recorded rounds for ${entry.id}` }
     const wrapped = countingPlanner(replayPlanner(rounds))
-    return { ...wrapped, notRun: null }
+    return { ...wrapped, workspace, diagramPrompt: route?.diagramPrompt, notRun: null }
   }
-  const base = MODE === "live" ? createModelPlanner() : createLocalPlanner()
+  const base = route ? replayPlanner([route.plan]) : MODE === "live" ? createModelPlanner() : createLocalPlanner()
   const wrapped = countingPlanner(base)
-  return { ...wrapped, notRun: null }
+  return { ...wrapped, workspace, diagramPrompt: route?.diagramPrompt, notRun: null }
 }
 
 function runContext(document: GeometryDocument, runId: string) {
@@ -187,7 +189,7 @@ function runContext(document: GeometryDocument, runId: string) {
     target: {
       projectId: "project-reliability",
       documentId: document.metadata.id,
-      workspace: document.workspace as "conics" | "geometry3d",
+      workspace: document.workspace === "calculus" ? "conics" as const : document.workspace,
       epoch: `epoch:${document.metadata.id}`,
       generation: document.revision,
       contentHash: contentFingerprint(document)
@@ -214,8 +216,8 @@ function exportPreflight() {
   }
 }
 
-function runtimeFor(planner: PlannerPort, runId: string, budget?: ReturnType<typeof createBudget>) {
-  let current = createEmptyDocument("geometry3d")
+function runtimeFor(planner: PlannerPort, runId: string, budget?: ReturnType<typeof createBudget>, workspace: Workspace = "geometry3d") {
+  let current = createEmptyDocument(workspace)
   const written: GeometryDocument[] = []
   const stages: { ok: boolean; verification?: { status: string; checks: readonly { kind: string; status: string; sourceText: string }[] } }[] = []
   const runtime = createAgentRuntime({
@@ -229,7 +231,7 @@ function runtimeFor(planner: PlannerPort, runId: string, budget?: ReturnType<typ
       handle: {
         projectId: "project-reliability",
         documentId: current.metadata.id,
-        workspace: current.workspace as "geometry3d",
+        workspace: current.workspace === "calculus" ? "conics" : current.workspace,
         epoch: `epoch:${current.metadata.id}`,
         generation: current.revision,
         contentHash: contentFingerprint(current)
@@ -267,18 +269,18 @@ describe("完整的协调器链路评测（T01）", () => {
     const notRun: string[] = []
 
     for (const entry of runnable) {
-      const { planner, requests, rounds, notRun: missing } = plannerFor(entry, recorded)
+      const { planner, requests, rounds, workspace, diagramPrompt, notRun: missing } = plannerFor(entry, recorded)
       if (missing !== null) {
         notRun.push(missing)
         continue
       }
       const started = Date.now()
-      const { runtime, written, stages, current } = runtimeFor(planner, entry.id)
+      const { runtime, written, stages, current } = runtimeFor(planner, entry.id, undefined, workspace)
       const events: RunPhase[] = []
       let terminal: ReliabilityCaseReport["terminal"]
       let error: string | null = null
       try {
-        for await (const event of runtime.coordinator.start({ run: runContext(current(), entry.id), userMessage: entry.prompt })) events.push(event.phase)
+        for await (const event of runtime.coordinator.start({ run: runContext(current(), entry.id), userMessage: diagramPrompt ?? entry.prompt })) events.push(event.phase)
         terminal = events.at(-1) ?? "none"
       } catch (caught) {
         terminal = "infrastructure"
@@ -302,11 +304,12 @@ describe("完整的协调器链路评测（T01）", () => {
               : output === "answer" ? terminal === "completed"
                 : false
       )
+      const answerMatches = entry.contains === undefined || rounds.some(round => "answer" in round && round.answer?.includes(entry.contains!))
       const passed = entry.expected === "plan"
         ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
-          && (independent.status === "passed" || independent.status === "not_applicable")
+          && answerMatches && (independent.status === "passed" || independent.status === "not_applicable")
         : entry.expected === "answer"
-          ? terminal === "completed" && outputsSatisfied && (entry.contains === undefined || rounds.some((r) => "answer" in r && typeof r.answer === "string" && r.answer.includes(entry.contains!)))
+          ? terminal === "completed" && outputsSatisfied && answerMatches
           : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "") && outputsSatisfied
             && (independent.status === "passed" || independent.status === "not_applicable")
 

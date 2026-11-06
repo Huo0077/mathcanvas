@@ -13,6 +13,27 @@ const LATEX_MARKER = /[$\\]/
 
 const SUBSCRIPTS = "₀₁₂₃₄₅₆₇₈₉"
 
+function lowerMathGroups(source: string, inFunction: boolean): string {
+  // Lower the innermost complete commands first. An unreadable group is
+  // retained for the verifier to reject instead of losing its braces.
+  const groupOperand = (operand: string) => /^(?:√?\d+(?:\.\d+)?|π|[A-Za-z])$/.test(operand.trim())
+    ? operand.trim()
+    : `(${operand})`
+  let text = source
+  for (let depth = 0; depth < 32; depth += 1) {
+    const next = text
+      .replace(/\\sqrt\s*\{([^{}]+)\}/g, (_match, radicand: string) =>
+        /^\d+(?:\.\d+)?$/.test(radicand.trim()) ? `√${radicand.trim()}` : `√(${radicand})`)
+      .replace(/\\(?:[dt]?frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, (_match, numerator: string, denominator: string) => {
+        const fraction = `${groupOperand(numerator)}/${groupOperand(denominator)}`
+        return inFunction ? `(${fraction})` : fraction
+      })
+    if (next === text) break
+    text = next
+  }
+  return text
+}
+
 /** 等长替换：只修字形，不移动 span（P5-2）。 */
 function fixOcrText(text: string): string {
   return text
@@ -37,7 +58,7 @@ export function expandExamShorthand(text: string): string {
 export function normalizeGeometryPrompt(prompt: string): string {
   if (!LATEX_MARKER.test(prompt)) return fixOcrText(prompt)
 
-  let text = prompt.replace(/\$/g, "")
+  let text = prompt.replace(/\$|\\[()[\]]/g, "")
 
   // 环境/排版命令：先去掉不承载几何语义的包装。
   text = text.replace(/\\(?:left|right)\s*/g, "")
@@ -58,16 +79,20 @@ export function normalizeGeometryPrompt(prompt: string): string {
   text = text.replace(/\\infty\b/g, "∞")
   text = text.replace(/\\circ\b/g, "°")
 
-  // 结构化命令：先 sqrt / frac，再拆包装。
-  text = text.replace(/\\sqrt\s*\{([^{}]+)\}/g, "√$1")
-  text = text.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "$1/$2")
+  // A fraction in a function acts as one operand, including before a power.
+  // Preserve the compact scalar notation expected by geometry readers.
+  text = text.replace(/([fgh]\s*\(\s*x\s*\)\s*=\s*)([^，,。；;\n\u4e00-\u9fff]+)/g,
+    (_match, prefix: string, expression: string) => prefix + lowerMathGroups(expression, true))
+  text = lowerMathGroups(text, false)
   text = text.replace(/\\(?:mathrm|text|mathbf|operatorname)\s*\{([^{}]+)\}/g, "$1")
   text = text.replace(/\\overrightarrow\s*\{([^{}]+)\}/g, "$1")
   text = text.replace(/\\vec\s*\{([^{}]+)\}/g, "$1")
   text = text.replace(/\\arctan\b/g, "arctan")
+  text = text.replace(/\\(sin|cos|tan)\s*x(?![\w(]|\s*\^)/g, "$1(x)")
+  text = text.replace(/\\(sin|cos|tan)(?=\s*\()/g, "$1")
 
   // 上标/下标：只处理数字与常见 2 次方。
-  text = text.replace(/\^\s*\{?\s*2\s*\}?/g, "²")
+  text = text.replace(/\^\s*(?:\{\s*2\s*\}|2(?![\d.]))/g, "²")
   text = text.replace(/\^\s*\{?\s*°\s*\}?/g, "°")
   text = text.replace(/_\{?\s*([0-9]+)\s*\}?/g, (_match, digits: string) =>
     [...digits].map((digit) => SUBSCRIPTS[Number(digit)] ?? digit).join(""))
@@ -78,6 +103,10 @@ export function normalizeGeometryPrompt(prompt: string): string {
   // 等边三角形的“边长为 N”展开成三条边；链式相等展开成两条独立条件。
   text = expandExamShorthand(text)
 
-  // 数学点名的空格不影响语义；中文本身不需要空格。
-  return text.replace(/\s+/g, "").trim()
+  // A line break before a question number can be the only part boundary.
+  return text.replace(/\s+/g, (spacing: string, offset: number) =>
+    /[\r\n]/.test(spacing) && /^(?:[（(]\s*[1-9]\d*\s*[）)]|[①-⑳])/.test(text.slice(offset + spacing.length))
+      ? "\n"
+      : ""
+  ).trim()
 }

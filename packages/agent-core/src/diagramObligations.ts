@@ -3,6 +3,7 @@ import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/ge
 import { readExplicitSolidConditions } from "./explicitSolidConditions"
 import { parseShapeClause } from "./solver/shapeGrammar"
 import { parseLengthChains } from "./lengthEquality"
+import { splitNumberedProblem, type ProblemPart } from "./numberedProblem"
 
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
@@ -14,7 +15,7 @@ export type DiagramObligationKind =
    * 必须一起查**非退化 / 顶点闭合（平行四边形）/ 共面 / 四个角**，见 `diagramVerification`。
    */
   | "rectangle"
-  | "planePerpendicular" | "dihedral" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
+  | "planePerpendicular" | "dihedral" | "dihedralSine" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
   | "acuteTriangle" | "rightTriangle" | "obtuseTriangle" | "pointInsideTriangle"
   /**
    * **角平分线**（2026-10-20）：`AD 平分 ∠BAC` ⇒ `targets: ["D", "A", "B", "C"]`
@@ -267,6 +268,7 @@ export interface DiagramObligationSet {
   freeChoices: string[]
   freeChoiceSources?: (DiagramSourceSpan & { name: string })[]
   unverified: { sourceText: string; reason: string }[]
+  parts?: (ProblemPart & { obligations: DiagramObligationSet })[]
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
@@ -446,12 +448,12 @@ const ECCENTRICITY_VALUE = /离心率\s*e?\s*(?:为|是|=)\s*([0-9.√]+(?:\s*\/
 const ORIGIN_CENTER = /(?:中心|顶点)[^。；;，,\n]{0,6}?原点/
 
 /**
- * **离心率的值**：`√5` / `2√5` / `1` / `1/2` / `√3/2` / `0.5`。
+ * 正数、根式与分式，如 `2√5`、`1/2`、`√3/2`。
  *
  * 分式的两端各自求值（分子可以是根号），**整条必须被吃干净** —— `√3/2/2` 这种
  * 不是离心率，宁可返回 `null` 让它落进未核验。
  */
-function eccentricityValue(raw: string): number | null {
+function positiveRadicalOrFraction(raw: string): number | null {
   const compact = raw.replace(/\s+/g, "")
   const fraction = /^([0-9.√]+)\/([0-9.]+)$/.exec(compact)
   const value = fraction === null
@@ -539,7 +541,7 @@ function resolveFocusEccentricity(
       report("焦点与中心重合（距离为 0），这不是一个能画出来的椭圆 / 双曲线 / 抛物线，未核验。")
       continue
     }
-    const eccentricityNumber = eccentricity === null ? null : eccentricityValue(eccentricity[1]!)
+    const eccentricityNumber = eccentricity === null ? null : positiveRadicalOrFraction(eccentricity[1]!)
     if (eccentricity !== null && eccentricityNumber === null) {
       report("这个离心率的数值读不出来，未核验。")
       continue
@@ -828,8 +830,7 @@ function resolveExplicitSolidConditions(
  * 不做任何数学变形 —— 因为一旦开始"化简"，判据就不再是"图是不是题面那条曲线"，
  * 而是"我的化简对不对"了。
  *
- * 隐式乘号**只补 `数字×x` 这一种**（`3x` → `3*x`）。不补宽：`log10(x)` 里那个 `0(`
- * 一旦被当成乘法，表达式就悄悄变了意思 —— 宁可让不认识的写法落回"未核验"。
+ * 只补已知因子之间的乘号，例如 `3x`、`4sin(x)` 和 `sin(x)cos(x)`。
  */
 function normalizeStatedExpression(raw: string): string | null {
   const trimmed = raw.trim()
@@ -838,6 +839,15 @@ function normalizeStatedExpression(raw: string): string | null {
     .replace(/²/g, "^2").replace(/³/g, "^3").replace(/⁴/g, "^4")
     .replace(/[−–—]/g, "-")
     .replace(/[×·⋅]/g, "*")
+    .replace(/π/g, "pi")
+    .replace(/√\s*(\d+(?:\.\d+)?)/g, "sqrt($1)")
+    .replace(/√(?=\s*\()/g, "sqrt")
+    .replace(/(?<![A-Za-z_])\\?(sin|cos|tan)\^\s*([2-4])\s*x\b/g, "$1(x)^$2")
+    .replace(/(?<![A-Za-z_])\\?(sin|cos|tan)\s*(\d+(?:\.\d+)?)\s*x(?![\w(]|\s*\^)/g, "$1($2*x)")
+    .replace(/(?<![A-Za-z_])(sin|cos|tan)\s*x(?![\w(]|\s*\^)/g, "$1(x)")
+    .replace(/(?<=[\d)])\s*(?=(?:sin|cos|tan|sqrt)\s*\()/g, "*")
+    .replace(/(^|[^A-Za-z_\d.])(\d+(?:\.\d+)?)\s*(?=\(|pi\b)/g, "$1$2*")
+    .replace(/\)\s*(?=\(|x\b|pi\b)/g, ")*")
     .replace(/(\d)\s*x/g, "$1*x")
   return normalized.length === 0 ? null : normalized
 }
@@ -1332,6 +1342,13 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       const scalar = finitePositive(m[1])
       if (scalar === null) return null
       return { kind: "vectorDot", targets: [...names(m[2]), ...names(m[3]), ...names(m[4])], value: scalar }
+    }
+  },
+  {
+    pattern: /二面角\s*([A-Z])\s*[-−–—]\s*([A-Z])\s*([A-Z])\s*[-−–—]\s*([A-Z])\s*的?正弦值?\s*(?:为|是|=)\s*((?:(?:\d+(?:\.\d+)?\s*)?√\s*)?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?=\s*(?:[，,。；;]|\.(?!\d)|$))/g,
+    read: (m) => {
+      const value = positiveRadicalOrFraction(m[5]!)
+      return value === null || value > 1 ? null : { kind: "dihedralSine", targets: m.slice(1, 5), value }
     }
   },
   {
@@ -2131,7 +2148,31 @@ function resolveStatedVertexAngle(givens: DiagramObligation[], unverified: Diagr
 }
 
 export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {
-  const boundary = /(?:求证|证明)/.exec(prompt)
+  const problem = splitNumberedProblem(prompt)
+  // Later hypothetical conditions cannot be checked on a diagram whose
+  // subquestion has not been chosen. Keep the individual scopes available.
+  if (problem?.parts.slice(1).some(part => /^\s*(?:若|如果|假设|另设)/.test(part.text))) {
+    const shared = parseDiagramScope(problem.stem, options)
+    const parts = problem.parts.map(part => {
+      const scopedPrompt = problem.stem.padEnd(part.start) + part.text
+      return { ...part, obligations: parseDiagramScope(scopedPrompt, options, true) }
+    })
+    return {
+      ...shared,
+      parts,
+      goals: parts.flatMap(part => part.obligations.goals),
+      goalSources: parts.flatMap(part => part.obligations.goalSources ?? []),
+      unverified: [...shared.unverified, {
+        sourceText: "各小问的条件",
+        reason: "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+      }]
+    }
+  }
+  return parseDiagramScope(prompt, options)
+}
+
+function parseDiagramScope(prompt: string, options: DiagramParseOptions, numberedPart = false): DiagramObligationSet {
+  const boundary = (numberedPart ? /(?:求证|试?证明|(?<=[，,。；;\n])\s*求)/ : /(?:求证|试?证明)/).exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
   const goalRawStart = boundary === null ? -1 : boundary.index + boundary[0].length
   const goalRaw = goalRawStart < 0 ? "" : prompt.slice(goalRawStart)

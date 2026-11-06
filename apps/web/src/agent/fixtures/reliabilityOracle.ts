@@ -1,3 +1,5 @@
+import { compileExpression, evaluateExpression } from "@draw/geometry-kernel"
+
 /**
  * **独立判据**（T01/T02，2026-10-27）：不经过产品解析器与产品核验器，直接从**候选文档**的
  * 点坐标回代题单里写死的期望。
@@ -18,6 +20,7 @@ export interface OraclePoint {
 
 export type OracleFact =
   | { kind: "distance"; a: string; b: string; value: number }
+  | { kind: "function-sample"; label: string; x: number; value: number }
   /** `(a − b) · (d − c)`：与产品无关的点积口径。 */
   | { kind: "dot"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "point-coordinate"; name: string; x: number; y: number; z: number }
@@ -110,6 +113,23 @@ export function evaluateOracle(candidate: unknown, oracle: Oracle): OracleResult
   const results: OracleFactResult[] = []
 
   for (const fact of oracle.facts) {
+    if (fact.kind === "function-sample") {
+      const candidates = primitives.filter((primitive): primitive is { expression: string; domain: [number, number] } => {
+        const item = primitive as { type?: string; label?: string; expression?: string; domain?: [number, number] }
+        return item.type === "function" && item.label === fact.label && typeof item.expression === "string"
+          && item.domain !== undefined && item.domain[0] <= fact.x && fact.x <= item.domain[1]
+      })
+      let measured = Number.NaN
+      if (candidates.length === 1) {
+        try {
+          measured = evaluateExpression(compileExpression(candidates[0].expression), { x: fact.x })
+        } catch {
+          // An unreadable expression cannot match a reference sample.
+        }
+      }
+      results.push({ fact, status: Number.isFinite(measured) && close(measured, fact.value) ? "passed" : "failed", detail: `x=${fact.x} 时实测 ${measured}，期望 ${fact.value}。` })
+      continue
+    }
     if (fact.kind === "primitive-count") {
       const matched = primitives.filter((primitive) => fact.type === undefined || (primitive as { type?: unknown }).type === fact.type)
       // 不指定 `type` 时把**实际都有哪些类型**也说出来：题单写错类型名时，这条 detail 是唯一的线索。

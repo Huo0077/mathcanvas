@@ -61,7 +61,7 @@ import { normalizeGeometryPrompt } from "./latexNormalisation"
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
   "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
-  "planePerpendicular", "dihedral", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
+  "planePerpendicular", "dihedral", "dihedralSine", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
   "conicAxes", "conicChord", "tangentAt", "functionGraph", "commonTangent",
   "angleBisector", "chordCenterDistance", "arcLength",
   "incenter", "centroid", "orthocenter", "excenter", "circumcenter", "midline",
@@ -89,6 +89,7 @@ const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.
 /** 逐条 claim 的容差：与核验器同一套判据（长度用绝对、关系用无量纲、角度用度）。 */
 function toleranceFor(kind: DiagramObligationKind, value: number | undefined): ObligationTolerance | undefined {
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  if (kind === "dihedralSine") return { kind: "relative", value: UNITLESS_TOLERANCE }
   // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）；线面角是同一族的第三个数。
   if (kind === "planarAngle" || kind === "linePlaneAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   /**

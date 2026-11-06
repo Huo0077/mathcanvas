@@ -15,3 +15,21 @@ describe("goal clauses after 则", () => {
     expect(parsed.unverified.some((entry) => entry.sourceText.includes("SA="))).toBe(false)
   })
 })
+
+it("keeps each numbered question's assumptions in its own scope", () => {
+  const prompt = "四棱锥 P-ABCD 中，PA=2。① 若 AD⊥PB，试证明 AD∥平面 PBC；② 若 AD⊥DC，求 AD。"
+  const parsed = parseDiagramObligations(prompt)
+  expect(parsed.givens.map(given => given.sourceText)).toEqual(["PA=2"])
+  expect(parsed.unverified).toEqual([expect.objectContaining({ sourceText: "各小问的条件" })])
+  expect(parsed.parts?.map(part => part.obligations.givens.map(given => given.sourceText))).toEqual([
+    ["PA=2", "AD⊥PB"],
+    ["PA=2", "AD⊥DC"]
+  ])
+  expect(parsed.goals).toEqual(["AD∥平面 PBC；", "AD。"])
+  for (const part of parsed.parts ?? []) {
+    expect(prompt.slice(part.start, part.end)).toBe(part.text)
+    for (const given of part.obligations.givens) {
+      expect(prompt.slice(given.start, given.end)).toBe(given.sourceText)
+    }
+  }
+})

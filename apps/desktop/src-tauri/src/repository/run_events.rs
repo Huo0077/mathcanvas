@@ -130,6 +130,8 @@ pub struct RunEventVersions {
     pub tool_registry_revision: String,
     #[serde(default)]
     pub action_schema_revision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_build: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

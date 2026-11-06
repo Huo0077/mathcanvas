@@ -3,6 +3,7 @@ import { commitTransaction, compileAction, createIdAllocator, solidTopology3, ty
 import { ratioParameterFor, sectionSolid3, validatePrismInput, DEFAULT_SOLID_SEGMENTS, foldAnglesForTargetDistance, searchFoldAngles, type FoldSystemOptions } from "@draw/geometry-kernel"
 
 import {
+  MAX_PLAN_ANSWER_LENGTH,
   MAX_REPAIR_ATTEMPTS,
   PLAN_SCHEMA_VERSION,
   type ClarificationQuestion,
@@ -719,6 +720,17 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
 
   // ---- 3/5/6. 逐笔：引用解析 → 几何校验 → 动作编译 → 推进工作文档 ----------
   for (const [index, action] of audit.actions.entries()) {
+    if (action.actionId === "solid.create_segment") {
+      const blockedBy = failedSegmentProducers(action.inputs.vertexNames, audit.actions.slice(0, index), compiledActions, working)
+      if (blockedBy.length > 0) {
+        diagnostics.push({
+          ...planDiagnostic("reference_resolution", "action_blocked_by_dependency", pathFor(index), `连线依赖未建成的对象（${blockedBy.join("、")}）。先修复这些动作。`, "warning"),
+          actionKey: action.actionKey,
+          blockedBy
+        })
+        continue
+      }
+    }
     /**
      * 注：这里**没有**"补全之后必填字段还缺"的兜底检查 —— 那是死代码（Fix round 1 / I13）。
      * `auditPlan` 在任何错误/提问时返回 `actions: []`，而 `compilePlan` 在那时就提前返回了，
@@ -801,7 +813,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
     ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true, prompt: parserPrompt }) : undefined
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
-    if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
+    if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
   }
   diagnostics.push(...renderDegeneracyWarnings(working))
   const failed = diagnostics.some((entry) => entry.severity === "error")
@@ -910,6 +922,27 @@ function approximationAssumptions(actions: readonly DraftAction[]): StructuredAs
 
 /** 只保留 `envelope.` 前缀的诊断路径，用于构造修复请求（修复只认字段路径）。 */function toParseErrors(diagnostics: readonly PlanDiagnostic[]): { code: string; path: string; detail: string }[] {
   return diagnostics.filter((entry) => entry.severity === "error").map((entry) => ({ code: entry.code, path: entry.path, detail: entry.detail }))
+}
+
+function failedSegmentProducers(
+  names: readonly string[],
+  previous: readonly DraftAction[],
+  compiled: readonly DraftAction[],
+  document: GeometryDocument
+): string[] {
+  const missing = names.filter(name => !document.primitives.some(primitive => primitive.type === "point3" && primitive.label === name))
+  const blockers = new Set<string>()
+  for (const name of missing) {
+    const producers = previous.filter(action => {
+      if (action.actionId === "solid.fold") return action.inputs.apexAs === name
+      if (action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_face" || action.actionId === "solid.create_prism") {
+        return action.inputs.vertexNames?.includes(name) === true
+      }
+      return false
+    })
+    if (producers.length === 1 && !compiled.some(action => action.actionKey === producers[0].actionKey)) blockers.add(producers[0].actionKey)
+  }
+  return [...blockers]
 }
 
 // ---------------------------------------------------------------- N2 救回路径
@@ -3541,7 +3574,7 @@ export function describeCompileRepairPrompt(repair: RepairRequest, diagnostics: 
  * - `points` 上出现 `unexpected field 'z'` ⇒ 模型把**三维坐标**给了**平面动作**。
  *   它建完 `solid.create_polyhedron` 之后，会想用 `planar.create_segment` 去补 OA / CD 这类边，
  *   而平面动作只收 `x`/`y` —— 于是**整份计划被传输层拒掉**。
- * - `envelope.answer` 出现在 `plan` 分支 ⇒ 它把两个分支的字段混在一起了。
+ * - `plan` 带了 `toolResultRefs` 或 `questions` ⇒ 混入了别的分支的字段。
  * - 其余 `envelope.*` 失败 ⇒ 重申顶层合同（**只列仍然必填的字段**；`schemaVersion`/`factIds`/`kind`
  *   已改为可推断，再要求模型补它们等于制造又一轮无谓失败）。
  */
@@ -3551,9 +3584,17 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (planarZ) {
     advice.push("提醒：`planar.*` 动作在**平面上**作图，坐标只能有 `x`、`y`，**不接受 `z`** —— 带上 `z` 会被直接拒。立体图元（顶点/棱/面）请由 `solid.*` 动作一次建出；**要连两点之间的线**用 `solid.create_segment`（**只给两个点名**，两端必须是图上已经有的点），不要再用 `planar.*` 去补立体的边。")
   }
-  const answerInPlan = errors.some((error) => error.path === "envelope.answer" || error.path === "envelope.toolResultRefs" || error.path === "envelope.questions")
-  if (answerInPlan) {
-    advice.push("提醒：`kind` 为 `plan` 时顶层**只能有** `schemaVersion`、`kind`、`goal`、`factIds`、`assumptions`、`relations`、`actions`。`answer` / `toolResultRefs` / `questions` 属于别的分支，**不要混进来**。")
+  const wrongBranchField = errors.some((error) => error.code === "unknown_field" && (error.path === "envelope.toolResultRefs" || error.path === "envelope.questions"))
+  const answerTooLong = errors.some((error) => error.code === "string_too_long" && error.path === "envelope.answer")
+  const wrappedEnvelope = errors.some((error) => error.code === "unknown_field" && error.path === "envelope.arguments")
+  if (wrongBranchField) {
+    advice.push("提醒：作图计划可在 `answer` 附上解答。`toolResultRefs` / `questions` 属于别的分支，**不要混进来**。")
+  }
+  if (answerTooLong) {
+    advice.push(`请把 \`answer\` 精简到 ${MAX_PLAN_ANSWER_LENGTH} 字符以内，保留关键推导和结论。`)
+  }
+  if (wrappedEnvelope) {
+    advice.push("请直接把 `kind`、`goal` 及对应分支的字段放在工具参数的顶层，移除多余的 `arguments` 包装。")
   }
   /**
    * **引用没写作用域**（2026-10-17 评测现场）：模型把 `dynamic.create_bound_point.host`
@@ -3576,7 +3617,7 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
   if (hostNotFound) {
     advice.push('提醒：`host` / `hostId` 指向的实体必须**真的存在**：同一份计划里刚建的用 `{"scope":"draft","alias":"…"}`，那个别名必须是**前面某一笔真的给出的**名字（不要自己拼 `solid-1:e0` 这种）；场景里已有的用 `{"scope":"scene","ref":{"documentId":"…","entityId":"…"}}`。找不到宿主时，补**建出那个宿主**的那一笔，或换成图上已有的点名走 `solid.create_segment` / `solid.create_point`。')
   }
-  const envelopeFailure = errors.some((error) => error.path.startsWith("envelope")) && !answerInPlan
+  const envelopeFailure = errors.some((error) => error.path.startsWith("envelope")) && !wrongBranchField && !answerTooLong && !wrappedEnvelope
   if (envelopeFailure) {
     advice.push("提醒：`kind` 为 `plan` 时顶层必须有 `goal` 与 `actions`（数组，至少一项）。")
   }

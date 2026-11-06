@@ -13,6 +13,10 @@ export interface JsonSchema {
   additionalProperties?: boolean
   items?: JsonSchema
   oneOf?: readonly JsonSchema[]
+  anyOf?: readonly JsonSchema[]
+  not?: JsonSchema
+  minLength?: number
+  maxLength?: number
   minimum?: number
   maximum?: number
   minItems?: number

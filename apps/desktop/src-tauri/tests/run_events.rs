@@ -57,6 +57,7 @@ fn event(event_id: &str, detail: &str) -> RunEventInput {
             prompt_version: "mathcanvas.agent.prompt.v6".to_string(),
             tool_registry_revision: "2026-09-19.1".to_string(),
             action_schema_revision: "mathcanvas.plan.v1".to_string(),
+            app_build: Some("4.2.0+0123456789ab.abcdef123456".to_string()),
         }),
         usage: Some(RunEventUsage { input_tokens: Some(120), output_tokens: Some(40) }),
         // 普通账本事件没有痕迹；`None` 会被 `skip_serializing_if` 省掉，不写成一个 `null`。

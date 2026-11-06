@@ -179,6 +179,7 @@ export interface ToolResult<Payload> {
 
 /** 协议版本号。PlanEnvelope 顶层严格包含 `schemaVersion`。 */
 export const PLAN_SCHEMA_VERSION = "mathcanvas.plan.v1"
+export const MAX_PLAN_ANSWER_LENGTH = 4096
 
 export type PlanKind = "plan" | "clarification" | "answer"
 
@@ -406,6 +407,8 @@ export interface PlanDiagnostic {
   path: string
   detail: string
   severity: "info" | "warning" | "error"
+  actionKey?: string
+  blockedBy?: string[]
 }
 
 /** 只保留错误级诊断（给修复请求与界面用）。 */

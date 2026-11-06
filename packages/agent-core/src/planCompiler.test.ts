@@ -32,6 +32,24 @@ function rawPlan(actions: unknown[]): unknown {
   return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "代表题", factIds: [], actions }
 }
 
+it("identifies a failed solid as the blocker of its dependent segment", () => {
+  const result = compilePlan(rawPlan([
+    {
+      actionId: "solid.create_polyhedron", actionKey: "pyramid", factIds: [],
+      inputs: { alias: "pyramid", vertexNames: ["A", "B", "C", "D", "P"],
+        vertices: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 1 }, { x: 0, y: 2, z: 0 }, { x: 0, y: 0, z: 2 }],
+        faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]] }
+    },
+    { actionId: "solid.create_segment", actionKey: "segment", factIds: [], inputs: { alias: "AP", vertexNames: ["A", "P"] } }
+  ]), context())
+  expect(result.ok).toBe(false)
+  expect(result.diagnostics).toEqual(expect.arrayContaining([
+    expect.objectContaining({ code: "degenerate_polyhedron" }),
+    expect.objectContaining({ code: "action_blocked_by_dependency", actionKey: "segment", blockedBy: ["pyramid"] })
+  ]))
+  expect(result.repair?.errors.map(error => error.code)).not.toContain("segment_reference_missing")
+})
+
 /**
  * **期望在 Task 5 有意改了**：那三条"开关打开 = 开关关闭"的逐字节断言当年守的是
  * "开关不会悄悄换掉这张图"。乙案 Task 5 给开关打开时**新增**了一句坐标来源标注
@@ -658,11 +676,19 @@ describe("compile repair advice", () => {
     expect(hint).toContain("不要")
   })
 
-  it("explains that a plan branch must not carry answer/other-branch fields", () => {
-    const hint = ask([{ code: "unknown_field", path: "envelope.answer", detail: "unexpected field 'answer'" }])
+  it("allows an answer on a plan but directs other-branch fields elsewhere", () => {
+    const hint = ask([{ code: "unknown_field", path: "envelope.toolResultRefs", detail: "unexpected field 'toolResultRefs'" }])
 
     expect(hint).toContain("不要混进来")
     expect(hint).toContain("toolResultRefs")
+    expect(hint).toContain("可在 `answer` 附上解答")
+  })
+
+  it("gives precise repair advice for wrapped plans and oversized answers", () => {
+    expect(ask([{ code: "unknown_field", path: "envelope.arguments", detail: "unexpected field 'arguments'" }])).toContain("移除多余的 `arguments` 包装")
+    const hint = ask([{ code: "string_too_long", path: "envelope.answer", detail: "max 4096 characters" }])
+    expect(hint).toContain("把 `answer` 精简到 4096 字符以内")
+    expect(hint).not.toContain("不要混进来")
   })
 
   /**

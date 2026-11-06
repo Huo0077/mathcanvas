@@ -30,6 +30,7 @@ export function SettingsWorkspace({ unavailableReason, onBack }: { unavailableRe
       <div hidden={tab !== "advanced"}>
         <details className="settings-advanced"><summary>实验性功能</summary><ExperimentalFeatures /></details>
         <details className="settings-advanced"><summary>开发者评测</summary><ProviderEval /></details>
+        {import.meta.env.VITE_MATHCANVAS_BUILD && <p>应用构建 {import.meta.env.VITE_MATHCANVAS_BUILD}</p>}
       </div>
     </div>
   </div>

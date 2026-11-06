@@ -1,8 +1,39 @@
 {
   "version": 1,
   "suite": "reliability-dev-smoke",
-  "notice": "开发冒烟题单，不是 T02 的独立复核验收题单。每题带来源、预期终态与独立 oracle（oracle 由题面单独推导，判据不经过产品解析器）。2026-10-27 扩到 27 条：常规 5 / 翻折 10 / 表达变式 7 / 负例 5（负例比任务书的 3 条多 2 条，因为那两条是既有回归、删掉会丢覆盖）；新增 oracle 事实类型 segment-ratio 与 angle。",
+  "notice": "开发冒烟题单。题目记录来源与预期终态，几何和函数用独立于题面解析的 oracle 回代。完整的人工复核验收题单单独统计。",
   "cases": [
+    {
+      "id": "incident-trig-monotonicity",
+      "prompt": "17. 已知函数 $f(x)=4\\sin x\\cos(x-\\frac{\\pi}{4})-\\sqrt{2}$。\n(i) 求函数 $f(x)$ 的递增区间。",
+      "expected": "plan",
+      "contains": "[-π/8+kπ, 3π/8+kπ]",
+      "requireVerification": "passed",
+      "provenance": { "source": "11 月 5 日三角函数报错题的等价写法", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "function-sample", "label": "f(x)", "x": 0, "value": -1.4142135623730951 },
+          { "kind": "function-sample", "label": "f(x)", "x": 0.39269908169872414, "value": 0 },
+          { "kind": "function-sample", "label": "f(x)", "x": 1.1780972450961724, "value": 2 }
+        ]
+      }
+    },
+    {
+      "id": "incident-scoped-pyramid",
+      "prompt": "如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。① 若 AD⊥PB，试证明 AD∥平面 PBC；② 若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。",
+      "expected": "plan",
+      "contains": "AD = √3",
+      "requireVerification": "passed",
+      "provenance": { "source": "11 月 5 日 Q17 四棱锥报错题的等价写法", "reviewStatus": "unreviewed" },
+      "requiredOutputs": ["draft", "verification_passed"],
+      "oracle": {
+        "facts": [
+          { "kind": "distance", "a": "A", "b": "D", "value": 1.7320508075688772 },
+          { "kind": "dot", "a": "A", "b": "D", "c": "D", "d": "C", "value": 0 }
+        ]
+      }
+    },
     {
       "id": "rect-fold-length",
       "prompt": "矩形 ABCD 中，AB=4，BC=2，AB⊥BC，BD=2√5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",

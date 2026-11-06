@@ -45,7 +45,7 @@ export function finiteNumber(value: unknown, path: string, errors: ParseError[])
   return value
 }
 
-export function boundedString(value: unknown, path: string, errors: ParseError[], { allowEmpty = false } = {}): string | null {
+export function boundedString(value: unknown, path: string, errors: ParseError[], { allowEmpty = false, maxLength = MAX_STRING } = {}): string | null {
   if (typeof value !== "string") {
     errors.push(fail("invalid_type", path, "expected a string"))
     return null
@@ -54,8 +54,8 @@ export function boundedString(value: unknown, path: string, errors: ParseError[]
     errors.push(fail("empty_string", path, "expected a non-empty string"))
     return null
   }
-  if (value.length > MAX_STRING) {
-    errors.push(fail("string_too_long", path, `max ${MAX_STRING} characters`))
+  if (value.length > maxLength) {
+    errors.push(fail("string_too_long", path, `max ${maxLength} characters`))
     return null
   }
   return value

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
@@ -7,6 +7,7 @@ import { useAgentStore } from "../agentStore"
 import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
+import { imagePrompt, splitImagePrompt } from "../services/problemImagePrompt"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
 import { FUNCTION_TANGENT_PROMPT, functionTangentPlan, PYRAMID_PROMPT, pyramidPlan } from "./representativeFixtures"
@@ -62,6 +63,69 @@ describe("answer delivery independently of document changes", () => {
     await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
     expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
   })
+
+  it.each([
+    String.raw`已知函数 $f(x)=4\sin x\cos(x-\frac{\pi}{4})-\sqrt{2}$。
+（1）求 $f(x)$ 的单调递增区间；`,
+    String.raw`17. 已知函数 $f(x)=4\sin x\cos(x-\frac{\pi}{4})-\sqrt{2}$。
+(i) 求函数 $f(x)$ 的递增区间。`
+  ])("solves and commits the LaTeX trigonometric problem without a provider", async (problem) => {
+    const resolveProvider = vi.fn(async () => { throw new Error("this problem should be planned locally") })
+    const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
+    const result = await runAndWait(runner, problem)
+    expect(resolveProvider).not.toHaveBeenCalled()
+    expect(result.phase).toBe("awaiting_confirmation")
+    const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(reply.text).toContain("[-π/8+kπ, 3π/8+kπ]")
+    expect(reply.draft?.diagramVerification?.checks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "functionGraph", status: "passed" })])
+    )
+    await runner.confirm()
+    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.filter(({ type }) => type === "function")).toHaveLength(1)
+  })
+
+  it.each([
+    `17.（★）（本小题满分15分）
+如图，四棱锥P-ABCD中，PA⊥底面ABCD，PA=AC=2，BC=1，AB=√3。
+（1）若AD⊥PB，证明：AD//平面PBC；
+（2）若AD⊥DC，且二面角A-CP-D的正弦值为√42/7，求AD。`,
+    `17.（★）（本小题满分15分）
+如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。
+(1)若 AD⊥PB，证明：AD∥平面 PBC；
+(2)若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。`,
+    `如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。① 若 AD⊥PB，试证明 AD∥平面 PBC；② 若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。`,
+    `17.(★)(本小题满分 15 分)
+如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3.
+(1)若 AD⊥PB，证明：AD//平面 PBC；
+(2)若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD.`,
+    String.raw`17.（★）（本小题满分15分）
+如图，四棱锥 $P-ABCD$ 中，$PA\perp$ 底面 $ABCD$，$PA=AC=2$，$BC=1$，$AB=\sqrt{3}$。
+(1) 若 $AD\perp PB$，证明：$AD\parallel$ 平面 $PBC$；
+(2) 若 $AD\perp DC$，且二面角 $A-CP-D$ 的正弦值为 $\frac{\sqrt{42}}{7}$，求 $AD$。`
+  ])("builds and commits the scoped pyramid from a transcribed problem", async (problem) => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives.push({ id: "existing-a", type: "point3", label: "A", position: { x: 5, y: 5, z: 5 } })
+    useSceneStore.setState({ document, workspaceDocuments: { geometry3d: document } })
+    const resolveProvider = vi.fn(async () => { throw new Error("this problem should be planned locally") })
+    const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
+    const result = await runAndWait(runner, imagePrompt(problem, "", ["PB 为虚线"]))
+    expect(resolveProvider).not.toHaveBeenCalled()
+    const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(reply.failure).toBeUndefined()
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(reply.text).toContain("AD ∥ 平面 PBC")
+    expect(reply.text).toContain("AD = √3")
+    expect(reply.draft?.diagramVerification?.status).toBe("passed")
+    const verified = reply.draft?.diagramVerification?.checks.map((check) => check.sourceText.replace(/\s/g, ""))
+    expect(verified).toContain("AD⊥DC")
+    expect(verified).toContain("二面角A-CP-D的正弦值为√42/7")
+    expect(verified).not.toContain("AD⊥PB")
+    await runner.confirm()
+    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+    expect(useSceneStore.getState().document.primitives).toContainEqual(document.primitives[0])
+  })
 })
 
 async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: string) {
@@ -77,6 +141,20 @@ async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: 
   const userMessage = [...conversation.messages].reverse().find((message) => message.role === "user")!
   return runner.run(prompt, userMessage.id)
 }
+
+it("keeps the source region for a critical image uncertainty and asks for review before planning", async () => {
+  const problem = "如图，AB=2，求 AC。"
+  const uncertainty = { image: 2, box: [0.2, 0.3, 0.4, 0.5] as [number, number, number, number], text: "AB 的数字可能是 3" }
+  const serialized = imagePrompt(problem, "", { problem, diagram: [], uncertainties: [uncertainty] })
+  expect(splitImagePrompt(serialized)).toMatchObject({ prompt: problem, imageEvidence: { uncertainties: [uncertainty], reviewed: [] } })
+  const resolveProvider = vi.fn(async () => { throw new Error("unreviewed image must not reach a model") })
+  const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
+  const result = await runAndWait(runner, serialized)
+  expect(result.phase).toBe("waiting")
+  expect(resolveProvider).not.toHaveBeenCalled()
+  expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure?.message).toContain("请核对图 2")
+  expect(runner.hasDraft()).toBe(false)
+})
 
 /**
  * 立体计划，但**面环退化**（C 与 B 重合）。

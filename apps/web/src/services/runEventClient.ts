@@ -51,6 +51,7 @@ export interface RunEventInput {
     promptVersion: string
     toolRegistryRevision: string
     actionSchemaRevision: string
+    appBuild?: string
   }
   usage?: { inputTokens?: number; outputTokens?: number }
   /**
@@ -100,7 +101,9 @@ async function asResult<T>(run: () => Promise<T>): Promise<LedgerResult<T>> {
  *（幂等，**不是错误** —— 重试与重启后的补写都会走到这里）。
  */
 export async function appendRunEvent(event: RunEventInput): Promise<LedgerResult<boolean>> {
-  return asResult(async () => (await invokeDesktop<unknown>("append_run_event", { event })) === true)
+  const appBuild = import.meta.env.VITE_MATHCANVAS_BUILD
+  const payload = event.versions && appBuild ? { ...event, versions: { ...event.versions, appBuild } } : event
+  return asResult(async () => (await invokeDesktop<unknown>("append_run_event", { event: payload })) === true)
 }
 
 /** 读一条运行的事件（有界、按写入顺序）。 */

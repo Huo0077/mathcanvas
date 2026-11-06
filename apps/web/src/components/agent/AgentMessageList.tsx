@@ -38,7 +38,9 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 function AssistantBody({ message }: { message: AgentMessage }) {
-  return <>{splitTranscript(message.text).map((section, index) => section.kind === "code"
+  return <>
+    {message.draft?.diagramVerification && message.text.trim() && <small className="agent-run-detail">上方的题设核验针对草稿图形。</small>}
+    {splitTranscript(message.text).map((section, index) => section.kind === "code"
     ? <div className="agent-code" key={`${message.id}-code-${index}`} data-code-language={section.language}>
       <div className="agent-code-head"><span>{section.language || "code"}</span><CopyCodeButton code={section.code} /></div>
       {/* 高亮由 `codeHighlight` 的纯函数给出 token，这里只负责着色 ——

@@ -1,5 +1,6 @@
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
+import { buildFingerprint } from "../../scripts/build-fingerprint.mjs"
 
 /**
  * **把编辑器 / 工具的原子写临时文件排除在文件监视之外**（2026-10-05）。
@@ -32,7 +33,8 @@ import react from "@vitejs/plugin-react"
  */
 const ATOMIC_WRITE_ARTIFACTS = [/\.tmpdir[\\/]/, /\.tmp$/]
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
+  define: { "import.meta.env.VITE_MATHCANVAS_BUILD": JSON.stringify(command === "build" ? buildFingerprint() : "") },
   server: { watch: { ignored: ATOMIC_WRITE_ARTIFACTS } }
-})
+}))

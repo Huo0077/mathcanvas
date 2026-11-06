@@ -1,8 +1,9 @@
-import { PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseNote, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget, type PromptNormalisations } from "./contracts"
+import { MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, type DraftAction, type ParseError, type ParseNote, type ParseResult, type PlanEnvelope, type PlanRelation, type PlanRelationKind, type PlanRelationTarget, type PromptNormalisations } from "./contracts"
 // 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
 
 import { ACTIONS, type ActionSpec } from "./actionRegistry"
-import { MAX_ACTIONS, isPlainObject, boundedArray, boundedString, fail, optionalFiniteNumber, readStringArray, quotedName, rejectUnknownFields } from "./schemaReaders"
+import { MAX_ACTIONS, MAX_ARRAY, MAX_STRING, isPlainObject, boundedArray, boundedString, fail, optionalFiniteNumber, readStringArray, quotedName, rejectUnknownFields } from "./schemaReaders"
+import type { JsonSchema } from "./actionSchemas"
 
 // 这两个模块的东西**继续从这里出去**：`index.ts` 是 `export * from "./schemas"`，
 // 所以把它们搬走之后必须在这里转出去，否则包的公开面就变了（调用方一行都不用改）。
@@ -117,6 +118,76 @@ function describePlanShape(input: unknown): string {
  * 下游核验取不到残差，只能当"无法判定" —— 那是最容易被读成"已满足"的一种状态。
  */
 const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"]
+
+const COMMON_ENVELOPE_FIELDS = ["schemaVersion", "kind", "goal", "factIds", "assumptions"]
+const ENVELOPE_BRANCHES = {
+  plan: { required: ["actions"], optional: ["relations", "normalisations", "answer"] },
+  clarification: { required: ["questions"], optional: [] },
+  answer: { required: ["answer", "toolResultRefs"], optional: [] }
+} satisfies Record<PlanEnvelope["kind"], { required: string[]; optional: string[] }>
+
+const ENVELOPE_KINDS = Object.keys(ENVELOPE_BRANCHES) as PlanEnvelope["kind"][]
+const ALL_ENVELOPE_FIELDS = new Set([
+  ...COMMON_ENVELOPE_FIELDS,
+  ...Object.values(ENVELOPE_BRANCHES).flatMap(({ required, optional }) => [...required, ...optional])
+])
+
+export function planEnvelopeToolParameters(actionItems: readonly JsonSchema[]): JsonSchema {
+  const text: JsonSchema = { type: "string", minLength: 1, maxLength: MAX_STRING }
+  const strings: JsonSchema = { type: "array", items: text, maxItems: MAX_ARRAY }
+  return {
+    type: "object",
+    required: ["kind"],
+    additionalProperties: false,
+    properties: {
+      schemaVersion: { type: "string", enum: [PLAN_SCHEMA_VERSION] },
+      kind: { type: "string", enum: ENVELOPE_KINDS },
+      goal: text,
+      factIds: strings,
+      assumptions: strings,
+      actions: actionItems.length === 0
+        ? { type: "array", maxItems: 0 }
+        : { type: "array", minItems: 1, maxItems: MAX_ACTIONS, items: { oneOf: actionItems } },
+      questions: { ...strings, minItems: 1 },
+      answer: { type: "string", maxLength: MAX_PLAN_ANSWER_LENGTH },
+      toolResultRefs: strings,
+      relations: {
+        type: "array",
+        maxItems: MAX_ARRAY,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["kind", "targets"],
+          properties: {
+            id: text,
+            kind: { type: "string", enum: RELATION_KINDS },
+            targets: {
+              type: "array", minItems: 1, maxItems: MAX_ARRAY,
+              items: { type: "object", required: ["vertex"], properties: { vertex: text }, additionalProperties: false }
+            },
+            value: { type: "number" }
+          }
+        }
+      },
+      normalisations: {
+        type: "array", maxItems: MAX_ARRAY,
+        items: {
+          type: "object", additionalProperties: false, required: ["original", "normalized"],
+          properties: { original: { type: "string", minLength: 1 }, normalized: { type: "string", minLength: 1 } }
+        }
+      }
+    },
+    oneOf: ENVELOPE_KINDS.filter(kind => kind !== "plan" || actionItems.length > 0).map(kind => {
+      const { required, optional } = ENVELOPE_BRANCHES[kind]
+      const allowed = new Set([...COMMON_ENVELOPE_FIELDS, ...required, ...optional])
+      return {
+        properties: { kind: { enum: [kind] } },
+        required,
+        not: { anyOf: [...ALL_ENVELOPE_FIELDS].filter(field => !allowed.has(field)).map(field => ({ required: [field] })) }
+      }
+    })
+  }
+}
 
 /**
  * 读关系表。
@@ -258,18 +329,13 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
      * 修法：读不出 `kind` 时按**所有 kind 的字段并集**查一次未知字段，两条错误一起给。
      * 并集是**故意放宽**的一侧：这一支马上要拒绝，多列几个合法字段名不会放走任何东西。
      */
-    const anyKindFields = ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "actions", "questions", "answer", "toolResultRefs"]
     const strayFields: ParseError[] = []
-    rejectUnknownFields(input, anyKindFields, "envelope", strayFields)
+    rejectUnknownFields(input, [...ALL_ENVELOPE_FIELDS], "envelope", strayFields)
     return { ok: false, errors: [fail("unknown_kind", "envelope.kind", `unexpected kind ${quotedName(String(input.kind))}`), ...strayFields] }
   }
 
-  const allowed = kind === "plan"
-    ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "relations", "normalisations", "answer", "actions"]
-    : kind === "clarification"
-      ? ["schemaVersion", "kind", "goal", "factIds", "assumptions", "questions"]
-      : ["schemaVersion", "kind", "goal", "factIds", "assumptions", "answer", "toolResultRefs"]
-  rejectUnknownFields(input, allowed, "envelope", errors)
+  const { required, optional } = ENVELOPE_BRANCHES[kind]
+  rejectUnknownFields(input, [...COMMON_ENVELOPE_FIELDS, ...required, ...optional], "envelope", errors)
 
   /**
    * **样板字段漏了就当默认值**（2026-10-04，用户同意放宽）。
@@ -346,7 +412,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const normalisations = !rawNormalisations || rawNormalisations.length === 0 ? undefined : rawNormalisations
 
   if (kind === "plan") {
-    const answer = input.answer === undefined ? undefined : boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true }) ?? undefined
+    const answer = input.answer === undefined ? undefined : boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true, maxLength: MAX_PLAN_ANSWER_LENGTH }) ?? undefined
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
     if (rawActions && rawActions.length === 0) errors.push(fail("empty_actions", "envelope.actions", "a plan needs at least one action"))
     if (rawActions && rawActions.length > MAX_ACTIONS) errors.push(fail("array_too_long", "envelope.actions", `max ${MAX_ACTIONS} actions`))
@@ -373,7 +439,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
     return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, questions: questions as string[] }, ...(notes.length === 0 ? {} : { notes }) }
   }
 
-  const answer = boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true })
+  const answer = boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true, maxLength: MAX_PLAN_ANSWER_LENGTH })
   const toolResultRefs = readStringArray(input.toolResultRefs, "envelope.toolResultRefs", errors)
   if (errors.length > 0) return { ok: false, errors }
   return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, toolResultRefs: toolResultRefs as string[] }, ...(notes.length === 0 ? {} : { notes }) }

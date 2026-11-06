@@ -18,25 +18,51 @@ export async function prepareProblemImage(file: File): Promise<ProblemImage> {
   const bitmap = await createImageBitmap(file).catch(() => { throw new Error("无法读取这张图片。请换一张截图。") })
   try {
     if (bitmap.width * bitmap.height > 48_000_000) throw new Error("图片分辨率过大。请先截取单道题。")
-    const canvas = document.createElement("canvas")
-    const context = canvas.getContext("2d", { alpha: false })
-    if (!context) throw new Error("当前环境无法处理图片。")
-    let scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height))
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
-      context.fillStyle = "#fff"
-      context.fillRect(0, 0, canvas.width, canvas.height)
-      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-      const encoded = canvas.toDataURL("image/png")
-      const prefix = "data:image/png;base64,"
-      if (encoded.startsWith(prefix) && encoded.length - prefix.length <= MAX_PNG_BASE64) {
-        return { name: file.name || "剪贴板图片", png: encoded.slice(prefix.length) }
-      }
-      scale *= 0.75
-    }
-    throw new Error("处理后的图片仍然过大。请先裁出题干和配图。")
+    return { name: file.name || "剪贴板图片", png: encodeProblemImage(bitmap) }
   } finally {
     bitmap.close()
   }
+}
+
+export function decodeProblemImage(image: ProblemImage): Promise<ImageBitmap> {
+  const bytes = Uint8Array.from(atob(image.png), character => character.charCodeAt(0))
+  return createImageBitmap(new Blob([bytes], { type: "image/png" }))
+}
+
+export async function cropProblemImage(image: ProblemImage, box: readonly [number, number, number, number]): Promise<ProblemImage> {
+  const bitmap = await decodeProblemImage(image)
+  try {
+    const [left, top, right, bottom] = box
+    const padX = Math.max(0.01, (right - left) * 0.12)
+    const padY = Math.max(0.01, (bottom - top) * 0.12)
+    const x = Math.floor(Math.max(0, left - padX) * bitmap.width)
+    const y = Math.floor(Math.max(0, top - padY) * bitmap.height)
+    const width = Math.ceil(Math.min(1, right + padX) * bitmap.width) - x
+    const height = Math.ceil(Math.min(1, bottom + padY) * bitmap.height) - y
+    return { name: image.name, png: encodeProblemImage(bitmap, [x, y, width, height]) }
+  } finally {
+    bitmap.close()
+  }
+}
+
+function encodeProblemImage(bitmap: ImageBitmap, region: readonly [number, number, number, number] = [0, 0, bitmap.width, bitmap.height]): string {
+  const [x, y, width, height] = region
+  const canvas = document.createElement("canvas")
+  const context = canvas.getContext("2d", { alpha: false })
+  if (!context) throw new Error("当前环境无法处理图片。")
+  let scale = Math.min(1, 2400 / Math.max(width, height))
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    canvas.width = Math.max(1, Math.round(width * scale))
+    canvas.height = Math.max(1, Math.round(height * scale))
+    context.fillStyle = "#fff"
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(bitmap, x, y, width, height, 0, 0, canvas.width, canvas.height)
+    const encoded = canvas.toDataURL("image/png")
+    const prefix = "data:image/png;base64,"
+    if (encoded.startsWith(prefix) && encoded.length - prefix.length <= MAX_PNG_BASE64) {
+      return encoded.slice(prefix.length)
+    }
+    scale *= 0.75
+  }
+  throw new Error("处理后的图片仍然过大。请先裁出题干和配图。")
 }

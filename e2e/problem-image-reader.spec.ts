@@ -4,9 +4,9 @@ import { createEmptyDocument, decodeMgeo, encodeMgeo } from "@draw/dsl"
 import { commandButton } from "./command-menu"
 
 const png = readFileSync("apps/desktop/src-tauri/src/providers/vision_probe.b64", "utf8").trim()
-const PRISM = String.raw`15\. 如图，在直三棱柱 $ABC-A_1B_1C_1$ 中，$\angle ACB=90^\circ$，$AC=BC$，$D$，$E$ 分别为 $AB$，$AC_1$ 的中点。
-(1) 证明：$DE\parallel$ 平面 $BCC_1B_1$；
-(2) 设 $CC_1=2$，直线 $DE$ 与平面 $ACC_1A_1$ 所成的角为 $45^\circ$，求直线 $DE$ 到平面 $BCC_1B_1$ 的距离。`
+const PRISM = String.raw`15. 如图，在直三棱柱 $ABC-A_1B_1C_1$ 中，$\angle ACB=90^\circ$，$AC=BC$，$D$，$E$ 分别为 $AB$，$AC_1$ 的中点。
+（1）证明：$DE\parallel$ 平面 $BCC_1B_1$；
+（2）设 $CC_1=2$，直线 $DE$ 与平面 $ACC_1A_1$ 所成的角为 $45^\circ$，求直线 $DE$ 到平面 $BCC_1B_1$ 的距离。`
 
 test("reads two images and sends the corrected problem with optional diagram references", async ({ page }) => {
   await page.addInitScript((problem) => {
@@ -36,10 +36,17 @@ test("reads two images and sends the corrected problem with optional diagram ref
             requestCount += 1
             const messages = args?.messages as { role: string; images?: string[] }[]
             document.body.dataset.imageRequests = String(requestCount)
+            const regional = requestCount === 3
             if (args?.profileId !== "vision" || args.profileRevision !== 2 || args.tools !== undefined
-              || messages[1].role !== "user" || messages[1].images?.length !== 2
+              || messages[1].role !== "user" || messages[1].images?.length !== (regional ? 1 : 2)
               || !messages[1].images.every((image) => image.startsWith("iVBORw0KGgo"))) throw new Error("invalid visual request")
             if (requestCount === 1) return { kind: "failed", failure: "transport", message: "test connection interrupted", retryable: true }
+            if (regional) {
+              const header = atob(messages[1].images[0]).slice(16, 24)
+              const dimension = (offset: number) => Array.from(header.slice(offset, offset + 4)).reduce((size, character) => size * 256 + character.charCodeAt(0), 0)
+              if (dimension(0) >= 280 || dimension(4) >= 120) throw new Error("regional reread uploaded the full image")
+              return [{ kind: "delta", text: JSON.stringify({ problem: "CC₁=2", diagram: [], uncertainties: [] }) }, { kind: "completed", stopReason: "stop" }]
+            }
             const reading = {
               problem: problem.replace("CC_1=2", "CC_1=[看不清]"),
               diagram: [
@@ -84,20 +91,26 @@ test("reads two images and sends the corrected problem with optional diagram ref
   await expect(send).toBeDisabled()
   await panel.getByRole("button", { name: /侧棱的长度数字模糊/ }).click()
   await expect(panel.locator("[data-image-highlight]")).toBeVisible()
+  await panel.getByRole("button", { name: "重读疑点 1" }).click()
+  await expect(panel.getByText("选区读数 · CC₁=2")).toBeVisible()
+  await expect(transcription).toHaveValue(/CC_1=\[看不清\]/)
   await expect(panel.getByRole("button", { name: "定位配图读数 1" })).toBeHidden()
   await panel.getByText("配图参考 · 2 条").click()
   await panel.getByRole("button", { name: "定位配图读数 1" }).click()
   await expect(panel.getByRole("img", { name: "图 2 预览" })).toBeVisible()
-  await expect(panel.getByRole("checkbox")).toHaveCount(0)
   await transcription.fill(PRISM)
+  await expect(send).toBeDisabled()
+  await panel.getByRole("checkbox", { name: "已核对疑点 1" }).check()
   await send.click()
   await expect(panel).toHaveCount(0)
   const message = page.locator('.agent-message[data-message-role="user"]').last()
   await expect(message).toContainText("配图参考")
+  await message.getByText("配图参考", { exact: true }).click()
+  await expect(message).toContainText("用户已核对疑点 图 1")
   await expect(message).not.toContainText("配图已核对")
   await expect(page.locator('.agent-message[data-message-role="assistant"] .agent-bubble')).toContainText("距离为 t/2=1。")
   await expect(page.getByRole("region", { name: "确认改动" })).toBeVisible()
-  await expect(page.locator("body")).toHaveAttribute("data-image-requests", "2")
+  await expect(page.locator("body")).toHaveAttribute("data-image-requests", "3")
 })
 
 test("replays the original image handoff and commits one verified prism draft", async ({ page }) => {

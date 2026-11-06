@@ -1,6 +1,7 @@
 import { createEmptyDocument } from "@draw/dsl"
 import type { Vector3 } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
+import { normalizeGeometryPrompt } from "./latexNormalisation"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { parseDiagramObligations } from "./diagramObligations"
@@ -735,6 +736,49 @@ describe("Task 15: function-family premises", () => {
   }
 
   const checkOf = (report: ReturnType<typeof verifyDiagramObligations>, kind: string) => report.checks.find((check) => check.kind === kind)
+
+  it.each([
+    ["2*sin(2*x-pi/4)", "passed"],
+    ["2*sin(2*x-pi/4)-sqrt(2)", "failed"]
+  ])("checks the LaTeX trigonometric function against %s", (expression, status) => {
+    const { plan, candidate } = graphFixture(expression)
+    const prompt = String.raw`已知函数 $f(x)=4\sin x\cos(x-\frac{\pi}{4})-\sqrt{2}$。`
+    const givens = parseDiagramObligations(normalizeGeometryPrompt(prompt))
+    expect(checkOf(verifyDiagramObligations(givens, plan, candidate), "functionGraph")?.status).toBe(status)
+  })
+
+  it.each([
+    [String.raw`\sin^{2}x`, "sin(x)^2", "sin(2*x)"],
+    [String.raw`\sin 2x`, "sin(2*x)", "sin(x)^2"],
+    [String.raw`\frac{1}{2x}`, "1/(2*x)", "x/2"],
+    [String.raw`\frac{x}{2x}`, "x/(2*x)", "x*x/2"],
+    [String.raw`\frac{1}{2(x+1)}`, "1/(2*(x+1))", "(x+1)/2"],
+    [String.raw`\frac{1}{2\pi}`, "1/(2*pi)", "pi/2"],
+    [String.raw`\frac{1}{2}^2x`, "x/4", "x/2"],
+    [String.raw`\sqrt{1+\sqrt{2}}`, "sqrt(1+sqrt(2))", "sqrt(3)"]
+  ])("keeps the structure of %s when verifying the drawn function", (latex, correct, incorrect) => {
+    const givens = parseDiagramObligations(normalizeGeometryPrompt(`已知函数 $f(x)=${latex}$。`))
+    for (const [expression, expected] of [[correct, "passed"], [incorrect, "failed"]]) {
+      const { plan, candidate } = graphFixture(expression, [1, 3])
+      expect(checkOf(verifyDiagramObligations(givens, plan, candidate), "functionGraph")?.status).toBe(expected)
+    }
+  })
+
+  it("uses the named main curve and refuses duplicate labels", () => {
+    const { plan, candidate } = graphFixture("x^2")
+    const first = candidate.primitives[0]
+    first.label = "f(x)"
+    const auxiliary = { id: "aux", type: "function" as const, label: "辅助线", expression: "x", domain: [-2, 2] as [number, number] }
+    candidate.primitives.push(auxiliary)
+    const givens = parseDiagramObligations("画出 f(x)=x² 的图像。")
+    expect(verifyDiagramObligations(givens, plan, candidate).status).toBe("passed")
+    if (first.type !== "function") throw new Error("Expected function")
+    first.expression = "x"
+    auxiliary.expression = "x^2"
+    expect(verifyDiagramObligations(givens, plan, candidate).status).toBe("failed")
+    auxiliary.label = "f(x)"
+    expect(verifyDiagramObligations(givens, plan, candidate).checks[0]).toMatchObject({ status: "unverified", code: "function_binding_ambiguous" })
+  })
 
   it("**断点两侧都画对了 ⇒ passed**：题面在 x = 0 断开，图上也在 x = 0 断开", () => {
     const { plan, candidate } = graphFixture("1/x")
