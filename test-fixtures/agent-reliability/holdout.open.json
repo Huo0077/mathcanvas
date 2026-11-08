@@ -1,0 +1,125 @@
+[
+  {
+    "caseId": "open-fold-01",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "BD²=t²+2h²+2h²cosθ, a=6,b=8,θ=90°" },
+    "problemText": "矩形 ABCD 中，AB=6，BC=8，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 7.343023900274328 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-fold-02",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "a=3,b=4,θ=60°" },
+    "problemText": "矩形 ABCD 中，AB=3，BC=4，沿对角线 AC 把 △ABC 折起 60°。求折后 BD 的长度。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 4.386342439892261 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-fold-03",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "square side 5, θ=90°" },
+    "problemText": "正方形 ABCD 的边长为 5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 5 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-fold-04",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "a=7,b=1,θ=90°, pre and post" },
+    "problemText": "矩形 ABCD 中，AB=7，BC=1，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。分别求折前和折后 BD 的长。",
+    "goals": [
+      { "id": "g1", "kind": "numeric", "reference": { "value": 7.0710678118654755 } },
+      { "id": "g2", "kind": "numeric", "reference": { "value": 6.931089380465383 } }
+    ],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-fold-05",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "arccos((16−t²−2h²)/(2h²)), a=4,b=2" },
+    "problemText": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=4。求折角。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 67.97568716295783, "unit": "°" } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-fold-06",
+    "family": "rectangle-fold",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "sqrt(a²+b²), a=6,b=8" },
+    "problemText": "矩形 ABCD 中，AB=6，BC=8，沿对角线 AC 把 △ABC 折起。求折前 BD 的长。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 10 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-conic-01",
+    "family": "conic-eccentricity",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "PF₁²=6·OP² ⇒ e=√3" },
+    "problemText": "双曲线左右焦点为 F₁、F₂，P 为 F₂ 到渐近线的垂足，PF₁=√6·OP，求离心率。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 1.7320508075688772 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-conic-02",
+    "family": "conic-eccentricity",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "a²≤2b² ⇒ 0<e≤√2/2" },
+    "problemText": "椭圆上点 P 对定点 B 满足 PB≤2b 恒成立，求离心率 e 的取值范围。",
+    "goals": [{ "id": "g1", "kind": "interval", "reference": { "value": "0<e≤√2/2", "expression": "(0,\\sqrt{2}/2]" } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-ortho-01",
+    "family": "orthographic-cuboid",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "5×4×2 cuboid" },
+    "problemText": "长方体的三视图分别为 5×2、5×4、4×2，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 40 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-ortho-02",
+    "family": "orthographic-cuboid",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "6×8×10 cuboid" },
+    "problemText": "长方体的三视图分别为 6×10、6×8、8×10，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 480 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-ortho-03",
+    "family": "orthographic-cuboid",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "5×4×2 minus 1×2×2 notch" },
+    "problemText": "L 形柱体：主视图 5×2，俯视图 5×4 且一角切去 1×2，左视图 4×2，切槽贯穿高度，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 36 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "open-ortho-04",
+    "family": "orthographic-cuboid",
+    "split": "open-holdout",
+    "blind": false,
+    "source": { "kind": "synthetic-closed-form", "reference": "6×6×4 minus 2×1×4 notch" },
+    "problemText": "L 形柱体：主视图 6×4，俯视图 6×6 且一角切去 2×1，左视图 6×4，切槽贯穿高度，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 136 } }],
+    "reviewers": ["single-operator (not independent)"]
+  }
+]

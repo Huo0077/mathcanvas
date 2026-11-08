@@ -37,6 +37,16 @@ export default tseslint.config(
     languageOptions: { globals: { process: "readonly", console: "readonly" } }
   },
   {
+    /**
+     * `.cjs` 是**评测脚本**（Node CommonJS）。仓库里它们本来就用 `require`，
+     * 但 flat config 默认把 `require/module` 当未定义 —— 那是配置缺项，不是代码问题。
+     * 这里只补 Node 全局与 require 规则，**不放宽任何业务代码的检查**。
+     */
+    files: ["**/*.cjs"],
+    languageOptions: { globals: { require: "readonly", module: "readonly", process: "readonly", console: "readonly", __dirname: "readonly", __filename: "readonly" } },
+    rules: { "@typescript-eslint/no-require-imports": "off" }
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks, "react-refresh": reactRefresh },
     rules: {

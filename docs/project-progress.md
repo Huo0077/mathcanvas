@@ -76,6 +76,14 @@
 - 测试：11 项（长方体/选项匹配/共享轴冲突/矛盾尺寸/缺高/单位冲突/L 形体积/切槽未定/越界/域外/非正尺寸），实现前模块不存在而红，实现后全绿；`typecheck` exit 0，改动文件 lint 0 error。
 - 边界：**不解析**三视图的自然语言/图像，只吃结构化视图事实；mm-009/mm-075 这类圆柱/遮挡歧义题明确 `unsupported`，不宣称已解。
 
+### W8 / T8 题族能力与双轨评测（离线部分）
+
+- 能力清单：新增 `packages/agent-core/src/capabilityManifest.ts`，为四个已落地族声明输入、求解域、答案类型、核验方式与回退理由；清单**不出现** `formally_proved`；未知族 `fallbackFor` 返回 `unsupported`。5 项测试通过。
+- 评分器：`scripts/real-exam-eval/score.cjs` 增加 `scoreStructured` / `honestyOf`（不 eval 的标量解析、多选集合、区间开闭、单位、缺问、澄清、provider 失败、错误却标已核验）。`node --test` **20 项**通过（原有 9 项保持）。
+- 数据集：新增 `dataset.schema.json`、`development.json`（8 题）、`holdout.open.json`（12 题）；`holdout.manifest.json` 只存 id 与 sha256，并明确 `blind:false` —— 内容在仓库里，就不是盲测。校验器拒绝缺字段、重复 id、以及"开放集冒充盲测"。
+- 报告器：`scripts/agent-reliability-eval/report.cjs` 的全量分母包含失败/澄清/未评分；条件正确率只分母"有可评分完整终答"的题；单次运行给 Wilson 区间；`compareRuns` 只报点估计并提示样本独立性。8 项 node 测试通过。
+- 边界：**没有跑真模型或线上入口**，所以没有准确率数字；A/B 双轨适配器与生产入口评测留给有预算批准时执行。预注册门槛仍按方案 §11.3，未事后调整。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

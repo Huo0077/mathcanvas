@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-11-08",
+  "blind": false,
+  "note": "OPEN holdout: content is in holdout.open.json, so it is not blind. Hashes let a later blind copy be compared by identity.",
+  "cases": [
+    {
+      "caseId": "open-fold-01",
+      "split": "open-holdout",
+      "contentHash": "8eb0a796fa508930a44952c040bb565c56521d395d822af289c926cc188ac49c"
+    },
+    {
+      "caseId": "open-fold-02",
+      "split": "open-holdout",
+      "contentHash": "594ab3c12bff2960d35e330db53ad1ef8840cebcc04dd8dedc83e237ee9efa65"
+    },
+    {
+      "caseId": "open-fold-03",
+      "split": "open-holdout",
+      "contentHash": "ec85002844830b6d707eac03c295e960f10dbd37b10a73872a4ab1ee34061912"
+    },
+    {
+      "caseId": "open-fold-04",
+      "split": "open-holdout",
+      "contentHash": "199a43b48026a7f7881c74c406486b311f8165ff0463bb63028151720ebff234"
+    },
+    {
+      "caseId": "open-fold-05",
+      "split": "open-holdout",
+      "contentHash": "898358c4a724dda564d1bfd34e509ecb660a2d4580640b2cae12fe68236d873c"
+    },
+    {
+      "caseId": "open-fold-06",
+      "split": "open-holdout",
+      "contentHash": "a05efb4dc71239d864ab0184247b1a38b1b061d14f8476bcf70a5adb28dad583"
+    },
+    {
+      "caseId": "open-conic-01",
+      "split": "open-holdout",
+      "contentHash": "5cb2447fc1785db16ef2bb67bdb6fef89f51b44aac6ea92bc178081e2681546d"
+    },
+    {
+      "caseId": "open-conic-02",
+      "split": "open-holdout",
+      "contentHash": "61340f16eb7983a9be6a7aeb91f196015773539471f03ac41db52c3182e58070"
+    },
+    {
+      "caseId": "open-ortho-01",
+      "split": "open-holdout",
+      "contentHash": "6be850d0a9c9d2bf1f8539c012c2310a78f67e1f166f48deb1ee5302f3e6ed77"
+    },
+    {
+      "caseId": "open-ortho-02",
+      "split": "open-holdout",
+      "contentHash": "2ce6ec81eae1bacb0b84b9e23f00bd802e64d30be16d23640336b121ac732469"
+    },
+    {
+      "caseId": "open-ortho-03",
+      "split": "open-holdout",
+      "contentHash": "3e8c487e363aba154df6645ca910ff1b96c759fd554eddb532c700cea2f5803a"
+    },
+    {
+      "caseId": "open-ortho-04",
+      "split": "open-holdout",
+      "contentHash": "3aee99e47bee2e5a34c845f67a25de02302dbcd3d59239a8b63b0ee73d821b80"
+    }
+  ]
+}

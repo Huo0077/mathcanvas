@@ -127,6 +127,24 @@
       "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/orthographicProblem.test.ts --maxWorkers=1",
       "exitCode": 0,
       "result": "11 tests passed"
+    },
+    {
+      "id": "w8-capability-manifest",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/capabilityManifest.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "5 tests passed"
+    },
+    {
+      "id": "w8-scorer",
+      "command": "node --test scripts/real-exam-eval/score.test.cjs",
+      "exitCode": 0,
+      "result": "20 tests passed"
+    },
+    {
+      "id": "w8-dataset-report",
+      "command": "node --test scripts/agent-reliability-eval/dataset.test.cjs",
+      "exitCode": 0,
+      "result": "8 tests passed (dataset validation + offline report)"
     }
   ],
   "knownLimits": [

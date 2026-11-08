@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mathcanvas.local/schemas/agent-reliability-dataset.json",
+  "title": "Agent reliability evaluation case list",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["caseId", "family", "split", "source", "problemText", "goals"],
+    "properties": {
+      "caseId": { "type": "string", "minLength": 3, "pattern": "^[A-Za-z0-9._-]+$" },
+      "family": {
+        "type": "string",
+        "enum": ["rectangle-fold", "conic-eccentricity", "orthographic-cuboid", "trig-monotonicity"]
+      },
+      "split": { "type": "string", "enum": ["dev", "open-holdout"] },
+      "source": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "reference"],
+        "properties": {
+          "kind": { "type": "string", "enum": ["audit-fixture", "synthetic-closed-form", "public-exam"] },
+          "reference": { "type": "string", "minLength": 3 }
+        }
+      },
+      "problemText": { "type": "string", "minLength": 3 },
+      "goals": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "reference"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "kind": { "type": "string", "enum": ["single_choice", "multiple_choice", "numeric", "interval", "proof"] },
+            "reference": {
+              "type": "object",
+              "required": ["value"],
+              "properties": {
+                "value": { "type": ["number", "string"] },
+                "unit": { "type": "string" },
+                "expression": { "type": "string" },
+                "tolerance": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          }
+        }
+      },
+      "reviewers": { "type": "array", "items": { "type": "string" } },
+      "blind": { "type": "boolean" }
+    }
+  }
+}

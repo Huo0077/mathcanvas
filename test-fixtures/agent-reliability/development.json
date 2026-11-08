@@ -1,0 +1,80 @@
+[
+  {
+    "caseId": "dev-fold-01",
+    "family": "rectangle-fold",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "test-fixtures/agent-answer-validation-20261102.json#E01" },
+    "problemText": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "goals": [
+      { "id": "g1", "kind": "proof", "reference": { "value": "BD⊥AC 不成立（投影间距非零）" } },
+      { "id": "g2", "kind": "numeric", "reference": { "value": 3.687817782917155 } }
+    ],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-fold-merged",
+    "family": "rectangle-fold",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "test-fixtures/agent-answer-validation-20261102.json#E10" },
+    "problemText": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。分别求折前和折后 BD 的长。",
+    "goals": [
+      { "id": "g1", "kind": "numeric", "reference": { "value": 4.47213595499958 } },
+      { "id": "g2", "kind": "numeric", "reference": { "value": 3.687817782917155 } }
+    ],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-fold-preonly",
+    "family": "rectangle-fold",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "test-fixtures/agent-answer-validation-20261102.json#E15" },
+    "problemText": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起。求折前 BD 的长。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 4.47213595499958 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-fold-angle",
+    "family": "rectangle-fold",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "test-fixtures/agent-answer-validation-20261102.json#E23" },
+    "problemText": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=3。求折角。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 135.95137432591568, "unit": "°" } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-conic-eccentricity",
+    "family": "conic-eccentricity",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "docs/audit/2026-11-08-agent-failure-root-cause-analysis.md#text-128" },
+    "problemText": "双曲线左右焦点为 F₁、F₂，P 为 F₂ 到渐近线的垂足，PF₁=√6·OP，求离心率。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 1.7320508075688772 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-conic-range",
+    "family": "conic-eccentricity",
+    "split": "dev",
+    "source": { "kind": "audit-fixture", "reference": "docs/audit/2026-11-08-agent-failure-root-cause-analysis.md#text-198" },
+    "problemText": "椭圆上点 P 对定点 B 满足 PB≤2b 恒成立，求离心率 e 的取值范围。",
+    "goals": [{ "id": "g1", "kind": "interval", "reference": { "value": "0<e≤√2/2", "expression": "(0,\\sqrt{2}/2]" } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-ortho-cuboid",
+    "family": "orthographic-cuboid",
+    "split": "dev",
+    "source": { "kind": "synthetic-closed-form", "reference": "orthographicProblem.test.ts#cuboid-4x2x3" },
+    "problemText": "某长方体的主视图为 4×3、俯视图为 4×2、左视图为 2×3，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 24 } }],
+    "reviewers": ["single-operator (not independent)"]
+  },
+  {
+    "caseId": "dev-ortho-notched",
+    "family": "orthographic-cuboid",
+    "split": "dev",
+    "source": { "kind": "synthetic-closed-form", "reference": "orthographicProblem.test.ts#L-prism-notch" },
+    "problemText": "某 L 形柱体的主视图为 4×3、俯视图为 4×3 且一角切去 1×1、左视图为 3×3，切槽贯穿高度，求体积。",
+    "goals": [{ "id": "g1", "kind": "numeric", "reference": { "value": 33 } }],
+    "reviewers": ["single-operator (not independent)"]
+  }
+]
