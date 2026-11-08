@@ -115,6 +115,12 @@
       "command": "temporary mutation: hyperbola criterion forced true, then reverted",
       "exitCode": 1,
       "result": "the e=√5 refutation test turned red as expected; mutation reverted and suite green"
+    },
+    {
+      "id": "w6-image-evidence",
+      "command": "node node_modules/vitest/vitest.mjs run apps/web/src/services/problemImageEvidence.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "10 tests passed"
     }
   ],
   "knownLimits": [

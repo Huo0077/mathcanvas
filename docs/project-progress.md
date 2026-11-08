@@ -57,6 +57,17 @@
 - 红绿：先写 15 项行为测试；实现后绿。另做一次变异（把双曲线判据改成恒真）确认红测能抓住（1 项红），随后还原。最终 **16 项**通过，`typecheck` exit 0，改动文件 lint 0 error。
 - 边界：只覆盖声明的四类判据；没有通用 CAS；未接真实模型修正循环（"最多一次证据驱动修正"需要真模型调用，未授权）。
 
+### W6 / T6 图像证据与受控重读
+
+- 新增 `apps/web/src/services/problemImageEvidence.ts`（纯函数）：
+  - 引用：`(attachmentId, sha256, page, 归一化 region, sourceKind)`；校验哈希 64 位十六进制、区域在 `[0,1]` 且宽高为正、附件属于本次授权会话且哈希一致；区域坐标统一保留 4 位小数（避免浮点噪声让"同一区域"变成两个键）。
+  - 缺口：题面把尺寸写成符号/缺值（`高为 h`）→ `missing_dimension`；题面依赖向量但没有有效箭头 → `vector_direction_missing`；两者都标 `required`。用户改过题干另记 `transcript_edited`（不触发重读）。
+  - 重读：`planImageReread(audit, used, limit=2)` 只取 required 缺口、按区域去重、最多 2 次；`used>=limit` 返回 `budget_exhausted`。
+  - 冲突：同一区域两次读数不同 → 用户更正优先，保留被覆盖条目与 `user_correction_wins` / `visual_conflict` 原因；绝不做"取平均"。
+  - 诊断：`diagnosticLine` 只输出句柄、哈希前 8 位、区域与 40 字摘要，`data:` 图片负载先被抹掉再截断，整行 ≤320 字。
+- 测试：10 项（尺寸缺失/数值不误报、向量方向、引用校验、重读上限与去重、次序变化不重复、用户更正与视觉冲突、base64 不进入诊断），实现前因模块不存在而红、修正后全绿；`typecheck` exit 0。
+- **边界（明确未做）**：没有把该层接进 `ProblemImageComposer`/`agentRunner` 的自动重读循环 —— 自动重读会新增模型调用，需用户批准预算；当前仍是用户手动"重读选区"。因此 mm-005/mm-009 式"模型未声明的漏尺寸"尚未在运行期自动拦截，只有策略与证据层就绪。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。
