@@ -1,0 +1,658 @@
+{
+  "generatedAt": "2026-11-08T15:11:35.720Z",
+  "revision": "9a4fdf1ad74272270f83bd7bfa765c520c9c7e7d",
+  "mode": "offline-characterisation-not-live-accuracy",
+  "observations": {
+    "historicalSchemaReplay": {
+      "rows": [
+        {
+          "caseId": "mm-035",
+          "requestIndex": 2,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 2814,
+          "fields": [
+            "answer",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "mm-035",
+          "requestIndex": 3,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 651,
+          "fields": [
+            "answer",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "mm-051",
+          "requestIndex": 3,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "plan",
+          "answerLength": null,
+          "fields": [
+            "actions",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "normalisations",
+            "relations",
+            "schemaVersion"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "mm-051",
+          "requestIndex": 4,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "plan",
+          "answerLength": null,
+          "fields": [
+            "actions",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "normalisations",
+            "relations",
+            "schemaVersion"
+          ],
+          "accepted": false,
+          "errors": [
+            {
+              "code": "invalid_type",
+              "path": "envelope.actions[0].inputs.faces[0][0]"
+            }
+          ]
+        },
+        {
+          "caseId": "mm-051",
+          "requestIndex": 5,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 1088,
+          "fields": [
+            "answer",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "mm-063",
+          "requestIndex": 2,
+          "batchToolIds": [
+            "scene_inspect",
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 250,
+          "fields": [
+            "answer",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "text-139",
+          "requestIndex": 1,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 2087,
+          "fields": [
+            "answer",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "text-139",
+          "requestIndex": 2,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 202,
+          "fields": [
+            "answer",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "normalisations",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": false,
+          "errors": [
+            {
+              "code": "unknown_field",
+              "path": "envelope.normalisations"
+            }
+          ]
+        },
+        {
+          "caseId": "text-190",
+          "requestIndex": 1,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "plan",
+          "answerLength": null,
+          "fields": [
+            "actions",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "text-190",
+          "requestIndex": 2,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "plan",
+          "answerLength": null,
+          "fields": [
+            "actions",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "normalisations",
+            "relations",
+            "schemaVersion"
+          ],
+          "accepted": true
+        },
+        {
+          "caseId": "text-190",
+          "requestIndex": 3,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "plan",
+          "answerLength": null,
+          "fields": [
+            "actions",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "schemaVersion"
+          ],
+          "accepted": false,
+          "errors": [
+            {
+              "code": "empty_actions",
+              "path": "envelope.actions"
+            }
+          ]
+        },
+        {
+          "caseId": "text-190",
+          "requestIndex": 4,
+          "batchToolIds": [
+            "plan_set_plan"
+          ],
+          "kind": "answer",
+          "answerLength": 570,
+          "fields": [
+            "answer",
+            "assumptions",
+            "factIds",
+            "goal",
+            "kind",
+            "normalisations",
+            "schemaVersion",
+            "toolResultRefs"
+          ],
+          "accepted": false,
+          "errors": [
+            {
+              "code": "unknown_field",
+              "path": "envelope.normalisations"
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "scope": "Parser only: acceptance does not establish transport success, valid reasoning, or a correct answer."
+    },
+    "emptyAnswerSchema": {
+      "accepted": true
+    },
+    "wrong-choice": {
+      "phases": [
+        "preflight",
+        "observing",
+        "planning",
+        "answering",
+        "completed"
+      ],
+      "finalAnswer": "最终答案：A（√5）",
+      "writes": 0,
+      "planner": "scripted fault injection, not a live model"
+    },
+    "clarification-as-answer": {
+      "phases": [
+        "preflight",
+        "observing",
+        "planning",
+        "answering",
+        "completed"
+      ],
+      "finalAnswer": "请提供清晰图片以确认尺寸。",
+      "writes": 0,
+      "planner": "scripted fault injection, not a live model"
+    },
+    "empty-answer": {
+      "phases": [
+        "preflight",
+        "observing",
+        "planning",
+        "answering",
+        "completed"
+      ],
+      "finalAnswer": "",
+      "writes": 0,
+      "planner": "scripted fault injection, not a live model"
+    },
+    "fractionGrouping": {
+      "input": "函数 $f(x)=\\frac{1}{2x}$，求导数。",
+      "normalized": "函数f(x)=(1/(2x))，求导数。",
+      "scope": "Normalisation only, not a proof of all expression semantics."
+    },
+    "deterministicRouting": {
+      "rows": [
+        {
+          "prompt": "已知函数f(x)=2sin(x)cos(x-π/3)+1，求f(x)的单调递增区间。",
+          "family": "functions"
+        },
+        {
+          "prompt": "已知函数f(x)=2sin(x)cos(x-π/3)+1，求f(x)的单调递减区间。",
+          "family": null
+        },
+        {
+          "prompt": "已知函数f(x)=2sin(x)cos(x-π/3)+1，求出这个函数在哪些区间上单调递增。",
+          "family": null
+        }
+      ],
+      "scope": "A route miss means fallback, not necessarily an incorrect final answer."
+    },
+    "rectangleFold24": {
+      "total": 24,
+      "corePass": 18,
+      "rows": [
+        {
+          "id": "E01",
+          "name": "原题两问",
+          "expectedKind": "refute",
+          "corePass": true,
+          "status": "answer",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BD⊥AC」不成立：(B′−D)·(C−A)≈12（不垂直）。\n（2）折后 BD=2√85/5≈3.687817783。\n原因：沿 AC 折叠不改变顶点在折痕上的投影。另两个顶点的投影间距为 |4²−2²|/√(4²+2²)>0，因此其连线不垂直于折痕。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E02",
+          "name": "单独求长",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 BD=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E03",
+          "name": "换点名和尺寸",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            5.531726674375733
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 QS=3√85/5≈5.531726674。\n长度推导：设 a=6，b=3。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 QS²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E04",
+          "name": "交换长短边",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            3.671511950137164
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 BD=√337/5≈3.67151195。\n长度推导：设 a=3，b=4。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E05",
+          "name": "相邻边相等",
+          "expectedKind": "true",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            4
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BD⊥AC」在所构造的折叠状态中成立（坐标核验）：(B′−D)·(C−A)≈-5.329070518e-15（垂直）。\n（2）折后 BD=4≈4。\n长度推导：设 a=4，b=4。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E06",
+          "name": "正方形常见说法",
+          "expectedKind": "true",
+          "corePass": false,
+          "status": "none",
+          "lengths": [],
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E07",
+          "name": "明确60度折角",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            4.098780306383839
+          ],
+          "angleDegrees": 60,
+          "hasAnswerText": true,
+          "answer": "（1）折后 B′D≈4.098780306。"
+        },
+        {
+          "id": "E08",
+          "name": "换另一条折痕",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 AC=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 AC²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E09",
+          "name": "分开问折前折后",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            4.47213595499958,
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折前 BD=2√5≈4.472135955。\n（2）折后 BD=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E10",
+          "name": "合并问折前折后",
+          "expectedKind": "numeric",
+          "corePass": false,
+          "status": "plan",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 BD=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E11",
+          "name": "中文垂直表述",
+          "expectedKind": "refute",
+          "corePass": true,
+          "status": "answer",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BD 垂直于 AC」不成立：(B′−D)·(C−A)≈12（不垂直）。\n（2）折后 BD=2√85/5≈3.687817783。\n原因：沿 AC 折叠不改变顶点在折痕上的投影。另两个顶点的投影间距为 |4²−2²|/√(4²+2²)>0，因此其连线不垂直于折痕。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E12",
+          "name": "逗号分隔两问",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            4.47213595499958,
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折前 BD=2√5≈4.472135955。\n（2）折后 BD=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E13",
+          "name": "口语问长度",
+          "expectedKind": "numeric",
+          "corePass": false,
+          "status": "plan",
+          "lengths": [],
+          "angleDegrees": 90,
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E14",
+          "name": "缺少折角",
+          "expectedKind": "clarify",
+          "corePass": true,
+          "status": "clarification",
+          "lengths": [],
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E15",
+          "name": "只问折前无需折角",
+          "expectedKind": "numeric",
+          "corePass": false,
+          "status": "clarification",
+          "lengths": [],
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E16",
+          "name": "重复边长矛盾",
+          "expectedKind": "inconsistent",
+          "corePass": true,
+          "status": "unsupported",
+          "code": "inconsistent_conditions",
+          "lengths": [],
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E17",
+          "name": "对边长度矛盾",
+          "expectedKind": "inconsistent",
+          "corePass": true,
+          "status": "unsupported",
+          "code": "inconsistent_conditions",
+          "lengths": [],
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E18",
+          "name": "对角线条件矛盾",
+          "expectedKind": "inconsistent",
+          "corePass": false,
+          "status": "answer",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BD⊥AC」不成立：(B′−D)·(C−A)≈12（不垂直）。\n（2）折后 BD=2√85/5≈3.687817783。\n原因：沿 AC 折叠不改变顶点在折痕上的投影。另两个顶点的投影间距为 |4²−2²|/√(4²+2²)>0，因此其连线不垂直于折痕。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E19",
+          "name": "定义辅助垂足",
+          "expectedKind": "true",
+          "corePass": false,
+          "status": "answer",
+          "lengths": [],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BE⊥AC」尚未核验：缺少点名：E，尚未核验。"
+        },
+        {
+          "id": "E20",
+          "name": "边比确定矩形",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 BD=2√85/5≈3.687817783。\n长度推导：设 a=4，b=2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E21",
+          "name": "小数尺度",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            0.3687817782917154
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 B′D≈0.3687817783。\n长度推导：设 a=0.4，b=0.2。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E22",
+          "name": "大尺度正方形",
+          "expectedKind": "true",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            1000000.0000000001
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）「BD⊥AC」在所构造的折叠状态中成立（坐标核验）：(B′−D)·(C−A)≈0.00006103515625（垂直）。\n（2）折后 B′D≈1000000。\n长度推导：设 a=1000000，b=1000000。两顶点在折痕上的投影间距 t=|a²−b²|/√(a²+b²)，各自到折痕的距离 h=ab/√(a²+b²)。折后两平面垂直，由勾股定理 BD²=t²+2h²=(a⁴+b⁴)/(a²+b²)。"
+        },
+        {
+          "id": "E23",
+          "name": "由长度反求折角",
+          "expectedKind": "angle",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [],
+          "angleDegrees": 135.95137432591565,
+          "hasAnswerText": false,
+          "answer": ""
+        },
+        {
+          "id": "E24",
+          "name": "连续两折保留距离",
+          "expectedKind": "numeric",
+          "corePass": true,
+          "status": "plan",
+          "lengths": [
+            3.6878177829171546
+          ],
+          "angleDegrees": 90,
+          "hasAnswerText": true,
+          "answer": "（1）折后 B′D≈3.687817783。"
+        }
+      ],
+      "scope": "Reuses the historical independent numeric fixture oracle; not a full proof or browser delivery check. Angle corePass can be true even with no answer text."
+    },
+    "text128Counterexample": {
+      "wrong": {
+        "a": 1,
+        "c": 2.23606797749979,
+        "pf1Squared": 8,
+        "required": 5.999999999999999,
+        "residual": 2.000000000000001
+      },
+      "correct": {
+        "a": 1,
+        "c": 1.7320508075688772,
+        "pf1Squared": 6,
+        "required": 6,
+        "residual": 0
+      },
+      "method": "Independent coordinate arithmetic, not the agent expression converter."
+    },
+    "text198Counterexample": {
+      "a": 2,
+      "b": 1,
+      "p": [
+        1.8856180831641267,
+        -0.3333333333333333
+      ],
+      "pbSquared": 5.333333333333333,
+      "allowed": 4,
+      "method": "One admissible point refutes the universal claim; it is not a proof of the correct interval."
+    }
+  }
+}
