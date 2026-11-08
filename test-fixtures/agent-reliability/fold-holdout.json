@@ -1,0 +1,98 @@
+[
+  {
+    "id": "H01",
+    "note": "缩放变式：6-8 矩形，折后 BD，90°",
+    "prompt": "矩形 ABCD 中，AB=6，BC=8，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [7.3430239]
+  },
+  {
+    "id": "H02",
+    "note": "只问折前，不给折角",
+    "prompt": "矩形 ABCD 中，AB=6，BC=8，沿对角线 AC 把 △ABC 折起。求折前 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "answer",
+    "values": [10]
+  },
+  {
+    "id": "H03",
+    "note": "非直角折角 60°",
+    "prompt": "矩形 ABCD 中，AB=3，BC=4，沿对角线 AC 把 △ABC 折起 60°。求折后 BD 的长度。",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [4.38634244]
+  },
+  {
+    "id": "H04",
+    "note": "钝折角 120°",
+    "prompt": "矩形 ABCD 中，AB=3，BC=4，沿对角线 AC 把 △ABC 折起 120°。求折后 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [2.778488798]
+  },
+  {
+    "id": "H05",
+    "note": "正方形换尺寸 5",
+    "prompt": "正方形 ABCD 的边长为 5，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [5]
+  },
+  {
+    "id": "H06",
+    "note": "2-6 矩形只问折前",
+    "prompt": "矩形 ABCD 中，AB=2，BC=6，沿对角线 AC 把 △ABC 折起。求折前 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "answer",
+    "values": [6.32455532]
+  },
+  {
+    "id": "H07",
+    "note": "7-1 合并问折前折后",
+    "prompt": "矩形 ABCD 中，AB=7，BC=1，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。分别求折前和折后 BD 的长。",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [7.071067812, 6.93108938]
+  },
+  {
+    "id": "H08",
+    "note": "45° + 口语问法「多长」",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起 45°。折后 BD 多长？",
+    "kind": "length",
+    "expectedStatus": "plan",
+    "values": [4.257403364]
+  },
+  {
+    "id": "H09",
+    "note": "正方形 1，折后垂直且 BD=1",
+    "prompt": "正方形 ABCD 的边长为 1，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC；求折后 BD 的长。",
+    "kind": "perpendicular-and-length",
+    "expectedStatus": "plan",
+    "values": [1]
+  },
+  {
+    "id": "H10",
+    "note": "对角线矛盾 AC=7（AB=4、BC=2 ⇒ √20）",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，AC=7，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。",
+    "kind": "inconsistent",
+    "expectedStatus": "unsupported",
+    "values": []
+  },
+  {
+    "id": "H11",
+    "note": "辅助垂足 E，BE⊥AC",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。",
+    "kind": "perpendicular",
+    "expectedStatus": "plan",
+    "values": []
+  },
+  {
+    "id": "H12",
+    "note": "由折后长度反求折角（67.9757°）",
+    "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=4。求折角。",
+    "kind": "angle",
+    "expectedStatus": "plan",
+    "values": [67.975687163]
+  }
+]

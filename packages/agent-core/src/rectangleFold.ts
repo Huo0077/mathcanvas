@@ -94,7 +94,7 @@ export interface RectangleFoldCheck {
 }
 
 const P = POINT_NAME_SOURCE
-const RECTANGLE_PATTERN = new RegExp(`(?:矩形|长方形)\\s*(${P})(${P})(${P})(${P})`)
+const RECTANGLE_PATTERN = new RegExp(`(?:矩形|长方形|正方形)\\s*(${P})(${P})(${P})(${P})`)
 const PERPENDICULAR_PLANES = new RegExp(
   `平面\\s*(${P})(${P})(${P})\\s*(?:⊥|垂直于|垂直)\\s*平面\\s*(${P})(${P})(${P})`,
   "g"
@@ -148,6 +148,12 @@ function segmentKey(first: string, second: string): string {
 export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
   const rectangle = RECTANGLE_PATTERN.exec(prompt)
   if (rectangle === null) return { status: "none" }
+  /**
+   * **正方形是矩形的一种写法**（W4 / E06）：
+   * 卷面常写「正方形 ABCD 的边长为 4」—— 四个点仍是环序，边长两边相等。
+   * 旧实现只认「矩形/长方形」，于是整道题落到 `none`（连"缺什么"都不说）。
+   */
+  const square = /正方形/.test(rectangle[0])
   const ring = rectangle.slice(1, 5).map(canonicalPointName) as [string, string, string, string]
   if (new Set(ring).size !== 4) return { status: "unsupported", reason: `矩形点名有重复（${ring.join("")}）。`, sourceText: rectangle[0] }
   const rectangleSpan: SourceSpan = { start: rectangle.index, end: rectangle.index + rectangle[0].length, text: rectangle[0] }
@@ -249,6 +255,23 @@ export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
   // **只有恰好缺一条边时才用比例补**（两条都缺 ⇒ 比例给定不出尺度，仍然如实报缺）。
   if (a !== null && b === null && ratio !== null) b = { value: a.value / ratio, segment: `${ring[1]}${ring[2]}` }
   if (b !== null && a === null && ratio !== null) a = { value: b.value * ratio, segment: `${ring[0]}${ring[1]}` }
+  /**
+   * **正方形的"边长为 n"**（W4 / E06）：这不是 `AB=4` 那种点名长度，
+   * 通用句型表读不出来，只有这一族题面自己知道它同时定下两条邻边。
+   */
+  if (square) {
+    const stated = /边(?:长)?\s*(?:为|是|=|：|:)?\s*(\d+(?:\.\d+)?)/.exec(prompt)
+    const side = stated === null ? null : Number(stated[1])
+    if (side !== null && Number.isFinite(side) && side > 0) {
+      a = { value: side, segment: `${ring[0]}${ring[1]}` }
+      b = { value: side, segment: `${ring[1]}${ring[2]}` }
+    } else if (a !== null && b === null) {
+      // 「正方形 ABCD，AB=4」：只给一条边也定得下另一条（正方形四边相等）。
+      b = { value: a.value, segment: `${ring[1]}${ring[2]}` }
+    } else if (b !== null && a === null) {
+      a = { value: b.value, segment: `${ring[0]}${ring[1]}` }
+    }
+  }
   if (a === null || b === null) {
     const missing = a === null ? `${ring[0]}${ring[1]}` : `${ring[1]}${ring[2]}`
     return {
@@ -274,6 +297,36 @@ export function readRectangleFoldCore(prompt: string): RectangleFoldRead {
     const values = [a.value, b.value]
     if (!close(values[first]! / values[second]!, Number(given.value))) {
       return { status: "unsupported", code: "inconsistent_conditions", reason: `题设条件矛盾：${given.sourceText} 与矩形边长不一致。`, sourceText: given.sourceText }
+    }
+  }
+  /**
+   * **对角线的独立一致性**（W4 / E18）：`AC=6` 与 `AB=4、BC=2` 不可能同时成立。
+   *
+   * 旧实现只把"不是矩形的边"的长度**跳过**，于是这条矛盾既没被核验、也没被报出来，
+   * 求解继续按 4/2 编下去。这里把写在环对角线上的长度单独收集，与 a、b 推得的对角线比。
+   */
+  const diagonal = Math.hypot(a.value, b.value)
+  /**
+   * **只检查"折起之前"的对角线**：`使 BD=3` 是**折后**的距离条件（E23 就是靠它反求折角），
+   * 拿它去和折前对角线比会把一道有唯一解的题判成矛盾。
+   */
+  const foldAt = /折起|折叠|翻折|翻转/.exec(prompt)?.index ?? Number.POSITIVE_INFINITY
+  for (const given of givens) {
+    if (given.kind !== "fixedLength" || given.value === undefined || given.targets.length !== 2) continue
+    if (given.start > foldAt) continue
+    const first = canonicalPointName(given.targets[0]!)
+    const second = canonicalPointName(given.targets[1]!)
+    const key = segmentKey(first, second)
+    const onDiagonal = ring.some((name, index) => segmentKey(name, ring[(index + 2) % 4]!) === key)
+    const onEdge = ring.some((name, index) => segmentKey(name, ring[(index + 1) % 4]!) === key)
+    if (!onDiagonal || onEdge) continue
+    if (!close(Number(given.value), diagonal)) {
+      return {
+        status: "unsupported",
+        code: "inconsistent_conditions",
+        reason: `题设条件矛盾：${given.sourceText} 与矩形边长 ${a.segment}=${a.value}、${b.segment}=${b.value} 推得的对角线 √${a.value * a.value + b.value * b.value}≈${diagonal.toFixed(3)} 不一致。`,
+        sourceText: given.sourceText
+      }
     }
   }
 
@@ -540,4 +593,37 @@ export function evaluateLength(points: PointTable, segment: [string, string]): {
   }
   const value = norm(sub(points[first]!, points[second]!))
   return { value, detail: `${first}${second}≈${Number(value.toPrecision(10))}。` }
+}
+
+/**
+ * **辅助点定义：`E 是 / 为 C 在 AB 上的垂足`**（W4 / E19）。
+ *
+ * 这类句子不是"待证命题"，而是**构造**：E 的位置由 C 到 AB 的投影唯一确定。
+ * 旧实现既不建 E、也不核验 BE⊥AC，只能说"缺少点名 E"，把一道由定义成立的题判成未核验。
+ *
+ * 只读这一种语序（`是/为 … 在 … 上的垂足`）。读不到就不建 —— 不猜"大概是想说垂足"。
+ */
+export interface RectangleFootDefinition {
+  point: string
+  from: string
+  line: [string, string]
+  sourceText: string
+  start: number
+  end: number
+}
+
+export function readRectangleFootDefinitions(prompt: string): RectangleFootDefinition[] {
+  const pattern = /(?:设\s*)?([A-Z])\s*(?:是|为)\s*([A-Z])\s*在\s*([A-Z])\s*([A-Z])\s*上的垂足/g
+  const feet: RectangleFootDefinition[] = []
+  for (const match of prompt.matchAll(pattern)) {
+    feet.push({
+      point: canonicalPointName(match[1]!),
+      from: canonicalPointName(match[2]!),
+      line: [canonicalPointName(match[3]!), canonicalPointName(match[4]!)],
+      sourceText: match[0],
+      start: match.index,
+      end: match.index + match[0].length
+    })
+  }
+  return feet
 }

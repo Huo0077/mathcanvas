@@ -38,8 +38,18 @@ describe("fold goal correctness regressions", () => {
     expect(solved.plan.answer).toContain("折后 BD=2√85/5")
   })
 
-  it("does not refute a claim when a defined foot has not been constructed", () => {
+  it("constructs a defined foot and verifies the claim instead of refuting it", () => {
     const solved = solveRectangleFold(`${USER_CASE}设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。`)
+    expect(solved.status).toBe("plan")
+    if (solved.status !== "plan") throw new Error("expected plan")
+    // E 由题面定义构造；BE⊥AC 由"垂足"这条定义成立（坐标核验也一并通过）。
+    expect(solved.findings[0]).toMatchObject({ status: "holds", holds: true })
+    expect(solved.plan.answer).toContain("垂足")
+    expect(solved.plan.actions.some((action) => action.actionId === "solid.create_point")).toBe(true)
+  })
+
+  it("still reports an undefined foot as unverified rather than refuting it", () => {
+    const solved = solveRectangleFold(`${USER_CASE}求证 BE⊥AC。`)
     expect(solved.status).toBe("answer")
     if (solved.status !== "answer") throw new Error("expected answer")
     expect(solved.answer).toContain("尚未核验")

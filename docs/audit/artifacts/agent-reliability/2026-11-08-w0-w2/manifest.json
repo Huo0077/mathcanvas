@@ -85,6 +85,24 @@
       "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src --maxWorkers=2",
       "exitCode": 0,
       "result": "184 files / 1958 tests passed"
+    },
+    {
+      "id": "w4-fold-files",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/rectangleFold.all24.test.ts packages/agent-core/src/rectangleFoldPlan.delivery.test.ts packages/agent-core/src/rectangleFold.holdout.test.ts packages/agent-core/src/rectangleFoldPlan.test.ts packages/agent-core/src/rectangleFold.test.ts --maxWorkers=2",
+      "exitCode": 0,
+      "result": "5 files / 72 tests passed; original 24 fixtures pass their independent core criteria (24/24)"
+    },
+    {
+      "id": "w4-e2e",
+      "command": "node node_modules/@playwright/test/cli.js test e2e/agent-fold-delivery.spec.ts",
+      "exitCode": 0,
+      "result": "2 passed (28.1s); offline local planner"
+    },
+    {
+      "id": "w4-agent-core",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src --maxWorkers=2",
+      "exitCode": 0,
+      "result": "186 files / 1978 tests passed"
     }
   ],
   "knownLimits": [
