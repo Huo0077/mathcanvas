@@ -84,6 +84,24 @@
 - 报告器：`scripts/agent-reliability-eval/report.cjs` 的全量分母包含失败/澄清/未评分；条件正确率只分母"有可评分完整终答"的题；单次运行给 Wilson 区间；`compareRuns` 只报点估计并提示样本独立性。8 项 node 测试通过。
 - 边界：**没有跑真模型或线上入口**，所以没有准确率数字；A/B 双轨适配器与生产入口评测留给有预算批准时执行。预注册门槛仍按方案 §11.3，未事后调整。
 
+### W9 / T9 迁移、灰度与发布准备（未发布）
+
+- 灰度开关：新增 `apps/web/src/agent/reliabilityFlags.ts`，五个开关**默认全关**、彼此独立、未知名字直接拒绝；测试档用显式 `RELIABILITY_FLAGS_FOR_TESTS` 全开。开关不由模型开启，也不构成任何安全门禁的旁路 —— 关掉只会让证据更保守。
+- 迁移：新增 `isSolveResultV1` 运行时守卫；界面只渲染当前版本，未知/未来版本按"历史回答，未重新核验"处理，**保留正文**；不重写历史消息、不做不可逆全库迁移。5 项 flags 测试 + 3 项守卫测试通过。
+- 灰度顺序：① `answerSemanticsV1`（显示语义）→ ② `goalTrackingV1`（目标/条件）→ ③ `mathVerificationV1`（证据等级）→ ④ `imageRereadV1`（受控重读）→ ⑤ `orthographicTemplatesV1`（有限三视图）。每步记录 revision、flags、产物 hash 与用户可见变化。
+- 回滚顺序与开启相反：先关本轮 flag，保留 W0 编码清理与 W2 状态诚实性修复；仍不足再按 W9→W1 逆序回退提交。回滚冒烟：旧会话打开、普通回答、缺图澄清、创建/确认/撤销草稿、取消零写入。
+- 发布：**未打 tag、未构建桌面产物、未发 Release、未跑真模型**。按方案 §11.4/§15，发布需要用户明确批准预算与产物；本轮只交付工程验收版。
+
+#### 最终验证读数（2026-11-08，本机）
+
+- 全量单测：**533 文件 / 5669 通过 + 1 todo / 0 失败**（943.21s，`--maxWorkers=2`，含全部新增测试）。
+- `npm run typecheck`：exit 0。
+- 文档门禁：8 文件 / 22 项通过。
+- 改动文件 eslint：0 error（全仓仍有 12 条**未触碰文件**的既有 error：`no-empty` / `prefer-const` / 浏览器全局，见 W8 记录；本轮未扩大）。
+- 新增浏览器用例：`e2e/agent-answer-delivery.spec.ts` 与 `e2e/agent-fold-delivery.spec.ts` 同一次运行 **4 项通过**（离线本地规划器，无模型调用）。
+- 专项：W4 折叠 5 文件 72 项、W5 16 项、W6 10 项、W7 11 项、W8 能力清单 5 项 / 评分器 20 项 / 数据集与报告 8 项、W9 flags 5 项 + 守卫 3 项。
+- 证据：`docs/audit/artifacts/agent-reliability/2026-11-08-w0-w2/`（manifest/commands/README）。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

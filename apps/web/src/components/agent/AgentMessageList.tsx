@@ -1,4 +1,5 @@
 import { HeaderIcon, type HeaderIconName } from "../HeaderIcon"
+import { isSolveResultV1 } from "@draw/agent-core"
 import type { AgentConversation, AgentMessage } from "../../agentStore"
 import { formatMessageTime, splitTranscript } from "../../agentTranscript"
 import { highlightCode } from "../../codeHighlight"
@@ -46,7 +47,7 @@ function AssistantBody({ message }: { message: AgentMessage }) {
    * 不再重复渲染同一段话（重复两遍会让用户以为有两问）。没有 `solveResult` 的旧消息
    * 走原来的正文路径 —— 不补标签、不默认已验证。
    */
-  const solve = message.solveResult
+  const solve = isSolveResultV1(message.solveResult) ? message.solveResult : undefined
   const duplicatedByCard = solve !== undefined && solve.answers.length === 1 && solve.answers[0]?.displayText.trim() === message.text.trim()
   /**
    * **旧消息不默认成已验证**（W2）：新代码的回答类运行一定带 `solveResult`；

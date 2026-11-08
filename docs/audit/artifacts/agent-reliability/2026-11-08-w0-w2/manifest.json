@@ -145,6 +145,42 @@
       "command": "node --test scripts/agent-reliability-eval/dataset.test.cjs",
       "exitCode": 0,
       "result": "8 tests passed (dataset validation + offline report)"
+    },
+    {
+      "id": "w9-flags",
+      "command": "node node_modules/vitest/vitest.mjs run apps/web/src/agent/reliabilityFlags.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "5 tests passed"
+    },
+    {
+      "id": "w9-version-guard",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/answerResult.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "3 tests passed"
+    },
+    {
+      "id": "final-full-suite",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=2",
+      "exitCode": 0,
+      "result": "533 files / 5669 passed + 1 todo / 0 failed (943.21s, local, no paid model calls)"
+    },
+    {
+      "id": "final-typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "result": "all workspaces + e2e + scripts"
+    },
+    {
+      "id": "final-docs",
+      "command": "node node_modules/vitest/vitest.mjs run scripts/docs-consistency --maxWorkers=2 --testTimeout=60000",
+      "exitCode": 0,
+      "result": "8 files / 22 tests passed"
+    },
+    {
+      "id": "e2e-final",
+      "command": "node node_modules/@playwright/test/cli.js test e2e/agent-answer-delivery.spec.ts e2e/agent-fold-delivery.spec.ts",
+      "exitCode": 0,
+      "result": "4 tests passed (2 answer-delivery + 2 fold-delivery; offline local planner, no model calls)"
     }
   ],
   "knownLimits": [

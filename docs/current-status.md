@@ -6,7 +6,7 @@
 
 新增[根因报告](audit/2026-11-08-agent-failure-root-cause-analysis.md)与[实施计划](superpowers/plans/2026-11-08-agent-reliability-remediation.md)。10项离线行为探针记录当前缺口，含错误/空回答仍可completed；24道折叠题核心复核18/24，另有内部角度未进入正文。定向回归7文件240项、评分器9项与类型检查通过；文档规范21/22，失败为HEAD原有5文件BOM，未混入无关改动。这些不是缺陷已修或真实模型成功率提升的证据。本轮未调用付费模型、未改生产代码、未打包发布。
 
-## 2026-11-08 —— Agent 可靠性整改：W0–W8 实施（M1 完成）
+## 2026-11-08 —— Agent 可靠性整改：W0–W9 实施（工程完成，未发布）
 
 按[整改方案](superpowers/plans/2026-11-08-agent-reliability-remediation.md)第9节工作包推进；每包先红测，再最小实现，定向回归后独立提交。
 
@@ -19,8 +19,9 @@
 - **W6（完成）**：新增题图证据层 `problemImageEvidence`：每条读数绑定 `(attachmentId, sha256, page, 归一化 region, sourceKind)` 并校验附件归属与会话；符号化/缺失尺寸与无方向向量生成 `required` 缺口；`planImageReread` 按区域去重、最多2次、预算耗尽即停；同一区域两次读数冲突时用户更正优先且保留被覆盖记录；诊断只写句柄/哈希前缀/40字摘要，base64 被抹掉。定向 **10项** 通过。**未接线**：宿主尚未自动触发重读，题图仍由用户手动重读。
 - **W7（完成）**：新增 `orthographicProblem`：只支持轴对齐长方体与 L 形柱体；三视图共享轴不一致即 `view_identity_conflict`（不重排标签）、单位不一致即 `unit_conflict`、缺维度即 `information_incomplete`；体积用解析分块与闭合网格有向四面体两条独立路径，不一致不给数值；切槽高度未给时候选体积不同 → `non_unique_volume`；选项只在算完后匹配。定向 **11项** 通过，`typecheck` exit 0。
 - **W8（完成）**：新增 `capabilityManifest`（四族能力、求解域、答案类型、核验方式、回退理由，**不声明形式证明**）；扩展评分器为结构化比较（多选去重、区间开闭、精确/小数等价、单位、缺问、合理澄清、请求失败、错误却标已核验单独计），**20项** node 测试通过；新增数据集 schema、8题开发集、12题**开放**留出集与只含 id/hash 的 manifest（`blind:false`），校验器拒绝"开放集冒充盲测"；离线报告器按全量分母统计并给 Wilson 区间，**8项**测试通过。**未跑真模型**，不产生任何准确率结论。
+- **W9（完成，未发布）**：新增五个独立灰度开关（`answerSemanticsV1`/`goalTrackingV1`/`mathVerificationV1`/`imageRereadV1`/`orthographicTemplatesV1`，生产默认全关、测试档显式全开、未知开关名拒绝）与 `isSolveResultV1` 守卫（未知版本退回「历史回答，未重新核验」，正文保留）；灰度/回滚顺序、旧会话迁移规则写入进度归档。5项开关测试 + 3项守卫测试通过。**未打 tag、未发布、未构建桌面产物、未跑真模型。**
 
-W0–W8 已完成；下一步 W9（迁移、灰度与发布准备）。M1 未调用真模型、未跑全量 Playwright/桌面构建；"测试通过"不等于真实题集准确率提升。
+W0–W9 的工程实现已完成。M1 未调用真模型、未跑全量 Playwright/桌面构建；"测试通过"不等于真实题集准确率提升，也不构成发布。
 
 ## 2026-11-07 同步 v4.3.0 并重建桌面端
 

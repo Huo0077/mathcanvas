@@ -84,3 +84,30 @@ export interface SolveResult {
 }
 
 export const SOLVE_RESULT_SCHEMA_VERSION = "mathcanvas.solve.v1" as const
+
+/**
+ * **运行时守卫（W9）**：只认 `mathcanvas.solve.v1` 这一版。
+ *
+ * 旧会话里可能出现未来/未知版本的 `solveResult`（或手工伪造的字段）。界面与迁移层
+ * 读到未知版本时必须**当成没有这个字段**：保留正文、标"历史回答，未重新核验"，
+ * 而不是拿一个不认识的结构去渲染"已交付/已核验"。
+ */
+export function isSolveResultV1(value: unknown): value is SolveResult {
+  if (typeof value !== "object" || value === null) return false
+  const candidate = value as Record<string, unknown>
+  if (candidate.schemaVersion !== SOLVE_RESULT_SCHEMA_VERSION) return false
+  if (typeof candidate.problemRevision !== "string") return false
+  if (!SOLVE_STATUSES.includes(candidate.status as SolveStatus)) return false
+  for (const key of ["answers", "unansweredGoalIds", "evidence", "reasonCodes", "clarificationQuestions"]) {
+    if (!Array.isArray(candidate[key])) return false
+  }
+  return (candidate.answers as unknown[]).every((answer) => {
+    if (typeof answer !== "object" || answer === null) return false
+    const item = answer as Record<string, unknown>
+    return typeof item.goalId === "string"
+      && typeof item.kind === "string"
+      && ANSWER_KINDS.includes(item.kind as AnswerKind)
+      && typeof item.displayText === "string"
+      && Array.isArray(item.evidenceRefs)
+  })
+}

@@ -1141,15 +1141,27 @@ describe("T3 — output mode follows the channel and never over-claims", () => {
  * 命中时**一次 provider 请求都不发**；不属于这一族的题面照旧走模型。
  */
 describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
-  it.each([
-    ["AB=4，AB=5，BC=2", "求证 BD⊥AC。", "条件矛盾"],
-    ["AB=4，BC=2", "设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。", "尚未核验"]
-  ])("returns determined diagnostics without asking a model to invent missing evidence", async (sides, goal, expected) => {
+  it("returns a determined contradiction without asking a model to invent missing evidence", async () => {
     const runModel = vi.fn(async () => deltas(goodEnvelope))
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
-    const outcome = await planner.plan(request({ userMessage: `矩形 ABCD 中，${sides}，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。${goal}` }))
+    const outcome = await planner.plan(request({ userMessage: "矩形 ABCD 中，AB=4，AB=5，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BD⊥AC。" }))
     if (!("plan" in outcome) || outcome.plan.kind !== "answer") throw new Error("expected answer")
-    expect(outcome.plan.answer).toContain(expected)
+    expect(outcome.plan.answer).toContain("条件矛盾")
+    expect(runModel).not.toHaveBeenCalled()
+  })
+
+  it("returns an undefined-foot diagnostic without asking a model", async () => {
+    /**
+     * 这里**故意不给垂足定义**：E 从未被构造，`BE⊥AC` 只能如实"尚未核验"。
+     * 安全闸的判据是"确定性的终态不交给模型猜"，不是"这道题一定有答案"。
+     * （给了 `设 E 为 … 垂足` 时 W4 会确定性地构造并核验，那条路径在
+     * `rectangleFoldPlan.delivery.test.ts` 里单独验收。）
+     */
+    const runModel = vi.fn(async () => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
+    const outcome = await planner.plan(request({ userMessage: "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求证 BE⊥AC。" }))
+    if (!("plan" in outcome) || outcome.plan.kind !== "answer") throw new Error("expected answer")
+    expect(outcome.plan.answer).toContain("尚未核验")
     expect(runModel).not.toHaveBeenCalled()
   })
   it("缺折角 ⇒ 直接澄清问折角，不发请求（不默认 90°）", async () => {
