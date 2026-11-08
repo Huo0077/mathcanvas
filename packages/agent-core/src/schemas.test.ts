@@ -1090,4 +1090,59 @@ describe("repair envelopes", () => {
       expect(error?.path).toBe("envelope.actions[1].actionKey")
     }
   })
+
+  it("W1 / T1 验收：4096 字符的 answer 合法，4097 字符明确拒绝", () => {
+    const validAnswer = "A".repeat(4096)
+    const valid = parsePlanEnvelope({
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "answer",
+      goal: "测试字符边界",
+      factIds: [],
+      answer: validAnswer,
+      toolResultRefs: []
+    })
+    expect(valid.ok).toBe(true)
+    if (valid.ok) {
+      expect(valid.value.kind).toBe("answer")
+      if (valid.value.kind === "answer") {
+        expect(valid.value.answer.length).toBe(4096)
+      }
+    }
+
+    const overflowAnswer = "A".repeat(4097)
+    const invalid = parsePlanEnvelope({
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "answer",
+      goal: "测试字符超限",
+      factIds: [],
+      answer: overflowAnswer,
+      toolResultRefs: []
+    })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      const err = invalid.errors.find((e) => e.path === "envelope.answer")
+      expect(err).toBeDefined()
+      expect(err?.code).toBe("string_too_long")
+      expect(err?.detail).toContain("max 4096 characters")
+    }
+  })
+
+  it("W1 / T1 分支隔离：answer 分支带 normalisations 被明确拒绝为 unknown_field", () => {
+    const invalid = parsePlanEnvelope({
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "answer",
+      goal: "只读回答测试",
+      factIds: [],
+      answer: "这是回答",
+      toolResultRefs: [],
+      normalisations: [{ original: "AD=2", normalized: "AD=2" }]
+    })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) {
+      const err = invalid.errors.find((e) => e.path === "envelope.normalisations")
+      expect(err).toBeDefined()
+      expect(err?.code).toBe("unknown_field")
+      expect(err?.detail).toContain("unexpected field 'normalisations'")
+    }
+  })
 })

@@ -1,4 +1,4 @@
-import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
+import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, envelopeAllowedFields, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, de
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v15"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -88,6 +88,25 @@ function channelAdvice(channel: ModelChannel): string {
     : "如果要包代码围栏，请只包一层 ```json，且围栏内只有这个 JSON；围栏之外不要有别的字。"
 }
 
+/**
+ * **三个分支的合法字段只从共享定义取**（`schemas.ts` 的 `ENVELOPE_BRANCHES`）。
+ *
+ * 提示词里再手抄一份字段表，就必然与 `parsePlanEnvelope` 的白名单漂移：
+ * 解析器认的字段模型看不到，或者提示词鼓励了一个会被拒的字段 ——
+ * `normalisations` 误放进 `answer` 正是现场那一个。所以这几行由 `envelopeAllowedFields`
+ * 生成，`normalisations` 只在 `plan` 那一行出现是因为它**属于 plan 分支**，不是手写的特例。
+ */
+function branchFieldList(kind: "plan" | "clarification" | "answer"): string {
+  return envelopeAllowedFields(kind).map((field) => `\`${field}\``).join("、")
+}
+
+/** 纠错反馈里的分支名来自模型输出，只认这三个合法值，别的一律不回显。 */
+type EnvelopeBranch = "plan" | "clarification" | "answer"
+
+function validBranch(branch: string | undefined): EnvelopeBranch | undefined {
+  return branch === "plan" || branch === "clarification" || branch === "answer" ? branch : undefined
+}
+
 /** 输出形状：三个分支各自**逐字**给出，因为多一个字段就会被拒。 */
 function outputShapes(canPlan: boolean): string[] {
   const shapes: string[] = []
@@ -99,12 +118,22 @@ function outputShapes(canPlan: boolean): string[] {
    * 引擎只回 `invalid_type@envelope.actions: expected an array`。
    * 这份提示词后面有一大段"关系怎么给"的说明，模型很可能把注意力都放在那里，
    * 反而漏掉了信封本身的必填键 —— 所以把合同单独提前、说短。
+   *
+   * **W1（2026-11-08）**：字段清单改由 `envelopeAllowedFields` 生成（与解析器同一个真源），
+   * 并逐个分支点名，而不是只写一句"不要混用"。
    */
-  shapes.push("先给出 `kind`。作图用 `plan` 并提供非空 `actions`。澄清用 `clarification` 并提供非空 `questions`。只读回答用 `answer` 并提供 `answer` 和 `toolResultRefs`。不要混用不同分支的字段。")
+  if (canPlan) {
+    shapes.push(`先给出 \`kind\`。作图分支（\`plan\`）允许的字段：${branchFieldList("plan")}，其中 \`actions\` 必须非空；\`normalisations\` 只在这个分支合法。`)
+  } else {
+    shapes.push("先给出 `kind`。这一阶段**不允许**返回计划：不要给出 `plan` 分支。")
+  }
+  shapes.push(`澄清分支（\`clarification\`）允许的字段：${branchFieldList("clarification")}，其中 \`questions\` 必须非空。`)
+  shapes.push(`只读回答分支（\`answer\`）允许的字段：${branchFieldList("answer")}，其中 \`answer\` 与 \`toolResultRefs\` 必须给出。`)
+  shapes.push("不同分支的字段互不混杂：把另一个分支的字段写进来会被当作未知字段拒绝。")
   if (canPlan) {
     // 例子里**不放 `relations`**：它是可选的，而且"perpendicular 只给 2 个顶点"与判据要求的
     // 3 / 5 个自相矛盾 —— 放一个自相矛盾的例子只会把模型带偏。
-    shapes.push(`计划：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
+    shapes.push(`计划示例：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "一句话说清这次要做什么", factIds: [], assumptions: [], actions: [{ actionId: "从下面的动作菜单里选", actionKey: "本次运行内唯一的名字", factIds: [], inputs: {} }] })}`)
   }
   /**
    * **"不要编数值"与"先做别反问"的冲突在这里解开**（设计 2026-10-03 §5.5）。
@@ -177,6 +206,24 @@ function repairDetailSections(repair: NonNullable<SystemPromptPolicyInput["repai
     ? diagnostics.map((entry) => `${entry.stage}/${entry.code}@${entry.path}: ${entry.detail}`)
     : repair.errors.map((error) => `${error.code}@${error.path}: ${error.detail}`)
   if (rejected.length > 0) sections.push("", "### 被拒的层与字段（系统编译器的诊断）", ...rejected.map((line) => `- ${line}`))
+
+  /**
+   * **W1：把"拒在哪个分支"说清楚**（2026-11-08）。
+   *
+   * 只给字段路径时，模型知道"多了一个字段"，但不知道那个字段属于**另一个分支**，
+   * 下一次很可能把它换个名字再塞回来。分支名来自模型输出，所以只认三个合法值；
+   * 合法分支的字段清单仍由共享定义生成（`branchFieldList`），不在这里手抄。
+   */
+  const branch = validBranch(repair.branch)
+  if (branch !== undefined) {
+    sections.push(
+      "",
+      "### 被拒的分支与本分支允许的字段",
+      `- 分支：\`${branch}\``,
+      `- 本分支允许的字段：${branchFieldList(branch)}`,
+      "- 只能改这些字段，或换成一个合法的 `kind` 重新发送；不要自动删字段，也不要把合法子集当作整批执行。"
+    )
+  }
 
   // 2) "这次只允许改这几处"来自编译器的 `allowedChanges`，不是提示词自己推的。
   if (repair.allowedChanges.length > 0) sections.push("", "### 这次只允许改这几处", ...repair.allowedChanges.map((path) => `- ${path}`))
@@ -347,7 +394,7 @@ export function buildPolicyText(input: SystemPromptPolicyInput): string {
        * 明确写出"只换说法、不许改条件"：模型既能规划又能改写时，它有动机把题面改弱成自己能画的样子，
        * 而那是本仓最忌讳的失效方式。判据在 `promptNormalization.ts` 的四道阀里，这里只把话说清。
        */
-      "上下文里**有** `unreadClauses`（我们读不懂的题面从句）时，请在计划顶层给出 `normalisations`：`[{\"original\":\"原话里逐字出现的那一段\",\"normalized\":\"同一件事的标准写法\"}]`。**只换说法，不许改条件**（不许新增、删除或弱化任何条件）—— 指不回原文、引入原文没有的点名、或把关系换弱的条目，系统会**直接丢弃**，那条题设照旧算「未核验」。没有 `unreadClauses` 时不要写这个字段。",
+      "上下文里**有** `unreadClauses`（我们读不懂的题面从句）时，请在计划顶层给出 `normalisations`：`[{\"original\":\"原话里逐字出现的那一段\",\"normalized\":\"同一件事的标准写法\"}]`。注意：normalisations 仅在计划（kind: \"plan\"）分支中合法，严禁在只读回答（answer）或澄清中出现（未知字段会被拒绝）。**只换说法，不许改条件**（不许新增、删除或弱化任何条件）—— 指不回原文、引入原文没有的点名、或把关系换弱的条目，系统会**直接丢弃**，那条题设照旧算「未核验」。没有 `unreadClauses` 时不要写这个字段。",
       "**请用 `vertexNames` 说出每个顶点的名字**（例如 `[\"P\",\"A\",\"B\",\"C\",\"D\"]`，与 `vertices` 一一对应）。系统靠它把题面里的「AB ⊥ AD」对上具体哪两个顶点；**不给 `vertexNames` 时系统无法核验这些关系**，不会靠猜题面点名顺序认顶点；请明确给出每个坐标对应的名字。"
     )
   }

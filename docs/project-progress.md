@@ -20,6 +20,13 @@
 - 重跑文档门禁：**8文件 / 22项全通过**（此前8文件21/22，失败即上述BOM）；评分器 `node --test scripts/real-exam-eval/score.test.cjs` **9项通过**。仅有编码差异，无行为变化。
 - 仍待办：W1分支化纠错与W2逐问交付；不改评分规则、不放宽草稿确认与几何门禁。
 
+### W1 / T1 协议恢复与分支合同
+
+- 红测：提示词必须逐字包含由 `envelopeAllowedFields` 生成的三个分支字段行；`answer` 分支的纠错要显示被拒分支与该分支合法字段；非法分支名不得回显。实现前2项红，实现后转绿。
+- 实现：`systemPrompt` 的输出形状改为从共享定义生成（提示词 v15），`normalisations` 只出现在 `plan` 分支；修复节新增「被拒的分支与本分支允许的字段」；`coordinator` 用 `declaredEnvelopeKind` 提取分支并写入 `RepairRequest.branch`（去掉 `any`）；`outputParser` 对 `normalisations` 误放给出定向提示。
+- 回归：`schemas`/`coordinator`/`modelPlanner`/`systemPrompt` **4文件 217项**通过，`npm run typecheck` exit 0。既有「混合批次零执行、合法只读批次整批执行」用例保持绿。
+- 不改变：不放宽信封白名单、不自动删字段、不执行合法子集、不新增模型调用或预算；重复同一格式错误仍只有一次合预算纠错（第二次失败即 `failed`）。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

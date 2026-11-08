@@ -91,11 +91,12 @@ export function describeDefaultPolicies(actionIds?: readonly string[]): ActionAu
  * "第三次"，于是"超出上限就拒绝再修"这条判据在调用方一侧根本无法实现。上限由
  * `MAX_REPAIR_ATTEMPTS` 表达，调用方自己比。
  */
-export function repairRequestFor(errors: readonly ParseError[], attempt: number, reason = "schema_invalid"): RepairRequest {
+export function repairRequestFor(errors: readonly ParseError[], attempt: number, reason = "schema_invalid", branch?: string): RepairRequest {
   return {
     reason,
     errors: errors.map((error) => ({ code: error.code, path: error.path, detail: error.detail })),
     allowedChanges: [...new Set(errors.map((error) => error.path))],
-    attempt: Math.max(1, Math.trunc(attempt))
+    attempt: Math.max(1, Math.trunc(attempt)),
+    ...(branch ? { branch } : {})
   }
 }

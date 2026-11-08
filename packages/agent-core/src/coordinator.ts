@@ -193,6 +193,20 @@ export interface AgentCoordinator {
 export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
 
 /**
+ * **模型在信封里自称的 `kind`**（W1，2026-11-08）。
+ *
+ * 纠错反馈要把"拒在哪个分支"告诉模型，这样它不会把字段换个名字再塞回来。
+ * 但那份 `kind` 是**模型写的**：只取字符串值，合法性的判断交给消费方
+ * （`systemPrompt` 只认三个已知分支，别的一律不回显）。读不出来就是 `undefined`，
+ * 那一节不出现 —— 不猜、不补。
+ */
+function declaredEnvelopeKind(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || !("kind" in value)) return undefined
+  const kind = (value as { kind?: unknown }).kind
+  return typeof kind === "string" ? kind : undefined
+}
+
+/**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
  *
  * ## 为什么需要它（N4d 抽出请求构造之后）
@@ -525,7 +539,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           const failure = outcome.failure
           lastDetail = planFailureDetail(failure)
           ledger.record(`plan attempt ${attempt} failed (${failure.category}): ${failure.detail}`)
-          const next = repairRequestFor(failure.errors, schemaRepairs + 1, failure.category)
+          const failureBranch = declaredEnvelopeKind(failure.decoded)
+          const next = repairRequestFor(failure.errors, schemaRepairs + 1, failure.category, failureBranch)
           if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
           schemaRepairs += 1
           repair = { ...next, hint: describePlanFailureRepair(failure) }
@@ -552,7 +567,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 请求本身走已注册的 `repairRequestFor`：于是"允许改哪几处"（`allowedChanges`）
            * 与编译阶段那一份是同一个算法，不再是这里手写的一句话。
            */
-          const next = repairRequestFor(result.errors, schemaRepairs + 1)
+          const resultBranch = declaredEnvelopeKind(outcome.plan)
+          const next = repairRequestFor(result.errors, schemaRepairs + 1, "schema_invalid", resultBranch)
           if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
           schemaRepairs += 1
           /**

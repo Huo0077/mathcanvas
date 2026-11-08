@@ -119,12 +119,18 @@ function describePlanShape(input: unknown): string {
  */
 const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"]
 
-const COMMON_ENVELOPE_FIELDS = ["schemaVersion", "kind", "goal", "factIds", "assumptions"]
-const ENVELOPE_BRANCHES = {
+export const COMMON_ENVELOPE_FIELDS = ["schemaVersion", "kind", "goal", "factIds", "assumptions"] as const
+export const ENVELOPE_BRANCHES = {
   plan: { required: ["actions"], optional: ["relations", "normalisations", "answer"] },
   clarification: { required: ["questions"], optional: [] },
   answer: { required: ["answer", "toolResultRefs"], optional: [] }
-} satisfies Record<PlanEnvelope["kind"], { required: string[]; optional: string[] }>
+} as const
+
+export function envelopeAllowedFields(kind: PlanEnvelope["kind"]): readonly string[] {
+  const branch = ENVELOPE_BRANCHES[kind]
+  return [...COMMON_ENVELOPE_FIELDS, ...branch.required, ...branch.optional]
+}
+
 
 const ENVELOPE_KINDS = Object.keys(ENVELOPE_BRANCHES) as PlanEnvelope["kind"][]
 const ALL_ENVELOPE_FIELDS = new Set([

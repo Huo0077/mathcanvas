@@ -11,7 +11,7 @@
 按[整改方案](superpowers/plans/2026-11-08-agent-reliability-remediation.md)第9节工作包推进；每包先红测，再最小实现，定向回归后独立提交。
 
 - **W0（完成）**：按字节移除5个受跟踪文件开头的UTF-8 BOM，其余字节与换行未动，未改评分规则或题面；`docs-consistency` **8文件 / 22项通过**（此前21/22），`node --test scripts/real-exam-eval/score.test.cjs` **9项通过**。该修复无产品行为变化。
-- **W1（进行中）**：分支化协议纠错反馈、共享字段说明与整批预检。
+- **W1（完成）**：纠错反馈带原因码、字段路径、被拒分支与该分支允许字段（分支名只认 `plan`/`clarification`/`answer`，非法值不回显）；三个分支的字段清单由 `envelopeAllowedFields` 从共享定义生成，`normalisations` 只出现在 `plan` 分支（提示词 v15）；同一格式错误只给一次合预算纠错，非法批次仍零执行。定向回归**4文件 / 217项**通过，`typecheck` exit 0。
 - **W2（未开始）**：宿主答案合同与逐问交付/诚实状态。
 
 本轮为工程整改，未调用真模型、未跑完整Playwright/桌面构建、未发布；门禁通过不等于真实题集准确率提升。

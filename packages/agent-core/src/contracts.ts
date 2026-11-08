@@ -356,6 +356,8 @@ export interface RepairRequest {
   allowedChanges: string[]
   /** 第几次修复（从 1 开始）；`MAX_REPAIR_ATTEMPTS` 之外不再给机会。 */
   attempt: number
+  /** 当前被判定的分支类别（"plan" | "clarification" | "answer"）。 */
+  branch?: string
 }
 
 /** 修复只给**一次**（计划 Global Constraints："Repair is limited to one request"）。 */

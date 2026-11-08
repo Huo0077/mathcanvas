@@ -1057,3 +1057,111 @@ describe("planning failure contract", () => {
     expect(harness.committer.stage).not.toHaveBeenCalled()
   })
 })
+
+describe("W1 / T1 协议恢复与预算纠错", () => {
+  it("最小测试设计：注入第一次含未知字段 normalisations 的 answer，第二次合法 answer，获得合预算纠错且未执行工具", async () => {
+    let attempt = 0
+    const malformedAnswer: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "answer",
+      goal: "答复问题",
+      factIds: ["fact-1"],
+      answer: "第一轮带非法字段",
+      toolResultRefs: [],
+      normalisations: [{ original: "a", normalized: "a" }]
+    } as unknown as PlanEnvelope
+
+    const validAnswer: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "answer",
+      goal: "答复问题",
+      factIds: ["fact-1"],
+      answer: "第二轮合法",
+      toolResultRefs: []
+    }
+
+    const harness = makeHarness({
+      plan: () => {
+        attempt += 1
+        return attempt === 1
+          ? { plan: malformedAnswer, requestId: "req-1", attemptId: "attempt-1" }
+          : { plan: validAnswer, requestId: "req-2", attemptId: "attempt-2" }
+      }
+    })
+
+    await drive(harness.coordinator, { run, userMessage: "求长度" })
+
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(harness.committer.stage).not.toHaveBeenCalled()
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+    const secondRequest = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    expect(secondRequest.repair).toBeDefined()
+    expect(secondRequest.repair?.errors.some((e) => e.path === "envelope.normalisations")).toBe(true)
+    expect(secondRequest.repair?.allowedChanges).toContain("envelope.normalisations")
+    expect(secondRequest.repair?.branch).toBe("answer")
+    expect(secondRequest.repair?.hint).toContain("normalisations")
+    expect(harness.budget.snapshot().used.generation).toBe(2)
+    expect(harness.coordinator.phase()).toBe("completed")
+  })
+
+  it("当 generation 余额不足时，同一夹具只调用 planner 一次且停在 budget_repair，文档版本不变", async () => {
+    let attempt = 0
+    const malformedAnswer: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "answer",
+      goal: "答复问题",
+      factIds: ["fact-1"],
+      answer: "第一轮带非法字段",
+      toolResultRefs: [],
+      normalisations: [{ original: "a", normalized: "a" }]
+    } as unknown as PlanEnvelope
+
+    const harness = makeHarness({
+      limits: { generation: 1 },
+      plan: () => {
+        attempt += 1
+        return { plan: malformedAnswer, requestId: "req-1", attemptId: "attempt-1" }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "求长度" })
+
+    expect(harness.planner.plan).toHaveBeenCalledTimes(1)
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.detail).toContain("budget_repair")
+    expect(harness.committer.stage).not.toHaveBeenCalled()
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+
+  it("重复同一格式错误只给一次合预算纠错：第二次仍非法即失败，不会无限重试", async () => {
+    const malformedAnswer: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "answer",
+      goal: "答复问题",
+      factIds: ["fact-1"],
+      answer: "带非法字段",
+      toolResultRefs: [],
+      normalisations: [{ original: "a", normalized: "a" }]
+    } as unknown as PlanEnvelope
+    let attempt = 0
+    const harness = makeHarness({
+      limits: { generation: 10 },
+      plan: () => {
+        attempt += 1
+        return { plan: malformedAnswer, requestId: `req-${attempt}`, attemptId: `attempt-${attempt}` }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "求长度" })
+
+    // 一次原始尝试 + 一次修复；没有第三次（同一错误类别只有一次机会）。
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.detail).toContain("never matched the schema")
+    expect(harness.committer.stage).not.toHaveBeenCalled()
+    // 第二次请求点名的分支与字段路径与第一次一致 —— 纠错是定向的，不是重发一遍。
+    const second = vi.mocked(harness.planner.plan).mock.calls[1][0] as PlanRequest
+    expect(second.repair?.branch).toBe("answer")
+    expect(second.repair?.errors.some((error) => error.path === "envelope.normalisations")).toBe(true)
+  })
+})

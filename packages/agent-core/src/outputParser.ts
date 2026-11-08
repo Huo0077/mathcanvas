@@ -194,6 +194,11 @@ const SOLID_EXITS = "要画**开放的平面图形**（四边形、三角形片�
 
 function targetedTransportAdvice(errors: readonly ParseError[]): string[] {
   const advice: string[] = []
+  const hasNormalisations = errors.some((error) => error.path.includes("envelope.normalisations") || (error.code === "unknown_field" && error.detail.includes("normalisations")))
+  if (hasNormalisations) {
+    advice.push("提醒：normalisations 字段仅在 plan 分支中允许；只读回答（answer）或澄清分支不接受 normalisations，请将其移除。")
+  }
+
   const emptyFaces = errors.some((error) => error.path.includes(".inputs.") && /polyhedron needs at least (three vertices|one face)/.test(error.detail))
   if (emptyFaces) {
     advice.push("提醒：`solid.create_polyhedron` 现在也接受**一个面环**的平面多边形（例如 `faces: [[0,1,2,3]]`，物化成一张面）。你这次连一个面环都没给；如果你要画的是开放的平面图形（四边形、三角形片、翻折片），也可以直接用 `solid.create_face`：给 `vertices`（至少三个**共面**、互不共线的点）与 `vertexNames` 就行，它**不收 `faces`**。只有闭合实体才需要至少四个面。")
