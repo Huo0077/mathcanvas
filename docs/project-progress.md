@@ -14,6 +14,12 @@
 
 基于历史50题、24道折叠题及本地离线探针完善[根因报告](audit/2026-11-08-agent-failure-root-cause-analysis.md)和[执行方案](superpowers/plans/2026-11-08-agent-reliability-remediation.md)。本轮补齐模块接口、W0–W9工作包、验收矩阵、预注册评测、迁移灰度和回滚，默认单执行者，建议先做W0/W1/W2。方案预计20–33人日，非交付承诺；未开始产品整改、付费评测或GitHub发布。
 
+## 2026-11-08 —— Agent 可靠性整改 M1：W0 编码修复
+
+- 按方案W0移除5个受跟踪文本文件开头的UTF-8 BOM：docs/audit/2026-11-05-real-exam-evaluation-protocol.md、scripts/real-exam-eval/{score.cjs,score.test.cjs,vitest.config.mts}、test-fixtures/real-exams-20261105/README.md。逐文件按字节确认首字节不再是 EF BB BF，其余字节未重编码。
+- 重跑文档门禁：**8文件 / 22项全通过**（此前8文件21/22，失败即上述BOM）；评分器 `node --test scripts/real-exam-eval/score.test.cjs` **9项通过**。仅有编码差异，无行为变化。
+- 仍待办：W1分支化纠错与W2逐问交付；不改评分规则、不放宽草稿确认与几何门禁。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

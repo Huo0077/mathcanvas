@@ -1,2 +1,2 @@
-﻿import { defineConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
 export default defineConfig({ test: { environment: 'node', maxWorkers: 1, fileParallelism: false, include: ['scripts/real-exam-eval/live.eval.mjs'], testTimeout: 14400000 } })

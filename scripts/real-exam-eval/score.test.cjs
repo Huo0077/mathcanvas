@@ -1,4 +1,4 @@
-﻿const {test}=require('node:test');const assert=require('node:assert/strict');const {extractChoice,score}=require('./score.cjs');
+const {test}=require('node:test');const assert=require('node:assert/strict');const {extractChoice,score}=require('./score.cjs');
 test('explicit final choice',()=>assert.equal(extractChoice('推导。最终答案：C'),'C'));
 test('latex bold choice',()=>assert.equal(extractChoice('最终答案：$\\boxed{B}$'),'B'));
 test('standard Chinese conclusion',()=>assert.equal(extractChoice('故选：D。'),'D'));

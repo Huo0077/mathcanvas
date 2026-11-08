@@ -1,4 +1,4 @@
-﻿function extractChoice(text){
+function extractChoice(text){
  const normalized=String(text??'').replace(/\\(?:boxed|text|mathrm|mathbf)\s*\{/g,'').replace(/[\s$*{}\\]/g,'');
  const matches=[...normalized.matchAll(/(?:最终答案|正确答案|答案|故选|所以选|应选|选择)[：:]?([ABCD])(?![A-Za-z])/g)].map(m=>m[1]);
  const choices=[...new Set(matches)];return choices.length===1?choices[0]:null;
