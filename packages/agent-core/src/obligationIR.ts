@@ -267,7 +267,11 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
  * `draftStore` 即使改走 `parseObligationIR` 这条路，行为也与改动之前完全一致。
  */
 export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
-  const givens: DiagramObligation[] = ir.obligations.filter((item) => item.role === "given").map((item) => ({
+  /**
+   * **construction 也是题设**（W3）：辅助点定义（垂足等）在旧结构里没有独立角色，
+   * 它必须继续出现在 `givens` 里 —— 丢掉它等于把那条条件从核验范围里删掉。
+   */
+  const givens: DiagramObligation[] = ir.obligations.filter((item) => item.role === "given" || item.role === "construction").map((item) => ({
     kind: item.kind as DiagramObligationKind,
     sourceText: item.sourceText,
     start: item.start,
@@ -318,5 +322,66 @@ export function parseObligationIR(prompt: string): ObligationIR {
 export interface ObligationIR {
   obligations: GeometryObligation[]
   unverified: { sourceText: string; reason: string }[]
+  /**
+   * **目标上下文（W3 / T3，2026-11-08）**：逐问的稳定 id、原文跨度、状态与依赖。
+   *
+   * 可选：旧调用方（与 `buildObligationIR` 的直接产物）没有它，读到时按"没有逐问元信息"处理。
+   * `goalId` **就是**目标那条 `GeometryObligation.id` —— 于是"这条目标是哪一句"只有一份真相。
+   */
+  goals?: GoalContext[]
+  /**
+   * **条件消费清单（W3）**：每条题设条件被哪个求解器、为哪几问消费；
+   * 没被消费的条件显式标成 `unprocessed` / `ambiguous` / `unsupported`，不许静默消失。
+   */
+  usage?: ConditionUsage[]
+}
+
+/**
+ * 原文里的一个跨度（W3 / §8.4）。
+ *
+ * 单位是 **JavaScript 字符串的 UTF-16 下标**，而且指向**用户原文**（不是规范化文本）。
+ * 原文与规范化文本之间的映射由调用方维护；混用两套下标会让"可追溯"变成假的。
+ *
+ * 名字带 `Goal` 前缀是为了与 `namedFold` 已有的 `SourceSpan` 区分（两者语义不同，
+ * 后者是翻折状态里的点名跨度）。
+ */
+export interface GoalSourceSpan {
+  /** 这份原文的稳定标识（W3 用 `problemRevision`）。 */
+  sourceId: string
+  start: number
+  end: number
+}
+
+/** 一条目标的元信息（§8.4；`goalId` = 目标 IR 条目的 id）。 */
+export interface GoalContext {
+  goalId: string
+  /** `stem` 或 `part-<n>`：这一问在题面的哪一段。 */
+  partId: string
+  source: GoalSourceSpan
+  /**
+   * 折前 / 折后 / 第几次操作（`s0` 是未折叠的基准状态）。
+   *
+   * **只从题面明文推导**（`折前` / `折后` / `折起后`…），不从撇号猜：
+   * `B'` 只是点名，撇号本身不说明它属于哪个状态。
+   */
+  stateId: string
+  /** 显式引用更早小问的目标（`由(1)知…`）才写；不是"按顺序都要依赖"。 */
+  dependsOnGoalIds: string[]
+  expectedKind: import("./answerResult").AnswerKind
+}
+
+export type ConditionDisposition = "used" | "redundant_proved" | "ambiguous" | "unsupported" | "unprocessed"
+
+/** 一条题设条件的消费记录（§8.4 + W3 的 `partId` / `conditionSourceText` 扩展）。 */
+export interface ConditionUsage {
+  obligationId: string
+  requiredForGoalIds: string[]
+  consumedBy: string[]
+  disposition: ConditionDisposition
+  explanation: string
+  /** W3 扩展：这条条件出现在哪个小问/公共题设里（`stem` 或 `part-<n>`）。 */
+  partId?: string
+  /** W3 扩展：原文片段，便于界面与报告直接对照（不另建事实库）。 */
+  conditionSourceText?: string
 }
 

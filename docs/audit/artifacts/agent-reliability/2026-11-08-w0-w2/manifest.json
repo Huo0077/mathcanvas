@@ -1,7 +1,7 @@
 {
   "runId": "2026-11-08-w0-w2",
   "recordedAt": "2026-11-09T00:45:00+08:00",
-  "scope": "M1: W0 (BOM cleanup) + W1 (branch contracts and budgeted repair) + W2 (host answer contract and per-goal delivery)",
+  "scope": "M1: W0 (BOM cleanup) + W1 (branch contracts and budgeted repair) + W2 (host answer contract and per-goal delivery); W3 appended to the same log",
   "baseRevision": "9a4fdf1ad74272270f83bd7bfa765c520c9c7e7d",
   "headRevisionAtRun": "72fa9afb (W1 commit); W2 changes were uncommitted during these runs",
   "worktree": "dirty (W2 sources and tests not yet committed when the commands ran)",
@@ -73,6 +73,18 @@
       "command": "node node_modules/vitest/vitest.mjs run scripts/docs-consistency --maxWorkers=2 --testTimeout=60000",
       "exitCode": 0,
       "result": "8 files / 22 tests passed"
+    },
+    {
+      "id": "w3-problem-understanding",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/problemUnderstanding.test.ts packages/agent-core/src/obligationIR.test.ts --maxWorkers=2",
+      "exitCode": 0,
+      "result": "2 files / 24 tests passed"
+    },
+    {
+      "id": "w3-agent-core",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src --maxWorkers=2",
+      "exitCode": 0,
+      "result": "184 files / 1958 tests passed"
     }
   ],
   "knownLimits": [

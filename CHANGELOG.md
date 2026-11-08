@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-08 —— Agent 可靠性整改：W3 题意、条件与目标追踪（工程记录）
+
+- 新增 `problemUnderstanding`：合并问句拆成逐问目标，①②/(1)(2) 分作用域，折前/折后状态与显式依赖来自原文，垂足定义归 `construction`。
+- `obligationIR` 扩展 `GoalContext`/`ConditionUsage`/`GoalSourceSpan`；未读懂条件同时进入 `unverified` 与消费清单，没有求解器消费则显式 `unprocessed`。
+- `agent-core` 全量 184 文件 / 1958 项、定向 24 项通过，`typecheck` exit 0；目标仍为 `unsupported`，生产入口接线留给 W4。
+
 ## 2026-11-08 —— Agent 可靠性整改 M1：W2 答案交付与诚实状态（工程记录）
 
 - 新增宿主答案合同与 `acceptAnswer` 纯函数：空白正文、空目标、缺结构值、被否证候选不再算已交付；证据引用核对题面修订。

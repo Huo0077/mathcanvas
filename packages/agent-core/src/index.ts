@@ -65,6 +65,11 @@ export * from "./localPlanDefaults"
 export * from "./modelEvents"
 export * from "./modelGateway"
 export * from "./obligationIR"
+/**
+ * **题意层**（W3 / T3）：逐问目标、原文跨度、折前/折后状态、依赖与条件消费清单。
+ * 它在 `obligationIR` 之上扩展元信息，不另建事实库。
+ */
+export * from "./problemUnderstanding"
 export * from "./outputParser"
 export * from "./proof/proofArtifact"
 export * from "./proof/proofBackendReview"

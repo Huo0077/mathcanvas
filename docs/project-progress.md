@@ -34,6 +34,13 @@
 - 证据：`docs/audit/artifacts/agent-reliability/2026-11-08-w0-w2/`（manifest 与命令/退出码）。实测 **10文件 400项** + UI/runner **4文件 119项** + 浏览器 **2项** 通过，`typecheck` exit 0，改动文件 lint 0 error。
 - 边界：证据恒为空（尚无宿主核验器）→ 界面一律显示「未核验」；真实模型、真实题集准确率与桌面入口未测；旧消息不做重判，只加提示。
 
+### W3 / T3 题意、条件与目标追踪
+
+- 红测：`problemUnderstanding` 12 项 —— 合并问句两个目标（折前/折后状态不同）、`B'` 撇号点进入目标、仅折前只一问、①② 与 (1)(2) 分作用域、小问专用条件 `AD=2` 不污染第 1 问、垂足归 `construction`、given/free_choice/goal 角色分离、未读懂条件进入 `unverified` 与消费清单、消费记录标记求解器、无求解器消费标 `unprocessed`、goalId 随 revision 稳定、legacy givens 逐字段不变。实现前因模块不存在而红。
+- 实现：`obligationIR.ts` 扩展 `GoalContext`/`ConditionUsage`/`GoalSourceSpan`（`goalId` 复用目标 IR 条目 id），`toLegacyObligationSet` 把 `construction` 继续映射进旧 `givens`；新增 `problemUnderstanding.ts`：原文 span（UTF-16）、合并问句拆分与共享单位、小问作用域、折前/折后明文状态、显式 `由(1)` 依赖、垂足构造识别、条件消费清单（未报告=未消费）。
+- 证据：定向 2 文件 24 项、`agent-core` 全量 **184 文件 / 1958 项** 通过，`typecheck` exit 0，改动文件 lint 0 error。
+- 边界：目标仍全部 `judgeability: unsupported`（现有核验器不判目标）；生产入口尚未接入该层，W4 折叠题先接；`任取一点 P` 这类写法仍不被 parser 识别（用 `任取点 P`）。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

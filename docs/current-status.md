@@ -6,15 +6,16 @@
 
 新增[根因报告](audit/2026-11-08-agent-failure-root-cause-analysis.md)与[实施计划](superpowers/plans/2026-11-08-agent-reliability-remediation.md)。10项离线行为探针记录当前缺口，含错误/空回答仍可completed；24道折叠题核心复核18/24，另有内部角度未进入正文。定向回归7文件240项、评分器9项与类型检查通过；文档规范21/22，失败为HEAD原有5文件BOM，未混入无关改动。这些不是缺陷已修或真实模型成功率提升的证据。本轮未调用付费模型、未改生产代码、未打包发布。
 
-## 2026-11-08 —— Agent 可靠性整改 M1 实施（W0 完成，W1/W2 进行中）
+## 2026-11-08 —— Agent 可靠性整改：W0–W3 实施（M1 完成）
 
 按[整改方案](superpowers/plans/2026-11-08-agent-reliability-remediation.md)第9节工作包推进；每包先红测，再最小实现，定向回归后独立提交。
 
 - **W0（完成）**：按字节移除5个受跟踪文件开头的UTF-8 BOM，其余字节与换行未动，未改评分规则或题面；`docs-consistency` **8文件 / 22项通过**（此前21/22），`node --test scripts/real-exam-eval/score.test.cjs` **9项通过**。该修复无产品行为变化。
 - **W1（完成）**：纠错反馈带原因码、字段路径、被拒分支与该分支允许字段（分支名只认 `plan`/`clarification`/`answer`，非法值不回显）；三个分支的字段清单由 `envelopeAllowedFields` 从共享定义生成，`normalisations` 只出现在 `plan` 分支（提示词 v15）；同一格式错误只给一次合预算纠错，非法批次仍零执行。定向回归**4文件 / 217项**通过，`typecheck` exit 0。
 - **W2（完成）**：新增宿主答案合同 `answerResult`/`answerAcceptance`（空白正文不算已答、空目标不算成功、被否证候选不作为终论、证据引用核对题面修订）；`RunEvent.solveResult` 由宿主派生并随消息持久化；状态卡按交付状态显示「已回答/部分回答/需要补充/未完成」，逐问答案卡显示缺项与「未核验」；旧消息显示「历史回答，未重新核验」。定向回归**10文件 / 400项**、UI/runner **4文件 / 119项**、新浏览器用例**2项**通过，`typecheck` exit 0。
+- **W3（完成）**：新增题意层 `problemUnderstanding` 与 IR 元信息（`GoalContext`/`ConditionUsage`/`GoalSourceSpan`）：合并问句拆成两问、①②/(1)(2) 分作用域、折前/折后状态与显式依赖、`垂足` 归 `construction`、未读懂条件进入 `unverified` 与消费清单。`GoalContext.goalId` 就是目标 IR 条目的 id，span 指向用户原文的 UTF-16 下标。定向**2文件 / 24项**、`agent-core` 全量**184文件 / 1958项**通过，`typecheck` exit 0。
 
-W0–W2（M1）已完成：工程门禁与交付状态修复。证据见 `docs/audit/artifacts/agent-reliability/2026-11-08-w0-w2/`。M1 未调用真模型、未跑全量 Playwright/桌面构建；"测试通过"不等于真实题集准确率提升。
+W0–W3 已完成；下一步 W4（折叠题闭环）。M1 未调用真模型、未跑全量 Playwright/桌面构建；"测试通过"不等于真实题集准确率提升。
 
 ## 2026-11-07 同步 v4.3.0 并重建桌面端
 
