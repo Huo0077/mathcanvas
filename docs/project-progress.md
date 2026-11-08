@@ -27,6 +27,13 @@
 - 回归：`schemas`/`coordinator`/`modelPlanner`/`systemPrompt` **4文件 217项**通过，`npm run typecheck` exit 0。既有「混合批次零执行、合法只读批次整批执行」用例保持绿。
 - 不改变：不放宽信封白名单、不自动删字段、不执行合法子集、不新增模型调用或预算；重复同一格式错误仍只有一次合预算纠错（第二次失败即 `failed`）。
 
+### W2 / T2 答案交付与诚实状态
+
+- 红测：`answerAcceptance` 20 项（空白正文、空目标、未核验可见、结构值缺失/错配、被否证候选、证据引用、澄清/部分/不一致、多目标与对话目标）；`AnswerResult` 5 项；runtime 3 项；`RunStatus` 3 项；store 3 项。组件与提示词部分先红后绿。
+- 实现：新增 `answerResult.ts`（`SolveStatus`/`AnswerKind`/`AnswerValue`/`GoalAnswer`/`EvidenceRecord`/`SolveResult`）与 `answerAcceptance.ts`（纯函数 `acceptAnswer`，逐目标裁决）；`RunEvent.solveResult` 作为可选字段随转移事件携带；协调器在 answer、clarification 与"带解答的 plan"三条路径派生 `SolveResult` 并回调宿主；运行时新增 `solveResult()`；消息新增可选持久化字段；界面新增逐问答案卡与旧消息「历史回答，未重新核验」；状态卡按交付状态而非回执状态显示。
+- 证据：`docs/audit/artifacts/agent-reliability/2026-11-08-w0-w2/`（manifest 与命令/退出码）。实测 **10文件 400项** + UI/runner **4文件 119项** + 浏览器 **2项** 通过，`typecheck` exit 0，改动文件 lint 0 error。
+- 边界：证据恒为空（尚无宿主核验器）→ 界面一律显示「未核验」；真实模型、真实题集准确率与桌面入口未测；旧消息不做重判，只加提示。
+
 ## 2026-11-07 —— 同步 v4.3.0 与桌面端重建
 
 - 远端更新到 `6fe61d51`（v4.3.0 发布）；本地 `17fc4a3b` 的题图识别/Agent 可靠性修复 rebase 为 `59ea3613`，保留本地提交。

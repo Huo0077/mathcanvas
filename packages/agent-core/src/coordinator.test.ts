@@ -1105,7 +1105,6 @@ describe("W1 / T1 协议恢复与预算纠错", () => {
   })
 
   it("当 generation 余额不足时，同一夹具只调用 planner 一次且停在 budget_repair，文档版本不变", async () => {
-    let attempt = 0
     const malformedAnswer: PlanEnvelope = {
       schemaVersion: "mathcanvas.plan.v1",
       kind: "answer",
@@ -1119,7 +1118,6 @@ describe("W1 / T1 协议恢复与预算纠错", () => {
     const harness = makeHarness({
       limits: { generation: 1 },
       plan: () => {
-        attempt += 1
         return { plan: malformedAnswer, requestId: "req-1", attemptId: "attempt-1" }
       }
     })

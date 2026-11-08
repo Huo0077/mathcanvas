@@ -833,7 +833,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const draftId = active.draftId()
 
       if ((phase === "completed" || phase === "awaiting_confirmation") && active.answer() !== undefined) {
-        await useAgentStore.getState().recordAnswer(active.answer()!, eventRunId, generation())
+        await useAgentStore.getState().recordAnswer(active.answer()!, eventRunId, generation(), active.solveResult())
       }
 
       if (draftId && phase === "awaiting_confirmation") {
@@ -901,7 +901,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
               ? `这一步需要你补充信息：${ledgerDetail}`
               : `这一步需要你补充信息${lastSelection?.textProfileId === "local-planner" ? "。当前没有接入模型服务，本地规划器只认识几条固定指令" : ""}。`,
           retryable: false
-        }, eventRunId, generation())
+        }, eventRunId, generation(), active.solveResult())
       } else if (phase === "failed") {
         const last = active.coordinator.ledger().at(-1)
         const detail = last?.detail || "这次运行没有完成。"

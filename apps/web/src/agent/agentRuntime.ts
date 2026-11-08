@@ -23,6 +23,7 @@ import {
   type RunEvent,
   type SceneDocumentSnapshot,
   type SkillCatalog,
+  type SolveResult,
   type ToolResult
 } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
@@ -199,6 +200,13 @@ export interface AgentRuntime {
   questions(): string[] | undefined
   /** Validated answer text, retained independently of document changes. */
   answer(): string | undefined
+  /**
+   * **宿主派生的答案交付语义**（W2 / T2）。
+   *
+   * `answer()` 只说"模型写了什么"，这一个说"交付了几问、缺哪一问、有没有证据"。
+   * 界面必须用后者的 `status` 与 `evidence` 决定标签 —— 前者是 `completed` 不等于答案正确。
+   */
+  solveResult(): SolveResult | undefined
   /**
    * 用户点了确认之后**真正落盘**。
    *
@@ -410,6 +418,11 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   /** 规划器要问用户的问题（同上，一条路径）。 */
   let declaredQuestions: string[] | undefined
   let declaredAnswer: string | undefined
+  /**
+   * **宿主派生的答案交付语义**（W2）：每次运行新建一个运行时，所以不必清理。
+   * 只有协调器（宿主侧）能写它 —— 规划器交过来的信封不构成它。
+   */
+  let declaredSolveResult: SolveResult | undefined
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
@@ -437,6 +450,9 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       // 只有澄清分支才有问题；另外两个分支即使带 `questions` 也不是合法的信封（schema 会拒）。
       declaredQuestions = plan.kind === "clarification" ? [...plan.questions] : undefined
       declaredAnswer = plan.kind === "clarification" ? undefined : plan.answer
+    },
+    onSolveResult: (result) => {
+      declaredSolveResult = result
     },
     requestedSkillIds,
     availableActions,
@@ -475,6 +491,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     },
     questions: () => declaredQuestions,
     answer: () => declaredAnswer,
+    solveResult: () => declaredSolveResult,
     confirmDraft(): ConfirmOutcome {
       const id = committer.draftIdFor()
       /**

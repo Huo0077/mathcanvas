@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 
+import type { SolveResult } from "@draw/agent-core"
+
 import { AGENT_STORAGE_KEY, useAgentStore, type AgentMessage } from "./agentStore"
 import { summaryOfDocument, withDocumentSummary } from "./conversationSummary"
 import { MAX_SUMMARY_CHARS, conversationRepository } from "./conversationRepository"
@@ -494,5 +496,71 @@ describe("a run writes back to the conversation it started in", () => {
 
     expect(await useAgentStore.getState().retractFact({ conversationId, key: "commit:never-written", reason: "随便说说" })).toBe(false)
     expect((await conversationRepository().readRecord(conversationId))?.facts).toEqual([])
+  })
+})
+
+/**
+ * **W2 / T2：答案交付语义随消息一起持久化。**
+ *
+ * 旧消息没有这个字段是**合法的**（读出来必须当作"历史回答，未重新核验"）；
+ * 新回答则必须把状态、缺项与证据一起存下来 —— 只存正文等于把"未核验"这句话丢掉。
+ */
+describe("W2 — answer delivery survives the message write", () => {
+  const solve = (overrides: Partial<SolveResult> = {}): SolveResult => ({
+    schemaVersion: "mathcanvas.solve.v1",
+    problemRevision: "revision-1",
+    status: "answered",
+    answers: [{ goalId: "goal-1", kind: "conversation", displayText: "0", evidenceRefs: [] }],
+    unansweredGoalIds: [],
+    evidence: [],
+    reasonCodes: [],
+    clarificationQuestions: [],
+    ...overrides
+  })
+
+  beforeEach(reset)
+
+  it("stores the delivery status next to the answer text", async () => {
+    useAgentStore.getState().sendPrompt("数一下有几个对象")
+
+    await useAgentStore.getState().recordAnswer("0", undefined, undefined, solve())
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.text).toBe("0")
+    expect(assistant.solveResult?.status).toBe("answered")
+    expect(assistant.solveResult?.evidence).toEqual([])
+    // 持久化：刷新之后仍然说得出"未核验"。
+    expect(localStorage.getItem(AGENT_STORAGE_KEY) ?? "").toContain("mathcanvas.solve.v1")
+  })
+
+  it("keeps clarification questions on the waiting message", async () => {
+    useAgentStore.getState().sendPrompt("画一个矩形")
+
+    await useAgentStore.getState().failPendingReply(
+      { code: "needs_more_information", message: "AB 的长是多少？", retryable: false },
+      undefined,
+      undefined,
+      solve({
+        status: "needs_clarification",
+        answers: [],
+        unansweredGoalIds: ["goal-1"],
+        clarificationQuestions: ["AB 的长是多少？"]
+      })
+    )
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.failure?.message).toBe("AB 的长是多少？")
+    expect(assistant.solveResult?.status).toBe("needs_clarification")
+    expect(assistant.solveResult?.clarificationQuestions).toEqual(["AB 的长是多少？"])
+  })
+
+  it("leaves legacy messages without a solveResult untouched", async () => {
+    useAgentStore.getState().sendPrompt("旧问题")
+
+    await useAgentStore.getState().recordAnswer("旧回答")
+
+    const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(assistant.text).toBe("旧回答")
+    expect(assistant.solveResult).toBeUndefined()
   })
 })

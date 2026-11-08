@@ -1011,3 +1011,54 @@ describe("representative tasks from the design", () => {
     expect(candidate?.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
   })
 })
+
+/**
+ * **W2 / T2：答案交付语义由宿主派生。**
+ *
+ * `answer()` 只说"模型写了什么"，`solveResult()` 说"交付了几问、有没有证据"。
+ * 这两件事必须分开：`completed` 只表示流程结束，不是"解对了"。
+ */
+describe("W2 — the host derives answer delivery semantics", () => {
+  it("exposes an answered solveResult with no evidence for a normal answer", async () => {
+    const { runtime } = makeRuntime({ envelope: answerEnvelope() })
+
+    const collected: { phase: string; solveResult?: unknown }[] = []
+    for await (const event of runtime.coordinator.start({ run: runContext(), userMessage: "数一下有几个对象" })) collected.push(event)
+
+    expect(runtime.answer()).toBe("0")
+    const solve = runtime.solveResult()
+    expect(solve?.status).toBe("answered")
+    expect(solve?.answers[0]?.displayText).toBe("0")
+    // **没有核验器就没有证据**：不要为了"看起来完成"编一条。
+    expect(solve?.evidence).toEqual([])
+    // 事件也带同一份结论（可选字段；旧事件没有它）。
+    expect(collected.find((event) => event.phase === "completed")?.solveResult).toEqual(solve)
+  })
+
+  it("does not let a whitespace answer become a delivered answer", async () => {
+    const { runtime } = makeRuntime({ envelope: { ...answerEnvelope(), answer: "   " } as PlanEnvelope })
+
+    await drive(runtime.coordinator, { run: runContext(), userMessage: "数一下有几个对象" })
+
+    expect(runtime.solveResult()?.status).toBe("failed")
+    expect(runtime.solveResult()?.reasonCodes).toContain("empty_answer")
+    expect(runtime.solveResult()?.unansweredGoalIds).toEqual(["goal-1"])
+  })
+
+  it("keeps a clarification run at needs_clarification with its concrete question", async () => {
+    const clarification: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "clarification",
+      goal: "需要补充条件",
+      factIds: [],
+      questions: ["AB 的长是多少？"]
+    }
+    const { runtime } = makeRuntime({ envelope: clarification })
+
+    await drive(runtime.coordinator, { run: runContext(), userMessage: "画一个矩形" })
+
+    expect(runtime.solveResult()?.status).toBe("needs_clarification")
+    expect(runtime.solveResult()?.clarificationQuestions).toEqual(["AB 的长是多少？"])
+    expect(runtime.answer()).toBeUndefined()
+  })
+})

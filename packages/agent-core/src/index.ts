@@ -1,6 +1,14 @@
 export * from "./actionSchemas"
 export * from "./actionIds"
 /**
+ * **宿主答案合同与验收**（W2 / T2，2026-11-08）。
+ *
+ * `answerResult` 只有类型（`SolveResult` 由宿主产生，模型不能自证已核验）；
+ * `answerAcceptance` 是纯函数裁决（目标覆盖 / 正文 / 结构值 / 证据引用）。
+ */
+export * from "./answerAcceptance"
+export * from "./answerResult"
+/**
  * **benchmark 的题集与报告契约**（子任务 N4a 从 `scripts/agent-benchmark/` 搬进来）。
  *
  * 它进包根是因为**应用侧要用同一份**：`scripts/` 不是工作区，应用拿不到它，

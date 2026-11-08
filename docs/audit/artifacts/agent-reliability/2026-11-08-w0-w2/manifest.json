@@ -1,0 +1,84 @@
+{
+  "runId": "2026-11-08-w0-w2",
+  "recordedAt": "2026-11-09T00:45:00+08:00",
+  "scope": "M1: W0 (BOM cleanup) + W1 (branch contracts and budgeted repair) + W2 (host answer contract and per-goal delivery)",
+  "baseRevision": "9a4fdf1ad74272270f83bd7bfa765c520c9c7e7d",
+  "headRevisionAtRun": "72fa9afb (W1 commit); W2 changes were uncommitted during these runs",
+  "worktree": "dirty (W2 sources and tests not yet committed when the commands ran)",
+  "environment": {
+    "node": "v26.3.0",
+    "npm": "11.16.0",
+    "os": "Windows",
+    "paidModelCalls": 0,
+    "networkModelCalls": 0,
+    "flags": "defaults"
+  },
+  "commands": [
+    {
+      "id": "w0-docs",
+      "command": "node node_modules/vitest/vitest.mjs run scripts/docs-consistency --maxWorkers=2 --testTimeout=60000",
+      "exitCode": 0,
+      "result": "8 files / 22 tests passed (was 21/22 before W0)"
+    },
+    {
+      "id": "w0-score",
+      "command": "node --test scripts/real-exam-eval/score.test.cjs",
+      "exitCode": 0,
+      "result": "9 tests passed"
+    },
+    {
+      "id": "w1-targeted",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/schemas.test.ts packages/agent-core/src/coordinator.test.ts apps/web/src/agent/modelPlanner.test.ts apps/web/src/agent/systemPrompt.test.ts --maxWorkers=2",
+      "exitCode": 0,
+      "result": "4 files / 217 tests passed"
+    },
+    {
+      "id": "w2-acceptance",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/answerAcceptance.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "1 file / 20 tests passed"
+    },
+    {
+      "id": "w2-regression",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/schemas.test.ts packages/agent-core/src/coordinator.test.ts packages/agent-core/src/answerAcceptance.test.ts packages/agent-core/src/runState.test.ts apps/web/src/agent/modelPlanner.test.ts apps/web/src/agent/systemPrompt.test.ts apps/web/src/agent/agentRuntime.test.ts apps/web/src/agent/agentRunner.test.ts apps/web/src/agentStore.runStatus.test.ts apps/web/src/components/agent/AnswerResult.test.tsx --maxWorkers=2",
+      "exitCode": 0,
+      "result": "10 files / 400 tests passed"
+    },
+    {
+      "id": "w2-ui",
+      "command": "node node_modules/vitest/vitest.mjs run apps/web/src/components/agent/RunStatus.test.tsx apps/web/src/components/agent/AnswerResult.test.tsx apps/web/src/agentStore.runStatus.test.ts apps/web/src/agent/agentRunner.test.ts --maxWorkers=2",
+      "exitCode": 0,
+      "result": "4 files / 119 tests passed"
+    },
+    {
+      "id": "w2-e2e",
+      "command": "node node_modules/@playwright/test/cli.js test e2e/agent-answer-delivery.spec.ts",
+      "exitCode": 0,
+      "result": "2 passed (36.5s); offline local planner, no model calls"
+    },
+    {
+      "id": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "result": "all workspaces + e2e + scripts"
+    },
+    {
+      "id": "lint-changed",
+      "command": "eslint <changed files>",
+      "exitCode": 0,
+      "result": "0 errors; full-repo lint still has pre-existing errors in untouched scripts/fixtures"
+    },
+    {
+      "id": "docs-after",
+      "command": "node node_modules/vitest/vitest.mjs run scripts/docs-consistency --maxWorkers=2 --testTimeout=60000",
+      "exitCode": 0,
+      "result": "8 files / 22 tests passed"
+    }
+  ],
+  "knownLimits": [
+    "No paid or live model run was made; these results are engineering acceptance, not real accuracy.",
+    "The e2e suite uses the offline local planner; it proves delivery semantics reach the UI, not that the model answers correctly.",
+    "Full-repo eslint still reports pre-existing errors in untouched files (scripts/*.cjs, e2e fixtures); changed files introduce none.",
+    "Evidence records are always empty in W2 because no host verifier runs yet; the UI therefore shows 未核验."
+  ]
+}

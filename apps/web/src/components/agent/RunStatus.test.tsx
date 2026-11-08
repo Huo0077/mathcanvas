@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
+import type { SolveResult } from "@draw/agent-core"
+
 import type { AgentMessage } from "../../agentStore"
 import { RunStatus } from "./RunStatus"
 
@@ -153,5 +155,45 @@ describe("the status card leaves the draft UI to the confirmation panel", () => 
 
     // 版本与动作数由确认面板给出（那里还有前后对比），状态卡只说"在等你确认"。
     expect(screen.queryByText("动作数")).toBeNull()
+  })
+})
+
+/**
+ * **W2 / T2：状态卡读宿主派生的交付语义，而不是"有没有收到回执"。**
+ *
+ * 旧实现里"运行走到 completed"就显示"已回答"；空白正文与请求补图都以 completed 结束，
+ * 于是界面说了一句假话。现在 `solveResult.status` 优先，`failed` / `partial` 各有各的词。
+ */
+describe("W2 — delivery status comes from the host's solveResult", () => {
+  const solve = (status: SolveResult["status"]): SolveResult => ({
+    schemaVersion: "mathcanvas.solve.v1",
+    problemRevision: "revision-1",
+    status,
+    answers: status === "answered" ? [{ goalId: "goal-1", kind: "conversation", displayText: "0", evidenceRefs: [] }] : [],
+    unansweredGoalIds: status === "answered" ? [] : ["goal-1"],
+    evidence: [],
+    reasonCodes: [],
+    clarificationQuestions: status === "needs_clarification" ? ["AB 的长是多少？"] : []
+  })
+
+  it("does not label an empty delivery as answered or no-change", () => {
+    render(<RunStatus message={message({ text: "", commit: { status: "no_change" }, solveResult: solve("failed") })} />)
+
+    expect(screen.getByText("未完成")).toBeTruthy()
+    expect(screen.queryByText("已回答")).toBeNull()
+    expect(screen.queryByText("无需改动")).toBeNull()
+  })
+
+  it("labels a partial delivery as partial instead of answered", () => {
+    render(<RunStatus message={message({ text: "只答了第一问", commit: { status: "no_change" }, solveResult: solve("partial") })} />)
+
+    expect(screen.getByText("部分回答")).toBeTruthy()
+    expect(screen.queryByText("已回答")).toBeNull()
+  })
+
+  it("keeps the answered label only when the host accepted the delivery", () => {
+    render(<RunStatus message={message({ text: "0", commit: { status: "no_change" }, solveResult: solve("answered") })} />)
+
+    expect(screen.getByText("已回答")).toBeTruthy()
   })
 })

@@ -1,3 +1,5 @@
+import { acceptAnswer } from "./answerAcceptance"
+import type { SolveResult } from "./answerResult"
 import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
@@ -96,6 +98,14 @@ export interface CoordinatorDependencies {
    */
   onPlanParsed?: (plan: PlanEnvelope) => void
   /**
+   * **宿主派生的答案交付语义**（W2 / T2，2026-11-08）。
+   *
+   * 与 `onPlanParsed` 同一条理由：`SolveResult` 里有协调器自己用不上、但宿主必须看见的
+   * 东西（逐问回答、缺项、证据等级）。它不塞进 `RunEvent.detail`（那是给人看的一句话），
+   * 也不让宿主再去问一次模型。**由宿主产生**，模型提交的信封不构成它。
+   */
+  onSolveResult?: (result: SolveResult) => void
+  /**
    * **编译之前**的一次准备机会（例如把工作区切到这条计划需要的那个）。
    *
    * 为什么需要它：动作编译器会拒绝"工作区不匹配"的动作（`solid.create_template` 在
@@ -150,6 +160,13 @@ export interface AgentCoordinator {
    */
   toolTraces(): readonly ToolCallTrace[]
   phase(): RunEvent["phase"]
+  /**
+   * **这次运行派生的答案交付语义**（W2 / T2）。
+   *
+   * 回答类运行结束时才有值：`status` 只说"交付层面"的结论（回答了几问、缺哪一问），
+   * 证据为空就表示**未核验**。没有回答的运行返回 `undefined`，不编一个空结果。
+   */
+  solveResult(): SolveResult | undefined
   /**
    * **用户确认之后把账本走完**（外部审查 A4）。
    *
@@ -207,6 +224,38 @@ function declaredEnvelopeKind(value: unknown): string | undefined {
 }
 
 /**
+ * **把现有信封适配成宿主答案合同**（W2 / T2）。
+ *
+ * T2 不改变外部信封：`answer` 分支的正文就是全部内容，所以这里只建**一个**
+ * `conversation` 目标（"有交付即完整"），把正文原样交给 `acceptAnswer` 裁决。
+ * W3 接上真实子问之后，目标会来自题意层，这个适配器只保留"旧信封读成 conversation"的兼容路径。
+ *
+ * `problemRevision` 用当前文档的内容哈希：它随文档内容变化，所以证据引用能在题面被改过之后失效。
+ * **证据先给空数组** —— 这一轮没有任何宿主核验器跑过，"没有证据"必须如实说成没有。
+ */
+function solveResultFromEnvelope(candidate: PlanEnvelope, problemRevision: string): SolveResult {
+  const goals = [{ id: "goal-1", kind: "conversation" as const, required: true }]
+  if (candidate.kind === "clarification") {
+    return acceptAnswer({
+      problemRevision,
+      goals,
+      candidates: [],
+      evidence: [],
+      resolution: "clarification",
+      clarificationQuestions: candidate.questions
+    })
+  }
+  return acceptAnswer({
+    problemRevision,
+    goals,
+    candidates: [{ goalId: "goal-1", kind: "conversation", displayText: candidate.answer ?? "", evidenceRefs: [] }],
+    evidence: [],
+    resolution: "answer",
+    clarificationQuestions: []
+  })
+}
+
+/**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
  *
  * ## 为什么需要它（N4d 抽出请求构造之后）
@@ -261,6 +310,13 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
   let cancelled = false
   /** 最近一次 `start` 的目标句柄：补记确认结果时 `record` 的 patch 用它。 */
   let lastTarget: RunContext["target"] | undefined
+  /**
+   * **这一次运行的答案交付语义**（W2）。
+   *
+   * 每次 `start` 清空：上一轮的 "answered" 不能证明这一轮也交付了什么。
+   * 只有宿主侧的 `acceptAnswer` 能写它 —— 模型提交的信封不构成它。
+   */
+  let solveResult: SolveResult | undefined
 
   function cancel(reason: CancelReason = "user"): CancelResult {
     if (!ledger) return { cancelled: false, phase: "created" }
@@ -275,6 +331,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
   async function* run(request: StartRequest): AsyncGenerator<RunEvent> {
     const budget = dependencies.budget ?? createBudget(dependencies.limits)
     lastTarget = request.run.target
+    // 上一轮的交付结论不属于这一轮。
+    solveResult = undefined
     ledger = createRunLedger({ runId: request.run.runId, promptMessageId: request.run.promptMessageId, handle: request.run.target, now, revisions: runRevisions(request) })
     controller = new AbortController()
     const signal = controller.signal
@@ -631,14 +689,22 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         }
 
         if (candidate.kind !== "plan") {
-          const answering = ledger.transition("answering", candidate.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question")
+          /**
+           * **答案交付语义由宿主派生**（W2 / T2）：正文、缺项与证据等级一起交给界面。
+           * `answered` 只表示"这一问有可交付回答"，不代表答案数学正确 —— 证据为空时
+           * 界面必须显示"未核验"。
+           */
+          const delivered = solveResultFromEnvelope(candidate, request.run.target.contentHash)
+          solveResult = delivered
+          dependencies.onSolveResult?.(delivered)
+          const answering = ledger.transition("answering", candidate.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question", undefined, { solveResult: delivered })
           if (answering.ok) yield answering.event
           if (candidate.kind === "clarification") {
-            const waiting = ledger.transition("waiting", "waiting for the user's answer")
+            const waiting = ledger.transition("waiting", "waiting for the user's answer", undefined, { solveResult: delivered })
             if (waiting.ok) yield waiting.event
             return
           }
-          const completed = ledger.transition("completed", "the run produced no draft")
+          const completed = ledger.transition("completed", "the run produced no draft", undefined, { solveResult: delivered })
           if (completed.ok) yield completed.event
           return
         }
@@ -784,7 +850,17 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * 确认状态不是"等用户点按钮"的 UI 细节，而是**账本必须留下的记录**。
        * 跳过它，事后就无法区分"用户确认过"与"调用方直接调了提交"。
        */
-      const confirming = ledger.transition("awaiting_confirmation", "waiting for the user to confirm the preview")
+      /**
+       * **作图计划附带的解答也走同一份答案合同**（W2）：正文非空时才派生，
+       * 空解答不产生 `SolveResult`（`answered` 的前提是"真的有话可说"）。
+       */
+      if (stagedPlan.answer !== undefined && stagedPlan.answer.trim().length > 0) {
+        const delivered = solveResultFromEnvelope(stagedPlan, request.run.target.contentHash)
+        solveResult = delivered
+        dependencies.onSolveResult?.(delivered)
+      }
+
+      const confirming = ledger.transition("awaiting_confirmation", "waiting for the user to confirm the preview", undefined, solveResult === undefined ? undefined : { solveResult })
       if (confirming.ok) yield confirming.event
 
       if (!request.confirmed || !dependencies.consent) return
@@ -875,6 +951,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     },
     phase() {
       return ledger?.phase() ?? "created"
+    },
+    solveResult() {
+      return solveResult
     },
     settleConfirmation
   }

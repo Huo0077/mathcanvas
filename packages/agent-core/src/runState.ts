@@ -1,3 +1,4 @@
+import type { SolveResult } from "./answerResult"
 import type { DocumentHandle, RunId, ToolResult, VerificationReport } from "./contracts"
 
 /**
@@ -128,6 +129,14 @@ export interface RunEvent extends RunEventIds {
    * 只在首条记录，等于要求读者先去翻第一条。
    */
   revisions: RunRevisions
+  /**
+   * **宿主派生的答案交付语义**（W2 / T2，2026-11-08）。
+   *
+   * 可选：旧事件没有它，旧代码读到 `undefined` 时按"未核验的历史回答"处理。
+   * 它只在答案真正交付的那一刻挂上（`completed` / `waiting` / `awaiting_confirmation`），
+   * 而且**由宿主产生** —— 模型无法提交一个"已核验"的 `SolveResult` 混进账本。
+   */
+  solveResult?: SolveResult
 }
 
 /**
@@ -224,7 +233,7 @@ export interface RunLedger {
   /** 是否已到终态（终态之后 `transition` 与 `record` 都会被拒）。 */
   finished(): boolean
   ledger(): readonly RunEvent[]
-  transition(to: RunPhase, detail?: string, ids?: Partial<RunEventIds>): TransitionResult
+  transition(to: RunPhase, detail?: string, ids?: Partial<RunEventIds>, extra?: { solveResult?: SolveResult }): TransitionResult
   /** 只记录不换状态（例如"工具返回了一条诊断"）。终态之后返回 null 并丢弃。 */
   record(detail: string, ids?: Partial<RunEventIds>): RunEvent | null
   /**
@@ -280,7 +289,7 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
     finished,
     ledger: () => [...events],
 
-    transition(to, detail = "", patch) {
+    transition(to, detail = "", patch, extra) {
       if (finished()) return { ok: false, reason: "run_finished", from: phase, allowed: [] }
       const allowed = TRANSITIONS[phase]
       if (!allowed.includes(to)) return { ok: false, reason: "illegal_transition", from: phase, allowed }
@@ -289,7 +298,7 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
       if (patch) ids = { ...ids, ...patch, runId: init.runId, promptMessageId: patch.promptMessageId ?? ids.promptMessageId }
       phase = to
       sequence += 1
-      const event: RunEvent = { ...ids, revisions, sequence, at: now(), phase: to, from, detail }
+      const event: RunEvent = { ...ids, revisions, sequence, at: now(), phase: to, from, detail, ...(extra?.solveResult === undefined ? {} : { solveResult: extra.solveResult }) }
       events.push(event)
       return { ok: true, event }
     },

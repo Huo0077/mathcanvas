@@ -1,3 +1,5 @@
+import type { SolveStatus } from "@draw/agent-core"
+
 import type { AgentCommitView, AgentMessage } from "../../agentStore"
 import { ToolTracePanel } from "./ToolTracePanel"
 import { TranscriptText } from "./TranscriptText"
@@ -59,20 +61,36 @@ function phaseLabel(phase: string): string {
   return PHASE_LABELS[phase] ?? phase
 }
 
+/**
+ * **交付状态优先于"有没有回执"**（W2 / T2）。
+ *
+ * 旧判据是 `message.commit` 存在且正文非空 ⇒ "已回答"，但空白正文与"请补充图片"
+ * 同样以 `completed` + `no_change` 结束 —— 于是界面把两类失败说成了成功。
+ * 这里读宿主派生的 `solveResult.status`；没有这个字段的旧消息仍走原来的路径。
+ */
+const DELIVERY_LABELS: Record<SolveStatus, { label: string; detail: string }> = {
+  answered: { label: "已回答", detail: "" },
+  partial: { label: "部分回答", detail: "有些小问还没有可交付的回答" },
+  needs_clarification: { label: "等待补充信息", detail: "" },
+  inconsistent: { label: "题设存在冲突", detail: "条件互相矛盾，暂不能继续" },
+  unsupported: { label: "超出当前能力", detail: "" },
+  failed: { label: "未完成", detail: "这一轮没有可交付的回答" }
+}
+
 function progressOf(message: AgentMessage): { label: string; detail: string } | null {
   if (message.pending) {
     const latest = message.trace?.at(-1)
     return { label: "进行中", detail: latest ? phaseLabel(latest.phase) : "正在开始" }
   }
-  if (message.commit) return { label: message.commit.status === "committed" ? "已提交" : message.text && message.text !== "这次没有需要改动的地方。" ? "已回答" : "无需改动", detail: "" }
   if (message.failure) return { label: message.failure.code === "needs_more_information" ? "等待补充信息" : "没有完成", detail: "" }
   /**
-   * **草稿已暂存但运行不再 pending**：这是"等你确认"的状态，不是"没有状态"。
-   *
-   * 第一版这里直接返回 `null`，于是那块草稿预览（含确认/丢弃按钮与一步撤销声明）
-   * **整块不渲染** —— 用户看到一条空消息，却没有任何东西可点。是测试抓出来的。
+   * **草稿优先于交付语义**：计划附带解答时也有 `solveResult`，但这一步真正等用户做的是确认草稿；
+   * 逐问答案由 `AnswerResult` 显示，状态卡不抢那句话。
    */
   if (message.draft) return { label: "等待你确认", detail: "草稿已暂存，还没有写进文档" }
+  const delivery = message.solveResult === undefined ? undefined : DELIVERY_LABELS[message.solveResult.status]
+  if (delivery !== undefined) return delivery
+  if (message.commit) return { label: message.commit.status === "committed" ? "已提交" : message.text && message.text !== "这次没有需要改动的地方。" ? "已回答" : "无需改动", detail: "" }
   return null
 }
 

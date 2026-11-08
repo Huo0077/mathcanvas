@@ -2,6 +2,7 @@ import { HeaderIcon, type HeaderIconName } from "../HeaderIcon"
 import type { AgentConversation, AgentMessage } from "../../agentStore"
 import { formatMessageTime, splitTranscript } from "../../agentTranscript"
 import { highlightCode } from "../../codeHighlight"
+import { AnswerResult } from "./AnswerResult"
 import { ConfirmationPanel } from "./ConfirmationPanel"
 import { RunStatus } from "./RunStatus"
 import { TranscriptText } from "./TranscriptText"
@@ -38,9 +39,27 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 function AssistantBody({ message }: { message: AgentMessage }) {
+  /**
+   * **W2：答案交付卡先于正文**。
+   *
+   * 宿主派生的 `solveResult` 已经逐问列出了答案；当它只有一问且正文与气泡内容相同时，
+   * 不再重复渲染同一段话（重复两遍会让用户以为有两问）。没有 `solveResult` 的旧消息
+   * 走原来的正文路径 —— 不补标签、不默认已验证。
+   */
+  const solve = message.solveResult
+  const duplicatedByCard = solve !== undefined && solve.answers.length === 1 && solve.answers[0]?.displayText.trim() === message.text.trim()
+  /**
+   * **旧消息不默认成已验证**（W2）：新代码的回答类运行一定带 `solveResult`；
+   * 一条**纯文字**、没有草稿/回执/失败、也没有 `solveResult` 的助手消息，只可能来自旧版本。
+   * 对它只加一句"历史回答，未重新核验"，正文原样保留。
+   */
+  const legacyAnswer = !message.pending && solve === undefined && message.text.trim().length > 0
+    && message.draft === undefined && message.commit === undefined && message.failure === undefined
   return <>
+    {solve !== undefined && <AnswerResult result={solve} />}
+    {legacyAnswer && <small className="agent-run-detail">历史回答，未重新核验。</small>}
     {message.draft?.diagramVerification && message.text.trim() && <small className="agent-run-detail">上方的题设核验针对草稿图形。</small>}
-    {splitTranscript(message.text).map((section, index) => section.kind === "code"
+    {!duplicatedByCard && splitTranscript(message.text).map((section, index) => section.kind === "code"
     ? <div className="agent-code" key={`${message.id}-code-${index}`} data-code-language={section.language}>
       <div className="agent-code-head"><span>{section.language || "code"}</span><CopyCodeButton code={section.code} /></div>
       {/* 高亮由 `codeHighlight` 的纯函数给出 token，这里只负责着色 ——

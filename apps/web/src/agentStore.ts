@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { DraftObjectCounts } from "@draw/agent-core"
+import type { DraftObjectCounts, SolveResult } from "@draw/agent-core"
 
 import { deriveConversationTitle } from "./agentTranscript"
 import {
@@ -135,6 +135,13 @@ export interface AgentMessage {
   commit?: AgentCommitView
   /** 失败原因（人话），供界面显示可执行的下一步。 */
   failure?: { code: string; message: string; retryable: boolean }
+  /**
+   * **答案交付语义**（W2 / T2）。
+   *
+   * 可选字段：旧消息没有它，读取时必须当作"历史回答，未重新核验"，
+   * **不能**默认成已验证。答案正文仍以 `text` 为准（旧记录不会因为缺这个字段而丢正文）。
+   */
+  solveResult?: SolveResult
   /**
    * **开发者详细视图**用的账本导出（Task 2.6 Step 4）。
    *
@@ -442,9 +449,9 @@ interface AgentState {
   recordDraft: (draft: AgentDraftView, runId?: string, documentGeneration?: number) => Promise<boolean>
   /** 记下提交结果；`committed` / `no_change` 都算结束。 */
   recordReceipt: (receipt: AgentCommitView, runId?: string, documentGeneration?: number) => Promise<boolean>
-  recordAnswer: (text: string, runId?: string, documentGeneration?: number) => Promise<boolean>
+  recordAnswer: (text: string, runId?: string, documentGeneration?: number, solveResult?: SolveResult) => Promise<boolean>
   /** 运行失败：保留原因与"能不能重试"，而不是给一条空回复。 */
-  failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string, documentGeneration?: number) => Promise<boolean>
+  failPendingReply: (failure: { code: string; message: string; retryable: boolean }, runId?: string, documentGeneration?: number, solveResult?: SolveResult) => Promise<boolean>
   /**
    * **一轮已提交运行的结论写进长期记忆**（Task 5）。
    *
@@ -687,14 +694,25 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     : message, runId),
   recordDiagnosticFor: (target, line) => updateMessageAt(get, set, target, (message) => ({ ...message, diagnostics: [...(message.diagnostics ?? []), line] })),
   recordDraft: (draft, runId, documentGeneration) => commitPending(get, set, (message) => message.pending ? { ...message, draft, pending: false } : message, { runId, documentGeneration }),
-  recordAnswer: (text, runId, documentGeneration) => commitPending(get, set, (message) => ({ ...message, text }), { runId, documentGeneration }),
+  recordAnswer: (text, runId, documentGeneration, solveResult) => commitPending(get, set, (message) => ({
+    ...message,
+    text,
+    // 只在新结果存在时覆盖：旧消息没有这个字段，读出来必须是"未核验"，而不是被写上一条空证据。
+    ...(solveResult === undefined ? {} : { solveResult })
+  }), { runId, documentGeneration }),
   recordReceipt: (receipt, runId, documentGeneration) => commitPending(get, set, (message) => ({
     ...message,
     pending: false,
     commit: receipt,
     text: message.text || (receipt.status === "committed" ? "已按确认提交。" : receipt.status === "no_change" ? "这次没有需要改动的地方。" : "")
   }), { finish: true, runId, documentGeneration }),
-  failPendingReply: (failure, runId, documentGeneration) => commitPending(get, set, (message) => ({ ...message, pending: false, failure, text: "" }), { finish: true, runId, documentGeneration }),
+  failPendingReply: (failure, runId, documentGeneration, solveResult) => commitPending(get, set, (message) => ({
+    ...message,
+    pending: false,
+    failure,
+    text: "",
+    ...(solveResult === undefined ? {} : { solveResult })
+  }), { finish: true, runId, documentGeneration }),
   recordCommittedRun: async (input) => {
     const pinned = get().runTargets[input.runId]
     const conversationId = input.conversationId ?? pinned?.conversationId
