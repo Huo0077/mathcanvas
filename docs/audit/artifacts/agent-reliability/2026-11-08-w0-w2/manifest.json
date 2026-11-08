@@ -103,6 +103,18 @@
       "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src --maxWorkers=2",
       "exitCode": 0,
       "result": "186 files / 1978 tests passed"
+    },
+    {
+      "id": "w5-math-verification",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/verification/mathAnswerVerification.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "16 tests passed"
+    },
+    {
+      "id": "w5-mutation-check",
+      "command": "temporary mutation: hyperbola criterion forced true, then reverted",
+      "exitCode": 1,
+      "result": "the e=√5 refutation test turned red as expected; mutation reverted and suite green"
     }
   ],
   "knownLimits": [
