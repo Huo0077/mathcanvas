@@ -121,6 +121,12 @@
       "command": "node node_modules/vitest/vitest.mjs run apps/web/src/services/problemImageEvidence.test.ts --maxWorkers=1",
       "exitCode": 0,
       "result": "10 tests passed"
+    },
+    {
+      "id": "w7-orthographic",
+      "command": "node node_modules/vitest/vitest.mjs run packages/agent-core/src/orthographicProblem.test.ts --maxWorkers=1",
+      "exitCode": 0,
+      "result": "11 tests passed"
     }
   ],
   "knownLimits": [

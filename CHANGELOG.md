@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-08 —— Agent 可靠性整改：W7 有限三视图与体积双核验（工程记录）
+
+- 新增 `orthographicProblem`：轴对齐长方体与 L 形柱体；共享轴/单位/维度冲突分别报 `view_identity_conflict`、`unit_conflict`、`information_incomplete`；切槽高度未给报 `non_unique_volume`。
+- 体积用解析分块与闭合网格有向四面体两条独立路径互验，不一致不给数值；选项只在算完后匹配。
+- 11 项定向测试通过、typecheck exit 0；不解析自然语言/图像，域外族明确 unsupported。
+
 ## 2026-11-08 —— Agent 可靠性整改：W6 题图证据与受控重读策略（工程记录）
 
 - 新增 `problemImageEvidence`：读数绑定附件/哈希/归一化区域/来源，校验会话归属；尺寸缺失与无方向向量生成 required 缺口。

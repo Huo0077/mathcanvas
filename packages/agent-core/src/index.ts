@@ -66,6 +66,11 @@ export * from "./modelEvents"
 export * from "./modelGateway"
 export * from "./obligationIR"
 /**
+ * **有限三视图与体积双核验**（W7 / T7）：只支持轴对齐长方体与 L 形柱体；
+ * 共享轴冲突即拒绝，体积用解析分块与闭合网格两条独立路径互相核验。
+ */
+export * from "./orthographicProblem"
+/**
  * **题意层**（W3 / T3）：逐问目标、原文跨度、折前/折后状态、依赖与条件消费清单。
  * 它在 `obligationIR` 之上扩展元信息，不另建事实库。
  */
