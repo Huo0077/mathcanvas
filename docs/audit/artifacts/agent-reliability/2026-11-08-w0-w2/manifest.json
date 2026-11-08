@@ -181,6 +181,12 @@
       "command": "node node_modules/@playwright/test/cli.js test e2e/agent-answer-delivery.spec.ts e2e/agent-fold-delivery.spec.ts",
       "exitCode": 0,
       "result": "4 tests passed (2 answer-delivery + 2 fold-delivery; offline local planner, no model calls)"
+    },
+    {
+      "id": "release-4.4.0-build",
+      "command": "npm run bundle --workspace @draw/desktop",
+      "exitCode": 0,
+      "result": "mathcanvas-desktop.exe 17,804,288 B; MSI 7,266,304 B; NSIS 5,403,629 B; SHA-256 in docs/release/v4.4.0.md; no startup smoke"
     }
   ],
   "knownLimits": [

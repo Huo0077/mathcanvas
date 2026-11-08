@@ -1,3 +1,9 @@
+/* global document, Image */
+/**
+ * 这个脚本把题面与题图排成一张"试卷页"再截图。`document` / `Image` 出现在
+ * `page.evaluate` 的回调里 —— 它们在 Playwright 的**浏览器上下文**中执行，
+ * 不是 Node 侧的全局；ESLint 看不到这层边界，所以显式声明。
+ */
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright');

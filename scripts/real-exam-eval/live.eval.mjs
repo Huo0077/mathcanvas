@@ -1,7 +1,15 @@
+/* global window */
+/**
+ * `window.__TAURI_INTERNALS__` 出现在 `page.evaluate` 的回调里 —— 那段代码在
+ * Playwright 的**浏览器上下文**执行，不是 Node 侧的全局；ESLint 看不到这层边界，
+ * 所以显式声明 `window`。Node 侧的计时器与取消器统一走 `globalThis`，
+ * 这样就不用给整个 .mjs 打开浏览器全局。
+ */
 import { it, expect } from 'vitest';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { createEmptyDocument } from '@draw/dsl';
 import { contentFingerprint } from '@draw/scene-graph';
 import { createAgentRuntime } from '../../apps/web/src/agent/agentRuntime';
@@ -17,6 +25,7 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
     if (fs.existsSync(path.join(out, 'summary.json')))
         throw new Error('Refusing to overwrite a completed run');
     fs.mkdirSync(out, { recursive: true });
+    const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     const all = JSON.parse(fs.readFileSync('test-fixtures/real-exams-20261105/cases.json', 'utf8'));
     const cases = process.env.MATHCANVAS_REAL_EXAM_IDS ? all.filter((q) => process.env.MATHCANVAS_REAL_EXAM_IDS.split(',').includes(q.id)) : all;
     const browser = await chromium.connectOverCDP(process.env.MATHCANVAS_REAL_EXAM_CDP ?? 'http://127.0.0.1:9227');
@@ -24,6 +33,8 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
     expect(page).toBeTruthy();
     const allowed = new Set(['list_provider_profiles', 'active_provider_profile', 'provider_health', 'provider_run', 'provider_cancel']);
     const max = Number(process.env.MATHCANVAS_REAL_EXAM_MAX_REQUESTS ?? 450);
+    if (!Number.isInteger(max) || max <= 0) throw new Error('Request cap must be a positive integer');
+    if (!cases.length) throw new Error('No matching exam cases');
     let totalRequests = 0, current = null;
     const native = async (command, args = {}) => page.evaluate(async ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args), { command, args });
     const invoke = async (command, args = {}) => {
@@ -39,7 +50,7 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
         const start = Date.now();
         let timer;
         try {
-            const response = await Promise.race([native(command, args), new Promise((_, reject) => { timer = setTimeout(() => { void native('provider_cancel', { runId: args.runId }); reject(new Error('REQUEST_TIMEOUT_90000MS')); }, 90000); })]);
+            const response = await Promise.race([native(command, args), new Promise((_, reject) => { timer = globalThis.setTimeout(() => { void native('provider_cancel', { runId: args.runId }); reject(new Error('REQUEST_TIMEOUT_90000MS')); }, 90000); })]);
             record.response = response;
             return response;
         }
@@ -48,7 +59,7 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
             throw error;
         }
         finally {
-            clearTimeout(timer);
+            globalThis.clearTimeout(timer);
             record.elapsedMs = Date.now() - start;
             fs.writeFileSync(path.join(out, current.id + '-requests.json'), JSON.stringify(current.requests, null, 2));
         }
@@ -60,14 +71,15 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
     const results = [];
     try {
         for (const q of cases) {
+            if (totalRequests >= max) break;
             const started = Date.now();
             current = { id: q.id, requests: [] };
             const requests = current.requests;
             const runId = `real-exam-${q.id}-${Date.now()}`;
             const result = { id: q.id, year: q.year, paper: q.paper, questionNumber: q.questionNumber, workspace: q.workspace, visionRequired: !!q.sheet, expected: q.expected, startedAt: new Date().toISOString(), terminal: 'not_started', events: [], stages: [], diagnostics: [], reading: null, error: null, answer: null, draft: null, liveWrites: 0 };
             let runtime = null;
-            const controller = new AbortController();
-            const timer = setTimeout(() => { result.timedOut = true; controller.abort(); runtime?.coordinator.cancel('user'); }, 180000);
+            const controller = new globalThis.AbortController();
+            const timer = globalThis.setTimeout(() => { result.timedOut = true; controller.abort(); runtime?.coordinator.cancel('user'); }, 180000);
             try {
                 const instructions = '请解答此题，给出必要推导，并以“最终答案：X”明确最终选项。如需图形辅助，请生成可核验的图形草稿。';
                 let prompt = q.question + '\n' + instructions, imageNotes = '';
@@ -83,11 +95,12 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
                 const handle = { projectId: 'exam-isolated', documentId: document.metadata.id, workspace: document.workspace, epoch: 'exam:' + q.id, generation: document.revision, contentHash: contentFingerprint(document) };
                 const planner = createModelPlanner({ imageNotes, onDiagnostic: line => result.diagnostics.push(line) });
                 runtime = createAgentRuntime({ readDocument: () => document, writeDocument: () => { result.liveWrites++; throw new Error('Automatic write prohibited'); }, readSceneDocuments: () => [{ handle, document }], planner, projectId: 'exam-isolated', runId, onStageOutcome: outcome => result.stages.push(outcome), exportPreflight: { preflight: () => { throw new Error('Export not under test'); } } });
-                const run = { runId, conversationId: runId, promptMessageId: runId + '-prompt', target: handle, sources: [], textProfileId: profile.id, capabilityRevision: '2026-11-05.real-exam', policyRevision: 'baseline' };
+                const run = { runId, conversationId: runId, promptMessageId: runId + '-prompt', target: handle, sources: [], textProfileId: profile.id, capabilityRevision: '2026-11-09.real-exam', policyRevision: 'current-source-core-regression' };
                 for await (const event of runtime.coordinator.start({ run, userMessage: prompt })) {
                     result.events.push(event);
                     result.terminal = event.phase;
                 }
+                result.solveResult = runtime.solveResult?.() ?? null;
                 result.answer = runtime.answer() ?? null;
                 result.questions = runtime.questions() ?? null;
                 const draftId = runtime.draftId();
@@ -99,7 +112,7 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
                     result.terminal = q.sheet && !result.reading ? 'vision_failed' : 'infrastructure_failed';
             }
             finally {
-                clearTimeout(timer);
+                globalThis.clearTimeout(timer);
             }
             result.elapsedMs = Date.now() - started;
             result.requests = requests.length;
@@ -113,7 +126,7 @@ it('explicitly authorized real-exam baseline, no fixtures or mocked provider res
             expect(result.liveWrites).toBe(0);
         }
         const n = results.length, delivered = results.filter(x => x.deliverySuccess).length, answered = results.filter(x => x.score.answered).length, correct = results.filter(x => x.endToEndCorrect).length;
-        const summary = { createdAt: new Date().toISOString(), revision: '6fe61d51a4d3a666ec41a61fdb6a2363f7ea4044', model: profile.modelId, profileRevision: profile.revision, total: n, delivered, answered, correct, deliveryRate: delivered / n, endToEndOptionAccuracy: correct / n, conditionalOptionAccuracy: answered ? correct / answered : null, visionRequired: results.filter(x => x.visionRequired).length, visionParsed: results.filter(x => x.visionRequired && x.reading).length, totalRequests, requestCap: max, capabilityProbeRequestsAdditional: 4, costKnown: false, costUsd: null, results: results.map(({ id, terminal, error, score, elapsedMs, deliverySuccess, endToEndCorrect, visionRequired, requests }) => ({ id, terminal, error, score, elapsedMs, deliverySuccess, endToEndCorrect, visionRequired, requests })) };
+        const summary = { createdAt: new Date().toISOString(), revision, evaluationTrack: 'core-runtime-with-native-provider-not-full-UI', plannedTotal: cases.length, stoppedAtRequestCap: totalRequests >= max, model: profile.modelId, profileRevision: profile.revision, total: n, delivered, answered, correct, deliveryRate: delivered / n, endToEndOptionAccuracy: correct / n, conditionalOptionAccuracy: answered ? correct / answered : null, visionRequired: results.filter(x => x.visionRequired).length, visionParsed: results.filter(x => x.visionRequired && x.reading).length, totalRequests, requestCap: max, capabilityProbeRequestsAdditional: 0, costKnown: false, costUsd: null, results: results.map(({ id, terminal, error, score, elapsedMs, deliverySuccess, endToEndCorrect, visionRequired, requests }) => ({ id, terminal, error, score, elapsedMs, deliverySuccess, endToEndCorrect, visionRequired, requests })) };
         fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 2));
         console.log('SUMMARY', JSON.stringify({ ...summary, results: undefined }));
     }

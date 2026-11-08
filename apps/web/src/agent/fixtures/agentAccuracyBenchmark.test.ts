@@ -258,7 +258,9 @@ describe("Agent 画图效果、成功率与准确率全量综合评测", () => {
           try {
             const res = await planner.plan({ userMessage: cleanPrompt } as never)
             plan = "plan" in res ? res.plan : null
-          } catch {}
+          } catch {
+            // 本地规划器只认识固定句式；认不出就当"没有计划"，交给下一条判据。
+          }
         }
 
         if (plan && plan.kind === "plan") {

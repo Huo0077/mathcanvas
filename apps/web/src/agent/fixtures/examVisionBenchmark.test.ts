@@ -398,7 +398,7 @@ describe("高考与著名联考真题全量作图能力评测（含'如图'识�
       const deterministicPlan = deterministicPlanForPrompt(cleanPrompt)
       const localPlanner = createLocalPlanner()
       let envelope: PlanEnvelope | null = prismPlan ?? deterministicPlan ?? null
-      let plannerKind = prismPlan ? "prism_midpoints" : deterministicPlan ? "deterministic_parametric" : "local_planner"
+      const plannerKind = prismPlan ? "prism_midpoints" : deterministicPlan ? "deterministic_parametric" : "local_planner"
 
       if (!envelope) {
         try {

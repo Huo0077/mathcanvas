@@ -10,6 +10,14 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-09 —— MathCanvas 4.4.0 发布构建
+
+- 版本提升到 `4.4.0`（`tauri.conf.json` / `Cargo.toml` / `Cargo.lock` 三处一致）；新增 [发布说明](release/v4.4.0.md)，README 与状态页的版本入口同步。
+- 桌面端由本版源码构建：Web 端 17.49s 重建，Rust release 编译 1m30s；产物 `mathcanvas-desktop.exe` 17,804,288 B（SHA-256 `311755ba…a58190`）、MSI 7,266,304 B、NSIS 5,403,629 B，完整哈希在发布说明。
+- 修复既有 12 条 eslint error：空 `catch` 补说明、`let`→`const`、Playwright `page.evaluate` 回调里的 `window/document/Image` 显式声明、Node 计时器/AbortController 改走 `globalThis`。`npm run lint` **0 error / 30 warning**。
+- 门禁：`typecheck` exit 0；文档门禁 22/22；两个 benchmark 测试 7 项通过；W9 全量单测 533/5669 + 1 todo / 0 失败仍是本版基础（本版只改版本、文档与注释）。
+- **未上传 GitHub Release**（无 `gh`/令牌），已推送标签 `v4.4.0`；未运行 exe 启动 smoke，未调用真模型。
+
 ## 2026-11-08 —— 历史错题根因与完整实施方案（仅调查和文档）
 
 基于历史50题、24道折叠题及本地离线探针完善[根因报告](audit/2026-11-08-agent-failure-root-cause-analysis.md)和[执行方案](superpowers/plans/2026-11-08-agent-reliability-remediation.md)。本轮补齐模块接口、W0–W9工作包、验收矩阵、预注册评测、迁移灰度和回滚，默认单执行者，建议先做W0/W1/W2。方案预计20–33人日，非交付承诺；未开始产品整改、付费评测或GitHub发布。
