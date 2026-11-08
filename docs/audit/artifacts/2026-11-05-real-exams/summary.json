@@ -1,0 +1,1158 @@
+{
+  "date": "2026-11-05",
+  "revision": "6fe61d51a4d3a666ec41a61fdb6a2363f7ea4044",
+  "model": "deepseek-v4-flash",
+  "rawBaseline": {
+    "total": 50,
+    "delivered": 43,
+    "answered": 38,
+    "correct": 26,
+    "deliveryRate": 0.86,
+    "accuracy": 0.52,
+    "conditionalAccuracy": 0.6842105263157895,
+    "visionParsed": 29,
+    "visionRequired": 30
+  },
+  "materialValidFirstRun47": {
+    "total": 47,
+    "delivered": 41,
+    "answered": 36,
+    "correct": 26,
+    "deliveryRate": 0.8723404255319149,
+    "accuracy": 0.5531914893617021,
+    "conditionalAccuracy": 0.7222222222222222,
+    "visionParsed": 27,
+    "visionRequired": 27
+  },
+  "materialCorrectionIntermediate3": {
+    "total": 3,
+    "delivered": 3,
+    "answered": 3,
+    "correct": 0,
+    "deliveryRate": 1.0,
+    "accuracy": 0.0,
+    "conditionalAccuracy": 0.0,
+    "visionParsed": 3,
+    "visionRequired": 3
+  },
+  "materialCorrected3": {
+    "total": 3,
+    "delivered": 3,
+    "answered": 3,
+    "correct": 3,
+    "deliveryRate": 1.0,
+    "accuracy": 1.0,
+    "conditionalAccuracy": 1.0,
+    "visionParsed": 3,
+    "visionRequired": 3
+  },
+  "compositeAfterMaterialCorrection_NOT_singleRun": {
+    "total": 50,
+    "delivered": 44,
+    "answered": 39,
+    "correct": 29,
+    "deliveryRate": 0.88,
+    "accuracy": 0.58,
+    "conditionalAccuracy": 0.7435897435897436,
+    "visionParsed": 30,
+    "visionRequired": 30
+  },
+  "baselineVision": {
+    "total": 30,
+    "delivered": 25,
+    "answered": 20,
+    "correct": 11,
+    "deliveryRate": 0.8333333333333334,
+    "accuracy": 0.36666666666666664,
+    "conditionalAccuracy": 0.55,
+    "visionParsed": 29,
+    "visionRequired": 30
+  },
+  "baselineText": {
+    "total": 20,
+    "delivered": 18,
+    "answered": 18,
+    "correct": 15,
+    "deliveryRate": 0.9,
+    "accuracy": 0.75,
+    "conditionalAccuracy": 0.8333333333333334,
+    "visionParsed": 0,
+    "visionRequired": 0
+  },
+  "usage": {
+    "baseline": {
+      "requests": 118,
+      "inputTokens": 389145,
+      "outputTokens": 56143,
+      "reportedModels": [
+        "deepseek-flash"
+      ]
+    },
+    "material-corrected-intermediate": {
+      "requests": 8,
+      "inputTokens": 24517,
+      "outputTokens": 4374,
+      "reportedModels": [
+        "deepseek-flash"
+      ]
+    },
+    "material-corrected": {
+      "requests": 12,
+      "inputTokens": 42553,
+      "outputTokens": 5824,
+      "reportedModels": [
+        "deepseek-flash"
+      ]
+    },
+    "pilot": {
+      "requests": 8,
+      "inputTokens": 32554,
+      "outputTokens": 3101,
+      "reportedModels": [
+        "deepseek-flash"
+      ]
+    }
+  },
+  "additionalCapabilityProbeRequests": 4,
+  "totalNativeRequests": 150,
+  "costKnown": false,
+  "materialAudit": [
+    {
+      "id": "mm-000",
+      "firstRunSha256": "09e55638087040464b4580bb63bf161d12cafe691f6e7d77ebdef62100077364",
+      "currentSha256": "131dcfb9ff88a7616169e9a08de88d7cc75ecf18478fe786f84433f037cd1c42",
+      "mislabelledFirstRun": true
+    },
+    {
+      "id": "mm-003",
+      "firstRunSha256": "47478d24ea4d7661568b1ea07e6bf6a81ece3b91271d47fc68248796f15a94ff",
+      "currentSha256": "47478d24ea4d7661568b1ea07e6bf6a81ece3b91271d47fc68248796f15a94ff",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-005",
+      "firstRunSha256": "2b5585bf8cc578055a658b5fa8fb5ab96c8d2da886e13b4624a9e9d1b255aa71",
+      "currentSha256": "2b5585bf8cc578055a658b5fa8fb5ab96c8d2da886e13b4624a9e9d1b255aa71",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-008",
+      "firstRunSha256": "3319ddde6216d60657639adc78dcc6c02f5dad0017c3109ed4caf1bd3efd1ea4",
+      "currentSha256": "3319ddde6216d60657639adc78dcc6c02f5dad0017c3109ed4caf1bd3efd1ea4",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-009",
+      "firstRunSha256": "b9bc5c6531d046a2c036ccfa8807d97d7b710f9350a4caa6de9d9debefe0e658",
+      "currentSha256": "b9bc5c6531d046a2c036ccfa8807d97d7b710f9350a4caa6de9d9debefe0e658",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-011",
+      "firstRunSha256": "026f474d9a8adeb0580b8a3ebc638ff2ba5cc9312cb5b14e76229c7b2eb73d7f",
+      "currentSha256": "026f474d9a8adeb0580b8a3ebc638ff2ba5cc9312cb5b14e76229c7b2eb73d7f",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-012",
+      "firstRunSha256": "4642bd26e06c7383403786b3eaf2e49a95671d11b66ee8d798f317cdff3f13c6",
+      "currentSha256": "018175ea9608a848f0e013b6473f01bbc567eb8f07bbdb1fde38b9f3b9014473",
+      "mislabelledFirstRun": true
+    },
+    {
+      "id": "mm-014",
+      "firstRunSha256": "4fc12a003f33dbdec87e14b3645ee63051345e81bab05b90d9383749b5d56a6c",
+      "currentSha256": "4fc12a003f33dbdec87e14b3645ee63051345e81bab05b90d9383749b5d56a6c",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-015",
+      "firstRunSha256": "ed4edd454fed95dd456ced2756ad67c2efae297665ec6edafc3291503308afab",
+      "currentSha256": "ed4edd454fed95dd456ced2756ad67c2efae297665ec6edafc3291503308afab",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-017",
+      "firstRunSha256": "cbc17f207f9b2905fb03b3f8cee74b76a239731361a4e3f3ad8bb8fdec0f9b39",
+      "currentSha256": "cbc17f207f9b2905fb03b3f8cee74b76a239731361a4e3f3ad8bb8fdec0f9b39",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-020",
+      "firstRunSha256": "8ed53f5606af9640daa85c3f135408c11476ba87fa3376e34ffbc5541a028d64",
+      "currentSha256": "8ed53f5606af9640daa85c3f135408c11476ba87fa3376e34ffbc5541a028d64",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-022",
+      "firstRunSha256": "8d9cb14ab033bc14acc4387218de1b34505109d11335e3406f438452df1c67a6",
+      "currentSha256": "8d9cb14ab033bc14acc4387218de1b34505109d11335e3406f438452df1c67a6",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-024",
+      "firstRunSha256": "7fb06038d83f3adeb0fd2be9dae12c3e5fc19d8f82bdcd3be621bd4beddd2d09",
+      "currentSha256": "7fb06038d83f3adeb0fd2be9dae12c3e5fc19d8f82bdcd3be621bd4beddd2d09",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-025",
+      "firstRunSha256": "e8439e3e1d02e836d0c6758be013e08bab268bde6a14bf9fcd9caecb43df119e",
+      "currentSha256": "e8439e3e1d02e836d0c6758be013e08bab268bde6a14bf9fcd9caecb43df119e",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-029",
+      "firstRunSha256": "0800db8600c82f64efdc275dca4ac8700eb82f901140263e2435ec71f751d4b1",
+      "currentSha256": "0800db8600c82f64efdc275dca4ac8700eb82f901140263e2435ec71f751d4b1",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-033",
+      "firstRunSha256": "4f2cc5447ed7e3d7b33f4b5c1a56c66f33f46a439087f3e6e1fb72ad885e1dad",
+      "currentSha256": "4f2cc5447ed7e3d7b33f4b5c1a56c66f33f46a439087f3e6e1fb72ad885e1dad",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-034",
+      "firstRunSha256": "bfa34c31c9cf0fa0d90ea1cc9d397e9d14939afd324b273bd1988292108852c2",
+      "currentSha256": "bfa34c31c9cf0fa0d90ea1cc9d397e9d14939afd324b273bd1988292108852c2",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-035",
+      "firstRunSha256": "1136d0aad03ecb3e2aca913330131a55633ba29d02f88e6a600fc17fc7497a08",
+      "currentSha256": "1136d0aad03ecb3e2aca913330131a55633ba29d02f88e6a600fc17fc7497a08",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-036",
+      "firstRunSha256": "13dd470a162be6f56e2f35d1bdd62fbc3de832f9ea2795e6b4e3264746c8114a",
+      "currentSha256": "13dd470a162be6f56e2f35d1bdd62fbc3de832f9ea2795e6b4e3264746c8114a",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-041",
+      "firstRunSha256": "764575e9f90d9d17177b34a9f72d6f062e8a81695072abc9fb38bcd9cfab5f66",
+      "currentSha256": "764575e9f90d9d17177b34a9f72d6f062e8a81695072abc9fb38bcd9cfab5f66",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-051",
+      "firstRunSha256": "a6b99b5087354d45293e46b4120f4634b5b5db9dc9b9089e7c7232c5f4ced97a",
+      "currentSha256": "a6b99b5087354d45293e46b4120f4634b5b5db9dc9b9089e7c7232c5f4ced97a",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-055",
+      "firstRunSha256": "a3cd6c4063d0a2dd3d5fba1d66c53701f58220cd62e31e86f9bbb5bc334edfed",
+      "currentSha256": "a3cd6c4063d0a2dd3d5fba1d66c53701f58220cd62e31e86f9bbb5bc334edfed",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-056",
+      "firstRunSha256": "74c1bb8f1363955f9fe001855c008dd5df5a340a309f55311d7ca8d73d56f8f5",
+      "currentSha256": "74c1bb8f1363955f9fe001855c008dd5df5a340a309f55311d7ca8d73d56f8f5",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-058",
+      "firstRunSha256": "46f5961f4ff8650bf22cdc3605fbe85a04b7f6ea8a88a6c27af7ffa31523bac6",
+      "currentSha256": "682564b66d6dc91e4e0daa6f3701a3f70bf887336aef9f63ca8da87d52acf182",
+      "mislabelledFirstRun": true
+    },
+    {
+      "id": "mm-059",
+      "firstRunSha256": "7da8730b58ca2e0e8539d41c22cb94a18c950ef6c0af138a78c7218506c9ec93",
+      "currentSha256": "7da8730b58ca2e0e8539d41c22cb94a18c950ef6c0af138a78c7218506c9ec93",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-060",
+      "firstRunSha256": "c970ff70ed5df27555a38750e041ded22031653d9f7250327312313799f3c90a",
+      "currentSha256": "c970ff70ed5df27555a38750e041ded22031653d9f7250327312313799f3c90a",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-063",
+      "firstRunSha256": "9fdec62994d15ae7d905f993930186eb35fbcc9d7aa20d65e02ee0602bdaffc8",
+      "currentSha256": "9fdec62994d15ae7d905f993930186eb35fbcc9d7aa20d65e02ee0602bdaffc8",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-066",
+      "firstRunSha256": "f9a7e59b856c3b749d2048fba84bcc5cd2889af4e48a35b9f8ee1fce4692d0e2",
+      "currentSha256": "f9a7e59b856c3b749d2048fba84bcc5cd2889af4e48a35b9f8ee1fce4692d0e2",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-068",
+      "firstRunSha256": "22ef6b0feb191a7c0bf2e5601d28d5a30083107f11824b244556a7a646ed0970",
+      "currentSha256": "22ef6b0feb191a7c0bf2e5601d28d5a30083107f11824b244556a7a646ed0970",
+      "mislabelledFirstRun": false
+    },
+    {
+      "id": "mm-075",
+      "firstRunSha256": "d22af8b18065aa8bd7c8ecec46c97b07825eaaa3694db95eb26b69594a52b671",
+      "currentSha256": "d22af8b18065aa8bd7c8ecec46c97b07825eaaa3694db95eb26b69594a52b671",
+      "mislabelledFirstRun": false
+    }
+  ],
+  "sourceQualityFlags": {
+    "text-151": "option C formula damaged upstream",
+    "text-178": "triangle symbol became square upstream",
+    "mm-051": "reference derivation has 24/25 typo; final sqrt(7) verified"
+  },
+  "results": [
+    {
+      "id": "mm-000",
+      "terminal": "vision_failed",
+      "error": "Error: 模型返回的题图结果无法核对。请换一张清晰的图，或更换视觉模型后重试。",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 3810,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 1
+    },
+    {
+      "id": "mm-003",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5526,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-005",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 6302,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-008",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10542,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-009",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 18016,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 5
+    },
+    {
+      "id": "mm-011",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 11031,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-012",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10749,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-014",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 12145,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-015",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 11096,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-017",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 7350,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-020",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 7144,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-022",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5395,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-024",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 12192,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-025",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10466,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-029",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 4973,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-033",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10647,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-034",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 4988,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-035",
+      "terminal": "failed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 19952,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-036",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 14310,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-041",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 7236,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-051",
+      "terminal": "failed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 16140,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 5
+    },
+    {
+      "id": "mm-055",
+      "terminal": "waiting",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 3983,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-056",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10505,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-058",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 9736,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-059",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10512,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-060",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 10475,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-063",
+      "terminal": "failed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 6042,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-066",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5440,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "mm-068",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 9113,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3
+    },
+    {
+      "id": "mm-075",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5461,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2
+    },
+    {
+      "id": "text-128",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 6355,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-131",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2494,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-137",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2466,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-139",
+      "terminal": "failed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 13039,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-142",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5479,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-143",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2576,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-151",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2331,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-158",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2221,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-163",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 3131,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-167",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2724,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-176",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2340,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-178",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 6010,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-180",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2129,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-186",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 5634,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-190",
+      "terminal": "failed",
+      "error": null,
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 11408,
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 4
+    },
+    {
+      "id": "text-198",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 9704,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-203",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 8700,
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2
+    },
+    {
+      "id": "text-204",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2214,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-206",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 3659,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    },
+    {
+      "id": "text-212",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 2275,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1
+    }
+  ],
+  "correctionResults": [
+    {
+      "id": "mm-000",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 12913,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-012",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 13918,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 4
+    },
+    {
+      "id": "mm-058",
+      "terminal": "completed",
+      "error": null,
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "elapsedMs": 13337,
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 4
+    }
+  ]
+}

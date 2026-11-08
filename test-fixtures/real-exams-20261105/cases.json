@@ -1,0 +1,1347 @@
+[
+  {
+    "id": "mm-000",
+    "year": "2010",
+    "paper": "（新课标）",
+    "questionNumber": "4",
+    "question": "4. (5 分) 如图, 质点 $P$ 在半径为 2 的圆周上逆时针运动, 其初始位置为 $P_0$ ( $\\sqrt{2},-\\sqrt{2})$, 角速度为 1 , 那么点 $\\mathrm{P}$ 到 $\\mathrm{x}$ 轴距离 $\\mathrm{d}$ 关于时间 $\\mathrm{t}$ 的函数图象大致为 $(\\quad)$",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【解答】解: 通过分析可知当 $\\mathrm{t}=0$ 时, 点 $\\mathrm{P}$ 到 $\\mathrm{x}$ 轴距离 $\\mathrm{d}$ 为 $\\sqrt{2}$, 于是可以排除答案 $A, D$,再根据当 $t=\\frac{\\pi}{4}$ 时, 可知点 $P$ 在 $x$ 轴上此时点 $P$ 到 $x$ 轴距离 $d$ 为 0 , 排除答案 $B$,故选: C.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-000-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_0_0.png",
+        "sha256": "34912317805a9a12339ca8800faea4e97452f0f5060889b009365fff7e2658e8"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-000-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_0_1.png",
+        "sha256": "09508de5e50175b256744f2cca88c6a0fc9a9e952b0246063e500c67de8aa782"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-000-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_0_2.png",
+        "sha256": "4bbbfadae0d0f26b91f00a020ae8d93d9f31780a4b5b037ab82a31cc0e2721d4"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-000-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_0_3.png",
+        "sha256": "aebb5aae59d20c2bd007ba80b0c86e33fa94400762a45c114716b547ad871f71"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-000-4.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_0_4.png",
+        "sha256": "eda1672b3d1b464561e377394a52f243c62df8418c666da389e4f686ce26294a"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 0,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-000-sheet.png"
+  },
+  {
+    "id": "mm-003",
+    "year": "2011",
+    "paper": "(新课标)",
+    "questionNumber": "6",
+    "question": "6. (5 分) 在一个几何体的三视图中, 正视图和俯视图如图所示, 则相应的侧视图可以为（）",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【解答】解：由俯视图和正视图可以得到几何体是一个简单的组合体,是由一个三棱雉和被轴截面截开的半个圆雉组成,$\\therefore$ 侧视图是一个中间有分界线的三角形,故选: D.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-003-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_3_0.png",
+        "sha256": "b720cca1ffcd034f5ca68c4047264f6a20351d1032326de462e3a94a04cbcecd"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-003-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_3_1.png",
+        "sha256": "a969199985264ee462bc42dca0ec63d91dead9e46a18af52024d50cf2eb10f60"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-003-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_3_2.png",
+        "sha256": "b704feafe3a00ecfcee1481d81939b6369edf144648785062716a77c8b619163"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-003-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_3_3.png",
+        "sha256": "0ed655554aaf0e7f283795df833a51ec24eaddd33d12874a592be81fbc93f930"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-003-4.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_3_4.png",
+        "sha256": "d99e9b7723f2887c81ca6bf279a32ee8e2282750c14be8129d7650f35695317c"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 3,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-003-sheet.png"
+  },
+  {
+    "id": "mm-005",
+    "year": "2012",
+    "paper": "(新课标)",
+    "questionNumber": "7",
+    "question": "7. (5 分) 如图, 网格纸上小正方形的边长为 1 , 粗线画出的是某几何体的三视图, 则此几何体的体积为 ( )A. 6B. 9C. 12D. 18",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 该几何体是三棱雉, 底面是俯视图, 三棱雉的高为 3 ;底面三角形斜边长为 6 , 高为 3 的等腰直角三角形,此几何体的体积为 $V=\\frac{1}{3} \\times \\frac{1}{2} \\times 6 \\times 3 \\times 3=9$.故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-005-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_5_0.png",
+        "sha256": "bfaae80238c02dc2c08f76ae59d4015e802e4e541676efa3270fd202f4896943"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 5,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-005-sheet.png"
+  },
+  {
+    "id": "mm-008",
+    "year": "2013",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图, 有一个水平放置的透明无盖的正方体容器, 容器高 $8 \\mathrm{~cm}$, 将一个球放在容器口, 再向容器注水, 当球面恰好接触水面时测得水深为 $6 \\mathrm{~cm}$,如不计容器的厚度, 则球的体积为 ( )A. $\\frac{500 \\pi}{3} \\mathrm{~cm}^3$B. $\\frac{866 \\pi}{3} \\mathrm{~cm}^3$C. $\\frac{1372 \\pi}{3} \\mathrm{~cm}^3$D. $\\frac{2048 \\pi}{3} \\mathrm{~cm}^3$",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【解答】解: 设正方体上底面所在平面截球得小圆 M,则圆心 $M$ 为正方体上底面正方形的中心. 如图.设球的半径为 $R$, 根据题意得球心到上底面的距离等于 $(R-2) \\mathrm{cm}$,而圆 $M$ 的半径为 4 , 由球的截面圆性质, 得 $R^2=(R-2)^2+4^2$,解出 $R=5$,$\\therefore$ 根据球的体积公式, 该球的体积 $\\mathrm{V}=\\frac{4 \\pi}{3} \\mathrm{R}^3=\\frac{4 \\pi}{3} \\times 5^3=\\frac{500 \\pi}{3} \\mathrm{~cm}^3$.故选: A.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-008-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_8_0.png",
+        "sha256": "068eb3ae058c37b1e528271e5c5971d9779c4eb65e315568c676a2e11f2ad641"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 8,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-008-sheet.png"
+  },
+  {
+    "id": "mm-009",
+    "year": "2013",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "8",
+    "question": "8. (5 分) 某几何体的三视图如图所示, 则该几何体的体积为 ( )A. $16+8 \\pi$B. $8+8 \\pi$C. $16+16 \\pi$D. $8+16 \\pi$",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【解答】解: 三视图复原的几何体是一个长方体与半个圆柱的组合体, 如图, 其中长方体长、宽、高分别是 $4,2,2$, 半个圆柱的底面半径为 2 , 母线长为 4$\\therefore$ 长方体的体积 $=4 \\times 2 \\times 2=16$,半个圆柱的体积 $=\\frac{1}{2} \\times 2^2 \\times \\pi \\times 4=8 \\pi$所以这个几何体的体积是 $16+8 \\pi$;故选: A.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-009-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_9_0.png",
+        "sha256": "be36b1e85a48796ccc79848ebdf0c1d7cd7b27cae8717d71ce7583af27297853"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 9,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-009-sheet.png"
+  },
+  {
+    "id": "mm-011",
+    "year": "2013",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "7",
+    "question": "7. (5 分) 一个四面体的顶点在空间直角坐标系 $0-x y z$ 中的坐标分别是 (1, 0 , 1) , $(1,1,0),(0,1,1),(0,0,0)$, 画该四面体三视图中的正视图时, 以 $z O x$ 平面为投影面, 则得到正视图可以为 $(\\quad)$",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【解答】解：因为一个四面体的顶点在空间直角坐标系 $0-x y z$ 中的坐标分别是 $(1,0,1),(1,1,0),(0,1,1),(0,0,0)$, 几何体的直观图如图, 是正方体的顶点为顶点的一个正四面体, 所以以 $\\mathrm{zOx}$ 平面为投影面,则得到正视图为:故选: A.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-011-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_11_0.png",
+        "sha256": "b89baef48984b0bd36c8df4f8bd5ffd28d55489bc5f0001b0cffe3161cf39aa9"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-011-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_11_1.png",
+        "sha256": "0bf004a736dda442092351c9980fd5a41258e8eeaa8f4f5476c1db5bc7544d18"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-011-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_11_2.png",
+        "sha256": "63fbc6db94da93b9f4b7cb667a424496304144327da16be8057f533b9a548a34"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-011-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_11_3.png",
+        "sha256": "5067471b74bc81effca71c5919b27cb038fc33db5e3a7e71550c6291b588fb33"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 11,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-011-sheet.png"
+  },
+  {
+    "id": "mm-012",
+    "year": "2014",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图, 圆 $\\mathrm{O}$ 的半径为 $1, \\mathrm{~A}$ 是圆上的定点, $\\mathrm{P}$ 是圆上的动点, 角 $\\mathrm{x}$ 的始边为射线 $O A$, 终边为射线 $O P$, 过点 $P$ 作直线 $O A$ 的垂线, 垂足为 $M$, 将点 $M$ 到直线 $O P$ 的距离表示为 $x$ 的函数 $f(x)$, 则 $y=f(x)$ 在 $[0, \\pi]$ 的图象大致为 $(\\quad)$",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【解答】解: 在直角三角形 $O M P$ 中, $O P=1, \\angle P O M=x$, 则 $O M=|\\cos x|$, $\\therefore$ 点 $\\mathrm{M}$ 到直线 $\\mathrm{OP}$ 的距离表示为 $\\mathrm{x}$ 的函数 $\\mathrm{f}(\\mathrm{x})=\\mathrm{OM}|\\sin \\mathrm{x}|$ $=|\\cos x| \\cdot|\\sin x|=\\frac{1}{2}|\\sin 2 x|$,其周期为 $T=\\frac{\\pi}{2}$, 最大值为 $\\frac{1}{2}$, 最小值为 0 ,故选: C.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-012-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_12_0.png",
+        "sha256": "c1a001dfa05e3a6d365839452902951c21a54e82c362de6df108299814af7e52"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-012-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_12_1.png",
+        "sha256": "9889cb87d482fa1e7fbac16e9faf8f0cb473b7218cc159b6c7821ba4d85a271b"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-012-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_12_2.png",
+        "sha256": "22526b43d28aab92b31eefda8ee0baed4c3ac601b5c2d0ba4547ad627416860b"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-012-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_12_3.png",
+        "sha256": "d3897b80f32cd8bac8122a0678022e3755e2dd125570a2a3e0db5b7ab7194e94"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-012-4.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_12_4.png",
+        "sha256": "8f16ef59fe3db6f42b8b5715c9d7b72c22fc297659950ce89bf50512cb7d223b"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 12,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-012-sheet.png"
+  },
+  {
+    "id": "mm-014",
+    "year": "2014",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "12",
+    "question": "12. (5 分) 如图, 网格纸上小正方形的边长为 1 , 粗实线画出的是某多面体的三视图, 则该多面体的各条棱中, 最长的棱的长度为 ( )A. $6 \\sqrt{2}$B. 6C. $4 \\sqrt{2}$D. 4",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 几何体的直观图如图: $A B=4, B D=4, C$ 到 $B D$ 的中点的距离为: 4 ,$$\\therefore \\mathrm{BC}=\\mathrm{CD}=\\sqrt{2^2+4^2}=2 \\sqrt{5} . \\quad \\mathrm{AC}=\\sqrt{4^2+(2 \\sqrt{5})^2}=6, \\quad \\mathrm{AD}=4 \\sqrt{2},$$显然 $\\mathrm{AC}$ 最长. 长为 6 .故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-014-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_14_0.png",
+        "sha256": "78a7347c8b1fb7ee75bc47e598b2c7b809442d101112e59a6cdaa90618021bea"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 14,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-014-sheet.png"
+  },
+  {
+    "id": "mm-015",
+    "year": "2014",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图, 网格纸上正方形小格的边长为 1 (表示 $1 \\mathrm{~cm}$ ), 图中粗线画出的是某零件的三视图, 该零件由一个底面半径为 $3 \\mathrm{~cm}$, 高为 $6 \\mathrm{~cm}$ 的圆柱体毛坏切削得到, 则切削掉部分的体积与原来毛坏体积的比值为 $(\\mathrm{I})$A. $\\frac{17}{27}$B. $\\frac{5}{9}$C. $\\frac{10}{27}$D. $\\frac{1}{3}$",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【解答】解: 几何体是由两个圆柱组成, 一个是底面半径为 3 高为 2 , 一个是底面半径为 2 , 高为 4 ,组合体体积是: $3^2 \\pi \\cdot 2+2^2 \\pi \\cdot 4=34 \\pi$.底面半径为 $3 \\mathrm{~cm}$, 高为 $6 \\mathrm{~cm}$ 的圆柱体毛坯的体积为: $3^2 \\pi \\times 6=54 \\pi$切削掉部分的体积与原来毛坯体积的比值为: $\\frac{54 \\pi-34 \\pi}{54 \\pi}=\\frac{10}{27}$.故选: C.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-015-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_15_0.png",
+        "sha256": "c126db87599ae3a57fb93b6cafa1dae8ea971911b858b67dd9e7e9b9a2b5c90e"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 15,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-015-sheet.png"
+  },
+  {
+    "id": "mm-017",
+    "year": "2015",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 《九章算术》是我国古代内容极为丰富的数学名著, 书中有如下问题：\"今有委米依垣内角, 下周八尺, 高五尺. 问：积及为米几何？ “其意思为: \"在屋内墙角处堆放米 (如图, 米堆为一个圆雉的四分之一), 米堆底部的弧长为 8 尺, 米堆的高为 5 尺, 问米堆的体积和堆放的米各为多少? “已知 1 斛米的体积约为 1.62 立方尺, 圆周率约为 3 , 估算出堆放的米约有 $($ )A. 14 斛B. 22 斛C. 36 斛D. 66 斛",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解：设圆雉的底面半径为 $r$, 则 $\\frac{\\pi}{2} r=8$,解得 $r=\\frac{16}{\\pi}$,故米堆的体积为 $\\frac{1}{4} \\times \\frac{1}{3} \\times \\pi \\times\\left(\\frac{16}{\\pi}\\right)^2 \\times 5 \\approx \\frac{320}{9}$, $\\because 1$ 斛米的体积约为 1.62 立方,$$\\therefore \\frac{320}{9} \\div 1.62 \\approx 22 \\text {, }$$故选：B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-017-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_17_0.png",
+        "sha256": "d0b76c452381e49d4f829a1aeaf1ca183c9d93d99cadcf94a4bc7d9a5f7fa95d"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 17,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-017-sheet.png"
+  },
+  {
+    "id": "mm-020",
+    "year": "2015",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "11",
+    "question": "11. (5 分) 圆柱被一个平面截去一部分后与半球（半径为 $r$ ) 组成一个几何体,该几何体三视图中的正视图和俯视图如图所示. 若该几何体的表面积为$16+20 \\pi$, 则 $r=(\\quad)$A. 1B. 2C. 4D. 8",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 由几何体三视图中的正视图和俯视图可知,截圆柱的平面过圆柱的轴线,该几何体是一个半球拼接半个圆柱,$\\therefore$ 其表面积为: $\\frac{1}{2} \\times 4 \\pi r^2+\\frac{1}{2} \\times \\pi r^2+\\frac{1}{2} \\times 2 r \\times 2 \\pi r+2 r \\times 2 r+\\frac{1}{2} \\times \\pi r^2=5 \\pi r^2+4 r^2$,又 $\\because$ 该几何体的表面积为 $16+20 \\pi$,$\\therefore 5 \\pi r^2+4 r^2=16+20 \\pi$, 解得 $r=2$,",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-020-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_20_0.png",
+        "sha256": "ebecc43c316a102df917bb07d20dcec99d1103f4efbb1390b500fc75360e0cac"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-020-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_20_1.png",
+        "sha256": "c5e443801002ce1b12758f79443de2e615a4bbaf05292dea8d2f19d3644f1402"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 20,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-020-sheet.png"
+  },
+  {
+    "id": "mm-022",
+    "year": "2015",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 一个正方体被一个平面截去一部分后, 剩余部分的三视图如图, 则截去部分体积与剩余部分体积的比值为 ( )A. $\\frac{1}{8}$B. $\\frac{1}{7}$C. $\\frac{1}{6}$D. $\\frac{1}{5}$",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【解答】解：设正方体的棱长为 1，由三视图判断，正方体被切掉的部分为三棱雉,$\\therefore$ 正方体切掉部分的体积为 $\\frac{1}{3} \\times \\frac{1}{2} \\times 1 \\times 1 \\times 1=\\frac{1}{6}$,$\\therefore$ 剩余部分体积为 $1-\\frac{1}{6}=\\frac{5}{6}$,$\\therefore$ 截去部分体积与剩余部分体积的比值为 $\\frac{1}{5}$.故选:D",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-022-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_22_0.png",
+        "sha256": "e81ea6547e3ef554d8210ce7df51faeea401963a71512cf29e4c58bf0b1fedff"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 22,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-022-sheet.png"
+  },
+  {
+    "id": "mm-024",
+    "year": "2015",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "10",
+    "question": "10. (5 分) 如图, 长方形 $A B C D$ 的边 $A B=2, B C=1, O$ 是 $A B$ 的中点, 点 $P$ 沿着边 $B C, C D$ 与 $D A$ 运动, 记 $\\angle B O P=x$. 将动点 $P$ 到 $A, B$ 两点距离之和表示为 $x$的函数 $f(x)$, 则 $y=f(x)$ 的图象大致为 $(\\quad)$",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解：当 $0 \\leqslant x \\leqslant \\frac{\\pi}{4}$ 时, $B P=\\tan x, A P=\\sqrt{A B^2+B P^2}=\\sqrt{4+\\tan ^2 x}$,此时 $f(x)=\\sqrt{4+\\tan ^2 x}+\\tan x, 0 \\leqslant x \\leqslant \\frac{\\pi}{4}$, 此时单调递增,当 $P$ 在 $C D$ 边上运动时, $\\frac{\\pi}{4} \\leqslant x \\leqslant \\frac{3 \\pi}{4}$ 且 $x \\neq \\frac{\\pi}{2}$ 时,如图所示, $\\tan \\angle P O B=\\tan (\\pi-\\angle P O Q)=\\tan x=-\\tan \\angle P O Q=-\\frac{P Q}{O Q}=-\\frac{1}{O Q}$, $\\therefore O Q=-\\frac{1}{\\tan x}$,$\\therefore P D=A O-O Q=1+\\frac{1}{\\tan x}, P C=B O+O Q=1-\\frac{1}{\\tan x}$,$\\therefore P A+P B=\\sqrt{\\left(1-\\frac{1}{\\tan x}\\right)^2+1}+\\sqrt{\\left(1+\\frac{1}{\\tan x}\\right)^2+1}$,当 $x=\\frac{\\pi}{2}$ 时, $P A+P B=2 \\sqrt{2}$,当 $P$ 在 $A D$ 边上运动时, $\\frac{3 \\pi}{4} \\leqslant x \\leqslant \\pi, P A+P B=\\sqrt{4+\\tan ^2 x}-\\tan x$,由对称性可知函数 $\\mathrm{f}(\\mathrm{x})$ 关于 $\\mathrm{x}=\\frac{\\pi}{2}$ 对称,且 $f\\left(\\frac{\\pi}{4}\\right)>f\\left(\\frac{\\pi}{2}\\right)$, 且轨迹为非线型,排除 A, C, D,故选: B.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-024-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_24_0.png",
+        "sha256": "f8bea667c9a1febead0334431d271055220ced66aab066f5274f4319f3c0cb77"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-024-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_24_1.png",
+        "sha256": "22367524bf05467d55279126babce381093e7b83053b7db1fb3cffca9cba69f6"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-024-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_24_2.png",
+        "sha256": "d2387ba71ee86abf12026fd321ec0e12e39c2657c379b272de771493e808b83d"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-024-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_24_3.png",
+        "sha256": "7ec64fb5a9d39ea3c8dcfc2296ec094af0ed98e68a8364facf3044e170be50c1"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-024-4.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_24_4.png",
+        "sha256": "95ae6542a99793d75d1d3235d8b55094e588fc206b467b39ad85f576a49ef2d5"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 24,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-024-sheet.png"
+  },
+  {
+    "id": "mm-025",
+    "year": "2016",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图, 某几何体的三视图是三个半径相等的圆及每个圆中两条相互垂直的半径. 若该几何体的体积是 $\\frac{28 \\pi}{3}$, 则它的表面积是 ( )A. $17 \\pi$B. $18 \\pi$C. $20 \\pi$D. $28 \\pi$",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【解答】解：由题意可知三视图复原的几何体是一个球去掉 $\\frac{1}{8}$ 后的几何体, 如图可得: $\\frac{7}{8} \\times \\frac{4}{3} \\pi R^3=\\frac{28 \\pi}{3}, R=2$.它的表面积是: $\\frac{7}{8} \\times 4 \\pi \\cdot 2^2+\\frac{3}{4} \\times \\pi \\cdot 2^2=17 \\pi$.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-025-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_25_0.png",
+        "sha256": "1f6ced63240e17df2e9c09e96685cba0fd0f093f350b789f562e0952c13b64ed"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 25,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-025-sheet.png"
+  },
+  {
+    "id": "mm-029",
+    "year": "2016",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图是由圆柱与圆雉组合而成的几何体的三视图, 则该几何体的表面积为 $(\\quad)$A. $20 \\pi$B. $24 \\pi$C. $28 \\pi$D. $32 \\pi$",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【解答】解: 由三视图知, 空间几何体是一个组合体,上面是一个圆雉, 圆雉的底面直径是 4 , 圆雉的高是 $2 \\sqrt{3}$,$\\therefore$ 在轴截面中圆雉的母线长是 $\\sqrt{12+4}=4$,$\\therefore$ 圆雉的侧面积是 $\\pi \\times 2 \\times 4=8 \\pi$,下面是一个圆柱, 圆柱的底面直径是 4 , 圆柱的高是 4 ,$\\therefore$ 圆柱表现出来的表面积是 $\\pi \\times 2^2+2 \\pi \\times 2 \\times 4=20 \\pi$$\\therefore$ 空间组合体的表面积是 $28 \\pi$,故选: C.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-029-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_29_0.png",
+        "sha256": "40c33e0872bf64e51a54516bbb42e5963f7c7e04071c0aa0d9508404a918d368"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 29,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-029-sheet.png"
+  },
+  {
+    "id": "mm-033",
+    "year": "2016",
+    "paper": "（新课标Ⅲ）",
+    "questionNumber": "9",
+    "question": "9. (5 分) 如图, 网格纸上小正方形的边长为 1 , 粗实线画出的是某多面体的三视图，则该多面体的表面积为 ( )A. $18+36 \\sqrt{5}$B. $54+18 \\sqrt{5}$C. 90D. 81",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解：由已知中的三视图可得：该几何体是一个以主视图为底面的直四棱柱,其底面面积为: $3 \\times 6=18$,侧面的面积为: $\\left(3 \\times 3+3 \\times \\sqrt{3^2+6^2}\\right) \\times 2=18+18 \\sqrt{5}$,故棱柱的表面积为: $18 \\times 2+18+18 \\sqrt{5}=54+18 \\sqrt{5}$.故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-033-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_33_0.png",
+        "sha256": "0a6489e396690fe04850310f66a242571fb8b5f4870816489441db7d361a8cdf"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 33,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-033-sheet.png"
+  },
+  {
+    "id": "mm-034",
+    "year": "2017",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "2",
+    "question": "2. (5 分) 如图, 正方形 $A B C D$ 内的图形来自中国古代的太极图. 正方形内切圆中的黑色部分和白色部分关于正方形的中心成中心对称. 在正方形内随机取一点, 则此点取自黑色部分的概率是 ( )A. $\\frac{1}{4}$B. $\\frac{\\pi}{8}$C. $\\frac{1}{2}$D. $\\frac{\\pi}{4}$",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解：根据图象的对称性知, 黑色部分为圆面积的一半, 设圆的半径为 1 , 则正方形的边长为 2 ,则黑色部分的面积 $S=\\frac{\\pi}{2}$,则对应概率 $\\mathrm{P}=\\frac{\\frac{\\pi}{2}}{4}=\\frac{\\pi}{8}$,故选: B.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-034-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_34_0.png",
+        "sha256": "4ec3b5a7c4b262445a475d8053dd443523b9384ef167994774e43ac85b7f0d49"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 34,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-034-sheet.png"
+  },
+  {
+    "id": "mm-035",
+    "year": "2017",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "7",
+    "question": "7. (5 分) 某多面体的三视图如图所示, 其中正视图和左视图都由正方形和等腰直角三角形组成, 正方形的边长为 2 , 俯视图为等腰直角三角形, 该多面体的各个面中有若干个是梯形, 这些梯形的面积之和为 ( )A. 10B. 12C. 14D. 16",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 由三视图可画出直观图,该立体图中只有两个相同的梯形的面, $\\mathrm{S}_{\\text {梯形 }}=\\frac{1}{2} \\times 2 \\times(2+4)=6$,$\\therefore$ 这些梯形的面积之和为 $6 \\times 2=12$,故选：B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-035-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_35_0.png",
+        "sha256": "bc696948eb31b1d6460370950b2bdcff0a88086272cfeb2aafb218e2c2147a8a"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 35,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-035-sheet.png"
+  },
+  {
+    "id": "mm-036",
+    "year": "2017",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "4",
+    "question": "4. (5 分) 如图, 网格纸上小正方形的边长为 1 , 粗实线画出的是某几何体的三视图, 该几何体由一平面将一圆柱截去一部分后所得, 则该几何体的体积为 $(\\quad)$A. $90 \\pi$B. $63 \\pi$C. $42 \\pi$D. $36 \\pi$",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解：由三视图可得, 直观图为一个完整的圆柱减去一个高为 6 的圆柱的一半,$$V=\\pi \\cdot 3^2 \\times 10-\\frac{1}{2} \\cdot \\pi \\cdot 3^2 \\times 6=63 \\pi \\text {, }$$故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-036-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_36_0.png",
+        "sha256": "1e25f560a6dc5cf6453900d168826c948105c0c81a0c60711177fc5a2735b2af"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 36,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-036-sheet.png"
+  },
+  {
+    "id": "mm-041",
+    "year": "2018",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "7",
+    "question": "7. (5 分) 某圆柱的高为 2 , 底面周长为 16 , 其三视图如图. 圆柱表面上的点 $M$在正视图上的对应点为 $\\mathrm{A}$, 圆柱表面上的点 $\\mathrm{N}$ 在左视图上的对应点为 $\\mathrm{B}$, 则在此圆柱侧面上, 从 $\\mathrm{M}$ 到 $\\mathrm{N}$ 的路径中, 最短路径的长度为 ( )A. $2 \\sqrt{17}$B. $2 \\sqrt{5}$C. 3D. 2",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 由题意可知几何体是圆柱, 底面周长 16 , 高为: 2 ,直观图以及侧面展开图如图:圆柱表面上的点 $\\mathrm{N}$ 在左视图上的对应点为 $\\mathrm{B}$, 则在此圆柱侧面上, 从 $\\mathrm{M}$ 到 $\\mathrm{N}$ 的路径中, 最短路径的长度: $\\sqrt{2^2+4^2}=2 \\sqrt{5}$.故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-041-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_41_0.png",
+        "sha256": "ab36893a3259a8ca02ca04b5e265c5d385f0f9405c8ff6770e225a3d047cc7da"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 41,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-041-sheet.png"
+  },
+  {
+    "id": "mm-051",
+    "year": "2019",
+    "paper": "（新课标Ⅲ）",
+    "questionNumber": "8",
+    "question": "8. 如图, 点 $N$ 为正方形 $A B C D$ 的中心, $\\triangle E C D$ 为正三角形, 平面 $E C D \\perp$ 平面 $A B C D, M$ 是线段 $E D$ 的中点, 则 ( )A. $B M=E N$, 且直线 $B M, E N$ 是相交直线B. $B M \\neq E N$, 且直线 $B M, E N$ 是相交直线C. $B M=E N$, 且直线 $B M, E N$ 是异面直线D. $B M \\neq E N$, 且直线 $B M, E N$ 是异面直线",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】 $\\because \\triangle B D E, N$ 为 $B D$ 中点 $M$ 为 $D E$ 中点, $\\therefore B M, E N$ 共面相交, 选项 C, D 为错. 作 $E O \\perp C D$ 于 $O$, 连接 $O N$, 过 $M$ 作 $M F \\perp O D$ 于 $F$.连 $B F, \\because$ 平面 $C D E \\perp$ 平面 $A B C D$.$E O \\perp C D, E O \\subset$ 平面 $C D E, \\therefore E O \\perp$ 平面 $A B C D, M F \\perp$ 平面 $A B C E$,$\\therefore \\triangle M F B$ 与 $\\triangle E O N$ 均为直角三角形.设正方形边长为 2 , 易知 $E O=\\sqrt{3}, 0 N=1 \\quad E N=2$,$$M F=\\frac{\\sqrt{3}}{2}, \\quad B F=\\sqrt{2^2+\\frac{9}{4}}=\\frac{5}{2} \\quad \\therefore \\quad B M=\\sqrt{\\frac{3}{4}+\\frac{24}{4}}=\\sqrt{7} .$$$\\therefore B M \\neq E N$, 故选 B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-051-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_51_0.png",
+        "sha256": "07957841302a27fdb90685941479a77fb47d0adb322a95fd733bb8ab7d5f45df"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 51,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-051-sheet.png"
+  },
+  {
+    "id": "mm-055",
+    "year": "2020",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "7",
+    "question": "7. 如图是一个多面体的三视图, 这个多面体某条棱的一个端点在正视图中对应的点为 $M$ , 在俯视图中对应的点为 $N$, 则该端点在侧视图中对应的点为（）A. $E$B. $F$C. $G$D. $H$",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】根据三视图, 画出多面体立体图形,$D_1 D_4$ 上的点在正视图中都对应点 $M$, 直线 $B_3 C_4$ 上的点在俯视图中对应的点为 $\\mathrm{N}$,$\\therefore$ 在正视图中对应 $M$, 在俯视图中对应 $N$ 的点是 $D_4$, 线段 $D_3 D_4$, 上的所有点在侧试图中都对应 $E, \\therefore$ 点 $D_4$ 在侧视图中对应的点为 $E$.故选: A",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-055-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_55_0.png",
+        "sha256": "2f6a434924eb72cc91449155564206006c5a4e921fd7f3450eb1fc7636bdc353"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 55,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-055-sheet.png"
+  },
+  {
+    "id": "mm-056",
+    "year": "2020",
+    "paper": "（新课标Ⅲ）",
+    "questionNumber": "8",
+    "question": "8.下图为某几何体的三视图, 则该几何体的表面积是 $(\\cdots)$A. $6+4 \\sqrt{2}$B. $4+4 \\sqrt{2}$C. $6+2 \\sqrt{3}$D. $4+2 \\sqrt{3}$",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】根据三视图特征, 在正方体中截取出符合题意的立体图形根据立体图形可得: $S_{{\\triangle} A B C}=S_{{\\triangle} A D C}=S_{{\\triangle} C D B}=\\frac{1}{2} \\times 2 \\times 2=2$.根据勾股定理可得: $A B=A D=D B=2 \\sqrt{2}$$\\therefore \\triangle A D B$ 是边长为 $2 \\sqrt{2}$ 的等边三角形根据三角形面积公式可得:$$S_{{\\triangle} A D B}=\\frac{1}{2} A B \\cdot A D \\cdot \\sin 60^{\\circ}=\\frac{1}{2}(2 \\sqrt{2})^2 \\cdot \\frac{\\sqrt{3}}{2}=2 \\sqrt{3}$$$\\therefore$ 该几何体的表面积是: $3 \\times 2+2 \\sqrt{3}=6+2 \\sqrt{3}$.故选: C.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-056-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_56_0.png",
+        "sha256": "81db7c022cb054d9d3abfb72fac5b9c7a21b1ed1fc7f16ecd513c17d48e03954"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 56,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-056-sheet.png"
+  },
+  {
+    "id": "mm-058",
+    "year": "2021",
+    "paper": "（全国甲卷）",
+    "questionNumber": "6",
+    "question": "6. 在一个正方体中, 过顶点 $A$ 的三条棱的中点分别为 $E, F, G$. 该正方体截去三棱雉 $A-E F G$ 后, 所得多面体的三视图中, 正视图如图所示, 则相应的侧视图是 ( )",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【详解】由题意及正视图可得几何体的直观图, 如图所示,所以其侧视图为故选: D",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-058-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_58_0.png",
+        "sha256": "fb5bd33930e80281c08cca5f875687e44ea63db973035baf2df86cf3d275bb43"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-058-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_58_1.png",
+        "sha256": "85c06f52f59213a0d44c8e2a35a6e82ea4a5220e1c7563bf0cdd90b1358e4190"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-058-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_58_2.png",
+        "sha256": "6abfb9cac3946aa044f29f45959518db2e14cc2e9b3039ed6e5e6de3e3b73542"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-058-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_58_3.png",
+        "sha256": "f0a9f83ec51217bcb8fe378aa152bba941d4d62bcf9231130c15b904dc76100b"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-058-4.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_58_4.png",
+        "sha256": "afa3cf57092fa599110aa3173c473f69a811cb36dfa7ea69e9b587f6da75094b"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 58,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-058-sheet.png"
+  },
+  {
+    "id": "mm-059",
+    "year": "2021",
+    "paper": "（全国甲卷）",
+    "questionNumber": "8",
+    "question": "8.2020 年 12 月 8 日, 中国和尼泊尔联合公布珠穆朗玛峰最新高程为 8848.86 (单位: $\\mathrm{m}$ ), 三角高程测量法是珠峰高程测量方法之一. 如图是三角高程测量法的一个示意图, 现有 $A, B, C$ 三点, 且 $A, B, C$ 在同一水平面上的投影 $A^{\\prime}, B^{\\prime}, C^{\\prime}$ 满足 $\\angle A^{\\prime} C^{\\prime} B^{\\prime}=45^{\\circ}, \\angle A^{\\prime} B^{\\prime} C^{\\prime}=60^{\\circ}$. 由 $C$ 点测得 $B$ 点的仰角为 $15^{\\circ}, B B^{\\prime}$ 与 $C C^{\\prime}$ 的差为 100 ; 由 $B$ 点测得 $A$ 点的仰角为 $45^{\\circ}$, 则 $A, C$ 两点到水平面 $A^{\\prime} B^{\\prime} C^{\\prime}$ 的高度差 $A A^{\\prime}-C C^{\\prime}$ 约为 $(\\sqrt{3} \\approx 1.732)(\\quad)$A. 346B. 373C. 446D. 473",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-059-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_59_0.png",
+        "sha256": "c5ad41e11a14325041d28919f12f9ce799324415574f6e384b396d0f4339ae8a"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 59,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-059-sheet.png"
+  },
+  {
+    "id": "mm-060",
+    "year": "2021",
+    "paper": "（全国乙卷）",
+    "questionNumber": "9",
+    "question": "9. 魏晋时期刘徽撰写的《海岛算经》是关于测量的数学著作, 其中第一题是测量海盗的高。如图, 点 $\\mathrm{E}, \\mathrm{H}, \\mathrm{G}$ 在水平线 $\\mathrm{AC}$ 上, $\\mathrm{DE}$ 和 $\\mathrm{FG}$ 是两个垂直于水平面且等高的测量标杆的高度, 称为 “表高”, $\\mathrm{EG}$ 称为 “表距”, GC 和 EH 都称为 “表目距”, $\\mathrm{GC}$ 与 $\\mathrm{EH}$ 的差称为 “表目距的差”。则海岛的高 $\\mathrm{AB}=()$.$A ： \\frac{\\text { 表高 } \\times \\text { 表距 }}{\\text { 表目距的差 }}+$ 表高B： $\\frac{\\text { 表高}\\times\\text{表距 }}{\\text { 表目距的差 }}-$ 表高$C: \\frac{\\text { 表高 } \\times \\text { 表距 }}{\\text { 表目距的差 }}+$ 表距.D: $\\frac{\\text { 表高 } \\times \\text { 表距 }}{\\text { 表目距的差 }}-$ 表距",
+    "expected": [
+      "A"
+    ],
+    "analysis": "解析:连接 $D F$ 交 $A B$ 于 $M$, 则 $A B=A M+B M$.记 $\\angle B D M=a, \\angle B F M=\\beta$, 则 $\\frac{M B}{\\tan \\beta}-\\frac{M B}{\\tan \\alpha}=M F-M D=D F$.而 $\\tan \\beta=\\frac{F G}{G C}, \\tan a=\\frac{E D}{E H}$. 所以$$\\frac{M B}{\\tan \\beta}-\\frac{M B}{\\tan \\alpha}=M B\\left(\\frac{1}{\\tan \\beta}-\\frac{1}{\\tan \\alpha}\\right)=M B \\cdot\\left(\\frac{G C}{F G}-\\frac{E H}{E D}\\right)=M B \\cdot \\frac{G C-E H}{E D}$$故 $M B=\\frac{E D \\cdot D F}{G C-E H}=\\frac{\\text { 表高 } \\times \\text { 表距 }}{\\text { 表目距的差 }}$, 所以高 $A B=\\frac{\\text { 表高 } \\times \\text { 表距 }}{\\text { 表目距的差 }}+$ 表高.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-060-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_60_0.png",
+        "sha256": "13fc10f95f0640450feffc361bd679b6a44d1db9465d1a81b77fb2e9ac847900"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 60,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-060-sheet.png"
+  },
+  {
+    "id": "mm-063",
+    "year": "2022",
+    "paper": "（全国甲卷）",
+    "questionNumber": "8",
+    "question": "8. 沈括的《梦溪笔谈》是中国古代科技史上的杰作, 其中收录了计算圆弧长度的 “会圆术” ,如图, $\\overparen{A B}$ 是以 $O$ 为圆心, $O A$ 为半径的圆弧, $C$ 是的 $A B$ 中点, $D$ 在 $\\overparen{A B}$ 上, $C D \\perp A B$. “会圆术” 给出 $\\overparen{A B}$ 的弧长的近似值 $s$ 的计算公式: $s=A B+\\frac{C D^2}{O A}$. 当 $O A=2, \\angle A O B=60^{\\circ}$时, $s=()$A. $\\frac{11-3 \\sqrt{3}}{2}$B. $\\frac{11-4 \\sqrt{3}}{2}$C. $\\frac{9-3 \\sqrt{3}}{2}$D.$\\frac{9-4 \\sqrt{3}}{2}$",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】解: 如图, 连接 $O C$,因为 $C$ 是 $A B$ 的中点,所以 $O C \\perp A B$,又 $C D \\perp A B$, 所以 $O, C, D$ 三点共线,即 $O D=O A=O B=2$,又 $\\angle A O B=60^{\\circ}$,所以 $A B=O A=O B=2$,则 $O C=\\sqrt{3}$, 故 $C D=2-\\sqrt{3}$,所以 $s=A B+\\frac{C D^2}{O A}=2+\\frac{(2-\\sqrt{3})^2}{2}=\\frac{11-4 \\sqrt{3}}{2}$.故选: B.",
+    "workspace": "conics",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-063-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_63_0.png",
+        "sha256": "fb25eca87db8803e0e38ad33004e585a8bb2c5c0ebf097e6c85e87383a82f8db"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 63,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-063-sheet.png"
+  },
+  {
+    "id": "mm-066",
+    "year": "2014",
+    "paper": "新课标Ⅰ",
+    "questionNumber": "8",
+    "question": "8. (5 分) 如图, 网格纸的各小格都是正方形, 粗实线画出的是一个几何体的三视图, 则这个几何体是（）\nA. 三棱雉\nB. 三棱柱\nC. 四棱雉\nD. 四棱柱",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【解答】解: 根据网格纸的各小格都是正方形, 粗实线画出的是一个几何体的三视图,可知几何体如图: 几何体是三棱柱.\n故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-066-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_66_0.png",
+        "sha256": "3a749433ebbad3b6a750dd8471765dea1d59464f12204ba35df29745dd9aa748"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 66,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-066-sheet.png"
+  },
+  {
+    "id": "mm-068",
+    "year": "2017",
+    "paper": "新课标Ⅰ",
+    "questionNumber": "6",
+    "question": "6. (5 分) 如图, 在下列四个正方体中, $A, B$ 为正方体的两个顶点, $M, N, Q$为所在棱的中点, 则在这四个正方体中, 直线 $\\mathrm{AB}$ 与平面 $\\mathrm{MNQ}$ 不平行的是( )",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【解答】解：对于选项 $B$, 由于 $A B / / M Q$, 结合线面平行判定定理可知 $B$ 不满足题意;\n对于选项 $C$, 由于 $A B / / M Q$, 结合线面平行判定定理可知 $C$ 不满足题意;对于选项 $D$, 由于 $A B / / N Q$, 结合线面平行判定定理可知 $D$ 不满足题意;所以选项 $A$ 满足题意,故选: A.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-068-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_68_0.png",
+        "sha256": "96de2add6ae15cef7953938e5b55038253443f67a26e04dea384f2e7d6a1dcaa"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-068-1.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_68_1.png",
+        "sha256": "7654e0b4796c2fc03d1a31fa434b64deebf4b4878d78ede64e3fb6f32a93ea52"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-068-2.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_68_2.png",
+        "sha256": "4088a40ee147e092c698c407a3ca994303f37a7b599c774aa909899e3dbed9d5"
+      },
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-068-3.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_68_3.png",
+        "sha256": "7dc3c4867e7fa4a7bd941c50c5acdbb9d96121b2dfc6cebddcddac08f0c8128f"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 68,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-068-sheet.png"
+  },
+  {
+    "id": "mm-075",
+    "year": "2022",
+    "paper": "全国甲卷",
+    "questionNumber": "4",
+    "question": "4. 如图, 网格纸上绘制的是一个多面体的三视图, 网格小正方形的边长为 1 , 则该多面体的体积为 ()\nA. 8\nB. 12\nC. 16\nD. 20",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】由三视图还原几何体, 如图,\n则该直四棱柱的体积 $V=\\frac{2+4}{2} \\times 2 \\times 2=12$.故选: B.",
+    "workspace": "geometry3d",
+    "images": [
+      {
+        "file": "test-fixtures/real-exams-20261105/images/mm-075-0.png",
+        "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs/2010-2023_Math_MCQs_75_0.png",
+        "sha256": "149202883e0e423281f038d7b14679a6c5d3807901160eebc72abbfcc7b5205b"
+      }
+    ],
+    "source": {
+      "repo": "OpenMOSS/GAOKAO-MM",
+      "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+      "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+      "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+    },
+    "originalIndex": 75,
+    "sheet": "test-fixtures/real-exams-20261105/images/mm-075-sheet.png"
+  },
+  {
+    "id": "text-128",
+    "year": "2018",
+    "paper": "（新课标ⅲ）",
+    "questionNumber": "11",
+    "question": "11. (5 分) 设 $F_{1}, F_{2}$ 是双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1(a>0, b>0)$ 的左, 右焦点, $O$ 是坐标原点. 过 $F_{2}$ 作 $C$ 的一条渐近线的垂线, 垂足为 $P$, 若 $\\left|P F_{1}\\right|=\\sqrt{6}|O P|$, 则 $C$ 的离心率为 $(\\quad)$\nA. $\\sqrt{5}$\nB. 2\nC. $\\sqrt{3}$\nD. $\\sqrt{2}$\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "解：双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1 \\quad(a>0 . b>0)$ 的一条渐近线方程为 $y=\\frac{b}{a} x$, $\\therefore$ 点 $\\mathrm{F}_{2}$ 到渐近线的距离 $\\mathrm{d}=\\frac{\\mathrm{bc}}{\\sqrt{\\mathrm{a}^{2}+\\mathrm{b}^{2}}}=\\mathrm{b}$, 即 $\\left|P F_{2}\\right|=b$,\n\n$\\therefore|\\mathrm{OP}|=\\sqrt{\\left|O \\mathrm{~F}_{2}\\right|^{2}-\\left|\\mathrm{PF}_{2}\\right|^{2}}=\\sqrt{c^{2}-\\mathrm{b}^{2}}=\\mathrm{a}, \\quad \\cos \\angle \\mathrm{PF} \\mathrm{F}_{2} \\mathrm{O}=\\frac{\\mathrm{b}}{\\mathrm{c}}$,\n\n$\\because\\left|\\mathrm{PF}_{1}\\right|=\\sqrt{6}|\\mathrm{OP}|$\n\n$\\therefore\\left|P F_{1}\\right|=\\sqrt{6} a$ 在三角形 $F_{1} P F_{2}$ 中, 由余弦定理可得 $\\left|P F_{1}\\right|^{2}=\\left|P F_{2}\\right|^{2}+\\left|F_{1} F_{2}\\right|^{2}-2\\left|P F_{2}\\right| \\cdot\\left|F_{1} F_{2}\\right| C O S \\angle$ $\\mathrm{PF}_{2} \\mathrm{O}$\n\n$\\therefore 6 \\mathrm{a}^{2}=\\mathrm{b}^{2}+4 c^{2}-2 \\times b \\times 2 c \\times \\frac{b}{c}=4 c^{2}-3 b^{2}=4 c^{2}-3 \\quad\\left(c^{2}-a^{2}\\right)$,\n\n即 $3 a^{2}=c^{2}$,\n\n即 $\\sqrt{3} a=c$,\n\n$\\therefore \\mathrm{e}=\\frac{\\mathrm{c}}{\\mathrm{a}}=\\sqrt{3}$,\n\n故选: C.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 128
+  },
+  {
+    "id": "text-131",
+    "year": "2019",
+    "paper": "（新课标ⅰ）",
+    "questionNumber": "2",
+    "question": "2. 设复数 $z$ 满足 $|z-\\mathrm{i}|=1, z$ 在复平面内对应的点为 $(x, y)$, 则\nA. $(x+1)^{2}+y^{2}=1$\nB. $(x-1)^{2}+y^{2}=1$\nC. $x^{2}+(y-1)^{2}=1$\nD.\n\n$x^{2}+(y+1)^{2}=1$\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】 $z=x+y i, z-i==x+(y-1) i,|z-i|=\\sqrt{x^{2}+(y-1)^{2}}=1$, 则 $x^{2}+(y-1)^{2}=1$. 故选 C.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 131
+  },
+  {
+    "id": "text-137",
+    "year": "2019",
+    "paper": "（新课标ⅱ）",
+    "questionNumber": "2",
+    "question": "2. 设 $z=-3+2 \\mathrm{i}$, 则在复平面内 $\\bar{z}$ 对应的点位于\nA. 第一象限\nB. 第二象限\nC. 第三象限\nD. 第四象限\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】由 $z=-3+2 i$, 得 $\\bar{z}=-3-2 i$, 则 $\\bar{z}=-3-2 i$, 对应点 $(-3,-2)$ 位于第三象限. 故选 $\\mathrm{C}$.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 137
+  },
+  {
+    "id": "text-139",
+    "year": "2019",
+    "paper": "（新课标ⅱ）",
+    "questionNumber": "4",
+    "question": "4.2019 年 1 月 3 日嫦娥四号探测器成功实现人类历史上首次月球背面软着陆, 我国航天 事业取得又一重大成就, 实现月球背面软着陆需要解决的一个关键技术问题是地面与探 测器的通讯联系。 为解决这个问题, 发射了嫦娥四号中继星 “鹊桥”, 鹊桥沿着围绕地 月拉格朗日 $L_{2}$ 点的轨道运行. $L_{2}$ 点是平衡点, 位于地月连线的延长线上. 设地球质量为 $M_{1}$, 月球质量为 $M_{2}$, 地月距离为 $R, L_{2}$ 点到月球的距离为 $r$, 根据牛顿运动定律和万 有引力定律, $r$ 满足方程:\n\n$$\n\\frac{M_{1}}{(R+r)^{2}}+\\frac{M_{2}}{r^{2}}=(R+r) \\frac{M_{1}}{R^{3}}\n$$\n\n设 $a=\\frac{r}{R}$, 由于 $a$ 的值很小, 因此在近似计算中 $\\frac{3 a^{3}+3 a^{4}+a^{5}}{(1+a)^{2}} \\approx 3 a^{3}$, 则 $r$ 的近似值 为\nA. $\\sqrt{\\frac{M_{2}}{M_{1}}} R$\nB. $\\sqrt{\\frac{M_{2}}{2 M_{1}}} R$\nC. $\\sqrt[3]{\\frac{3 M_{2}}{M_{1}}} R$\nD. $\\sqrt[3]{\\frac{M_{2}}{3 M_{1}}} R$\n",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【详解】由 $a=\\frac{r}{R}$, 得 $r=a R$\n\n因为 $\\frac{M_{1}}{(R+r)^{2}}+\\frac{M_{2}}{r^{2}}=(R+r) \\frac{M_{1}}{R^{3}}$,\n\n所以 $\\frac{M_{1}}{R^{2}(1+a)^{2}}+\\frac{M_{2}}{a^{2} R^{2}}=(1+a) \\frac{M_{1}}{R^{2}}$,\n\n即 $\\frac{M_{2}}{M_{1}}=a^{2}\\left[(1+a)-\\frac{1}{(1+a)^{2}}\\right]=\\frac{a^{5}+3 a^{4}+3 a^{3}}{(1+a)^{2}} \\approx 3 a^{3}$,\n\n解得 $a==^{3} \\sqrt{\\frac{M_{2}}{3 M_{1}}}$,\n\n所以 $r=a R=\\sqrt{\\frac{M_{2}}{3 M_{1}}} R$.\n",
+    "workspace": "geometry3d",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 139
+  },
+  {
+    "id": "text-142",
+    "year": "2019",
+    "paper": "（新课标ⅱ）",
+    "questionNumber": "7",
+    "question": "7. 设 $\\alpha, \\beta$ 为两个平面, 则 $\\alpha / / \\beta$ 的充要条件是\nA. $\\alpha$ 内有无数条直线与 $\\beta$ 平行\nB. $\\alpha$ 内有两条相交直线与 $\\beta$ 平行\nC. $\\alpha, \\beta$ 平行于同一条直线\nD. $\\alpha, \\beta$ 垂直于同一平面\n",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】由面面平行的判定定理知: $a$ 内两条相交直线都与 $\\beta$ 平行是 $a / / \\beta$ 的充分条件,\n\n由面面平行性质定理知, 若 $a / / \\beta$, 则 $a$ 内任意一条直线都与 $\\beta$ 平行, 所以 $a$ 内两条相交 直线都与 $\\beta$ 平行是 $a / / \\beta$ 的必要条件, 故选 $\\mathrm{B}$.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 142
+  },
+  {
+    "id": "text-143",
+    "year": "2019",
+    "paper": "（新课标ⅱ）",
+    "questionNumber": "8",
+    "question": "8. 若抛物线 $y^{2}=2 p x \\quad(p>0)$ 的焦点是椭圆 $\\frac{x^{2}}{3 p}+\\frac{y^{2}}{p}=1$ 的一个焦点, 则 $p=$\nA. 2\nB. 3\nC. 4\nD. 8\n",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【详解】因为抛物线 $y^{2}=2 p x(p>0)$ 的焦点 $\\left(\\frac{p}{2}, 0\\right)$ 是椭圆 $\\frac{x^{2}}{3 p}+\\frac{y^{2}}{p}=1$ 的一个焦点, 所以 $3 p-p=\\left(\\frac{p}{2}\\right)^{2}$, 解得 $p=8$, 故选 $\\mathrm{D}$.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 143
+  },
+  {
+    "id": "text-151",
+    "year": "2019",
+    "paper": "（新课标ⅲ）",
+    "questionNumber": "10",
+    "question": "10. 双曲线 $C: \\frac{x^{2}}{4}-\\frac{y^{2}}{2}=1$ 的右焦点为 $F$, 点 $P$ 在 $C$ 的一条渐近线上, $O$ 为坐标原点, 若 $|P O|=|P F|$, 则 $\\triangle P F O$ 的面积为\nA. $\\frac{3 \\sqrt{2}}{4}$\nB. $\\frac{3 \\sqrt{2}}{2}$\nC. $\\frac{\\mathrm{x}_{1}}{\\mathrm{x}_{2}}$\nD. $3 \\sqrt{2}$\n",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】由 $a=2, b=\\sqrt{2}, c=\\sqrt{a^{2}+b^{2}}=\\sqrt{6}$ ．\n\n$$\n\\because|P O|=|P F|, \\therefore x_{P}=\\frac{\\sqrt{6}}{2}\n$$\n\n又 $P$ 在 $C$ 的一条渐近线上, 不妨设为在 $y=\\frac{b}{a} x$ 上,\n\n$\\therefore S_{\\triangle P F O}=\\frac{1}{2}|O F| \\cdot\\left|y_{P}\\right|=\\frac{1}{2} \\times \\sqrt{6} \\times \\frac{\\sqrt{3}}{2}=\\frac{3 \\sqrt{2}}{4}$, 故选 A.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 151
+  },
+  {
+    "id": "text-158",
+    "year": "2020",
+    "paper": "（全国卷Ⅲ）",
+    "questionNumber": "5",
+    "question": "5. 设 $O$ 为坐标原点, 直线 $x=2$ 与抛物线 $C: y^{2}=2 p x(p>0)$ 交于 $D, E$ 两点, 若 $O D \\perp O E$, 则 $C$ 的焦点坐标为 $(\\quad)$\nA. $\\left(\\frac{1}{4}, 0\\right)$\nB. $\\left(\\frac{1}{2}, 0\\right)$\nC. $(1,0)$\nD. $(2,0)$\n",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】因为直线 $x=2$ 与抛物线 $y^{2}=2 p x(p>0)$ 交于 $C, D$ 两点, 且 $O D \\perp O E$, 根据抛物线的对称性可以确定 $\\angle D O x=\\angle C O x=\\frac{\\pi}{4}$, 所以 $C(2,2)$ ， 代人抛物线方程 $4=4 p$, 求得 $p=1$, 所以其焦点坐标为 $\\left(\\frac{1}{2}, 0\\right)$, 故选: B.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 158
+  },
+  {
+    "id": "text-163",
+    "year": "2020",
+    "paper": "（全国卷Ⅲ）",
+    "questionNumber": "11",
+    "question": "11. 设双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1 \\quad(a>0, b>0)$ 的左、右焦点分别为 $F_{1}, F_{2}$, 离心率为 $\\sqrt{5} . P$ 是 $C$ 上一点, 且 $F_{1} P \\perp F_{2} P$. 若 $\\triangle P F_{1} F_{2}$ 的面积为 4 , 则 $a=(\\quad)$\nA. 1\nB. 2\nC. 4\nD. 8\n",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】 $\\because \\frac{c}{a}=\\sqrt{5}, \\therefore c=\\sqrt{5} a$ ，根据双曲线的定义可得 ||$P F_{1}|-| P F_{2} \\|=2 a$ ，\n\n$S_{\\triangle P F_{1} F_{2}}=\\frac{1}{2}\\left|P F_{1}\\right| \\cdot\\left|P F_{2}\\right|=4$, 即 $\\left|P F_{1}\\right| \\cdot\\left|P F_{2}\\right|=8$ ，\n\n$\\because F_{1} P \\perp F_{2} P, \\quad \\therefore\\left|P F_{1}\\right|^{2}+\\left|P F_{2}\\right|^{2}=(2 c)^{2}$\n\n$\\therefore\\left(\\left|P F_{1}\\right|-\\left|P F_{2}\\right|\\right)^{2}+2\\left|P F_{1}\\right| \\cdot\\left|P F_{2}\\right|=4 c^{2}$, 即 $a^{2}-5 a^{2}+4=0$, 解得 $a=1$, 故选: A.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 163
+  },
+  {
+    "id": "text-167",
+    "year": "2020",
+    "paper": "（新课标Ⅰ）",
+    "questionNumber": "4",
+    "question": "4. 已知 $A$ 为抛物线 $C: y^{2}=2 p x(p>0)$ 上一点, 点 $A$ 到 $C$ 的焦点的距离为 12 , 到 $y$ 轴的距离为 9 , 则 $p=()$\nA. 2\nB. 3\nC. 6\nD. 9\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】设抛物线的焦点为 $F$, 由抛物线的定义知 $|A F|=x_{A}+\\frac{p}{2}=12$, 即 $12=9+\\frac{p}{2}$, 解得 $p=6$.\n\n故选: C.\n\n【点晴】本题主要考查利用抛物线的定义计算焦半径, 考查学生转化与化归思想, 是一道容易题.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 167
+  },
+  {
+    "id": "text-176",
+    "year": "2020",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "5",
+    "question": "5. 若过点 $(2,1)$ 的圆与两坐标轴都相切, 则圆心到直线 $2 x-y-3=0$ 的距离为 $(\\quad)$\nA. $\\frac{\\sqrt{5}}{5}$\nB. $\\frac{2 \\sqrt{5}}{5}$\nC. $\\frac{3 \\sqrt{5}}{5}$\nD. $\\frac{4 \\sqrt{5}}{5}$\n",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】由于圆上的点 $(2,1)$ 在第一象限, 若圆心不在第一象限,\n\n则圆与至少与一条坐标轴相交, 不合乎题意, 所以圆心必在第一象限,\n\n设圆心的坐标为 $(a, a)$, 则圆的半径为 $a$,\n\n圆的标准方程为 $(x-a)^{2}+(y-a)^{2}=a^{2}$. 由题意可得 $(2-a)^{2}+(1-a)^{2}=a^{2}$,\n\n可得 $a^{2}-6 a+5=0$, 解得 $a=1$ 或 $a=5$,\n\n所以圆心的坐标为 $(1,1)$ 或 $(5,5)$,\n\n圆心到直线 $2 x-y-3=0$ 的距离均为 $d=\\frac{|-2|}{\\sqrt{5}}=\\frac{2 \\sqrt{5}}{5}$;\n\n所以，圆心到直线 $2 x-y-3=0$ 的距离为 $\\frac{2 \\sqrt{5}}{5}$.\n\n故选: B.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 176
+  },
+  {
+    "id": "text-178",
+    "year": "2020",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "8",
+    "question": "8. 设 $O$ 为坐标原点, 直线 $x=a$ 与双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1(a>0, b>0)$ 的两条渐近线分别交于 $D, E$ 两点, 若 $\\square O D E$ 的面积为 8 , 则 $C$ 的焦距的最小值为（）\nA. 4\nB. 8\nC. 16\nD. 32\n",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】 $\\because C \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1(a>0, b>0)$\n\n$\\therefore$ 双曲线的渐近线方程是 $y= \\pm \\frac{b}{a} x$\n\n$\\because$ 直线 $x=a$ 与双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1(a>0, b>0)$ 的两条渐近线分别交于 $D, E$ 两点\n\n不妨设 $D$ 为在第一象限, $E$ 在第四象限\n\n联立 $\\left\\{\\begin{array}{l}x=a \\\\ y=\\frac{b}{a} x\\end{array}\\right.$, 解得 $\\left\\{\\begin{array}{l}x=a \\\\ y=b\\end{array}\\right.$\n\n故 $D(a, b)$\n\n联立 $\\left\\{\\begin{array}{l}x=a \\\\ y=-\\frac{b}{a} x\\end{array}\\right.$, 解得 $\\left\\{\\begin{array}{l}x=a \\\\ y=-b\\end{array}\\right.$\n\n故 $E(a,-b)$\n\n$\\therefore|E D|=2 b$\n\n$\\therefore \\square O D E$ 面积为: $S_{\\triangle O D E}=\\frac{1}{2} a \\times 2 b=a b=8$\n\n$\\because$ 双曲线 $C: \\frac{x^{2}}{a^{2}}-\\frac{y^{2}}{b^{2}}=1(a>0, b>0)$\n\n$\\therefore$ 其焦距为 $2 c=2 \\sqrt{a^{2}+b^{2}} \\geq 2 \\sqrt{2 a b}=2 \\sqrt{16}=8$\n\n当且仅当 $a=b=2 \\sqrt{2}$ 取等号\n\n$\\therefore C$ 的焦距的最小值： 8\n\n故选: B.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 178
+  },
+  {
+    "id": "text-180",
+    "year": "2020",
+    "paper": "（新课标Ⅱ）",
+    "questionNumber": "10",
+    "question": "10.已知 $\\triangle A B C$ 是面积为 $\\frac{9 \\sqrt{3}}{4}$ 的等边三角形, 且其顶点都在球 $O$ 的球面上. 若球 $O$ 的表面积为 $16 \\pi$, 则 $O$ 到平面 $A B C$ 的距离为（）\nA. $\\sqrt{3}$\nB. $\\frac{3}{2}$\nC. 1\nD. $\\frac{\\sqrt{3}}{2}$\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】设球 $O$ 的半径为 $R$, 则 $4 \\pi R^{2}=16 \\pi$, 解得: $R=2$.\n\n设 $\\square A B C$ 外接圆半径为 $r$, 边长为 $a$,\n\n$\\because \\square A B C$ 是面积为 $\\frac{9 \\sqrt{3}}{4}$ 的等边三角形,\n\n$\\therefore \\frac{1}{2} a^{2} \\times \\frac{\\sqrt{3}}{2}=\\frac{9 \\sqrt{3}}{4}$, 解得: $a=3, \\therefore r=\\frac{2}{3} \\times \\sqrt{a^{2}-\\frac{a^{2}}{4}}=\\frac{2}{3} \\times \\sqrt{9-\\frac{9}{4}}=\\sqrt{3}$,\n\n$\\therefore$ 球心 $O$ 到平面 $A B C$ 的距离 $d=\\sqrt{R^{2}-r^{2}}=\\sqrt{4-3}=1$.\n\n故选: C.\n",
+    "workspace": "geometry3d",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 180
+  },
+  {
+    "id": "text-186",
+    "year": "2021",
+    "paper": "（全国甲卷）",
+    "questionNumber": "5",
+    "question": "5. 已知 $F_{1}, F_{2}$ 是双曲线 $C$ 的两个焦点, $P$ 为 $C$ 上一点, 且 $\\angle F_{1} P F_{2}=60^{\\circ},\\left|P F_{1}\\right|=3\\left|P F_{2}\\right|$, 则 $C$ 的离心率为\nA. $\\frac{\\sqrt{7}}{2}$\nB. $\\frac{\\sqrt{13}}{2}$\nC. $\\sqrt{7}$\nD. $\\sqrt{13}$\n",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】因为 $\\left|P F_{1}\\right|=3\\left|P F_{2}\\right|$, 由双曲线的定义可得 $\\left|P F_{1}\\right|-\\left|P F_{2}\\right|=2\\left|P F_{2}\\right|=2 a$,\n\n所以 $\\left|P F_{2}\\right|=a,\\left|P F_{1}\\right|=3 a$;\n\n因为 $\\angle F_{1} P F_{2}=60^{\\circ}$,由余弦定理可得 $4 c^{2}=9 a^{2}+a^{2}-2 \\times 3 a \\cdot a \\cdot \\cos 60^{\\circ}$,\n\n整理可得 $4 c^{2}=7 a^{2}$, 所以 $e^{2}=\\frac{c^{2}}{a^{2}}=\\frac{7}{4}$, 即 $e=\\frac{\\sqrt{7}}{2}$.\n\n故选: A\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 186
+  },
+  {
+    "id": "text-190",
+    "year": "2021",
+    "paper": "（全国甲卷）",
+    "questionNumber": "11",
+    "question": "11. 已如 $A, B, C$ 是半径为 1 的球 $O$ 的球面上的三个点, 且 $A C \\perp B C, A C=B C=1$, 则三棱雉 $O-A B C$ 的体积为 $(\\quad)$\nA. $\\frac{\\sqrt{2}}{12}$\nB. $\\frac{\\sqrt{3}}{12}$\nC. $\\frac{\\sqrt{2}}{4}$\nD. $\\frac{\\sqrt{3}}{4}$\n",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】 $\\because A C \\perp B C, A C=B C=1, \\therefore \\triangle A B C$ 为等腰直角三角形, $\\therefore A B=\\sqrt{2}$,\n\n则 $\\triangle A B C$ 外接圆的半径为 $\\frac{\\sqrt{2}}{2}$, 又球的半径为 1 ,\n\n设 $O$ 到平面 $A B C$ 的距离为 $d$,\n\n则 $d=\\sqrt{1^{2}-\\left(\\frac{\\sqrt{2}}{2}\\right)^{2}}=\\frac{\\sqrt{2}}{2}$,\n\n所以 $V_{O-A B C}=\\frac{1}{3} S_{\\triangle A B C} \\cdot d=\\frac{1}{3} \\times \\frac{1}{2} \\times 1 \\times 1 \\times \\frac{\\sqrt{2}}{2}=\\frac{\\sqrt{2}}{12}$.\n\n故选: A.\n",
+    "workspace": "geometry3d",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 190
+  },
+  {
+    "id": "text-198",
+    "year": "2021",
+    "paper": "（新课标ⅰ）",
+    "questionNumber": "11",
+    "question": "11. 设 $B$ 是椭圆 $C: \\frac{x^{2}}{a^{2}}+\\frac{y^{2}}{b^{2}}=1(a>b>0)$ 的上顶点, 若 $C$ 上的任意一点 $P$ 都满足, $|P B| \\leq 2 b ， \\quad$ 则 $C$ 的离心率的取值范围是 $(\\quad)$\n\nA. $\\left[\\frac{\\sqrt{2}}{2}, 1\\right)$\n\nB. $\\left[\\frac{1}{2}, 1\\right)$\n\nC. $\\left(0, \\frac{\\sqrt{2}}{2}\\right]$\n\nD. $\\left(0, \\frac{1}{2}\\right]$\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "解析:\n\n由题意, 点 $B(0, b)$, 设 $P\\left(x_{0}, y_{0}\\right)$, 则 $\\frac{x_{0}^{2}}{a^{2}}+\\frac{y_{0}^{2}}{b^{2}}=1 \\Rightarrow x_{0}^{2}=a^{2}\\left(1-\\frac{y_{0}^{2}}{b^{2}}\\right)$, 故\n\n$|P B|^{2}=x_{0}^{2}+\\left(y_{0}-b\\right)^{2}=a^{2}\\left(1-\\frac{y_{0}^{2}}{b^{2}}\\right)+y_{0}^{2}-2 b y_{0}+b^{2}=-\\frac{c^{2}}{b^{2}} y_{0}^{2}-2 b y_{0}+a^{2}+b^{2}$\n\n$y_{0} \\in[-b, b]$\n\n由题意, 当 $y_{0}=-b$ 时, $|P B|^{2}$ 最大, 则 $-\\frac{b^{3}}{c^{2}} \\leq-b, b^{2} \\geq c^{2}, a^{2}-c^{2} \\geq c^{2}, c=\\frac{c}{a} \\leq \\frac{\\sqrt{2}}{2}$,\n\n$c \\in\\left(0, \\frac{\\sqrt{2}}{2}\\right]$\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 198
+  },
+  {
+    "id": "text-203",
+    "year": "2022",
+    "paper": "（全国乙卷）",
+    "questionNumber": "4",
+    "question": "4. 嫦娥二号卫星在完成探月任务后, 继续进行深空探测, 成为我国第一颗环绕太阳飞行的 人造行星, 为研究嫦娥二号绕日周期与地球绕日周期的比值, 用到数列 $\\left\\{b_{n}\\right\\}: b_{1}=1+\\frac{1}{a_{1}}$, $b_{2}=1+\\frac{1}{a_{1}+\\frac{1}{a_{2}}}, \\quad b_{3}=1+\\frac{1}{a_{1}+\\frac{1}{a_{2}+\\frac{1}{a_{3}}}}, \\cdots$, 依此类推, 其中 $a_{k} \\in \\mathbf{N}^{\\star}(k=1,2, \\cdots)$. 则 ()\nA. $b_{1}<b_{5}$\nB. $b_{3}<b_{8}$\nC. $b_{6}<b_{2}$\nD. $b_{4}<b_{7}$\n",
+    "expected": [
+      "D"
+    ],
+    "analysis": "【详解】解: 因为 $a_{k} \\in \\mathbf{N}^{*}(k=1,2, \\cdots)$,\n\n所以 $a_{1}<a_{1}+\\frac{1}{a_{2}}, \\frac{1}{a_{1}}>\\frac{1}{a_{1}+\\frac{1}{a_{2}}}$, 得到 $b_{1}>b_{2}$,\n\n同理 $a_{1}+\\frac{1}{a_{2}}>a_{1}+\\frac{1}{a_{2}+\\frac{1}{a_{3}}}$, 可得 $b_{2}<b_{3}, b_{1}>b_{3}$\n\n又因为 $\\frac{1}{a_{2}}>\\frac{1}{a_{2}+\\frac{1}{a_{3}+\\frac{1}{a_{4}}}}, a_{1}+\\frac{1}{a_{2}+\\frac{1}{a_{3}}}<a_{1}+\\frac{1}{a_{2}+\\frac{1}{a_{3}+\\frac{1}{a_{4}}}}$ ，\n\n故 $b_{2}<b_{4}, b_{3}>b_{4}$;\n\n以此类推, 可得 $b_{1}>b_{3}>b_{5}>b_{7}>\\cdots, b_{7}>b_{8}$, 故 $\\mathrm{A}$ 错误;\n\n$b_{1}>b_{7}>b_{8}$, 故 B 错误; \n\n$$\n\\begin{aligned}\n& \\frac{1}{a_{2}}>\\frac{1}{a_{2}+\\frac{1}{a_{3}+\\cdots \\frac{1}{a_{6}}}} \\text {, 得 } b_{2}<b_{6} \\text {, 故 C 错误; } \\\\\n& a_{1}+\\frac{1}{a_{2}+\\frac{1}{a_{3}+\\frac{1}{a_{4}}}}>a_{1}+\\frac{1}{a_{2}+\\cdots \\frac{1}{a_{6}+\\frac{1}{a_{7}}}} \\text {, 得 } b_{4}<b_{7} \\text {, 故 D 正确. }\n\\end{aligned}\n$$\n\n故选: D.\n",
+    "workspace": "geometry3d",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 203
+  },
+  {
+    "id": "text-204",
+    "year": "2022",
+    "paper": "（全国乙卷）",
+    "questionNumber": "5",
+    "question": "5. 设 $F$ 为抛物线 $C: y^{2}=4 x$ 的焦点, 点 $A$ 在 $C$ 上, 点 $B(3,0)$, 若 $|A F|=|B F|$, 则 $|A B|=$ ()\nA. 2\nB. $2 \\sqrt{2}$\nC. 3\nD. $3 \\sqrt{2}$\n",
+    "expected": [
+      "B"
+    ],
+    "analysis": "【详解】由题意得, $F(1,0)$, 则 $|A F|=|B F|=2$,\n\n即点 $\\mathrm{A}$ 到准线 $x=-1$ 的距离为 2 , 所以点 $\\mathrm{A}$ 的横坐标为 $-1+2=1$,\n\n不妨设点 $\\mathrm{A}$ 在 $x$ 轴上方, 代人得, $A(1,2)$,\n\n所以 $|A B|=\\sqrt{(3-1)^{2}+(0-2)^{2}}=2 \\sqrt{2}$.\n\n故选: B\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 204
+  },
+  {
+    "id": "text-206",
+    "year": "2022",
+    "paper": "（全国乙卷）",
+    "questionNumber": "9",
+    "question": "9. 已知球 $O$ 的半径为 1 , 四棱雉的顶点为 $O$, 底面的四个顶点均在球 $O$ 的球面上, 则当该 四棱雉的体积最大时，其高为（）\nA. $\\frac{1}{3}$\nB. $\\frac{1}{2}$\nC. $\\frac{\\sqrt{3}}{3}$\nD. $\\frac{\\sqrt{2}}{2}$\n",
+    "expected": [
+      "C"
+    ],
+    "analysis": "【详解】设该四棱雉底面为四边形 $A B C D$, 四边形 $A B C D$ 所在小圆半径为 $r$,\n\n设四边形 $A B C D$ 对角线夹角为 $a$,\n\n则 $S_{A B C D}=\\frac{1}{2} \\cdot A C \\cdot B D \\cdot \\sin a \\leq \\frac{1}{2} \\cdot A C \\cdot B D \\leq \\frac{1}{2} \\cdot 2 r \\cdot 2 r=2 r^{2}$\n\n(当且仅当四边形 $A B C D$ 为正方形时等号成立)\n\n即当四棱雉的顶点 $O$ 到底面 $A B C D$ 所在小圆距离一定时, 底面 $A B C D$ 面积最大值为 $2 r^{2}$\n\n又 $r^{2}+h^{2}=1$\n\n则 $V_{O-A B C D}=\\frac{1}{3} \\cdot 2 r^{2} \\cdot h=\\frac{\\sqrt{2}}{3} \\sqrt{r^{2} \\cdot r^{2} \\cdot 2 h^{2}} \\leq \\frac{\\sqrt{2}}{3} \\sqrt{\\left(\\frac{r^{2}+r^{2}+2 h^{2}}{3}\\right)^{3}}=\\frac{4 \\sqrt{3}}{27}$\n\n当且仅当 $r^{2}=2 h^{2}$ 即 $h=\\frac{\\sqrt{3}}{3}$ 时等号成立,\n\n故选: C\n",
+    "workspace": "geometry3d",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 206
+  },
+  {
+    "id": "text-212",
+    "year": "2022",
+    "paper": "（全国甲卷）",
+    "questionNumber": "10",
+    "question": "10. 椭圆 $C: \\frac{x^{2}}{a^{2}}+\\frac{y^{2}}{b^{2}}=1(a>b>0)$ 的左顶点为 $A$, 点 $P, Q$ 均在 $C$ 上, 且关于 $y$ 轴对称. 若 直线 $A P, A Q$ 的斜率之积为 $\\frac{1}{4}$, 则 $C$ 的离心率为 ()\nA. $\\frac{\\sqrt{3}}{2}$\nB. $\\frac{\\sqrt{2}}{2}$\nC. $\\frac{1}{2}$\nD. $\\frac{1}{3}$\n",
+    "expected": [
+      "A"
+    ],
+    "analysis": "【详解】解: $A(-a, 0)$,\n\n设 $P\\left(x_{1}, y_{1}\\right)$, 则 $Q\\left(-x_{1}, y_{1}\\right)$,\n\n则 $k_{A P}=\\frac{y_{1}}{x_{1}+a}, k_{A Q}=\\frac{y_{1}}{-x_{1}+a}$,\n\n故 $k_{A P} \\cdot k_{A Q}=\\frac{y_{1}}{x_{1}+a} \\cdot \\frac{y_{1}}{-x_{1}+a}=\\frac{y_{1}^{2}}{-x_{1}^{2}+a^{2}}=\\frac{1}{4}$,\n\n又 $\\frac{x_{1}^{2}}{a^{2}}+\\frac{y_{1}^{2}}{b^{2}}=1$, 则 $y_{1}^{2}=\\frac{b^{2}\\left(a^{2}-x_{1}^{2}\\right)}{a^{2}}$,\n\n所以 $\\frac{\\frac{b^{2}\\left(a^{2}-x_{1}^{2}\\right)}{a^{2}}}{-x_{1}^{2}+a^{2}}=\\frac{1}{4}$, 即 $\\frac{b^{2}}{a^{2}}=\\frac{1}{4}$,\n\n所以椭圆 $C$ 的离心率 $e=\\frac{c}{a}=\\sqrt{1-\\frac{b^{2}}{a^{2}}}=\\frac{\\sqrt{3}}{2}$.\n\n故选: A.\n",
+    "workspace": "conics",
+    "images": [],
+    "source": {
+      "repo": "OpenLMLab/GAOKAO-Bench",
+      "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+      "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+    },
+    "originalIndex": 212
+  }
+]

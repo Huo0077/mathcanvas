@@ -1,0 +1,14 @@
+{
+  "mm": {
+    "repo": "OpenMOSS/GAOKAO-MM",
+    "commit": "76d5193c89655192d053dcf86ead743e0423ec95",
+    "url": "https://raw.githubusercontent.com/OpenMOSS/GAOKAO-MM/76d5193c89655192d053dcf86ead743e0423ec95/Data/2010-2023_Math_MCQs.json",
+    "sha256": "85f007fed1d1e1868c78ff0931c5a4f71845955a6f42653edf7b20b2a943e838"
+  },
+  "text": {
+    "repo": "OpenLMLab/GAOKAO-Bench",
+    "commit": "6dbb24f8d8439041e5431c4c184a582182a6ce9c",
+    "url": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+    "sha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c"
+  }
+}

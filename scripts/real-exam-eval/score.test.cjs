@@ -1,0 +1,10 @@
+﻿const {test}=require('node:test');const assert=require('node:assert/strict');const {extractChoice,score}=require('./score.cjs');
+test('explicit final choice',()=>assert.equal(extractChoice('推导。最终答案：C'),'C'));
+test('latex bold choice',()=>assert.equal(extractChoice('最终答案：$\\boxed{B}$'),'B'));
+test('standard Chinese conclusion',()=>assert.equal(extractChoice('故选：D。'),'D'));
+test('do not guess from enumerated options',()=>assert.equal(extractChoice('A.1 B.2 C.3 D.4'),null));
+test('unanswered is not correct',()=>assert.equal(score('', ['A']).correct,false));
+test('wrong option is wrong',()=>assert.equal(score('最终答案：B',['C']).correct,false));
+test('no substring contamination',()=>assert.equal(extractChoice('分析ABC三点，答案尚待确定'),null));
+test('conflicting conclusions require review',()=>assert.equal(extractChoice('答案：A。最终答案：C'),null));
+test('matching answer correct',()=>assert.equal(score('所以选B',['B']).correct,true));
