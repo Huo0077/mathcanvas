@@ -122,3 +122,72 @@ describe("W7 — 域外与不可观测参数", () => {
     expect(solved.status).toBe("unsupported")
   })
 })
+
+/**
+ * **W7（2026-11-09）：候选消歧与轮廓反投影**。
+ *
+ * 同一组外轮廓尺寸对应不同实体时体积可能不同：
+ * - 长方体与同底棱锥的包围盒相同，但主视图顶点数（4 vs 3）不同；
+ * - 声明的顶点数与实体不符时 `outline_conflict`，不给数值；
+ * - 选项只改变标签，不改变数值。
+ */
+describe("W7 — 候选消歧与轮廓反投影", () => {
+  const triangle = (id: "front" | "side", width: number, height: number): OrthographicView =>
+    ({ id, width, height, vertexCount: 3 })
+
+  it("refuses a prism when the declared front outline is a triangle", () => {
+    const solved = solveOrthographicProblem({ problemRevision: "rev-1", views: [triangle("front", 4, 3), top(4, 2), triangle("side", 2, 3)] })
+    expect(solved.status).toBe("conflict")
+    if (solved.status !== "conflict") return
+    expect(solved.code).toBe("outline_conflict")
+    expect(solved.reason).toContain("outline_vertex_mismatch")
+  })
+
+  it("solves the same box as a right pyramid only when the outline is triangular", () => {
+    const solved = solveOrthographicProblem({ problemRevision: "rev-1", views: [triangle("front", 4, 3), top(4, 2), triangle("side", 2, 3)], family: "right-pyramid" })
+    expect(solved.status).toBe("answer")
+    if (solved.status !== "answer") return
+    expect(solved.family).toBe("right-pyramid")
+    expect(solved.volume).toBeCloseTo((4 * 2 * 3) / 3, 12)
+    expect(solved.methods.mesh).toBeCloseTo(solved.methods.analytic, 9)
+  })
+
+  it("rejects a right pyramid whose declared outline is a rectangle", () => {
+    const rectangle = (id: "front" | "side", width: number, height: number): OrthographicView =>
+      ({ id, width, height, vertexCount: 4 })
+    const solved = solveOrthographicProblem({ problemRevision: "rev-1", views: [rectangle("front", 4, 3), top(4, 2), rectangle("side", 2, 3)], family: "right-pyramid" })
+    expect(solved.status).toBe("conflict")
+    if (solved.status !== "conflict") return
+    expect(solved.code).toBe("outline_conflict")
+  })
+
+  it("scales the volume by the cube of a uniform scale factor", () => {
+    const base = solveOrthographicProblem({ problemRevision: "rev-1", views: [front(4, 3), top(4, 2), side(2, 3)] })
+    const scaled = solveOrthographicProblem({ problemRevision: "rev-2", views: [front(8, 6), top(8, 4), side(4, 6)] })
+    expect(base.status).toBe("answer")
+    expect(scaled.status).toBe("answer")
+    if (base.status !== "answer" || scaled.status !== "answer") return
+    expect(scaled.volume).toBeCloseTo(base.volume * 8, 9)
+  })
+
+  it("keeps the number identical when options are permuted (labels only)", () => {
+    const first = solveOrthographicProblem({ problemRevision: "rev-1", views: [front(4, 3), top(4, 2), side(2, 3)], options: ["A. 24", "B. 20", "C. 18"] })
+    const permuted = solveOrthographicProblem({ problemRevision: "rev-1", views: [front(4, 3), top(4, 2), side(2, 3)], options: ["A. 20", "B. 18", "C. 24"] })
+    expect(first.status).toBe("answer")
+    expect(permuted.status).toBe("answer")
+    if (first.status !== "answer" || permuted.status !== "answer") return
+    expect(permuted.volume).toBe(first.volume)
+    expect(first.matchedOptions).toEqual(["A"])
+    expect(permuted.matchedOptions).toEqual(["C"])
+  })
+
+  it("delivers the same number without any options", () => {
+    const withOptions = solveOrthographicProblem({ problemRevision: "rev-1", views: [front(4, 3), top(4, 2), side(2, 3)], options: ["A. 24"] })
+    const without = solveOrthographicProblem({ problemRevision: "rev-1", views: [front(4, 3), top(4, 2), side(2, 3)] })
+    expect(withOptions.status).toBe("answer")
+    expect(without.status).toBe("answer")
+    if (withOptions.status !== "answer" || without.status !== "answer") return
+    expect(without.volume).toBe(withOptions.volume)
+    expect(without.matchedOptions).toEqual([])
+  })
+})

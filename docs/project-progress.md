@@ -4,9 +4,13 @@
 
 > **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
 
-> **这是归档，不是当前状态。** 新方案 W0–W6 已分别推送，W6 之后继续实施 W7；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
+> **这是归档，不是当前状态。** 新方案 W0–W7 已分别推送，W7 之后继续实施 W8；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-09 —— Agent高可靠升级：W7三视图候选消歧与轮廓反投影
+
+新增 `orthographicProjection`（底面多边形 + 高度 → 主/俯/左轮廓，按包围盒尺寸与轮廓顶点数比较；长方体 4 顶点 vs 棱锥 3 顶点可分）与 `orthographicCandidates`（长方体 / L 形柱体 / 不规则棱柱 / 正四棱锥逐个算体积并反投影；`resolveInvariantVolume` 只合并通过反投影的候选，不同体积报 ambiguous，域未枚举完不称唯一）。`solveOrthographicProblem` 新增 `right-pyramid`（解析 `底面积×高/3` 与独立闭合网格求和两条路径）、支持声明 `vertexCount`，不符报 `outline_conflict` 且不给数值；俯视图只有包围盒时不规则棱柱不通过。变式：同比放大 2 倍体积 ×8、选项置换只改标签、无选项同值。门禁：W7 定向 3 文件 / 34 项；agent-core + geometry-kernel + Web agent/services 343 文件 / 3883 项 + 1 todo；typecheck exit 0；改动文件 lint 0 错误。**未调用真模型**；图像管线结构化视图接线仍是后续工作。
 
 ## 2026-11-09 —— Agent高可靠升级：W6第二批题族独立判据
 

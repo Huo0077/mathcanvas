@@ -106,3 +106,5 @@ export { normalizeHostParameter } from "./reactive/constraints"
 export * from "./solidGoalMeasurements"
 export * from "./pointNames"
 export * from "./foldSystem"
+/** W7：三视图轮廓反投影（棱柱/棱锥的包围盒 + 顶点数，用来区分同一外轮廓的不同实体）。 */
+export * from "./orthographicProjection"

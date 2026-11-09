@@ -72,6 +72,8 @@ export * from "./obligationIR"
  * 共享轴冲突即拒绝，体积用解析分块与闭合网格两条独立路径互相核验。
  */
 export * from "./orthographicProblem"
+/** W7：三视图候选枚举与"唯一体积"判据（只合并通过反投影的候选）。 */
+export * from "./orthographicCandidates"
 /**
  * **题意层**（W3 / T3）：逐问目标、原文跨度、折前/折后状态、依赖与条件消费清单。
  * 它在 `obligationIR` 之上扩展元信息，不另建事实库。
