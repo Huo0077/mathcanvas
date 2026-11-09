@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -28,10 +28,10 @@ import { describe, expect, it } from "vitest"
  * `ALLOWED` 里登记**文件 + 原因**——不要默默放宽整条判据。
  */
 
-/** 受跟踪的文件（相对仓库根）。untracked 的构建产物不参与。 */
+/** 受跟踪且工作区仍存在的文件；已明确删除的文件不参与，无关产物也不参与。 */
 function trackedFiles(): string[] {
   const output = execFileSync("git", ["ls-files", "-z"], { cwd: process.cwd() })
-  return new TextDecoder().decode(output).split("\0").filter(Boolean)
+  return new TextDecoder().decode(output).split("\0").filter((entry) => entry.length > 0 && existsSync(path.join(process.cwd(), entry)))
 }
 
 /** 只扫文本类；二进制类连解码都不该做。 */

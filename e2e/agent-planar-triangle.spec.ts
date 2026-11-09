@@ -67,7 +67,7 @@ test("draws the planar right triangle and verifies AB ⊥ AC from the committed 
   await expect(panel.locator(".agent-assumptions")).toContainText("示例值")
 
   await panel.getByRole("button", { name: "确认并提交" }).click()
-  await expect(page.getByText("已提交")).toBeVisible()
+  await expect(page.getByText("已按确认提交。")).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(async () => page.evaluate(() => window.localStorage.getItem("mathcanvas:draft:conics"))).not.toBeNull()
 

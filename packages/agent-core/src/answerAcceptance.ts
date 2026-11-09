@@ -50,7 +50,7 @@ function valueProblem(answer: GoalAnswer): string | undefined {
   if (value.kind !== answer.kind) return "value_kind_mismatch"
   switch (value.kind) {
     case "single_choice":
-      return value.optionId.trim().length > 0 ? undefined : "invalid_value"
+      return /^[A-D]$/.test(value.optionId.trim()) ? undefined : "invalid_value"
     case "multiple_choice": {
       const ids = value.optionIds.map((id) => id.trim()).filter((id) => id.length > 0)
       return ids.length > 0 ? undefined : "invalid_value"
@@ -87,6 +87,10 @@ function assess(goal: AnswerGoal, candidate: GoalAnswer): Assessment | null {
   if (goal.kind !== "unknown" && candidate.kind !== goal.kind) reasons.push("goal_kind_mismatch")
 
   const value = normalizedValue(candidate)
+  const explicitFinals = [...candidate.displayText.matchAll(/最终答案\s*[:：]\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
+  if (value?.kind === "single_choice" && explicitFinals.some(match => match[1] !== value.optionId.trim())) {
+    reasons.push("inconsistent_final_option")
+  }
   const problem = valueProblem({ ...candidate, value })
   const acceptedValue = problem === undefined ? value : undefined
   if (problem !== undefined) reasons.push(problem)

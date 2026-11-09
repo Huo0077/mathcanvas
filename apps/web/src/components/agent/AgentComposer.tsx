@@ -54,7 +54,7 @@ export function AgentComposer({ onSend, busy = false, disabled = false, draft, l
       aria-label="对话输入"
       rows={1}
       value={value}
-      placeholder="描述你要做的几何图形或数学问题…"
+      placeholder="请输入文字题目，或用文字描述要画的图形…"
       onChange={(event) => setValue(event.target.value)}
       onCompositionStart={() => { composingRef.current = true }}
       onCompositionEnd={() => { composingRef.current = false; lastCompositionEndRef.current = performance.now() }}

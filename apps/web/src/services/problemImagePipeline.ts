@@ -112,7 +112,12 @@ export async function runImageRereadCycle(input: ImagePipelineInput): Promise<Im
   const limit = input.limit ?? IMAGE_REREAD_LIMIT
   const diagram: DiagramItemInput[] = [...input.diagram]
   let audit = auditProblemImage({ ...input, diagram })
-  let required = requiredImageGaps(input.target, audit.facts)
+  let required = requiredImageGaps(input.target, audit.facts, input.problem)
+  // No OCR box: retry only the authorised attachment once at full-image scope; never fabricate coordinates.
+  if (required.some(gap => gap.required && gap.attachmentId === undefined) && input.attachments.length > 0) {
+    required = required.map(gap => gap.required && gap.attachmentId === undefined
+      ? { ...gap, attachmentId: input.attachments[0]!.attachmentId, region: { x: 0, y: 0, width: 1, height: 1 } } : gap)
+  }
   const conflicts: ImageEvidenceConflict[] = []
   const requests: ImageRereadRequest[] = []
   let used = 0
@@ -144,7 +149,7 @@ export async function runImageRereadCycle(input: ImagePipelineInput): Promise<Im
     const unchanged = sameFacts(audit.facts, merged.facts)
     diagram.push(...incoming)
     audit = { ...auditProblemImage({ ...input, diagram }), facts: merged.facts }
-    required = requiredImageGaps(input.target, merged.facts)
+    required = requiredImageGaps(input.target, merged.facts, input.problem)
     if (unchanged) {
       stopped = "no_change"
       break

@@ -149,6 +149,10 @@ function goalFragments(text: string): GoalFragment[] {
       const clauseEnd = markers[index + 1]?.index ?? sentence.end
       const clause = trimmedFragment(text.slice(clauseStart, clauseEnd), clauseStart)
       if (clause.text.length === 0) continue
+      // “粗线画出的是三视图” describes a given image; it is not an instruction to draw.
+      if ((marker.marker === "画出" || marker.marker === "绘制") && /^的是/u.test(clause.text)) continue
+      // “收录了计算…的公式” is a named historical method, not another sub-question.
+      if (marker.marker === "计算" && /收录了$/u.test(text.slice(Math.max(0, marker.index - 4), marker.index))) continue
       const forcedKind: AnswerKind | undefined = marker.marker === "求证" || marker.marker === "证明" || marker.marker === "试证"
         ? "proof"
         : marker.marker === "画出" || marker.marker === "作出" || marker.marker === "作图" || marker.marker === "绘制" || marker.marker === "创建" || marker.marker === "建立" || marker.marker === "建一个" || marker.marker === "建造"
@@ -228,6 +232,23 @@ function earlierPartReferences(text: string): number[] {
   return parts
 }
 
+/** A choice must be visible in the user's question, not inferred from diagram notes or a model answer. */
+function singleChoiceQuestionSpan(prompt: string): { start: number; end: number } | null {
+  const notes = prompt.indexOf("\n\n【配图参考")
+  const text = notes < 0 ? prompt : prompt.slice(0, notes)
+  const options = [...text.matchAll(/(?:^|[^A-Za-z\\])([ABCD])\s*[.．、]/g)]
+  const labels = options.map(match => match[1]).join("")
+  const sequenceIndex = labels.indexOf("ABCD")
+  const firstOption = sequenceIndex >= 0 ? options[sequenceIndex] : undefined
+  const blank = /[（(]\s*(?:\\(?:quad|cdots))?\s*[）)]/u.exec(text)
+  const optionStart = firstOption === undefined ? -1 : firstOption.index + firstOption[0].indexOf("A")
+  const end = optionStart >= 0 ? optionStart : blank === null ? -1 : blank.index + blank[0].length
+  if (end < 0 || (firstOption === undefined && !/(?:则|为|是|选|下列|可以|大致)/u.test(text.slice(0, end)))) return null
+  const start = /^\s*/u.exec(text)?.[0].length ?? 0
+  const trimmedEnd = text.slice(0, end).trimEnd().length
+  return trimmedEnd > start ? { start, end: trimmedEnd } : null
+}
+
 export function understandProblem(input: ProblemUnderstandingInput): ProblemUnderstanding {
   const prompt = input.prompt
   const whole = parseDiagramObligations(prompt)
@@ -289,6 +310,22 @@ export function understandProblem(input: ProblemUnderstandingInput): ProblemUnde
     }
   }
 
+  // A single-choice question is an answer request even when phrased “则（ ）” rather than “求…”.
+  // Explicit proof/drawing and independently numbered subgoals keep their original contracts.
+  const choice = singleChoiceQuestionSpan(prompt)
+  if (choice !== null && goals.length <= 1 && !goals.some(goal => goal.expectedKind === "proof" || goal.expectedKind === "drawing")) {
+    if (goals.length === 1) goals[0]!.expectedKind = "single_choice"
+    else {
+      const sourceText = prompt.slice(choice.start, choice.end)
+      const goalId = `${input.problemRevision}:goal:${choice.start}-${choice.end}:0`
+      goalObligations.push({ id: goalId, role: "goal", kind: "proposition", sourceText,
+        start: choice.start, end: choice.end, targets: pointNamesOf(sourceText), judgeability: "unsupported" })
+      goals.push({ goalId, partId: partIdAt(scopes, choice.start, choice.end),
+        source: { sourceId: input.problemRevision, ...choice }, stateId: foldStateOf(sourceText),
+        dependsOnGoalIds: [], expectedKind: "single_choice" })
+      goalsByPart.set(goals[0]!.partId, [goalId])
+    }
+  }
   // 显式引用更早小问才建立依赖（不是"按顺序全都依赖"）。
   for (const goal of goals) {
     const obligation = goalObligations.find((item) => item.id === goal.goalId)!

@@ -83,12 +83,11 @@ describe("ribbon command configuration", () => {
     expect(construct.commands.every((command) => command.disabled === true)).toBe(true)
     expect(construct.commands.find((command) => command.id === "create-line3")?.disabledReason).toContain("Shift")
   })
-  it("offers image reading alongside the unavailable text conversion", () => {
+  it("offers text-only agent entry without an image-reading command", () => {
     const multimodal = createRibbonGroups(emptyContext).find((group) => group.id === "multimodal")
 
-    expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion", "input-image-conversion"])
-    expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字转换", "图片识题"])
-    expect(multimodal?.commands[0]?.disabledReason).toBe("文字转换服务尚未接入，暂不可用")
-    expect(multimodal?.commands[1]?.disabled).toBeFalsy()
+    expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion"])
+    expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字解题"])
+    expect(multimodal?.commands[0]?.disabled).toBeFalsy()
   })
 })

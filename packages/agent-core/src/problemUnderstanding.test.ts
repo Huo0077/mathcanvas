@@ -186,3 +186,50 @@ it("recognizes an explicit create-one-shape request as one drawing goal", () => 
   const result = understandProblem({ prompt: "建一个棱长 3 的立方体", problemRevision: "drawing-rev" })
   expect(result.goals.map(goal => goal.expectedKind)).toEqual(["drawing"])
 })
+
+describe("single-choice exam goals", () => {
+  it.each([
+    "如图，三视图的正视图和俯视图已知，则侧视图可以为（）",
+    "设 z=x+yi 满足 |z-i|=1，则\nA. x²+y²=1\nB. x²+(y-1)²=1\nC. x²+(y+1)²=1\nD. (x-1)²+y²=1",
+    "求一个几何体的体积为( )A. 6B. 9C. 12D. 18",
+    "函数图象大致为 $(\\quad)$\n请解答此题，给出必要推导，并以最终答案：X明确最终选项。"
+  ])("tracks one source-bound single-choice goal: %s", (prompt) => {
+    const result = understand(prompt)
+    expect(result.goals).toHaveLength(1)
+    const goal = result.goals[0]!
+    expect(goal.expectedKind).toBe("single_choice")
+    const obligation = obligationOf(result, goal.goalId)
+    expect(prompt.slice(goal.source.start, goal.source.end)).toBe(obligation.sourceText)
+    expect(obligation.sourceText).not.toContain("请解答此题")
+  })
+
+  it("does not downgrade an explicit drawing/proof request to an answer-only goal", () => {
+    for (const prompt of ["画出函数图象，再选出正确的图形：A. 甲 B. 乙 C. 丙 D. 丁", "证明 AB=CD，A. 甲 B. 乙 C. 丙 D. 丁"]) {
+      const kinds = understand(prompt).goals.map(goal => goal.expectedKind)
+      expect(kinds).toContain(prompt.startsWith("画") ? "drawing" : "proof")
+    }
+  })
+
+  it("does not infer a choice goal from an arbitrary mathematical assertion", () => {
+    expect(understand("图中的角相等，请给出结论。").goals).toHaveLength(0)
+  })
+})
+
+it("does not confuse the description of a pre-drawn three-view image with a drawing request", () => {
+  const prompt = "粗线画出的是某几何体的三视图，则体积为（ ）A. 3 B. 4 C. 5 D. 6"
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).toEqual(["single_choice"])
+})
+
+it("keeps an actual drawing request when it describes a provided diagram in the same question", () => {
+  const prompt = "粗线画出的是三视图。请画出对应几何体，并选择正确选项（ ）A. 甲 B. 乙 C. 丙 D. 丁"
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).toContain("drawing")
+})
+it("does not treat option labels from a statement as a standalone choice question", () => {
+  expect(understand("A. AB=CD B. BC=DE C. AB=EF D. AD=BC").goals).toHaveLength(0)
+})
+
+it("does not convert a multi-part math question to one single-choice goal", () => {
+  const prompt = "在三角形 ABC 中，(1) 求 AB 的长度；(2) 求面积。备选项 A. 1 B. 2 C. 3 D. 4"
+  expect(understand(prompt).goals).toHaveLength(2)
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).not.toEqual(["single_choice"])
+})

@@ -16,6 +16,14 @@ export function adaptLegacyAnswer(context: SolveContext, text: string): GoalAnsw
     if (goal.expectedKind === "numeric") {
       const number = /(?:=|＝)\s*([-+]?\d+(?:\.\d+)?)\s*(?=$|[。；;，,\s])/u.exec(segment)?.[1]
       if (number) candidates.push({ goalId: goal.goalId, kind: "numeric", displayText: segment, value: { kind: "numeric", expression: number }, evidenceRefs: [] })
+    } else if (goal.expectedKind === "single_choice") {
+      // The model must state one final option; option letters in its reasoning are not answers.
+      const finals = [...segment.matchAll(/最终答案\s*[:：]\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
+      const otherClaims = [...segment.matchAll(/(?:答案为|选择|(?<!最)选)\s*[:：]?\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
+      if (finals.length === 1 && otherClaims.every(claim => claim[1] === finals[0]![1])) {
+        candidates.push({ goalId: goal.goalId, kind: "single_choice", displayText: segment,
+          value: { kind: "single_choice", optionId: finals[0]![1]! }, evidenceRefs: [] })
+      }
     } else if (goal.expectedKind === "conversation") {
       candidates.push({ goalId: goal.goalId, kind: "conversation", displayText: segment, value: { kind: "conversation", text: segment }, evidenceRefs: [] })
     }

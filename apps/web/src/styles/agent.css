@@ -270,62 +270,7 @@
 .agent-composer-hint { margin: 0; color: var(--agent-faint); font-size: var(--text-2xs); }
 .agent-composer-status { margin: 0 var(--space-2) var(--space-2); color: var(--color-accent-strong); font-size: var(--text-xs); }
 
-.problem-image-composer { min-width: 0; }
-.problem-image-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--color-muted); }
-.problem-image-toggle[aria-expanded="true"] { color: var(--color-accent-strong); background: var(--color-accent-soft); }
-.problem-image-panel {
-  display: grid;
-  gap: 12px;
-  max-width: 760px;
-  max-height: min(60dvh, 610px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  margin: 0 auto 10px;
-  padding: 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-panel);
-}
-.problem-image-panel :is(p, h2, h3, figure) { margin: 0; }
-.problem-image-panel h2 { font-size: 15px; }
-.problem-image-panel h3 { font-size: 13px; }
-.problem-image-panel p { color: var(--color-muted); font-size: 12px; line-height: 1.6; }
-.problem-image-head, .problem-image-service, .problem-image-apply { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.problem-image-head > div { display: grid; gap: 4px; }
-.problem-image-panel button, .problem-image-toggle { padding: 6px 10px; border-radius: 6px; }
-.problem-image-files { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.problem-image-file { display: flex; min-width: 0; max-width: 100%; align-items: center; }
-.problem-image-thumbnail { display: flex; min-width: 0; max-width: 210px; align-items: center; gap: 8px; text-align: left; }
-.problem-image-thumbnail[aria-pressed="true"] { background: var(--color-accent-soft); }
-.problem-image-thumbnail img { width: 32px; height: 26px; object-fit: contain; background: white; }
-.problem-image-thumbnail span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.problem-image-preview { padding: 8px; text-align: center; background: var(--color-surface-subtle); border-radius: 6px; }
-.problem-image-preview figure { position: relative; display: inline-block; max-width: 100%; vertical-align: middle; }
-.problem-image-preview img { display: block; max-width: 100%; max-height: 210px; }
-.problem-image-highlight { position: absolute; border: 2px solid var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, transparent); pointer-events: none; }
-.problem-image-crop-target { cursor: crosshair; }
-.problem-image-crop-corner { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); transform: translate(-50%, -50%); pointer-events: none; }
-.problem-image-crop-controls { margin-top: 8px; }
-.problem-image-crop-controls button + button { margin-inline-start: 8px; }
-.problem-image-service label { display: flex; flex: 1 1 220px; min-width: 0; align-items: center; gap: 8px; }
-.problem-image-service select { flex: 1; min-width: 0; max-width: 100%; }
-.problem-image-review { display: grid; gap: 12px; border-top: 1px solid var(--color-border); padding-top: 12px; }
-.problem-image-review > label { display: grid; gap: 6px; }
-.problem-image-review > .problem-image-checkbox { display: flex; align-items: center; }
-.problem-image-review textarea { width: 100%; padding: 8px; resize: vertical; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface-subtle); line-height: 1.6; }
-.problem-image-uncertain { display: grid; gap: 6px; }
 .problem-image-observations summary { cursor: pointer; font-size: 13px; }
-.problem-image-uncertain button { text-align: left; }
-.problem-image-observation { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
-.problem-image-observation span { overflow-wrap: anywhere; }
-.problem-image-observation button { white-space: nowrap; }
-.problem-image-observation-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
-.problem-image-observation-actions label { white-space: nowrap; }
-.problem-image-apply { justify-content: flex-end; }
-@media (max-width: 600px) {
-  .problem-image-composer .agent-composer-hint { display: none; }
-  .problem-image-panel { max-height: 54dvh; }
-}
 
 .agent-send {
   min-height: 34px;

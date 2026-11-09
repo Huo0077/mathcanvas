@@ -17,3 +17,15 @@ it("never invents a choice or drawing value from a conversational assertion", as
   const context = await createSolveContext({ ...source, prompt: "求图形面积。" }, hash)
   expect(adaptLegacyAnswer(context, "应当大约是某个选项")).toEqual([])
 })
+
+it("adapts one explicit final option but never infers a choice from derivation or ambiguous prose", async () => {
+  const context = await createSolveContext({ ...source, prompt: "设复数 z=x+yi 满足 |z-i|=1，则\nA. x²+y²=1\nB. (x-1)²+y²=1\nC. x²+(y-1)²=1\nD. (x+1)²+y²=1" }, hash)
+  expect(context.understanding.goals.map(goal => goal.expectedKind)).toEqual(["single_choice"])
+  const answer = adaptLegacyAnswer(context, "由轨迹公式可得圆心(0,1)。最终答案：C。")
+  expect(answer).toHaveLength(1)
+  expect(answer[0]).toMatchObject({ goalId: context.understanding.goals[0]?.goalId, kind: "single_choice",
+    value: { kind: "single_choice", optionId: "C" } })
+  for (const text of ["C 的方程是正确的", "最终答案：A，最终答案：C", "最终答案：E", "最终答案：C，但证明选择 D"]) {
+    expect(adaptLegacyAnswer(context, text), text).toEqual([])
+  }
+})

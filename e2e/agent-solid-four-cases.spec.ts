@@ -64,8 +64,7 @@ for (const [index, [label, prompt]] of ([
     await page.getByRole("button", { name: "Agent 工作区" }).click()
 
     await page.getByRole("button", { name: "确认并提交" }).click()
-    await expect(page.getByText("已提交")).toBeVisible()
-
+    // Verify committed document and one-step undo below; the reply text may already contain the answer.
     await page.getByRole("button", { name: "返回画布" }).click()
     await expect(page.locator(".app-shell")).toHaveAttribute("data-app-module", "traditional")
     await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
@@ -81,7 +80,6 @@ test("Case 4 原题：出草稿 → 一次提交 → 一步撤销", async ({ pag
   await send(page, CASE_4_ORIGINAL)
   await expectDraft(page)
   await page.getByRole("button", { name: "确认并提交" }).click()
-  await expect(page.getByText("已提交")).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
   await page.keyboard.press("Control+z")
@@ -92,7 +90,6 @@ test("Case 4 修订版：出草稿 → 一次提交 → 一步撤销", async ({ 
   await send(page, CASE_4_REVISED)
   await expectDraft(page)
   await page.getByRole("button", { name: "确认并提交" }).click()
-  await expect(page.getByText("已提交")).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
   await page.keyboard.press("Control+z")

@@ -331,10 +331,21 @@ async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: S
   }
   const requiredGaps = (imageGaps ?? []).filter((gap) => gap.required)
   if (imageGaps !== undefined) audit?.({ kind: "image", status: requiredGaps.length === 0 ? "ok" : `gap:${requiredGaps.map((gap) => gap.code).join(",")}` })
+  // The visible final answer is part of the contract: a hidden structured option cannot
+  // silently override “no matching option” or “compare the figure yourself”.
+  const declaredChoice = candidates.find(answer => answer.kind === "single_choice" && answer.value?.kind === "single_choice")
+  const visibleAnswer = candidate.kind === "clarification" ? "" : candidate.answer ?? ""
+  const finals = [...visibleAnswer.matchAll(/最终答案\s*[:：]\s*([^\n。！!]+)/gu)]
+  const structuredOption = declaredChoice?.value?.kind === "single_choice" ? declaredChoice.value.optionId : null
+  const choiceConflict = structuredOption !== null && (
+    finals.some(match => match[1]!.trim() !== structuredOption)
+    || /无匹配选项|各选项均不符|需对照(?:原题)?(?:选项)?图(?:确认)?/u.test(visibleAnswer)
+  )
   const accepted = acceptSolvedCandidate({ context, candidates, candidateHashes, evidence: boundEvidence,
     // 图上还缺条件时**不能**按"已回答"交付：走澄清分支，答案保留为 partial，并附上要补的条件。
-    resolution: candidate.kind === "clarification" || requiredGaps.length > 0 ? "clarification" : "answer",
+    resolution: choiceConflict ? "failed" : candidate.kind === "clarification" || requiredGaps.length > 0 ? "clarification" : "answer",
     questions: candidate.kind === "clarification" ? candidate.questions : requiredGaps.slice(0, 4).map((gap) => gap.message) })
+  if (choiceConflict) accepted.reasonCodes.push("inconsistent_final_option")
   if (requiredGaps.length > 0) accepted.reasonCodes.push("image_evidence_gap")
   /**
    * **W8：被否证之后不再"沉默地失败"**。宿主给了路由策略时，把结论写进交付：
@@ -860,6 +871,14 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           return
         }
 
+        // A read-only single-choice question must never stage a model-invented drawing.
+        if (dependencies.solveContext?.understanding.goals.length === 1
+          && dependencies.solveContext.understanding.goals[0]?.expectedKind === "single_choice"
+          && modelContext.availableActions.length === 0) {
+          const failed = ledger.transition("failed", "answer-only question returned a drawing plan; no draft was staged")
+          if (failed.ok) yield failed.event
+          return
+        }
         // 走到这里它必然是 `kind: "plan"`（另外两种信封在上面那条分支里已经走完了）。
         const plan = candidate
 

@@ -217,3 +217,12 @@ describe("W7 三视图读数规范化", () => {
     expect(orthographicViewReadings([{ text: "主视图（位置待核对）" }])).toBeUndefined()
   })
 })
+
+it("a diagram with no localized readings schedules one bounded full-image reread", async () => {
+  let calls = 0
+  const outcome = await runImageRereadCycle({ attachments, conversationId: "conv-1", problem: "如图，求该几何体的体积。",
+    diagram: [], target: "volume", reread: async request => { calls += 1; expect(request.region).toEqual({ x: 0, y: 0, width: 1, height: 1 }); return [] } })
+  expect(calls).toBe(1)
+  expect(outcome.used).toBe(1)
+  expect(outcome.required.some(gap => gap.code === "missing_dimension" && gap.required)).toBe(true)
+})

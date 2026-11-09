@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAgentConversation, useAgentStore } from "../../agentStore"
 import { AgentWorkspace } from "./AgentWorkspace"
+import { imagePrompt } from "../../services/problemImagePrompt"
 
 /**
  * `zustand` 的 `setState` 是浅合并：只换 `conversations` 会让上一个用例留下的
@@ -174,4 +175,20 @@ describe("the workspace never invents a reply", () => {
     expect(() => fireEvent.click(screen.getByRole("button", { name: "发送" }))).not.toThrow()
     expect(screen.getByRole("log", { name: "对话记录" }).textContent).toContain("建一个立方体")
   })
+})
+
+it("offers only text input without image-reading controls", () => {
+  render(<AgentWorkspace onBackToWorkspace={() => {}} />)
+  expect(screen.getByRole("textbox", { name: "对话输入" })).toBeTruthy()
+  expect(screen.queryByRole("button", { name: /识别题图|图片识题|添加题图/ })).toBeNull()
+  expect(screen.queryByLabelText("选择题图文件")).toBeNull()
+})
+it("keeps archived image messages readable without providing an upload or rerun control", () => {
+  const old = imagePrompt("如图，求体积。", "", ["图上标注的高为 3"])
+  useAgentStore.getState().sendPrompt(old)
+  useAgentStore.getState().resolvePendingReply("这是一条历史回答。")
+  render(<AgentWorkspace onBackToWorkspace={() => {}} />)
+  expect(screen.getByRole("log", { name: "对话记录" }).textContent).toContain("如图，求体积")
+  expect(screen.getByText("配图参考")).toBeTruthy()
+  expect(screen.queryByLabelText("选择题图文件")).toBeNull()
 })

@@ -41,7 +41,8 @@ export interface PlannerRouteInput {
 /** Same deterministic/provider/offline router for the UI and evaluation. */
 export async function selectProblemPlanner(input: PlannerRouteInput): Promise<ProblemPlannerSelection> {
   if (input.planner) return { planner: input.planner, requestedSkillIds: [], textProfileId: "local-planner" }
-  const deterministic = routeDeterministicProblem(input.prompt)
+  const answerOnlyChoice = input.requiredGoals?.length === 1 && input.requiredGoals[0]?.kind === "single_choice"
+  const deterministic = answerOnlyChoice ? null : routeDeterministicProblem(input.prompt)
   if (deterministic) return {
     planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
     diagramPrompt: deterministic.diagramPrompt, requestedSkillIds: [deterministic.family], textProfileId: "local-planner"
@@ -49,14 +50,15 @@ export async function selectProblemPlanner(input: PlannerRouteInput): Promise<Pr
   const resolution = await (input.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
   if (!resolution.ok) {
     const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
-    return { planner: createLocalPlanner(options), requestedSkillIds: localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
+    return { planner: createLocalPlanner(options), requestedSkillIds: answerOnlyChoice ? [] : localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
   }
   return {
     planner: createModelPlanner({ ...input.modelPlanner, imageNotes: input.imageNotes, solveSession: input.solveSession,
       requiredGoals: input.requiredGoals, resolveProvider: async () => resolution,
       onDiagnostic: (line) => { input.modelPlanner?.onDiagnostic?.(line); input.onDiagnostic?.(line) }
     }),
-    requestedSkillIds: SKILL_MANIFESTS.map(manifest => manifest.id), textProfileId: resolution.provider.id
+    requestedSkillIds: answerOnlyChoice
+      ? [] : SKILL_MANIFESTS.map(manifest => manifest.id), textProfileId: resolution.provider.id
   }
 }
 

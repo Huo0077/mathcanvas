@@ -285,3 +285,27 @@ describe("W2 — 多目标、部分与普通对话", () => {
     expect(result.reasonCodes).toContain("unknown_goal")
   })
 })
+
+it("rejects a non-option single-choice value rather than completing it", () => {
+  const result = acceptAnswer({ problemRevision: "revision-1", goals: [{ id: "g1", kind: "single_choice", required: true }],
+    candidates: [{ goalId: "g1", kind: "single_choice", displayText: "最终答案：E", value: { kind: "single_choice", optionId: "E" }, evidenceRefs: [] }],
+    evidence: [], resolution: "answer", clarificationQuestions: [] })
+  expect(result.status).not.toBe("answered")
+  expect(result.reasonCodes).toContain("invalid_value")
+})
+
+it("rejects a structured option when its own explicit final answer names another option", () => {
+  const result = acceptAnswer({ problemRevision: "revision-1", goals: [{ id: "g1", kind: "single_choice", required: true }],
+    candidates: [{ goalId: "g1", kind: "single_choice", displayText: "推导得 9，最终答案：B。", value: { kind: "single_choice", optionId: "C" }, evidenceRefs: [] }],
+    evidence: [], resolution: "answer", clarificationQuestions: [] })
+  expect(result.status).not.toBe("answered")
+  expect(result.reasonCodes).toContain("inconsistent_final_option")
+})
+
+it("does not mistake a quoted option in an old revision for a verified final answer", () => {
+  const result = acceptAnswer({ problemRevision: "revision-1", goals: [{ id: "g1", kind: "single_choice", required: true }],
+    candidates: [{ goalId: "g1", kind: "single_choice", displayText: "候选 C；最终答案：B。", value: { kind: "single_choice", optionId: "B" }, evidenceRefs: [] }],
+    evidence: [], resolution: "answer", clarificationQuestions: [] })
+  expect(result.status).toBe("answered")
+  expect(result.evidence).toEqual([])
+})

@@ -22,7 +22,6 @@ import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWork
 import type { InspectorTab } from "./components/InspectorTabs"
 import { GraphicsView } from "./components/GraphicsView"
 import { GuidanceHint } from "./components/GuidanceHint"
-import { guidanceFor } from "./guidance"
 import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
 import { SpatialSolidWizard } from "./components/SpatialSolidWizard"
@@ -300,7 +299,6 @@ export function App() {
    * 切模块时把文档草稿、工作区文档原样留着，所以来回切换不会丢任何几何内容。
    */
   const [activeModule, setActiveModule] = useState<AppModuleId>(DEFAULT_APP_MODULE)
-  const [openImageReader, setOpenImageReader] = useState(false)
   /**
    * 桌面自述（G1 Task 1.1/1.2）。
    *
@@ -318,7 +316,6 @@ export function App() {
   }, [])
   const desktopRuntimeHint = desktopInfo ? undefined : "密钥保存在 Windows 凭据管理器里，需要桌面版（Windows 应用）；当前在浏览器里运行，配置无法保存。"
   const slope = document.parameters.slope
-  const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
   // Projection geometry is derived once per revision and shared by the four viewports and every exporter.
   /**
    * **显示与导出必须解析同一个来源**（Task 0.6 Step 3，计划点名的"display and export use the
@@ -691,8 +688,7 @@ export function App() {
    * 接下来多半就是要用命令，留一个空白的命令区只会让他以为切换失败了。
    */
   const handleRibbonCommand = (commandId: string) => {
-    if (commandId === "input-image-conversion") {
-      setOpenImageReader(true)
+    if (commandId === "input-text-conversion") {
       setActiveModule("agent")
       return
     }
@@ -999,7 +995,7 @@ export function App() {
         所以"现在在哪个大板块、怎么换回去"永远看得见，而不是藏在 Agent 区内部的一个按钮里。 */}
     <ModuleRail
       activeModule={activeModule}
-      onModuleChange={(module) => { setOpenImageReader(false); setActiveModule(module) }}
+      onModuleChange={setActiveModule}
     />
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       <AppChrome
@@ -1140,8 +1136,7 @@ export function App() {
       {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
           切进 Agent 区不会因为画布重渲染而卡一下。 */}
       <AgentWorkspace
-        onBackToWorkspace={() => { setOpenImageReader(false); setActiveModule(DEFAULT_APP_MODULE) }}
-        initialImageReaderOpen={openImageReader}
+        onBackToWorkspace={() => setActiveModule(DEFAULT_APP_MODULE)}
         onRun={runAgentPrompt}
         // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
         onConfirm={(runId) => { agentRunner.confirm(runId) }}

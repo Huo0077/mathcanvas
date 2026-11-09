@@ -1,4 +1,5 @@
 import type { ImageBox, ImageReadingItem } from "./problemImageReader"
+import { isGraphChoiceProblem } from "./problemImageReview"
 
 /**
  * **题图证据与受控重读（W6 / T6，2026-11-08）**。
@@ -328,6 +329,19 @@ export function planImageReread(audit: ImageEvidenceAudit, used: number, limit =
 /** 一个目标到底还需要什么（W4）：缺口不是"再读一遍"，而是**具体字段**。 */
 export type ImageEvidenceTarget = "volume" | "graph-choice"
 
+/** 只有要求计算体积时才应用体积尺寸门禁；“给定体积求面积”不能反向拦截。 */
+export function imageEvidenceTargetOf(problem: string): ImageEvidenceTarget | undefined {
+  if (isGraphChoiceProblem(problem)) return "graph-choice"
+  const firstOption = /(?:^|\s|[（）()])A\s*[.．、]/u.exec(problem)
+  const stem = firstOption === null ? problem : problem.slice(0, firstOption.index + firstOption[0].indexOf("A"))
+  const blankTarget = [...stem.matchAll(/(体积|容积|表面积|面积|周长|长度|半径)(?:为|是|等于)?\s*\$?\s*[（(]\s*(?:\\quad)?\s*[）)]/gu)].at(-1)
+  if (blankTarget !== undefined) return blankTarget[1] === "体积" || blankTarget[1] === "容积" ? "volume" : undefined
+  const lastQuestion = [...stem.matchAll(/(?:则|那么|求|计算|问)/gu)].at(-1)
+  const targetClause = lastQuestion === undefined ? stem : stem.slice(lastQuestion.index)
+  if (/(?:体积|容积)/u.test(targetClause) && !/(?:表面积|面积|周长|长度|半径)(?:为|是|等于|多少)/u.test(targetClause)) return "volume"
+  return undefined
+}
+
 const NUMBER_TOKEN = String.raw`[+\-−]?\d+(?:\.\d+)?|\\sqrt\s*\{[^{}]+\}|√\d+(?:\.\d+)?`
 const DIMENSION_READING = new RegExp(
   `(宽度|宽|长度|长|高度|高|半径|直径|边长|底面积|侧面积|表面积|体积|角度)\\s*(?:为|是|等于|＝|=|:|：)?\\s*(${NUMBER_TOKEN})`
@@ -373,7 +387,21 @@ const SHAPE_FEATURE = /零点|极[大小]|峰|谷|穿过|过原点|经过原点|
  * **目标所需证据**（W4）。返回的缺口只是"还缺什么"，**不等于已经解决**：
  * 调用方（`problemImagePipeline`）重读之后必须重新审计一次，才能说缺口消了。
  */
-export function requiredImageGaps(target: ImageEvidenceTarget, facts: readonly ImageEvidenceFact[]): ImageEvidenceGap[] {
+/** 题干数字不伪装成图上证据，只用于避免“题干已给量却被判零尺寸”的误拦截。 */
+function statedDimensions(problem: string): { label: string; value: number }[] {
+  // 选项中的数字是候选答案，不能当题设。网格单格尺寸可算一项，但不能替代物体轮廓尺寸。
+  const firstOption = /(?:^|\s|[（）()])A\s*[.．、]/u.exec(problem)
+  const stem = firstOption === null ? problem : problem.slice(0, firstOption.index + firstOption[0].indexOf("A"))
+  const readings: { label: string; value: number }[] = []
+  const pattern = /(容器高|水深|弧长|底面半径|半径|直径|底面边长|边长|高度|高|长度|宽度|宽)\s*(?:为|是|等于|＝|=|:|：)?\s*\$?\s*(\d+(?:\.\d+)?)(?=\s*(?:\$|\\mathrm\b|[尺米厘千]|cm\b|mm\b|m\b|[，,。；;（(]|$))/gu
+  for (const match of stem.matchAll(pattern)) {
+    const label = match[1]!, value = Number(match[2])
+    if (Number.isFinite(value) && !readings.some(item => item.label === label && item.value === value)) readings.push({ label, value })
+  }
+  return readings
+}
+
+export function requiredImageGaps(target: ImageEvidenceTarget, facts: readonly ImageEvidenceFact[], problem = ""): ImageEvidenceGap[] {
   const gaps: ImageEvidenceGap[] = []
   const anchor = facts[0]
   const place: { attachmentId?: string; region?: ImageRegion } =
@@ -385,14 +413,19 @@ export function requiredImageGaps(target: ImageEvidenceTarget, facts: readonly I
   })
 
   if (target === "volume") {
-    // 球体只给半径/直径时一组就够；其余几何体的体积至少需要两组独立尺寸。
-    const singleSufficient = dimensions.length === 1 && /球|半径|直径/.test(dimensions[0]!.fact.text)
-    if (dimensions.length < 2 && !singleSufficient) {
+    // 不把题干转录成图像证据：仅在“是否缺尺寸”这一问里合并两类数值。
+    const written = statedDimensions(problem)
+    const amount = dimensions.length + written.filter(item => !dimensions.some(reading => reading.label === item.label && reading.value === item.value)).length
+    const isOnlySphere = /球/u.test(problem) && !/圆柱|圆锥|圆台|柱体/u.test(problem)
+      && !/柱|锥|棱台/u.test(dimensions.map(reading => reading.fact.text).join(" "))
+  const singleSufficient = amount === 1 && isOnlySphere
+    && (dimensions.some(reading => /半径|直径/u.test(reading.fact.text)) || written.some(item => /半径|直径/u.test(item.label)))
+    if (amount < 2 && !singleSufficient) {
       gaps.push({
         code: "missing_dimension",
         required: true,
         ...place,
-        message: dimensions.length === 0
+        message: amount === 0
           ? "体积目标没有任何可核验的数值尺寸；图上的定位标签不算尺寸，不允许按常见版本补数。"
           : "体积目标至少需要两组可核验的数值尺寸，当前只有一组。"
       })

@@ -1,7 +1,7 @@
 # MathCanvas 项目进度（早期归档：2026-09-12 ～ 2026-10-06）
 
 > 本文件从 [`docs/project-progress.md`](project-progress.md) 拆出（2026-10-24）。这里保留 2026-09 的过程记录，以及历史上后补在文件末尾的 2026-10-04～10-06 条目。
-> **当前状态**见 [`docs/current-status.md`](current-status.md)；2026-10-01 之后的记录留在主文件。新方案 W0–W3 于 2026-11-09 分包推送，W4–W11 未实施；旧任务号与新工作包不是同一套编号。
+> **当前状态**见 [`docs/current-status.md`](current-status.md)；2026-10-01 之后的记录留在主文件。“W0–W3 已推、W4–W11 未实施”是当时的补记快照，后来 W0–W11 已分包完成，但这**不等于真题作图通过**；旧任务号与新工作包不是同一套编号。最新文字题范围、实测及新方案见[当前状态](current-status.md)与[可核验作图实施计划](superpowers/plans/2026-11-09-text-only-certified-drawing-implementation.md)。
 
 ## 2026-09-29/30 —— 第四十九批：Task 8 六类样题、两处缺陷修复、Task 1/2/3/5 回归收口（已合并进 `main`）
 

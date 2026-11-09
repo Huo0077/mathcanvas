@@ -5,6 +5,7 @@ import {
   auditProblemImage,
   buildImageFact,
   diagnosticLine,
+  imageEvidenceTargetOf,
   isGivenImageFact,
   mergeImageEvidence,
   planImageReread,
@@ -251,4 +252,46 @@ describe("W6 — 诊断只留句柄与短摘要", () => {
     expect(line).toContain(shaA.slice(0, 8))
     expect(line.length).toBeLessThanOrEqual(320)
   })
+})
+
+describe("题干明示尺寸与图像尺寸共同判缺（图题回归）", () => {
+  it("容器高 8、水深 6 已明示时不再误报没有任何尺寸", () => {
+    const problem = "如图，正方体容器高 $8\\mathrm{~cm}$，当球面接触水面时水深为 $6\\mathrm{~cm}$，则球的体积为（ ）A. 1 B. 2 C. 3 D. 4"
+    expect(requiredImageGaps("volume", [], problem).filter(gap => gap.required)).toEqual([])
+  })
+  it("弧长 8 尺、高 5 尺来自题干而不是示意图", () => {
+    expect(requiredImageGaps("volume", [], "圆锥米堆底部的弧长为 8 尺，高为 5 尺，求米堆的体积。").filter(gap => gap.required)).toEqual([])
+  })
+  it("仅有网格单位边长 1 不能当作实体的两组尺寸", () => {
+    expect(requiredImageGaps("volume", [], "网格小正方形的边长为 1，粗线为某几何体的三视图，求体积。")
+      .some(gap => gap.required && gap.code === "missing_dimension")).toBe(true)
+  })
+  it("原题 OCR 字符串的容器高和水深均可成为显式尺寸", () => {
+    const problem = "6.（5 分）如图，有一个水平放置的透明无盖的正方体容器，容器高 $8\\mathrm{~cm}$，将一个球放在容器口，再向容器注水，当球面恰好接触水面时测得水深为 $6\\mathrm{~cm}$，如不计容器的厚度，则球的体积为（ ）A. $\\frac{500\\pi}{3}$ B. 其他"
+    expect(requiredImageGaps("volume", [], problem).filter(gap => gap.required)).toEqual([])
+  })
+  it("图示没有标定对象时，尺寸 2、4 不能冒充两个带语义的读数", () => {
+    const facts = [dimensionFact("正视图标有尺寸 2、4")]
+    expect(requiredImageGaps("volume", facts, "如图，求该几何体的体积。").some(gap => gap.required)).toBe(true)
+  })
+})
+
+it("does not demand volume dimensions when volume is given and surface area is asked", () => {
+  expect(imageEvidenceTargetOf("已知几何体的体积是 28π/3，则它的表面积是（ ）A. 17π B. 18π C. 20π D. 28π")).toBeUndefined()
+  expect(imageEvidenceTargetOf("如图，求该几何体的体积（ ）A. 6 B. 9 C. 12 D. 18")).toBe("volume")
+})
+
+it("does not accept a single cylinder radius as sufficient for volume", () => {
+  expect(requiredImageGaps("volume", [], "圆柱底面半径为 3，求体积。")
+    .some(gap => gap.required && gap.code === "missing_dimension")).toBe(true)
+})
+
+it("does not count answer options or an example's grid cell as independent target dimensions", () => {
+  expect(requiredImageGaps("volume", [], "小方格边长为 1，某几何体的体积为（ ）A. 6 B. 9 C. 12 D. 18")
+    .some(gap => gap.required && gap.code === "missing_dimension")).toBe(true)
+})
+
+it("uses the actual question clause instead of an earlier given area", () => {
+  expect(imageEvidenceTargetOf("底面积为 12，高为 3，体积为（ ）A. 6 B. 12 C. 36 D. 48")).toBe("volume")
+  expect(imageEvidenceTargetOf("体积是 36，底面积为（ ）A. 6 B. 12 C. 36 D. 48")).toBeUndefined()
 })

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -32,12 +32,12 @@ import { CURRENT_STATUS, newestCurrentStatusSectionDate } from "./releaseFacts"
  *（容忍 1 天，避开时区边界）。写错年份（`2027-…`）是这类文档最常见也最难自己发现的错。
  */
 
-/** 受跟踪的文件（相对仓库根）。**用 git 列举**：untracked 的构建产物、临时文件不该进这条判据。 */
+/** 受跟踪且工作区仍存在的文件（相对仓库根）；允许当前改动删除已停用的入口。 */
 function trackedFiles(): string[] {
   const output = execFileSync("git", ["ls-files", "-z"], { cwd: process.cwd() })
   return new TextDecoder().decode(output)
     .split("\0")
-    .filter((entry) => entry.length > 0)
+    .filter((entry) => entry.length > 0 && existsSync(path.join(process.cwd(), entry)))
 }
 
 /** BOM 的例外：PowerShell 脚本（理由见文件头）。 */

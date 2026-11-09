@@ -36,23 +36,3 @@ it("recovers unescaped math delimiters and preserves valid JSON escapes", () => 
   expect(parseProblemImageReading(JSON.stringify({ problem, diagram: [], uncertainties: [] }), 1)?.problem).toBe(problem)
   expect(parseProblemImageReading(raw.replace("x^2", String.raw`\z`), 1)).toBeNull()
 })
-
-
-it("W2 image budget counts an actual normalized screenshot, not base64 characters as tokens", async () => {
-  const { estimateVisionInputTokens } = await import("./problemImageReader")
-  const image = { name: "screenshot.png", png: "a".repeat(2_000_000) }
-  const estimate = estimateVisionInputTokens([image])
-  expect(estimate).toBeGreaterThan(0)
-  expect(estimate).toBeLessThan(96_000)
-  expect(estimateVisionInputTokens([image, image])).toBeGreaterThan(estimate)
-})
-
-it("W4 field-directed reread names the missing fields instead of re-reading everything", async () => {
-  const { rereadInstruction } = await import("./problemImageReader")
-  const instruction = rereadInstruction(["missing_dimension"])
-
-  expect(instruction).toContain("数值尺寸")
-  expect(instruction).toContain("[看不清]")
-  expect(instruction).not.toContain("整个题干")
-  expect(rereadInstruction([])).toBe("只转录选区可见的文字、公式和标记。")
-})

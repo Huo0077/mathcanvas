@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import { useAgentStore } from "../../agentStore"
-import { ProblemImageComposer } from "./ProblemImageComposer"
+import { AgentComposer } from "./AgentComposer"
 import { AgentConversationSidebar } from "./AgentConversationSidebar"
 import { AgentMessageList } from "./AgentMessageList"
 
@@ -46,10 +46,9 @@ interface AgentWorkspaceProps {
   onDiscard?: (runId?: string) => void
   onStop?: (runId?: string) => void
   onRetry?: () => void
-  initialImageReaderOpen?: boolean
 }
 
-export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard, onStop, onRetry, initialImageReaderOpen }: AgentWorkspaceProps) {
+export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard, onStop, onRetry }: AgentWorkspaceProps) {
   const conversations = useAgentStore((state) => state.conversations)
   const activeConversation = useAgentStore((state) => state.activeConversation)
   const activeConversationId = useAgentStore((state) => state.activeConversationId)
@@ -98,7 +97,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
       <header className="agent-stage-head">
         <div className="agent-stage-title">
           <h1>{activeConversation?.title ?? "新对话"}</h1>
-          <p>{pendingMessage ? "正在运行…" : "Agent 工作区 · 对话式作图"}</p>
+          <p>{pendingMessage ? "正在运行…" : "Agent 工作区 · 文字解题与作图"}</p>
         </div>
         <div className="agent-stage-actions">
           <button type="button" className="agent-back" onClick={onBackToWorkspace}>返回画布</button>
@@ -115,8 +114,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
         />
       </div>
       <div className="agent-stage-composer">
-        <ProblemImageComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
-          onSend={sendPrompt} busy={pendingMessage !== undefined} initialOpen={initialImageReaderOpen} />
+        <AgentComposer draft={{ value: draft, onChange: setDraft }} onSend={sendPrompt} busy={pendingMessage !== undefined} />
       </div>
     </div>
   </div>

@@ -17,7 +17,7 @@ import { splitImagePrompt } from "../services/problemImagePrompt"
 import { createAgentReliabilityFlagsForSession, type AgentReliabilityFlags } from "./reliabilityFlags"
 import { readRolloutPercentage } from "../persistence/rolloutPreferences"
 import { createSolveContext } from "@draw/agent-core"
-import { claimSolveSession, createDefaultSolveSession, type SolveSession } from "../services/solveSession"
+import { createDefaultSolveSession, type SolveSession } from "../services/solveSession"
 import { readReliabilityPreferences } from "../persistence/reliabilityPreferences"
 
 /**
@@ -525,14 +525,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, imageNotes: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]): Promise<PlannerSelection> {
-    return selectProblemPlanner({ prompt, imageNotes, planner: dependencies.planner, modelPlanner: dependencies.modelPlanner,
+  async function selectPlanner(prompt: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]): Promise<PlannerSelection> {
+    return selectProblemPlanner({ prompt, imageNotes: "", planner: dependencies.planner, modelPlanner: dependencies.modelPlanner,
       solveSession, requiredGoals, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
   async function runPrompt(text: string, promptMessageId: string): Promise<RunPromptResult> {
-      const { prompt, imageNotes, imageEvidence, sourceAttachments, imageGaps, imageTarget } = splitImagePrompt(text)
+      // Historical picture messages remain readable, but cannot run again.
+      const historicalImage = splitImagePrompt(text)
+      const prompt = text
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       /**
@@ -543,11 +545,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const pinned = useAgentStore.getState().pinRun({ runId, promptMessageId })
       // 钉不住（那条消息已经不在了）时退回"当前在途"那条老路径，而不是把事件丢掉。
       const eventRunId = pinned ? runId : undefined
-      const solveSession = (pinned ? claimSolveSession(pinned.conversationId, text) : null)
-        ?? createDefaultSolveSession(runId)
+      if (historicalImage.prompt !== text || historicalImage.imageNotes) {
+        await useAgentStore.getState().failPendingReply({ code: "image_reading_retired",
+          message: "图片识题已停用。请把题目和图示条件转写为文字后重新发送。", retryable: false }, eventRunId)
+        if (eventRunId) useAgentStore.getState().endRun(eventRunId)
+        return { phase: "failed", draftId: null }
+      }
+      const solveSession = createDefaultSolveSession(runId)
       runSessions.set(runId, solveSession)
       if (!solveSession.resume()) {
-        useAgentStore.getState().failPendingReply({ code: "session_expired", message: "识图解题会话已过期，请重新发起本题；不会继续计费。", retryable: true }, eventRunId)
+        useAgentStore.getState().failPendingReply({ code: "session_expired", message: "解题会话已过期，请重新发送文字题目；不会继续计费。", retryable: true }, eventRunId)
         if (eventRunId) useAgentStore.getState().endRun(eventRunId)
         runSessions.delete(runId)
         return { phase: "failed", draftId: null }
@@ -561,33 +568,14 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const requiresGoalTracking = reliability.goalTrackingV1 && reliability.answerSemanticsV1
       const hashText = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
       const preparedSolveContext = requiresGoalTracking ? await createSolveContext({
-        runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: sourceAttachments ?? [], corrections: [],
+        runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: [], corrections: [],
         sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText) : undefined
-      /**
-       * **图证据缺口必须写进轨迹**（W4）：只有句柄、缺口码与重读次数，不写图片字节。
-       * 有必答缺口时协调器会把这一题降为 partial/needs_clarification —— 这是"没读到"，
-       * 不是"答错了"。
-       */
-      if (imageGaps !== undefined && imageGaps.length > 0) {
-        const required = imageGaps.filter((gap) => gap.required).map((gap) => gap.code)
-        useAgentStore.getState().recordDiagnostic(`[image] target=${imageTarget ?? "none"} rereads=${imageEvidence?.rereads ?? 0} gaps=${required.length > 0 ? required.join(",") : "(none required)"}`.slice(0, 256), eventRunId)
-      }
       const requiredGoals = preparedSolveContext?.understanding.goals.map(goal => {
         const source = preparedSolveContext.understanding.ir.obligations.find(item => item.id === goal.goalId)
         return { goalId: goal.goalId, kind: goal.expectedKind, sourceText: source?.sourceText ?? "" }
       })
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
-      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId, solveSession, requiredGoals) : {
-        requestedSkillIds: [], textProfileId: "local-planner",
-        planner: { plan: async () => ({
-          plan: {
-            schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "核对题图疑点", factIds: [],
-            questions: unresolved.slice(0, 4).map(item => `请核对${item.image === null ? "原图的" : `图 ${item.image} 的`}疑点并重新发送题干：${item.text}`)
-          },
-          requestId: "image-review-request", attemptId: "image-review-attempt"
-        }) }
-      }
+      const selection: PlannerSelection = await selectPlanner(prompt, eventRunId, solveSession, requiredGoals)
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
@@ -608,9 +596,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const history = conversation.messages.filter((message) => message.id !== promptMessageId)
       useAgentStore.getState().recordDiagnostic(`[context] conversation ${conversation.binding.conversationId}: ${conversation.facts.length} confirmed fact(s), ${history.length} message(s)`, eventRunId)
       const active = startProblemSolve({ context: preparedSolveContext ?? await createSolveContext({ runId, conversationId: pinned?.conversationId ?? "local",
-        prompt, attachments: sourceAttachments ?? [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
+        prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
         session: solveSession, flags: reliability, hashText,
-        ...(imageGaps === undefined ? {} : { imageGaps: imageGaps.filter((gap) => gap.required) }),
         /**
          * **W8：独立候选的授权来自设置里的一条引用**（只存 profile id）。
          * 没有这条引用时策略会返回 `stop`，协调器不会去换模型；

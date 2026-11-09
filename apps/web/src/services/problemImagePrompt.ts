@@ -1,4 +1,4 @@
-import { MAX_PROBLEM_IMAGES } from "./problemImageFiles"
+const MAX_PROBLEM_IMAGES = 2 // Legacy transcript format limit; no new images are accepted.
 import { imageReadingText, parseImageReadingItems, type ImageReadingItem, type ProblemImageReading } from "./problemImageReader"
 import { isDiagramLine, isGraphChoiceProblem, isGraphChoiceReading } from "./problemImageReview"
 import type { ImageEvidenceGap, ImageEvidenceTarget } from "./problemImageEvidence"

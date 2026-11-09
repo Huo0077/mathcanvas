@@ -160,9 +160,8 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
     ...(planar
       ? [{ id: "base" as const, label: "基础与图元", commands: planarBaseCommands }]
       : spatialPrefix),
-    { id: "multimodal", label: "多模态输入", commands: [
-      command("input-text-conversion", "文字转换", "text", { disabled: true, disabledReason: "文字转换服务尚未接入，暂不可用" }),
-      command("input-image-conversion", "图片识题", "image", { prompt: "上传题干截图和几何配图" })
+    { id: "multimodal", label: "文字输入", commands: [
+      command("input-text-conversion", "文字解题", "text")
     ] },
     { id: "edit", label: "作业操作", commands: editCommands },
     { id: "export", label: "文件输出", commands: exportCommands }

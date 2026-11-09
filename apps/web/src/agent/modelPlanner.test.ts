@@ -1233,3 +1233,14 @@ it("W3 gives the planner the exact host goal IDs for structured answers", async 
   expect(system).toContain("revision:goal:0-7:0")
   expect(system).toContain("求 BC 的长度")
 })
+
+it("a single-choice goal asks for a read-only answer envelope rather than a drawing plan", async () => {
+  const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
+  const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel,
+    requiredGoals: [{ goalId: "rev:goal:0-8:0", kind: "single_choice", sourceText: "则选（ ）" }] })
+  await planner.plan(request({ model: { context: context({ availableActions: [] }), tools: [] } }))
+  const system = runModel.mock.calls[0]![0].messages[0]!.content
+  expect(system).toContain("rev:goal:0-8:0")
+  expect(system).toContain("kind=answer")
+  expect(system).toContain("无需作图")
+})

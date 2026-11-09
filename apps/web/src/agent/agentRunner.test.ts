@@ -109,7 +109,7 @@ describe("answer delivery independently of document changes", () => {
     useSceneStore.setState({ document, workspaceDocuments: { geometry3d: document } })
     const resolveProvider = vi.fn(async () => { throw new Error("this problem should be planned locally") })
     const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
-    const result = await runAndWait(runner, imagePrompt(problem, "", ["PB 为虚线"]))
+    const result = await runAndWait(runner, problem)
     expect(resolveProvider).not.toHaveBeenCalled()
     const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
     expect(reply.failure).toBeUndefined()
@@ -142,20 +142,20 @@ async function runAndWait(runner: ReturnType<typeof createAgentRunner>, prompt: 
   return runner.run(prompt, userMessage.id)
 }
 
-it("keeps the source region for a critical image uncertainty and asks for review before planning", async () => {
+it("refuses to rerun a legacy picture message but keeps its source text in history", async () => {
   const problem = "如图，AB=2，求 AC。"
   const uncertainty = { image: 2, box: [0.2, 0.3, 0.4, 0.5] as [number, number, number, number], text: "AB 的数字可能是 3" }
   const serialized = imagePrompt(problem, "", { problem, diagram: [], uncertainties: [uncertainty] })
   expect(splitImagePrompt(serialized)).toMatchObject({ prompt: problem, imageEvidence: { uncertainties: [uncertainty], reviewed: [] } })
-  const resolveProvider = vi.fn(async () => { throw new Error("unreviewed image must not reach a model") })
+  const resolveProvider = vi.fn(async () => { throw new Error("legacy picture must never reach a model") })
   const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
   const result = await runAndWait(runner, serialized)
-  expect(result.phase).toBe("waiting")
+  expect(result.phase).toBe("failed")
   expect(resolveProvider).not.toHaveBeenCalled()
-  expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure?.message).toContain("请核对图 2")
+  expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure?.message).toContain("转写为文字")
+  expect(useAgentStore.getState().activeConversation!.messages.some(message => message.role === "user" && message.text === serialized)).toBe(true)
   expect(runner.hasDraft()).toBe(false)
 })
-
 /**
  * 立体计划，但**面环退化**（C 与 B 重合）。
  *
@@ -1768,25 +1768,9 @@ describe("a committed run leaves long-term memory behind", () => {
 })
 
 
-describe("W2 image-to-run shared request ledger", () => {
+describe("text-only request ledger", () => {
   beforeEach(() => { resetScene(); resetAgent() })
-  it("an expired image handoff produces a visible failure instead of leaving a pending reply", async () => {
-    const { attachSolveSession, createSolveSession } = await import("../services/solveSession")
-    const prompt = "根据题图求体积。"
-    let now = 0
-    const session = createSolveSession("expired-vision", { requests: 8, inputTokens: 96000, outputTokens: 16000, wallTimeMs: 180000 }, () => now)
-    session.pauseForUser()
-    now = 1_800_001
-    expect(attachSolveSession(useAgentStore.getState().activeConversation!.id, prompt, session)).toBe(true)
-    const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
-    const runner = createAgentRunner({ modelPlanner: { runModel } })
-    const result = await runAndWait(runner, prompt)
-    expect(result.phase).toBe("failed")
-    expect(runModel).not.toHaveBeenCalled()
-    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.pending).toBe(false)
-    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure?.message).toContain("过期")
-  })
-  it("a normal text-only question also receives a limited request ledger", async () => {
+  it("a normal text-only question receives a limited request ledger", async () => {
     const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
     const runner = createAgentRunner({ modelPlanner: {
       resolveProvider: async () => ({ ok: true as const, provider: { id: "profile", modelId: "model", dialect: "openai_native" as const, revision: 1, capabilities: { json: "unknown" as const, tools: "unknown" as const, vision: "unknown" as const } } }),
@@ -1795,26 +1779,7 @@ describe("W2 image-to-run shared request ledger", () => {
     await runAndWait(runner, "请根据数据解决未识别的难题")
     expect(runModel.mock.calls.length).toBeLessThanOrEqual(8)
   })
-  it("uses the vision request from the same conversation instead of making an extra plan call", async () => {
-    const { attachSolveSession, createSolveSession } = await import("../services/solveSession")
-    const prompt = "请根据这幅图计算未知量。"
-    const session = createSolveSession("vision-run", { requests: 1, inputTokens: 96000, outputTokens: 16000, wallTimeMs: 180000 }, Date.now)
-    const vision = session.reserve("vision", 100, 4096)!
-    session.settle(vision.id, { inputTokens: 80, outputTokens: 300 })
-    expect(attachSolveSession(useAgentStore.getState().activeConversation!.id, prompt, session)).toBe(true)
-    const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
-    const runner = createAgentRunner({ modelPlanner: {
-      resolveProvider: async () => ({ ok: true as const, provider: { id: "profile", modelId: "model", dialect: "openai_native" as const, revision: 1, capabilities: { json: "unknown" as const, tools: "unknown" as const, vision: "unknown" as const } } }),
-      runModel
-    } })
-    const result = await runAndWait(runner, prompt)
-    expect(result.phase).toBe("failed")
-    expect(runModel).not.toHaveBeenCalled()
-    expect(session.snapshot().requests).toBe(1)
-  })
 })
-
-
 describe("W3 production answer acceptance", () => {
   beforeEach(() => { resetScene(); resetAgent() })
   it("legacy flag off preserves a normal conversational answer", async () => {

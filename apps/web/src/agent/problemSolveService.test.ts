@@ -184,3 +184,76 @@ it("W4: a required image gap blocks delivery through the same production entry",
   expect(output.liveWrites).toBe(0)
   expect(output.auditEvents.find(item => item.kind === "image")?.status).toContain("missing_dimension")
 })
+
+it("routes a plain exam choice through read-only production service and leaves its answer unverified", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const output = await runProductionScenario({ prompt: "设 z=x+yi 满足 |z-i|=1，则\nA. x²+y²=1\nB. (x-1)²+y²=1\nC. x²+(y-1)²=1\nD. (x+1)²+y²=1",
+    workspace: "conics", flags: "reliability",
+    providerReplies: [{ schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "选择正确选项", factIds: [],
+      answer: "圆心是(0,1)，最终答案：C。", toolResultRefs: [] }] })
+  expect(output.requiredGoalCount).toBe(1)
+  expect(output.requestedSkillIds).toEqual([])
+  expect(output.stageNames.at(-1)).toBe("completed")
+  expect(output.solveStatus).toBe("answered")
+  expect(output.auditEvents.map(event => event.kind)).toContain("accept")
+  expect(output.liveWrites).toBe(0)
+  expect(output.providerCalls).toBe(1)
+})
+
+it("a required image fact gap still blocks an explicit final choice in production", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const output = await runProductionScenario({ prompt: "如图，几何体体积为（ ）", workspace: "geometry3d", flags: "reliability",
+    attachments: [{ name: "sheet.png", bytes: new TextEncoder().encode("test image") }],
+    providerReplies: [{ schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "体积", factIds: [],
+      answer: "最终答案：B。", toolResultRefs: [] }],
+    imageGaps: [{ code: "missing_dimension", message: "题图没有可核对的尺寸。", required: true }] })
+  expect(output.solveStatus).not.toBe("answered")
+  expect(output.liveWrites).toBe(0)
+})
+
+it("rejects a model drawing plan for an answer-only choice before staging a document", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const output = await runProductionScenario({ prompt: "几何体的体积为（ ）A. 6 B. 9 C. 12 D. 18", workspace: "geometry3d", flags: "reliability",
+    providerReplies: [{ schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "猜测立体", factIds: [],
+      answer: "最终答案：B", actions: [{ actionId: "solid.create_template", actionKey: "cube", factIds: [], inputs: { alias: "cube", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 3, y: 3, z: 3 } } }] }] })
+  expect(output.stageNames.at(-1)).toBe("failed")
+  expect(output.stageNames).not.toContain("compiling")
+  expect(output.liveWrites).toBe(0)
+})
+
+it("rejects forged or missing structured goal answers instead of converting them to a valid choice", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const prompt = "设 z=x+yi 满足 |z-i|=1，则（ ）A. 甲 B. 乙 C. 丙 D. 丁"
+  for (const goalAnswers of [
+    [{ goalId: "foreign-goal", kind: "single_choice", displayText: "最终答案：C", value: { kind: "single_choice", optionId: "C" }, evidenceRefs: [] }],
+    [{ goalId: "foreign-goal", kind: "single_choice", displayText: "最终答案：E", value: { kind: "single_choice", optionId: "E" }, evidenceRefs: [] }]
+  ]) {
+    const output = await runProductionScenario({ prompt, workspace: "conics", flags: "reliability", providerReplies: [
+      { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "单选", factIds: [], answer: "最终答案：C。", goalAnswers, toolResultRefs: [] },
+      { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "单选", factIds: [], answer: "最终答案：C。", goalAnswers, toolResultRefs: [] }
+    ] })
+    expect(output.solveStatus).not.toBe("answered")
+    expect(output.liveWrites).toBe(0)
+  }
+})
+
+it("rejects a structured choice when the visible final answer says no option matches", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const reply = (goalId: string) => ({ schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "离心率", factIds: [], toolResultRefs: [],
+    answer: "计算后四个选项均不符合。最终答案：无匹配选项，请核对题设。", goalAnswers: [{ goalId,
+      kind: "single_choice", displayText: "A", value: { kind: "single_choice", optionId: "A" }, evidenceRefs: [] }] })
+  const output = await runProductionScenario({ prompt: "离心率是（ ）A. 1 B. 2 C. 3 D. 4", workspace: "conics", flags: "reliability", providerReplies: [reply] })
+  expect(output.stageNames.at(-1)).toBe("failed")
+  expect(output.solveStatus).not.toBe("answered")
+  expect(output.liveWrites).toBe(0)
+})
+
+it("rejects a structured image option when the visible final answer asks the user to match the figure", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const reply = (goalId: string) => ({ schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "选图", factIds: [], toolResultRefs: [],
+    answer: "函数可写为 f(x)=|sin 2x|。具体是 A/B/C/D 中哪一幅，需对照原题图确认。最终答案：以上述函数解析式对应的图象为准。",
+    goalAnswers: [{ goalId, kind: "single_choice", displayText: "C", value: { kind: "single_choice", optionId: "C" }, evidenceRefs: [] }] })
+  const output = await runProductionScenario({ prompt: "如图，下列图象是（ ）A. 图1 B. 图2 C. 图3 D. 图4", workspace: "conics", flags: "reliability", providerReplies: [reply] })
+  expect(output.stageNames.at(-1)).toBe("failed")
+  expect(output.solveStatus).not.toBe("answered")
+})

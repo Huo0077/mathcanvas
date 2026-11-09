@@ -8,7 +8,7 @@ import { selectProblemPlanner, startProblemSolve } from "../problemSolveService"
 export interface ProductionScenario {
   prompt: string
   workspace: WorkspaceId
-  providerReplies: readonly unknown[]
+  providerReplies: readonly (unknown | ((goalId: string) => unknown))[]
   attachments?: readonly { name: string; bytes: Uint8Array }[]
   flags: "legacy" | "reliability"
   /** W4：宿主审计出的图证据缺口（真实实现来自 `problemImagePipeline`）。 */
@@ -21,6 +21,7 @@ export interface ProductionScenarioResult {
   requiredGoalCount: number
   problemRevision: string
   providerCalls: number
+  requestedSkillIds: readonly string[]
   liveWrites: number
   auditEvents: SolveAuditEvent[]
 }
@@ -48,7 +49,8 @@ export async function runProductionScenario(input: ProductionScenario): Promise<
       resolveProvider: async () => ({ ok: true, provider: { id: "script-provider", modelId: "offline", dialect: "openai_native", revision: 1,
         capabilities: { json: "unknown", tools: "unknown", vision: "unknown" } } }),
       runModel: async () => {
-        const envelope = input.providerReplies[providerCalls++]
+        const reply = input.providerReplies[providerCalls++]
+        const envelope = typeof reply === "function" ? reply(context.understanding.goals[0]?.goalId ?? "") : reply
         if (!envelope) throw new Error("provider script exhausted")
         return { ok: true, events: [{ kind: "delta", requestId: "req", attemptId: "attempt", text: JSON.stringify(envelope) }] }
       }
@@ -71,5 +73,5 @@ export async function runProductionScenario(input: ProductionScenario): Promise<
   for await (const event of runtime.coordinator.start({ run, userMessage: input.prompt })) stageNames.push(event.phase)
   return { stageNames, solveStatus: runtime.solveResult()?.status ?? "absent",
     unansweredGoalIds: runtime.solveResult()?.unansweredGoalIds ?? [], requiredGoalCount: context.understanding.goals.length,
-    providerCalls, liveWrites, auditEvents, problemRevision: context.problemRevision }
+    providerCalls, requestedSkillIds: selection.requestedSkillIds, liveWrites, auditEvents, problemRevision: context.problemRevision }
 }
