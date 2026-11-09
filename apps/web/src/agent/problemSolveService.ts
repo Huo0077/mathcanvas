@@ -1,4 +1,4 @@
-import { routeDeterministicProblem, SKILL_MANIFESTS, type HashText, type SolveContext, type MathFact, type PlannerPort } from "@draw/agent-core"
+import { routeDeterministicProblem, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort } from "@draw/agent-core"
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeDependencies } from "./agentRuntime"
 import type { AgentReliabilityFlags } from "./reliabilityFlags"
 import type { SolveSession } from "../services/solveSession"
@@ -58,14 +58,22 @@ export async function selectProblemPlanner(input: PlannerRouteInput): Promise<Pr
 /** Closed-domain facts are derived only from the user prompt, never from model output or options. */
 export function deriveTrustedMathFacts(context: SolveContext): MathFact[] {
   if (context.understanding.goals.length !== 1) return []
+  const goalId = context.understanding.goals[0]!.goalId
+  const facts: MathFact[] = []
   const prompt = context.prompt.replace(/\s+/g, "")
   const match = /^已知二次函数f\(t\)=([+-]?\d+)t(?:²|\^2)([+-]\d+)t([+-]\d+)，?t∈([[(])([+-]?\d+),([+-]?\d+)([)\]])，?求(最大|最小)值[。.]?$/.exec(prompt)
-  if (!match) return []
-  const coefficients = [Number(match[1]), Number(match[2]), Number(match[3])] as const
-  const lower = Number(match[5]), upper = Number(match[6])
-  if (![...coefficients, lower, upper].every(Number.isFinite) || lower >= upper) return []
-  return [{ kind: "quadratic-interval", goalId: context.understanding.goals[0]!.goalId, quadratic: coefficients,
-    interval: { lower, upper, lowerClosed: match[4] === "[", upperClosed: match[7] === "]" }, claim: match[8] === "最大" ? "max" : "min" }]
+  if (match) {
+    const coefficients = [Number(match[1]), Number(match[2]), Number(match[3])] as const
+    const lower = Number(match[5]), upper = Number(match[6])
+    if ([...coefficients, lower, upper].every(Number.isFinite) && lower < upper) {
+      facts.push({ kind: "quadratic-interval", goalId, quadratic: coefficients,
+        interval: { lower, upper, lowerClosed: match[4] === "[", upperClosed: match[7] === "]" }, claim: match[8] === "最大" ? "max" : "min" })
+    }
+  }
+  // W6：题面条件 → 题族事实（圆锥曲线 / 有限概率 / 三角形）。模型给的坐标不进 facts。
+  facts.push(...conditionMathFacts({ problemRevision: context.problemRevision,
+    conditions: [{ id: "prompt", sourceText: context.prompt, goalIds: [goalId] }] }))
+  return facts
 }
 
 export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {

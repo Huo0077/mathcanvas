@@ -40,11 +40,50 @@ export const CAPABILITY_MANIFEST: readonly CapabilityDeclaration[] = [
   {
     family: "conic-eccentricity",
     inputs: ["text"],
-    solveDomain: ["双曲线垂足与离心率关系（PF₁²=k·OP² 型）", "椭圆上距离全称不等式的离心率范围"],
+    solveDomain: ["双曲线垂足与离心率关系（PF₁²=k·OP² 型）", "椭圆上距离全称不等式的离心率范围",
+      "双曲线焦点到渐近线的垂足（必须同时落在线上且与焦点连线垂直）",
+      "椭圆点到上顶点距离上界（只在 e≤√2/2 时成立；e=√3/2 必须给出反例）"],
     answerKinds: ["numeric", "interval"],
     verification: ["instance", "interval-branch"],
     fallback: "unsupported",
-    fallbackReason: "超出这两类判据的圆锥曲线结论没有独立核验路径，返回超出能力而不是猜。"
+    fallbackReason: "超出这几类判据的圆锥曲线结论没有独立核验路径，返回超出能力而不是猜。"
+  },
+  {
+    family: "function-equivalence",
+    inputs: ["text"],
+    solveDomain: ["有限区间内两个初等表达式的采样反例（|sinxcosx| 型绝对值、定义域不一致）",
+      "弧度/角度单位必须按声明一致；采样通过只标 sampled"],
+    answerKinds: ["numeric", "proof"],
+    verification: ["instance"],
+    fallback: "unsupported",
+    fallbackReason: "超出可解析表达式（数字、x、π、四则、整数幂、绝对值、sin/cos/tan/sqrt/abs）的结论没有采样判据。"
+  },
+  {
+    family: "finite-probability",
+    inputs: ["text"],
+    solveDomain: ["有限等可能样本", "无放回组合计数（有放回是另一种模型，不能混用）"],
+    answerKinds: ["numeric"],
+    verification: ["instance"],
+    fallback: "unsupported",
+    fallbackReason: "样本空间/等可能/独立条件必须由题面绑定；没有绑定就返回超出能力，不用概率计算器冒充解析。"
+  },
+  {
+    family: "plane-right-triangle",
+    inputs: ["text"],
+    solveDomain: ["非退化直角三角形的面积（三个顶点坐标来自题面）"],
+    answerKinds: ["numeric"],
+    verification: ["instance"],
+    fallback: "unsupported",
+    fallbackReason: "任意三角形/圆的面积与角度暂无注册判据，非直角输入返回超出能力而不是硬套公式。"
+  },
+  {
+    family: "continued-fraction-monotonicity",
+    inputs: ["text"],
+    solveDomain: ["正整数系数连分数的精确求值（bigint，无浮点）", "相邻项反例否证单调性（只否证，不证明）"],
+    answerKinds: ["proof"],
+    verification: ["instance"],
+    fallback: "clarify",
+    fallbackReason: "有限项相符不等于一般结论成立；需要递推/归纳检查时如实说不知道。"
   },
   {
     family: "orthographic-cuboid",

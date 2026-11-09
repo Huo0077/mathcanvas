@@ -1,6 +1,10 @@
 import type { EvidenceRecord, GoalAnswer } from "../answerResult"
 import type { Budget } from "../budget"
 import type { ObligationIR } from "../obligationIR"
+import { verifyDomainAnswer, type DomainMathFact } from "./domainChecks"
+import { parseScalar } from "./scalarParsing"
+
+export { parseScalar } from "./scalarParsing"
 
 /**
  * **独立数学答案核验（W5 / T5，2026-11-08）**。
@@ -74,7 +78,7 @@ export interface EllipseRangeFact {
   boundMultiplier?: Scalar
 }
 
-export type MathFact = QuadraticIntervalFact | DistanceEqualityFact | PerpendicularFact | HyperbolaFootFact | EllipseRangeFact
+export type MathFact = QuadraticIntervalFact | DistanceEqualityFact | PerpendicularFact | HyperbolaFootFact | EllipseRangeFact | DomainMathFact
 
 export interface MathVerificationRequest {
   problemRevision: string
@@ -112,48 +116,6 @@ function finite(value: number | undefined): value is number {
  * 超过这个形状就返回 `undefined`（随之落到 `unknown`）—— 把一个解析不了的表达式
  * "想办法算出来"是本仓最忌讳的静默改题。
  */
-export function parseScalar(input: string): number | undefined {
-  const text = input
-    .replace(/\\left|\\right/g, "")
-    .replace(/\\sqrt\s*\{([^{}]+)\}/g, "√$1")
-    .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)")
-    .replace(/\\cdot|\\times/g, "*")
-    .replace(/[$\s]/g, "")
-    .replace(/[×]/g, "*")
-    .trim()
-  if (text.length === 0) return undefined
-
-  const fraction = /^\((.+)\)\/\((.+)\)$/.exec(text)
-  if (fraction !== null) {
-    const numerator = parseScalar(fraction[1]!)
-    const denominator = parseScalar(fraction[2]!)
-    if (!finite(numerator) || !finite(denominator) || denominator === 0) return undefined
-    return numerator / denominator
-  }
-  const plain = /^(-?\d+(?:\.\d+)?)$/.exec(text)
-  if (plain !== null) return Number(plain[1])
-  const ratio = /^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(text)
-  if (ratio !== null) {
-    const denominator = Number(ratio[2])
-    return denominator === 0 ? undefined : Number(ratio[1]) / denominator
-  }
-  const radical = /^(-?)√(\d+(?:\.\d+)?)$/.exec(text)
-  if (radical !== null) return (radical[1] === "-" ? -1 : 1) * Math.sqrt(Number(radical[2]))
-  const radicalOver = /^(-?)√(\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/.exec(text)
-  if (radicalOver !== null) {
-    const denominator = Number(radicalOver[3])
-    if (denominator === 0) return undefined
-    return (radicalOver[1] === "-" ? -1 : 1) * Math.sqrt(Number(radicalOver[2])) / denominator
-  }
-  const coefficient = /^(-?\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)(?:\/(-?\d+(?:\.\d+)?))?$/.exec(text)
-  if (coefficient !== null) {
-    const denominator = coefficient[3] === undefined ? 1 : Number(coefficient[3])
-    if (denominator === 0) return undefined
-    return Number(coefficient[1]) * Math.sqrt(Number(coefficient[2])) / denominator
-  }
-  return undefined
-}
-
 export interface ParsedRange {
   lower: number
   upper: number
@@ -421,7 +383,10 @@ export function verifyMathAnswer(request: MathVerificationRequest, budget: Budge
           ? quadraticInterval({ fact, candidate: request.candidate, problemRevision: request.problemRevision })
           : fact.kind === "distance-equality"
             ? distanceEquality({ fact, candidate: request.candidate, problemRevision: request.problemRevision })
-            : perpendicular({ fact, candidate: request.candidate, problemRevision: request.problemRevision })
+            : fact.kind === "perpendicular"
+              ? perpendicular({ fact, candidate: request.candidate, problemRevision: request.problemRevision })
+              // W6：第二批题族（圆锥曲线垂足/离心率、函数采样、精确概率、直角三角形、连分数）。
+              : verifyDomainAnswer(fact, request.candidate, request.problemRevision)
     if (result.decision === "refuted") return result
     if (result.decision === "unknown") lastUnknown = result
     else lastSupported = result
