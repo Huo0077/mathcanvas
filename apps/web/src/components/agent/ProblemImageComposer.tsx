@@ -6,6 +6,8 @@ import { imagePrompt } from "../../services/problemImagePrompt"
 import { alignGridReadings } from "../../services/problemImageGrid"
 import { graphChoiceDraft, hasVectorSupplement, isDiagramLine, isGraphChoiceProblem, missingGraphChoices, requiredVectorReadings, reviewProblemImage } from "../../services/problemImageReview"
 import { AgentComposer } from "./AgentComposer"
+import { useAgentStore } from "../../agentStore"
+import { attachSolveSession, createDefaultSolveSession, dropSolveSession, type SolveSession } from "../../services/solveSession"
 
 interface ProblemImageComposerProps {
   draft: { value: string; onChange: (value: string) => void }
@@ -23,6 +25,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   const toggle = useRef<HTMLButtonElement>(null)
   const imagePreview = useRef<HTMLDivElement>(null)
   const operation = useRef<AbortController | null>(null)
+  const solveSession = useRef<SolveSession | null>(null)
   const sending = useRef(false)
   const [open, setOpen] = useState(initialOpen)
   const [images, setImages] = useState<ProblemImage[]>([])
@@ -44,7 +47,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   const [regionalReading, setRegionalReading] = useState<{ item: EvidenceItem; text: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => () => operation.current?.abort(), [])
+  useEffect(() => () => { operation.current?.abort(); if (solveSession.current) { dropSolveSession(solveSession.current); solveSession.current.cancel("composer closed") } }, [])
   useEffect(() => {
     if (!open) return
     let current = true
@@ -57,6 +60,11 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
     })
     return () => { current = false }
   }, [open, refresh])
+
+  function resetBudget() {
+    if (solveSession.current) { dropSolveSession(solveSession.current); solveSession.current.cancel("different problem") }
+    solveSession.current = null
+  }
 
   function resetReading() {
     setReading(null)
@@ -96,6 +104,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         if (controller.signal.aborted) return
       }
       if (prepared.length) {
+        resetBudget()
         resetReading()
         setImages((current) => [...current, ...prepared])
       }
@@ -121,7 +130,10 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
     setError(null)
     try {
       const selectedImages = item && box ? [await cropProblemImage(images[imageIndex], box)] : images
-      const result = await readProblemImages(reader, selectedImages, `problem-image-${crypto.randomUUID()}`, controller.signal, item !== undefined)
+      const session = solveSession.current ?? createDefaultSolveSession(`vision-${crypto.randomUUID()}`)
+      solveSession.current = session
+      if (!session.resume()) throw new Error("本题识图会话已过期。请重新选择题图。")
+      const result = await readProblemImages(reader, selectedImages, `problem-image-${crypto.randomUUID()}`, controller.signal, item !== undefined, session)
       if (controller.signal.aborted) return
       if (item) {
         const text = [result.problem, ...result.diagram.map(imageReadingText), ...result.uncertainties.map(entry => entry.text)].filter(Boolean).join(" · ")
@@ -137,6 +149,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "识别失败，请重试。")
     } finally {
+      solveSession.current?.pauseForUser()
       if (operation.current === controller && !controller.signal.aborted) {
         operation.current = null
         setWorking(null)
@@ -147,6 +160,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   function cancelReading() {
     operation.current?.abort()
     operation.current = null
+    solveSession.current?.pauseForUser()
     setWorking(null)
   }
 
@@ -197,9 +211,17 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         graphChoice ? `图形选项（用户核对）：\n${graphSupplement.trim()}` : "",
         draft.value
       ].filter(Boolean).join("\n")
-      const accepted = await onSend(imagePrompt(problem, instructions, reading, reviewed, confirmedLines))
+      const completePrompt = imagePrompt(problem, instructions, reading, reviewed, confirmedLines)
+      const session = solveSession.current
+      const conversationId = useAgentStore.getState().activeConversation?.id
+      if (session && (!conversationId || !attachSolveSession(conversationId, completePrompt, session)))
+        throw new Error("识图会话已被占用或已过期，请重新开始本题。")
+      let accepted = false
+      try { accepted = await onSend(completePrompt) }
+      finally { if (!accepted && session) dropSolveSession(session) }
       if (!accepted) throw new Error("题图识别结果未能发送，内容已保留，可以重试。")
       draft.onChange("")
+      solveSession.current = null
       resetReading()
       setImages([])
       setPreview(0)
@@ -256,6 +278,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
             <span title={image.name}>图 {index + 1} · {image.name}</span>
           </button>
           <button type="button" aria-label={`移除图 ${index + 1}`} disabled={working !== null || submitting} onClick={() => {
+            resetBudget()
             setImages((current) => current.filter((_, item) => item !== index))
             setPreview(0)
             setError(null)

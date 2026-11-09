@@ -1766,3 +1766,50 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(shown.commit?.detail ?? "", "面向用户的那句话里不该出现引擎的英文原话").not.toMatch(/document changed|draft was invalidated|no draft /i)
   })
 })
+
+
+describe("W2 image-to-run shared request ledger", () => {
+  beforeEach(() => { resetScene(); resetAgent() })
+  it("an expired image handoff produces a visible failure instead of leaving a pending reply", async () => {
+    const { attachSolveSession, createSolveSession } = await import("../services/solveSession")
+    const prompt = "根据题图求体积。"
+    let now = 0
+    const session = createSolveSession("expired-vision", { requests: 8, inputTokens: 96000, outputTokens: 16000, wallTimeMs: 180000 }, () => now)
+    session.pauseForUser()
+    now = 1_800_001
+    expect(attachSolveSession(useAgentStore.getState().activeConversation!.id, prompt, session)).toBe(true)
+    const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
+    const runner = createAgentRunner({ modelPlanner: { runModel } })
+    const result = await runAndWait(runner, prompt)
+    expect(result.phase).toBe("failed")
+    expect(runModel).not.toHaveBeenCalled()
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.pending).toBe(false)
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure?.message).toContain("过期")
+  })
+  it("a normal text-only question also receives a limited request ledger", async () => {
+    const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
+    const runner = createAgentRunner({ modelPlanner: {
+      resolveProvider: async () => ({ ok: true as const, provider: { id: "profile", modelId: "model", dialect: "openai_native" as const, revision: 1, capabilities: { json: "unknown" as const, tools: "unknown" as const, vision: "unknown" as const } } }),
+      runModel
+    } })
+    await runAndWait(runner, "请根据数据解决未识别的难题")
+    expect(runModel.mock.calls.length).toBeLessThanOrEqual(8)
+  })
+  it("uses the vision request from the same conversation instead of making an extra plan call", async () => {
+    const { attachSolveSession, createSolveSession } = await import("../services/solveSession")
+    const prompt = "请根据这幅图计算未知量。"
+    const session = createSolveSession("vision-run", { requests: 1, inputTokens: 96000, outputTokens: 16000, wallTimeMs: 180000 }, Date.now)
+    const vision = session.reserve("vision", 100, 4096)!
+    session.settle(vision.id, { inputTokens: 80, outputTokens: 300 })
+    expect(attachSolveSession(useAgentStore.getState().activeConversation!.id, prompt, session)).toBe(true)
+    const runModel = vi.fn(async () => ({ ok: true as const, events: [] }))
+    const runner = createAgentRunner({ modelPlanner: {
+      resolveProvider: async () => ({ ok: true as const, provider: { id: "profile", modelId: "model", dialect: "openai_native" as const, revision: 1, capabilities: { json: "unknown" as const, tools: "unknown" as const, vision: "unknown" as const } } }),
+      runModel
+    } })
+    const result = await runAndWait(runner, prompt)
+    expect(result.phase).toBe("failed")
+    expect(runModel).not.toHaveBeenCalled()
+    expect(session.snapshot().requests).toBe(1)
+  })
+})

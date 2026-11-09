@@ -1,5 +1,6 @@
 import { invokeDesktop } from "./desktopRuntime"
 import { cancelModelRun, startModelRun } from "./modelClient"
+import { runReservedModel, type SolveSession } from "./solveSession"
 import { isVerified, listProviderProfiles, readActiveProviderProfile, readProviderHealth, type ProviderProfile } from "./providerProfileClient"
 import type { ProblemImage } from "./problemImageFiles"
 
@@ -95,6 +96,12 @@ export function parseImageReadingItems(items: unknown, imageCount: number, limit
   return parsed
 }
 
+/** Preflight image allowance is an estimate, never a claim of billed image tokens.
+ * The native provider reports actual usage; missing usage retains this reservation. */
+export function estimateVisionInputTokens(images: readonly ProblemImage[]): number {
+  return images.length * 4096 + Math.ceil(INSTRUCTIONS.length / 2)
+}
+
 export async function listImageReaders(): Promise<{ profiles: ProviderProfile[]; activeId: string | null; error?: string }> {
   const [list, active] = await Promise.all([listProviderProfiles(), readActiveProviderProfile()])
   if (!list.ok) return {
@@ -109,12 +116,13 @@ export async function listImageReaders(): Promise<{ profiles: ProviderProfile[];
   return { profiles: checked.filter((profile) => profile !== null), activeId: active.ok ? active.value : null }
 }
 
-export async function readProblemImages(profile: ProviderProfile, images: readonly ProblemImage[], runId: string, signal: AbortSignal, regionOnly = false): Promise<ProblemImageReading> {
+export async function readProblemImages(profile: ProviderProfile, images: readonly ProblemImage[], runId: string, signal: AbortSignal, regionOnly = false, solveSession?: SolveSession): Promise<ProblemImageReading> {
   const cancel = () => { void cancelModelRun(runId, invokeDesktop) }
   signal.throwIfAborted()
   signal.addEventListener("abort", cancel, { once: true })
+  solveSession?.signal.addEventListener("abort", cancel, { once: true })
   try {
-    const result = await startModelRun({
+    const invoke = () => startModelRun({
       runId,
       profileId: profile.id,
       profileRevision: profile.revision,
@@ -125,6 +133,11 @@ export async function readProblemImages(profile: ProviderProfile, images: readon
         { role: "user", content: regionOnly ? "这张图是从题图裁出的待核对区域。只转录选区可见的文字、公式和标记。" : "请读取这些数学题图。", images: images.map((image) => image.png) }
       ]
     }, { invoke: invokeDesktop })
+    if (solveSession && !solveSession.pinProvider("vision", profile.id, profile.revision))
+      throw new Error("视觉模型配置或会话版本发生变化，请重新开始本题。")
+    const result = solveSession
+      ? await runReservedModel(solveSession, "vision", estimateVisionInputTokens(images), Math.min(profile.maxOutputTokens ?? 4096, 4096), invoke)
+      : await invoke()
     signal.throwIfAborted()
     if (!result.ok) {
       if (result.failure === "permission" || result.failure === "auth") throw new Error("模型配置或图像验证已变化。请到模型服务检查后重试。")
@@ -139,5 +152,6 @@ export async function readProblemImages(profile: ProviderProfile, images: readon
     return reading
   } finally {
     signal.removeEventListener("abort", cancel)
+    solveSession?.signal.removeEventListener("abort", cancel)
   }
 }

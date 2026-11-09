@@ -36,3 +36,13 @@ it("recovers unescaped math delimiters and preserves valid JSON escapes", () => 
   expect(parseProblemImageReading(JSON.stringify({ problem, diagram: [], uncertainties: [] }), 1)?.problem).toBe(problem)
   expect(parseProblemImageReading(raw.replace("x^2", String.raw`\z`), 1)).toBeNull()
 })
+
+
+it("W2 image budget counts an actual normalized screenshot, not base64 characters as tokens", async () => {
+  const { estimateVisionInputTokens } = await import("./problemImageReader")
+  const image = { name: "screenshot.png", png: "a".repeat(2_000_000) }
+  const estimate = estimateVisionInputTokens([image])
+  expect(estimate).toBeGreaterThan(0)
+  expect(estimate).toBeLessThan(96_000)
+  expect(estimateVisionInputTokens([image, image])).toBeGreaterThan(estimate)
+})

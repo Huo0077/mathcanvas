@@ -1200,3 +1200,25 @@ describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
     expect(runModel).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("W2 — provider budget shared with vision", () => {
+  it("sends an explicit maxOutputTokens no greater than the remaining shared output budget", async () => {
+    const { createSolveSession } = await import("../services/solveSession")
+    const session = createSolveSession("cap", { requests: 8, inputTokens: 20000, outputTokens: 1000, wallTimeMs: 180000 }, () => 0)
+    const runModel = vi.fn(async (_request: SentRequest & { maxOutputTokens?: number }) => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel, solveSession: session })
+    await planner.plan(request())
+    expect(runModel).toHaveBeenCalledTimes(1)
+    expect(runModel.mock.calls[0]![0].maxOutputTokens).toBe(1000)
+  })
+  it("a vision request consumes the sole provider request before planning and prevents another transport", async () => {
+    const { createSolveSession } = await import("../services/solveSession")
+    const session = createSolveSession("shared", { requests: 1, inputTokens: 8000, outputTokens: 8000, wallTimeMs: 180000 }, () => 0)
+    const vision = session.reserve("vision", 200, 500)!
+    session.settle(vision.id, { inputTokens: 150, outputTokens: 200 })
+    const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
+    const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel, solveSession: session })
+    await expect(planner.plan(request())).rejects.toThrow(/budget|limit/i)
+    expect(runModel).not.toHaveBeenCalled()
+  })
+})

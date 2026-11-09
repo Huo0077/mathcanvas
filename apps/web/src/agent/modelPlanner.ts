@@ -36,6 +36,7 @@ import {
   type ProviderProfile
 } from "../services/providerProfileClient"
 import { invokeDesktop } from "../services/desktopRuntime"
+import { runReservedModel, type SolveSession } from "../services/solveSession"
 import { cancelModelRun, startModelRun, type ModelChatMessage, type ModelClientStart } from "../services/modelClient"
 import { buildSystemPrompt } from "./systemPrompt"
 
@@ -192,6 +193,8 @@ export async function resolveActiveProvider(): Promise<ProviderResolution> {
 export interface ModelPlannerDependencies {
   /** Automatically transcribed diagram observations, separate from the problem givens. */
   imageNotes?: string
+  /** All provider attempts, including retries, share the session begun by vision. */
+  solveSession?: SolveSession
   /** 现取「使用中」的那一份。缺省走真实 IPC（`resolveActiveProvider`）。 */
   resolveProvider?: () => Promise<ProviderResolution>
   /** 发一次请求。缺省走 `provider_run`。第二个参数是"这次还能不能继续"的判据（取消用）。 */
@@ -409,6 +412,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       const readTools = request.executeTool === undefined ? [] : request.model.tools.map(nativeReadToolSchema).filter((schema) => schema !== null)
       const tools = channel === "native_tools" ? [buildPlanToolSchema(request.model.context.availableActions), ...readTools] : []
 
+      if (dependencies.solveSession && !dependencies.solveSession.pinProvider("plan", provider.id, provider.revision))
+        throw new ModelPlannerError("provider_failed", "本题使用的模型配置在解题期间发生变化，已停止。", false)
       const runId = request.run.runId
       const messages = buildMessages(request, channel, dependencies.imageNotes)
       if (channel === "native_tools" && readTools.length > 0) {
@@ -447,6 +452,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       for (;;) {
         attempts += 1
         request.signal.addEventListener("abort", onAbort)
+        dependencies.solveSession?.signal.addEventListener("abort", onAbort)
         let result: ModelClientStart
         if (request.beforeProviderRequest && !request.beforeProviderRequest(1)) {
           throw new ModelPlannerError("provider_failed", "provider request budget exhausted before transport", false)
@@ -462,12 +468,22 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            * - 文本通道与原生工具通道都不发输出约束：前者本来就是宽松文本，
            *   后者的结构化由工具 schema 保证，再叠一个 `response_format` 只会让部分服务 400。
            */
-          const outputMode = channel === "strict_json" ? "json_mode" : undefined
+          const outputMode: "json_mode" | undefined = channel === "strict_json" ? "json_mode" : undefined
           const maxOutputTokens = provider.maxOutputTokens === undefined ? undefined
             : request.repair?.reason === "response_incomplete" ? provider.maxOutputTokens : Math.min(4096, provider.maxOutputTokens)
-          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }), ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }) }, { isCancelled: () => request.signal.aborted })
+          const availableOutput = dependencies.solveSession
+            ? dependencies.solveSession.limits.outputTokens - dependencies.solveSession.snapshot().outputTokens : undefined
+          const requestOutputLimit = availableOutput === undefined ? maxOutputTokens
+            : Math.max(1, Math.min(maxOutputTokens ?? 4096, availableOutput))
+          const modelRequest = { runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }), ...(requestOutputLimit === undefined ? {} : { maxOutputTokens: requestOutputLimit }) }
+          const invoke = () => runModel(modelRequest, { isCancelled: () => request.signal.aborted || dependencies.solveSession?.signal.aborted === true })
+          result = dependencies.solveSession
+            ? await runReservedModel(dependencies.solveSession, request.repair ? "repair" : "plan",
+              Math.max(1, Math.ceil(JSON.stringify(messages).length / 2)), requestOutputLimit ?? 4096, invoke)
+            : await invoke()
         } finally {
           request.signal.removeEventListener("abort", onAbort)
+          dependencies.solveSession?.signal.removeEventListener("abort", onAbort)
         }
 
         const first = result.ok ? result.events[0] : undefined

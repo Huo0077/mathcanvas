@@ -14,6 +14,7 @@ import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
+import { claimSolveSession, createDefaultSolveSession, type SolveSession } from "../services/solveSession"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -479,6 +480,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 现在每一轮都留着它自己的运行时与落点，界面上那块面板说哪一轮就确认哪一轮。
    */
   const runs = new Map<string, { runtime: AgentRuntime; commit: PendingCommit }>()
+  const runSessions = new Map<string, SolveSession>()
   /** 最近一轮（老调用方不传 `runId` 时用它）。 */
   let lastRunId: string | null = null
 
@@ -502,6 +504,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
   /** 一轮用掉了：从表里删掉（`lastRunId` 跟着挪到还在的那一轮）。 */
   function retireRun(runId: string): void {
     runs.delete(runId)
+    runSessions.delete(runId)
     if (lastRunId === runId) lastRunId = [...runs.keys()].at(-1) ?? null
   }
 
@@ -516,7 +519,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, imageNotes: string, runId?: string): Promise<PlannerSelection> {
+  async function selectPlanner(prompt: string, imageNotes: string, runId?: string, solveSession?: SolveSession): Promise<PlannerSelection> {
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
 
@@ -544,6 +547,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       planner: createModelPlanner({
         ...dependencies.modelPlanner,
         imageNotes,
+        solveSession,
         resolveProvider: async () => resolution,
         /**
          * **模型原话留在本机诊断里**（2026-09-22，用户现场）：界面上那句失败文案只说得出"形状不对"，
@@ -573,13 +577,22 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const pinned = useAgentStore.getState().pinRun({ runId, promptMessageId })
       // 钉不住（那条消息已经不在了）时退回"当前在途"那条老路径，而不是把事件丢掉。
       const eventRunId = pinned ? runId : undefined
+      const solveSession = (pinned ? claimSolveSession(pinned.conversationId, text) : null)
+        ?? createDefaultSolveSession(runId)
+      runSessions.set(runId, solveSession)
+      if (!solveSession.resume()) {
+        useAgentStore.getState().failPendingReply({ code: "session_expired", message: "识图解题会话已过期，请重新发起本题；不会继续计费。", retryable: true }, eventRunId)
+        if (eventRunId) useAgentStore.getState().endRun(eventRunId)
+        runSessions.delete(runId)
+        return { phase: "failed", draftId: null }
+      }
       if (import.meta.env.VITE_MATHCANVAS_BUILD) {
         useAgentStore.getState().recordDiagnostic(`应用构建 ${import.meta.env.VITE_MATHCANVAS_BUILD}`, eventRunId)
       }
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
       const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
-      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId) : {
+      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId, solveSession ?? undefined) : {
         requestedSkillIds: [], textProfileId: "local-planner",
         planner: { plan: async () => ({
           plan: {
@@ -1090,6 +1103,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const entry = resolveRun(runId)
       if (!entry) return false
       const { runtime: run, commit } = entry
+      runSessions.get(commit.runId)?.cancel("user")
       const result = run.coordinator.cancel("user")
       if (!result.cancelled) {
         // 这一轮已经结束了（协调器的账本已经收尾）：它不可能再等确认 —— **顺手收掉**，
