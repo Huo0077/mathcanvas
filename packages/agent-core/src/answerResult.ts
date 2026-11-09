@@ -70,6 +70,11 @@ export interface EvidenceRecord {
   producer: "host_verifier" | "legacy_adapter"
   method: string
   evidence: ClaimEvidence
+  /** 新版宿主记录附有候选、来源、场景与核验器版本；旧记录读取兼容但不得自动升级为可信。 */
+  candidateHash?: string
+  sourceRevision?: string
+  sceneRevision?: string
+  verifierVersion?: string
 }
 
 export interface SolveResult {

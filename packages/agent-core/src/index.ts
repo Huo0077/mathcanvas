@@ -8,6 +8,7 @@ export * from "./actionIds"
  */
 export * from "./answerAcceptance"
 export * from "./answerResult"
+export * from "./solveContext"
 /**
  * **benchmark 的题集与报告契约**（子任务 N4a 从 `scripts/agent-benchmark/` 搬进来）。
  *
