@@ -1,0 +1,1310 @@
+{
+  "date": "2026-11-09",
+  "timezone": "Asia/Shanghai",
+  "revision": "8aa2d34d2146dd2d5f9605947d21ccbfdac18857",
+  "version": "4.4.0",
+  "evaluationTrack": "core-runtime-with-native-provider-not-full-UI",
+  "scope": "Same fixed 50 public 2010–2022 exam-choice development cases; not blind holdout or full product UI end-to-end",
+  "build": {
+    "exitCode": 0,
+    "completedAt": "2026-11-09T00:00:53.049Z",
+    "binaryPath": "D:/draw/draw/apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe",
+    "binarySha256": "00d0f50cd43d7fb3cf10f033361bd4b8988748de2897e6fae923ac19025076a1",
+    "binaryBytes": 17804288,
+    "binaryMtime": "2026-11-09T00:00:39.216Z",
+    "sourceChangesDuringBuild": []
+  },
+  "sourceVerification": {
+    "files": 1138,
+    "changesDuringBuild": [],
+    "changesAfterEvaluation": [],
+    "headUnchanged": true,
+    "binaryUnchanged": true
+  },
+  "modelProfile": "deepseek-v4-flash",
+  "profileRevision": 1,
+  "reportedModels": [
+    "deepseek-flash"
+  ],
+  "scoring": {
+    "primary": "deliverySuccess AND unchanged legacy score.correct / all 50; option match only, not proof validation",
+    "total": 50,
+    "delivered": 40,
+    "explicitChoice": 40,
+    "deliveredAndOptionCorrect": 31,
+    "primaryAccuracy": 0.62,
+    "deliveryRate": 0.8,
+    "rawOptionCorrectIncludingBlocked": 33,
+    "vision": {
+      "total": 30,
+      "delivered": 22,
+      "answered": 22,
+      "optionCorrect": 16,
+      "deliveredAndCorrect": 15
+    },
+    "text": {
+      "total": 20,
+      "delivered": 18,
+      "answered": 18,
+      "optionCorrect": 17,
+      "deliveredAndCorrect": 16
+    },
+    "visionParsed": 28,
+    "knownExtractorFalseNegativeIds": [
+      "mm-034"
+    ]
+  },
+  "runtime": {
+    "phases": {
+      "completed": 40,
+      "failed": 4,
+      "vision_failed": 2,
+      "waiting": 4
+    },
+    "solveResultAnswered": 40,
+    "solveResultAbsent": 10,
+    "solveResultsWithAnyEvidence": 0,
+    "liveDocumentWrites": 0,
+    "meanElapsedMs": 7275.24,
+    "medianElapsedMs": 6230,
+    "p95ElapsedMsNearestRank": 17677
+  },
+  "usage": {
+    "officialRequests": 110,
+    "officialUsageReportedRequests": 110,
+    "officialReportedInputTokens": 405558,
+    "officialReportedOutputTokens": 51661,
+    "interruptedExcludedRecordedRequests": 1,
+    "interruptedExcludedPossibleAdditionalInFlightRequests": 1,
+    "totalRecordedRequests": 111,
+    "maxIncludingUnrecordedInFlight": 112,
+    "officialRequestCap": 155,
+    "totalAnnouncedCap": 160,
+    "costKnown": false,
+    "costUsd": null
+  },
+  "comparison": {
+    "previousRevision": "8d983961640e1486aadc3979fd56fcc3f136359a",
+    "previousPrimaryCorrect": 32,
+    "currentPrimaryCorrect": 31,
+    "percentagePointChange": -2,
+    "improvedIds": [
+      "mm-005",
+      "mm-008",
+      "mm-017",
+      "mm-035",
+      "mm-041",
+      "mm-059",
+      "text-158",
+      "text-178",
+      "text-198",
+      "text-212"
+    ],
+    "regressedIds": [
+      "mm-029",
+      "mm-033",
+      "mm-034",
+      "mm-056",
+      "mm-058",
+      "mm-063",
+      "mm-066",
+      "text-128",
+      "text-176",
+      "text-190",
+      "text-203"
+    ],
+    "note": "Single stochastic run; code changes mainly release/lint/evaluation metadata, not production solver changes. No causal improvement claim."
+  },
+  "freeChecks": {
+    "desktopBuild": {
+      "exitCode": 0
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "lint": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": 30
+    },
+    "scoringAndDataset": {
+      "passed": 28
+    },
+    "reliabilityUnit": {
+      "passed": 85,
+      "files": 9
+    },
+    "uiRegression": {
+      "passed": 9,
+      "note": "Real browser UI, offline planner fixtures where applicable, not live-model UI solving"
+    },
+    "docsConsistency": {
+      "passed": 22,
+      "files": 8
+    }
+  },
+  "cleanup": {
+    "ownedDesktopPid": 42876,
+    "closed": true,
+    "remoteDebugPort9227Closed": true
+  },
+  "limitations": [
+    "Native-provider core runtime bypasses AgentRunner special routing and user confirmation/rendering",
+    "Correct option does not validate derivation or geometry reconstruction",
+    "Legacy scorer intentionally unchanged; mm-034 says 选 B but is not matched",
+    "No extra repeats to cherry-pick outcomes; interrupted batch fully excluded",
+    "All 40 solveResult answered objects have empty evidence"
+  ],
+  "results": [
+    {
+      "id": "mm-000",
+      "year": "2010",
+      "paper": "（新课标）",
+      "questionNumber": "4",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 7836,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-003",
+      "year": "2011",
+      "paper": "(新课标)",
+      "questionNumber": "6",
+      "expected": [
+        "D"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 10556,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-005",
+      "year": "2012",
+      "paper": "(新课标)",
+      "questionNumber": "7",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 7138,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-008",
+      "year": "2013",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "6",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 7911,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-009",
+      "year": "2013",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "8",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 6372,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-011",
+      "year": "2013",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "7",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 13780,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-012",
+      "year": "2014",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "6",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 9515,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-014",
+      "year": "2014",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "12",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 10478,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-015",
+      "year": "2014",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "6",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 7052,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-017",
+      "year": "2015",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "6",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 5813,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-020",
+      "year": "2015",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "11",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 9514,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-022",
+      "year": "2015",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "6",
+      "expected": [
+        "D"
+      ],
+      "terminal": "failed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4,
+      "elapsedMs": 12877,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-024",
+      "year": "2015",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "10",
+      "expected": [
+        "B"
+      ],
+      "terminal": "vision_failed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 1,
+      "elapsedMs": 3775,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-025",
+      "year": "2016",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "6",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 11507,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-029",
+      "year": "2016",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "6",
+      "expected": [
+        "C"
+      ],
+      "terminal": "waiting",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4,
+      "elapsedMs": 9375,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-033",
+      "year": "2016",
+      "paper": "（新课标Ⅲ）",
+      "questionNumber": "9",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 7792,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-034",
+      "year": "2017",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "2",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 5649,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-035",
+      "year": "2017",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "7",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 9504,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-036",
+      "year": "2017",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "4",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 10063,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-041",
+      "year": "2018",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "7",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 7122,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-051",
+      "year": "2019",
+      "paper": "（新课标Ⅲ）",
+      "questionNumber": "8",
+      "expected": [
+        "B"
+      ],
+      "terminal": "failed",
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 4,
+      "elapsedMs": 24407,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-055",
+      "year": "2020",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "7",
+      "expected": [
+        "A"
+      ],
+      "terminal": "waiting",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 6595,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-056",
+      "year": "2020",
+      "paper": "（新课标Ⅲ）",
+      "questionNumber": "8",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 5,
+      "elapsedMs": 20901,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-058",
+      "year": "2021",
+      "paper": "（全国甲卷）",
+      "questionNumber": "6",
+      "expected": [
+        "D"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 6088,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-059",
+      "year": "2021",
+      "paper": "（全国甲卷）",
+      "questionNumber": "8",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 8175,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-060",
+      "year": "2021",
+      "paper": "（全国乙卷）",
+      "questionNumber": "9",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 2,
+      "elapsedMs": 7404,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-063",
+      "year": "2022",
+      "paper": "（全国甲卷）",
+      "questionNumber": "8",
+      "expected": [
+        "B"
+      ],
+      "terminal": "failed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 5,
+      "elapsedMs": 13287,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-066",
+      "year": "2014",
+      "paper": "新课标Ⅰ",
+      "questionNumber": "8",
+      "expected": [
+        "B"
+      ],
+      "terminal": "waiting",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 3,
+      "elapsedMs": 8981,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-068",
+      "year": "2017",
+      "paper": "新课标Ⅰ",
+      "questionNumber": "6",
+      "expected": [
+        "A"
+      ],
+      "terminal": "vision_failed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": true,
+      "requests": 1,
+      "elapsedMs": 2763,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "mm-075",
+      "year": "2022",
+      "paper": "全国甲卷",
+      "questionNumber": "4",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": true,
+      "requests": 5,
+      "elapsedMs": 17677,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-128",
+      "year": "2018",
+      "paper": "（新课标ⅲ）",
+      "questionNumber": "11",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 5706,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-131",
+      "year": "2019",
+      "paper": "（新课标ⅰ）",
+      "questionNumber": "2",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 3,
+      "elapsedMs": 5905,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-137",
+      "year": "2019",
+      "paper": "（新课标ⅱ）",
+      "questionNumber": "2",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 1947,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-139",
+      "year": "2019",
+      "paper": "（新课标ⅱ）",
+      "questionNumber": "4",
+      "expected": [
+        "D"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 3937,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-142",
+      "year": "2019",
+      "paper": "（新课标ⅱ）",
+      "questionNumber": "7",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 4846,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-143",
+      "year": "2019",
+      "paper": "（新课标ⅱ）",
+      "questionNumber": "8",
+      "expected": [
+        "D"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "D",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 1973,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-151",
+      "year": "2019",
+      "paper": "（新课标ⅲ）",
+      "questionNumber": "10",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2758,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-158",
+      "year": "2020",
+      "paper": "（全国卷Ⅲ）",
+      "questionNumber": "5",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2,
+      "elapsedMs": 3161,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-163",
+      "year": "2020",
+      "paper": "（全国卷Ⅲ）",
+      "questionNumber": "11",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 3222,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-167",
+      "year": "2020",
+      "paper": "（新课标Ⅰ）",
+      "questionNumber": "4",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2580,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-176",
+      "year": "2020",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "5",
+      "expected": [
+        "B"
+      ],
+      "terminal": "failed",
+      "score": {
+        "choice": null,
+        "answered": false,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2,
+      "elapsedMs": 5544,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-178",
+      "year": "2020",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "8",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2120,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-180",
+      "year": "2020",
+      "paper": "（新课标Ⅱ）",
+      "questionNumber": "10",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2570,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-186",
+      "year": "2021",
+      "paper": "（全国甲卷）",
+      "questionNumber": "5",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2855,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-190",
+      "year": "2021",
+      "paper": "（全国甲卷）",
+      "questionNumber": "11",
+      "expected": [
+        "A"
+      ],
+      "terminal": "waiting",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": false,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 2,
+      "elapsedMs": 4757,
+      "solveStatus": null,
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-198",
+      "year": "2021",
+      "paper": "（新课标ⅰ）",
+      "questionNumber": "11",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 4521,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-203",
+      "year": "2022",
+      "paper": "（全国乙卷）",
+      "questionNumber": "4",
+      "expected": [
+        "D"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": false,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": false,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 4435,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-204",
+      "year": "2022",
+      "paper": "（全国乙卷）",
+      "questionNumber": "5",
+      "expected": [
+        "B"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "B",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2,
+      "elapsedMs": 4270,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-206",
+      "year": "2022",
+      "paper": "（全国乙卷）",
+      "questionNumber": "9",
+      "expected": [
+        "C"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "C",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 2,
+      "elapsedMs": 4373,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    },
+    {
+      "id": "text-212",
+      "year": "2022",
+      "paper": "（全国甲卷）",
+      "questionNumber": "10",
+      "expected": [
+        "A"
+      ],
+      "terminal": "completed",
+      "score": {
+        "choice": "A",
+        "answered": true,
+        "correct": true,
+        "criterion": "explicit final option exact match; not proof validation"
+      },
+      "deliverySuccess": true,
+      "endToEndCorrect": true,
+      "visionRequired": false,
+      "requests": 1,
+      "elapsedMs": 2375,
+      "solveStatus": "answered",
+      "evidenceCount": 0
+    }
+  ]
+}

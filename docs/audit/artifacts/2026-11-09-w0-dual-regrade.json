@@ -1,0 +1,2267 @@
+{
+  "schemaVersion": "agent-regrade-batch.v1",
+  "createdAt": "2026-11-09T00:47:20.055Z",
+  "note": "Offline regrade only; option match is not proof/drawing correctness; all math review pending",
+  "runs": [
+    {
+      "name": "previous-50",
+      "schemaVersion": "agent-regrade.v1",
+      "sourceRevision": "8d983961640e1486aadc3979fd56fcc3f136359a",
+      "sourceCreatedAt": null,
+      "evaluationTrack": "core-runtime-with-native-provider-not-full-UI",
+      "scorers": {
+        "legacy": "legacy-option-v1",
+        "v2": "structured-final-v2"
+      },
+      "totals": {
+        "cases": 50,
+        "delivered": 41,
+        "legacyDeliveredCorrect": 32,
+        "v2DeliveredCorrect": 34,
+        "v2RawCorrect": 36,
+        "v2Ambiguous": 0,
+        "v2Unscored": 6,
+        "mathReviewed": 0,
+        "mathCorrect": null,
+        "mathFullAccuracy": null,
+        "mathLowerBound": 0
+      },
+      "results": [
+        {
+          "id": "mm-000",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-003",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-005",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-008",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-009",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-011",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-012",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-014",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-015",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-017",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-020",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-022",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-024",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-025",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-029",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-033",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-034",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-035",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-036",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-041",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "A",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-051",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-055",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-056",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-058",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-059",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-060",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-063",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-066",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-068",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-075",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-128",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-131",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-137",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-139",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-142",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-143",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-151",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-158",
+          "visionRequired": false,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-163",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-167",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-176",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-178",
+          "visionRequired": false,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-180",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-186",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-190",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-198",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-203",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-204",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-206",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-212",
+          "visionRequired": false,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        }
+      ],
+      "sourceHashes": {
+        "summarySha256": "32a4c63e8ce23d568b727704fe5fc6a5a1559a637f4d3bfb30a9dc2f4b70ea98",
+        "caseFilesSha256": "aecfb63ee28c933363f89b2d4ca5a3cdae416f8d4ac50906a79abec422efe177"
+      }
+    },
+    {
+      "name": "rebuild-50",
+      "schemaVersion": "agent-regrade.v1",
+      "sourceRevision": "8aa2d34d2146dd2d5f9605947d21ccbfdac18857",
+      "sourceCreatedAt": null,
+      "evaluationTrack": "core-runtime-with-native-provider-not-full-UI",
+      "scorers": {
+        "legacy": "legacy-option-v1",
+        "v2": "structured-final-v2"
+      },
+      "totals": {
+        "cases": 50,
+        "delivered": 40,
+        "legacyDeliveredCorrect": 31,
+        "v2DeliveredCorrect": 32,
+        "v2RawCorrect": 34,
+        "v2Ambiguous": 0,
+        "v2Unscored": 10,
+        "mathReviewed": 0,
+        "mathCorrect": null,
+        "mathFullAccuracy": null,
+        "mathLowerBound": 0
+      },
+      "results": [
+        {
+          "id": "mm-000",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-003",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-005",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-008",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-009",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-011",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-012",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-014",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-015",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-017",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-020",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-022",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-024",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-025",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-029",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-033",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-034",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "conclusion",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-035",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-036",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-041",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-051",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "D",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-055",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-056",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-058",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-059",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-060",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-063",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-066",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "C",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-068",
+          "visionRequired": true,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "mm-075",
+          "visionRequired": true,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-128",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-131",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-137",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-139",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-142",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-143",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "D",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "D",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-151",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-158",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-163",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-167",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-176",
+          "visionRequired": false,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": null,
+            "status": "unscored",
+            "source": null,
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-178",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-180",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-186",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-190",
+          "visionRequired": false,
+          "deliverySuccess": false,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-198",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-203",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": false,
+            "deliveredCorrect": false
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-204",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "B",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "B",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-206",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "C",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "C",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        },
+        {
+          "id": "text-212",
+          "visionRequired": false,
+          "deliverySuccess": true,
+          "legacy": {
+            "choice": "A",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "v2": {
+            "choice": "A",
+            "status": "answered",
+            "source": "final",
+            "correct": true,
+            "deliveredCorrect": true
+          },
+          "mathReview": {
+            "status": "not_reviewed",
+            "reasoning": "not_reviewed",
+            "drawing": "not_reviewed"
+          }
+        }
+      ],
+      "sourceHashes": {
+        "summarySha256": "dec4f97346a8159f2ed071c3a2bcf364ee1383bee046567051a78c276303d815",
+        "caseFilesSha256": "b4c701a6544cd26b3e851d87f8bf04827038185fd3a23d3a83b22a72b3e0e338"
+      }
+    }
+  ]
+}

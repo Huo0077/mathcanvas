@@ -10,6 +10,10 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-09 —— Agent高可靠升级新计划：W0可信测量
+
+在此前两轮真实50题记录之上，新增[设计](superpowers/specs/2026-11-09-agent-high-reliability-design.md)和[W0—W11实施计划](superpowers/plans/2026-11-09-agent-high-reliability-upgrade.md)。新计划W0修正 `scoredAccuracy` 分母、保留旧评分规则并新增终答识别，按逐题原始记录对两轮离线重评，保留旧32/50、31/50，另报新口径34/50、32/50。完整推导与作图未审阅，不能当成Agent变强。详细见[W0核验](audit/2026-11-09-w0-dual-regrade-report.md)。本包未付费；W1—W11未完成。
+
 ## 2026-11-09 —— MathCanvas 4.4.0 发布构建
 
 - 版本提升到 `4.4.0`（`tauri.conf.json` / `Cargo.toml` / `Cargo.lock` 三处一致）；新增 [发布说明](release/v4.4.0.md)，README 与状态页的版本入口同步。

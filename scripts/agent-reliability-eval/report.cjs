@@ -20,6 +20,7 @@ function emptyBucket() {
     correct: 0,
     wrong: 0,
     unscored: 0,
+    scored: 0,
     clarification: 0,
     providerFailed: 0,
     wrongButClaimedVerified: 0,
@@ -30,9 +31,12 @@ function emptyBucket() {
 
 function addTo(bucket, item) {
   bucket.total += 1
+  // Historical wrong/unscored buckets stay unchanged; scored is an independent,
+  // mutually exclusive predicate so a null clarification cannot be subtracted twice.
   if (item.correct === true) bucket.correct += 1
   else if (item.correct === false) bucket.wrong += 1
   else bucket.unscored += 1
+  if ((item.correct === true || item.correct === false) && item.clarification !== true && item.providerFailed !== true) bucket.scored += 1
   if (item.clarification === true) bucket.clarification += 1
   if (item.providerFailed === true) bucket.providerFailed += 1
   if (item.claimedVerified === true && item.correct === false) bucket.wrongButClaimedVerified += 1
@@ -42,7 +46,7 @@ function addTo(bucket, item) {
 
 function finalize(bucket) {
   // 条件正确率的分母 = 有可评分完整终答的题：澄清、provider 失败、未评分不算"答了但答错"。
-  const scored = Math.max(0, bucket.correct + bucket.wrong - bucket.clarification - bucket.providerFailed)
+  const scored = bucket.scored
   const interval = wilson(bucket.correct, bucket.total)
   return {
     ...bucket,
@@ -53,7 +57,25 @@ function finalize(bucket) {
   }
 }
 
+function validateRun(run) {
+  if (!run || !Array.isArray(run.cases)) throw new TypeError('run.cases must be an array')
+  const seen = new Set()
+  for (const item of run.cases) {
+    if (!item || typeof item !== 'object') throw new TypeError('case must be an object')
+    if (item.correct !== undefined && item.correct !== null && typeof item.correct !== 'boolean') throw new TypeError('correct must be true, false or null')
+    if (item.clarification === true && item.providerFailed === true) throw new Error('provider failure and clarification cannot be the same outcome')
+    if (item.correct === true && (item.clarification === true || item.providerFailed === true)) throw new Error('correct answer cannot also be a clarification or provider failure')
+    const id = item.caseId ?? item.id
+    if (id !== undefined) {
+      if (typeof id !== 'string' || id.length === 0) throw new TypeError('case id must be a nonempty string')
+      if (seen.has(id)) throw new Error(`duplicate case id: ${id}`)
+      seen.add(id)
+    }
+  }
+}
+
 function summarize(run) {
+  validateRun(run)
   const totals = emptyBucket()
   const bySplit = {}
   const byFamily = {}

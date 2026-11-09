@@ -164,4 +164,39 @@ function honestyOf(scored,claimedVerified=false){
   const wrong=scored&&scored.correct===false;
   return {wrongButClaimedVerified:Boolean(wrong&&claimedVerified===true)};
 }
-module.exports={extractChoice,score,parseNumber,parseInterval,scoreStructured,honestyOf};
+/** Versioned final-answer extraction. Legacy extractChoice remains byte-for-byte unchanged. */
+function parseFinalChoiceV2(text, structuredValue){
+  const normalized=String(text??'').replace(/\\(?:boxed|text|mathrm|mathbf)\s*\{/g,'').replace(/[\s$*{}\\]/g,'');
+  const result=(choice,source)=>({choice,status:choice?'answered':'unscored',source});
+  const ambiguous={choice:null,status:'ambiguous',source:null};
+  const matches=(pattern)=>[...normalized.matchAll(pattern)].map(match=>match[1]);
+  const finals=[...new Set(matches(/(?:最终答案|最终选项|最终选择)[：:]?([ABCD])(?![A-Za-z])/g))];
+  if(finals.length>1)return ambiguous;
+  let structured=null;
+  if(structuredValue?.kind==='single_choice'){
+    structured=String(structuredValue.optionId??'').trim().toUpperCase();
+    if(!/^[ABCD]$/.test(structured))return ambiguous;
+  }
+  if(structured!==null){
+    if(finals.length===1 && finals[0]!==structured)return ambiguous;
+    return result(structured,'structured');
+  }
+  if(finals.length===1)return result(finals[0],'final');
+  const conclusions=[];
+  for(const match of normalized.matchAll(/(?:正确答案|答案|故选|所以选|应选|选择|选)[：:]?([ABCD])(?![A-Za-z])/g)){
+    const preceding=normalized.slice(Math.max(0,match.index-2),match.index);
+    if(/(?:不|非|未|没|备|不能)$/.test(preceding))continue;
+    conclusions.push(match[1]);
+  }
+  const distinct=[...new Set(conclusions)];
+  if(conclusions.length && /(?:无法确定|不能确定|不确定|仍需补图|待核对|需核对)/.test(normalized))return result(null,null);
+  if(distinct.length>1)return ambiguous;
+  return distinct.length===1?result(distinct[0],'conclusion'):result(null,null);
+}
+function scoreFinalChoiceV2(answer, expected, deliverySuccess=true, structuredValue){
+  const parsed=parseFinalChoiceV2(answer,structuredValue);
+  const correct=parsed.status==='answered'&&Array.isArray(expected)&&expected.length===1&&parsed.choice===expected[0];
+  return {...parsed,answered:parsed.status==='answered',correct,deliverySuccess:deliverySuccess===true,endToEndCorrect:deliverySuccess===true&&correct,
+    criterion:'structured or explicit final option exact match; not proof validation',scorerVersion:'structured-final-v2'};
+}
+module.exports={extractChoice,score,parseNumber,parseInterval,scoreStructured,honestyOf,parseFinalChoiceV2,scoreFinalChoiceV2};
