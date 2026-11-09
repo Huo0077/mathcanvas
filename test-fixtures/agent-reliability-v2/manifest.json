@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "corpusHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scorerVersion": "structured-final-v2",
+  "buildId": "build-2026-11-09",
+  "binarySha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "revision": "rev-1",
+  "profileRevision": "1",
+  "entryTrack": "core-service",
+  "flagSnapshot": { "answerSemanticsV1": true, "goalTrackingV1": true, "mathVerificationV1": true, "imageRereadV1": true, "orthographicTemplatesV1": true },
+  "budgetSnapshot": { "requests": 8, "inputTokens": 96000, "outputTokens": 16000, "wallTimeMs": 180000 },
+  "frozenMaterialHashes": {
+    "dev-001": "1111111111111111111111111111111111111111111111111111111111111111",
+    "holdout-001": "2222222222222222222222222222222222222222222222222222222222222222",
+    "blind-001": "3333333333333333333333333333333333333333333333333333333333333333",
+    "anomaly-001": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "cases": [
+    { "id": "dev-001", "split": "dev", "family": "conic-eccentricity", "materialHash": "1111111111111111111111111111111111111111111111111111111111111111", "question": "已知双曲线 x²/9 − y²/16 = 1，F₂ 为右焦点，求 F₂ 到渐近线的垂足。", "requiredGoalKinds": ["numeric"] },
+    { "id": "holdout-001", "split": "holdout-validation", "family": "orthographic-cuboid", "materialHash": "2222222222222222222222222222222222222222222222222222222222222222", "question": "三视图为 4×3、4×2、2×3 的长方体，求体积。", "requiredGoalKinds": ["numeric"] },
+    { "id": "blind-001", "split": "holdout-blind", "family": "function-equivalence", "materialHash": "3333333333333333333333333333333333333333333333333333333333333333", "question": "判断 f(x)=|sin x cos x| 与 g(x)=sin(2x)/2 是否相等。", "requiredGoalKinds": ["proof"] },
+    { "id": "anomaly-001", "split": "anomaly", "family": "finite-probability", "materialHash": "4444444444444444444444444444444444444444444444444444444444444444", "question": "袋中有 3 个红球、2 个蓝球，不放回取 2 个，求全是红球的概率。", "requiredGoalKinds": ["numeric"] }
+  ]
+}

@@ -4,9 +4,13 @@
 
 > **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
 
-> **这是归档，不是当前状态。** 新方案 W0–W9 已分别推送，W9 之后继续实施 W10；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
+> **这是归档，不是当前状态。** 新方案 W0–W10 已分别推送，仅剩 W11；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-09 —— Agent高可靠升级：W10评测清单闸门与离线阶梯规划
+
+新增 `manifest.cjs` 校验冻结清单（语料哈希、评分器版本、buildId/binary 身份、flag/budget 快照、entryTrack、冻结材料哈希与逐题号），拒绝跨 split 复用材料、同 split 重复材料、题号重复、冻结后改材料、有图无附件、参考解进题面。新增 `production.eval.mjs` 离线阶梯规划：默认 offline_planned（全部 runs=0），真实运行需 `MATHCANVAS_REAL_EXAM_LIVE=1` 且 `MATHCANVAS_EXPECTED_BUILD` 与 buildId 完全一致，否则拒绝。新增 `test-fixtures/agent-reliability-v2/manifest.json` + README（4 条 dev/验证/盲测/异常题号，仅哈希与题干；阶梯 0→10→50×3→100→500）。门禁：W10 定向 12 项，planner 默认 offline_planned，改动文件 lint 0 错误，文档 22/22。**无 500 题语料、未跑付费批次**；dataset/report 未改 split 命名。
 
 ## 2026-11-09 —— Agent高可靠升级：W9逐问交付徽标
 

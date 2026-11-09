@@ -1,5 +1,13 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— Agent高可靠升级 W10：评测清单闸门与离线阶梯规划
+
+- **W0—W10 已分别提交推送，W11 待完成**。本包只做**离线**评测基础设施：不发任何真实请求、不产生准确率。
+- **新增清单闸门**（`scripts/agent-reliability-eval/manifest.cjs`）：校验 `corpusHash` / `scorerVersion` / `buildId` / `binarySha256` / `revision` / `profileRevision` / `flagSnapshot` / `budgetSnapshot` / `entryTrack`，并拒绝六类捷径 —— 同一材料跨 dev/holdout（`cross_split`）、同 split 重复材料、题号重复、冻结后材料被改或冻结题号缺失（`material_changed_after_freeze`）、需配图却无附件（`image_without_attachment`）、参考解泄漏到题面（`reference_in_prompt`）。
+- **新增离线阶梯规划**（`production.eval.mjs`）：默认 `offline_planned`（所有阶梯 `runs = 0`）；真实运行必须 `MATHCANVAS_REAL_EXAM_LIVE=1` **且** `MATHCANVAS_EXPECTED_BUILD` 与清单 `buildId` 完全一致，否则拒绝（`build_identity_missing` / `build_identity_mismatch`）。
+- **新增冻结清单与说明**（`test-fixtures/agent-reliability-v2/manifest.json`、`README.md`）：4 条 dev/验证/盲测/异常题号，只含哈希与题干，不含参考答案；阶梯为 离线 → 10 → 50×3 → 100 → 500，重复两轮仍只有 500 道不同题。
+- 门禁：W10 定向 **12 项**（`node --test`）；`production.eval.mjs` 默认输出 `offline_planned`；改动文件 lint 0 错误；文档门禁 22/22。**没有 500 题语料、没有跑过任何付费批次**：本包证明的是闸门存在，不证明准确率；`dataset.cjs` / `report.cjs` 未改成新 split 命名（沿用既有校验器）。
+
 ## 2026-11-09 —— Agent高可靠升级 W9：逐问交付徽标只认宿主证据
 
 - **W0—W9 已分别提交推送，W10—W11 进行中**。本包把"交付状态"的依据收窄到 `SolveResult` 的证据，不看正文关键词。
