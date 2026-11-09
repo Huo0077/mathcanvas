@@ -132,3 +132,21 @@ export function isEnabledForSession(sessionId: string, percentage: number): bool
   const clamped = Math.min(100, Math.max(0, percentage))
   return rolloutBucket(sessionId) < clamped
 }
+
+/**
+ * **W11：把分桶接到真实消费点**。
+ *
+ * 同一个会话在一次发布里只落一个桶；开关按**依赖顺序**派生 —— 题意层与答案语义先开，
+ * 数学核验才可能开，三视图族再依赖数学核验。于是任何比例下得到的组合都是合法的，
+ * 不需要在错误路径上再兜一次底。默认比例 0 ⇒ 与"全关"逐字相同。
+ */
+export function createAgentReliabilityFlagsForSession(sessionId: string, percentage: number): AgentReliabilityFlags {
+  const enabled = isEnabledForSession(sessionId, percentage)
+  const answerSemanticsV1 = enabled
+  const goalTrackingV1 = enabled && answerSemanticsV1
+  const mathVerificationV1 = enabled && goalTrackingV1
+  const orthographicTemplatesV1 = enabled && mathVerificationV1
+  // 重读不依赖语义层，但仍受同一个桶控制（同一会话不会"一半开一半关"）。
+  const imageRereadV1 = enabled
+  return createAgentReliabilityFlags({ answerSemanticsV1, goalTrackingV1, mathVerificationV1, orthographicTemplatesV1, imageRereadV1 })
+}

@@ -1,5 +1,11 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— 补线（三）：W11 灰度分桶接入真实开关
+
+- **分桶不再只是工具函数**：新增 `persistence/rolloutPreferences.ts`（默认 **0%**、只存整数、坏数据退化到 0%），`reliabilityFlags.createAgentReliabilityFlagsForSession(sessionId, percentage)` 按**依赖顺序**派生开关（答案语义 → 题意跟踪 → 数学核验 → 三视图；重读同桶），所以任何比例下得到的组合都通过 `validateReliabilityConfig`。`agentRunner` 用**钉住的会话 id** 取这一轮的开关。
+- **默认行为逐字不变**：没调过比例就是 0%，与该包之前"全关"完全一致；`agentRunner` 既有 76 项用例在 0% 下全绿。
+- 门禁：rollout/偏好/runner 定向 **4 文件 / 96 项**；全项目 typecheck exit 0；改动文件 lint 0 错误；全量单测与文档门禁见下。**没有真实流量**：0% 默认、也没有做 10%→50%→100% 的在线观察，因此不宣称已放量。
+
 ## 2026-11-09 —— 补线（二）：W8 独立候选授权只存引用
 
 - **设置页只保存一份配置的引用**：新增 `persistence/reliabilityPreferences.ts`，严格净化读、只写 `independentProfileId`（不复制密钥、不新增 provider）；`ProviderSettings` 增加「独立候选（可选）」下拉，只列**非使用中**的配置，保存成功/失败都如实提示；被授权的那份配置删除后，下次刷新自动撤销授权。

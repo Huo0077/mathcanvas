@@ -8,6 +8,10 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-09 —— 补线（三）：W11 分桶接入真实开关
+
+新增 `persistence/rolloutPreferences.ts`（默认 0%、只存整数、坏数据退化 0%）与 `createAgentReliabilityFlagsForSession`：按依赖顺序派生开关（答案语义 → 题意 → 数学核验 → 三视图；重读同桶），任何比例下组合都通过 `validateReliabilityConfig`；`agentRunner` 用钉住的会话 id 取开关，0% 与"全关"逐字相同。门禁：rollout/偏好/runner 定向 4 文件 / 96 项；typecheck exit 0；改动文件 lint 0 错误。没有真实流量、未做 10/50/100% 观察。
+
 ## 2026-11-09 —— 补线（二）：W8 独立候选授权只存引用
 
 新增 `persistence/reliabilityPreferences.ts`：读写严格净化，只保存 `independentProfileId`（不复制密钥、不新增 provider），坏数据退化为"未授权"。`ProviderSettings` 增加「独立候选（可选）」下拉（只列非使用中配置，删除后自动撤销授权），并有"只存 id、不存 key/secret"的组件用例。`agentRunner` 把授权状态传给 `startProblemSolve`，W8 策略因此使用真实授权（有 → `independent_candidate_required`；无 → `refuted_no_independent_profile`）。**仍不执行第二个模型调用**（需另行授权的付费批次与规划器替换）。门禁：设置/偏好/agent/services 94 文件 / 1046 项 + 1 todo；typecheck exit 0；改动文件 lint 0 错误。

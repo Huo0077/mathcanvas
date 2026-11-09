@@ -14,7 +14,8 @@ import { deriveAcceptance } from "./acceptance"
 import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
-import { agentReliabilityFlags, type AgentReliabilityFlags } from "./reliabilityFlags"
+import { createAgentReliabilityFlagsForSession, type AgentReliabilityFlags } from "./reliabilityFlags"
+import { readRolloutPercentage } from "../persistence/rolloutPreferences"
 import { createSolveContext } from "@draw/agent-core"
 import { claimSolveSession, createDefaultSolveSession, type SolveSession } from "../services/solveSession"
 import { readReliabilityPreferences } from "../persistence/reliabilityPreferences"
@@ -555,7 +556,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         useAgentStore.getState().recordDiagnostic(`应用构建 ${import.meta.env.VITE_MATHCANVAS_BUILD}`, eventRunId)
       }
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
-      const reliability = dependencies.reliabilityFlags ?? agentReliabilityFlags()
+      const reliability = dependencies.reliabilityFlags
+        ?? createAgentReliabilityFlagsForSession(pinned?.conversationId ?? runId, readRolloutPercentage())
       const requiresGoalTracking = reliability.goalTrackingV1 && reliability.answerSemanticsV1
       const hashText = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
       const preparedSolveContext = requiresGoalTracking ? await createSolveContext({

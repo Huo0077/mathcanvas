@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { createAgentReliabilityFlags, isEnabledForSession, RELIABILITY_FLAGS_FOR_TESTS, rolloutBucket, validateReliabilityConfig } from "./reliabilityFlags"
+import {
+  createAgentReliabilityFlags,
+  createAgentReliabilityFlagsForSession,
+  isEnabledForSession,
+  RELIABILITY_FLAGS_FOR_TESTS,
+  rolloutBucket,
+  validateReliabilityConfig
+} from "./reliabilityFlags"
 
 /**
  * **W11：开关依赖、灰度分桶与回滚（2026-11-09）**。
@@ -69,5 +76,42 @@ describe("W11 灰度分桶稳定", () => {
       expect(isEnabledForSession(id, 0)).toBe(false)
       expect(isEnabledForSession(id, 100)).toBe(true)
     }
+  })
+})
+
+describe("W11 分桶接到真实消费点", () => {
+  const ids = ["session-a", "session-b", "会话-2", "0", "zzz"]
+
+  it("keeps every combination legal at every percentage", () => {
+    for (const id of ids) {
+      for (const percentage of [0, 1, 10, 50, 99, 100]) {
+        expect(validateReliabilityConfig(createAgentReliabilityFlagsForSession(id, percentage)).ok).toBe(true)
+      }
+    }
+  })
+
+  it("derives flags in dependency order and stays all-off at 0%", () => {
+    for (const id of ids) {
+      const flags = createAgentReliabilityFlagsForSession(id, 0)
+      expect(Object.values(flags).every((value) => value === false)).toBe(true)
+    }
+    const all = createAgentReliabilityFlagsForSession("session-a", 100)
+    expect(all).toEqual(RELIABILITY_FLAGS_FOR_TESTS)
+  })
+
+  it("never enables math verification without goal tracking, even if asked to roll out", () => {
+    for (const id of ids) {
+      for (const percentage of [10, 50, 99, 100]) {
+        const flags = createAgentReliabilityFlagsForSession(id, percentage)
+        if (flags.mathVerificationV1) expect(flags.goalTrackingV1 && flags.answerSemanticsV1).toBe(true)
+        if (flags.orthographicTemplatesV1) expect(flags.mathVerificationV1).toBe(true)
+      }
+    }
+  })
+
+  it("keeps the same decision for the same session across calls", () => {
+    const first = createAgentReliabilityFlagsForSession("session-a", 40)
+    const second = createAgentReliabilityFlagsForSession("session-a", 40)
+    expect(second).toEqual(first)
   })
 })
