@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— Agent高可靠升级 W8：失败后的风险路由与独立候选判据
+
+- **W0—W8 已分别提交推送，W9—W11 进行中**。本包只加"失败之后走哪条路"的判据与**原因**，不启用新模型、不新增 provider。
+- **新增策略表**（`apps/web/src/agent/solveStrategyPolicy.ts`）：`chooseSolveStrategy({failure, mode, callsRemaining, hasAuthorizedIndependentProfile})` → `primary | vision_reread | independent | stop`。auth **永不**重问；`image_gap` **先读图**（不让纯文字模型补猜）；`refuted`/`disagreement` 只有**用户授权过独立配置**才允许 `independent`，默认档不会悄悄换模型；剩余调用为 0 时一律 `stop`；高精度档只影响请求/token 上限，**不改变**授权前提。独立候选上限 2 个。
+- **生产接线**：`startProblemSolve` 把授权与档位显式传给运行时，协调器在**证据被否证**时调用同一策略并把结论写进交付：有授权 → `independent_candidate_required`；没有 → `refuted_no_independent_profile` 并附一句可执行说明。协调器**不换模型**：换模型必须由宿主显式注入第二个规划器（本包未注入）。
+- 门禁：W8 定向 **3 文件 / 79 项**（含协调器与生产服务回归）；全项目 typecheck exit 0；改动文件 lint 0 错误；文档门禁 22/22。**未调用真模型**；未实现第二个独立模型的真实调用（需要用户授权独立配置，且本会话不启用新 provider），也未改 `ProviderSettings` 的"只存配置引用"部分 —— 这两项是下一步，不在本包宣称完成。
+
 ## 2026-11-09 —— Agent高可靠升级 W7：三视图候选消歧与轮廓反投影
 
 - **W0—W7 已分别提交推送，W8—W11 进行中**。本包只扩三视图族的**判据**，不新增曲面/遮挡重建能力。

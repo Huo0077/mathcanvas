@@ -70,6 +70,9 @@ it("the production service refutes a wrong quadratic value before delivery", asy
   expect(runtime.solveResult()?.reasonCodes).toContain("refuted_answer")
   expect(runtime.solveResult()?.evidence[0]?.candidateHash).toMatch(/^[0-9a-f]{64}$/)
   expect(writeDocument).not.toHaveBeenCalled()
+  // W8：没有授权的独立配置时，被否证要说清"为什么停"与下一步，而不是只留一句 failed。
+  expect(runtime.solveResult()?.reasonCodes).toContain("refuted_no_independent_profile")
+  expect(runtime.solveResult()?.clarificationQuestions.length).toBeGreaterThan(0)
 })
 
 
@@ -102,6 +105,27 @@ it("a single shared production router preserves deterministic, model and offline
   expect(noProvider.textProfileId).toBe("local-planner")
 })
 
+
+it("W8: an authorized independent profile turns a refutation into an explicit next step", async () => {
+  const document = createEmptyDocument("conics")
+  const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
+  const prompt = "已知二次函数 f(t)=-3t²-2t+5，t∈[-1,1]，求最大值。"
+  const context = await createSolveContext({ runId: "r-ind", conversationId: "c", prompt, attachments: [], corrections: [], sceneRevision: "doc-v0" }, hash)
+  const goalId = context.understanding.goals[0]!.goalId
+  const plan: PlanEnvelope = { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "max", factIds: [], answer: "最大值=2", toolResultRefs: [],
+    goalAnswers: [{ goalId, kind: "numeric", displayText: "最大值=2", value: { kind: "numeric", expression: "2" }, evidenceRefs: [] }] }
+  const runtime = startProblemSolve({ context, session: createDefaultSolveSession("s8"), flags: RELIABILITY_FLAGS_FOR_TESTS, hashText: hash,
+    independentProfileAuthorized: true, runtime: {
+      planner: { plan: async () => ({ plan, requestId: "req", attemptId: "att" }) }, readDocument: () => document, writeDocument: vi.fn(),
+      readSceneDocuments: () => [{ handle: { projectId: "p", documentId: document.metadata.id, workspace: "conics", epoch: "e", generation: 0, contentHash: "doc-v0" }, document }],
+      exportPreflight: { preflight: () => { throw new Error("no export") } }, projectId: "p", runId: "r-ind"
+    } })
+  for await (const _event of runtime.coordinator.start({ run: { runId: "r-ind", conversationId: "c", promptMessageId: "m",
+    target: { projectId: "p", documentId: document.metadata.id, workspace: "conics", epoch: "e", generation: 0, contentHash: "doc-v0" },
+    sources: [], textProfileId: "local", capabilityRevision: "r", policyRevision: "p" }, userMessage: prompt })) { /* drain */ }
+  expect(runtime.solveResult()?.reasonCodes).toContain("independent_candidate_required")
+  expect(runtime.solveResult()?.reasonCodes).not.toContain("refuted_no_independent_profile")
+})
 
 it("scenario harness exercises the same production router, runtime and answer gate", async () => {
   const { runProductionScenario } = await import("./fixtures/productionSolveScenario")

@@ -76,6 +76,8 @@ export interface AgentRuntimeDependencies {
   trustedMathFacts?: readonly MathFact[]
   /** W4：宿主审计出的图证据缺口；有必答缺口时这一题不会被当成已回答。 */
   imageGaps?: readonly { code: string; message: string; required: boolean }[]
+  /** W8：被否证后走哪条路（独立候选需要用户授权；协调器不会自己换模型）。 */
+  refutationStrategy?: (input: { callsRemaining: number; goalId?: string }) => "independent" | "stop"
   onSolveAudit?: (event: SolveAuditEvent) => void
   /** One shared run budget, including provider retries and coordinator repairs. */
   budget?: Budget
@@ -439,6 +441,8 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     ...(dependencies.solveContext === undefined ? {} : { solveContext: dependencies.solveContext, hashText: dependencies.hashText, trustedMathFacts: dependencies.trustedMathFacts, onSolveAudit: dependencies.onSolveAudit }),
     // W4：缺口只由宿主审计产生；模型输出不构成它。
     ...(dependencies.imageGaps === undefined ? {} : { imageGaps: dependencies.imageGaps }),
+    // W8：否证后的路由结论由应用层策略给出，协调器只记录。
+    ...(dependencies.refutationStrategy === undefined ? {} : { refutationStrategy: dependencies.refutationStrategy }),
     observer,
     committer: dependencies.onStageOutcome === undefined ? committer : {
       async stage(request) {

@@ -5,6 +5,7 @@ import type { SolveSession } from "../services/solveSession"
 import { agentNextPhaseFlags } from "./featureFlags"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
+import { chooseSolveStrategy } from "./solveStrategyPolicy"
 
 /** One production runtime assembler shared by UI and the offline/real evaluation adapter. */
 export interface ProblemSolveInput {
@@ -15,6 +16,10 @@ export interface ProblemSolveInput {
   runtime: AgentRuntimeDependencies
   /** W4：图像证据流水线审计出的缺口（宿主产生，模型不可伪造）。 */
   imageGaps?: readonly { code: string; message: string; required: boolean }[]
+  /** W8：用户是否授权过一个独立模型配置来做交叉验证（默认没有）。 */
+  independentProfileAuthorized?: boolean
+  /** W8：当前档位（只影响请求上限与路由说明，不改变授权前提）。 */
+  solveMode?: "default" | "high_accuracy"
 }
 
 export interface ProblemPlannerSelection {
@@ -84,6 +89,15 @@ export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {
       ? { solveContext: input.context, hashText: input.hashText,
           ...(input.flags.mathVerificationV1 ? { trustedMathFacts: deriveTrustedMathFacts(input.context) } : {}),
           // 重读开关关闭时缺口照样要说出来：缺口不是"新能力"，而是"这一题没读到"。
-          ...(input.imageGaps === undefined ? {} : { imageGaps: input.imageGaps }) }
+          ...(input.imageGaps === undefined ? {} : { imageGaps: input.imageGaps }),
+          /**
+           * **W8：把否证后的路由决定交给协调器**。授权与档位由调用方显式传入；
+           * 没有授权时策略返回 `stop`，协调器会把原因写成 `refuted_no_independent_profile`，
+           * 而**不会**偷偷换一个模型（换模型必须显式注入第二个规划器）。
+           */
+          refutationStrategy: ({ callsRemaining }) => chooseSolveStrategy({
+            failure: "refuted", mode: input.solveMode ?? "default", callsRemaining,
+            hasAuthorizedIndependentProfile: input.independentProfileAuthorized === true
+          }) === "independent" ? "independent" : "stop" }
       : {}) })
 }

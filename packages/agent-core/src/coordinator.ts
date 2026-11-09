@@ -130,6 +130,12 @@ export interface CoordinatorDependencies {
    * 只有宿主（图像证据流水线）能产生它，模型输出不构成缺口。
    */
   imageGaps?: readonly { code: string; message: string; required: boolean }[]
+  /**
+   * **被否证后走哪条路**（W8）：`independent` 需要用户授权的第二模型配置；
+   * `stop` 表示当前没有授权、也不该让文字模型补猜。协调器只记下这个结论与原因，
+   * **不会**自己去换模型（换模型必须由宿主显式注入）。
+   */
+  refutationStrategy?: (input: { callsRemaining: number; goalId?: string }) => "independent" | "stop"
   onSolveAudit?: (event: SolveAuditEvent) => void
   /**
    * **编译之前**的一次准备机会（例如把工作区切到这条计划需要的那个）。
@@ -299,7 +305,8 @@ class BudgetStop extends Error {
 async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: SolveContext, hash: HashText | undefined,
   budget: Budget, signal: AbortSignal, facts: readonly MathFact[] | undefined, draftId?: string,
   audit?: (event: Omit<SolveAuditEvent, "runId" | "problemRevision">) => void,
-  imageGaps?: readonly { code: string; message: string; required: boolean }[]): Promise<SolveResult> {
+  imageGaps?: readonly { code: string; message: string; required: boolean }[],
+  refutationStrategy?: (input: { callsRemaining: number; goalId?: string }) => "independent" | "stop"): Promise<SolveResult> {
   if (!hash) throw new Error("trusted answer context requires a host hashing function")
   const candidates = candidate.kind === "clarification" ? []
     : candidate.goalAnswers !== undefined ? candidate.goalAnswers : adaptLegacyAnswer(context, candidate.answer ?? "")
@@ -329,6 +336,22 @@ async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: S
     resolution: candidate.kind === "clarification" || requiredGaps.length > 0 ? "clarification" : "answer",
     questions: candidate.kind === "clarification" ? candidate.questions : requiredGaps.slice(0, 4).map((gap) => gap.message) })
   if (requiredGaps.length > 0) accepted.reasonCodes.push("image_evidence_gap")
+  /**
+   * **W8：被否证之后不再"沉默地失败"**。宿主给了路由策略时，把结论写进交付：
+   * 有授权的独立配置 → `independent_candidate_required`（下一步是交叉验证）；
+   * 没有 → `refuted_no_independent_profile` 并附一句可执行的说明。
+   * 这里**不换模型**：换模型必须由宿主显式注入第二个规划器。
+   */
+  const refuted = accepted.evidence.filter((record) => record.evidence.status === "failed")
+  if (refuted.length > 0 && refutationStrategy !== undefined) {
+    const decision = refutationStrategy({ callsRemaining: budget.remaining("generation"), goalId: refuted[0]?.goalId })
+    if (decision === "independent") {
+      accepted.reasonCodes.push("independent_candidate_required")
+    } else {
+      accepted.reasonCodes.push("refuted_no_independent_profile")
+      accepted.clarificationQuestions.push("这次答案被宿主否证，且当前没有已授权的第二模型配置；请核对题设条件后重试，或在设置里授权独立候选。")
+    }
+  }
   audit?.({ kind: "accept", status: accepted.status })
   return accepted
 }
@@ -816,7 +839,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 界面必须显示"未核验"。
            */
           const delivered = dependencies.solveContext
-            ? await solveResultFromTrustedContext(candidate, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, undefined, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps)
+            ? await solveResultFromTrustedContext(candidate, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, undefined, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps, dependencies.refutationStrategy)
             : solveResultFromEnvelope(candidate, request.run.target.contentHash)
           solveResult = delivered
           dependencies.onSolveResult?.(delivered)
@@ -984,7 +1007,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       if (dependencies.solveContext || (stagedPlan.answer !== undefined && stagedPlan.answer.trim().length > 0)) {
         const delivered = dependencies.solveContext
-          ? await solveResultFromTrustedContext(stagedPlan, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, staged.draftId, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps)
+          ? await solveResultFromTrustedContext(stagedPlan, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, staged.draftId, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps, dependencies.refutationStrategy)
           : solveResultFromEnvelope(stagedPlan, request.run.target.contentHash)
         solveResult = delivered
         dependencies.onSolveResult?.(delivered)
