@@ -43,6 +43,7 @@ import {
 import { ProviderForm, type ProviderDraft, type ProviderFormResult } from "./ProviderForm"
 import { FEATURE_LABELS, HEALTH_LABELS, providerProbeIssue, reasonFor } from "./providerSettingsFields"
 import { BoltIcon, CheckIcon, PencilIcon, PlusIcon, TrashIcon } from "./icons"
+import { readReliabilityPreferences, setIndependentProfileId } from "../../persistence/reliabilityPreferences"
 
 export interface ProviderSettingsProps {
   /** 测试注入用；缺省走真实 IPC。 */
@@ -129,6 +130,8 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
   const [editing, setEditing] = useState<ProviderDraft | null | undefined>(undefined)
   const [probing, setProbing] = useState("")
   const [status, setStatus] = useState<{ kind: "idle" | "ok" | "error"; message: string }>({ kind: "idle", message: "" })
+  /** W8：被授权做交叉验证的配置**引用**（只存 id；密钥仍在原生凭据库）。 */
+  const [independentId, setIndependentId] = useState(() => readReliabilityPreferences().independentProfileId ?? "")
 
   const refresh = useCallback(async () => {
     // **没有桌面外壳时不去问 IPC。** 在浏览器里跑是正常状态（不是错误），
@@ -151,6 +154,12 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
       setHealth(nextHealth)
       setKeyPresent(nextKey)
       setActiveId((await api.active()) ?? "")
+      // W8：被授权的独立候选如果已经被删掉，就**撤销授权**（不静默指向不存在的配置）。
+      const authorized = readReliabilityPreferences().independentProfileId
+      if (authorized !== null && !loaded.some((profile) => profile.id === authorized)) {
+        setIndependentProfileId(null)
+        setIndependentId("")
+      }
     } catch (error) {
       setStatus({ kind: "error", message: error instanceof Error ? error.message : String(error) })
     }
@@ -399,6 +408,31 @@ export function ProviderSettings({ client, unavailableReason }: ProviderSettings
         <button type="button" className="provider-button-add" onClick={() => setEditing(null)}><PlusIcon />添加第一个</button>
       </li>}
     </ul>
+
+    {/* W8：独立候选**只记引用**。它不会复制密钥、也不会自己新增配置；
+        只有用户在这里明确选过一份，否证后的交叉验证才可能被考虑。 */}
+    {count > 0 && <section className="provider-independent" aria-label="独立候选">
+      <label htmlFor="independent-profile">独立候选（可选）</label>
+      <select
+        id="independent-profile"
+        aria-label="独立候选配置"
+        value={independentId}
+        onChange={(event) => {
+          const value = event.target.value
+          setIndependentId(value)
+          const saved = setIndependentProfileId(value === "" ? null : value)
+          setStatus(saved
+            ? { kind: "ok", message: value === "" ? "已取消独立候选授权。" : "已授权这一份配置作为独立候选（只保存引用）。" }
+            : { kind: "error", message: "无法保存独立候选配置；请在桌面版重试。" })
+        }}
+      >
+        <option value="">未启用</option>
+        {profiles.filter((profile) => profile.id !== activeId).map((profile) =>
+          <option key={profile.id} value={profile.id}>{profile.name} · {profile.modelId}</option>
+        )}
+      </select>
+      <p className="provider-row-note">只保存这一份配置的引用（id），不复制密钥；只有被否证的答案才会用到它。</p>
+    </section>}
 
     {/* 状态行：`aria-live` 让读屏也能听到"存住了 / 没通过"。 */}
     <p className="provider-status" data-kind={status.kind} role="status" aria-live="polite">{status.message}</p>

@@ -8,6 +8,10 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-09 —— 补线（二）：W8 独立候选授权只存引用
+
+新增 `persistence/reliabilityPreferences.ts`：读写严格净化，只保存 `independentProfileId`（不复制密钥、不新增 provider），坏数据退化为"未授权"。`ProviderSettings` 增加「独立候选（可选）」下拉（只列非使用中配置，删除后自动撤销授权），并有"只存 id、不存 key/secret"的组件用例。`agentRunner` 把授权状态传给 `startProblemSolve`，W8 策略因此使用真实授权（有 → `independent_candidate_required`；无 → `refuted_no_independent_profile`）。**仍不执行第二个模型调用**（需另行授权的付费批次与规划器替换）。门禁：设置/偏好/agent/services 94 文件 / 1046 项 + 1 todo；typecheck exit 0；改动文件 lint 0 错误。
+
 ## 2026-11-09 —— 补线：W9 e2e、W7 结构化视图、W10 分轨报告
 
 W9：新增 `e2e/agent-verified-delivery.spec.ts`（3 项）并给既有两条交付 spec 加徽标断言；用 Vite 现构建当前 Web 后 `--workers=1` 实跑 7/7。W7：`parseOrthographicViews` 只认视图身份 + 宽×高 + 形状；新增 `orthographic-volume` 事实复用 `solveOrthographicProblem`（24 支持、30 否证、视图冲突 `unknown`）；`orthographicViewReadings` 把题图读数整理成「三视图读数：…」进入上下文。W10：`dataset.cjs` 接受生产分卷与 `id` 题号并新增 `crossSplitMaterialConflicts`；`report.cjs` 新增 `byEntryTrack` 与 `assertUnitIntervals`（越界即抛）。门禁：W7/W10 定向 46 + 28 项、e2e 7/7、typecheck exit 0、改动文件 lint 0 错误。仍未调用真模型、未跑付费评测、未打 tag；W8 独立模型真实调用与设置页配置引用仍未做。

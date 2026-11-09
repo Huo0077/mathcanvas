@@ -17,6 +17,7 @@ import { splitImagePrompt } from "../services/problemImagePrompt"
 import { agentReliabilityFlags, type AgentReliabilityFlags } from "./reliabilityFlags"
 import { createSolveContext } from "@draw/agent-core"
 import { claimSolveSession, createDefaultSolveSession, type SolveSession } from "../services/solveSession"
+import { readReliabilityPreferences } from "../persistence/reliabilityPreferences"
 
 /**
  * **Agent 运行器**（Task 2.5 Step 2 的另一半）。
@@ -608,6 +609,12 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         prompt, attachments: sourceAttachments ?? [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
         session: solveSession, flags: reliability, hashText,
         ...(imageGaps === undefined ? {} : { imageGaps: imageGaps.filter((gap) => gap.required) }),
+        /**
+         * **W8：独立候选的授权来自设置里的一条引用**（只存 profile id）。
+         * 没有这条引用时策略会返回 `stop`，协调器不会去换模型；
+         * 有引用也只表示"允许考虑交叉验证"，不代表本包会真的发起第二次模型调用。
+         */
+        independentProfileAuthorized: readReliabilityPreferences().independentProfileId !== null,
         runtime: {
         onSolveAudit: (event) => {
           // Only bounded, structural metadata: never model text, base64, or credentials.

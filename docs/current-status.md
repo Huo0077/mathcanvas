@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— 补线（二）：W8 独立候选授权只存引用
+
+- **设置页只保存一份配置的引用**：新增 `persistence/reliabilityPreferences.ts`，严格净化读、只写 `independentProfileId`（不复制密钥、不新增 provider）；`ProviderSettings` 增加「独立候选（可选）」下拉，只列**非使用中**的配置，保存成功/失败都如实提示；被授权的那份配置删除后，下次刷新自动撤销授权。
+- **生产接线**：`agentRunner` 把"是否已授权独立候选"传给 `startProblemSolve`，W8 的策略因此真正使用用户的授权：有授权时被否证的交付带 `independent_candidate_required`，没有时带 `refuted_no_independent_profile` 与可执行说明。
+- **仍然没有做**：真实的第二个模型调用。它需要一次显式授权的付费批次与规划器替换设计，本会话既不启用新模型也不跑付费评测，所以**不宣称交叉验证已执行**。
+- 门禁：设置/偏好/agent/services 定向 **94 文件 / 1046 项 + 1 todo**；`ProviderSettings` 33 项（含新增的"只存 id、不存密钥"用例）；全项目 typecheck exit 0；改动文件 lint 0 错误；交付 e2e 复跑结果见下。
+
 ## 2026-11-09 —— 补线：W9 浏览器 e2e、W7 结构化视图接线、W10 分轨报告
 
 - **W9 e2e 已补上**：新增 `e2e/agent-verified-delivery.spec.ts`（3 项），并在既有 `agent-answer-delivery` / `agent-fold-delivery` 里加上徽标断言。用当前源码重建 Web 后实跑 **7/7 通过**（`--workers=1`，global-setup 用 Vite 现构建，不是旧产物）。判据：无宿主证据时徽标是 `unverified`、逐问标未核验、交付两段长度也不许出现"已核验（逐问）"。
@@ -31,7 +38,7 @@
 - **新增 `agentDeliveryBadge`**：`deliverySummary(result)` 逐问统计证据并给出四档徽标 —— `verified`（必答目标**全部** `verified_instance` 且 answered）/ `partial`（有证据但没盖满）/ `unverified`（无证据、`sampled` 采样、旧消息）/ `failed`（有目标被否证或交付失败）。`deliveryBadge({status, requiredGoals, verifiedGoals, refutedGoals})` 是纯函数，两问只核验一问**不可能**得到 `verified`。
 - **界面接线**：`AnswerResult` 增加 `data-delivery-badge` 与逐问 `data-goal-verification`，并显示"已核验（逐问）/部分核验/未核验/核验未通过"；`sampled` 仍显示未核验，缺答目标继续单独列出。
 - 门禁：W9 定向 **2 文件 / 12 项**；Web + `agent-core` + geometry-kernel 全量 **489 文件 / 5225 项 + 1 todo**；全项目 typecheck exit 0；改动文件 lint 0 错误；文档门禁 22/22。
-- **未完成边界（已部分补齐，见上）**：Playwright 的 `agent-verified-delivery` 等 e2e 已在"补线"里跑通（7/7）；W2 既有的逐问标签与结构化终答未改。**未调用真模型**，不产生真实识别/准确率结论。
+- **未完成边界（已部分补齐，见上）**：Playwright 的 `agent-verified-delivery` 等 e2e 已在"补线"里跑通（7/7）；W2 既有的逐问标签与结构化终答未改。**未调用真模型**，不产生真实识别/准确率结论。W8 的独立模型真实调用与设置页配置引用已在"补线（二）"里补到"只存引用"这一步（仍不执行第二个模型）。
 
 ## 2026-11-09 —— Agent高可靠升级 W8：失败后的风险路由与独立候选判据
 

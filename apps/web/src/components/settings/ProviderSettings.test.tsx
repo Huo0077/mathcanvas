@@ -131,6 +131,20 @@ async function fillNewProfile(name = "DeepSeek", model = "deepseek-chat", secret
 afterEach(() => cleanup())
 
 describe("adding a model service", () => {
+  it("stores only a profile id when the user authorizes an independent candidate", async () => {
+    // W8：交叉验证的授权是一条**引用**，不是一份配置副本 —— 设置里不许出现密钥。
+    const { client } = makeClient({ profiles: [profile({ id: "a", name: "甲" }), profile({ id: "b", name: "乙" })], active: "a" })
+    render(<ProviderSettings client={client} />)
+    const select = await screen.findByLabelText("独立候选配置")
+    fireEvent.change(select, { target: { value: "b" } })
+    const raw = localStorage.getItem("mathcanvas:reliability-preferences")!
+    expect(JSON.parse(raw)).toEqual({ independentProfileId: "b" })
+    expect(raw.toLowerCase()).not.toContain("key")
+    expect(raw.toLowerCase()).not.toContain("secret")
+    // 正在使用的那一份不能被选成自己的独立候选。
+    expect(screen.queryByRole("option", { name: /甲/ })).toBeNull()
+  })
+
   it("fills the official DeepSeek Flash model ID and endpoint from its preset", async () => {
     const { client } = makeClient()
     render(<ProviderSettings client={client} />)
