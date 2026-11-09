@@ -6,7 +6,8 @@ import type { SolveResult } from "./answerResult"
 import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
-import { parsePlanEnvelope, repairRequestFor } from "./schemas"
+import { parsePlanEnvelope, repairRequestFor, describeSchemaRecoveryHint } from "./schemas"
+import { decidePlanRecovery } from "./planRecovery"
 import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
 import { describePlanFailureRepair, describeRepairPrompt, planFailureDetail, schemaFailureDetail } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
@@ -278,6 +279,12 @@ function solveResultFromEnvelope(candidate: PlanEnvelope, problemRevision: strin
     resolution: "answer",
     clarificationQuestions: []
   })
+}
+
+/** 提示词不是错误日志转储：两段提示合起来也有界（4096）。 */
+function boundedHint(...parts: readonly string[]): string {
+  const text = parts.filter((part) => part.trim().length > 0).join("\n\n")
+  return text.length <= 4096 ? text : `${text.slice(0, 4095)}…`
 }
 
 /** Budget rejection remains distinguishable from a genuine planner or context failure. */
@@ -554,6 +561,11 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       let schemaRepairs = 0
       let compileRepairs = 0
+      /**
+       * **引用修复单独计数**（W5）：引用了一个这次没产生的工具结果，与"JSON 写错"
+       * 是两类失败，前者不该被后者吃掉额度（见 `contracts.ts` 的 `MAX_REFERENCE_REPAIRS`）。
+       */
+      let referenceRepairs = 0
 
       /**
        * **一次原始尝试 + 每类各一次可见修复**的循环。
@@ -652,11 +664,26 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           const failure = outcome.failure
           lastDetail = planFailureDetail(failure)
           ledger.record(`plan attempt ${attempt} failed (${failure.category}): ${failure.detail}`)
+          /**
+           * **这一次还值不值得再问**（W5）：auth / provider 拒绝不再重问，格式错误只修一次。
+           * 判据由 `decidePlanRecovery` 统一给，协调器只把"还剩几次生成""本次真实的工具结果"
+           * 这两件事喂进去 —— 各分支自己记得别多问一次，总有漏的那一次。
+           */
+          const decision = decidePlanRecovery({
+            failure: failure.category === "provider_refusal" ? "auth" : "schema",
+            schemaRepairsUsed: schemaRepairs, referenceRepairsUsed: referenceRepairs,
+            callsRemaining: budget.remaining("generation"), availableResultIds: [...toolResultRefs]
+          })
+          if (decision.action === "stop") {
+            if (decision.reason === "budget_exhausted") return yield* stop("budget_repair", lastDetail)
+            lastDetail = `${lastDetail} (no repair: ${decision.reason})`
+            break
+          }
           const failureBranch = declaredEnvelopeKind(failure.decoded)
           const next = repairRequestFor(failure.errors, schemaRepairs + 1, failure.category, failureBranch)
-          if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
+          if (next.attempt > MAX_REPAIR_ATTEMPTS) break
           schemaRepairs += 1
-          repair = { ...next, hint: describePlanFailureRepair(failure) }
+          repair = { ...next, hint: boundedHint(describePlanFailureRepair(failure), describeSchemaRecoveryHint(failure.errors)) }
           continue
         }
 
@@ -681,8 +708,17 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 与编译阶段那一份是同一个算法，不再是这里手写的一句话。
            */
           const resultBranch = declaredEnvelopeKind(outcome.plan)
+          const decision = decidePlanRecovery({
+            failure: "schema", schemaRepairsUsed: schemaRepairs, referenceRepairsUsed: referenceRepairs,
+            callsRemaining: budget.remaining("generation"), availableResultIds: [...toolResultRefs]
+          })
+          if (decision.action === "stop") {
+            if (decision.reason === "budget_exhausted") return yield* stop("budget_repair", lastDetail)
+            lastDetail = `${lastDetail} (no repair: ${decision.reason})`
+            break
+          }
           const next = repairRequestFor(result.errors, schemaRepairs + 1, "schema_invalid", resultBranch)
-          if (schemaRepairs >= MAX_REPAIR_ATTEMPTS || next.attempt > MAX_REPAIR_ATTEMPTS) break
+          if (next.attempt > MAX_REPAIR_ATTEMPTS) break
           schemaRepairs += 1
           /**
            * **把被拒的那份东西本当"证据"传下去**（2026-10-04，来自真实运行）。
@@ -698,7 +734,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 所以与"不回显模型原话"那条纪律不冲突。
            */
           const rejected = JSON.stringify(outcome.plan)
-          repair = { ...next, hint: describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: rejected, channel: "fenced_text" }) }
+          repair = { ...next, hint: boundedHint(describeRepairPrompt({ ok: false, reason: "schema_invalid", errors: result.errors, payload: rejected, channel: "fenced_text" }), describeSchemaRecoveryHint(result.errors)) }
           continue
         }
 
@@ -737,9 +773,39 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         if (candidate.kind === "answer") {
           const missingResults = candidate.toolResultRefs.filter((ref) => !toolResultRefs.has(ref))
           if (missingResults.length > 0) {
-            const waiting = ledger.transition("waiting", `the answer cites tool results this run did not produce: ${missingResults.join(", ")}`)
-            if (waiting.ok) yield waiting.event
-            return
+            lastDetail = `the answer cites tool results this run did not produce: ${missingResults.join(", ")}`
+            ledger.record(`plan attempt ${attempt} cited unknown tool results: ${missingResults.join(", ")}`)
+            /**
+             * **错引用走定向修复，不再直接进 `waiting`**（W5）。
+             *
+             * 原先这里是 `waiting`（"这一步需要你补充信息"）—— 用户既不知道缺什么，
+             * 模型也没有第二次机会，而它只要看到"本次可引用的 ID 是这几个"就能自己改对。
+             * 修不修、准不准引用、还剩几次，全部由 `decidePlanRecovery` 回答；
+             * 没有可引用结果或额度用尽时**如实失败**，不伪造 ID。
+             */
+            const decision = decidePlanRecovery({
+              failure: "tool_reference", schemaRepairsUsed: schemaRepairs, referenceRepairsUsed: referenceRepairs,
+              callsRemaining: budget.remaining("generation"), availableResultIds: [...toolResultRefs]
+            })
+            if (decision.action === "stop") {
+              if (decision.reason === "budget_exhausted") return yield* stop("budget_repair", lastDetail)
+              lastDetail = `${lastDetail} (no repair: ${decision.reason})`
+              break
+            }
+            referenceRepairs += 1
+            repair = {
+              reason: "tool_reference",
+              errors: missingResults.map((ref, index) => ({
+                code: "unknown_tool_result_ref",
+                path: `envelope.toolResultRefs[${index}]`,
+                detail: `this run produced no tool result with id ${ref.slice(0, 80)}`
+              })),
+              allowedChanges: ["envelope.toolResultRefs"],
+              attempt: referenceRepairs,
+              branch: "answer",
+              hint: boundedHint(decision.hint)
+            }
+            continue
           }
         }
 

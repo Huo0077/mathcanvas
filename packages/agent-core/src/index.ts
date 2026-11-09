@@ -77,6 +77,11 @@ export * from "./orthographicProblem"
  * 它在 `obligationIR` 之上扩展元信息，不另建事实库。
  */
 export * from "./problemUnderstanding"
+/**
+ * **计划协议的定向恢复**（W5）：修不修、只准引用哪些工具结果 ID、格式错误的合法形式。
+ * 与 `schemas` 的字段读取同源，不另建第二套判定。
+ */
+export * from "./planRecovery"
 export * from "./outputParser"
 export * from "./proof/proofArtifact"
 export * from "./proof/proofBackendReview"

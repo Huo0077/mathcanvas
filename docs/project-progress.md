@@ -4,9 +4,13 @@
 
 > **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
 
-> **这是归档，不是当前状态。** 新方案 W0–W4 已分别推送，W4 之后继续实施 W5；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
+> **这是归档，不是当前状态。** 新方案 W0–W5 已分别推送，W5 之后继续实施 W6；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-09 —— Agent高可靠升级：W5计划协议与错引用恢复
+
+新增 `planRecovery.ts`：`decidePlanRecovery` 作为"还修不修"的唯一入口（信封修复、引用修复各自计数、auth/取消/预算用尽直接停），`describeReferenceRepair` 只列本次真实产生的工具结果 ID，`describeSchemaRecoveryHint` 逐字段给出合法形式并与既有提示合并后钳到 4096。协调器把原先"错引用 → waiting"的死路换成一次定向修复：提示里给可复制 ID 表并要求先执行工具，修好照常交付；无结果可引用或额度用尽则如实失败（`no_referenceable_result` / `reference_repair_limit`），预算不足仍停在 `budget_repair`。门禁：W5 定向 2 文件 / 74 项、`agent-core` 全量 194 文件 / 2058 项、全项目 typecheck exit 0、改动文件 lint 0 错误。**未调用真模型**，"真实 API 格式失败率 <1%"没有证据。
 
 ## 2026-11-09 —— Agent高可靠升级：W4图像证据与定向补读
 

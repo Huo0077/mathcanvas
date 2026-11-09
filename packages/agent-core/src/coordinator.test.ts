@@ -886,12 +886,64 @@ describe("facts and read receipts from the model tool loop", () => {
     expect(coordinator.phase()).toBe("completed")
   })
 
-  it("refuses an invented tool-result reference even if the model returns a valid answer envelope", async () => {
+  it("fails honestly when an invented tool-result reference cannot be repaired", async () => {
     const planner: PlannerPort = { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "count", factIds: ["fact-1"], answer: "1", toolResultRefs: ["invented-call"] }, requestId: "req-2", attemptId: "a2" }) }
     const coordinator = createCoordinator({ planner, observer: { observe: async () => facts }, committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) } })
     await drive(coordinator, { run, userMessage: "count" })
-    expect(coordinator.phase()).toBe("waiting")
+    // W5：不再停在 `waiting`（那句话既不说缺什么、也没给模型第二次机会）。
+    expect(coordinator.phase()).toBe("failed")
     expect(coordinator.ledger().at(-1)?.detail).toContain("invented-call")
+    expect(coordinator.ledger().at(-1)?.detail).toContain("no_referenceable_result")
+  })
+})
+
+/**
+ * **W5：错引用的定向恢复（2026-11-09）**。
+ *
+ * mm-029 / mm-055 / mm-066 / text-190 的共同形态是"回答引用了这次没产生的结果 ID"。
+ * 修复的判据有两条，都必须由宿主掌握：**只准引用本次真实产生的 ID**，且**只修一次**。
+ */
+describe("W5 — reference recovery only cites results this run produced", () => {
+  const answer = (refs: string[]) => ({ schemaVersion: "mathcanvas.plan.v1" as const, kind: "answer" as const, goal: "describe point", factIds: ["fact-1"] as string[], answer: "A point", toolResultRefs: refs })
+
+  it("repairs once, hands over the real id table, and then completes", async () => {
+    const hints: string[] = []
+    let calls = 0
+    const planner: PlannerPort = { plan: async (request) => {
+      calls += 1
+      if (request.repair) hints.push(request.repair.hint)
+      const discovered = await request.executeTool!({ run, toolCallId: "read-1", toolId: "scene.inspect", input: { documentId: "doc-1" }, actionCount: 0, signal: request.signal })
+      expect(discovered.status).toBe("success")
+      return calls === 1
+        ? { plan: answer(["invented-call"]), requestId: "req-1", attemptId: "a1" }
+        : { plan: answer(["read-1"]), requestId: "req-2", attemptId: "a2" }
+    } }
+    const coordinator = createCoordinator({ planner, observer: { observe: async () => facts },
+      committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) },
+      tools: { call: async () => ({ status: "success", summary: "found point", next_actions: [], artifacts: [], payload: [{ documentId: "doc-1", entityId: "point-2", label: "P" }], diagnostics: [] }) } })
+    await drive(coordinator, { run, userMessage: "describe point" })
+
+    expect(coordinator.phase()).toBe("completed")
+    expect(hints).toHaveLength(1)
+    expect(hints[0]).toContain("read-1")
+    expect(hints[0]).toContain("toolResultRefs")
+  })
+
+  it("stops after the single reference repair instead of asking again", async () => {
+    let calls = 0
+    const planner: PlannerPort = { plan: async (request) => {
+      calls += 1
+      await request.executeTool!({ run, toolCallId: "read-1", toolId: "scene.inspect", input: { documentId: "doc-1" }, actionCount: 0, signal: request.signal })
+      return { plan: answer([`invented-${calls}`]), requestId: `req-${calls}`, attemptId: `a${calls}` }
+    } }
+    const coordinator = createCoordinator({ planner, observer: { observe: async () => facts },
+      committer: { stage: async () => ({ ok: true, draftVersion: 1, previewHash: "hash" }), commit: async () => ({ status: "rejected" }) },
+      tools: { call: async () => ({ status: "success", summary: "found point", next_actions: [], artifacts: [], payload: [], diagnostics: [] }) } })
+    await drive(coordinator, { run, userMessage: "describe point" })
+
+    expect(calls).toBe(2)
+    expect(coordinator.phase()).toBe("failed")
+    expect(coordinator.ledger().at(-1)?.detail).toContain("reference_repair_limit")
   })
 })
 

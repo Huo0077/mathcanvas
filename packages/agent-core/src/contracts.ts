@@ -366,6 +366,16 @@ export interface RepairRequest {
 export const MAX_REPAIR_ATTEMPTS = 1
 
 /**
+ * **引用修复同样只给一次，但与信封修复分开计数**（W5，2026-11-09）。
+ *
+ * `toolResultRefs` 引用了一个这次运行没产生的 ID（mm-029 / mm-055 / mm-066 / text-190）时，
+ * 原先直接进 `waiting` —— 用户看到的是"这一步需要你补充信息"，而模型只要知道
+ * "可引用的 ID 是这几个"就能自己改对。让它与"JSON 形状写错"共用一个计数，就等于
+ * 一次笔误吃掉引用修复的机会（这正是 2026-10-10 修过的同一类病）。所以各记各的。
+ */
+export const MAX_REFERENCE_REPAIRS = 1
+
+/**
  * **编译阶段那一类给两次**（2026-10-11 用户现场；用户当场裁决"可以"提起）。
  *
  * 症状（桌面端同一条题的第五次尝试，逐条读数见 `docs/current-status.md`）：一轮里模型先犯

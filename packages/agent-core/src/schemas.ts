@@ -177,6 +177,54 @@ export function envelopeAllowedFields(kind: PlanEnvelope["kind"]): readonly stri
 }
 
 
+/**
+ * **形状失败时必须说清"哪个字段、合法形式是什么"**（W5，2026-11-09）。
+ *
+ * 现场三类失败（mm-022/051/063、text-176）都只拿到一句 `missing_field@…alias`：
+ * 模型知道"缺字段"，但不知道具体该写什么，于是第二次照旧。这条提示把**字段路径**与
+ * **合法形式**成对给出，并且有界（4096）—— 提示词不是错误日志转储。
+ *
+ * 只从 `ParseError` 的 code/path/detail 推，不读模型原话（回显会形成自我强化循环）。
+ */
+export function describeSchemaRecoveryHint(errors: readonly ParseError[]): string {
+  const lines: string[] = []
+  const seen = new Set<string>()
+  for (const error of errors) {
+    const key = `${error.code}@${error.path}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    lines.push(`- ${error.path}：${recoveryFieldForm(error)}`)
+    if (lines.length >= 24) break
+  }
+  const text = lines.join("\n")
+  return text.length <= 4096 ? text : `${text.slice(0, 4095)}…`
+}
+
+function recoveryFieldForm(error: ParseError): string {
+  const path = error.path
+  if (path.endsWith(".alias")) return "新建对象的 inputs.alias 必须是非空字符串（例如 \"box1\"），不能省略"
+  if (path === "envelope.actions") return "actions 至少要有一个动作；如果这一步只需要回答，请把 kind 写成 \"answer\" 并给出非空 answer，不要发一份空计划"
+  if (path.endsWith(".actionId")) return "actionId 必须是本轮可用动作清单里的名字，不要自造，也不要带前缀"
+  if (path.endsWith(".actionKey")) return "每个动作的 actionKey 必须是本次运行里唯一的非空字符串"
+  if (/\.[xy]$/.test(path)) return "坐标分量必须是有限数字：写成 inputs.x / inputs.y 两个数，不要写字符串或其他键名"
+  if (path.endsWith(".goal")) return "goal 必须是一句非空字符串（给人看的这句话），不要写数组或对象"
+  if (path === "envelope.questions") return "clarification 至少给一个具体问题（非空字符串数组）"
+  if (path === "envelope.toolResultRefs") return "toolResultRefs 必须是本次运行真实产生的工具结果 ID 数组；没有就写空数组"
+  switch (error.code) {
+    case "missing_field":
+      return `必填字段缺失：${error.detail.length > 0 ? error.detail : "按合同补上"}`.slice(0, 200)
+    case "invalid_type":
+      return "类型不对：按该字段的声明类型重写（数组 / 对象 / 字符串 / 有限数字）"
+    case "invalid_value":
+      return "取值不在允许范围：按说明里的枚举或格式取值"
+    case "unknown_field":
+      return "这个字段不在白名单里：删掉它，只保留本合同声明的字段"
+    case "schema_version_mismatch":
+      return `schemaVersion 必须恰好是 "${PLAN_SCHEMA_VERSION}"`
+    default:
+      return error.detail.length > 0 ? error.detail.slice(0, 200) : "按合同修正该字段"
+  }
+}
 const ENVELOPE_KINDS = Object.keys(ENVELOPE_BRANCHES) as PlanEnvelope["kind"][]
 const ALL_ENVELOPE_FIELDS = new Set([
   ...COMMON_ENVELOPE_FIELDS,
