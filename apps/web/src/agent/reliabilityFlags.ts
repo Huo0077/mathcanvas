@@ -65,3 +65,70 @@ export const RELIABILITY_FLAGS_FOR_TESTS: AgentReliabilityFlags = createAgentRel
   imageRereadV1: true,
   orthographicTemplatesV1: true
 })
+
+/**
+ * **W11：开关依赖必须可校验**（2026-11-09）。
+ *
+ * 五个开关不是"随便组合"的：数学核验依赖题意层与答案语义，否则"核验"的对象
+ * 本身就是猜出来的目标；三视图族又依赖数学核验，否则它只能给尺寸、给不了判据；
+ * 受控重读依赖**可用的会话**与**原附件能力**，否则"重读"没有可读的东西。
+ *
+ * 返回 `ok: false` 时必须拒绝启动新模式 —— 关闭某个开关只会让证据更保守，
+ * 但**非法组合**会让"已核验"变成假话。
+ */
+export interface ReliabilityCapabilities {
+  sessionAvailable?: boolean
+  attachmentCapability?: boolean
+}
+
+export interface ReliabilityConfigError {
+  code: string
+  message: string
+}
+
+export function validateReliabilityConfig(
+  flags: AgentReliabilityFlags,
+  capabilities: ReliabilityCapabilities = {}
+): { ok: true } | { ok: false; errors: ReliabilityConfigError[] } {
+  const errors: ReliabilityConfigError[] = []
+  if (flags.mathVerificationV1 && !flags.goalTrackingV1) {
+    errors.push({ code: "math_requires_goal_tracking", message: "数学核验要求先开启题意/目标跟踪（goalTrackingV1），否则核验的不是题面目标。" })
+  }
+  if (flags.mathVerificationV1 && !flags.answerSemanticsV1) {
+    errors.push({ code: "math_requires_answer_semantics", message: "数学核验要求先开启逐问交付语义（answerSemanticsV1），否则否证无法落到交付状态。" })
+  }
+  if (flags.orthographicTemplatesV1 && !flags.goalTrackingV1) {
+    errors.push({ code: "orthographic_requires_goal_tracking", message: "三视图族要求题意/目标跟踪（goalTrackingV1）。" })
+  }
+  if (flags.orthographicTemplatesV1 && !flags.mathVerificationV1) {
+    errors.push({ code: "orthographic_requires_math_verification", message: "三视图族要求数学核验（mathVerificationV1），否则体积没有独立判据。" })
+  }
+  if (flags.imageRereadV1 && capabilities.sessionAvailable === false) {
+    errors.push({ code: "reread_requires_session", message: "受控重读要求可用的解题会话；没有会话就不该发读图请求。" })
+  }
+  if (flags.imageRereadV1 && capabilities.attachmentCapability === false) {
+    errors.push({ code: "reread_requires_attachments", message: "受控重读要求原附件能力；没有附件就无从重读。" })
+  }
+  return errors.length === 0 ? { ok: true } : { ok: false, errors }
+}
+
+/** FNV-1a：只用于**稳定分桶**，不是密码学哈希，也不参与任何身份校验。 */
+function stableBucket(seed: string): number {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash % 100
+}
+
+/** 同一会话在同一档位下必须**总是**落在同一个桶里（不随机、不随重启变化）。 */
+export function rolloutBucket(sessionId: string): number {
+  return stableBucket(sessionId)
+}
+
+export function isEnabledForSession(sessionId: string, percentage: number): boolean {
+  if (!Number.isFinite(percentage)) return false
+  const clamped = Math.min(100, Math.max(0, percentage))
+  return rolloutBucket(sessionId) < clamped
+}

@@ -1,8 +1,18 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— Agent高可靠升级 W11：开关依赖、灰度分桶与回滚
+
+- **W0—W11 全部实施并逐包推送**（最新提交见远端 `origin/main`）。本包关闭"开关能返回 true、行为却不变"和"非法组合照样跑"两个旧缺口。
+- **依赖校验**（`reliabilityFlags.ts` 的 `validateReliabilityConfig`）：`mathVerificationV1` 要求 `goalTrackingV1` + `answerSemanticsV1`；`orthographicTemplatesV1` 要求 `goalTrackingV1` + `mathVerificationV1`；`imageRereadV1` 要求可用会话与原附件能力。错误带**精确原因码**（`math_requires_goal_tracking` 等），不是一句"配置无效"。
+- **生产接线**：`startProblemSolve` 先校验再建运行时；非法组合**拒绝启动**（`invalid reliability configuration`），一次模型请求都不会发。关掉核验只让证据更保守（答案保留、不再有"已核验"标签），旧 W2 的交付标签不受新开关影响。
+- **灰度分桶**：`rolloutBucket(sessionId)` / `isEnabledForSession(sessionId, pct)` 用 FNV-1a 做**稳定分桶**（同一会话跨重启同桶、0% 全关、100% 全开），不随机抽样、不随时间漂移。
+- **回滚语义**：关开关不清空正文与历史数据，只取消"已核验"资格；草稿确认、CAS、几何门禁与预算账本全部保持不变（本包未改这些路径）。
+- 门禁：W11 定向 **3 文件 / 23 项**；全量回归见下表；全项目 typecheck exit 0；改动文件 lint 0 错误；文档门禁 22/22。**未启用新模型、未跑付费评测、未打 tag/Release**；灰度分桶未接入真实流量（无生产会话样本），"10%→50%→100% 各 100 个合规会话"的观察门槛**尚未执行**，因此不宣称已放量。
+- **本轮边界汇总**：W4 自动补读、W5 引用修复、W6 新判据、W7 轮廓反投影、W8 路由、W9 徽标、W10 清单闸门、W11 依赖与分桶，全部为离线/浏览器模拟验证；**仍没有真实模型同口径基线**（最近真实 50 题仍是旧口径 31/50 = 62%），也没有 500 题语料或付费批次。
+
 ## 2026-11-09 —— Agent高可靠升级 W10：评测清单闸门与离线阶梯规划
 
-- **W0—W10 已分别提交推送，W11 待完成**。本包只做**离线**评测基础设施：不发任何真实请求、不产生准确率。
+- **W0—W10 已分别提交推送（W11 见上）**。本包只做**离线**评测基础设施：不发任何真实请求、不产生准确率。
 - **新增清单闸门**（`scripts/agent-reliability-eval/manifest.cjs`）：校验 `corpusHash` / `scorerVersion` / `buildId` / `binarySha256` / `revision` / `profileRevision` / `flagSnapshot` / `budgetSnapshot` / `entryTrack`，并拒绝六类捷径 —— 同一材料跨 dev/holdout（`cross_split`）、同 split 重复材料、题号重复、冻结后材料被改或冻结题号缺失（`material_changed_after_freeze`）、需配图却无附件（`image_without_attachment`）、参考解泄漏到题面（`reference_in_prompt`）。
 - **新增离线阶梯规划**（`production.eval.mjs`）：默认 `offline_planned`（所有阶梯 `runs = 0`）；真实运行必须 `MATHCANVAS_REAL_EXAM_LIVE=1` **且** `MATHCANVAS_EXPECTED_BUILD` 与清单 `buildId` 完全一致，否则拒绝（`build_identity_missing` / `build_identity_mismatch`）。
 - **新增冻结清单与说明**（`test-fixtures/agent-reliability-v2/manifest.json`、`README.md`）：4 条 dev/验证/盲测/异常题号，只含哈希与题干，不含参考答案；阶梯为 离线 → 10 → 50×3 → 100 → 500，重复两轮仍只有 500 道不同题。

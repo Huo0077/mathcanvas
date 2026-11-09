@@ -1,6 +1,6 @@
 import { routeDeterministicProblem, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort } from "@draw/agent-core"
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeDependencies } from "./agentRuntime"
-import type { AgentReliabilityFlags } from "./reliabilityFlags"
+import { validateReliabilityConfig, type AgentReliabilityFlags } from "./reliabilityFlags"
 import type { SolveSession } from "../services/solveSession"
 import { agentNextPhaseFlags } from "./featureFlags"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
@@ -84,6 +84,12 @@ export function deriveTrustedMathFacts(context: SolveContext): MathFact[] {
 export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {
   if (input.context.runId !== input.runtime.runId || input.session.signal.aborted)
     throw new Error("solve run and session identity mismatch")
+  /**
+   * **W11：非法开关组合拒绝启动**（fail closed）。关闭某个开关只会让证据更保守，
+   * 但"核验开着、目标跟踪关着"会让核验对象变成猜出来的目标 —— 那是假话，必须拒绝。
+   */
+  const config = validateReliabilityConfig(input.flags)
+  if (!config.ok) throw new Error(`invalid reliability configuration: ${config.errors.map((error) => error.code).join(",")}`)
   return createAgentRuntime({ ...input.runtime,
     ...(input.flags.goalTrackingV1 && input.flags.answerSemanticsV1
       ? { solveContext: input.context, hashText: input.hashText,

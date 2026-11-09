@@ -76,6 +76,20 @@ it("the production service refutes a wrong quadratic value before delivery", asy
 })
 
 
+it("W11: an invalid flag combination is rejected before any model call", async () => {
+  const document = createEmptyDocument("conics")
+  const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
+  const context = await createSolveContext({ runId: "r-flags", conversationId: "c", prompt: "求长度。", attachments: [], corrections: [], sceneRevision: "scene" }, hash)
+  expect(() => startProblemSolve({
+    context, session: createDefaultSolveSession("s-flags"),
+    // 数学核验开着、目标跟踪关着：核验对象只能是猜出来的目标。
+    flags: { answerSemanticsV1: true, goalTrackingV1: false, mathVerificationV1: true, imageRereadV1: false, orthographicTemplatesV1: false },
+    hashText: hash,
+    runtime: { planner: { plan: async () => { throw new Error("must not run") } }, readDocument: () => document, writeDocument: vi.fn(),
+      readSceneDocuments: () => [], exportPreflight: { preflight: () => { throw new Error("no export") } }, projectId: "p", runId: "r-flags" }
+  })).toThrow(/invalid reliability configuration/)
+})
+
 it("the production service rejects identity mismatches before opening a draft", async () => {
   const document = createEmptyDocument("geometry3d")
   const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
