@@ -1,5 +1,7 @@
 > **当前状态**：见 [当前状态](../current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
 
+> **新旧编号边界（2026-11-09）**：新 12 工作包方案 W0–W3 已分别提交并推送，W4–W11 暂停；本页传统交互验收不是本轮工作包的现状或新的真题正确率。现在时以 [当前状态](../current-status.md) 为准。
+
 # 高中数学绘图与立体交互进度记录
 
 > **2026-10-11 四家族真题驱动升级：本页只保留此前传统几何交互/发行过程。** 现已完成的[真题作图需求调研](2026-10-11-four-family-exam-diagram-survey.md)与[GitHub 源码/测试取舍](2026-10-11-github-agent-implementation-survey.md)与[严格按 Task 1–21 执行的新任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另列；这里“六类代表题通过”不能当新真题四族 Agent 覆盖，现时看[当前状态](../current-status.md)。

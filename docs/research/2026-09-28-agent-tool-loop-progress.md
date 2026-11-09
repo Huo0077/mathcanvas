@@ -1,5 +1,7 @@
 > **当前状态**：见 [当前状态](../current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
 
+> **新旧编号边界（2026-11-09）**：新 12 工作包方案 W0–W3 已分别提交并推送，W4–W11 暂停；本页 2026-09 的结果不是本轮工作包的现状或新的真题正确率。现在时以 [当前状态](../current-status.md) 为准。
+
 # Agent Tool Loop Progress Snapshot
 
 > **2026-10-11 四家族真题驱动升级：本页保留旧 tool-loop 时点的过程快照。** 新的[真题需求调研](2026-10-11-four-family-exam-diagram-survey.md)和[GitHub 源码实施调研](2026-10-11-github-agent-implementation-survey.md)与[连续编号 Task 1–21 的作图/兼容/Lean/缺陷任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另行记录；不可把本页旧样本分数当四家族真题作图成功率，现时仍以[当前状态](../current-status.md)为准。
