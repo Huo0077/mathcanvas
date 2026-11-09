@@ -7,6 +7,7 @@ export * from "./actionIds"
  * `answerAcceptance` 是纯函数裁决（目标覆盖 / 正文 / 结构值 / 证据引用）。
  */
 export * from "./answerAcceptance"
+export * from "./answerEnvelopeAdapter"
 export * from "./answerResult"
 export * from "./solveContext"
 /**

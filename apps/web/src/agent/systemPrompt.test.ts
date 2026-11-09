@@ -756,3 +756,11 @@ describe("W1 — the repair section names the rejected branch", () => {
     expect(sectionLines(prompt.policy, BRANCH_SECTION)).toEqual([])
   })
 })
+
+
+it("W3 exposes structured goal answers as candidates without promoting model evidence", () => {
+  const policy = buildPolicyText({ channel: "strict_json", canPlan: false, actionIds: [] })
+  expect(policy).toContain("goalAnswers")
+  expect(policy).toContain("goalId")
+  expect(policy).toContain("不能自称已核验")
+})

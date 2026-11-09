@@ -24,6 +24,10 @@ import {
   type SceneDocumentSnapshot,
   type SkillCatalog,
   type SolveResult,
+  type SolveAuditEvent,
+  type SolveContext,
+  type HashText,
+  type MathFact,
   type ToolResult
 } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
@@ -67,6 +71,10 @@ export interface AgentRuntimeDependencies {
    */
   writeDocument(candidate: GeometryDocument): void
   planner: PlannerPort
+  solveContext?: SolveContext
+  hashText?: HashText
+  trustedMathFacts?: readonly MathFact[]
+  onSolveAudit?: (event: SolveAuditEvent) => void
   /** One shared run budget, including provider retries and coordinator repairs. */
   budget?: Budget
   /** Read-only diagnostics: reports the actual product stage result without recompilation. */
@@ -426,6 +434,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
+    ...(dependencies.solveContext === undefined ? {} : { solveContext: dependencies.solveContext, hashText: dependencies.hashText, trustedMathFacts: dependencies.trustedMathFacts, onSolveAudit: dependencies.onSolveAudit }),
     observer,
     committer: dependencies.onStageOutcome === undefined ? committer : {
       async stage(request) {

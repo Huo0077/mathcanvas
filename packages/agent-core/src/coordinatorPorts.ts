@@ -467,6 +467,8 @@ export interface CommitterPort {
         ok: true
         draftVersion: number
         previewHash: string
+        /** Host-minted draft identity (not model-controlled). */
+        draftId?: string
         /**
          * **这次暂存出来的候选文档"满足了哪几条验收条件"**（Phase 3 接线的回程通道）。
          *

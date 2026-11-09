@@ -250,6 +250,7 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         ok: true,
         draftVersion: staged.preview.draftVersion,
         previewHash: staged.preview.previewHash,
+        draftId: draftId,
         ...(verification === undefined ? {} : { verification })
       }
     },

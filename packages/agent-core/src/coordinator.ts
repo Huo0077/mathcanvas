@@ -1,4 +1,7 @@
 import { acceptAnswer } from "./answerAcceptance"
+import { adaptLegacyAnswer } from "./answerEnvelopeAdapter"
+import { acceptSolvedCandidate, candidateHash, bindHostEvidence, type BoundEvidenceRecord, type SolveContext, type HashText } from "./solveContext"
+import { verifyMathAnswer, type MathFact } from "./verification/mathAnswerVerification"
 import type { SolveResult } from "./answerResult"
 import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
@@ -32,6 +35,15 @@ import type { AcceptanceCheck } from "./verification/taskAcceptance"
  *    也就不会有迟到结果写进账本（计划 Step 5）。
  * 5. **预算是闸不是装饰**：每一步之前 `budget.consume(...)`，被拒即停止；预算被拒**不改文档**。
  */
+
+export interface SolveAuditEvent {
+  kind: "understand" | "verify" | "accept"
+  runId: string
+  problemRevision: string
+  attemptId?: string
+  goalId?: string
+  status?: string
+}
 
 export interface CoordinatorDependencies {
   planner: PlannerPort
@@ -105,6 +117,11 @@ export interface CoordinatorDependencies {
    * 也不让宿主再去问一次模型。**由宿主产生**，模型提交的信封不构成它。
    */
   onSolveResult?: (result: SolveResult) => void
+  /** Opt-in host-created context; old conversations retain the legacy answer contract. */
+  solveContext?: SolveContext
+  hashText?: HashText
+  trustedMathFacts?: readonly MathFact[]
+  onSolveAudit?: (event: SolveAuditEvent) => void
   /**
    * **编译之前**的一次准备机会（例如把工作区切到这条计划需要的那个）。
    *
@@ -255,25 +272,45 @@ function solveResultFromEnvelope(candidate: PlanEnvelope, problemRevision: strin
   })
 }
 
-/**
- * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
- *
- * ## 为什么需要它（N4d 抽出请求构造之后）
- *
- * `buildPlanRequest` 在 `buildContext` 之后、`buildConversationContext` 之前给出一个
- * 同步的计费时机（`reportContextSpend`），而**拒绝的方式**必须是"这一轮到此为止"。
- * 那个函数是普通函数，不是生成器 —— 它没法 `yield` 一条 `stop()` 事件。所以回调抛这个私有
- * 标记，调用点接住之后走**原来那条** `stop("budget_context")` 路径：
- * 文档不变、账本如实、事件形状与从前逐字相同。
- *
- * 为什么不用一个裸 `Error` 加字符串比较：那样"预算被拒"与"组装真的抛了"就分不开，
- * 而后者必须继续往上传播（它是一次真失败，不是一次干净的停止）。
- */
+/** Budget rejection remains distinguishable from a genuine planner or context failure. */
 class BudgetStop extends Error {
   constructor(readonly stopReason: string) {
     super(stopReason)
     this.name = "BudgetStop"
   }
+}
+
+/** One opt-in gate for read-only answers and plans carrying an answer. */
+async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: SolveContext, hash: HashText | undefined,
+  budget: Budget, signal: AbortSignal, facts: readonly MathFact[] | undefined, draftId?: string,
+  audit?: (event: Omit<SolveAuditEvent, "runId" | "problemRevision">) => void): Promise<SolveResult> {
+  if (!hash) throw new Error("trusted answer context requires a host hashing function")
+  const candidates = candidate.kind === "clarification" ? []
+    : candidate.goalAnswers !== undefined ? candidate.goalAnswers : adaptLegacyAnswer(context, candidate.answer ?? "")
+  if (candidate.kind === "plan" && draftId && context.understanding.goals.some(goal => goal.expectedKind === "drawing")) {
+    for (const goal of context.understanding.goals.filter(goal => goal.expectedKind === "drawing")) {
+      candidates.push({ goalId: goal.goalId, kind: "drawing", displayText: "已暂存图形，等待确认。",
+        value: { kind: "drawing", draftId }, evidenceRefs: [] })
+    }
+  }
+  const candidateHashes: Record<string, string> = {}
+  for (const answer of candidates) candidateHashes[answer.goalId] = await candidateHash(answer, hash)
+  const boundEvidence: BoundEvidenceRecord[] = []
+  if (facts?.length) {
+    for (const answer of candidates) {
+      const verification = verifyMathAnswer({ problemRevision: context.problemRevision, goalId: answer.goalId,
+        ir: context.understanding.ir, candidate: answer, facts }, budget, signal)
+      audit?.({ kind: "verify", goalId: answer.goalId, status: verification.decision })
+      if (verification.evidence && (verification.decision === "refuted" || verification.decision === "supported")) {
+        boundEvidence.push(bindHostEvidence(context, candidateHashes[answer.goalId]!, verification.evidence, "math-verification-v1"))
+      }
+    }
+  }
+  const accepted = acceptSolvedCandidate({ context, candidates, candidateHashes, evidence: boundEvidence,
+    resolution: candidate.kind === "clarification" ? "clarification" : "answer",
+    questions: candidate.kind === "clarification" ? candidate.questions : [] })
+  audit?.({ kind: "accept", status: accepted.status })
+  return accepted
 }
 
 /**
@@ -344,6 +381,11 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
     if (started.ok) yield started.event
 
     try {
+      if (dependencies.solveContext) {
+        if (dependencies.solveContext.runId !== request.run.runId || dependencies.solveContext.conversationId !== request.run.conversationId || dependencies.solveContext.prompt !== request.userMessage)
+          throw new Error("trusted solve context does not match the current run")
+        dependencies.onSolveAudit?.({ kind: "understand", runId: request.run.runId, problemRevision: dependencies.solveContext.problemRevision, status: "parsed" })
+      }
       // ---- 观察场景 ----------------------------------------------------
       if (!spend(budget, "tool")) return yield* stop("budget_tool")
       const observing = ledger.transition("observing", "reading the scene")
@@ -456,7 +498,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       let stagedPlan: Extract<PlanEnvelope, { kind: "plan" }> | null = null
       /** 暂存成功的产物：**只有它非空时**这次运行才有草稿可走下去。 */
-      let staged: { draftVersion: number; previewHash: string } | null = null
+      let staged: { draftVersion: number; previewHash: string; draftId?: string } | null = null
       /**
        * **暂存时回带的验收报告**（Phase 3 接线）。
        *
@@ -694,7 +736,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * `answered` 只表示"这一问有可交付回答"，不代表答案数学正确 —— 证据为空时
            * 界面必须显示"未核验"。
            */
-          const delivered = solveResultFromEnvelope(candidate, request.run.target.contentHash)
+          const delivered = dependencies.solveContext
+            ? await solveResultFromTrustedContext(candidate, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, undefined, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }))
+            : solveResultFromEnvelope(candidate, request.run.target.contentHash)
           solveResult = delivered
           dependencies.onSolveResult?.(delivered)
           const answering = ledger.transition("answering", candidate.kind === "answer" ? "answering from the scene" : "asking the user a clarifying question", undefined, { solveResult: delivered })
@@ -702,6 +746,11 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           if (candidate.kind === "clarification") {
             const waiting = ledger.transition("waiting", "waiting for the user's answer", undefined, { solveResult: delivered })
             if (waiting.ok) yield waiting.event
+            return
+          }
+          if (dependencies.solveContext && delivered.status !== "answered") {
+            const incomplete = ledger.transition("failed", `answer incomplete: ${delivered.reasonCodes.join(",")}`, undefined, { solveResult: delivered })
+            if (incomplete.ok) yield incomplete.event
             return
           }
           const completed = ledger.transition("completed", "the run produced no draft", undefined, { solveResult: delivered })
@@ -854,10 +903,17 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        * **作图计划附带的解答也走同一份答案合同**（W2）：正文非空时才派生，
        * 空解答不产生 `SolveResult`（`answered` 的前提是"真的有话可说"）。
        */
-      if (stagedPlan.answer !== undefined && stagedPlan.answer.trim().length > 0) {
-        const delivered = solveResultFromEnvelope(stagedPlan, request.run.target.contentHash)
+      if (dependencies.solveContext || (stagedPlan.answer !== undefined && stagedPlan.answer.trim().length > 0)) {
+        const delivered = dependencies.solveContext
+          ? await solveResultFromTrustedContext(stagedPlan, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, staged.draftId, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }))
+          : solveResultFromEnvelope(stagedPlan, request.run.target.contentHash)
         solveResult = delivered
         dependencies.onSolveResult?.(delivered)
+        if (dependencies.solveContext && delivered.status !== "answered") {
+          const incomplete = ledger.transition("failed", `answer incomplete: ${delivered.reasonCodes.join(",")}`, undefined, { solveResult: delivered })
+          if (incomplete.ok) yield incomplete.event
+          return
+        }
       }
 
       const confirming = ledger.transition("awaiting_confirmation", "waiting for the user to confirm the preview", undefined, solveResult === undefined ? undefined : { solveResult })

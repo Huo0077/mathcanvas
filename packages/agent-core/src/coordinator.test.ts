@@ -1163,3 +1163,162 @@ describe("W1 / T1 协议恢复与预算纠错", () => {
     expect(second.repair?.errors.some((error) => error.path === "envelope.normalisations")).toBe(true)
   })
 })
+
+
+describe("W3 current problem revision", () => {
+  it("a changed prompt cannot reuse a pinned solve context from a different problem", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt: "求 BC 的长度", attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const harness = makeHarness({ plan: () => ({ plan: answerEnvelope(), requestId: "r", attemptId: "a" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer,
+      solveContext: context, hashText: hash })
+    const events = await drive(coordinator, { run, userMessage: "求 AC 的长度" })
+    expect(coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.detail).toContain("does not match")
+    expect(harness.planner.plan).not.toHaveBeenCalled()
+  })
+})
+
+describe("W3 redacted acceptance audit", () => {
+  it("emits understand, verify and accept events with revisions and attempts but no source text", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "已知二次函数 f(t)=-3t²-2t+5，t∈[-1,1]，求最大值。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const goalId = context.understanding.goals[0]!.goalId
+    const events: { kind: string; problemRevision: string; goalId?: string; attemptId?: string }[] = []
+    const harness = makeHarness({ plan: () => ({ plan: { kind: "answer", schemaVersion: "mathcanvas.plan.v1", goal: "maximum", factIds: [],
+      answer: "最大值=2", toolResultRefs: [], goalAnswers: [{ goalId, kind: "numeric", displayText: "最大值=2", value: { kind: "numeric", expression: "2" }, evidenceRefs: [] }] }, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer,
+      solveContext: context, hashText: hash, trustedMathFacts: [{ kind: "quadratic-interval", goalId, quadratic: [-3, -2, 5],
+        interval: { lower: -1, upper: 1, lowerClosed: true, upperClosed: true }, claim: "max" }], onSolveAudit: event => events.push(event) })
+    await drive(coordinator, { run, userMessage: prompt })
+    expect(events.map(event => event.kind)).toEqual(["understand", "verify", "accept"])
+    expect(events.every(event => event.problemRevision === context.problemRevision)).toBe(true)
+    expect(events.find(event => event.kind === "verify")).toMatchObject({ goalId, attemptId: "att" })
+    expect(JSON.stringify(events)).not.toContain("-3t²")
+  })
+})
+
+describe("W3 host verification on the real coordinator path", () => {
+  it("refutes a wrong numerical answer with bound host evidence", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "求二次函数的最大值。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const goalId = context.understanding.goals[0]!.goalId
+    const fact = { kind: "quadratic-interval" as const, goalId, quadratic: [-3, -2, 5] as const,
+      interval: { lower: -1, upper: 1, lowerClosed: true, upperClosed: true }, claim: "max" as const }
+    const harness = makeHarness({ plan: () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "maximum", factIds: ["fact-1"], answer: "最大值=2", toolResultRefs: [] }, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer,
+      solveContext: context, hashText: hash, trustedMathFacts: [fact] })
+    const events = await drive(coordinator, { run, userMessage: prompt })
+    const result = events.at(-1)?.solveResult
+    expect(coordinator.phase()).toBe("failed")
+    expect(result?.status).toBe("failed")
+    expect(result?.reasonCodes).toContain("refuted_answer")
+    expect(result?.evidence).toHaveLength(1)
+    expect(result?.evidence[0]).toMatchObject({ problemRevision: context.problemRevision,
+      sourceRevision: context.sourceRevision, sceneRevision: context.sceneRevision, evidence: { status: "failed" } })
+    expect(result?.answers).toHaveLength(0)
+  })
+})
+
+describe("W3 missing answer in drawing plan", () => {
+  it("does not confirm a geometry draft when a mandatory numeric goal was omitted", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "在矩形 ABCD 中画示意图，并求 BC 的长度。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    expect(context.understanding.goals.some(goal => goal.expectedKind === "numeric")).toBe(true)
+    const harness = makeHarness()
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer,
+      solveContext: context, hashText: hash, consent })
+    const events = await drive(coordinator, { run, userMessage: prompt, confirmed: true })
+    expect(events.at(-1)?.solveResult?.unansweredGoalIds).toEqual(expect.arrayContaining(context.understanding.goals.filter(goal => goal.expectedKind === "numeric").map(goal => goal.goalId)))
+    expect(coordinator.phase()).toBe("failed")
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+})
+
+describe("W3 host drawing goal", () => {
+  it("permits a drawing-only preview only with an actual host-minted draft ID", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "画出立方体。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    expect(context.understanding.goals.map(goal => goal.expectedKind)).toEqual(["drawing"])
+    const harness = makeHarness({ stage: async () => ({ ok: true, draftVersion: 2, previewHash: "preview-1", draftId: "host-draft-1" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash })
+    const events = await drive(coordinator, { run, userMessage: prompt })
+    expect(coordinator.phase()).toBe("awaiting_confirmation")
+    expect(events.at(-1)?.solveResult?.status).toBe("answered")
+    expect(events.at(-1)?.solveResult?.answers[0]?.value).toEqual({ kind: "drawing", draftId: "host-draft-1" })
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+})
+
+describe("W3 draft answer completeness before user confirmation", () => {
+  it("blocks a validated diagram whose required answer goals remain missing", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "矩形 ABCD 中 AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，求折前BC与折后B'C的长度。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const plan = { ...planEnvelope(), answer: "（1）BC=2" }
+    const harness = makeHarness({ plan: () => ({ plan, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash, consent })
+    await drive(coordinator, { run, userMessage: prompt, confirmed: true })
+    expect(coordinator.phase()).toBe("failed")
+    expect(harness.committer.stage).toHaveBeenCalledTimes(1)
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+})
+
+describe("W3 unknown mathematical goal", () => {
+  it("does not claim completion when a math goal is recognized but its answer kind is unknown", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "求 x 与 y 的关系。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    expect(context.understanding.goals[0]?.expectedKind).toBe("unknown")
+    const goalId = context.understanding.goals[0]!.goalId
+    const harness = makeHarness({ plan: () => ({ plan: { kind: "answer", schemaVersion: "mathcanvas.plan.v1", goal: "relation", factIds: [], answer: "因此结论成立", toolResultRefs: [],
+      goalAnswers: [{ goalId, kind: "conversation", displayText: "结论成立", value: { kind: "conversation", text: "结论成立" }, evidenceRefs: [] }] }, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash })
+    const events = await drive(coordinator, { run, userMessage: prompt })
+    expect(coordinator.phase()).toBe("failed")
+    expect(events.at(-1)?.solveResult?.status).not.toBe("answered")
+  })
+})
+
+describe("W3 shared production answer gate", () => {
+  it("uses validated goalAnswers rather than guessing which subquestion prose answers", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "矩形 ABCD 中，AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，求折前BC与折后B'C的长度。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const first = context.understanding.goals[0]!.goalId
+    const harness = makeHarness({ plan: () => ({ plan: { kind: "answer", schemaVersion: "mathcanvas.plan.v1", goal: "length", factIds: [],
+      answer: "稍后解释", toolResultRefs: [], goalAnswers: [{ goalId: first, kind: "numeric", displayText: "BC=2", value: { kind: "numeric", expression: "2" }, evidenceRefs: [] }] }, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash })
+    const events = await drive(coordinator, { run, userMessage: prompt })
+    expect(events.at(-1)?.solveResult?.status).toBe("partial")
+    expect(events.at(-1)?.solveResult?.answers[0]?.goalId).toBe(first)
+    expect(events.at(-1)?.solveResult?.unansweredGoalIds).toHaveLength(1)
+  })
+  it("never completes a two-goal math prompt from one labelled result", async () => {
+    const { createSolveContext } = await import("./solveContext")
+    const hash = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const prompt = "矩形 ABCD 中 AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，求折前BC与折后B'C的长度。"
+    const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
+    const harness = makeHarness({ plan: () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "two parts", factIds: ["fact-1"], answer: "（1）BC=2", toolResultRefs: [] }, requestId: "req", attemptId: "att" }) })
+    const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash })
+    const events = await drive(coordinator, { run, userMessage: prompt })
+    expect(coordinator.phase()).not.toBe("completed")
+    expect(events.at(-1)?.solveResult?.problemRevision).toBe(context.problemRevision)
+    expect(events.at(-1)?.solveResult?.status).toBe("partial")
+    expect(events.at(-1)?.solveResult?.unansweredGoalIds).toHaveLength(1)
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+})

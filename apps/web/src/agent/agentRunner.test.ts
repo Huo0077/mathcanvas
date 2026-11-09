@@ -1813,3 +1813,42 @@ describe("W2 image-to-run shared request ledger", () => {
     expect(session.snapshot().requests).toBe(1)
   })
 })
+
+
+describe("W3 production answer acceptance", () => {
+  beforeEach(() => { resetScene(); resetAgent() })
+  it("legacy flag off preserves a normal conversational answer", async () => {
+    const planner: PlannerPort = { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "chat", factIds: [],
+      answer: "你好", toolResultRefs: [] }, requestId: "r", attemptId: "a" }) }
+    const runner = createAgentRunner({ planner })
+    const result = await runAndWait(runner, "你好")
+    expect(result.phase).toBe("completed")
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toBe("你好")
+  })
+  it("keeps legacy read-only drawing instructions reachable even with a missing local provider", async () => {
+    const { RELIABILITY_FLAGS_FOR_TESTS } = await import("./reliabilityFlags")
+    const resolveProvider = vi.fn(async () => ({ ok: false as const, code: "no_active_profile" as const, detail: "no provider" }))
+    const runner = createAgentRunner({ reliabilityFlags: RELIABILITY_FLAGS_FOR_TESTS, modelPlanner: { resolveProvider } })
+    const result = await runAndWait(runner, "建一个棱长 3 的立方体")
+    expect(result.phase, JSON.stringify(useAgentStore.getState().activeConversation!.messages.at(-1)?.failure)).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(runner.hasDraft()).toBe(true)
+  })
+  it("does not mark a two-question mathematical prompt completed when only one answer is supplied", async () => {
+    const { RELIABILITY_FLAGS_FOR_TESTS } = await import("./reliabilityFlags")
+    const planner: PlannerPort = { plan: async () => ({
+      plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "折叠前后两问", factIds: [],
+        answer: "（1）BC=2", toolResultRefs: [] }, requestId: "one-question", attemptId: "one"
+    }) }
+    const runner = createAgentRunner({ planner, reliabilityFlags: RELIABILITY_FLAGS_FOR_TESTS })
+    const prompt = "矩形 ABCD 中，AB=4，BC=2。沿 AC 将三角形 ABC 折起 90°，求折前BC与折后B'C的长度。"
+    const result = await runAndWait(runner, prompt)
+    const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
+    expect(result.phase).not.toBe("completed")
+    expect(reply.solveResult?.status, JSON.stringify({ failure: reply.failure, trace: reply.trace?.slice(-2) })).toBe("partial")
+    expect(reply.solveResult?.unansweredGoalIds).toHaveLength(1)
+    expect(reply.solveResult?.evidence).toEqual([])
+    expect(reply.diagnostics?.some(line => line.includes("solve:understand") && line.includes(reply.solveResult!.problemRevision))).toBe(true)
+    expect(reply.diagnostics?.some(line => line.includes("solve:accept") && line.includes("partial"))).toBe(true)
+  })
+})

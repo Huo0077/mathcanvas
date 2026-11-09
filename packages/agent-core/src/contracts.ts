@@ -235,10 +235,12 @@ export type EnvelopeAssumptions = string[]
  */
 export type PromptNormalisations = { original: string; normalized: string }[]
 
+import type { GoalAnswer } from "./answerResult"
+
 export type PlanEnvelope =
-  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; normalisations?: PromptNormalisations; answer?: string; actions: DraftAction[] }
+  | { schemaVersion: string; kind: "plan"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; relations?: PlanRelations; normalisations?: PromptNormalisations; answer?: string; goalAnswers?: GoalAnswer[]; actions: DraftAction[] }
   | { schemaVersion: string; kind: "clarification"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; questions: string[] }
-  | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; toolResultRefs: string[] }
+  | { schemaVersion: string; kind: "answer"; goal: string; factIds: string[]; assumptions?: EnvelopeAssumptions; answer: string; goalAnswers?: GoalAnswer[]; toolResultRefs: string[] }
 
 // ---------------------------------------------------------------- 关系表（设计 2026-10-03 §5.1）
 //

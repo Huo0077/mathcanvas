@@ -119,11 +119,56 @@ function describePlanShape(input: unknown): string {
  */
 const RELATION_KINDS: readonly PlanRelationKind[] = ["perpendicular", "parallel", "coplanar", "pointOn", "equalLength", "ratio", "midpoint"]
 
+/** Model-proposed goal values are untrusted data, not host verification records. */
+function readGoalAnswers(value: unknown, errors: ParseError[]): import("./answerResult").GoalAnswer[] | undefined {
+  if (value === undefined) return undefined
+  const items = boundedArray(value, "envelope.goalAnswers", errors)
+  if (!items) return undefined
+  const out: import("./answerResult").GoalAnswer[] = []
+  const seen = new Set<string>()
+  for (const [index, raw] of items.entries()) {
+    const at = "envelope.goalAnswers[" + index + "]"
+    if (!isPlainObject(raw)) { errors.push(fail("invalid_type", at, "expected an object")); continue }
+    rejectUnknownFields(raw, ["goalId", "kind", "displayText", "value", "evidenceRefs"], at, errors)
+    const goalId = boundedString(raw.goalId, at + ".goalId", errors)
+    const displayText = boundedString(raw.displayText, at + ".displayText", errors, { maxLength: MAX_PLAN_ANSWER_LENGTH })
+    if (typeof raw.kind !== "string" || !["single_choice", "multiple_choice", "numeric", "interval", "proof", "drawing", "conversation", "unknown"].includes(raw.kind)) {
+      errors.push(fail("invalid_value", at + ".kind", "unknown answer kind")); continue
+    }
+    if (raw.evidenceRefs !== undefined && (!Array.isArray(raw.evidenceRefs) || raw.evidenceRefs.length !== 0))
+      errors.push(fail("invalid_value", at + ".evidenceRefs", "model cannot claim host evidence"))
+    if (!isPlainObject(raw.value) || raw.value.kind !== raw.kind) { errors.push(fail("invalid_type", at + ".value", "value must match answer kind")); continue }
+    const kind = raw.kind
+    const key = kind === "single_choice" ? "optionId" : kind === "numeric" || kind === "interval" ? "expression"
+      : kind === "proof" ? "conclusion" : kind === "drawing" ? "draftId" : kind === "multiple_choice" ? "optionIds" : "text"
+    rejectUnknownFields(raw.value, ["kind", key], at + ".value", errors)
+    let parsedValue: import("./answerResult").AnswerValue | undefined
+    if (kind === "multiple_choice") {
+      const options = readStringArray(raw.value.optionIds, at + ".value.optionIds", errors)
+      if (options && options.length > 0 && new Set(options).size === options.length && options.every(option => /^[ABCD]$/.test(option))) parsedValue = { kind, optionIds: options }
+      else errors.push(fail("invalid_value", at + ".value.optionIds", "choose distinct A-D options"))
+    } else {
+      const parsed = boundedString(raw.value[key], at + ".value." + key, errors)
+      if (parsed !== null) {
+        if (kind === "single_choice" && !/^[ABCD]$/.test(parsed)) errors.push(fail("invalid_value", at + ".value.optionId", "option must be A-D"))
+        else if (kind === "drawing") errors.push(fail("invalid_value", at + ".value.draftId", "draft IDs come only from the host"))
+        else parsedValue = { kind, [key]: parsed } as import("./answerResult").AnswerValue
+      }
+    }
+    if (goalId && seen.has(goalId)) errors.push(fail("duplicate_goal", at + ".goalId", "duplicate goal id"))
+    if (goalId && displayText && parsedValue && !seen.has(goalId)) {
+      seen.add(goalId)
+      out.push({ goalId, kind: kind as import("./answerResult").AnswerKind, displayText, value: parsedValue, evidenceRefs: [] })
+    }
+  }
+  return out
+}
+
 export const COMMON_ENVELOPE_FIELDS = ["schemaVersion", "kind", "goal", "factIds", "assumptions"] as const
 export const ENVELOPE_BRANCHES = {
-  plan: { required: ["actions"], optional: ["relations", "normalisations", "answer"] },
+  plan: { required: ["actions"], optional: ["relations", "normalisations", "answer", "goalAnswers"] },
   clarification: { required: ["questions"], optional: [] },
-  answer: { required: ["answer", "toolResultRefs"], optional: [] }
+  answer: { required: ["answer", "toolResultRefs"], optional: ["goalAnswers"] }
 } as const
 
 export function envelopeAllowedFields(kind: PlanEnvelope["kind"]): readonly string[] {
@@ -157,6 +202,7 @@ export function planEnvelopeToolParameters(actionItems: readonly JsonSchema[]): 
       questions: { ...strings, minItems: 1 },
       answer: { type: "string", maxLength: MAX_PLAN_ANSWER_LENGTH },
       toolResultRefs: strings,
+      goalAnswers: { type: "array", maxItems: MAX_ARRAY, items: { type: "object", additionalProperties: false, required: ["goalId", "kind", "displayText", "value"], properties: { goalId: text, kind: { type: "string", enum: ["single_choice", "multiple_choice", "numeric", "interval", "proof", "conversation", "unknown"] }, displayText: text, value: { type: "object", additionalProperties: false, oneOf: [{"type":"object","additionalProperties":false,"required":["kind","optionId"],"properties":{"kind":{"type":"string","enum":["single_choice"]},"optionId":{"type":"string","minLength":1}}},{"type":"object","additionalProperties":false,"required":["kind","optionIds"],"properties":{"kind":{"type":"string","enum":["multiple_choice"]},"optionIds":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string","enum":["A","B","C","D"]}}}},{"type":"object","additionalProperties":false,"required":["kind","expression"],"properties":{"kind":{"type":"string","enum":["numeric"]},"expression":{"type":"string","minLength":1}}},{"type":"object","additionalProperties":false,"required":["kind","expression"],"properties":{"kind":{"type":"string","enum":["interval"]},"expression":{"type":"string","minLength":1}}},{"type":"object","additionalProperties":false,"required":["kind","conclusion"],"properties":{"kind":{"type":"string","enum":["proof"]},"conclusion":{"type":"string","minLength":1}}},{"type":"object","additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"type":"string","enum":["conversation"]},"text":{"type":"string","minLength":1}}},{"type":"object","additionalProperties":false,"required":["kind","text"],"properties":{"kind":{"type":"string","enum":["unknown"]},"text":{"type":"string","minLength":1}}}] }, evidenceRefs: { type: "array", maxItems: 0 } } } },
       relations: {
         type: "array",
         maxItems: MAX_ARRAY,
@@ -417,6 +463,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
     : undefined
   const normalisations = !rawNormalisations || rawNormalisations.length === 0 ? undefined : rawNormalisations
 
+  const goalAnswers = readGoalAnswers(input.goalAnswers, errors)
   if (kind === "plan") {
     const answer = input.answer === undefined ? undefined : boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true, maxLength: MAX_PLAN_ANSWER_LENGTH }) ?? undefined
     const rawActions = boundedArray(input.actions, "envelope.actions", errors)
@@ -435,7 +482,7 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
       actions.push(parsed.value)
     }
     if (errors.length > 0) return { ok: false, errors }
-    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), ...(answer === undefined ? {} : { answer }), actions }, ...(notes.length === 0 ? {} : { notes }) }
+    return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, relations, ...(normalisations === undefined ? {} : { normalisations }), ...(answer === undefined ? {} : { answer }), ...(goalAnswers === undefined ? {} : { goalAnswers }), actions }, ...(notes.length === 0 ? {} : { notes }) }
   }
 
   if (kind === "clarification") {
@@ -448,6 +495,6 @@ export function parsePlanEnvelope(input: unknown): ParseResult<PlanEnvelope> {
   const answer = boundedString(input.answer, "envelope.answer", errors, { allowEmpty: true, maxLength: MAX_PLAN_ANSWER_LENGTH })
   const toolResultRefs = readStringArray(input.toolResultRefs, "envelope.toolResultRefs", errors)
   if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, toolResultRefs: toolResultRefs as string[] }, ...(notes.length === 0 ? {} : { notes }) }
+  return { ok: true, value: { schemaVersion: PLAN_SCHEMA_VERSION, kind, goal: goal as string, factIds: factIds as string[], assumptions, answer: answer as string, ...(goalAnswers === undefined ? {} : { goalAnswers }), toolResultRefs: toolResultRefs as string[] }, ...(notes.length === 0 ? {} : { notes }) }
 }
 

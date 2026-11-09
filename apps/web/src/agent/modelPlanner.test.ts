@@ -1222,3 +1222,14 @@ describe("W2 — provider budget shared with vision", () => {
     expect(runModel).not.toHaveBeenCalled()
   })
 })
+
+
+it("W3 gives the planner the exact host goal IDs for structured answers", async () => {
+  const runModel = vi.fn(async (_request: SentRequest) => deltas(goodEnvelope))
+  const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel,
+    requiredGoals: [{ goalId: "revision:goal:0-7:0", kind: "numeric", sourceText: "求 BC 的长度" }] })
+  await planner.plan(request())
+  const system = runModel.mock.calls[0]![0].messages[0]!.content
+  expect(system).toContain("revision:goal:0-7:0")
+  expect(system).toContain("求 BC 的长度")
+})

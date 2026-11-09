@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { auditEntryFor, canonicalContentHash, describeDefaultPolicies, isRegisteredActionId, newDraftId, newRunId, parsePlanEnvelope, parseDraftAction, repairRequestFor, sha256HexBytes, unsupportedActionReason } from "./schemas"
+import { auditEntryFor, canonicalContentHash, describeDefaultPolicies, isRegisteredActionId, newDraftId, newRunId, planEnvelopeToolParameters, parsePlanEnvelope, parseDraftAction, repairRequestFor, sha256HexBytes, unsupportedActionReason } from "./schemas"
 import { DRAFT_ACTION_IDS } from "./actionIds"
 import { MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, type DocumentHandle } from "./contracts"
 
@@ -1144,5 +1144,32 @@ describe("repair envelopes", () => {
       expect(err?.code).toBe("unknown_field")
       expect(err?.detail).toContain("unexpected field 'normalisations'")
     }
+  })
+})
+
+
+describe("W3 per-goal candidate schema", () => {
+  it("accepts labelled structured numerical subanswers on a read-only envelope", () => {
+    const parsed = parsePlanEnvelope({ kind: "answer", goal: "lengths", answer: "（1）BC=2", toolResultRefs: [],
+      goalAnswers: [{ goalId: "goal-before", kind: "numeric", displayText: "BC=2", value: { kind: "numeric", expression: "2" }, evidenceRefs: [] }] })
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok && parsed.value.kind === "answer") expect(parsed.value.goalAnswers?.[0]?.value).toEqual({ kind: "numeric", expression: "2" })
+  })
+  it("publishes a native-tool candidate shape as strict as the parser", () => {
+    const params = planEnvelopeToolParameters([])
+    const candidate = params.properties?.goalAnswers?.items
+    expect(candidate?.properties?.value?.additionalProperties).toBe(false)
+    expect(candidate?.properties?.value?.oneOf?.length).toBeGreaterThan(0)
+  })
+  it("rejects model forged evidence, missing values and duplicate answer goals", () => {
+    const base = { kind: "answer", goal: "lengths", answer: "reply", toolResultRefs: [] }
+    const candidate = { goalId: "goal-before", kind: "numeric", displayText: "2", value: { kind: "numeric", expression: "2" }, evidenceRefs: [] }
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, evidence: { status: "formally_proved" } }] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [candidate, candidate] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, value: { kind: "numeric", expression: "" } }] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, value: { kind: "numeric", expression: "2", verifierStatus: "formally_proved" } }] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, evidenceRefs: ["scene:fake"] }] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, kind: "drawing", value: { kind: "drawing", draftId: "forged" } }] }).ok).toBe(false)
+    expect(parsePlanEnvelope({ ...base, goalAnswers: [{ ...candidate, value: { kind: "numeric", expression: "2", approximation: 5 } }] }).ok).toBe(false)
   })
 })

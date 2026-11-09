@@ -180,3 +180,9 @@ describe("W3 — 稳定 id 与兼容性", () => {
     expect(toLegacyObligationSet(result.ir).givens).toEqual(parsed.givens)
   })
 })
+
+
+it("recognizes an explicit create-one-shape request as one drawing goal", () => {
+  const result = understandProblem({ prompt: "建一个棱长 3 的立方体", problemRevision: "drawing-rev" })
+  expect(result.goals.map(goal => goal.expectedKind)).toEqual(["drawing"])
+})

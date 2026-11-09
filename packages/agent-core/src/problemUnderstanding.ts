@@ -76,7 +76,7 @@ interface GoalFragment {
 const UNIT_SUFFIX = /(的长度|的长|的距离|的周长|的面积|的体积|的度数|的正弦值|的余弦值|的大小)$/
 
 /** 目标标记：按长到短排列，`求出` 不能被 `求` 抢先匹配。 */
-const GOAL_MARKER = /(求证|试证|证明|求出|求得|判断|计算|画出|作出|作图|求)/g
+const GOAL_MARKER = /(求证|试证|证明|求出|求得|判断|计算|画出|作出|作图|绘制|创建|建立|建一个|建造|求)/g
 
 /** 句子边界（不消费分隔符本身）。 */
 const SENTENCE_END = /[。；;！!？?\n]/g
@@ -151,7 +151,7 @@ function goalFragments(text: string): GoalFragment[] {
       if (clause.text.length === 0) continue
       const forcedKind: AnswerKind | undefined = marker.marker === "求证" || marker.marker === "证明" || marker.marker === "试证"
         ? "proof"
-        : marker.marker === "画出" || marker.marker === "作出" || marker.marker === "作图"
+        : marker.marker === "画出" || marker.marker === "作出" || marker.marker === "作图" || marker.marker === "绘制" || marker.marker === "创建" || marker.marker === "建立" || marker.marker === "建一个" || marker.marker === "建造"
           ? "drawing"
           : undefined
       for (const fragment of splitMergedClause(clause.text, clause.start)) {

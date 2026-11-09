@@ -24,7 +24,7 @@ import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, de
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v15"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v16"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -148,6 +148,8 @@ function outputShapes(canPlan: boolean): string[] {
   shapes.push(`澄清（只有在**关系无法同时满足**时才用它）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "一句话", factIds: [], questions: ["一个具体的、用户能回答的问题"] })}`)
   shapes.push(`只读回答（不改文档时用它）：${JSON.stringify({ schemaVersion: PLAN_SCHEMA_VERSION, kind: "answer", goal: "一句话", factIds: [], answer: "回答本身", toolResultRefs: [] })}`)
   shapes.push(`作图计划也可用 \`answer\` 附上解答。该字段最多 ${MAX_PLAN_ANSWER_LENGTH} 字符。`)
+  shapes.push("数学题按必答小问提供可选 `goalAnswers`：每项包含 `goalId`、`kind`、`displayText`、`value`；目标标识必须来自题目目标，不可编造或复用别的题号。只有确定对应哪一问才填写。")
+  shapes.push("`goalAnswers` 是候选值，不能自称已核验；`evidenceRefs` 只能是空数组或省略，不能提交证据、证明状态或宿主草稿 ID。")
   return shapes
 }
 

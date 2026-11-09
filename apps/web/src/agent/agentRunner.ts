@@ -1,5 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, routeDeterministicProblem, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, buildLayoutModel, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RenderEvidence, type RunContext, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -8,12 +8,14 @@ import { useSceneStore } from "../store"
 import { conversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
 import { appendRunEvent } from "../services/runEventClient"
-import { createAgentRuntime, type AgentRuntime } from "./agentRuntime"
+import { type AgentRuntime } from "./agentRuntime"
+import { startProblemSolve, selectProblemPlanner } from "./problemSolveService"
 import { deriveAcceptance } from "./acceptance"
 import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
-import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
-import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
+import { type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
+import { agentReliabilityFlags, type AgentReliabilityFlags } from "./reliabilityFlags"
+import { createSolveContext } from "@draw/agent-core"
 import { claimSolveSession, createDefaultSolveSession, type SolveSession } from "../services/solveSession"
 
 /**
@@ -413,6 +415,8 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true; switched?: boolean
  */
 export interface AgentRunnerDependencies {
   planner?: PlannerPort
+  /** Opt-in reliability flags; the shipping default remains legacy until rollout. */
+  reliabilityFlags?: AgentReliabilityFlags
   /**
    * 模型规划器的注入点（测试用）。
    *
@@ -519,49 +523,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, imageNotes: string, runId?: string, solveSession?: SolveSession): Promise<PlannerSelection> {
-    // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
-    if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
-
-    /**
-     * **两个入口共用同一份确定性构造**（T7，2026-11-05）：
-     * 题面能被确定性构造识别、且题设已**独立核验**时，模型入口也直接用这份计划 ——
-     * 模型只负责结构/动作参数，不手算顶点坐标（见 `systemPrompt` 的那条纪律）。
-     * 识别不出或核验不过 ⇒ 返回 null，继续走原来的模型/兜底路径。
-     */
-    const deterministic = routeDeterministicProblem(prompt)
-    if (deterministic) return {
-      planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
-      diagramPrompt: deterministic.diagramPrompt,
-      requestedSkillIds: [deterministic.family], textProfileId: "local-planner"
-    }
-
-    const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
-    if (!resolution.ok) {
-      // This opt-in path is only reachable after the user enables witness search;
-      // a browser without a provider must not silently turn on diagram rescue.
-      const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
-      return { planner: createLocalPlanner(options), requestedSkillIds: localIntentSkillIds(prompt, options), textProfileId: "local-planner" }
-    }
-    return {
-      planner: createModelPlanner({
-        ...dependencies.modelPlanner,
-        imageNotes,
-        solveSession,
-        resolveProvider: async () => resolution,
-        /**
-         * **模型原话留在本机诊断里**（2026-09-22，用户现场）：界面上那句失败文案只说得出"形状不对"，
-         * 而"模型到底回了什么"是排查的唯一证据 —— 以前它被整个丢掉，只能靠猜。
-         * 注入的 `onDiagnostic`（测试用）照旧转发。
-         */
-        onDiagnostic: (line) => {
-          dependencies.modelPlanner?.onDiagnostic?.(line)
-          useAgentStore.getState().recordDiagnostic(line, runId)
-        }
-      }),
-      requestedSkillIds: MODEL_PLANNER_SKILL_IDS,
-      textProfileId: resolution.provider.id
-    }
+  async function selectPlanner(prompt: string, imageNotes: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]): Promise<PlannerSelection> {
+    return selectProblemPlanner({ prompt, imageNotes, planner: dependencies.planner, modelPlanner: dependencies.modelPlanner,
+      solveSession, requiredGoals, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
@@ -590,9 +554,19 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         useAgentStore.getState().recordDiagnostic(`应用构建 ${import.meta.env.VITE_MATHCANVAS_BUILD}`, eventRunId)
       }
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
+      const reliability = dependencies.reliabilityFlags ?? agentReliabilityFlags()
+      const requiresGoalTracking = reliability.goalTrackingV1 && reliability.answerSemanticsV1
+      const hashText = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
+      const preparedSolveContext = requiresGoalTracking ? await createSolveContext({
+        runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: [], corrections: [],
+        sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText) : undefined
+      const requiredGoals = preparedSolveContext?.understanding.goals.map(goal => {
+        const source = preparedSolveContext.understanding.ir.obligations.find(item => item.id === goal.goalId)
+        return { goalId: goal.goalId, kind: goal.expectedKind, sourceText: source?.sourceText ?? "" }
+      })
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
       const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
-      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId, solveSession ?? undefined) : {
+      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId, solveSession, requiredGoals) : {
         requestedSkillIds: [], textProfileId: "local-planner",
         planner: { plan: async () => ({
           plan: {
@@ -621,7 +595,14 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        */
       const history = conversation.messages.filter((message) => message.id !== promptMessageId)
       useAgentStore.getState().recordDiagnostic(`[context] conversation ${conversation.binding.conversationId}: ${conversation.facts.length} confirmed fact(s), ${history.length} message(s)`, eventRunId)
-      const active = createAgentRuntime({
+      const active = startProblemSolve({ context: preparedSolveContext ?? await createSolveContext({ runId, conversationId: pinned?.conversationId ?? "local",
+        prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
+        session: solveSession, flags: reliability, hashText,
+        runtime: {
+        onSolveAudit: (event) => {
+          // Only bounded, structural metadata: never model text, base64, or credentials.
+          useAgentStore.getState().recordDiagnostic(`solve:${event.kind} ${event.problemRevision} ${event.goalId ?? ""} ${event.attemptId ?? ""} ${event.status ?? ""}`.slice(0, 256), eventRunId)
+        },
         // 每次现取：句柄里的内容哈希就是 Compare-and-Swap 的依据。
         readDocument: () => useSceneStore.getState().document,
         // 提交成功后落盘。用 `commitCandidate`（压一步历史）而不是 `replace`（清历史）。
@@ -672,7 +653,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // The browser host can deterministically verify the candidate layout from its structure.
         // This is a structured-only gate, not a screenshot, DOM, or vision measurement.
         candidateRenderEvidence: (input) => buildStructuredCandidateRenderEvidence(input)
-      })
+      } })
       /**
        * **把这一轮登记进按 `runId` 索引的表**（Fix round 1 / C2）。
        *
@@ -992,7 +973,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
                 ? `系统暂未能完整解析条件，本次未提交。${incomplete} 这不是让你补点名：题面里的点名是清楚的，问题在解析这一侧。可以先改成逐条写法（例如把 \`AD=AB=2CD=2\` 写成 \`AD=2，AB=2，CD=1\`）重试，或把原题发给我们定位。`
                 : `题设尚未核验，本次不会提交。${incomplete}`,
           retryable: false
-        }, eventRunId, generation())
+        }, eventRunId, generation(), active.solveResult())
       } else if (phase === "completed") {
         await useAgentStore.getState().recordReceipt({ status: "no_change" }, eventRunId, generation())
       }
