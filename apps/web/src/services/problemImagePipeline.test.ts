@@ -6,7 +6,7 @@ import {
   type AttachmentHandle,
   type DiagramItemInput
 } from "./problemImageEvidence"
-import { applyImageAudit, runImageRereadCycle, toOriginalRegion } from "./problemImagePipeline"
+import { applyImageAudit, orthographicViewReadings, runImageRereadCycle, toOriginalRegion } from "./problemImagePipeline"
 
 /**
  * **W4：图像证据流水线（2026-11-09）**。
@@ -191,5 +191,29 @@ describe("W4 — 重读后的 sourceRevision 必须变化", () => {
       reread: async () => [{ text: "底面边长 4", image: 1, box: [0.1, 0.1, 0.5, 0.5] }]
     })
     expect(outcome.requests[0]).toMatchObject({ attachmentId: "att-1", region: { x: 0, y: 0, width: 1, height: 1 } })
+  })
+})
+
+/**
+ * **W7 接线：图上的三视图读数整理成宿主可解析的规范句**。
+ *
+ * 体积判据只认这条规范句里的视图身份与尺寸 —— 模型散文里的"大概 4×3"不算。
+ */
+describe("W7 三视图读数规范化", () => {
+  it("builds the canonical three-view line and deduplicates repeated labels", () => {
+    const line = orthographicViewReadings([
+      { text: "主视图 4×3 的矩形" }, { text: "俯视图 4×2 的矩形" }, { text: "左视图 2×3 的矩形" },
+      { text: "主视图（重复）4×3" }, { text: "无关读数 AB=4" }
+    ])
+    expect(line).toBe("三视图读数：主视图 4×3 矩形；俯视图 4×2 矩形；左视图 2×3 矩形")
+  })
+
+  it("keeps the triangular outline marker so the pyramid family is derivable", () => {
+    expect(orthographicViewReadings([{ text: "主视图 4×3 三角形" }])).toBe("三视图读数：主视图 4×3 三角形")
+  })
+
+  it("returns undefined when there is no view reading at all", () => {
+    expect(orthographicViewReadings([{ text: "AB=4" }, { text: "图1" }])).toBeUndefined()
+    expect(orthographicViewReadings([{ text: "主视图（位置待核对）" }])).toBeUndefined()
   })
 })

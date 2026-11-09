@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 
-const { loadDataset, validateDataset } = require('./dataset.cjs')
+const { crossSplitMaterialConflicts, loadDataset, validateDataset } = require('./dataset.cjs')
 const { summarize, compareRuns, wilson } = require('./report.cjs')
 
 const root = path.resolve(__dirname, '../..')
@@ -80,4 +80,30 @@ test('comparing runs reports a point estimate, not significance', () => {
   const compared = compareRuns(baseline, candidate)
   assert.equal(compared.delta, 0.5)
   assert.match(compared.note, /Point estimate only/)
+})
+
+/**
+ * W10：生产清单用 `id`（题号）与四个互斥分卷，离线开发集用 `caseId` + `open-holdout`。
+ * 同一材料跨分卷必须被**点名**，而不能悄悄当成两道独立题。
+ */
+test('accepts production splits and production question numbers', () => {
+  const result = validateDataset([{
+    id: 'holdout-001', split: 'holdout-validation', family: 'rectangle-fold',
+    source: { kind: 'audit-fixture', reference: 'exam-2026' }, problemText: '题干内容',
+    goals: [{ id: 'g1', kind: 'numeric', reference: { value: 1 } }]
+  }])
+  assert.equal(result.ok, true, result.errors.join('\n'))
+})
+
+test('reports the same material used across two splits', () => {
+  const conflicts = crossSplitMaterialConflicts([
+    { id: 'a', split: 'dev', materialHash: 'h1' },
+    { id: 'b', split: 'holdout-blind', materialHash: 'h1' },
+    { id: 'c', split: 'dev', materialHash: 'h2' }
+  ])
+  assert.equal(conflicts.length, 1)
+  assert.equal(conflicts[0].materialHash, 'h1')
+  assert.equal(conflicts[0].first.id, 'a')
+  assert.equal(conflicts[0].second.split, 'holdout-blind')
+  assert.equal(crossSplitMaterialConflicts([{ id: 'a', split: 'dev', materialHash: 'h1' }, { id: 'b', split: 'dev', materialHash: 'h1' }]).length, 0)
 })

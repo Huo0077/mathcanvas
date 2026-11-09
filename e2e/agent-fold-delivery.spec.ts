@@ -26,6 +26,8 @@ test("a merged pre/post fold question delivers both lengths", async ({ page }) =
   await expect(card).toContainText("2√85/5")
   // 没有核验器时仍然是"未核验"：交付 ≠ 证明。
   await expect(card).toContainText("未核验")
+  // W9：两个长度都交付了也不允许显示"已核验"。
+  await expect(card).not.toHaveAttribute("data-delivery-badge", "verified")
 })
 
 test("a contradictory diagonal is reported instead of silently answered", async ({ page }) => {

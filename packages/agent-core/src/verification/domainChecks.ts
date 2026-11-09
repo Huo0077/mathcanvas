@@ -1,8 +1,9 @@
 import type { EvidenceRecord, GoalAnswer } from "../answerResult"
+import { solveOrthographicProblem, type OrthographicView } from "../orthographicProblem"
 import { checkEllipseVertexBound, checkHyperbolaFoot, type Point2 } from "./conicChecks"
 import { checkDrawProbability, exactProbability, type DrawCondition, type ExactFraction } from "./discreteProbabilityChecks"
 import { checkFunctionClaim, type FunctionUnits } from "./functionChecks"
-import { parseScalar } from "./mathAnswerVerification"
+import { parseScalar } from "./scalarParsing"
 import { checkRightTriangle, type Point2 as PlanePoint } from "./planeGeometryChecks"
 import { judgeMonotonicity } from "./sequenceChecks"
 
@@ -74,6 +75,19 @@ export type DomainMathFact =
   | DrawProbabilityFact
   | RightTriangleAreaFact
   | ContinuedFractionMonotonicityFact
+  | OrthographicVolumeFact
+
+/**
+ * **三视图体积（W7 补，2026-11-09）**：视图来自图像管线的**结构化读数**
+ * （`parseOrthographicViews`），不是模型的散文。候选数值直接走同一个
+ * `solveOrthographicProblem`：轮廓/视图身份/体积双核验都只有一份实现。
+ */
+export interface OrthographicVolumeFact {
+  kind: "orthographic-volume"
+  goalId: string
+  views: readonly OrthographicView[]
+  family?: "cuboid" | "notched-cuboid" | "right-pyramid"
+}
 
 export interface DomainVerificationResult {
   decision: "supported" | "refuted" | "unknown"
@@ -266,6 +280,34 @@ function fractionOf(candidate: GoalAnswer): ExactFraction | null {
   return integer === null ? null : exactProbability(1n, BigInt(integer[1]!))
 }
 
+function orthographicVolume(fact: OrthographicVolumeFact, candidate: GoalAnswer, problemRevision: string): DomainVerificationResult {
+  const method = "orthographic-volume"
+  const domain = "orthographic:declared-views"
+  const claimed = numericOf(candidate)
+  if (!finite(claimed ?? Number.NaN)) return { decision: "unknown", method, domain, reasonCodes: ["candidate_not_numeric"] }
+  const solved = solveOrthographicProblem({
+    problemRevision,
+    views: fact.views,
+    ...(fact.family === undefined ? {} : { family: fact.family })
+  })
+  if (solved.status !== "answer") {
+    // 冲突/信息不足/域外都**不**给数值：这正是 mm-005 那类"补一个数凑选项"的反面。
+    const reasonCodes = solved.status === "conflict"
+      ? [solved.code]
+      : solved.status === "information_incomplete"
+        ? [...solved.reasonCodes]
+        : ["unsupported"]
+    return { decision: "unknown", method, domain, reasonCodes }
+  }
+  const residuals = { volume: solved.volume, claimed: claimed! }
+  if (closeTo(solved.volume, claimed!)) {
+    return { decision: "supported", method, domain, reasonCodes: ["limited_domain", `family:${solved.family}`], residuals, evidenceStatus: "verified_instance",
+      evidence: evidenceOf({ problemRevision, goalId: fact.goalId, method, decision: "supported", status: "verified_instance", residuals }) }
+  }
+  return { decision: "refuted", method, domain, reasonCodes: ["counterexample_found", `family:${solved.family}`], counterexample: residuals, residuals,
+    evidence: evidenceOf({ problemRevision, goalId: fact.goalId, method, decision: "refuted", status: "verified_instance", residuals }) }
+}
+
 export function verifyDomainAnswer(fact: DomainMathFact, candidate: GoalAnswer, problemRevision: string): DomainVerificationResult {
   switch (fact.kind) {
     case "hyperbola-asymptote-foot": return hyperbolaAsymptoteFoot(fact, candidate, problemRevision)
@@ -274,6 +316,7 @@ export function verifyDomainAnswer(fact: DomainMathFact, candidate: GoalAnswer, 
     case "draw-probability": return drawProbability(fact, candidate, problemRevision)
     case "right-triangle-area": return rightTriangleArea(fact, candidate, problemRevision)
     case "continued-fraction-monotonicity": return continuedFractionMonotonicity(fact, candidate, problemRevision)
+    case "orthographic-volume": return orthographicVolume(fact, candidate, problemRevision)
   }
 }
 

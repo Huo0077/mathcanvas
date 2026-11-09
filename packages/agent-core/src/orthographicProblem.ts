@@ -1,5 +1,5 @@
 import { outlinesAgree, projectPrismViews, projectPyramidViews, type Outline2D } from "@draw/geometry-kernel"
-import { parseScalar } from "./verification/mathAnswerVerification"
+import { parseScalar } from "./verification/scalarParsing"
 
 /**
  * **有限三视图与体积双核验（W7 / T7，2026-11-08）**。
@@ -81,6 +81,43 @@ export type OrthographicSolution =
   | { status: "unsupported"; problemRevision: string; reason: string }
 
 type Vec3 = { x: number; y: number; z: number }
+
+/**
+ * **W7（补）：从结构化读数里读出三视图**。
+ *
+ * 图像管线给出的是一行行读数（"主视图 4×3 的矩形"），派生出题面事实时必须走同一套
+ * 解析：**只认视图身份 + 宽×高 + 轮廓顶点数**，读不全就返回 `null`（宁可不生成事实）。
+ * 解析器本身不猜：没有"主视图"字样的一行不会被当成主视图。
+ */
+export interface ParsedOrthographicViews {
+  views: OrthographicView[]
+  family?: "right-pyramid"
+}
+
+const VIEW_PATTERNS: { id: OrthographicViewId; pattern: RegExp }[] = [
+  { id: "front", pattern: /(?:主视图|正视图)[^0-9]{0,16}(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/ },
+  { id: "top", pattern: /俯视图[^0-9]{0,16}(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/ },
+  { id: "side", pattern: /(?:左视图|侧视图)[^0-9]{0,16}(\d+(?:\.\d+)?)\s*[×xX*]\s*(\d+(?:\.\d+)?)/ }
+]
+
+export function parseOrthographicViews(text: string): ParsedOrthographicViews | null {
+  const compact = text.replace(/\s+/g, "")
+  const views: OrthographicView[] = []
+  for (const { id, pattern } of VIEW_PATTERNS) {
+    const match = pattern.exec(compact)
+    if (match === null) continue
+    const width = Number(match[1])
+    const height = Number(match[2])
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) continue
+    // 形状词只用来补轮廓顶点数；没有形状词就不声明顶点数（仍可算，但不能称形状唯一）。
+    const after = compact.slice((match.index ?? 0) + match[0].length, (match.index ?? 0) + match[0].length + 12)
+    const vertexCount = /三角形|三棱锥/.test(after) ? 3 : /矩形|长方形|四边形|正方形/.test(after) ? 4 : undefined
+    views.push({ id, width, height, ...(vertexCount === undefined ? {} : { vertexCount }) })
+  }
+  if (views.length === 0) return null
+  const family = views.some((view) => view.vertexCount === 3) ? "right-pyramid" : undefined
+  return { views, ...(family === undefined ? {} : { family }) }
+}
 
 const VIEW_LABEL: Record<OrthographicViewId, string> = { front: "主视图", top: "俯视图", side: "左视图" }
 

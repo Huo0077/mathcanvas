@@ -197,3 +197,32 @@ export async function applyImageAudit(context: SolveContext, audit: ImageEvidenc
 export function sourceAttachmentsOf(attachments: readonly AttachmentHandle[]): { attachmentId: string; sha256: string; page: number }[] {
   return attachments.map((attachment) => ({ attachmentId: attachment.attachmentId, sha256: attachment.sha256, page: attachment.page ?? 1 }))
 }
+
+/**
+ * **W7 接线：把图上的三视图读数变成可派生的事实来源**。
+ *
+ * 图像管线只给出"主视图 4×3 的矩形"这样的**读数**；这里把它们整理成一条规范句
+ * （`三视图读数：主视图 4×3 矩形；…`），随题面进入解题上下文。宿主的
+ * `parseOrthographicViews` 只认这条规范句里的视图身份与尺寸 —— 因此体积判据
+ * 用的仍是题图读数，而不是模型自己编的题设。
+ */
+export function orthographicViewReadings(items: readonly { text: string }[]): string | undefined {
+  const seen = new Set<string>()
+  const lines: string[] = []
+  for (const item of items) {
+    const text = item.text.replace(/\s+/g, "")
+    const label = /主视图|正视图/.test(text) ? "主视图"
+      : /俯视图/.test(text) ? "俯视图"
+        : /左视图|侧视图/.test(text) ? "左视图"
+          : undefined
+    if (label === undefined || seen.has(label)) continue
+    const size = /(\d+(?:\.\d+)?)[×xX*](\d+(?:\.\d+)?)/.exec(text)
+    if (size === null) continue
+    seen.add(label)
+    const shape = /三角形|三棱锥/.test(text) ? " 三角形"
+      : /矩形|长方形|四边形|正方形/.test(text) ? " 矩形"
+        : ""
+    lines.push(`${label} ${size[1]}×${size[2]}${shape}`)
+  }
+  return lines.length === 0 ? undefined : `三视图读数：${lines.join("；")}`
+}

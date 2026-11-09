@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { solveOrthographicProblem, type OrthographicView } from "./orthographicProblem"
+import { parseOrthographicViews, solveOrthographicProblem, type OrthographicView } from "./orthographicProblem"
 
 /**
  * **W7 / T7：有限三视图族的约束建模与体积双核验。**
@@ -189,5 +189,34 @@ describe("W7 — 候选消歧与轮廓反投影", () => {
     if (withOptions.status !== "answer" || without.status !== "answer") return
     expect(without.volume).toBe(withOptions.volume)
     expect(without.matchedOptions).toEqual([])
+  })
+})
+
+/**
+ * **W7 接线（2026-11-09）：从结构化读数解析三视图**。
+ *
+ * 图像管线给的是"主视图 4×3 的矩形"这种读数；解析器只认**视图身份 + 宽×高 + 形状**，
+ * 读不全就不生成事实；没有视图字样的一行绝不会被当成视图。
+ */
+describe("W7 — 从读数解析三视图", () => {
+  it("parses the three canonical view readings", () => {
+    const parsed = parseOrthographicViews("主视图 4×3 的矩形，俯视图 4×2 的矩形，左视图 2×3 的矩形")!
+    expect(parsed.views.map((view) => [view.id, view.width, view.height, view.vertexCount])).toEqual([
+      ["front", 4, 3, 4], ["top", 4, 2, 4], ["side", 2, 3, 4]
+    ])
+    expect(parsed.family).toBeUndefined()
+  })
+
+  it("derives the pyramid family from triangular outlines", () => {
+    const parsed = parseOrthographicViews("三视图读数：主视图 4×3 三角形；俯视图 4×2 矩形；左视图 2×3 三角形")!
+    expect(parsed.family).toBe("right-pyramid")
+    expect(parsed.views.find((view) => view.id === "front")?.vertexCount).toBe(3)
+  })
+
+  it("returns null when no view reading is present, and does not invent missing views", () => {
+    expect(parseOrthographicViews("求这个几何体的体积。")).toBeNull()
+    const partial = parseOrthographicViews("主视图 4×3 的矩形")!
+    expect(partial.views).toHaveLength(1)
+    expect(partial.views[0]?.id).toBe("front")
   })
 })

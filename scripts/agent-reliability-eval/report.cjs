@@ -74,11 +74,36 @@ function validateRun(run) {
   }
 }
 
+/** W10：报告里的任何"成功率"都必须落在 [0,1]；超过 100% 是代码缺陷，不是好消息。 */
+function assertUnitIntervals(report) {
+  const check = (value, path) => {
+    if (value === undefined || value === null) return
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${path} must be within [0,1], got ${value}`)
+  }
+  const walk = (bucket, path) => {
+    if (bucket === null || typeof bucket !== 'object') return
+    for (const [key, value] of Object.entries(bucket)) {
+      if (/Accuracy$/.test(key)) check(value, `${path}.${key}`)
+    }
+    check(bucket.wilson?.low, `${path}.wilson.low`)
+    check(bucket.wilson?.high, `${path}.wilson.high`)
+    check(bucket.wilson?.p, `${path}.wilson.p`)
+  }
+  if (!report || typeof report !== 'object') throw new TypeError('report must be an object')
+  walk(report.totals, 'totals')
+  for (const [key, bucket] of Object.entries(report.bySplit ?? {})) walk(bucket, `bySplit.${key}`)
+  for (const [key, bucket] of Object.entries(report.byFamily ?? {})) walk(bucket, `byFamily.${key}`)
+  for (const [key, bucket] of Object.entries(report.byEntryTrack ?? {})) walk(bucket, `byEntryTrack.${key}`)
+  return report
+}
+
 function summarize(run) {
   validateRun(run)
   const totals = emptyBucket()
   const bySplit = {}
   const byFamily = {}
+  /** W10：UI 抽测（`ui`）与服务评测（`core-service`）必须分开报告，不能混成一个成功率。 */
+  const byEntryTrack = {}
   for (const item of run.cases) {
     addTo(totals, item)
     const split = item.split ?? 'unknown'
@@ -87,16 +112,20 @@ function summarize(run) {
     const family = item.family ?? 'unknown'
     byFamily[family] = byFamily[family] ?? emptyBucket()
     addTo(byFamily[family], item)
+    const track = item.entryTrack ?? 'unknown'
+    byEntryTrack[track] = byEntryTrack[track] ?? emptyBucket()
+    addTo(byEntryTrack[track], item)
   }
   const finalizeAll = (buckets) => Object.fromEntries(Object.entries(buckets).map(([key, bucket]) => [key, finalize(bucket)]))
-  return {
+  return assertUnitIntervals({
     runId: run.runId ?? null,
     config: run.config ?? null,
     totals: finalize(totals),
     bySplit: finalizeAll(bySplit),
     byFamily: finalizeAll(byFamily),
+    byEntryTrack: finalizeAll(byEntryTrack),
     note: 'One run is one observation; repeated runs of the same cases are not independent samples.'
-  }
+  })
 }
 
 /** Paired difference in full accuracy; deliberately does not print a significance claim. */
@@ -109,4 +138,4 @@ function compareRuns(baseline, candidate) {
   return { baseline: before, candidate: after, delta, note: 'Point estimate only; use the per-run Wilson intervals and the case count before calling this an improvement.' }
 }
 
-module.exports = { wilson, summarize, compareRuns }
+module.exports = { wilson, summarize, compareRuns, assertUnitIntervals }

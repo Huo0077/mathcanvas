@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— 补线：W9 浏览器 e2e、W7 结构化视图接线、W10 分轨报告
+
+- **W9 e2e 已补上**：新增 `e2e/agent-verified-delivery.spec.ts`（3 项），并在既有 `agent-answer-delivery` / `agent-fold-delivery` 里加上徽标断言。用当前源码重建 Web 后实跑 **7/7 通过**（`--workers=1`，global-setup 用 Vite 现构建，不是旧产物）。判据：无宿主证据时徽标是 `unverified`、逐问标未核验、交付两段长度也不许出现"已核验（逐问）"。
+- **W7 结构化视图接线**：`parseOrthographicViews` 只认"视图身份 + 宽×高 + 形状"，新增 `orthographic-volume` 事实（`domainChecks`）直接复用 `solveOrthographicProblem` 的轮廓/双核验；题图读数由 `orthographicViewReadings` 整理成规范句「三视图读数：主视图 4×3 矩形；…」随后进入解题上下文。`trustedFactAdapters` 从题面/读数生成事实，`verifyMathAnswer` 统一出口：`24` 支持、`30` 否证、视图冲突返回 `unknown`（`view_identity_conflict`），不给数字。
+- **W10 分轨与分卷**：`dataset.cjs` 接受生产分卷（`dev` / `holdout-validation` / `holdout-blind` / `anomaly`）与生产题号 `id`，新增 `crossSplitMaterialConflicts`；`report.cjs` 新增 `byEntryTrack`（UI 抽测与服务评测分开报告）与 `assertUnitIntervals`（任何 `*Accuracy` 越界即抛错），并接入 `summarize`。
+- 门禁：W7/W10 定向 **46 + 28 项**；W9 e2e **7/7**；全项目 typecheck exit 0；改动文件 lint 0 错误；全量单测与文档门禁见下。**仍未启用新模型、未跑付费评测、未打 tag/Release**；W8 的独立模型真实调用与设置页"只存配置引用"仍未做。
+
 ## 2026-11-09 —— Agent高可靠升级 W11：开关依赖、灰度分桶与回滚
 
 - **W0—W11 全部实施并逐包推送**（最新提交见远端 `origin/main`）。本包关闭"开关能返回 true、行为却不变"和"非法组合照样跑"两个旧缺口。
@@ -16,7 +23,7 @@
 - **新增清单闸门**（`scripts/agent-reliability-eval/manifest.cjs`）：校验 `corpusHash` / `scorerVersion` / `buildId` / `binarySha256` / `revision` / `profileRevision` / `flagSnapshot` / `budgetSnapshot` / `entryTrack`，并拒绝六类捷径 —— 同一材料跨 dev/holdout（`cross_split`）、同 split 重复材料、题号重复、冻结后材料被改或冻结题号缺失（`material_changed_after_freeze`）、需配图却无附件（`image_without_attachment`）、参考解泄漏到题面（`reference_in_prompt`）。
 - **新增离线阶梯规划**（`production.eval.mjs`）：默认 `offline_planned`（所有阶梯 `runs = 0`）；真实运行必须 `MATHCANVAS_REAL_EXAM_LIVE=1` **且** `MATHCANVAS_EXPECTED_BUILD` 与清单 `buildId` 完全一致，否则拒绝（`build_identity_missing` / `build_identity_mismatch`）。
 - **新增冻结清单与说明**（`test-fixtures/agent-reliability-v2/manifest.json`、`README.md`）：4 条 dev/验证/盲测/异常题号，只含哈希与题干，不含参考答案；阶梯为 离线 → 10 → 50×3 → 100 → 500，重复两轮仍只有 500 道不同题。
-- 门禁：W10 定向 **12 项**（`node --test`）；`production.eval.mjs` 默认输出 `offline_planned`；改动文件 lint 0 错误；文档门禁 22/22。**没有 500 题语料、没有跑过任何付费批次**：本包证明的是闸门存在，不证明准确率；`dataset.cjs` / `report.cjs` 未改成新 split 命名（沿用既有校验器）。
+- 门禁：W10 定向 **12 项**（`node --test`）；`production.eval.mjs` 默认输出 `offline_planned`；改动文件 lint 0 错误；文档门禁 22/22。**没有 500 题语料、没有跑过任何付费批次**：本包证明的是闸门存在，不证明准确率。`dataset.cjs` 的生产分卷/题号与 `report.cjs` 的 UI/服务分轨已在"补线"里补齐（定向 28 项）。
 
 ## 2026-11-09 —— Agent高可靠升级 W9：逐问交付徽标只认宿主证据
 
@@ -24,7 +31,7 @@
 - **新增 `agentDeliveryBadge`**：`deliverySummary(result)` 逐问统计证据并给出四档徽标 —— `verified`（必答目标**全部** `verified_instance` 且 answered）/ `partial`（有证据但没盖满）/ `unverified`（无证据、`sampled` 采样、旧消息）/ `failed`（有目标被否证或交付失败）。`deliveryBadge({status, requiredGoals, verifiedGoals, refutedGoals})` 是纯函数，两问只核验一问**不可能**得到 `verified`。
 - **界面接线**：`AnswerResult` 增加 `data-delivery-badge` 与逐问 `data-goal-verification`，并显示"已核验（逐问）/部分核验/未核验/核验未通过"；`sampled` 仍显示未核验，缺答目标继续单独列出。
 - 门禁：W9 定向 **2 文件 / 12 项**；Web + `agent-core` + geometry-kernel 全量 **489 文件 / 5225 项 + 1 todo**；全项目 typecheck exit 0；改动文件 lint 0 错误；文档门禁 22/22。
-- **未完成边界**：本轮**没有**运行 Playwright 的 `agent-verified-delivery` 等 e2e（需要重建 Web 产物并起浏览器）；两问逐项标签与"终答从结构化答案渲染"沿用 W2 既有实现，本包只改徽标依据。**未调用真模型**，不产生真实识别/准确率结论。
+- **未完成边界（已部分补齐，见上）**：Playwright 的 `agent-verified-delivery` 等 e2e 已在"补线"里跑通（7/7）；W2 既有的逐问标签与结构化终答未改。**未调用真模型**，不产生真实识别/准确率结论。
 
 ## 2026-11-09 —— Agent高可靠升级 W8：失败后的风险路由与独立候选判据
 

@@ -103,4 +103,31 @@ describe("W6 生产核验出口", () => {
     const fact: MathFact = { kind: "draw-probability", goalId: "g1", condition: { red: 3, blue: 2, draws: 2, replacement: "without" }, boundToProblem: false }
     expect(verifyMathAnswer({ problemRevision: "p".repeat(64), goalId: "g1", ir, candidate: numeric("3/10"), facts: [fact] }, budget(), signal).decision).toBe("unknown")
   })
+
+  /**
+   * **W7 补：三视图体积走同一个核验出口**。视图来自结构化读数（适配器解析），
+   * 候选数值直接交给 `solveOrthographicProblem` 的轮廓/双核验，不另写一套体积公式。
+   */
+  it("verifies an orthographic volume from parsed view readings", () => {
+    const facts = conditionMathFacts({ problemRevision: "p".repeat(64), conditions: [
+      { id: "c1", sourceText: "三视图读数：主视图 4×3 矩形；俯视图 4×2 矩形；左视图 2×3 矩形", goalIds: ["g1"] }
+    ] })
+    expect(facts[0]).toMatchObject({ kind: "orthographic-volume" })
+    const supported = verifyMathAnswer({ problemRevision: "p".repeat(64), goalId: "g1", ir, candidate: numeric("24"), facts }, budget(), signal)
+    expect(supported.decision).toBe("supported")
+    expect(supported.evidence?.evidence.status).toBe("verified_instance")
+
+    const refuted = verifyMathAnswer({ problemRevision: "p".repeat(64), goalId: "g1", ir, candidate: numeric("30"), facts }, budget(), signal)
+    expect(refuted.decision).toBe("refuted")
+    expect(refuted.evidence?.evidence.status).toBe("failed")
+  })
+
+  it("stays unknown when the view readings conflict instead of returning a number", () => {
+    const facts: MathFact[] = [{ kind: "orthographic-volume", goalId: "g1", views: [
+      { id: "front", width: 4, height: 3 }, { id: "top", width: 5, height: 2 }, { id: "side", width: 2, height: 3 }
+    ] }]
+    const result = verifyMathAnswer({ problemRevision: "p".repeat(64), goalId: "g1", ir, candidate: numeric("24"), facts }, budget(), signal)
+    expect(result.decision).toBe("unknown")
+    expect(result.reasonCodes).toContain("view_identity_conflict")
+  })
 })

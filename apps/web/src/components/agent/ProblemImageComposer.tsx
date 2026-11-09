@@ -15,7 +15,7 @@ import {
   type ImageEvidenceGap,
   type ImageEvidenceTarget
 } from "../../services/problemImageEvidence"
-import { regionToBox, runImageRereadCycle, toOriginalRegion } from "../../services/problemImagePipeline"
+import { regionToBox, orthographicViewReadings, runImageRereadCycle, toOriginalRegion } from "../../services/problemImagePipeline"
 import { AgentComposer } from "./AgentComposer"
 import { useAgentStore } from "../../agentStore"
 import { attachSolveSession, createDefaultSolveSession, dropSolveSession, type SolveSession } from "../../services/solveSession"
@@ -329,6 +329,8 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
       const instructions = [
         vectorReadings > 0 ? `配图读数（用户补充）：${vectorSupplement.trim()}` : "",
         graphChoice ? `图形选项（用户核对）：\n${graphSupplement.trim()}` : "",
+        // W7：三视图读数整理成宿主可解析的规范句（体积判据只用题图读数，不用模型散文）。
+        orthographicViewReadings(reading.diagram) ?? "",
         draft.value
       ].filter(Boolean).join("\n")
       /**

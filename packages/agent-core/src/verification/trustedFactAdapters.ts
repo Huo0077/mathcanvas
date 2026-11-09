@@ -1,4 +1,5 @@
 import type { MathFact } from "./mathAnswerVerification"
+import { parseOrthographicViews } from "../orthographicProblem"
 
 /**
  * **题族事实适配器（W6，2026-11-09）**。
@@ -91,6 +92,13 @@ function rightTriangleFact(source: string, goalId: string): MathFact | undefined
   ] }
 }
 
+/** 三视图题：只认"视图身份 + 宽×高（+ 轮廓形状）"这组结构化读数。 */
+function orthographicFact(source: string, goalId: string): MathFact | undefined {
+  const parsed = parseOrthographicViews(source)
+  if (parsed === null || parsed.views.length === 0) return undefined
+  return { kind: "orthographic-volume", goalId, views: parsed.views, ...(parsed.family === undefined ? {} : { family: parsed.family }) }
+}
+
 /** 从题面条件生成宿主事实。同一条件只生成**一条**事实；目标不唯一则不生成。 */
 export function conditionMathFacts(input: TrustedFactInput): MathFact[] {
   if (!input.problemRevision) return []
@@ -102,7 +110,7 @@ export function conditionMathFacts(input: TrustedFactInput): MathFact[] {
     const goalId = goalIds[0]!
     if (seen.has(goalId)) continue
     const source = normalize(condition.sourceText)
-    const fact = hyperbolaFact(source, goalId) ?? ellipseFact(source, goalId) ?? drawFact(source, goalId) ?? rightTriangleFact(source, goalId)
+    const fact = hyperbolaFact(source, goalId) ?? ellipseFact(source, goalId) ?? drawFact(source, goalId) ?? rightTriangleFact(source, goalId) ?? orthographicFact(source, goalId)
     if (fact === undefined) continue
     seen.add(goalId)
     facts.push(fact)

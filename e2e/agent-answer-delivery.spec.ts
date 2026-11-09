@@ -24,6 +24,8 @@ test("a read-only answer shows its delivery status and that it is unverified", a
   await expect(card.locator(".agent-answer-index")).toHaveText("第1问")
   // 没有核验器就没有证据：界面上必须说"未核验"，且不许冒充证明。
   await expect(card).toContainText("未核验")
+  // W9：徽标同样只认宿主证据。
+  await expect(card).toHaveAttribute("data-delivery-badge", "unverified")
   await expect(card).not.toContainText("已证明")
 })
 
@@ -38,5 +40,7 @@ test("a fold question without the fold angle asks for the missing condition inst
   await expect(card).toBeVisible()
   await expect(card.locator(".agent-answer-status")).toHaveText("需要补充信息")
   await expect(card.locator(".agent-answer-questions li")).toHaveCount(1)
+  // W9：缺条件不是"核验通过"，也不是"失败"——徽标保持未核验。
+  await expect(card).toHaveAttribute("data-delivery-badge", "unverified")
   await expect(card).not.toContainText("已交付")
 })

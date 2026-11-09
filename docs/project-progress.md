@@ -8,6 +8,10 @@
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
 
+## 2026-11-09 —— 补线：W9 e2e、W7 结构化视图、W10 分轨报告
+
+W9：新增 `e2e/agent-verified-delivery.spec.ts`（3 项）并给既有两条交付 spec 加徽标断言；用 Vite 现构建当前 Web 后 `--workers=1` 实跑 7/7。W7：`parseOrthographicViews` 只认视图身份 + 宽×高 + 形状；新增 `orthographic-volume` 事实复用 `solveOrthographicProblem`（24 支持、30 否证、视图冲突 `unknown`）；`orthographicViewReadings` 把题图读数整理成「三视图读数：…」进入上下文。W10：`dataset.cjs` 接受生产分卷与 `id` 题号并新增 `crossSplitMaterialConflicts`；`report.cjs` 新增 `byEntryTrack` 与 `assertUnitIntervals`（越界即抛）。门禁：W7/W10 定向 46 + 28 项、e2e 7/7、typecheck exit 0、改动文件 lint 0 错误。仍未调用真模型、未跑付费评测、未打 tag；W8 独立模型真实调用与设置页配置引用仍未做。
+
 ## 2026-11-09 —— Agent高可靠升级：W11开关依赖、灰度分桶与回滚
 
 `reliabilityFlags` 新增 `validateReliabilityConfig`：数学核验要求题意跟踪 + 答案语义，三视图族要求题意跟踪 + 数学核验，受控重读要求可用会话与原附件能力，错误带原因码。`startProblemSolve` 先校验再建运行时，非法组合拒绝启动、零请求。新增 FNV-1a 稳定分桶 `rolloutBucket` / `isEnabledForSession`（同会话跨重启同桶、0% 全关、100% 全开）。回滚语义：关开关不清正文与历史，只取消"已核验"资格；草稿确认/CAS/几何门禁/预算不变。门禁：W11 定向 3 文件 / 23 项；全量回归通过；typecheck exit 0；改动文件 lint 0 错误；文档 22/22。**未启用新模型、未跑付费评测、未打 tag/Release**；灰度未接真实流量，10%→50%→100% 的观察门槛未执行。
