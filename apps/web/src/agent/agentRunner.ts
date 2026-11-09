@@ -530,7 +530,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
   async function runPrompt(text: string, promptMessageId: string): Promise<RunPromptResult> {
-      const { prompt, imageNotes, imageEvidence } = splitImagePrompt(text)
+      const { prompt, imageNotes, imageEvidence, sourceAttachments, imageGaps, imageTarget } = splitImagePrompt(text)
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       /**
@@ -558,8 +558,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const requiresGoalTracking = reliability.goalTrackingV1 && reliability.answerSemanticsV1
       const hashText = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
       const preparedSolveContext = requiresGoalTracking ? await createSolveContext({
-        runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: [], corrections: [],
+        runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: sourceAttachments ?? [], corrections: [],
         sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText) : undefined
+      /**
+       * **图证据缺口必须写进轨迹**（W4）：只有句柄、缺口码与重读次数，不写图片字节。
+       * 有必答缺口时协调器会把这一题降为 partial/needs_clarification —— 这是"没读到"，
+       * 不是"答错了"。
+       */
+      if (imageGaps !== undefined && imageGaps.length > 0) {
+        const required = imageGaps.filter((gap) => gap.required).map((gap) => gap.code)
+        useAgentStore.getState().recordDiagnostic(`[image] target=${imageTarget ?? "none"} rereads=${imageEvidence?.rereads ?? 0} gaps=${required.length > 0 ? required.join(",") : "(none required)"}`.slice(0, 256), eventRunId)
+      }
       const requiredGoals = preparedSolveContext?.understanding.goals.map(goal => {
         const source = preparedSolveContext.understanding.ir.obligations.find(item => item.id === goal.goalId)
         return { goalId: goal.goalId, kind: goal.expectedKind, sourceText: source?.sourceText ?? "" }
@@ -596,8 +605,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const history = conversation.messages.filter((message) => message.id !== promptMessageId)
       useAgentStore.getState().recordDiagnostic(`[context] conversation ${conversation.binding.conversationId}: ${conversation.facts.length} confirmed fact(s), ${history.length} message(s)`, eventRunId)
       const active = startProblemSolve({ context: preparedSolveContext ?? await createSolveContext({ runId, conversationId: pinned?.conversationId ?? "local",
-        prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
+        prompt, attachments: sourceAttachments ?? [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
         session: solveSession, flags: reliability, hashText,
+        ...(imageGaps === undefined ? {} : { imageGaps: imageGaps.filter((gap) => gap.required) }),
         runtime: {
         onSolveAudit: (event) => {
           // Only bounded, structural metadata: never model text, base64, or credentials.

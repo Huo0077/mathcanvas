@@ -46,3 +46,13 @@ it("W2 image budget counts an actual normalized screenshot, not base64 character
   expect(estimate).toBeLessThan(96_000)
   expect(estimateVisionInputTokens([image, image])).toBeGreaterThan(estimate)
 })
+
+it("W4 field-directed reread names the missing fields instead of re-reading everything", async () => {
+  const { rereadInstruction } = await import("./problemImageReader")
+  const instruction = rereadInstruction(["missing_dimension"])
+
+  expect(instruction).toContain("数值尺寸")
+  expect(instruction).toContain("[看不清]")
+  expect(instruction).not.toContain("整个题干")
+  expect(rereadInstruction([])).toBe("只转录选区可见的文字、公式和标记。")
+})

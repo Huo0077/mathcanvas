@@ -37,7 +37,7 @@ import type { AcceptanceCheck } from "./verification/taskAcceptance"
  */
 
 export interface SolveAuditEvent {
-  kind: "understand" | "verify" | "accept"
+  kind: "understand" | "verify" | "accept" | "image"
   runId: string
   problemRevision: string
   attemptId?: string
@@ -121,6 +121,14 @@ export interface CoordinatorDependencies {
   solveContext?: SolveContext
   hashText?: HashText
   trustedMathFacts?: readonly MathFact[]
+  /**
+   * **宿主审计出的图证据缺口**（W4）。
+   *
+   * 缺口是"图上还缺条件"，不是"模型答得不好"：只要还有 `required` 缺口，
+   * 这一题就不能被当成已交付 —— `answered` 会被降为 `partial` 并附上要补的条件。
+   * 只有宿主（图像证据流水线）能产生它，模型输出不构成缺口。
+   */
+  imageGaps?: readonly { code: string; message: string; required: boolean }[]
   onSolveAudit?: (event: SolveAuditEvent) => void
   /**
    * **编译之前**的一次准备机会（例如把工作区切到这条计划需要的那个）。
@@ -283,7 +291,8 @@ class BudgetStop extends Error {
 /** One opt-in gate for read-only answers and plans carrying an answer. */
 async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: SolveContext, hash: HashText | undefined,
   budget: Budget, signal: AbortSignal, facts: readonly MathFact[] | undefined, draftId?: string,
-  audit?: (event: Omit<SolveAuditEvent, "runId" | "problemRevision">) => void): Promise<SolveResult> {
+  audit?: (event: Omit<SolveAuditEvent, "runId" | "problemRevision">) => void,
+  imageGaps?: readonly { code: string; message: string; required: boolean }[]): Promise<SolveResult> {
   if (!hash) throw new Error("trusted answer context requires a host hashing function")
   const candidates = candidate.kind === "clarification" ? []
     : candidate.goalAnswers !== undefined ? candidate.goalAnswers : adaptLegacyAnswer(context, candidate.answer ?? "")
@@ -306,9 +315,13 @@ async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: S
       }
     }
   }
+  const requiredGaps = (imageGaps ?? []).filter((gap) => gap.required)
+  if (imageGaps !== undefined) audit?.({ kind: "image", status: requiredGaps.length === 0 ? "ok" : `gap:${requiredGaps.map((gap) => gap.code).join(",")}` })
   const accepted = acceptSolvedCandidate({ context, candidates, candidateHashes, evidence: boundEvidence,
-    resolution: candidate.kind === "clarification" ? "clarification" : "answer",
-    questions: candidate.kind === "clarification" ? candidate.questions : [] })
+    // 图上还缺条件时**不能**按"已回答"交付：走澄清分支，答案保留为 partial，并附上要补的条件。
+    resolution: candidate.kind === "clarification" || requiredGaps.length > 0 ? "clarification" : "answer",
+    questions: candidate.kind === "clarification" ? candidate.questions : requiredGaps.slice(0, 4).map((gap) => gap.message) })
+  if (requiredGaps.length > 0) accepted.reasonCodes.push("image_evidence_gap")
   audit?.({ kind: "accept", status: accepted.status })
   return accepted
 }
@@ -737,7 +750,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
            * 界面必须显示"未核验"。
            */
           const delivered = dependencies.solveContext
-            ? await solveResultFromTrustedContext(candidate, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, undefined, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }))
+            ? await solveResultFromTrustedContext(candidate, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, undefined, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps)
             : solveResultFromEnvelope(candidate, request.run.target.contentHash)
           solveResult = delivered
           dependencies.onSolveResult?.(delivered)
@@ -905,7 +918,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       if (dependencies.solveContext || (stagedPlan.answer !== undefined && stagedPlan.answer.trim().length > 0)) {
         const delivered = dependencies.solveContext
-          ? await solveResultFromTrustedContext(stagedPlan, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, staged.draftId, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }))
+          ? await solveResultFromTrustedContext(stagedPlan, dependencies.solveContext, dependencies.hashText, budget, signal, dependencies.trustedMathFacts, staged.draftId, (event) => dependencies.onSolveAudit?.({ ...event, runId: request.run.runId, problemRevision: dependencies.solveContext!.problemRevision, ...(lastAttemptIds?.attemptId ? { attemptId: lastAttemptIds.attemptId } : {}) }), dependencies.imageGaps)
           : solveResultFromEnvelope(stagedPlan, request.run.target.contentHash)
         solveResult = delivered
         dependencies.onSolveResult?.(delivered)

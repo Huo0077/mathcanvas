@@ -116,7 +116,22 @@ export async function listImageReaders(): Promise<{ profiles: ProviderProfile[];
   return { profiles: checked.filter((profile) => profile !== null), activeId: active.ok ? active.value : null }
 }
 
-export async function readProblemImages(profile: ProviderProfile, images: readonly ProblemImage[], runId: string, signal: AbortSignal, regionOnly = false, solveSession?: SolveSession): Promise<ProblemImageReading> {
+/** 重读提示词只说**缺什么字段**：让模型换一处再看，而不是把整个题干重读一遍。 */
+const GAP_FIELDS: Record<string, string> = {
+  missing_dimension: "数值尺寸（长、宽、高、半径、直径、边长、角度）",
+  vector_direction_missing: "每支向量的起点、箭头与方向",
+  missing_option_readings: "每个选项（A/B/C/D）各自的曲线特征",
+  missing_shape_features: "零点、极值、开口方向与符号走向",
+  missing_source_ref: "这条读数在图上的具体位置"
+}
+
+export function rereadInstruction(missing: readonly string[]): string {
+  const fields = [...new Set(missing.flatMap(code => GAP_FIELDS[code] === undefined ? [] : [GAP_FIELDS[code]!]))]
+  if (fields.length === 0) return "只转录选区可见的文字、公式和标记。"
+  return `只补读选区里这些字段：${fields.join("；")}。仍然看不清的写 [看不清]，不要按常见版本补数。`
+}
+
+export async function readProblemImages(profile: ProviderProfile, images: readonly ProblemImage[], runId: string, signal: AbortSignal, regionOnly = false, solveSession?: SolveSession, focus?: { missing: readonly string[] }): Promise<ProblemImageReading> {
   const cancel = () => { void cancelModelRun(runId, invokeDesktop) }
   signal.throwIfAborted()
   signal.addEventListener("abort", cancel, { once: true })
@@ -130,7 +145,9 @@ export async function readProblemImages(profile: ProviderProfile, images: readon
       maxOutputTokens: Math.min(profile.maxOutputTokens ?? 4096, 4096),
       messages: [
         { role: "system", content: INSTRUCTIONS },
-        { role: "user", content: regionOnly ? "这张图是从题图裁出的待核对区域。只转录选区可见的文字、公式和标记。" : "请读取这些数学题图。", images: images.map((image) => image.png) }
+        { role: "user", content: regionOnly
+          ? "这张图是从题图裁出的待核对区域。" + (focus === undefined ? "只转录选区可见的文字、公式和标记。" : rereadInstruction(focus.missing))
+          : "请读取这些数学题图。", images: images.map((image) => image.png) }
       ]
     }, { invoke: invokeDesktop })
     if (solveSession && !solveSession.pinProvider("vision", profile.id, profile.revision))

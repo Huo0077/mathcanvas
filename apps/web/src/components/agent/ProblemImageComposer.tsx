@@ -5,6 +5,17 @@ import { imageReadingText, listImageReaders, readProblemImages, type ImageBox, t
 import { imagePrompt } from "../../services/problemImagePrompt"
 import { alignGridReadings } from "../../services/problemImageGrid"
 import { graphChoiceDraft, hasVectorSupplement, isDiagramLine, isGraphChoiceProblem, missingGraphChoices, requiredVectorReadings, reviewProblemImage } from "../../services/problemImageReview"
+import {
+  auditProblemImage,
+  diagramItemOf,
+  regionOfBox,
+  requiredImageGaps,
+  type AttachmentHandle,
+  type ImageEvidenceAudit,
+  type ImageEvidenceGap,
+  type ImageEvidenceTarget
+} from "../../services/problemImageEvidence"
+import { regionToBox, runImageRereadCycle, toOriginalRegion } from "../../services/problemImagePipeline"
 import { AgentComposer } from "./AgentComposer"
 import { useAgentStore } from "../../agentStore"
 import { attachSolveSession, createDefaultSolveSession, dropSolveSession, type SolveSession } from "../../services/solveSession"
@@ -18,6 +29,42 @@ interface ProblemImageComposerProps {
 
 type EvidenceItem = ProblemImageReading["diagram"][number]
 type ManualCrop = { item: EvidenceItem; start?: [number, number]; box?: ImageBox }
+
+/** 体积题与图形选择题才有"目标所需证据"；其余题目只记证据、不判定缺口。 */
+function imageEvidenceTargetOf(problem: string): ImageEvidenceTarget | undefined {
+  if (isGraphChoiceProblem(problem)) return "graph-choice"
+  return /体积|容积/.test(problem) ? "volume" : undefined
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
+  const subtle = globalThis.crypto?.subtle
+  if (subtle === undefined) return null
+  const view = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+  const digest = await subtle.digest("SHA-256", view)
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")
+}
+
+/**
+ * 把已提交的题图绑成**附件身份**（W4）。
+ *
+ * 顺序即模型看到的顺序（图 1、图 2）。任何一张算不出哈希时返回空数组：
+ * 那就退回旧语义（只有读数、没有来源），**不伪造**一个哈希。
+ */
+async function attachmentHandlesOf(images: readonly ProblemImage[], conversationId: string | undefined): Promise<AttachmentHandle[]> {
+  const handles: AttachmentHandle[] = []
+  for (const [index, image] of images.entries()) {
+    let bytes: Uint8Array
+    try {
+      bytes = Uint8Array.from(atob(image.png), character => character.charCodeAt(0))
+    } catch {
+      return []
+    }
+    const sha256 = await sha256Hex(bytes)
+    if (sha256 === null) return []
+    handles.push({ attachmentId: `image-${index + 1}`, sha256, page: 1, ...(conversationId === undefined ? {} : { conversationId }) })
+  }
+  return handles
+}
 
 export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false }: ProblemImageComposerProps) {
   const panelId = useId()
@@ -45,6 +92,11 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   const [confirmedLines, setConfirmedLines] = useState<number[]>([])
   const [manualCrop, setManualCrop] = useState<ManualCrop | null>(null)
   const [regionalReading, setRegionalReading] = useState<{ item: EvidenceItem; text: string } | null>(null)
+  /** W4：本次题图的附件身份、宿主审计结果与**仍未解决**的缺口。 */
+  const [attachmentHandles, setAttachmentHandles] = useState<AttachmentHandle[]>([])
+  const [imageAudit, setImageAudit] = useState<ImageEvidenceAudit | null>(null)
+  const [gaps, setGaps] = useState<ImageEvidenceGap[]>([])
+  const [rereads, setRereads] = useState(0)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => () => { operation.current?.abort(); if (solveSession.current) { dropSolveSession(solveSession.current); solveSession.current.cancel("composer closed") } }, [])
@@ -77,6 +129,10 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
     setReviewed([])
     setConfirmedLines([])
     setRegionalReading(null)
+    setAttachmentHandles([])
+    setImageAudit(null)
+    setGaps([])
+    setRereads(0)
   }
 
   async function addImages(files: File[]) {
@@ -143,8 +199,72 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
       const aligned = await alignGridReadings(result, selectedImages)
       if (controller.signal.aborted) return
       resetReading()
-      setReading(reviewProblemImage(aligned, selectedImages.length))
       setProblem(result.problem)
+      /**
+       * **宿主自动定向补读**（W4）：首读之后按目标（体积 / 图形选项）判断还缺什么，
+       * 缺就裁出对应区域再读，最多 2 次；没有新信息立即停。读到的数值回到核对列表里，
+       * 缺口没消就**原样显示**给用户 —— 不允许按常见版本补数。
+       */
+      const conversationId = useAgentStore.getState().activeConversation?.id
+      const handles = await attachmentHandlesOf(images, conversationId)
+      if (controller.signal.aborted) return
+      setAttachmentHandles(handles)
+      const reviewedReading = reviewProblemImage(aligned, selectedImages.length)
+      const target = imageEvidenceTargetOf(result.problem)
+      const baseInput = {
+        attachments: handles,
+        ...(conversationId === undefined ? {} : { conversationId }),
+        problem: result.problem,
+        diagram: reviewedReading.diagram.map(item => diagramItemOf(item)),
+        uncertainties: reviewedReading.uncertainties.map(item => diagramItemOf(item)),
+        transcriptEdited: false
+      }
+      let audit = auditProblemImage(baseInput)
+      let nextGaps: ImageEvidenceGap[] = target === undefined ? [] : requiredImageGaps(target, audit.facts)
+      let used = 0
+      if (target !== undefined && handles.length > 0 && reader !== undefined) {
+        try {
+          const outcome = await runImageRereadCycle({
+            ...baseInput,
+            target,
+            reread: async (request) => {
+              const index = handles.findIndex(handle => handle.attachmentId === request.attachmentId)
+              const source = images[index]
+              if (index < 0 || source === undefined) return []
+              const crop = await cropProblemImage(source, regionToBox(request.region))
+              const regionRead = await readProblemImages(reader, [crop], `problem-image-reread-${crypto.randomUUID()}`,
+                controller.signal, true, session, { missing: request.missing })
+              return regionRead.diagram.map(item => ({
+                text: item.text,
+                image: index + 1,
+                box: item.box === null ? regionToBox(request.region) : regionToBox(toOriginalRegion(regionOfBox(item.box), request.region)),
+                sourceKind: "ocr" as const
+              }))
+            }
+          })
+          if (controller.signal.aborted) return
+          audit = outcome.audit
+          nextGaps = outcome.required
+          used = outcome.used
+        } catch (cause) {
+          if (controller.signal.aborted) return
+          setError("定向补读未完成，已保留首读结果。" + (cause instanceof Error ? `（${cause.message}）` : ""))
+        }
+      }
+      setImageAudit(audit)
+      setGaps(nextGaps)
+      setRereads(used)
+      const knownTexts = new Set(reviewedReading.diagram.map(item => item.text))
+      const added = used > 0
+        ? audit.facts
+            .filter(fact => !knownTexts.has(fact.text) && fact.ref.sourceKind !== "model_guess")
+            .map(fact => ({
+              text: fact.text,
+              image: handles.findIndex(handle => handle.attachmentId === fact.ref.attachmentId) + 1,
+              box: regionToBox(fact.ref.region) as ImageBox
+            }))
+        : []
+      setReading(added.length === 0 ? reviewedReading : { ...reviewedReading, diagram: [...reviewedReading.diagram, ...added] })
       if (isGraphChoiceProblem(result.problem)) setGraphSupplement(graphChoiceDraft(result))
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "识别失败，请重试。")
@@ -211,7 +331,31 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         graphChoice ? `图形选项（用户核对）：\n${graphSupplement.trim()}` : "",
         draft.value
       ].filter(Boolean).join("\n")
-      const completePrompt = imagePrompt(problem, instructions, reading, reviewed, confirmedLines)
+      /**
+       * **题图以结构化证据送达**（W4）：附件身份（attachmentId + sha256）、目标、
+       * 未解决缺口与重读次数一起随题面走。只发一串备注的话，宿主再也拿不到"这是哪张图"，
+       * 也就无法在重读之后让旧证据失效。
+       */
+      const target = imageEvidenceTargetOf(problem)
+      const submissionConversationId = useAgentStore.getState().activeConversation?.id
+      const submissionAudit = auditProblemImage({
+        attachments: attachmentHandles,
+        ...(submissionConversationId === undefined ? {} : { conversationId: submissionConversationId }),
+        problem,
+        diagram: reading.diagram.map(item => diagramItemOf(item)),
+        uncertainties: reading.uncertainties.map(item => diagramItemOf(item)),
+        transcriptEdited: problem.trim() !== reading.problem
+      })
+      const submissionGaps = target === undefined ? submissionAudit.gaps : [...submissionAudit.gaps, ...requiredImageGaps(target, submissionAudit.facts)]
+      const auditMeta = attachmentHandles.length === 0 ? undefined : {
+        attachments: attachmentHandles.map(handle => ({ attachmentId: handle.attachmentId, sha256: handle.sha256, page: handle.page ?? 1 })),
+        ...(target === undefined ? {} : { target }),
+        gaps: submissionGaps.map(gap => ({ code: gap.code, message: gap.message, required: gap.required })),
+        rereads
+      }
+      const completePrompt = imagePrompt(problem, instructions, reading, reviewed, confirmedLines, auditMeta)
+      setImageAudit(submissionAudit)
+      setGaps(target === undefined ? submissionAudit.gaps : requiredImageGaps(target, submissionAudit.facts))
       const session = solveSession.current
       const conversationId = useAgentStore.getState().activeConversation?.id
       if (session && (!conversationId || !attachSolveSession(conversationId, completePrompt, session)))
@@ -373,6 +517,14 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
             </div>
           </div>)}
         </details>}
+        {imageAudit !== null && imageAudit.facts.length > 0 && <p className="problem-image-evidence-summary" role="status">
+          已绑定图证据 {imageAudit.facts.length} 条（附件 {attachmentHandles.length} 张），定向重读 {rereads} 次。
+        </p>}
+        {gaps.some(gap => gap.required) && <div className="problem-image-gaps" role="status">
+          <h3>图证据缺口</h3>
+          <ul>{gaps.filter(gap => gap.required).map((gap, index) => <li key={index}>{gap.message}</li>)}</ul>
+          <p>可先框选补读。直接发送会按「未完成」处理，不会按常见版本补数。</p>
+        </div>}
         <div className="problem-image-apply">
           {/\[看不清\]|【看不清】|［看不清］/.test(problem) && <p>请先修正题干里的「[看不清]」。</p>}
           {needsReview && <p>请定位并核对可能影响题意的疑点，必要时先修正题干。</p>}

@@ -65,6 +65,8 @@ export type ImageEvidenceGapCode =
   | "vector_direction_missing"
   | "missing_source_ref"
   | "transcript_edited"
+  | "missing_option_readings"
+  | "missing_shape_features"
 
 export interface ImageEvidenceGap {
   code: ImageEvidenceGapCode
@@ -140,6 +142,11 @@ function regionOf(box: ImageBox | null | undefined): ImageRegion {
   // 也让"同一块区域"的键在两次读数之间稳定可比。
   const round = (value: number): number => Math.round(value * 10_000) / 10_000
   return { x: round(box[0]), y: round(box[1]), width: round(box[2] - box[0]), height: round(box[3] - box[1]) }
+}
+
+/** 读图框选 `[left, top, right, bottom]` → 归一化区域；裁图回映也要用它。 */
+export function regionOfBox(box: ImageBox | null | undefined): ImageRegion {
+  return regionOf(box)
 }
 
 export interface DiagramItemInput {
@@ -316,6 +323,111 @@ export function planImageReread(audit: ImageEvidenceAudit, used: number, limit =
   if (used >= limit) return { allowed: false, used, limit, regions: [], reasonCodes: ["budget_exhausted"] }
   if (regions.length === 0) return { allowed: false, used, limit, regions: [], reasonCodes: ["no_required_gap"] }
   return { allowed: true, used, limit, regions: regions.slice(0, Math.max(0, limit - used)), reasonCodes: ["missing_evidence"] }
+}
+
+/** 一个目标到底还需要什么（W4）：缺口不是"再读一遍"，而是**具体字段**。 */
+export type ImageEvidenceTarget = "volume" | "graph-choice"
+
+const NUMBER_TOKEN = String.raw`[+\-−]?\d+(?:\.\d+)?|\\sqrt\s*\{[^{}]+\}|√\d+(?:\.\d+)?`
+const DIMENSION_READING = new RegExp(
+  `(宽度|宽|长度|长|高度|高|半径|直径|边长|底面积|侧面积|表面积|体积|角度)\\s*(?:为|是|等于|＝|=|:|：)?\\s*(${NUMBER_TOKEN})`
+)
+const EQUALITY_READING = new RegExp(`([A-Za-z][A-Za-z0-9_]{0,3})\\s*=\\s*(${NUMBER_TOKEN})`)
+
+export interface ImageDimensionReading {
+  label: string
+  value: number
+  fact: ImageEvidenceFact
+}
+
+/**
+ * **模型猜测永远不是题设**：`model_guess` 即使自称 `high` 也只能算待核对的候选。
+ * 反过来，OCR 的低置信读数同样不升级 —— 缺省就是保守。
+ */
+export function isGivenImageFact(fact: ImageEvidenceFact): boolean {
+  if (fact.ref.sourceKind === "model_guess") return false
+  if (fact.ref.sourceKind === "user_correction" || fact.ref.sourceKind === "confirmed_line") return true
+  return fact.confidence === "high"
+}
+
+/** 把一条读数降回它应有的等级：猜测不因为标了 `high` 就变成题设。 */
+export function promoteImageFact(fact: ImageEvidenceFact): ImageEvidenceFact {
+  return fact.ref.sourceKind === "model_guess" ? { ...fact, confidence: "low" } : fact
+}
+
+/** 只有"有数值的尺寸"才算体积输入；`高 h`、`图1` 都不是。 */
+export function imageDimensionReading(fact: ImageEvidenceFact): ImageDimensionReading | null {
+  const text = fact.text.replace(/\s+/g, " ")
+  const reading = DIMENSION_READING.exec(text) ?? EQUALITY_READING.exec(text)
+  if (reading === null) return null
+  const value = parseDimension(reading[2]!)
+  return value === undefined ? null : { label: reading[1]!, value, fact }
+}
+
+const SHAPE_OPTION = /^\s*(?:选项\s*)?([A-D])\s*[:.、)．）]\s*(.+)$/
+const OPTION_DETAIL = /对称|单调|递增|递减|上升|下降|极[大小]|峰|谷|开口|拐点|零点|相切|穿过|经过|交于|相交|渐近|顶点|最小值|最大值/
+/** 可判形状特征：零点 / 极值 / 符号走向。`开口向上` 只是外观描述，不能单独判选项。 */
+const SHAPE_FEATURE = /零点|极[大小]|峰|谷|穿过|过原点|经过原点|交于|相交|渐近|最小值|最大值|x\s*=\s*[-−]?\d|y\s*=\s*[-−]?\d/
+
+/**
+ * **目标所需证据**（W4）。返回的缺口只是"还缺什么"，**不等于已经解决**：
+ * 调用方（`problemImagePipeline`）重读之后必须重新审计一次，才能说缺口消了。
+ */
+export function requiredImageGaps(target: ImageEvidenceTarget, facts: readonly ImageEvidenceFact[]): ImageEvidenceGap[] {
+  const gaps: ImageEvidenceGap[] = []
+  const anchor = facts[0]
+  const place: { attachmentId?: string; region?: ImageRegion } =
+    anchor === undefined ? {} : { attachmentId: anchor.ref.attachmentId, region: anchor.ref.region }
+  const given = facts.filter(isGivenImageFact)
+  const dimensions = given.flatMap((fact) => {
+    const reading = imageDimensionReading(fact)
+    return reading === null ? [] : [reading]
+  })
+
+  if (target === "volume") {
+    // 球体只给半径/直径时一组就够；其余几何体的体积至少需要两组独立尺寸。
+    const singleSufficient = dimensions.length === 1 && /球|半径|直径/.test(dimensions[0]!.fact.text)
+    if (dimensions.length < 2 && !singleSufficient) {
+      gaps.push({
+        code: "missing_dimension",
+        required: true,
+        ...place,
+        message: dimensions.length === 0
+          ? "体积目标没有任何可核验的数值尺寸；图上的定位标签不算尺寸，不允许按常见版本补数。"
+          : "体积目标至少需要两组可核验的数值尺寸，当前只有一组。"
+      })
+    }
+    return gaps
+  }
+
+  const options = new Set<string>()
+  let feature = false
+  for (const fact of given) {
+    const text = fact.text.normalize("NFKC")
+    for (const line of text.split(/[\n;；]/)) {
+      const match = SHAPE_OPTION.exec(line)
+      if (match !== null && OPTION_DETAIL.test(match[2]!)) options.add(match[1]!)
+    }
+    if (SHAPE_FEATURE.test(text)) feature = true
+  }
+  const missing = ["A", "B", "C", "D"].filter((choice) => !options.has(choice))
+  if (missing.length > 0) {
+    gaps.push({
+      code: "missing_option_readings",
+      required: true,
+      ...place,
+      message: `图形选择题缺少选项 ${missing.join("、")} 的可判读数；题干文字解析成功不等于选项图已经读到。`
+    })
+  }
+  if (!feature) {
+    gaps.push({
+      code: "missing_shape_features",
+      required: true,
+      ...place,
+      message: "图形选项没有读到零点、极值或符号走向；只凭选项字母不能终答。"
+    })
+  }
+  return gaps
 }
 
 const BASE64_PAYLOAD = /data:[^\s]{0,80}?,[A-Za-z0-9+/=]{16,}/g

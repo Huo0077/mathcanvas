@@ -132,3 +132,17 @@ it("scenario source revision changes when attachment bytes change without leakin
   expect(JSON.stringify(a.auditEvents)).not.toContain("private-picture-A")
   expect(a.providerCalls).toBe(1)
 })
+
+it("W4: a required image gap blocks delivery through the same production entry", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const prompt = "如图，求该几何体的体积。"
+  const reply = { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "volume", factIds: [], answer: "体积=12", toolResultRefs: [] }
+  const output = await runProductionScenario({ prompt, workspace: "geometry3d", flags: "reliability", providerReplies: [reply],
+    attachments: [{ name: "exam.png", bytes: new TextEncoder().encode("picture") }],
+    imageGaps: [{ code: "missing_dimension", message: "体积目标没有任何可核验的数值尺寸。", required: true }] })
+
+  expect(output.solveStatus).not.toBe("answered")
+  expect(output.stageNames.at(-1)).toBe("failed")
+  expect(output.liveWrites).toBe(0)
+  expect(output.auditEvents.find(item => item.kind === "image")?.status).toContain("missing_dimension")
+})

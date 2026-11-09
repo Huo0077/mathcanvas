@@ -5,8 +5,11 @@ import {
   auditProblemImage,
   buildImageFact,
   diagnosticLine,
+  isGivenImageFact,
   mergeImageEvidence,
   planImageReread,
+  promoteImageFact,
+  requiredImageGaps,
   validateImageRef,
   type AttachmentHandle,
   type ImageEvidenceFact
@@ -149,6 +152,91 @@ describe("W6 — 次序变化不制造重复，冲突不静默覆盖", () => {
     const merged = mergeImageEvidence([first], [second])
     expect(merged.facts.map((fact) => fact.text)).toEqual(["AB=4"])
     expect(merged.conflicts[0]?.reason).toBe("visual_conflict")
+  })
+})
+
+/**
+ * **W4：目标所需证据（2026-11-09）**。
+ *
+ * W6 只回答"这条读数缺不缺来源"，W4 追问的是"**这个目标还需要什么**"：
+ * 体积题只有「图1」这条定位标签时，缺的是尺寸本身，不是"再读一遍图1"；
+ * 图形选择题缺的是选项读数与可判形状的特征（零点/极值/符号）。
+ * 缺口不等于已解决 —— 重读结束后必须**重新审计**才能说缺口消了。
+ */
+const labelFact = (text = "图1"): ImageEvidenceFact => ({
+  id: "fact-label",
+  ref: { attachmentId: "att-1", sha256: shaA, page: 1, region: FULL, sourceKind: "ocr" },
+  text,
+  confidence: "high"
+})
+
+const dimensionFact = (text: string, sourceKind: ImageEvidenceFact["ref"]["sourceKind"] = "ocr"): ImageEvidenceFact => ({
+  id: "fact-" + text,
+  ref: { attachmentId: "att-1", sha256: shaA, page: 1, region: { x: 0.1, y: 0.1, width: 0.4, height: 0.4 }, sourceKind },
+  text,
+  confidence: "high"
+})
+
+const FULL = { x: 0, y: 0, width: 1, height: 1 }
+
+describe("W4 — 只有定位标签不能当体积尺寸", () => {
+  it("flags a missing dimension when the only reading is a figure label", () => {
+    const gaps = requiredImageGaps("volume", [labelFact()])
+
+    expect(gaps.some((gap) => gap.required && gap.code === "missing_dimension")).toBe(true)
+    expect(gaps[0]?.attachmentId).toBe("att-1")
+  })
+
+  it("accepts numeric dimensions and stops asking for more", () => {
+    const gaps = requiredImageGaps("volume", [dimensionFact("底面边长 4"), dimensionFact("高 3")])
+
+    expect(gaps.filter((gap) => gap.required)).toEqual([])
+  })
+
+  it("still flags a symbolic dimension written as a letter", () => {
+    const gaps = requiredImageGaps("volume", [dimensionFact("高 h"), dimensionFact("底面边长 4")])
+
+    expect(gaps.some((gap) => gap.code === "missing_dimension" && gap.required)).toBe(true)
+  })
+})
+
+describe("W4 — 图形选项必须读到选项与可判特征", () => {
+  it("requires every option reading and a shape feature", () => {
+    const gaps = requiredImageGaps("graph-choice", [dimensionFact("A：开口向上")])
+
+    expect(gaps.some((gap) => gap.code === "missing_option_readings" && gap.required)).toBe(true)
+    expect(gaps.some((gap) => gap.code === "missing_shape_features" && gap.required)).toBe(true)
+  })
+
+  it("is satisfied by four options plus a zero/extremum reading", () => {
+    const gaps = requiredImageGaps("graph-choice", [
+      dimensionFact("A：开口向上，顶点在 y 轴"), dimensionFact("B：开口向下，过原点"),
+      dimensionFact("C：关于 y 轴对称，最小值 -1"), dimensionFact("D：两端下降，零点 x=2")
+    ])
+
+    expect(gaps.filter((gap) => gap.required)).toEqual([])
+  })
+})
+
+describe("W4 — 模型猜测不能靠置信度升格为题设", () => {
+  it("never treats a model guess as given evidence", () => {
+    const guess = { ...dimensionFact("高 3", "model_guess"), confidence: "high" as const }
+
+    expect(isGivenImageFact(guess)).toBe(false)
+    expect(promoteImageFact(guess).confidence).toBe("low")
+    expect(promoteImageFact(guess).ref.sourceKind).toBe("model_guess")
+  })
+
+  it("treats OCR, confirmed lines and user corrections as given", () => {
+    for (const kind of ["ocr", "confirmed_line", "user_correction"] as const) {
+      expect(isGivenImageFact(dimensionFact("高 3", kind))).toBe(true)
+    }
+  })
+
+  it("does not let a guess clear a required gap", () => {
+    const gaps = requiredImageGaps("volume", [dimensionFact("高 3", "model_guess"), dimensionFact("底面边长 4")])
+
+    expect(gaps.some((gap) => gap.code === "missing_dimension" && gap.required)).toBe(true)
   })
 })
 

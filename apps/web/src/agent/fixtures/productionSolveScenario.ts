@@ -11,6 +11,8 @@ export interface ProductionScenario {
   providerReplies: readonly unknown[]
   attachments?: readonly { name: string; bytes: Uint8Array }[]
   flags: "legacy" | "reliability"
+  /** W4：宿主审计出的图证据缺口（真实实现来自 `problemImagePipeline`）。 */
+  imageGaps?: readonly { code: string; message: string; required: boolean }[]
 }
 export interface ProductionScenarioResult {
   stageNames: string[]
@@ -53,7 +55,8 @@ export async function runProductionScenario(input: ProductionScenario): Promise<
     }
   })
   const flags = input.flags === "legacy" ? createAgentReliabilityFlags() : createAgentReliabilityFlags({ answerSemanticsV1: true, goalTrackingV1: true, mathVerificationV1: true })
-  const runtime = startProblemSolve({ context, session, flags, hashText: hash, runtime: {
+  const runtime = startProblemSolve({ context, session, flags, hashText: hash,
+    ...(input.imageGaps === undefined ? {} : { imageGaps: input.imageGaps }), runtime: {
     planner: selection.planner, onSolveAudit: event => auditEvents.push(event), readDocument: () => document,
     writeDocument: () => { liveWrites += 1; throw new Error("no automatic document writes") },
     readSceneDocuments: () => [{ handle: { projectId: "scenario", documentId: document.metadata.id, workspace: input.workspace,

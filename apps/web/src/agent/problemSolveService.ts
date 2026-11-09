@@ -13,6 +13,8 @@ export interface ProblemSolveInput {
   flags: AgentReliabilityFlags
   hashText: HashText
   runtime: AgentRuntimeDependencies
+  /** W4：图像证据流水线审计出的缺口（宿主产生，模型不可伪造）。 */
+  imageGaps?: readonly { code: string; message: string; required: boolean }[]
 }
 
 export interface ProblemPlannerSelection {
@@ -72,5 +74,8 @@ export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {
   return createAgentRuntime({ ...input.runtime,
     ...(input.flags.goalTrackingV1 && input.flags.answerSemanticsV1
       ? { solveContext: input.context, hashText: input.hashText,
-          ...(input.flags.mathVerificationV1 ? { trustedMathFacts: deriveTrustedMathFacts(input.context) } : {}) } : {}) })
+          ...(input.flags.mathVerificationV1 ? { trustedMathFacts: deriveTrustedMathFacts(input.context) } : {}),
+          // 重读开关关闭时缺口照样要说出来：缺口不是"新能力"，而是"这一题没读到"。
+          ...(input.imageGaps === undefined ? {} : { imageGaps: input.imageGaps }) }
+      : {}) })
 }

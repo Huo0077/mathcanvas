@@ -4,9 +4,13 @@
 
 > **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
 
-> **这是归档，不是当前状态。** 新方案 W0–W3 已分别推送，W3 对应 `085cd768`；W4–W11 暂停。以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
+> **这是归档，不是当前状态。** 新方案 W0–W4 已分别推送，W4 之后继续实施 W5；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-09 —— Agent高可靠升级：W4图像证据与定向补读
+
+新增 `problemImagePipeline` 证据闭环（实现于 `apps/web/src/services/problemImagePipeline.ts`）：`requiredImageGaps` 按体积/图形选项两种目标列出缺口（定位标签不算尺寸，`model_guess` 不得清缺口），流水线按缺口裁区重读、合并、重新审计，最多 2 次、无变化即停、预算耗尽即停、冲突保留首次读数。提示词证据升到 version 2，携带附件身份（attachmentId + sha256 + page）、目标、未解决缺口与重读次数；UI 首读后自动补读并把缺口原样显示，`agentRunner` 用附件身份建立 `SolveContext` 并把必答缺口交给协调器，缺口未消时走澄清分支（`image_evidence_gap`，answered 降为 partial/needs_clarification）且记录 `image` 审计事件。门禁：W4 定向 9 文件/57 项、Agent+services 83 文件/927 项 + 1 todo、`agent-core` 全量 193 文件/2045 项、Web typecheck exit 0、改动文件 lint 0 错误。**未调用真模型、未做真实识图评测，不宣称成功率变化。**
 
 ## 2026-11-09 —— Agent高可靠升级新计划：W3共用生产解题路径
 
