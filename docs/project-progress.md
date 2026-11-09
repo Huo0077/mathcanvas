@@ -4,9 +4,13 @@
 
 > **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
 
-> **这是归档，不是当前状态。** 新方案 W0–W8 已分别推送，W8 之后继续实施 W9；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
+> **这是归档，不是当前状态。** 新方案 W0–W9 已分别推送，W9 之后继续实施 W10；以下小节按写入时刻保留，较早小节的“未完成”不覆盖后续记录；当前门禁和下一步以 [当前状态](current-status.md) 为准。
 
 > **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-09 —— Agent高可靠升级：W9逐问交付徽标
+
+`agentDeliveryBadge` 只从 `SolveResult` 逐问证据算四档徽标：`verified` 要求必答目标全部 `verified_instance` 且 answered；`partial` 是没盖满；`unverified` 覆盖空证据与 `sampled`；`failed` 覆盖被否证或交付失败。`deliveryBadge` 纯函数让"两问只核验一问"不可能得到 verified。`AnswerResult` 接线 `data-delivery-badge` / `data-goal-verification` 与中文标签。门禁：W9 定向 2 文件 / 12 项；Web + agent-core + geometry-kernel 489 文件 / 5225 项 + 1 todo；typecheck exit 0；改动文件 lint 0 错误；文档 22/22。**未跑 Playwright e2e**（需重建 Web），未调用真模型。
 
 ## 2026-11-09 —— Agent高可靠升级：W8风险路由与独立候选判据
 

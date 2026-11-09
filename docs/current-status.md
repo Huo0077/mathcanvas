@@ -1,5 +1,13 @@
 # MathCanvas 当前状态
 
+## 2026-11-09 —— Agent高可靠升级 W9：逐问交付徽标只认宿主证据
+
+- **W0—W9 已分别提交推送，W10—W11 进行中**。本包把"交付状态"的依据收窄到 `SolveResult` 的证据，不看正文关键词。
+- **新增 `agentDeliveryBadge`**：`deliverySummary(result)` 逐问统计证据并给出四档徽标 —— `verified`（必答目标**全部** `verified_instance` 且 answered）/ `partial`（有证据但没盖满）/ `unverified`（无证据、`sampled` 采样、旧消息）/ `failed`（有目标被否证或交付失败）。`deliveryBadge({status, requiredGoals, verifiedGoals, refutedGoals})` 是纯函数，两问只核验一问**不可能**得到 `verified`。
+- **界面接线**：`AnswerResult` 增加 `data-delivery-badge` 与逐问 `data-goal-verification`，并显示"已核验（逐问）/部分核验/未核验/核验未通过"；`sampled` 仍显示未核验，缺答目标继续单独列出。
+- 门禁：W9 定向 **2 文件 / 12 项**；Web + `agent-core` + geometry-kernel 全量 **489 文件 / 5225 项 + 1 todo**；全项目 typecheck exit 0；改动文件 lint 0 错误；文档门禁 22/22。
+- **未完成边界**：本轮**没有**运行 Playwright 的 `agent-verified-delivery` 等 e2e（需要重建 Web 产物并起浏览器）；两问逐项标签与"终答从结构化答案渲染"沿用 W2 既有实现，本包只改徽标依据。**未调用真模型**，不产生真实识别/准确率结论。
+
 ## 2026-11-09 —— Agent高可靠升级 W8：失败后的风险路由与独立候选判据
 
 - **W0—W8 已分别提交推送，W9—W11 进行中**。本包只加"失败之后走哪条路"的判据与**原因**，不启用新模型、不新增 provider。

@@ -1,4 +1,5 @@
 import type { AnswerValue, SolveResult, SolveStatus } from "@draw/agent-core"
+import { DELIVERY_BADGE_LABEL, deliverySummary } from "./agentDeliveryBadge"
 
 import { TranscriptText } from "./TranscriptText"
 
@@ -75,15 +76,23 @@ function evidenceSummary(result: SolveResult): string {
 
 export function AnswerResult({ result }: { result: SolveResult }) {
   const missing = result.unansweredGoalIds.map((goalId, index) => goalLabel(goalId, index + 1))
-  return <section className="agent-answer-result" data-solve-status={result.status} aria-label="答案交付">
+  /**
+   * **W9：徽标只从宿主证据算**（逐问统计），不从正文关键词猜"已验证"。
+   * `sampled` / 空证据一律 `unverified`，两问只核验一问最多 `partial`。
+   */
+  const delivery = deliverySummary(result)
+  const verified = new Set(delivery.verifiedGoalIds)
+  return <section className="agent-answer-result" data-solve-status={result.status} data-delivery-badge={delivery.badge} aria-label="答案交付">
     <header className="agent-answer-head">
       <span className="agent-answer-status" data-status={result.status}>{STATUS_LABEL[result.status]}</span>
+      <span className="agent-answer-delivery" data-badge={delivery.badge}>{DELIVERY_BADGE_LABEL[delivery.badge]}</span>
       <small className="agent-answer-evidence">{evidenceSummary(result)}</small>
     </header>
     {result.answers.length > 0 && <ol className="agent-answer-list">
       {result.answers.map((answer, index) => {
         const value = valueLine(answer.value)
-        return <li className="agent-answer-row" key={answer.goalId} data-answer-kind={answer.kind}>
+        const verification = verified.has(answer.goalId) ? "verified" : "unverified"
+        return <li className="agent-answer-row" key={answer.goalId} data-answer-kind={answer.kind} data-goal-verification={verification}>
           <span className="agent-answer-index">{goalLabel(answer.goalId, index + 1)}</span>
           <div className="agent-answer-body">
             <p className="agent-answer-text"><TranscriptText text={answer.displayText} /></p>
