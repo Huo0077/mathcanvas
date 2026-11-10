@@ -96,7 +96,14 @@ describe("W11 分桶接到真实消费点", () => {
       expect(Object.values(flags).every((value) => value === false)).toBe(true)
     }
     const all = createAgentReliabilityFlagsForSession("session-a", 100)
-    expect(all).toEqual(RELIABILITY_FLAGS_FOR_TESTS)
+    expect(all).toEqual({ ...RELIABILITY_FLAGS_FOR_TESTS, imageRereadV1: false })
+  })
+
+  it("never turns image reread on for a text-only session, even at 100%", () => {
+    for (const id of ids) {
+      expect(createAgentReliabilityFlagsForSession(id, 0).imageRereadV1).toBe(false)
+      expect(createAgentReliabilityFlagsForSession(id, 100).imageRereadV1).toBe(false)
+    }
   })
 
   it("never enables math verification without goal tracking, even if asked to roll out", () => {

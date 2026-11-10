@@ -73,6 +73,7 @@ describe("T7 目标层：题设通过与目标真假分开", () => {
     const dihedral = findings.find((finding) => finding.kind === "dihedral")!
     expect(dihedral.status).toBe("measured")
     expect(dihedral.measured!).toBeCloseTo(1 / Math.sqrt(3), 9)
+    expect(formatSolidGoalAnswer(findings)).toContain("54.7356")
   })
 
   it("文案：不成立要说「不成立 + 题设仍然通过」，成立也只是**实例证据**（不说整题已证明）", () => {

@@ -87,7 +87,31 @@ export function tryBuildParametricSolidPlan(input: ParametricSolidPlanInput): Pa
   for (const [index, name] of searched.candidate.names.entries()) points.set(name, searched.candidate.vertices[index]!)
   for (const auxiliary of searched.candidate.auxiliaryPoints ?? []) points.set(auxiliary.name, auxiliary.point)
   const findings = evaluateSolidGoals(input.prompt, points)
-  const answer = formatSolidGoalAnswer(findings)
+  // The source premise "line ⟂ plane" entails perpendicularity to every
+  // segment whose two endpoints lie in that plane. Instance measurement alone
+  // must not be presented as proof of the general claim.
+  const proofGoal = /(?:求证|证明)\s*([A-Z])([A-Z])\s*⊥\s*([A-Z])([A-Z])/u.exec(input.prompt)
+  const theoremPremise = proofGoal && givens.find(item => item.kind === "perpendicular"
+    && item.targets.length >= 5 && item.targets[0] === proofGoal[1] && item.targets[1] === proofGoal[2]
+    && item.targets.slice(2).includes(proofGoal[3]!) && item.targets.slice(2).includes(proofGoal[4]!))
+  const proven = proofGoal && theoremPremise && findings.length === 1 && findings[0]?.status === "holds"
+    ? `（1）由题设 ${proofGoal[1]}${proofGoal[2]} ⊥ 平面 ${theoremPremise.targets.slice(2).join("")}，而 ${proofGoal[3]}${proofGoal[4]} 的两端点都在该平面内，故 ${proofGoal[3]}${proofGoal[4]} 在该平面内。由线面垂直的定义，${proofGoal[1]}${proofGoal[2]} ⊥ ${proofGoal[3]}${proofGoal[4]}。（此为题设推导，不声称已获形式证明工具链认证。）`
+    : null
+  const [a, b, c, d] = shaped.spec.base
+  const apex = shaped.spec.apex?.at
+  const parallelGoal = /(?:证明|求证)\s*[:：]?\s*([A-Z])([A-Z])\s*(?:∥|\/\/)\s*平面\s*([A-Z]{3})/u.exec(input.prompt)
+  const diagonalIntersection = givens.some(item => item.kind === "pointOnSegment" && item.targets.join("") === "O" + a + c)
+    && givens.some(item => item.kind === "pointOnSegment" && item.targets.join("") === "O" + b + d)
+  const mMidpoint = givens.some(item => item.kind === "midpoint" && item.targets.join("") === "M" + apex + c)
+  const rhombusSource = a && b && c && d && new RegExp("底面\\s*" + [a, b, c, d].join("") + "[^。；]{0,24}菱形", "u").test(input.prompt)
+  const rhombusProof = a && b && c && d && apex && rhombusSource && diagonalIntersection && mMidpoint
+    && parallelGoal?.[1] === apex && parallelGoal[2] === a
+    && new Set(parallelGoal[3]).size === 3 && [b, d, "M"].every(point => parallelGoal[3]!.includes(point))
+    && findings[0]?.status === "holds" && findings[0]?.kind === "line-plane-parallel"
+    ? "（1）底面 " + [a, b, c, d].join("") + " 为菱形，其对角线 " + a + c + " 与 " + b + d + " 交于 O，故 O 为 " + a + c + " 的中点。M 为 " + apex + c + " 的中点，在 △" + apex + a + c + " 中，OM ∥ " + apex + a + "。又 O 在 " + b + d + " 上，OM 在平面 " + b + d + "M 内，且 " + a + " 不在该平面，故 " + apex + a + " ∥ 平面 " + b + d + "M。（题设推导；非形式证明工具链认证。）"
+    : null
+  const formatted = formatSolidGoalAnswer(findings)
+  const answer = proven ?? (rhombusProof && formatted ? formatted.replace(/（1）[^\n]*/u, rhombusProof) : formatted)
   const plan = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",

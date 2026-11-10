@@ -7,6 +7,7 @@ import { useAgentStore } from "../agentStore"
 import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
 import { readConversation } from "../services/conversationClient"
+import { setRolloutPercentage } from "../persistence/rolloutPreferences"
 import { imagePrompt, splitImagePrompt } from "../services/problemImagePrompt"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
@@ -32,14 +33,21 @@ describe("answer delivery independently of document changes", () => {
   beforeEach(() => { resetScene(); resetAgent() })
 
   it("retains a validated read-only answer through completed and persistence", async () => {
-    const answer = "第（1）问不成立；第（2）问 BD=2√85/5。"
+    const answer = "你好，我可以帮你做题。"
     const runner = createAgentRunner({ planner: { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "数学答复", factIds: [], answer, toolResultRefs: [] }, requestId: "answer-request", attemptId: "answer-attempt" }) } })
-    expect((await runAndWait(runner, "解释计算结果")).phase).toBe("completed")
+    expect((await runAndWait(runner, "你好")).phase).toBe("completed")
     const conversation = useAgentStore.getState().activeConversation!
     expect(conversation.messages.at(-1)?.text).toBe(answer)
     expect(conversation.messages.at(-1)?.failure).toBeUndefined()
     const stored = await conversationRepository().readRecord(conversation.id)
     expect(JSON.stringify(stored)).toContain(answer)
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+  })
+
+  it("does not accept an unrelated canned result as the requested calculation explanation", async () => {
+    const runner = createAgentRunner({ planner: { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "数学答复", factIds: [], answer: "BD=2√85/5", toolResultRefs: [] }, requestId: "unrelated", attemptId: "a" }) } })
+    const result = await runAndWait(runner, "解释计算结果")
+    expect(result.phase).toBe("failed")
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
@@ -177,7 +185,8 @@ function degeneratePyramidPlan() {
 }
 
 describe("the confirm and commit cycle", () => {
-  it("shows every unverified diagram condition in Chinese and offers no confirmation", async () => {
+  it.each([0, 100])("at %i%% rollout, unverified diagram conditions never get confirmation", async (percentage) => {
+    expect(setRolloutPercentage(percentage)).toBe(true)
     const planner: PlannerPort = {
       plan: async () => ({ plan: pyramidPlan(), requestId: "pyramid-eval", attemptId: "attempt-1" })
     }

@@ -262,6 +262,10 @@ export function formatSolidGoalAnswer(findings: readonly SolidGoalFinding[]): st
     const label = finding.sourceText.replace(/[；。\s]+$/u, "")
     if (finding.status === "holds") return `（${index + 1}）「${label}」在所构造的图形中**成立**（坐标核验；这是实例证据，不等于形式化证明）：${finding.detail}`
     if (finding.status === "disproved") return `（${index + 1}）「${label}」**不成立**：${finding.detail}。题设本身仍然通过核验 —— 图形可以保留，但这条结论不成立。`
+    if (finding.status === "measured" && finding.kind === "dihedral" && finding.measured !== null) {
+      const degrees = Math.acos(Math.min(1, Math.max(-1, finding.measured))) * 180 / Math.PI
+      return `（${index + 1}）「${label}」= ${degrees.toFixed(6)}°（cos = ${finding.measured.toPrecision(12)}；坐标量测的实例值，不是形式化证明）。`
+    }
     if (finding.status === "measured") return `（${index + 1}）「${label}」= ${finding.measured === null ? "（未量出）" : finding.measured.toPrecision(12)}（坐标量测；实例值，不是形式化证明）。`
     return `（${index + 1}）「${label}」尚未核验：${finding.detail}`
   })

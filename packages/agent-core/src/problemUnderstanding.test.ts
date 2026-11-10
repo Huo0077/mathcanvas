@@ -242,3 +242,28 @@ it("separates drawing, answer-only and mixed textual requests without treating a
   expect(taskIntentFor(understandProblem({ prompt: "\u8bf7\u753b\u6b63\u65b9\u4f53\u5e76\u6c42\u4f53\u79ef\u3002", problemRevision: "r" }), "\u8bf7\u753b\u6b63\u65b9\u4f53\u5e76\u6c42\u4f53\u79ef\u3002")).toBe("drawing-and-answer")
   expect(taskIntentFor(understandProblem({ prompt: "\u5982\u56fe\uff0c\u6c42\u8be5\u51e0\u4f55\u4f53\u7684\u4f53\u79ef\u3002", problemRevision: "r" }), "\u5982\u56fe\uff0c\u6c42\u8be5\u51e0\u4f55\u4f53\u7684\u4f53\u79ef\u3002")).toBe("clarification")
 })
+
+it("classifies an explicitly requested monotonic interval as an interval answer", () => {
+  const prompt = "已知函数 f(x)=sin x。求 f(x) 的单调递增区间。"
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).toEqual(["interval"])
+})
+
+it("classifies the requested length of a named segment as numeric even when the imperative is outside the goal span", () => {
+  const prompt = "在四棱锥 P-ABCD 中，求 AD。"
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).toEqual(["numeric"])
+})
+
+it("classifies a LaTeX-wrapped requested segment as numeric", () => {
+  const prompt = String.raw`在四棱锥 $P-ABCD$ 中，若 $AD\perp DC$，求 $AD$。`
+  expect(understand(prompt).goals.map(goal => goal.expectedKind)).toEqual(["numeric"])
+})
+
+it("keeps a line-plane angle as one measured goal instead of two independent questions", () => {
+  const prompt = "求直线PC与平面ADE所成角的正弦值。"
+  expect(understand(prompt).goals.map(g => [g.expectedKind, prompt.slice(g.source.start, g.source.end)])).toEqual([["numeric", "直线PC与平面ADE所成角的正弦值"]])
+})
+
+it("classifies a requested dihedral angle as a numeric goal", () => {
+  const prompt = "求二面角P-AB-C的大小。"
+  expect(understand(prompt).goals.map(g => g.expectedKind)).toEqual(["numeric"])
+})

@@ -1,6 +1,6 @@
 import { acceptAnswer } from "./answerAcceptance"
 import type { AnswerGoal, EvidenceRecord, GoalAnswer, SolveResult } from "./answerResult"
-import { understandProblem, type ProblemUnderstanding } from "./problemUnderstanding"
+import { understandProblem, taskIntentFor, type ProblemUnderstanding } from "./problemUnderstanding"
 
 export interface SourceAttachment { attachmentId: string; sha256: string; page: number }
 export interface ProblemSource {
@@ -65,7 +65,12 @@ export async function createSolveContext(source: ProblemSource, hash: HashText):
   if (!sha256.test(sourceRevision)) throw new Error("source hash must be SHA-256")
   const understanding = understandProblem({ prompt: source.prompt, problemRevision })
   const unrecognizedMathGoal = understanding.goals.length === 0 && /(?:求|算出|计算|证明|解题|请解|几何|如图|图中|面积|体积|方程|函数|角度|角相等|结论)/u.test(source.prompt)
-  if (understanding.goals.length === 0 && !unrecognizedMathGoal) {
+  if (understanding.goals.length === 0 && taskIntentFor(understanding, source.prompt, attachments.length > 0) === "drawing") {
+    // A shape-only command may not match the narrow goal parser. It still needs a
+    // host-issued draft goal; never let an empty-goal conversation certify a drawing.
+    understanding.goals.push({ goalId: problemRevision + ":drawing", expectedKind: "drawing", partId: "stem",
+      source: { sourceId: problemRevision, start: 0, end: source.prompt.length }, stateId: "s0", dependsOnGoalIds: [] })
+  } else if (understanding.goals.length === 0 && !unrecognizedMathGoal) {
     understanding.goals.push({ goalId: problemRevision + ":conversation", expectedKind: "conversation", partId: "stem",
       source: { sourceId: problemRevision, start: 0, end: source.prompt.length }, stateId: "s0", dependsOnGoalIds: [] })
   }

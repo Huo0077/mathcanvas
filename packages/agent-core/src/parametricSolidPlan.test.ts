@@ -170,3 +170,26 @@ describe("T5 参数化立体计划：四题的命名分点都落成绑定点", (
     expect(built.status).toBe("not-applicable")
   })
 })
+
+it("derives the rhombus midpoint theorem for Case 3 without treating instance geometry as proof", () => {
+  const prompt = CASE_3.prompt + "请画题设示意图。"
+  const built = tryBuildParametricSolidPlan({ prompt })
+  expect(built.status).toBe("ok")
+  if (built.status !== "ok" || built.plan.kind !== "plan") return
+  expect(built.plan.answer).toContain("OM ∥ PA")
+  expect(built.plan.answer).toContain("PA ∥ 平面 BDM")
+  expect(built.plan.answer).not.toContain("这是实例证据")
+  const changed = tryBuildParametricSolidPlan({ prompt: prompt.replace("点M为棱PC的中点", "点M在棱PC上") })
+  if (changed.status === "ok" && changed.plan.kind === "plan") expect(changed.plan.answer).not.toContain("OM ∥ PA")
+})
+
+it("derives PA perpendicular to a base diagonal from the given plane relation, not just a single instance", () => {
+  const stem = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD"
+  const good = tryBuildParametricSolidPlan({ prompt: stem })
+  expect(good.status).toBe("ok")
+  if (good.status !== "ok" || good.plan.kind !== "plan") return
+  expect(good.plan.answer).toContain("BD 在该平面内")
+  expect(good.plan.answer).not.toContain("实例证据")
+  const wrong = tryBuildParametricSolidPlan({ prompt: stem.replace("求证 PA ⊥ BD", "求证 PA ⊥ PC") })
+  if (wrong.status === "ok" && wrong.plan.kind === "plan") expect(wrong.plan.answer).not.toContain("PC 在该平面内")
+})

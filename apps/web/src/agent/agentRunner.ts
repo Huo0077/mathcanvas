@@ -525,9 +525,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[], taskIntent?: TextTaskIntent): Promise<PlannerSelection> {
+  async function selectPlanner(prompt: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[], taskIntent?: TextTaskIntent, solveContext?: import("@draw/agent-core").SolveContext): Promise<PlannerSelection> {
     return selectProblemPlanner({ prompt, imageNotes: "", planner: dependencies.planner, modelPlanner: dependencies.modelPlanner,
-      solveSession, requiredGoals, taskIntent, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
+      solveSession, requiredGoals, taskIntent, solveContext, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
@@ -575,7 +575,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         return { goalId: goal.goalId, kind: goal.expectedKind, sourceText: source?.sourceText ?? "" }
       })
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const selection: PlannerSelection = await selectPlanner(prompt, eventRunId, solveSession, requiredGoals, taskIntent)
+      const selection: PlannerSelection = await selectPlanner(prompt, eventRunId, solveSession, requiredGoals, taskIntent, preparedSolveContext)
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。

@@ -138,7 +138,7 @@ export function isEnabledForSession(sessionId: string, percentage: number): bool
  *
  * 同一个会话在一次发布里只落一个桶；开关按**依赖顺序**派生 —— 题意层与答案语义先开，
  * 数学核验才可能开，三视图族再依赖数学核验。于是任何比例下得到的组合都是合法的，
- * 不需要在错误路径上再兜一次底。默认比例 0 ⇒ 与"全关"逐字相同。
+ * 不需要在错误路径上再兜一次底。比例 0 ⇒ 与"全关"逐字相同；新安装默认 100% 时仅开启文字能力。
  */
 export function createAgentReliabilityFlagsForSession(sessionId: string, percentage: number): AgentReliabilityFlags {
   const enabled = isEnabledForSession(sessionId, percentage)
@@ -146,7 +146,7 @@ export function createAgentReliabilityFlagsForSession(sessionId: string, percent
   const goalTrackingV1 = enabled && answerSemanticsV1
   const mathVerificationV1 = enabled && goalTrackingV1
   const orthographicTemplatesV1 = enabled && mathVerificationV1
-  // 重读不依赖语义层，但仍受同一个桶控制（同一会话不会"一半开一半关"）。
-  const imageRereadV1 = enabled
+  // 纯文字模式禁止任何图片重读；即使用户灰度比例设为 100% 也不能复活旧识图能力。
+  const imageRereadV1 = false
   return createAgentReliabilityFlags({ answerSemanticsV1, goalTrackingV1, mathVerificationV1, orthographicTemplatesV1, imageRereadV1 })
 }

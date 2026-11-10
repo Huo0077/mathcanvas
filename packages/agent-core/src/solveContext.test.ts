@@ -189,3 +189,9 @@ describe("chat and unknown problems", () => {
     expect(result.reasonCodes).toContain("unrecognized_math_goal")
   })
 })
+
+it.each(["椭圆 x²/9+y²/4=1，画示意图", "抛物线 y²=4x，画示意图", "画一个球体，半径 5"])("requires a host drawing result, not an unrelated conversation answer: %s", async (text) => {
+  const context = await createSolveContext({ ...base, prompt: text }, sha)
+  expect(context.understanding.goals.some(goal => goal.expectedKind === "drawing")).toBe(true)
+  expect(context.understanding.goals.some(goal => goal.expectedKind === "conversation")).toBe(false)
+})

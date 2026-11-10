@@ -107,7 +107,7 @@ function trimmedFragment(text: string, start: number): { text: string; start: nu
  * 只有每一段都像"在问一个对象"时才拆，否则原样保留（宁可不拆，也不要把一句话切成半句）。
  */
 function splitMergedClause(text: string, baseStart: number): GoalFragment[] {
-  if (!/[与和、]/.test(text)) return [{ base: text, display: text, start: baseStart, end: baseStart + text.length }]
+  if (!/[与和、]/.test(text) || /(?:直线|线段|射线)[^，。；;]{0,20}与(?:平面|直线)[^，。；;]{0,24}所成角/u.test(text)) return [{ base: text, display: text, start: baseStart, end: baseStart + text.length }]
 
   const pieces: { text: string; start: number }[] = []
   let cursor = 0
@@ -171,9 +171,9 @@ function answerKindOf(text: string, forced?: AnswerKind): AnswerKind {
   if (forced !== undefined) return forced
   if (/证明|求证|恒成立|恒为|恒有|对任意|任意.*都/.test(text)) return "proof"
   if (/画出|作图|作出|画图/.test(text)) return "drawing"
-  if (/取值范围|范围/.test(text)) return "interval"
+  if (/取值范围|范围|单调(?:递增|递减)区间|递增区间|递减区间/.test(text)) return "interval"
   if (/选(?:出|择)?|选项|[ABCD]\s*[.．、]/.test(text)) return "single_choice"
-  if (/长度|距离|面积|体积|周长|角度|度数|多少|值为|值$|长$/.test(text)) return "numeric"
+  if (/长度|距离|面积|体积|周长|角度|度数|多少|大小|二面角|值为|值$|长$/.test(text) || /^[A-Z](?:[′']|₁|₂|₃)?[A-Z](?:[′']|₁|₂|₃)?$/.test(text.trim().replace(/\$/g, ""))) return "numeric"
   return "unknown"
 }
 

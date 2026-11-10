@@ -1,4 +1,4 @@
-import { routeDeterministicProblem, taskIntentFor, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort, type TextTaskIntent } from "@draw/agent-core"
+import { routeDeterministicProblem, taskIntentFor, adaptTrustedDeterministicAnswer, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort, type TextTaskIntent } from "@draw/agent-core"
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeDependencies } from "./agentRuntime"
 import { validateReliabilityConfig, type AgentReliabilityFlags } from "./reliabilityFlags"
 import type { SolveSession } from "../services/solveSession"
@@ -36,18 +36,21 @@ export interface PlannerRouteInput {
   solveSession?: SolveSession
   requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]
   taskIntent?: TextTaskIntent
+  solveContext?: SolveContext
   onDiagnostic?: (line: string) => void
 }
 
 /** Only a trusted local solver can supply a read-only answer from a drawing-shaped plan. */
-function localReadOnly(planner: PlannerPort): PlannerPort {
+function localAnswerAdapter(planner: PlannerPort, context?: SolveContext, readOnly = false): PlannerPort {
   return { plan: async request => {
     const outcome = await planner.plan(request)
-    if (!("plan" in outcome) || outcome.plan.kind !== "plan" || !outcome.plan.answer?.trim()) return outcome
+    if (!("plan" in outcome) || outcome.plan.kind === "clarification" || !outcome.plan.answer?.trim()) return outcome
     const plan = outcome.plan
+    const goalAnswers = context ? adaptTrustedDeterministicAnswer(context, plan.answer ?? "") : []
+    if (plan.kind !== "plan" || !readOnly) return goalAnswers.length ? { ...outcome, plan: { ...plan, goalAnswers } } : outcome
     return { ...outcome, plan: { schemaVersion: plan.schemaVersion, kind: "answer", goal: plan.goal,
       factIds: plan.factIds, answer: plan.answer!, toolResultRefs: [],
-      ...(plan.goalAnswers === undefined ? {} : { goalAnswers: plan.goalAnswers }),
+      ...(goalAnswers.length > 0 ? { goalAnswers } : plan.goalAnswers === undefined ? {} : { goalAnswers: plan.goalAnswers }),
       ...(plan.assumptions === undefined ? {} : { assumptions: plan.assumptions }) } }
   } }
 }
@@ -59,14 +62,13 @@ export async function selectProblemPlanner(input: PlannerRouteInput): Promise<Pr
   const answerOnlyChoice = input.requiredGoals?.length === 1 && input.requiredGoals[0]?.kind === "single_choice"
   const deterministic = answerOnlyChoice ? null : routeDeterministicProblem(input.prompt)
   if (deterministic) return {
-    planner: input.taskIntent === "readonly-answer" ? localReadOnly({ plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) })
-      : { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
+    planner: localAnswerAdapter({ plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) }, input.solveContext, input.taskIntent === "readonly-answer"),
     ...(input.taskIntent === "readonly-answer" ? {} : { diagramPrompt: deterministic.diagramPrompt }), requestedSkillIds: input.taskIntent === "readonly-answer" ? [] : [deterministic.family], textProfileId: "local-planner"
   }
   const resolution = await (input.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
   if (!resolution.ok) {
     const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
-    return { planner: input.taskIntent === "readonly-answer" ? localReadOnly(createLocalPlanner(options)) : createLocalPlanner(options), requestedSkillIds: input.taskIntent === "readonly-answer" || answerOnlyChoice ? [] : localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
+    return { planner: localAnswerAdapter(createLocalPlanner(options), input.solveContext, input.taskIntent === "readonly-answer"), requestedSkillIds: input.taskIntent === "readonly-answer" || answerOnlyChoice ? [] : localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
   }
   return {
     planner: createModelPlanner({ ...input.modelPlanner, imageNotes: input.imageNotes, solveSession: input.solveSession,
