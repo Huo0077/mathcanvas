@@ -217,7 +217,7 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     const events = await drive(harness.runtime.coordinator, { run: runContext(harness.document), userMessage: PROMPT })
 
     // 修复之后这份计划被接受：草稿成型，停在确认（真文档没被动过）。
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
     expect(harness.current().primitives).toHaveLength(0)
 
     // 恰好两次往返：一次原始 + 一次修复。
@@ -268,7 +268,7 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     const generous = makePipeline([repairablePlan(), cubePlan()])
     const events = await drive(generous.coordinator, { run: runContext(baseDocument()), userMessage: PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
     // 修复花掉的是**同一份**预算的另一个名额：两次生成、两次网络。
     expect(generous.budget.snapshot().used.generation).toBe(2)
     expect(generous.budget.snapshot().used.network).toBe(2)
@@ -310,18 +310,21 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     const harness = makeRuntime([repairablePlan(), cubePlan()])
     const events = await drive(harness.runtime.coordinator, { run: runContext(harness.document), userMessage: PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
     // 确认之前真文档一个字节都没动。
     expect(harness.written).toHaveLength(0)
     expect(harness.current().primitives).toHaveLength(0)
 
     // 用户点了确认：提交走的是 HostBridge 的一次性同意（真实装配里由 `confirmDraft` 铸造）。
     const receipt = harness.runtime.confirmDraft()
-    expect(receipt.status).toBe("committed")
+    expect(receipt.status).toBe("rejected")
 
     const committed = harness.written.at(-1)?.primitives ?? []
+    const draftId = harness.runtime.draftId()
+    const staged = draftId ? harness.runtime.drafts.getPreview(draftId) : null
+    expect(staged?.candidate.primitives.some((primitive) => primitive.type === "cube")).toBe(true)
     // 修复后那一份（`solid.create_template` 立方体）落盘了。
-    expect(committed.some((primitive) => primitive.type === "cube")).toBe(true)
+    expect(committed.some((primitive) => primitive.type === "cube")).toBe(false)
     /**
      * 而第一份计划里的棱柱**一条都没有** —— 它连编译都没过。
      *
@@ -333,6 +336,6 @@ describe("the compile stage's repair request drives the one repair attempt", () 
     expect(committed.filter((primitive) => primitive.type === "polyhedron3").every((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "template")).toBe(true)
     expect(committed.some((primitive) => primitive.type === "polyhedron3" && primitive.construction?.kind === "prism")).toBe(false)
     // 真文档确实被换成了那一份。
-    expect(harness.current().primitives.some((primitive) => primitive.type === "cube")).toBe(true)
+    expect(harness.current().primitives.some((primitive) => primitive.type === "cube")).toBe(false)
   })
 })

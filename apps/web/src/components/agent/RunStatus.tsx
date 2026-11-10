@@ -87,10 +87,11 @@ function progressOf(message: AgentMessage): { label: string; detail: string } | 
    * **草稿优先于交付语义**：计划附带解答时也有 `solveResult`，但这一步真正等用户做的是确认草稿；
    * 逐问答案由 `AnswerResult` 显示，状态卡不抢那句话。
    */
-  if (message.draft) return { label: "等待你确认", detail: "草稿已暂存，还没有写进文档" }
+  if (message.commit?.status === "committed") return { label: "已提交", detail: "" }
+  if (message.draft && !message.commit) return { label: "等待你确认", detail: "草稿已暂存，还没有写进文档" }
   const delivery = message.solveResult === undefined ? undefined : DELIVERY_LABELS[message.solveResult.status]
   if (delivery !== undefined) return delivery
-  if (message.commit) return { label: message.commit.status === "committed" ? "已提交" : message.text && message.text !== "这次没有需要改动的地方。" ? "已回答" : "无需改动", detail: "" }
+  if (message.commit) return { label: message.text && message.text !== "这次没有需要改动的地方。" ? "已回答" : "无需改动", detail: "" }
   return null
 }
 

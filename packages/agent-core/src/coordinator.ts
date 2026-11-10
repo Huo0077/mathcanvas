@@ -1002,7 +1002,14 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        *（那是编译器的 `RepairRequest`，只有编译失败时才有），没有请求的重试
        * 只是一次盲目的重复 —— 与协调器别处那条判据同源。
        */
-      if (request.acceptance !== undefined || stagedVerification !== null) {
+      const certificateCheck = stagedVerification?.checks.find(check => check.id === "drawing:certificate")
+      if (stagedPlan.actions.length > 0 && certificateCheck?.status !== "passed") {
+        ledger.record("drawing certificate missing from staged candidate")
+        const failed = ledger.transition("failed", `cannot confirm: ${certificateCheck?.detail ?? "drawing lacks a host-issued complete certificate"}`)
+        if (failed.ok) yield failed.event
+        return
+      }
+      if (stagedPlan.actions.length > 0 || request.acceptance !== undefined || stagedVerification !== null) {
         const gate = verificationGate(stagedVerification)
         if (!gate.proceed) {
           ledger.record(`verification gate blocked confirmation: ${gate.code}`)

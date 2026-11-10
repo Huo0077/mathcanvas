@@ -1,5 +1,5 @@
 import { createEmptyDocument } from "@draw/dsl"
-import type { RenderEvidence } from "@draw/agent-core"
+import { buildDrawingCertificate, canonicalContentHash, createSolveContext, DRAWING_VERIFIER_VERSION, verifyPointDrawingStructure, type RenderEvidence, type SolveContext } from "@draw/agent-core"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { beforeEach, describe, expect, it } from "vitest"
 
@@ -45,7 +45,10 @@ function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEv
   }
 }
 
-function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
+const pointContexts = new WeakMap<DraftStore, SolveContext>()
+const POINT_PROMPT = "画点A(1,0)"
+const sha = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
+async function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
   localStorage.clear()
   const base = createEmptyDocument("conics")
   useSceneStore.setState({ document: base, workspaceDocuments: { [base.workspace]: base }, history: [], future: [], error: null })
@@ -53,8 +56,12 @@ function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
   /** 真端口：读的就是 store 当前状态（不是快照；这条由 `sceneDocumentPort.test.ts` 专门守着）。 */
   const port = createSceneDocumentPort(useSceneStore.getState)
   const drafts: DraftStore = createDraftStore()
+  const solveContext = await createSolveContext({ runId: "run-1", conversationId: "conv-1", prompt: POINT_PROMPT,
+    attachments: [], corrections: [], sceneRevision: createDocumentHandle(base, "project-1").contentHash }, sha)
+  pointContexts.set(drafts, solveContext)
   const bridge: HostBridge = createHostBridge({
     drafts,
+    solveContext,
     live: () => {
       const current = port.current()
       // 句柄用与 `DocumentService` 同一套规则产出（内容哈希 + 精确到 revision 的 generation）。
@@ -70,7 +77,20 @@ function makeHarness(options: { now?: () => number; ttlMs?: number } = {}) {
 }
 
 async function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
-  return await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
+  const stage = await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, label: alias === "p2" ? "B" : "A", points: [{ x, y: 0 }] } }], version, POINT_PROMPT)
+  if (!stage.ok || version !== 1) return stage
+  const context = pointContexts.get(drafts)
+  const source = useSceneStore.getState().document
+  const checked = verifyPointDrawingStructure(POINT_PROMPT, stage.preview.candidate, source)
+  if (!context || !checked) throw Error("candidate did not match original point command")
+  const signed = buildDrawingCertificate({ context,
+    draft: { draftId, draftVersion: stage.preview.draftVersion, previewHash: stage.preview.previewHash,
+      candidateHash: canonicalContentHash(stage.preview.candidate), sceneRevision: context.sceneRevision, stageCount: stage.preview.stageCount },
+    diagram: stage.preview.diagramVerification,
+    toolVerification: { status: "passed", checks: [{ id: "point:structure", status: "passed", detail: "coordinate checked" }], next_actions: [] },
+    structuralChecks: [checked], verifierVersion: DRAWING_VERIFIER_VERSION })
+  if (signed.status !== "passed" || !drafts.setDrawingCertificate(draftId, stage.preview.draftVersion, signed.certificate)) throw Error(`point drawing could not be certified: ${signed.status === "unsupported" ? signed.reason : "stale draft"}`)
+  return stage
 }
 
 /** 真文档上的一笔手工编辑（用户操作走的就是 `applyBatch`）。 */
@@ -84,7 +104,7 @@ describe("agent commit pipeline against the real store", () => {
   })
 
   it("Gate 1 — a model-shaped action only ever creates an isolated draft", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
 
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
@@ -100,7 +120,7 @@ describe("agent commit pipeline against the real store", () => {
   })
 
   it("Gate 2 — a manual edit after the preview makes the draft stale and the newer head survives", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
@@ -139,7 +159,7 @@ describe("agent commit pipeline against the real store", () => {
    * 于是"草稿编译之后文档又变过"这条重新被既有的 `stale_source` 挡住。
    */
   it("Gate 2 — a manual edit before the user confirms is not silently merged", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
@@ -148,13 +168,11 @@ describe("agent commit pipeline against the real store", () => {
     const afterEdit = useSceneStore.getState().document
 
     const consent = bridge.requestConsent(record.draftId)
-    expect(consent.ok).toBe(true)
-    if (!consent.ok) throw new Error("expected consent")
+    expect(consent).toEqual({ ok: false, reason: "stale_source" })
 
-    const receipt = bridge.commit(record.draftId, consent.record)
-
-    expect(receipt.ok).toBe(false)
-    if (!receipt.ok) expect(receipt.reason).toBe("stale_source")
+    // No consent can be minted against a changed scene, so there is no commit attempt.
+    const receipt = bridge.commit(record.draftId, null)
+    expect(receipt).toEqual({ ok: false, reason: "missing_consent" })
     // 关键：草稿里的点没有落进来，用户那一笔也没有被覆盖。
     const live = useSceneStore.getState().document
     expect(live.primitives.map((primitive) => primitive.id)).toEqual(["point-manual"])
@@ -164,7 +182,7 @@ describe("agent commit pipeline against the real store", () => {
 
   it("Gate 2 — a draft compiled against the *current* document still commits normally", async () => {
     // 反向守卫：绑定基准句柄不能把"文档根本没被动过"的正常提交一起挡掉。
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
@@ -179,7 +197,7 @@ describe("agent commit pipeline against the real store", () => {
   })
 
   it("Gate 3 — consent is one-time: the same record cannot commit twice", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
@@ -207,7 +225,7 @@ describe("agent commit pipeline against the real store", () => {
    * 否则"草稿基准失效"这条判断可以整体删掉而测试全绿。
    */
   it("Gate 2 — assertFresh reports the draft's base document as stale after a manual edit", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion)).ok).toBe(true)
 
@@ -222,7 +240,7 @@ describe("agent commit pipeline against the real store", () => {
   })
 
   it("Gate 3 — consent is hash-bound: staging more after the preview invalidates the earlier consent", async () => {
-    const { bridge, drafts } = makeHarness()
+    const { bridge, drafts } = await makeHarness()
     const record = drafts.create(useSceneStore.getState().document, bridge.live()!.handle)
     expect((await stagePoint(drafts, record.draftId, record.draftVersion, 1, "p1")).ok).toBe(true)
 

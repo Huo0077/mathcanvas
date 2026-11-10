@@ -8,7 +8,7 @@ import { ConfirmationPanel } from "./ConfirmationPanel"
 const baseline: AgentDraftView = { draftId: "d-1", draftVersion: 2, previewHash: "a".repeat(64), stageCount: 1, undoesInOneStep: true }
 
 function renderReport(status: "passed" | "unverified" | "failed") {
-  const draft: AgentDraftView = { ...baseline, diagramVerification: { status, sampleValues: ["自由点 A 采用本图示例坐标 (0, 0, 1)"], checks: [
+  const draft: AgentDraftView = { ...baseline, drawingCertified: status === "passed", diagramVerification: { status, sampleValues: ["自由点 A 采用本图示例坐标 (0, 0, 1)"], checks: [
     { kind: "dihedral", sourceText: "二面角E-BC-D=45°", status, reason: status === "passed" ? "实测 45°" : "未得到可靠角度", expected: 45, actual: status === "passed" ? 45 : undefined }
   ], ...proofScopeOf({}) } }
   const onConfirm = vi.fn()
@@ -25,6 +25,18 @@ describe("diagram verification shown at the real confirmation boundary", () => {
     expect(screen.queryByText(/已证明/)).toBeNull()
   })
 
+  it("lets a host-certified shape-only cube be confirmed without inventing a numerical diagram report", () => {
+    const onConfirm = vi.fn()
+    render(<ConfirmationPanel draft={{ ...baseline, drawingCertified: true }} onConfirm={onConfirm} />)
+    expect(screen.getByRole("button", { name: "确认并提交" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "题设核验" }).textContent).toContain("结构")
+  })
+  it("a passed diagram report alone is not permission to confirm", () => {
+    const onConfirm = vi.fn()
+    render(<ConfirmationPanel draft={{ ...baseline, diagramVerification: { status: "passed", checks: [{ kind: "fixedLength", sourceText: "AB=2", status: "passed", reason: "2" }], sampleValues: [], ...proofScopeOf({}) } }} onConfirm={onConfirm} />)
+    expect(screen.queryByRole("button", { name: "确认并提交" })).toBeNull()
+    expect(onConfirm).not.toHaveBeenCalled()
+  })
   it.each(["unverified", "failed"] as const)("does not show normal confirmation for %s", (status) => {
     const onConfirm = renderReport(status)
     expect(screen.getByText("二面角E-BC-D=45°")).toBeTruthy()
@@ -58,10 +70,10 @@ describe("没有核验报告时要说清'这一轮没有核验'", () => {
     expect(section.textContent).toContain("模板")
   })
 
-  it("仍然允许确认，但在同一段里说清'系统没有替你核'", () => {
+  it("没有核验报告不允许确认，也说明阻断原因", () => {
     render(<ConfirmationPanel draft={baseline} onConfirm={() => {}} />)
 
-    expect(screen.getByRole("button", { name: "确认并提交" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "确认并提交" })).toBeNull()
     expect(screen.getByRole("region", { name: "题设核验" }).textContent).toContain("没有替你核")
   })
 

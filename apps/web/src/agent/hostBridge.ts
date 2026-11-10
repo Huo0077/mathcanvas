@@ -1,5 +1,8 @@
 import type { GeometryDocument } from "@draw/dsl"
 import {
+  canCommitDrawing,
+  DRAWING_VERIFIER_VERSION,
+  tryBuildScopedPyramidPlan,
   canonicalContentHash,
   countDraftObjects,
   diagnoseLayout,
@@ -72,6 +75,7 @@ export type PreviewArtifact = {
   candidate: GeometryDocument
   stageCount: number
   diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
+  drawingCertified: boolean
   /** **题面改写（原件 → 我这样读）**：改写要看得见，所以它随预览一起回带给界面。 */
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /**
@@ -118,7 +122,7 @@ export type CandidateRenderVerification = {
   }
 }
 
-export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" | "unverified_diagram" | "unverified_render" | "stale_render" | "failed_render"; detail?: string }
+export type ConsentResult = { ok: true; record: ConsentRecord } | { ok: false; reason: "unknown_draft" | "stale_source" | "unverified_diagram" | "unverified_render" | "stale_render" | "failed_render"; detail?: string }
 
 /**
  * 提交**被拒**的理由。
@@ -135,6 +139,8 @@ export type CommitReceiptResult = { ok: true; receipt: { changed: boolean; draft
 
 export interface HostBridgeDependencies {
   drafts: DraftStore
+  /** Pinned source identity; absent source can never authorize a nonempty drawing. */
+  solveContext?: import("@draw/agent-core").SolveContext
   /**
    * 当前活跃文档的**句柄 + 文档本体**。
    *
@@ -211,6 +217,22 @@ function renderFailure(verification: CandidateRenderVerification): { reason: "un
 }
 
 export function createHostBridge(dependencies: HostBridgeDependencies): HostBridge {
+  const drawingCertificateValid = (draftId: string, artifact: import("./draftStore").DraftPreview, liveHandle: DocumentHandle): boolean => {
+    if (artifact.stageCount === 0) return true
+    const certificate = dependencies.drafts.certificateOf(draftId)
+    const context = dependencies.solveContext
+    const fullPromptHash = context ? canonicalContentHash({ prompt: context.prompt }) : null
+    const scoped = context && certificate && certificate.promptHash !== fullPromptHash ? tryBuildScopedPyramidPlan(context.prompt) : null
+    const approvedScopeHash = scoped ? canonicalContentHash({ prompt: scoped.diagramPrompt }) : null
+    return !!certificate && !!context && (certificate.promptHash === fullPromptHash || certificate.promptHash === approvedScopeHash)
+      && canCommitDrawing(certificate, {
+      draftId, draftVersion: artifact.draftVersion, previewHash: artifact.previewHash,
+      candidateHash: canonicalContentHash(artifact.candidate), sceneRevision: liveHandle.contentHash,
+      stageCount: artifact.stageCount, problemRevision: context.problemRevision, sourceRevision: context.sourceRevision,
+      obligationManifestHash: certificate.obligationManifestHash, verifierVersion: DRAWING_VERIFIER_VERSION
+    })
+  }
+
   const { drafts, runId } = dependencies
   const now = dependencies.now ?? (() => Date.now())
   const ttl = dependencies.consentTtlMs ?? 60_000
@@ -242,6 +264,7 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           previewHash: artifact.previewHash,
           candidate: artifact.candidate,
           stageCount: artifact.stageCount,
+          drawingCertified: current !== null && artifact.stageCount > 0 && drawingCertificateValid(draftId, artifact, current.handle),
           ...(artifact.diagramVerification === undefined ? {} : { diagramVerification: artifact.diagramVerification }),
           ...(artifact.promptNormalisation === undefined ? {} : { promptNormalisation: artifact.promptNormalisation }),
           ...(artifact.proofAttempt === undefined ? {} : { proofAttempt: artifact.proofAttempt }),
@@ -264,7 +287,8 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const artifact = drafts.getPreview(draftId)
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
-      if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
+      if (!drafts.assertFresh(draftId, current.handle).ok) return { ok: false, reason: "stale_source" }
+      if (!drawingCertificateValid(draftId, artifact, current.handle)) return { ok: false, reason: "unverified_diagram" }
       const renderVerification = artifact.stageCount === 0
         ? { status: "passed", diagnostics: [] } satisfies CandidateRenderVerification
         : verifyCandidateRender(dependencies, {
@@ -341,7 +365,12 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
         return { ok: false, reason: "stale_preview" }
       }
 
-      if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
+      const liveForCertificate = dependencies.live()
+      const expectedForCertificate = consent.expectedHandles.target
+      if (!liveForCertificate || liveForCertificate.handle.epoch !== expectedForCertificate.epoch
+        || liveForCertificate.handle.generation !== expectedForCertificate.generation
+        || liveForCertificate.handle.contentHash !== expectedForCertificate.contentHash) return { ok: false, reason: "stale_source" }
+      if (!drawingCertificateValid(draftId, artifact, liveForCertificate.handle)) return { ok: false, reason: "unverified_diagram" }
 
       // 仍要走 Compare-and-Swap：授权是"用户同意过"，不等于"文档没被动过"。
       if (artifact.stageCount > 0) {

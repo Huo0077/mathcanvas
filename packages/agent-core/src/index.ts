@@ -215,6 +215,8 @@ export * from "./tools/draftTools"
 export * from "./tools/interactionTools"
 export * from "./tools/sceneTools"
 export * from "./verification/completionGate"
+export * from "./verification/drawingCertificate"
+export * from "./verification/drawingStructure"
 /**
  * W6：第二批题族的独立判据与题族事实适配器。判据实现文件由各自测试直接引用，
  * 包外只导出这一个入口（避免 `Point2` / `ExactFraction` 这类同名类型在 `export *` 下冲突）。

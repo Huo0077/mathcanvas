@@ -44,6 +44,8 @@ describe("proof transcript follows the real scene, without rewriting historical 
     // Browser has no Lean: this verifies real runner -> persisted message -> live panel wiring, not Lean success.
     expect(original.proofSceneBinding).toMatchObject({ documentId: useSceneStore.getState().document.metadata.id })
     await act(async () => { expect(runner.confirm().status).toBe("committed") })
+    expect(screen.getByText("\u5df2\u63d0\u4ea4\u7684\u4f5c\u56fe\u4e0e\u8bc1\u660e\u8bb0\u5f55")).toBeTruthy()
+    expect(screen.queryByText("\u786e\u8ba4\u4e4b\u540e\u4f1a\u53d1\u751f\u4ec0\u4e48")).toBeNull()
     expect(useSceneStore.getState().document.primitives).toHaveLength(19)
     expect(proof().getAttribute("data-outcome")).toBe("toolchain_unavailable")
     act(() => useSceneStore.getState().undo())

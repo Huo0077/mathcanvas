@@ -126,7 +126,7 @@ export /**
  * 2. **原因码保留**：诊断与用户话不互相顶替 —— 用户看到中文解释，括号里留着可搜索的码。
  */
 function commitFailureText(outcome: { status: string; detail?: string }): string {
-  const reason = (outcome.detail ?? "").split(":")[0]?.trim() || outcome.status
+  const reason = outcome.status === "stale_source" ? "stale_source" : (outcome.detail ?? "").split(":")[0]?.trim() || outcome.status
   const known: Record<string, string> = {
     stale_source: "文档在草稿生成之后被改过，这次提交没有落下去。请重新生成草稿。",
     stale_conversation: "这份草稿属于另一段对话，不能在这里提交。",
@@ -857,6 +857,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           counts: preview.ok ? preview.artifact.counts : undefined,
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           diagramVerification: preview.ok ? preview.artifact.diagramVerification : undefined,
+          drawingCertified: preview.ok && preview.artifact.drawingCertified,
+          ...(preview.ok && proofBase ? { drawingSceneBinding: { documentId: proofBase.documentId, contentHash: proofBase.contentHash } } : {}),
           promptNormalisation: preview.ok ? preview.artifact.promptNormalisation : undefined,
           // **形式证明那一次尝试**（§3-D）：关着时**连这个键都不写**（不是"值是 undefined"）——
           // 与草稿记录里那条口径一致，免得"默认路径逐字不变"在视图这一层被一个空键破坏。

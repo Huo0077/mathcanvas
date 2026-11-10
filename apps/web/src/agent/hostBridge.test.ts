@@ -1,5 +1,5 @@
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
-import type { RenderEvidence } from "@draw/agent-core"
+import { buildDrawingCertificate, canonicalContentHash, DRAWING_VERIFIER_VERSION, understandProblem, type RenderEvidence, type SolveContext } from "@draw/agent-core"
 import { createDocumentHandle } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 
@@ -37,13 +37,39 @@ function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEv
   }
 }
 
+/** Host-side test fixture for consent mechanics only; it is not a geometry oracle. */
+const CONSENT_FIXTURE_PROMPT = "在正方体ABCD-A1B1C1D1中，AB=2，请作图。"
+const trustedFixtureContext = new WeakMap<DraftStore, SolveContext>()
+function fixtureContext(document: GeometryDocument, runId: string, conversationId = "conv-1"): SolveContext {
+  const problemRevision = "a".repeat(64)
+  return { runId, conversationId, prompt: CONSENT_FIXTURE_PROMPT, attachments: [], corrections: [],
+    sceneRevision: createDocumentHandle(document, "project-1").contentHash, problemRevision,
+    sourceRevision: "b".repeat(64), understanding: understandProblem({ prompt: CONSENT_FIXTURE_PROMPT, problemRevision }), unrecognizedMathGoal: false }
+}
+function certifyFixture(drafts: DraftStore, draftId: string): void {
+  const context = trustedFixtureContext.get(drafts)
+  if (!context) return
+  const preview = drafts.getPreview(draftId)
+  if (!preview) throw new Error("missing fixture preview")
+  const signed = buildDrawingCertificate({ context,
+    draft: { draftId, draftVersion: preview.draftVersion, previewHash: preview.previewHash,
+      candidateHash: canonicalContentHash(preview.candidate), sceneRevision: context.sceneRevision, stageCount: preview.stageCount },
+    diagram: { status: "passed", checks: [{ kind: "fixedLength", sourceText: "AB=2", status: "passed", reason: "test fixture" }], sampleValues: [], proofScope: "figure-instance", proofScopeNote: "test fixture", universalClaims: "not-proven" },
+    toolVerification: { status: "passed", checks: [{ id: "fixture", status: "passed", detail: "test fixture" }], next_actions: [] },
+    structuralChecks: [{ sourceText: "正方体ABCD-A1B1C1D1", status: "passed", entityIds: ["fixture-solid"] }],
+    verifierVersion: DRAWING_VERIFIER_VERSION })
+  if (signed.status !== "passed" || !drafts.setDrawingCertificate(draftId, preview.draftVersion, signed.certificate)) throw new Error("failed to install trusted fixture certificate")
+}
 function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: number; conversationId?: string; candidateRenderEvidence?: CandidateRenderEvidencePort | null } = {}) {
   const drafts: DraftStore = createDraftStore()
   let document: GeometryDocument = createEmptyDocument("conics")
   let conversationId: string | null = options.conversationId ?? null
   const replaced: GeometryDocument[] = []
+  const solveContext = fixtureContext(document, options.runId ?? "run-1", options.conversationId)
+  trustedFixtureContext.set(drafts, solveContext)
   const bridge = createHostBridge({
     drafts,
+    solveContext,
     live: () => ({ handle: createDocumentHandle(document, "project-1"), document }),
     replace: (candidate) => {
       replaced.push(candidate)
@@ -56,7 +82,7 @@ function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: numbe
     consentTtlMs: options.ttlMs ?? 60_000,
     candidateRenderEvidence: options.candidateRenderEvidence === null ? undefined : options.candidateRenderEvidence ?? structuredRenderEvidence
   })
-  return { bridge, drafts, replaced, getDocument: () => document, setConversation: (next: string | null) => { conversationId = next } }
+  return { bridge, drafts, solveContext, replaced, getDocument: () => document, setConversation: (next: string | null) => { conversationId = next } }
 }
 
 /**
@@ -64,10 +90,46 @@ function makeBridge(options: { now?: () => number; runId?: string; ttlMs?: numbe
  * id、并被"重复 id"拒绝 —— 这是刻意的（重试不该产生两个对象）。
  * 所以要暂存**另一笔**操作时必须换 alias。第一版测试没换，于是"预览变了"根本没发生。
  */
-async function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p") {
-  return await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version)
+async function stagePoint(drafts: DraftStore, draftId: string, version: number, x = 1, alias = "p", certify = true) {
+  const result = await drafts.stage(draftId, [{ actionId: "planar.create_point", actionKey: alias, factIds: [], inputs: { alias, points: [{ x, y: 0 }] } }], version, certify && trustedFixtureContext.has(drafts) ? CONSENT_FIXTURE_PROMPT : undefined)
+  if (result.ok && certify) certifyFixture(drafts, draftId)
+  return result
 }
 
+/** W1: a direct HostBridge caller must not bypass the confirmation panel. */
+describe("drawing certificate boundary", () => {
+  it("rejects an actionable drawing without a diagram report at both consent and commit", async () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    expect((await stagePoint(harness.drafts, record.draftId, record.draftVersion, 1, "p", false)).ok).toBe(true)
+    const consent = harness.bridge.requestConsent(record.draftId)
+    expect(consent).toEqual({ ok: false, reason: "unverified_diagram" })
+    expect(harness.bridge.commit(record.draftId, null)).toEqual({ ok: false, reason: "missing_consent" })
+    expect(harness.replaced).toHaveLength(0)
+  })
+})
+  it("rejects an altered pinned original prompt even when its revision identifiers were not advanced", async () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    harness.solveContext.prompt = "画另一个形状"
+    expect(harness.bridge.requestConsent(record.draftId)).toEqual({ ok: false, reason: "unverified_diagram" })
+    expect(harness.replaced).toHaveLength(0)
+  })
+  it("cannot reuse a trusted certificate after its source scene changes, even if consent was minted earlier", async () => {
+    const harness = makeBridge()
+    const record = harness.drafts.create(harness.getDocument(), harness.bridge.live()!.handle)
+    await stagePoint(harness.drafts, record.draftId, record.draftVersion)
+    const consent = harness.bridge.requestConsent(record.draftId)
+    if (!consent.ok) throw Error("fixture consent missing")
+    const before = harness.getDocument().primitives.length
+    const changed = harness.getDocument()
+    changed.primitives.push({ id: "manual-1", type: "point", x: 8, y: 9 })
+    const result = harness.bridge.commit(record.draftId, consent.record)
+    expect(result).toEqual({ ok: false, reason: "stale_source" })
+    expect(harness.replaced).toHaveLength(0)
+    expect(harness.getDocument().primitives).toHaveLength(before + 1)
+  })
 describe("host bridge consent", () => {
   it("refuses to mint a consent token for an unverified diagram even if called directly", async () => {
     const drafts = createDraftStore()
@@ -215,6 +277,7 @@ describe("host bridge consent", () => {
      */
     const other = createHostBridge({
       drafts: harness.drafts,
+      solveContext: harness.solveContext,
       live: () => ({ handle: createDocumentHandle(harness.getDocument(), "project-1"), document: harness.getDocument() }),
       replace: () => {},
       runId: "run-2",
@@ -423,7 +486,10 @@ describe("candidate render evidence gate", () => {
     const drafts = createDraftStore()
     let document: GeometryDocument = createEmptyDocument("conics")
     let evidenceHash = "0".repeat(64)
+    const solveContext = fixtureContext(document, "run-stale")
+    trustedFixtureContext.set(drafts, solveContext)
     const dependencies = {
+      solveContext,
       drafts,
       live: () => ({ handle: createDocumentHandle(document, "project-1"), document }),
       replace: (candidate: GeometryDocument) => { document = candidate },

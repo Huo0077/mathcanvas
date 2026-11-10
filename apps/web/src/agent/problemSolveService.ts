@@ -92,7 +92,7 @@ export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {
    */
   const config = validateReliabilityConfig(input.flags)
   if (!config.ok) throw new Error(`invalid reliability configuration: ${config.errors.map((error) => error.code).join(",")}`)
-  return createAgentRuntime({ ...input.runtime,
+  return createAgentRuntime({ ...input.runtime, drawingContext: input.context,
     ...(input.flags.goalTrackingV1 && input.flags.answerSemanticsV1
       ? { solveContext: input.context, hashText: input.hashText,
           ...(input.flags.mathVerificationV1 ? { trustedMathFacts: deriveTrustedMathFacts(input.context) } : {}),

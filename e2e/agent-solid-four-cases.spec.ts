@@ -64,6 +64,8 @@ for (const [index, [label, prompt]] of ([
     await page.getByRole("button", { name: "Agent 工作区" }).click()
 
     await page.getByRole("button", { name: "确认并提交" }).click()
+    await expect(page.getByRole("region", { name: "运行状态" }).locator(".agent-run-state")).toHaveText("已提交")
+    await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
     // Verify committed document and one-step undo below; the reply text may already contain the answer.
     await page.getByRole("button", { name: "返回画布" }).click()
     await expect(page.locator(".app-shell")).toHaveAttribute("data-app-module", "traditional")
@@ -80,6 +82,8 @@ test("Case 4 原题：出草稿 → 一次提交 → 一步撤销", async ({ pag
   await send(page, CASE_4_ORIGINAL)
   await expectDraft(page)
   await page.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByRole("region", { name: "运行状态" }).locator(".agent-run-state")).toHaveText("已提交")
+  await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
   await page.keyboard.press("Control+z")
@@ -90,6 +94,8 @@ test("Case 4 修订版：出草稿 → 一次提交 → 一步撤销", async ({ 
   await send(page, CASE_4_REVISED)
   await expectDraft(page)
   await page.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByRole("region", { name: "运行状态" }).locator(".agent-run-state")).toHaveText("已提交")
+  await expect(page.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
   await page.getByRole("button", { name: "返回画布" }).click()
   await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
   await page.keyboard.press("Control+z")

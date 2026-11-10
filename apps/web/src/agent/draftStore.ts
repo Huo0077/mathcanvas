@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canCommitDrawing, canonicalContentHash, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport, type DrawingCertificate } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -54,6 +54,8 @@ export interface DraftRecord {
   /** 编译期补全出来的假设（跨 `stage` 累积，随预览回带）。 */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  drawingCertificate?: DrawingCertificate
+  materialisedActions?: DraftAction[]
   /**
    * **题面改写（原件 → 我这样读）**（2026-10-10 第二件）。
    *
@@ -95,6 +97,8 @@ export interface DraftPreview {
    * 不是 `DraftAction`（那是动作层的形状，`commitTransaction` 会判它 `unknown operation`）。
    */
   operations: DomainOperation[]
+  /** Host-only materialisation (including witness rescue), not sent to chat. */
+  materialisedActions?: DraftAction[]
   /**
    * **这一批补全出来的假设**（缺省字段的默认值、欠定特值）。
    *
@@ -210,6 +214,8 @@ export interface DraftStore {
   baseHandleOf(draftId: string): DocumentHandle | null
   invalidate(draftId: string, reason: string): void
   getPreview(draftId: string): DraftPreview | null
+  certificateOf(draftId: string): DrawingCertificate | null
+  setDrawingCertificate(draftId: string, expectedDraftVersion: number, certificate: DrawingCertificate): boolean
 }
 
 let draftCounter = 0
@@ -411,6 +417,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     previewHash: canonicalContentHash(record.candidate),
     stageCount: record.operations.length,
     operations: [...record.compiledOperations],
+    ...(record.materialisedActions === undefined ? {} : { materialisedActions: [...record.materialisedActions] }),
     completionAssumptions: [...record.completionAssumptions],
     ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) }),
     ...(record.promptNormalisation === undefined ? {} : { promptNormalisation: structuredClone(record.promptNormalisation) }),
@@ -585,6 +592,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         // 必须是同一个口径，否则用户在两条路径上看到两种范围说法。
         ...proofScopeOf(record.candidate.parameters)
       }
+      record.drawingCertificate = undefined
+      record.materialisedActions = [...materialised.actions]
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]
       record.compiledOperations = [...record.compiledOperations, ...compiled.operations]
@@ -648,6 +657,21 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ok: true, preview: previewOf(record) }
     },
 
+    certificateOf(draftId) {
+      return drafts.get(draftId)?.drawingCertificate ?? null
+    },
+    setDrawingCertificate(draftId, expectedDraftVersion, certificate) {
+      const record = drafts.get(draftId)
+      if (!record || invalidated.has(draftId) || record.draftVersion !== expectedDraftVersion || !record.baseHandle || record.rawPromptHash !== certificate.promptHash) return false
+      const preview = previewOf(record)
+      const identity = { draftId, draftVersion: preview.draftVersion, previewHash: preview.previewHash,
+        candidateHash: canonicalContentHash(preview.candidate), sceneRevision: record.baseHandle.contentHash, stageCount: preview.stageCount,
+        problemRevision: certificate.problemRevision, sourceRevision: certificate.sourceRevision,
+        obligationManifestHash: certificate.obligationManifestHash, verifierVersion: certificate.verifierVersion }
+      if (!canCommitDrawing(certificate, identity)) return false
+      record.drawingCertificate = certificate
+      return true
+    },
     assertFresh(draftId, liveHandle) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "stale_source", kind: "invalidated", detail: `no draft ${draftId}` }

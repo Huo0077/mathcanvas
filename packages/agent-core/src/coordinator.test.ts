@@ -23,6 +23,7 @@ const run: RunContext = {
   capabilityRevision: "rev",
   policyRevision: "policy"
 }
+const certifiedReport = { status: "passed" as const, checks: [{ id: "drawing:certificate", status: "passed" as const, detail: "test host capability" }], next_actions: [] }
 const consent: ConsentToken = { kind: "user_consent", nonce: "nonce-1", previewHash: "preview-1" }
 const facts: Observation = { factIds: ["fact-1"], summary: "one point at the origin" }
 
@@ -74,7 +75,7 @@ function makeHarness(options: { plan?: () => Promise<PlanOutcome> | PlanOutcome;
   const committer: CommitterPort = {
     stage: vi.fn(options.stage ?? (async () => {
       calls.push("stage")
-      return { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+      return { ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: { status: "passed" as const, checks: [{ id: "drawing:certificate", status: "passed" as const, detail: "trusted fixture" }], next_actions: [] } }
     })),
     commit: vi.fn(options.commit ?? (async () => {
       calls.push("commit")
@@ -86,6 +87,13 @@ function makeHarness(options: { plan?: () => Promise<PlanOutcome> | PlanOutcome;
   return { coordinator, planner, observer, committer, calls, budget }
 }
 
+it("never confirms a drawable plan when the stage omitted its drawing certificate", async () => {
+  const harness = makeHarness({ stage: async () => ({ ok: true, draftVersion: 2, previewHash: "preview-1" }) })
+  const events = await drive(harness.coordinator, { run, userMessage: "画一个立方体", confirmed: true })
+  expect(events.some(event => event.phase === "awaiting_confirmation" || event.phase === "committing" || event.phase === "completed")).toBe(false)
+  expect(events.at(-1)?.phase).toBe("failed")
+  expect(harness.committer.commit).not.toHaveBeenCalled()
+})
 async function drive(coordinator: ReturnType<typeof createCoordinator>, request: Parameters<ReturnType<typeof createCoordinator>["start"]>[0]) {
   const events = []
   for await (const event of coordinator.start(request)) events.push(event)
@@ -309,7 +317,7 @@ describe("coordinator cancellation", () => {
     const harness = makeHarness()
     harness.committer.stage = vi.fn(async () => {
       harness.coordinator.cancel("interrupted")
-      return { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+      return { ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: { status: "passed" as const, checks: [{ id: "drawing:certificate", status: "passed" as const, detail: "trusted fixture" }], next_actions: [] } }
     })
 
     await drive(harness.coordinator, { run, userMessage: "draw a point", confirmed: true })
@@ -386,7 +394,7 @@ describe("coordinator budget enforcement", () => {
         stageCalls += 1
         return stageCalls === 1
           ? { ok: false as const, reason: "compile_failed" as const, detail: "the first pass did not compile", repair: { reason: "compile_failed", errors: [{ code: "bad_field", path: "envelope.actions[0].inputs", detail: "x" }], allowedChanges: [], attempt: 1 } }
-          : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+          : { ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: certifiedReport }
       }
     })
 
@@ -423,7 +431,7 @@ describe("coordinator budget enforcement", () => {
         // 第 1 次暂存：编译拒绝（现场：平面 ABD⊥平面 BCD 实测 0.27735）。
         return stageCalls === 1
           ? { ok: false as const, reason: "compile_failed" as const, detail: "compile_failed: diagram_condition_failed", repair: { reason: "compile_failed", errors: [{ code: "bad_field", path: "envelope.actions[0].inputs", detail: "x" }], allowedChanges: [], attempt: 1 } }
-          : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+          : { ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: certifiedReport }
       }
     })
 
@@ -636,7 +644,7 @@ describe("the compile stage's one-shot repair", () => {
     let attempts = 0
     return async () => {
       attempts += 1
-      return attempts === 1 ? compileFailure : { ok: true as const, draftVersion: 2, previewHash: "preview-1" }
+      return attempts === 1 ? compileFailure : { ok: true as const, draftVersion: 2, previewHash: "preview-1", verification: certifiedReport }
     }
   }
 
@@ -713,7 +721,7 @@ describe("the compile stage's one-shot repair", () => {
       plans,
       stage: async () => {
         stages += 1
-        return stages <= 2 ? { ...compileFailure, repair: { ...repair, attempt: stages } } : { ok: true as const, draftVersion: 3, previewHash: "preview-2" }
+        return stages <= 2 ? { ...compileFailure, repair: { ...repair, attempt: stages } } : { ok: true as const, draftVersion: 3, previewHash: "preview-2", verification: certifiedReport }
       }
     })
 
@@ -955,7 +963,7 @@ describe("W5 — reference recovery only cites results this run produced", () =>
  * 逐格测过），因为"判据写好了但没人调用"正是这一轮之前的状态。
  */
 describe("the completion gate is actually consulted", () => {
-  const passingReport = { status: "passed" as const, checks: [{ id: "has_primitive:0", status: "passed" as const, detail: "a polyhedron3 exists" }], next_actions: [] }
+  const passingReport = { status: "passed" as const, checks: [{ id: "has_primitive:0", status: "passed" as const, detail: "a polyhedron3 exists" }, ...certifiedReport.checks], next_actions: [] }
 
   it("stops at waiting instead of offering confirmation when no verification came back", async () => {
     // 调用方声明了验收条件，而 stage 只回了版本与哈希 —— 那就是**没有证据**。
@@ -973,8 +981,8 @@ describe("the completion gate is actually consulted", () => {
      * 而 `at(-1)` 是**转移**事件（带的是人可读的 reason）—— 所以这里断言的是
      * 那句 reason，而不是 code 字面量。
      */
-    expect(harness.coordinator.ledger().at(-1)?.detail).toContain("no verification report")
-    expect(harness.coordinator.ledger().some((event) => event.detail.includes("no_verification_report"))).toBe(true)
+    expect(harness.coordinator.ledger().at(-1)?.detail).toContain("drawing lacks a host-issued complete certificate")
+    expect(harness.coordinator.ledger().some((event) => event.detail.includes("drawing certificate missing"))).toBe(true)
   })
 
   it("passes the acceptance criteria down to the committer so it can actually verify", async () => {
@@ -1301,7 +1309,7 @@ describe("W3 host drawing goal", () => {
     const prompt = "画出立方体。"
     const context = await createSolveContext({ runId: run.runId, conversationId: run.conversationId, prompt, attachments: [], corrections: [], sceneRevision: handle.contentHash }, hash)
     expect(context.understanding.goals.map(goal => goal.expectedKind)).toEqual(["drawing"])
-    const harness = makeHarness({ stage: async () => ({ ok: true, draftVersion: 2, previewHash: "preview-1", draftId: "host-draft-1" }) })
+    const harness = makeHarness({ stage: async () => ({ ok: true, draftVersion: 2, previewHash: "preview-1", draftId: "host-draft-1", verification: certifiedReport }) })
     const coordinator = createCoordinator({ planner: harness.planner, observer: harness.observer, committer: harness.committer, solveContext: context, hashText: hash })
     const events = await drive(coordinator, { run, userMessage: prompt })
     expect(coordinator.phase()).toBe("awaiting_confirmation")

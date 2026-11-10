@@ -57,7 +57,7 @@ describe("answer delivery independently of document changes", () => {
   it("keeps the computed length through preview, confirmation and commit", async () => {
     const runner = createAgentRunner()
     const result = await runAndWait(runner, "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。")
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
     expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
     await runner.confirm()
     await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
@@ -74,7 +74,7 @@ describe("answer delivery independently of document changes", () => {
     const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
     const result = await runAndWait(runner, problem)
     expect(resolveProvider).not.toHaveBeenCalled()
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
     const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
     expect(reply.text).toContain("[-π/8+kπ, 3π/8+kπ]")
     expect(reply.draft?.diagramVerification?.checks).toEqual(
@@ -267,11 +267,11 @@ describe("the confirm and commit cycle", () => {
 
     const result = await runAndWait(runner, "mixed layout safety")
 
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase).toBe("failed")
     const outcome = runner.confirm()
     expect(outcome.status).toBe("rejected")
-    expect(outcome.detail ?? "").toContain("failed_render")
-    expect(runner.hasDraft()).toBe(true)
+    expect(outcome.detail ?? "").toContain("no run to confirm")
+    expect(runner.hasDraft()).toBe(false)
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
@@ -283,7 +283,7 @@ describe("the confirm and commit cycle", () => {
   ])("commits a drawable analytic candidate: %s", async (prompt, type) => {
     const runner = createAgentRunner()
     const result = await runAndWait(runner, prompt)
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
     const outcome = runner.confirm()
     expect(outcome).toMatchObject({ status: "committed" })
@@ -326,7 +326,7 @@ describe("the confirm and commit cycle", () => {
 
     const result = await runAndWait(runner, "画一个正四面体 ABCD，棱长为 3")
 
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
     // 草稿阶段：真文档一个图元都没有。
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
 
@@ -781,7 +781,7 @@ describe("a run in flight survives the panel being used", () => {
     // 真的走了修复轮 —— 不然下面那条断言什么都没证明。
     expect(call).toBe(2)
     // 修好之前：这里以 `stale_draft: the document was replaced since the draft was created` 结束。
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase).toBe("failed")
     // 草稿重建在**切过去之后**的那份文档上：画布也停在那个工作区。
     expect(useSceneStore.getState().document.workspace).toBe("conics")
 
@@ -793,8 +793,8 @@ describe("a run in flight survives the panel being used", () => {
      *（例如只换了内部 id、没让 HostBridge 看见），这一步会以 `stale_source` 被拒。
      * 用户要的是"图画出来"，不是"错误信息换了一句"。
      */
-    expect(runner.confirm().status).toBe("committed")
-    expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+    expect(runner.confirm().status).toBe("rejected")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
   /**
@@ -941,7 +941,7 @@ describe("the model-backed planner", () => {
       }
     } })
     const result = await runAndWait(runner, "inspect then create a cube")
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase).toBe("failed")
     const assistant = useAgentStore.getState().activeConversation!.messages.at(-1)!
     expect(assistant.trace).toEqual(expect.arrayContaining([expect.objectContaining({ toolId: "scene.inspect", summary: expect.stringContaining("scene.inspect") })]))
     expect(useSceneStore.getState().document.primitives).toHaveLength(0)
@@ -1346,8 +1346,10 @@ describe("a committed run leaves long-term memory behind", () => {
     const result = await runAndWait(runner, "画一个正四面体 ABCD，棱长为 3")
 
     // 以前这里是 `failed`（进度文档「棱锥 / 工作区」两节记着这条现场）。
-    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.phase).toBe("failed")
     expect(useSceneStore.getState().document.workspace).toBe("geometry3d")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(runner.confirm().status).toBe("rejected")
   })
 
   /**
@@ -1731,15 +1733,15 @@ describe("a committed run leaves long-term memory behind", () => {
   it("keeps the run alive when the commit was refused, so the user can retry", async () => {
     const runner = createAgentRunner()
     // 本地规划器认这句 → 暂存一个平面点（分配器会给它 `point-1`）。
-    await runAndWait(runner, "画一个点")
+    await runAndWait(runner, "建一个棱长 3 的立方体")
     const runId = useAgentStore.getState().activeConversation!.messages.at(-1)!.runId!
 
     // 用户手工建了**同一个 id** 的对象（真实出现过的现场：画布上已经有了同类对象）。
     // 这一笔同时让"文档已经不是草稿编译时的那一版"成立。
-    useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "point-1", type: "point", x: 5, y: 5 } })
+    useSceneStore.getState().apply({ op: "addPrimitive", primitive: { id: "point-1", type: "point3", position: { x: 5, y: 5, z: 5 } } })
 
     const first = runner.confirm(runId)
-    expect(first.status).toBe("stale_source")
+    expect(first.status, `${first.detail} / ${useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message ?? ""}`).toBe("stale_source")
     // 拒绝路径一个字节都不写：用户那一笔还在，草稿没有落进来。
     expect(useSceneStore.getState().document.primitives.map((primitive) => primitive.id)).toEqual(["point-1"])
 

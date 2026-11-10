@@ -59,6 +59,16 @@ describe("explicit progress", () => {
   })
 })
 
+describe("commit receipt wins over an old draft", () => {
+  it("shows committed even when the same answer message still carries its preview", () => {
+    render(<RunStatus message={message({
+      text: "已画出实例。", draft: { draftId: "d1", draftVersion: 1, previewHash: "p", stageCount: 1, undoesInOneStep: true },
+      commit: { status: "committed" }
+    })} />)
+    expect(screen.getByText("已提交")).toBeTruthy()
+    expect(screen.queryByText("等待你确认")).toBeNull()
+  })
+})
 describe("status never relies on colour alone", () => {
   it("shows a single formatted clarification and a waiting state", () => {
     const { container } = render(<RunStatus message={message({ failure: { code: "needs_more_information", message: "请补充 **折角**，例如 `60°`。", retryable: false } })} />)

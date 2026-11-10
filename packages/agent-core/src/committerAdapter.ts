@@ -1,4 +1,10 @@
 import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
+import { canonicalContentHash } from "./hashing"
+import { buildDrawingCertificate, scopedDrawingContext, DRAWING_VERIFIER_VERSION, type DrawingCertificate, type StructuralDrawingCheck } from "./verification/drawingCertificate"
+import { verifyCubeDrawingStructure, verifyNamedSolidDrawingStructure, verifyFoldedTrapezoidStructure, verifyPointDrawingStructure, verifyAnalyticDrawingStructure, verifyRegularTetrahedronStructure, verifyFunctionDrawingStructure, verifyRectangleFoldStructure } from "./verification/drawingStructure"
+import type { GeometryDocument } from "@draw/dsl"
+import type { DraftAction } from "@draw/scene-graph"
+import type { SolveContext } from "./solveContext"
 
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
 import type { PlanDiagnostic, PlanRelations, PromptNormalisations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"
@@ -41,6 +47,7 @@ export interface DraftStoreLike {
         preview: {
           draftVersion: number
           previewHash: string
+          stageCount?: number
           /**
            * **候选文档**。适配器只把它交给验收判定（`runAcceptance`），
            * **不往协调器传** —— 报告才是回程载荷（见 `CommitterPort.stage` 的 `verification`）。
@@ -51,6 +58,7 @@ export interface DraftStoreLike {
            */
           candidate?: unknown
           diagramVerification?: DiagramVerificationReport
+          materialisedActions?: readonly DraftAction[]
         }
       }
     | {
@@ -73,6 +81,8 @@ export interface DraftStoreLike {
       }
   >
   /** 基础文档变了（手工编辑 / 撤销 / 切工作区）→ 草稿过期。 */
+  setDrawingCertificate?(draftId: string, expectedDraftVersion: number, certificate: DrawingCertificate): boolean
+  baseHandleOf?(draftId: string): DocumentHandle | null
   assertFresh?(draftId: string, liveHandle: DocumentHandle): { ok: true } | { ok: false; reason: "stale_source"; kind?: "invalidated" | "epoch" | "generation" | "content"; detail: string }
 }
 
@@ -101,6 +111,8 @@ export interface CommitterAdapterDependencies {
    * 而这一层真正要的也只是"把开关原样传下去"。可选；不给 = 都不传 = 全关。
    */
   nextPhaseFlags?: { obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean }
+  /** Independent of the optional answer-semantics rollout; drawing safety always uses the pinned source. */
+  drawingContext?: SolveContext
 }
 
 export interface CommitterAdapter extends CommitterPort {
@@ -241,10 +253,68 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         checks: diagram.checks.map((check, index) => ({ id: `diagram:${index}`, status: check.status === "unverified" ? "not_supported" : check.status, detail: `${check.sourceText}：${check.reason}` })),
         next_actions: diagram.checks.filter((check) => check.status !== "passed").map((check) => `${check.sourceText}：${check.reason}`)
       }
-      const checks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? [])]
+      // A diagram checker is not a certificate. A host-only capability is issued only
+      // when every source obligation and structural claim is accounted for.
+      const candidate = staged.preview.candidate as { primitives?: readonly { id?: string; type?: string }[] } | undefined
+      const context = dependencies.drawingContext
+      const sceneRevision = request.runSwitchedWorkspace === true
+        ? dependencies.drafts.baseHandleOf?.(draftId)?.contentHash ?? context?.sceneRevision
+        : context?.sceneRevision
+      const sceneContext = context && sceneRevision ? { ...context, sceneRevision } : null
+      const drawingContext = sceneContext && request.userMessage && request.userMessage !== context?.prompt
+        ? scopedDrawingContext(sceneContext, request.userMessage)
+        : sceneContext
+      const source = dependencies.live()?.document as GeometryDocument | undefined
+      const sourceIds = new Set(source?.primitives.map(item => item.id) ?? [])
+      const structuralChecks: StructuralDrawingCheck[] = (diagram?.checks ?? []).flatMap((check) => {
+        if (check.status !== "passed" || (check.kind !== "rectangle" && check.kind !== "solidPrismShape")) return []
+        const entities = candidate?.primitives?.filter(item => !sourceIds.has(item.id ?? "") && (check.kind === "rectangle"
+          ? item.type === "point" || item.type === "point3" || item.type === "face3"
+          : item.type === "polyhedron3")).map(item => item.id).filter((id): id is string => typeof id === "string") ?? []
+        return entities.length > 0 ? [{ sourceText: check.sourceText, status: "passed" as const, entityIds: entities }] : []
+      })
+     const cubeStructure = dependencies.drawingContext && source && candidate?.primitives
+        ? verifyCubeDrawingStructure(dependencies.drawingContext.prompt, staged.preview.candidate as GeometryDocument, source) : null
+      if (cubeStructure) structuralChecks.push(cubeStructure)
+      const pointStructure = dependencies.drawingContext && source && candidate?.primitives
+        ? verifyPointDrawingStructure(dependencies.drawingContext.prompt, staged.preview.candidate as GeometryDocument, source) : null
+      if (pointStructure) structuralChecks.push(pointStructure)
+      const analyticStructure = dependencies.drawingContext && source && candidate?.primitives
+        ? verifyAnalyticDrawingStructure(dependencies.drawingContext.prompt, staged.preview.candidate as GeometryDocument, source) : null
+      if (analyticStructure) structuralChecks.push(analyticStructure)
+      const tetrahedronStructure = dependencies.drawingContext && source && candidate?.primitives
+        ? verifyRegularTetrahedronStructure(dependencies.drawingContext.prompt, staged.preview.candidate as GeometryDocument, source) : null
+      structuralChecks.push(...(tetrahedronStructure ?? []))
+      const functionStructure = dependencies.drawingContext && source && candidate?.primitives
+        ? verifyFunctionDrawingStructure(dependencies.drawingContext.prompt, staged.preview.candidate as GeometryDocument, source) : null
+      if (functionStructure) structuralChecks.push(functionStructure)
+      if (dependencies.drawingContext && source && candidate?.primitives) {
+        structuralChecks.push(...verifyNamedSolidDrawingStructure((drawingContext?.prompt ?? dependencies.drawingContext.prompt), staged.preview.materialisedActions ?? request.actions, staged.preview.candidate as GeometryDocument, source))
+        structuralChecks.push(...verifyFoldedTrapezoidStructure((drawingContext?.prompt ?? dependencies.drawingContext.prompt), staged.preview.materialisedActions ?? request.actions, staged.preview.candidate as GeometryDocument, source))
+        structuralChecks.push(...verifyRectangleFoldStructure((drawingContext?.prompt ?? dependencies.drawingContext.prompt), staged.preview.materialisedActions ?? request.actions, staged.preview.candidate as GeometryDocument, source))
+      }
+      const priorChecks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? [])]
+      const priorVerification: VerificationReport | undefined = priorChecks.length === 0 && acceptanceReport === undefined && diagramReport === undefined
+        ? cubeStructure || pointStructure || analyticStructure ? { status: "passed", checks: [{ id: "structure:verified", status: "passed", detail: "geometry and identity independently verified" }], next_actions: [] } : undefined
+        : { status: priorChecks.some(check => check.status === "failed") ? "failed" : priorChecks.some(check => check.status === "not_supported") ? "not_supported" : priorChecks.some(check => check.status === "unknown") ? "unknown" : "passed", checks: priorChecks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? [])] }
+      const drawing = request.actions.length > 0
+      const identity = drawingContext && staged.preview.stageCount && candidate?.primitives
+        ? { draftId, draftVersion: staged.preview.draftVersion, previewHash: staged.preview.previewHash,
+            candidateHash: canonicalContentHash(staged.preview.candidate), sceneRevision: drawingContext.sceneRevision,
+            stageCount: staged.preview.stageCount }
+        : null
+      const signed = drawing && drawingContext && identity
+        ? buildDrawingCertificate({ context: drawingContext, draft: identity, diagram, toolVerification: priorVerification,
+            structuralChecks, verifierVersion: DRAWING_VERIFIER_VERSION })
+        : null
+      const certified = signed?.status === "passed" && dependencies.drafts.setDrawingCertificate?.(draftId, staged.preview.draftVersion, signed.certificate) === true
+      const missingNamedPoint = diagram?.checks.some(check => check.status !== "passed" && check.reason.includes("\u70b9\u540d\u7f3a\u5931")) === true
+      const certificateCheck = drawing ? [{ id: "drawing:certificate", status: certified ? "passed" as const : "not_supported" as const,
+        detail: certified ? "all original conditions are bound to this candidate" : signed?.status === "unsupported" ? signed.reason + (missingNamedPoint ? "\uff1b\u8bf7\u68c0\u67e5\u8ba1\u5212\u7684 vertexNames \u6216\u8865\u5efa\u70b9\uff0c\u91cd\u65b0\u8ba9\u6a21\u578b\u51fa\u4e00\u7248\u8ba1\u5212\u3002" : "") : "no independently verifiable drawing certificate" }] : []
+      const checks = [...priorChecks, ...certificateCheck]
       const verification: VerificationReport | undefined = checks.length === 0 && acceptanceReport === undefined && diagramReport === undefined
         ? undefined
-        : { status: checks.some((check) => check.status === "failed") ? "failed" : checks.some((check) => check.status === "not_supported") ? "not_supported" : checks.some((check) => check.status === "unknown") ? "unknown" : "passed", checks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? [])] }
+        : { status: checks.some((check) => check.status === "failed") ? "failed" : checks.some((check) => check.status === "not_supported") ? "not_supported" : checks.some((check) => check.status === "unknown") ? "unknown" : "passed", checks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? []), ...(certified ? [] : certificateCheck.map(check => check.detail))] }
 
       return {
         ok: true,

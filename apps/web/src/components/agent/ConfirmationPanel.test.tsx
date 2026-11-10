@@ -249,7 +249,7 @@ describe("one-undo statement and actions", () => {
   it("reports confirm and discard without doing them itself", () => {
     const onConfirm = vi.fn()
     const onDiscard = vi.fn()
-    render(<ConfirmationPanel draft={draft()} onConfirm={onConfirm} onDiscard={onDiscard} />)
+    render(<ConfirmationPanel draft={draft({ drawingCertified: true, diagramVerification: { status: "passed", checks: [{ kind: "unparsed", sourceText: "已有题设", status: "passed", reason: "已核" }], sampleValues: [], ...proofScopeOf({}) } })} onConfirm={onConfirm} onDiscard={onDiscard} />)
 
     screen.getByRole("button", { name: "确认并提交" }).click()
     screen.getByRole("button", { name: "丢弃草稿" }).click()

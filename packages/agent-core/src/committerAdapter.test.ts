@@ -81,7 +81,18 @@ function makeHost(overrides: Partial<HostBridgeLike> = {}): HostDouble {
   }
 }
 
-describe("committer adapter staging", () => {
+describe("committer adapter staging", () => {  it("does not report a drawable plan ready for confirmation without a minted certificate", async () => {
+    const liveDocument = document()
+    const host = makeHost()
+    const drafts = makeDrafts({}, host.setVersion)
+    const adapter = createCommitterAdapter({ drafts, host, live: () => ({ handle: handleFor(liveDocument), document: liveDocument }) })
+    const staged = await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    expect(staged.verification?.status).toBe("not_supported")
+    expect(staged.verification?.checks.some(check => check.id === "drawing:certificate" && check.status === "not_supported")).toBe(true)
+  })
+
   it("reports unverified diagram conditions to the gate even without caller acceptance", async () => {
     const drafts = makeDrafts({ stage: vi.fn(async () => ({ ok: true as const, preview: {
       draftVersion: 2, previewHash: "preview-2", diagramVerification: {

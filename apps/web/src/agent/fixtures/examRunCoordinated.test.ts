@@ -38,7 +38,8 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
   it("repairs invalid envelopes through the product coordinator with schema hints", async () => {
     const { planner, requests } = scripted([{ ...CUBE, schemaVersion: "invalid" }, CUBE])
     const result = await runWith(planner)(CASE, 1)
-    expect(result.outcome, result.detail).toBe("planned_after_repair")
+    expect(result.outcome, result.detail).toBe("rejected")
+    expect(result.failureLayer).toBe("verify")
     expect(requests).toHaveLength(2)
     expect(requests[1]!.repair?.reason).toBe("schema_invalid")
     expect(requests[1]!.repair?.errors.some((error) => error.path.includes("schemaVersion"))).toBe(true)
@@ -48,7 +49,8 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
   it("uses real worker compilation failure diagnostics in the repair request", async () => {
     const { planner, requests } = scripted([DEGENERATE, CUBE])
     const result = await runWith(planner)(CASE, 1)
-    expect(result.outcome, result.detail).toBe("planned_after_repair")
+    expect(result.outcome, result.detail).toBe("rejected")
+    expect(result.failureLayer).toBe("verify")
     expect(requests).toHaveLength(2)
     expect(requests[1]!.repair?.diagnostics?.some((entry) => entry.stage === "geometry_validation")).toBe(true)
   })
@@ -110,7 +112,8 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
 
   it("switches the isolated evaluation document without touching a user canvas", async () => {
     const result = await runWith(scripted([CUBE]).planner)({ ...CASE, family: "triangle" }, 1)
-    expect(result.outcome, result.detail).toBe("planned")
+    expect(result.outcome, result.detail).toBe("rejected")
+    expect(result.failureLayer).toBe("verify")
   })
 
   it("does not double-charge the reserved initial request and compile repair", async () => {
@@ -122,7 +125,8 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
     } })
     let spent = 0
     const result = await runWith(planner)(CASE, 1, { consumeRequest(amount = 1) { if (spent + amount > 2) return false; spent += amount; return true }, remainingRequests: () => 2 - spent })
-    expect(result.outcome, result.detail).toBe("planned_after_repair")
+    expect(result.outcome, result.detail).toBe("rejected")
+    expect(result.failureLayer).toBe("verify")
     expect(transports).toBe(2)
     expect(spent).toBe(2)
   })
@@ -153,7 +157,7 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
     } })
     let spent = 0
     const result = await runWith(planner)(CASE, 1, { consumeRequest(amount = 1) { if (spent + amount > limit) return false; spent += amount; return true }, remainingRequests: () => limit - spent })
-    expect(result.outcome, result.detail).toBe(limit === 1 ? "error" : "planned")
+    expect(result.outcome, result.detail).toBe(limit === 1 ? "error" : "rejected")
     expect(transports).toBe(limit)
     expect(spent).toBe(limit)
   })
@@ -162,7 +166,8 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
     const counts: number[] = []
     const runCase = createExamRunCase({ planner: scripted([DEGENERATE, CUBE]).planner, repairPath: "coordinator-driven", costOf: ({ attempts }) => { counts.push(attempts?.length ?? 0); return null }, geometryWorkerFactory: () => inlineWorker((request) => handleGeometryRequest(request as never)) })
     const result = await runCase(CASE, 1)
-    expect(result.outcome, result.detail).toBe("planned_after_repair")
+    expect(result.outcome, result.detail).toBe("rejected")
+    expect(result.failureLayer).toBe("verify")
     expect(counts).toEqual([2])
     expect(result.costUsd).toBeNull()
   })

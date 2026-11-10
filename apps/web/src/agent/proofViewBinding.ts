@@ -14,3 +14,11 @@ export function proofDraftForScene(draft: AgentDraftView, commit: AgentCommitVie
     : "这次历史证明没有保存图形绑定，无法确认它对应当前画布；请重新运行。"
   return { ...draft, proofAttempt: { ...draft.proofAttempt, outcome: "stale", stale: { kind: binding ? "scene_changed" : "scene_binding_unavailable", detail } } }
 }
+
+/** UI projection only; HostBridge independently rejects stale or missing certificates at consent and commit. */
+export function drawingDraftForScene(draft: AgentDraftView, document: GeometryDocument): AgentDraftView {
+  if (draft.drawingCertified !== true) return draft
+  const binding = draft.drawingSceneBinding
+  return binding?.documentId === document.metadata.id && binding.contentHash === contentFingerprint(document)
+    ? draft : { ...draft, drawingCertified: false, drawingSceneStale: binding !== undefined }
+}

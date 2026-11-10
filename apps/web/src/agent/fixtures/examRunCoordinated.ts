@@ -99,7 +99,7 @@ export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCas
         compile: { accepted: true, errorStages: [], ...(preview?.diagramVerification === undefined ? {} : { verification: preview.diagramVerification.status }) }
       })
       // Passing compilation alone is never evidence of passing the product confirmation gate.
-      if (verdict.outcome !== "rejected" && runtime.coordinator.phase() !== "awaiting_confirmation") verdict = { outcome: "error" }
+      if (verdict.outcome !== "rejected" && runtime.coordinator.phase() !== "awaiting_confirmation") verdict = { outcome: "rejected", failureLayer: "verify" }
     } else {
       verdict = { outcome: "error" }
     }

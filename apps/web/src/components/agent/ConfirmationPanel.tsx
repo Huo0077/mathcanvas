@@ -77,17 +77,19 @@ export interface ConfirmationPanelProps {
   proofBackends?: readonly string[]
   /** 交过审查记录的后端条数。缺省＝`PROOF_BACKEND_REVIEWS.length`（2026-10-06 起是 `1`）。 */
   proofReviewedCount?: number
+  /** Historical proof view, never a second chance to confirm an already submitted draft. */
+  historical?: boolean
   onConfirm?: () => void
   onDiscard?: () => void
 }
 
-export function ConfirmationPanel({ draft, assumptions = [], approximationNotes = [], omittedExports = [], targetDocumentId, sourceDocumentIds = [], proofBackends, proofReviewedCount, onConfirm, onDiscard }: ConfirmationPanelProps) {
+export function ConfirmationPanel({ draft, assumptions = [], approximationNotes = [], omittedExports = [], targetDocumentId, sourceDocumentIds = [], proofBackends, proofReviewedCount, historical = false, onConfirm, onDiscard }: ConfirmationPanelProps) {
   const deltas = countDeltas(draft)
   const removing = removedObjectCount(draft)
 
   return <section className="agent-confirmation" role="region" aria-label="确认改动">
     <header className="agent-confirmation-head">
-      <h3>确认之后会发生什么</h3>
+      <h3>{historical ? "\u5df2\u63d0\u4ea4\u7684\u4f5c\u56fe\u4e0e\u8bc1\u660e\u8bb0\u5f55" : "\u786e\u8ba4\u4e4b\u540e\u4f1a\u53d1\u751f\u4ec0\u4e48"}</h3>
       <p className="agent-confirmation-summary">{summarizeDraftScale(draft.counts, draft.baseCounts)}</p>
     </header>
 
@@ -161,17 +163,21 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       ② 题面本来就没有可核的条件。
 
       此前这一档**什么都不显示**，而"确认并提交"照旧出现（下面的判据是 `undefined || passed`）——
-      于是"系统没有核"被读成了"系统核过了"。这里只把话说清楚，**不改确认的闸门**：
-      "画一个正方体"这类题面本来就没有题设要核，把它一刀切成不许确认是另一件事。
+      于是"系统没有核"被读成了"系统核过了"。W1 起缺乏核验报告时不得展示确认入口；服务端同时必须拒绝无证书提交。
     */}
-    {draft.diagramVerification === undefined && <section className="agent-diagram-verification" aria-label="题设核验" data-status="not-run">
+    {draft.diagramVerification === undefined && draft.drawingCertified === true && <section className="agent-diagram-verification" aria-label="题设核验" data-status="passed">
+      <h4>图形结构已由宿主独立核验（不是普遍证明）</h4>
+      <p role="note">题面没有数值条件；本图的形状、拓扑及与题干的对应关系已核验。未进行全称证明。</p>
+    </section>}
+    {draft.diagramVerification === undefined && draft.drawingCertified !== true && <section className="agent-diagram-verification" aria-label="题设核验" data-status="not-run">
       <h4>这一轮没有题设核验报告</h4>
       <p>这份图里<strong>没有任何一条题设被核验过</strong>：要么计划用的是不带题面点名的实体（模板、圆锥、正 N 棱锥这类，顶点只有模板自己的编号，题面的 A、B、C 对不上），要么题面本来就没有可核的条件。</p>
-      <p role="note">确认之后图会照原样画出来 —— 但核对这一步<strong>没有发生</strong>，系统没有替你核。请自己看一眼它是否符合题设。</p>
+      <p role="note">核对这一步<strong>没有发生</strong>，系统没有替你核。本次不能确认提交，请补充可核验条件并重新生成草稿。</p>
     </section>}
 
     {draft.diagramVerification && <section className="agent-diagram-verification" aria-label="题设核验" data-status={draft.diagramVerification.status} data-proof-scope={draft.diagramVerification.proofScope} data-universal-claims={draft.diagramVerification.universalClaims}>
-      <h4>{draft.diagramVerification.status === "passed" ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
+      {draft.drawingSceneStale === true && <p role="alert">{"\u5f53\u524d\u753b\u5e03\u5df2\u6539\u53d8\uff0c\u56fe\u5f62\u8bc1\u4e66\u5df2\u8fc7\u671f\uff1b\u8bf7\u91cd\u65b0\u751f\u6210\u5e76\u6838\u9a8c\u8349\u7a3f\u3002"}</p>}
+      <h4>{draft.diagramVerification.status === "passed" && draft.drawingCertified === true ? "符合题设的一组示意图（不是普遍证明）" : "题设尚未全部核验，不能正式确认"}</h4>
       <p>通过 {draft.diagramVerification.checks.filter((item) => item.status === "passed").length} / 失败 {draft.diagramVerification.checks.filter((item) => item.status === "failed").length} / 未核验 {draft.diagramVerification.checks.filter((item) => item.status === "unverified").length}</p>
       <ul>{draft.diagramVerification.checks.map((item, index) => <li key={`${index}:${item.sourceText}`}>
         <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{describeCheckReason(item)}
@@ -261,13 +267,13 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
     </div>}
 
     {/* 计划逐字要求的 "exact one-undo statement"。 */}
-    <p className="agent-confirmation-undo" role="note">
+    {!historical && <p className="agent-confirmation-undo" role="note">
       {draft.undoesInOneStep ? "确认后整批只占一步撤销；撤销一次就能回到现在的样子。" : "这次改动会占多步撤销。"}
-    </p>
+    </p>}
 
-    <div className="agent-confirmation-actions">
-      {onConfirm && (draft.diagramVerification === undefined || draft.diagramVerification.status === "passed") && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
+    {!historical && <div className="agent-confirmation-actions">
+      {onConfirm && draft.drawingCertified === true && (draft.diagramVerification === undefined || draft.diagramVerification.status === "passed") && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
       {onDiscard && <button type="button" className="agent-draft-discard" onClick={onDiscard}>丢弃草稿</button>}
-    </div>
+    </div>}
   </section>
 }

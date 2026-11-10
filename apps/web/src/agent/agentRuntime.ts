@@ -72,6 +72,8 @@ export interface AgentRuntimeDependencies {
   writeDocument(candidate: GeometryDocument): void
   planner: PlannerPort
   solveContext?: SolveContext
+  /** Always present on text-problem runs, regardless of answer reliability rollout. */
+  drawingContext?: SolveContext
   hashText?: HashText
   trustedMathFacts?: readonly MathFact[]
   /** W4：宿主审计出的图证据缺口；有必答缺口时这一题不会被当成已回答。 */
@@ -278,6 +280,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   // ---- 宿主桥：唯一能写文档的入口。它自己做同意检查与 CAS。 ----
   const host = createHostBridge({
     drafts,
+    solveContext: dependencies.drawingContext ?? dependencies.solveContext,
     live,
     replace: (candidate) => dependencies.writeDocument(candidate),
     runId: dependencies.runId,
@@ -392,6 +395,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
 
   const committer = createCommitterAdapter({
     drafts,
+    drawingContext: dependencies.drawingContext ?? dependencies.solveContext,
     host,
     live,
     /**
@@ -520,11 +524,11 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
        * 说明被点的那份运行时**不是**跑出草稿的那一份（模块级字段被换过）；如果相位不是它，
        * 说明这一次运行根本没走到暂存。**把事实说出来，而不是让人猜。**
        */
-      if (!id) return { status: "rejected" as const, detail: `there is no staged draft to confirm (coordinator phase: ${coordinator.phase()})` }
+      if (!id || coordinator.phase() !== "awaiting_confirmation") return { status: "rejected" as const, detail: `there is no staged draft to confirm (coordinator phase: ${coordinator.phase()})` }
       const consent = host.requestConsent(id)
       if (!consent.ok) {
         // 没有可授权的预览（例如草稿已经失效）→ 如实拒绝，而不是硬着头皮提交。
-        return { status: "rejected" as const, detail: `cannot mint consent for ${id}: ${consent.reason}` }
+        return { status: consent.reason === "stale_source" ? "stale_source" as const : "rejected" as const, detail: `cannot mint consent for ${id}: ${consent.reason}` }
       }
       const result = host.commit(id, consent.record)
       if (result.ok) {

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAgentConversation, useAgentStore, type AgentMessage } from "../../agentStore"
 import { AgentComposer } from "./AgentComposer"
+import { proofScopeOf } from "@draw/agent-core"
+import { contentFingerprint } from "@draw/scene-graph"
+import { useSceneStore } from "../../store"
 import { AgentConversationSidebar } from "./AgentConversationSidebar"
 import { AgentMessageList } from "./AgentMessageList"
 
@@ -103,7 +106,9 @@ describe("agent pieces", () => {
       text: "",
       createdAt: 1,
       runId: "run-7",
-      draft: { draftId: "draft-1", draftVersion: 1, previewHash: "h", stageCount: 1, undoesInOneStep: true }
+      draft: { draftId: "draft-1", draftVersion: 1, previewHash: "h", stageCount: 1, undoesInOneStep: true, drawingCertified: true,
+        drawingSceneBinding: { documentId: useSceneStore.getState().document.metadata.id, contentHash: contentFingerprint(useSceneStore.getState().document) },
+        diagramVerification: { status: "passed", checks: [{ kind: "fixedLength", sourceText: "AB=2", status: "passed", reason: "已核" }], sampleValues: [], ...proofScopeOf({}) } }
     }
     const onConfirm = vi.fn()
     const onDiscard = vi.fn()

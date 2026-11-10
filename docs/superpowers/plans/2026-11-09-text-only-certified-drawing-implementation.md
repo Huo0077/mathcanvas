@@ -1,6 +1,6 @@
 # 纯文字题可核验作图：分阶段实施方案（2026-11-09）
 
-> 状态：**W0 已完成（证据冻结；非功能验收），W1–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
+> 状态：**W0–W1 已完成工程验收；W2–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
 
 ## 一、目标、边界和证据
 
@@ -52,6 +52,7 @@
 3. RED→GREEN（UI）：提交含答案正文后状态应为“已提交”，确认按钮消失；重复确认被拒、候选图元数不再增加；无报告时仅显示未核验原因与继续/放弃，不显示“正确图”或确认按钮。修复 `progressOf` 的 `commit` 与 `draft` 优先级并按终态清理按钮。
 4. 验证：`npx vitest run packages/agent-core/src/verification/drawingCertificate.test.ts packages/agent-core/src/verification/completionGate.test.ts packages/agent-core/src/coordinator.test.ts apps/web/src/agent/hostBridge.test.ts apps/web/src/components/agent/ConfirmationPanel.test.tsx apps/web/src/components/agent/RunStatus.test.tsx`；增加一条现有四题浏览器回执回归。完成标志：**无证书不能授权也不能落盘**；若旧成功题被拦，应修证据生产，不回退硬闸。
 
+**W1 完成证据：** 全量 Vitest 556 文件 / 5972 通过、0 失败、1 todo；全项目 typecheck、改动文件 lint 与差异检查通过；四题浏览器真实 UI 5/5。新增候选证书、原文义务与宿主结构绑定；无证书/过期/漏条件不能授权或提交。工程验收不代替 W5 真实 Provider 与盲题/人工审定，不声称开放题画图率 100%。
 ### W2：只读/作图分流与文字答题纠偏（W1 后；可与 W3 独立开发、不得提前发布）
 
 **文件**：`problemUnderstanding.ts`、`answerAcceptance.ts`、`coordinator.ts`、`problemSolveService.ts`、`agentRunner.ts` 和对应测试。
@@ -89,4 +90,4 @@
 
 ## 五、交付节奏与记录
 
-依赖：`W0 → W1 → (W2 与 W3 可并行但互不改同一文件时才并行) → W4 → W5`；其中 `coordinator.ts` 的 W1/W2 变更必须顺序集成。每块至少留一条 RED 失败记录、GREEN 命令及退出码、改动文件、题目分母、剩余不支持项、提交 hash；完成一块再把 `docs/current-status.md` 的“规划/已实现/已实测”三栏对齐。若实施时仍要求“每块上传 GitHub”，先确认本轮授权与目标仓库，再逐块推送；**本次只交付文档，不提交代码、不宣称功能已经升级**。
+依赖：`W0 → W1 → (W2 与 W3 可并行但互不改同一文件时才并行) → W4 → W5`；其中 `coordinator.ts` 的 W1/W2 变更必须顺序集成。每块至少留一条 RED 失败记录、GREEN 命令及退出码、改动文件、题目分母、剩余不支持项、提交 hash；完成一块再把 `docs/current-status.md` 的“规划/已实现/已实测”三栏对齐。本轮用户已授权每完成一块更新进度并推送 `origin/main`；W0/W1 只记已验证的工程结果，W2–W5 未实现前不得标完成或报告真实模型成功率。

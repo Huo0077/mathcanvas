@@ -3,8 +3,8 @@ import { buildPrism, buildSolidTemplate, createBuilderContext } from "@draw/geom
 import { contentFingerprint } from "@draw/scene-graph"
 import { describe, expect, it, vi } from "vitest"
 
-import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
-import { DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION, type RenderEvidence } from "@draw/agent-core"
+import type { PlanEnvelope, PlannerPort, PlanRequest, SolveContext } from "@draw/agent-core"
+import { createSolveContext, DEFAULT_DERIVED_STATUS_LIMIT, SKILL_CATALOGUE_REVISION, type RenderEvidence } from "@draw/agent-core"
 
 import { createAgentRuntime } from "./agentRuntime"
 import type { CandidateRenderEvidenceInput } from "./hostBridge"
@@ -73,10 +73,14 @@ function structuredRenderEvidence(input: CandidateRenderEvidenceInput): RenderEv
   }
 }
 
-function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean } = {}) {
+async function makeRuntime(options: { envelope?: PlanEnvelope; document?: GeometryDocument | null; planner?: PlannerPort; diagnostics?: (line: string) => void; geometryWorkerFactory?: () => WorkerLike; obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean; drawingContext?: SolveContext; prompt?: string } = {}) {
   let current = options.document === undefined ? geometryDocument() : options.document
   const written: GeometryDocument[] = []
+  const prompt = options.prompt ?? "建个立方体"
+  const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(x => x.toString(16).padStart(2, "0")).join("")
+  const drawingContext = options.drawingContext ?? (current ? await createSolveContext({ runId: "run-1", conversationId: "conv-1", prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(current) }, hash) : undefined)
   const runtime = createAgentRuntime({
+    ...(drawingContext === undefined ? {} : { drawingContext }),
     readDocument: () => current,
     writeDocument: (candidate) => {
       written.push(candidate)
@@ -124,10 +128,38 @@ async function drive(coordinator: ReturnType<typeof createAgentRuntime>["coordin
   return events
 }
 
-describe("the assembled runtime actually runs", () => {
+describe("the assembled runtime actually runs", () => {  it("refuses the same cube candidate when its text adds an unverified dimension", async () => {
+    const document = geometryDocument()
+    const prompt = "请画一个立方体，并令 AB=3。"
+    const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const drawingContext = await createSolveContext({ runId: "run-1", conversationId: "conv-1", prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(document) }, hash)
+    const { runtime, written } = await makeRuntime({ document, drawingContext })
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: prompt })
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.draftId()).toBeTruthy()
+    const preview = runtime.host.preview(runtime.draftId()!)
+    expect(preview.ok).toBe(true)
+    if (preview.ok) expect(preview.artifact.drawingCertified).toBe(false)
+    expect(written).toHaveLength(0)
+  })
+  it("issues a host drawing certificate for an independently checked cube before confirmation", async () => {
+    const document = geometryDocument()
+    const prompt = "请画一个立方体。"
+    const hash = async (text: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(x => x.toString(16).padStart(2, "0")).join("")
+    const drawingContext = await createSolveContext({ runId: "run-1", conversationId: "conv-1", prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(document) }, hash)
+    const { runtime, written } = await makeRuntime({ document, drawingContext })
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: prompt })
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(runtime.draftId()).toBeTruthy()
+    const preview = runtime.host.preview(runtime.draftId()!)
+    expect(preview.ok).toBe(true)
+    if (preview.ok) expect(preview.artifact.drawingCertified).toBe(true)
+    expect(written).toHaveLength(0)
+  })
+
   it("drafts a plan without touching the live document", async () => {
     // 这是整条链的关键性质：一次规划运行结束后，真文档必须**一个字节都没变**。
-    const { runtime, written, current } = makeRuntime()
+    const { runtime, written, current } = await makeRuntime()
 
     const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "建个立方体" })
 
@@ -146,7 +178,7 @@ describe("the assembled runtime actually runs", () => {
    * 够得到，而那份事实记录在说一件没发生的事（"没提交"，可画布已经变了）。
    */
   it("settles the run ledger once the user confirms", async () => {
-    const { runtime, written } = makeRuntime()
+    const { runtime, written } = await makeRuntime()
     const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "建个立方体" })
     expect(events.at(-1)).toBe("awaiting_confirmation")
 
@@ -169,11 +201,11 @@ describe("the assembled runtime actually runs", () => {
   it("drafts onto a document that already holds an object of the same kind", async () => {
     const document = geometryDocument()
     document.primitives.push({ id: "solid-1", type: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 }, label: "立方体" } as never)
-    const { runtime, written } = makeRuntime({ document })
+    const { runtime, written } = await makeRuntime({ document, prompt: "再建一个立方体" })
 
     const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: "再建一个立方体" })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1), runtime.coordinator.ledger().at(-1)?.detail).toBe("awaiting_confirmation")
     const draftId = runtime.committer.draftIdFor()
     expect(draftId).not.toBeNull()
     /**
@@ -204,13 +236,14 @@ describe("the assembled runtime actually runs", () => {
           : { ok: true, events: [{ kind: "tool_call", requestId: "r2", attemptId: "a2", toolCallId: "plan-1", toolId: PLAN_TOOL_NAME, input: planEnvelope() }] }
       }
     })
-    const { runtime, written, current } = makeRuntime({ document, planner })
+    const { runtime, written, current } = await makeRuntime({ document, planner })
 
     const streamed = []
     for await (const event of runtime.coordinator.start({ run: runContext(document), userMessage: "Inspect A and add a cube" })) streamed.push(event)
     const events = streamed.map((event) => event.phase)
 
-    expect(events.at(-1), JSON.stringify(runtime.coordinator.ledger().map((event) => ({ phase: event.phase, detail: event.detail })))).toBe("awaiting_confirmation")
+    expect(events.at(-1), JSON.stringify(runtime.coordinator.ledger().map((event) => ({ phase: event.phase, detail: event.detail })))).toBe("failed")
+    expect(runtime.host.requestConsent(runtime.draftId()!)).toEqual({ ok: false, reason: "unverified_diagram" })
     expect(streamed).toEqual(expect.arrayContaining([expect.objectContaining({ toolCallId: "read-1", detail: expect.stringContaining("scene.inspect") })]))
     expect(sent).toHaveLength(2)
     expect(sent[0].tools.map((tool) => (tool as { function: { name: string } }).function.name)).toContain("scene_inspect")
@@ -222,7 +255,7 @@ describe("the assembled runtime actually runs", () => {
   })
 
   it("completes a read-only run through the assembled observer", async () => {
-    const { runtime, written } = makeRuntime({ envelope: answerEnvelope() })
+    const { runtime, written } = await makeRuntime({ envelope: answerEnvelope() })
 
     const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "数一下有几个对象" })
 
@@ -250,7 +283,7 @@ describe("the assembled runtime actually runs", () => {
       return { plan: answerEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
     }) }
     const lines: string[] = []
-    const { runtime } = makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
+    const { runtime } = await makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
 
     await drive(runtime.coordinator, { run: runContext(document), userMessage: "这只实体有外接球吗" })
 
@@ -287,7 +320,7 @@ describe("the assembled runtime actually runs", () => {
       return { plan: answerEnvelope(), requestId: "req-1", attemptId: "attempt-1" }
     }) }
     const lines: string[] = []
-    const { runtime } = makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
+    const { runtime } = await makeRuntime({ document, planner, diagnostics: (line) => lines.push(line) })
 
     await drive(runtime.coordinator, { run: runContext(document), userMessage: "画布上有什么" })
 
@@ -310,7 +343,7 @@ describe("the assembled runtime actually runs", () => {
 
   it("refuses to commit without a host-minted consent token", async () => {
     // 同意凭据只能由宿主创建；`createAgentRuntime` 刻意不注入它，所以带 `confirmed` 也提交不了。
-    const { runtime, written } = makeRuntime()
+    const { runtime, written } = await makeRuntime()
 
     const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "建个立方体", confirmed: true })
 
@@ -320,7 +353,7 @@ describe("the assembled runtime actually runs", () => {
 
   it("leaves the live document alone when the compiler refuses the plan", async () => {
     const badPlan: PlanEnvelope = { schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "建一个不存在的动作", factIds: [], actions: [{ actionId: "planar.create_dragon" as never, actionKey: "d", factIds: [], inputs: {} as never }] }
-    const { runtime, written } = makeRuntime({ envelope: badPlan })
+    const { runtime, written } = await makeRuntime({ envelope: badPlan })
 
     const events = await drive(runtime.coordinator, { run: runContext(), userMessage: "建个立方体" })
 
@@ -330,7 +363,7 @@ describe("the assembled runtime actually runs", () => {
 
   it("shares one draft store between the tools and the committer", async () => {
     // 若两处各建一个 `DraftStore`，模型看到的草稿与提交的不是一回事。
-    const { runtime } = makeRuntime()
+    const { runtime } = await makeRuntime()
 
     const created = runtime.draftTools.create({
       projectId,
@@ -348,7 +381,7 @@ describe("the assembled runtime actually runs", () => {
   })
 
   it("reports a staging failure without mutating the draft version", async () => {
-    const { runtime } = makeRuntime()
+    const { runtime } = await makeRuntime()
     const created = runtime.draftTools.create({ projectId, documentId: "doc-1", workspace: "geometry3d", epoch: "epoch:doc-1", generation: 0, contentHash: "" })
 
     // 未知动作名 → 编译器拒绝。
@@ -368,7 +401,7 @@ describe("the assembled runtime actually runs", () => {
    */
   it("hands the application's next-phase flag down to the real worker compile strategy", async () => {
     const posted: Record<string, unknown>[] = []
-    const { runtime } = makeRuntime({
+    const { runtime } = await makeRuntime({
       obligationIR: true,
       geometryWorkerFactory: () => {
         const inner = inlineWorker((request) => handleGeometryRequest(request as never))
@@ -398,7 +431,7 @@ describe("the assembled runtime actually runs", () => {
     // 一个"测试之间互相污染"的假失败，与被测行为无关。
     resetGeometryWorkerForTests()
     const posted: Record<string, unknown>[] = []
-    const { runtime } = makeRuntime({
+    const { runtime } = await makeRuntime({
       witnessSearch: true,
       geometryWorkerFactory: () => {
         const inner = inlineWorker((request) => handleGeometryRequest(request as never))
@@ -423,7 +456,7 @@ describe("the assembled runtime actually runs", () => {
   })
 
   it("answers export preflight questions through the injected port", async () => {
-    const { runtime } = makeRuntime()
+    const { runtime } = await makeRuntime()
 
     expect(runtime.scene.inspect("doc-unknown").status).toBe("error")
   })
@@ -438,7 +471,7 @@ describe("the assembled runtime actually runs", () => {
   it("runs a read-only tool through the dispatcher and reports what it found", async () => {
     const document = geometryDocument()
     document.primitives.push({ id: "point-1", type: "point3", label: "A", position: { x: 0, y: 0, z: 0 } } as never)
-    const { runtime } = makeRuntime({ document })
+    const { runtime } = await makeRuntime({ document })
 
     const result = runtime.callTool("scene.inspect", { documentId: document.metadata.id })
 
@@ -447,7 +480,7 @@ describe("the assembled runtime actually runs", () => {
   })
 
   it("refuses to run a tool that writes the document, and leaves the document alone", async () => {
-    const { runtime, written, current } = makeRuntime()
+    const { runtime, written, current } = await makeRuntime()
 
     const result = runtime.callTool("draft.confirm_commit", {})
 
@@ -460,7 +493,7 @@ describe("the assembled runtime actually runs", () => {
   it("reads the scene fresh on every tool call instead of caching the first snapshot", async () => {
     // 观察层的"过期"检测靠现取；缓存快照会让工具一直看到旧场景。
     const document = geometryDocument()
-    const { runtime } = makeRuntime({ document })
+    const { runtime } = await makeRuntime({ document })
     expect(runtime.callTool("scene.inspect", { documentId: document.metadata.id }).payload).toHaveLength(0)
 
     document.primitives.push({ id: "point-2", type: "point3", label: "B", position: { x: 1, y: 0, z: 0 } } as never)
@@ -691,7 +724,7 @@ describe("representative tasks from the design", () => {
    * 关系改由系统从原话里抽（方案 C），所以这条路必须通。
    */
   it("blocks an unsupported extra condition in the assembled runtime without changing the live document", async () => {
-    const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
+    const { runtime, written, current } = await makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), prompt: `${PYRAMID_PROMPT}，∠ABC=60°` })
     const events = await drive(runtime.coordinator, {
       run: runContext(createEmptyDocument("geometry3d")), userMessage: `${PYRAMID_PROMPT}，∠ABC=60°`
     })
@@ -703,7 +736,7 @@ describe("representative tasks from the design", () => {
   })
   it("drafts the pyramid from a relations-only prompt, with the chosen numbers visible", async () => {
     // `pyramidPlan()` 默认**不带** relations —— 与现场一致。
-    const { runtime, written, current } = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d") })
+    const { runtime, written, current } = await makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), prompt: PYRAMID_PROMPT })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
 
@@ -758,7 +791,7 @@ describe("representative tasks from the design", () => {
         }
       }]
     }
-    const { runtime } = makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d"), witnessSearch: false })
+    const { runtime } = await makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d"), witnessSearch: false })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
 
@@ -789,19 +822,31 @@ describe("representative tasks from the design", () => {
         }
       }]
     }
-    const { runtime } = makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d") })
+    const { runtime } = await makeRuntime({ envelope: skewed as typeof base, document: createEmptyDocument("geometry3d"), prompt: PYRAMID_PROMPT })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1), runtime.coordinator.ledger().at(-1)?.detail).toBe("awaiting_confirmation")
   })
 
+  it("keeps a safe draft but refuses confirmation for an unsupported compound geometry prompt", async () => {
+    const document = createEmptyDocument("geometry3d")
+    const { runtime, written } = await makeRuntime({ envelope: obliquePrismSectionPlan(), document, prompt: OBLIQUE_PRISM_PROMPT })
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: OBLIQUE_PRISM_PROMPT })
+    expect(events.at(-1)).toBe("failed")
+    const draftId = runtime.draftId()
+    expect(draftId).toBeTruthy()
+    expect(runtime.drafts.getPreview(draftId!)?.candidate.primitives.length).toBeGreaterThan(0)
+    expect(runtime.host.requestConsent(draftId!)).toEqual({ ok: false, reason: "unverified_diagram" })
+    expect(written).toHaveLength(0)
+  })
   it("drafts the oblique-prism section with midpoints at 0.5 and a moving point at the audited 0.4", async () => {
-    const { runtime, written, current } = makeRuntime({ envelope: obliquePrismSectionPlan(), document: createEmptyDocument("geometry3d") })
+    const { runtime, written, current } = await makeRuntime({ envelope: obliquePrismSectionPlan(), document: createEmptyDocument("geometry3d") })
 
     const events = await drive(runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: OBLIQUE_PRISM_PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.host.requestConsent(runtime.draftId()!)).toEqual({ ok: false, reason: "unverified_diagram" })
     // 确认之前草稿是隔离的：没有任何一次写入。
     expect(written).toHaveLength(0)
     expect(current()?.primitives).toHaveLength(0)
@@ -885,7 +930,7 @@ describe("representative tasks from the design", () => {
   it("passes the proof-export flag into staging, and writes no field at all when it is off", async () => {
     // 用**有可核验图元**的那条题（`pyramidPlan` + `PYRAMID_PROMPT`）：形式证明那一次尝试
     // 只在"跑完作图、题设核验过了"之后才发生，立方体那条路连 `parsed` 都是 null。
-    const enabled = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: true })
+    const enabled = await makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: true, prompt: PYRAMID_PROMPT })
     const enabledEvents = await drive(enabled.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
     expect(enabledEvents.at(-1)).toBe("awaiting_confirmation")
     const enabledId = enabled.runtime.draftId()
@@ -894,7 +939,7 @@ describe("representative tasks from the design", () => {
     // 这道题**没有"求证"那一句** ⇒ 如实报"没有可形式化的目标"，不是失败。
     expect(enabledPreview?.proofAttempt?.outcome).toBe("no_goal")
 
-    const disabled = makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: false })
+    const disabled = await makeRuntime({ envelope: pyramidPlan(), document: createEmptyDocument("geometry3d"), proofExport: false, prompt: PYRAMID_PROMPT })
     const disabledEvents = await drive(disabled.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: PYRAMID_PROMPT })
     expect(disabledEvents.at(-1)).toBe("awaiting_confirmation")
     const disabledId = disabled.runtime.draftId()
@@ -924,11 +969,12 @@ describe("representative tasks from the design", () => {
       }] as never
     }
     const document = createEmptyDocument("geometry3d")
-    const { runtime } = makeRuntime({ envelope: frustum, document })
+    const { runtime } = await makeRuntime({ envelope: frustum, document })
 
     const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: "画一个圆台，上底半径 1、下底半径 2、高 3" })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.host.requestConsent(runtime.draftId()!)).toEqual({ ok: false, reason: "unverified_diagram" })
     const text = (runtime.assumptions() ?? []).join(" ")
     expect(text).toContain("近似")
     expect(text).toContain("弦高")
@@ -936,11 +982,12 @@ describe("representative tasks from the design", () => {
 
   it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {
     const document = createEmptyDocument("conics")
-    const { runtime, written, current } = makeRuntime({ envelope: conicInvariantPlan(), document })
+    const { runtime, written, current } = await makeRuntime({ envelope: conicInvariantPlan(), document })
 
     const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: CONIC_INVARIANT_PROMPT })
 
-    expect(events.at(-1)).toBe("awaiting_confirmation")
+    expect(events.at(-1)).toBe("failed")
+    expect(runtime.host.requestConsent(runtime.draftId()!)).toEqual({ ok: false, reason: "unverified_diagram" })
     expect(written).toHaveLength(0)
     expect(current()?.primitives).toHaveLength(0)
 
@@ -993,7 +1040,7 @@ describe("representative tasks from the design", () => {
       actions: [{ actionId: "solid.create_prism", actionKey: "prism", factIds: [], inputs: { alias: "prism" } } as unknown as PlanEnvelope extends { actions: (infer T)[] } ? T : never]
     }
 
-    const invariant = makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
+    const invariant = await makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
     const invariantEvents = await drive(invariant.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "证明任意棱柱都满足某结论" })
 
     expect(invariantEvents.at(-1)).toBe("failed")
@@ -1002,10 +1049,11 @@ describe("representative tasks from the design", () => {
     expect(invariant.runtime.coordinator.ledger().at(-1)?.detail).toContain("needs_concrete_value")
 
     // 对照组：同一份计划、一句没有"任意/恒定"的话 → 缺省被回填，草稿成型。
-    const ordinary = makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
+    const ordinary = await makeRuntime({ envelope: planWithoutDimensions, document: createEmptyDocument("geometry3d") })
     const ordinaryEvents = await drive(ordinary.runtime.coordinator, { run: runContext(createEmptyDocument("geometry3d")), userMessage: "画一个棱柱" })
 
-    expect(ordinaryEvents.at(-1)).toBe("awaiting_confirmation")
+    expect(ordinaryEvents.at(-1)).toBe("failed")
+    expect(ordinary.runtime.host.requestConsent(ordinary.runtime.draftId()!)).toEqual({ ok: false, reason: "unverified_diagram" })
     const draftId = ordinary.runtime.draftId()
     const candidate = draftId === null ? null : ordinary.runtime.drafts.getPreview(draftId)?.candidate
     expect(candidate?.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
@@ -1020,7 +1068,7 @@ describe("representative tasks from the design", () => {
  */
 describe("W2 — the host derives answer delivery semantics", () => {
   it("exposes an answered solveResult with no evidence for a normal answer", async () => {
-    const { runtime } = makeRuntime({ envelope: answerEnvelope() })
+    const { runtime } = await makeRuntime({ envelope: answerEnvelope() })
 
     const collected: { phase: string; solveResult?: unknown }[] = []
     for await (const event of runtime.coordinator.start({ run: runContext(), userMessage: "数一下有几个对象" })) collected.push(event)
@@ -1036,7 +1084,7 @@ describe("W2 — the host derives answer delivery semantics", () => {
   })
 
   it("does not let a whitespace answer become a delivered answer", async () => {
-    const { runtime } = makeRuntime({ envelope: { ...answerEnvelope(), answer: "   " } as PlanEnvelope })
+    const { runtime } = await makeRuntime({ envelope: { ...answerEnvelope(), answer: "   " } as PlanEnvelope })
 
     await drive(runtime.coordinator, { run: runContext(), userMessage: "数一下有几个对象" })
 
@@ -1053,7 +1101,7 @@ describe("W2 — the host derives answer delivery semantics", () => {
       factIds: [],
       questions: ["AB 的长是多少？"]
     }
-    const { runtime } = makeRuntime({ envelope: clarification })
+    const { runtime } = await makeRuntime({ envelope: clarification })
 
     await drive(runtime.coordinator, { run: runContext(), userMessage: "画一个矩形" })
 
