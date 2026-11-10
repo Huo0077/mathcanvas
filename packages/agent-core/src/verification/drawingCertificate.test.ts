@@ -26,6 +26,16 @@ const makeContext = () => createSolveContext({ runId: "r1", conversationId: "c1"
 const accepted = async () => buildDrawingCertificate({ context: await makeContext(), draft, diagram: report, toolVerification: tools, structuralChecks: [{ sourceText: "正方体ABCD-A1B1C1D1", status: "passed", entityIds: ["solid-1"] }], verifierVersion: "v1" })
 
 describe("drawing certificate rejects incomplete evidence", () => {
+  it("rejects a synthetic focal-chord prompt if only its parabola equation was checked", async () => {
+    const text = "抛物线C：y²=4x，AB为抛物线的焦点弦。请画示意图"
+    const context = await createSolveContext({ runId: "r1", conversationId: "c1", prompt: text, attachments: [], corrections: [], sceneRevision: draft.sceneRevision }, hash)
+    expect(context.understanding.ir.unverified.some(item => item.sourceText.includes("焦点弦"))).toBe(true)
+    const equationOnly: DiagramVerificationReport = { ...report, checks: [{ ...report.checks[0]!, kind: "conicAxes", sourceText: "y²=4x" }] }
+    const result = buildDrawingCertificate({ context, draft, diagram: equationOnly, toolVerification: tools,
+      structuralChecks: [{ sourceText: "抛物线C", status: "passed", entityIds: ["c"] }], verifierVersion: "v1" })
+    expect(result.status).toBe("unsupported")
+  })
+
   it("accepts a separate explicit request to draw the already specified diagram", async () => {
     const prompt = CASE_1.prompt + "\u8bf7\u753b\u9898\u8bbe\u793a\u610f\u56fe\u3002"
     const plan = deterministicPlanForPrompt(prompt)
@@ -38,6 +48,34 @@ describe("drawing certificate rejects incomplete evidence", () => {
     const structure = verifyNamedSolidDrawingStructure(prompt, plan.actions, compiled.draftDocument, base)
     const result = buildDrawingCertificate({ context, draft, diagram, structuralChecks: structure, toolVerification: tools, verifierVersion: "v1" })
     expect(result.status, result.status === "unsupported" ? result.reason : "").toBe("passed")
+  })
+
+  it.each([CASE_1, CASE_2, CASE_3])("refuses wrong point names or distorted edges for $id", async (fixture) => {
+    const plan = deterministicPlanForPrompt(fixture.prompt)
+    if (plan?.kind !== "plan") throw Error("missing deterministic plan")
+    const base = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(plan, { document: base, workspace: "geometry3d", conversationId: "mutation", documentGeneration: base.revision })
+    if (!compiled.ok || !compiled.draftDocument) throw Error("missing candidate")
+    const context = await createSolveContext({ runId: "r1", conversationId: "c1", prompt: fixture.prompt, attachments: [], corrections: [], sceneRevision: draft.sceneRevision }, hash)
+    const source = parseObligationWithLegacy(fixture.prompt).legacy
+    const solid = plan.actions.find(action => action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_prism")
+    if (!solid) throw Error("missing named solid")
+    const names = (solid.inputs as { vertexNames?: string[] }).vertexNames
+    if (!names || names.length < 2) throw Error("unnamed solid")
+    const wrongNames = structuredClone(plan)
+    const badNames = (wrongNames.actions.find(action => action.actionKey === solid.actionKey)!.inputs as { vertexNames: string[] }).vertexNames
+    ;[badNames[0], badNames[1]] = [badNames[1]!, badNames[0]!]
+    const mislabeled = verifyDiagramObligations(source, wrongNames, compiled.draftDocument, base)
+    const mislabeledStructure = verifyNamedSolidDrawingStructure(fixture.prompt, wrongNames.actions, compiled.draftDocument, base)
+    expect(buildDrawingCertificate({ context, draft, diagram: mislabeled, toolVerification: tools, structuralChecks: mislabeledStructure, verifierVersion: "v1" }).status).toBe("unsupported")
+
+    const distorted = structuredClone(compiled.draftDocument)
+    const vertex = distorted.primitives.find(item => item.type === "point3" && item.label === names[0])
+    if (vertex?.type !== "point3") throw Error("missing first named vertex")
+    vertex.position.x += 1.5
+    const wrongEdge = verifyDiagramObligations(source, plan, distorted, base)
+    const wrongStructure = verifyNamedSolidDrawingStructure(fixture.prompt, plan.actions, distorted, base)
+    expect(buildDrawingCertificate({ context, draft, diagram: wrongEdge, toolVerification: tools, structuralChecks: wrongStructure, verifierVersion: "v1" }).status).toBe("unsupported")
   })
 
   it.each([CASE_1, CASE_2, CASE_3])("covers every given and structure of $id", async (fixture) => {

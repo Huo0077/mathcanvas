@@ -2665,11 +2665,18 @@ function rescueWithSortedFaceRings(context: PlanCompileContext, first: CompileOn
         y: unitNormal.z * u.x - unitNormal.x * u.z,
         z: unitNormal.x * u.y - unitNormal.y * u.x
       }
-      const sortedBase = points.map((point) => {
+      const order = points.map((point, index) => {
         const relative = { x: point.x - center.x, y: point.y - center.y, z: point.z - center.z }
-        return { point, angle: Math.atan2(relative.x * v.x + relative.y * v.y + relative.z * v.z, relative.x * u.x + relative.y * u.y + relative.z * u.z) }
-      }).sort((left, right) => left.angle - right.angle).map((entry) => entry.point)
-      return { ...action, inputs: { ...(action.inputs as Record<string, unknown>), basePolygon: sortedBase } }
+        return { index, angle: Math.atan2(relative.x * v.x + relative.y * v.y + relative.z * v.z, relative.x * u.x + relative.y * u.y + relative.z * u.z) }
+      }).sort((left, right) => left.angle - right.angle).map((entry) => entry.index)
+      const originalNames = (action.inputs as { vertexNames?: unknown }).vertexNames
+      // A prism has paired base/top names. Sorting only its coordinates silently
+      // reassigns named vertices, so both name rings must follow the same order.
+      if (originalNames !== undefined && (!Array.isArray(originalNames) || originalNames.length !== 2 * points.length)) return action
+      const vertexNames = Array.isArray(originalNames)
+        ? { vertexNames: [...order.map(i => originalNames[i]), ...order.map(i => originalNames[i + points.length])] }
+        : {}
+      return { ...action, inputs: { ...(action.inputs as Record<string, unknown>), basePolygon: order.map(i => points[i]), ...vertexNames } }
     }
     if (action.actionId !== "solid.create_polyhedron") return action
     const inputs = action.inputs as { vertices?: unknown; faces?: unknown }
@@ -3613,7 +3620,8 @@ function targetedRepairAdvice(errors: readonly { code: string; path: string; det
    * `no host …` 回给它，下一轮它大概率还会拼一个新的 id。所以修复提示要说清**别名从哪来**：
    * 必须是**前面某一笔真的给出的**名字；找不到就补"建出那个宿主"的那一笔，或换成已有点名。
    */
-  const hostNotFound = errors.some((error) => error.code === "host_not_found")
+  const hostNotFound = errors.some((error) => error.code === "host_not_found"
+    || (error.code === "unresolved_alias" && /\.inputs\.host(?:$|\.)/.test(error.path)))
   if (hostNotFound) {
     advice.push('提醒：`host` / `hostId` 指向的实体必须**真的存在**：同一份计划里刚建的用 `{"scope":"draft","alias":"…"}`，那个别名必须是**前面某一笔真的给出的**名字（不要自己拼 `solid-1:e0` 这种）；场景里已有的用 `{"scope":"scene","ref":{"documentId":"…","entityId":"…"}}`。找不到宿主时，补**建出那个宿主**的那一笔，或换成图上已有的点名走 `solid.create_segment` / `solid.create_point`。')
   }

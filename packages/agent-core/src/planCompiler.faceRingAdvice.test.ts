@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
+import { createEmptyDocument } from "@draw/dsl"
+import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 
-import { describeCompileRepairPrompt } from "./planCompiler"
+import { compilePlan, describeCompileRepairPrompt } from "./planCompiler"
 
 /**
  * **面环坏了**（2026-10-19 联考 `joint-11` / `joint-13`）。
@@ -42,4 +44,22 @@ describe("face ring advice", () => {
     expect(hint).not.toContain("同一圈")
     expect(hint).not.toContain("绕行顺序")
   })
+})
+
+/** Synthetic joint-13 mechanism; not a reconstruction of the unavailable exam text. */
+it("rejects a synthetic non-coplanar side ring before staging a solid", () => {
+  const plan = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "draw a distorted cube", factIds: [], actions: [
+    { actionId: "solid.create_polyhedron", actionKey: "solid", factIds: [], inputs: {
+      alias: "solid", vertices: [
+        { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 2, y: 2, z: 0 }, { x: 0, y: 2, z: 0 },
+        { x: 0, y: 0, z: 1 }, { x: 2, y: 0, z: 1 }, { x: 2, y: 2, z: 1 }, { x: 0, y: 2, z: 2 }
+      ], faces: [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]]
+    } }
+  ] } as unknown as PlanEnvelope
+  const base = createEmptyDocument("geometry3d")
+  const result = compilePlan(plan, { document: base, conversationId: "synthetic-joint-13", documentGeneration: base.revision })
+  expect(result.ok).toBe(false)
+  expect(result.draftDocument).toBeNull()
+  expect(result.diagnostics.some(item => /not coplanar/.test(item.detail))).toBe(true)
+  expect(base.primitives).toHaveLength(0)
 })

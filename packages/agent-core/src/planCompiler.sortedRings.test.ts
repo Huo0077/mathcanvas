@@ -66,6 +66,24 @@ describe("face ring sorting rescue", () => {
     expect(compiled.assumptions.some((assumption) => assumption.id === "witness.sortedFaceRings")).toBe(true)
   })
 
+  it("never swaps the coordinates of named prism vertices while repairing a crossed base", () => {
+    const original = bowTiePrism()
+    const originalInputs = original.actions[0]!.inputs as { basePolygon: { x: number; y: number; z: number }[]; vertexNames: string[] }
+    const compiled = compilePlan(original, {
+      document: createEmptyDocument("geometry3d"),
+      conversationId: "named-bow-tie-prism",
+      documentGeneration: 0
+    })
+    expect(compiled.ok).toBe(true)
+    const repaired = compiled.actions[0]!.inputs as { basePolygon: { x: number; y: number; z: number }[]; vertexNames: string[] }
+    for (let i = 0; i < originalInputs.basePolygon.length; i += 1) {
+      const name = originalInputs.vertexNames[i]!
+      const position = repaired.vertexNames.indexOf(name)
+      expect(position, name).toBeGreaterThanOrEqual(0)
+      expect(repaired.basePolygon[position], name).toEqual(originalInputs.basePolygon[i])
+    }
+  })
+
   it("also reorders a prism base ring", () => {
     const compiled = compilePlan(bowTiePrism(), {
       document: createEmptyDocument("geometry3d"),

@@ -992,3 +992,10 @@ describe("题设账：长度表达式的边界", () => {
     expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(true)
   })
 })
+
+/** Synthetic joint-25 guard, not a reconstruction of the missing original exam text. */
+it("does not erase an unsupported focal-chord given after reading the parabola equation", () => {
+  const parsed = parseDiagramObligations("抛物线C：y²=4x，AB为抛物线的焦点弦。请画示意图")
+  expect(parsed.givens.some(item => item.kind === "conicAxes")).toBe(true)
+  expect(parsed.unverified.some(item => item.sourceText.includes("焦点弦"))).toBe(true)
+})

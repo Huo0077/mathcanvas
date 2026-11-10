@@ -1,6 +1,6 @@
 # 纯文字题可核验作图：分阶段实施方案（2026-11-09）
 
-> 状态：**W0–W2 已完成工程验收；W3–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
+> 状态：**W0–W3 已完成工程验收；W4–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
 
 ## 一、目标、边界和证据
 
@@ -71,6 +71,8 @@
 2. GREEN：实体别名必须由同一暂存/合法场景生成并指向预期类型；棱柱、梯形/菱形底、折片、棱上分点优先使用已有确定性构造器；原始多面体需闭合、非自交、共面、朝向/体积与题设残差独立检查。模型可以提候选，但不能通过静默改题、任意缩放凑选项、丢掉未识别条件取得 passed；最多一次受预算约束的定向修复，失败给明确位置/原因。
 3. 保留已修正项：Case 1–3 点名变换/缩放的正例与错边负例，Case 4 原题及修订版正例；缺关键命名/角度变体仅澄清。E19/E23 只加防退化回归。
 4. 验证：`npx vitest run packages/agent-core/src/planCompiler.hostNotFoundAdvice.test.ts packages/agent-core/src/planCompiler.faceRingAdvice.test.ts packages/agent-core/src/solidGeometryFourCases.test.ts packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/diagramVerification.test.ts`（执行前核对最后一文件是否存在，缺则新建定向测试）；对每项正例做错边、错名、错残差的变异测试。完成标志：旧构造仍可用、错图不能取证；不可验证域仍明确拒画。
+
+**W3 完成证据（合成失败机制，不是 joint 原题回测）：** 交叉棱柱重排保点名、假宿主 unresolved_alias 拒绝并给修复指导、焦点弦残留进入未核验；不共面/垂直/等边与错点名/错边负例均拒证。定向 8 文件 / 229 项通过，四题浏览器 6/6，E19/E23 回归通过；全量 556 文件 / 5993 通过 / 0 失败 / 1 todo，typecheck、lint、文档检查与差异检查通过。6 道 joint 缺原文仍排除原题分母，未进行真实 Provider 调用。
 
 ### W4：默认文字能力全开，但安全闸不可回滚（W1–W3 验收后）
 

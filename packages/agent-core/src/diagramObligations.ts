@@ -2326,7 +2326,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, numbere
      *（"点在线段上"要一条新义务 + 一条判据：共线且落在线段内），但**至少不许消失**。
      */
     const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(leftover.trim())
-    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)/.test(leftover) || unknownPointCondition)) {
+    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|焦点弦|焦弦|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)/.test(leftover) || unknownPointCondition)) {
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
     }
   }

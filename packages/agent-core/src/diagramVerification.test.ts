@@ -881,3 +881,27 @@ describe("Task 15: function-family premises", () => {
     expect(checkOf(report, "functionLineIntersections")).toBeUndefined()
   })
 })
+
+/** Synthetic mutations only: joint-14/17 originals are unavailable, so these are not exam-case passes. */
+describe("W3 synthetic wrong-residual guards", () => {
+  it("rejects a sizable plane-perpendicular residual even when the plan claims a right dihedral", () => {
+    const { plan, candidate } = fixture()
+    const a = candidate.primitives.find(item => item.id === "solid-v0")
+    if (a?.type !== "point3") throw Error("missing A")
+    a.position.y = 0.75
+    const report = verifyDiagramObligations(parseDiagramObligations("在三棱锥A-BCD中，平面ABD⊥平面BCD。请画示意图"), plan, candidate)
+    expect(report.status).toBe("failed")
+    expect(report.checks.find(check => check.kind === "planePerpendicular")?.status).toBe("failed")
+  })
+
+  it("rejects an equilateral claim when one side differs greatly, rather than trusting names", () => {
+    const { plan, candidate } = fixture()
+    const c = candidate.primitives.find(item => item.id === "solid-v2")
+    if (c?.type !== "point3") throw Error("missing C")
+    c.position.x = 0.33
+    c.position.y = 0.1
+    const report = verifyDiagramObligations(parseDiagramObligations("在三棱锥A-BCD中，△OCD为等边三角形。请画示意图"), plan, candidate)
+    expect(report.status).toBe("failed")
+    expect(report.checks.find(check => check.kind === "equilateral")?.status).toBe("failed")
+  })
+})
