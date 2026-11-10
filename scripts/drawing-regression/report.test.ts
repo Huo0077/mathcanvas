@@ -12,8 +12,15 @@ describe("W5 drawing report fail-closed denominator", () => {
     const result = summarizeDrawingRuns([run(), run({ caseId: "case-B", disposition: "unsupported", draftCreated: false, staged: false, certificateValid: false, verifiedObligations: [], reasonCodes: ["unsupported_clause"] })])
     expect(result.counts).toMatchObject({ attempted: 2, drafted: 1, staged: 1, verified: 1, committed: 1, unsupported: 1, committedWithKnownError: 0 })
     expect(result.obligationCoverage).toEqual({ verified: 2, required: 4, rate: 0.5 })
+    expect(result.cohorts.development).toEqual({ attempted: 2, committed: 1, verified: 2, required: 4, rate: 0.5 })
+    expect(result.cohorts.synthetic.attempted).toBe(0)
     expect(result.refusalRate).toBe(0.5)
     expect(result.failures).toEqual([{ caseId: "case-B", reasonCodes: ["unsupported_clause"] }])
+  })
+  it("never presents clean development fixtures as release approval", () => {
+    const result = summarizeDrawingRuns([run()])
+    expect(result.safetyGate).toEqual({ passed: true, violations: [] })
+    expect(result.releaseGate).toMatchObject({ passed: false, reasons: expect.arrayContaining(["independent_holdout_missing", "manual_release_review_required"]) })
   })
   it("forbids promoting tuned development cases into an independent holdout", () => {
     expect(() => summarizeDrawingRuns([run({ sourceSet: "development" })], { independentHoldout: true })).toThrow(/holdout/i)
@@ -21,9 +28,10 @@ describe("W5 drawing report fail-closed denominator", () => {
   it("counts unsafe commits and blocks release without hiding the failing denominator", () => {
     const report = summarizeDrawingRuns([run({ caseId: "bad-1", certificateValid: false }), run({ caseId: "bad-2", committedWithKnownError: true }), run({ caseId: "bad-3", verifiedObligations: ["given-1"] })])
     expect(report.counts).toMatchObject({ attempted: 3, committed: 3, committedWithKnownError: 1 })
-    expect(report.releaseGate).toEqual({ passed: false, violations: [
+    expect(report.safetyGate).toEqual({ passed: false, violations: [
       { caseId: "bad-1", code: "commit_without_certificate" }, { caseId: "bad-2", code: "committed_known_error" }, { caseId: "bad-3", code: "invalid_certificate_claim" }, { caseId: "bad-3", code: "commit_without_certificate" }
     ] })
+    expect(report.releaseGate.passed).toBe(false)
   })
   it("does not combine answer-only questions with drawing denominators or accept duplicate cases", () => {
     expect(() => summarizeDrawingRuns([run({ kind: "answer-only" })])).toThrow(/drawing/i)
@@ -42,7 +50,9 @@ describe("W5 preregistered holdout provenance", () => {
     status: "frozen" as const, registeredBeforeRun: true }
   it("requires a frozen source and independently reviewed oracle before reporting holdout", () => {
     const outcome = run({ caseId: "held-1", sourceSha256: source.promptSha256, sourceSet: "holdout" })
-    expect(summarizeDrawingRuns([outcome], { independentHoldout: true, preregistered: [source] }).counts.committed).toBe(1)
+    const holdout = summarizeDrawingRuns([outcome], { independentHoldout: true, preregistered: [source] })
+    expect(holdout.counts.committed).toBe(1)
+    expect(holdout.releaseGate).toMatchObject({ passed: false, reasons: ["manual_release_review_required"] })
     for (const invalid of [{ ...source, reviewerIndependent: false }, { ...source, registeredBeforeRun: false },
       { ...source, promptSha256: "c".repeat(64) }, { ...source, oracleReference: "" }]) {
       expect(() => summarizeDrawingRuns([outcome], { independentHoldout: true, preregistered: [invalid] })).toThrow(/holdout|oracle|independent|hash/i)

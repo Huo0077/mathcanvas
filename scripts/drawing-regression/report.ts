@@ -28,14 +28,20 @@ export interface PreregisteredDrawingCase {
   registeredBeforeRun: boolean
 }
 
+export type DrawingCohort = { attempted: number; committed: number; verified: number; required: number; rate: number | null }
+
 export interface DrawingSummary {
+  cohorts: Record<DrawingRun["sourceSet"], DrawingCohort>
   counts: { attempted: number; drafted: number; staged: number; verified: number; committed: number;
     committedWithKnownError: number; clarification: number; unsupported: number; failed: number }
   obligationCoverage: { verified: number; required: number; rate: number | null }
   refusalRate: number | null
   falseRefusalRate: { count: number; reviewed: number; rate: number | null }
   failures: { caseId: string; reasonCodes: string[] }[]
-  releaseGate: { passed: boolean; violations: { caseId: string; code: string }[] }
+  /** Mechanical safety gate only; not a product release authorization. */
+  safetyGate: { passed: boolean; violations: { caseId: string; code: string }[] }
+  /** Never auto-approve release from self-declared provenance or development samples. */
+  releaseGate: { passed: boolean; reasons: string[] }
 }
 const hash = /^[a-f0-9]{64}$/i
 export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { independentHoldout?: boolean; preregistered?: readonly PreregisteredDrawingCase[] } = {}): DrawingSummary {
@@ -49,9 +55,14 @@ export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { ind
   const ids = new Set<string>()
   const counts: DrawingSummary["counts"] = { attempted: 0, drafted: 0, staged: 0, verified: 0, committed: 0,
     committedWithKnownError: 0, clarification: 0, unsupported: 0, failed: 0 }
+  const cohorts: DrawingSummary["cohorts"] = {
+    development: { attempted: 0, committed: 0, verified: 0, required: 0, rate: null },
+    holdout: { attempted: 0, committed: 0, verified: 0, required: 0, rate: null },
+    synthetic: { attempted: 0, committed: 0, verified: 0, required: 0, rate: null }
+  }
   let required = 0, verified = 0, falseRefusals = 0, reviewedRefusals = 0
   const failures: DrawingSummary["failures"] = []
-  const violations: DrawingSummary["releaseGate"]["violations"] = []
+  const violations: DrawingSummary["safetyGate"]["violations"] = []
   for (const item of runs) {
     if (!item.caseId || ids.has(item.caseId)) throw new Error("duplicate or missing case id")
     ids.add(item.caseId)
@@ -79,6 +90,11 @@ export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { ind
     if (item.committedWithKnownError) counts.committedWithKnownError++
     required += all.size
     verified += passed.size
+    const cohort = cohorts[item.sourceSet]
+    cohort.attempted++
+    if (item.disposition === "committed") cohort.committed++
+    cohort.required += all.size
+    cohort.verified += passed.size
     if (item.disposition !== "committed") {
       failures.push({ caseId: item.caseId, reasonCodes: [...item.reasonCodes] })
       if (item.expectedDrawable !== undefined) {
@@ -87,9 +103,12 @@ export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { ind
       }
     }
   }
+  for (const cohort of Object.values(cohorts)) cohort.rate = cohort.required ? cohort.verified / cohort.required : null
   const refused = counts.attempted - counts.committed
-  return { counts, obligationCoverage: { verified, required, rate: required ? verified / required : null },
+  return { counts, cohorts, obligationCoverage: { verified, required, rate: required ? verified / required : null },
     refusalRate: counts.attempted ? refused / counts.attempted : null,
     falseRefusalRate: { count: falseRefusals, reviewed: reviewedRefusals, rate: reviewedRefusals ? falseRefusals / reviewedRefusals : null },
-    failures, releaseGate: { passed: violations.length === 0, violations } }
+    failures, safetyGate: { passed: violations.length === 0, violations },
+    releaseGate: { passed: false, reasons: [...(options.independentHoldout ? [] : ["independent_holdout_missing"]),
+      ...(violations.length ? ["safety_gate_failed"] : []), "manual_release_review_required"] } }
 }

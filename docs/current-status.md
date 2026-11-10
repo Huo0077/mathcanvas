@@ -2,10 +2,10 @@
 
 ## 2026-11-10 —— W5 作图发布闸施工中（仅开发夹具，尚未发布）
 
-- 新增脱敏的按题聚合统计：保留 attempted/drafted/staged/verified/committed/committedWithKnownError/clarification/unsupported，义务覆盖分母使用全部必需条件；假证书、已知错图提交均阻断发布，不能把失败样本剔除。统计测试 7/7、原 W0 冻结清单测试 3/3；清单 7 份原文与 6 份缺来源、SHA-256 `9e9a58b6ff2a5fa0fec03097190331a3f3d0ddca6d0db7e3257e5476efa34a1f`；开发夹具不能标作独立留出卷。
+- 新增脱敏的按题聚合统计：保留 attempted/drafted/staged/verified/committed/committedWithKnownError/clarification/unsupported，义务覆盖分母使用全部必需条件；假证书、已知错图提交均阻断发布，不能把失败样本剔除。统计测试 8/8、原 W0 冻结清单测试 3/3；清单 7 份原文与 6 份缺来源、SHA-256 `9e9a58b6ff2a5fa0fec03097190331a3f3d0ddca6d0db7e3257e5476efa34a1f`；开发夹具不能标作独立留出卷。
 - 浏览器新增四道旧立体题的原文义务展示、确认、一次提交和撤销，并从落盘点坐标独立量边长/中点/垂直/平行/折片；矛盾条件不能出现确认按钮也不写画布。与旧浏览器测试合跑 12/12（含过期证书）。浏览器另外实测画布变化后旧证书过期、按钮隐藏并保留手工对象；宿主桥无证书/过期证书/已用同意票的直接调用由独立单元测试保护，不能据此称所有绕路均已测尽。
-- 阶段工程门禁：全量 Vitest **557 文件 / 6020 通过 / 0 失败 / 1 todo**；typecheck、lint（0 错误/28 既有警告）、文档门禁 22/22、差异检查 exit 0；新增浏览器 6/6（含证书过期）。仍未做真实 Provider 或发布。
-- 本地实际运行报告（Git 忽略目录 `eval-results/drawing-regression/development-offline-latest.json`）：冻结开发原题 4/4 提交、合成未支持条件 1/1 拒画；5 次尝试、4 份草稿/核验/提交、已知错图提交 0、义务 33/34（拒画的合成条件计入分母）、模型请求 0、只查询一次本地配置。由 `scripts/drawing-regression/run.test.ts` 的单次真实 Agent 运行生成，**不属于独立留出或真实 Provider 成功率**。
+- 阶段工程门禁：全量 Vitest **558 文件 / 6024 通过 / 0 失败 / 1 todo**；typecheck、lint（0 错误/28 既有警告）、文档门禁 22/22、差异检查 exit 0；新增浏览器 6/6（含证书过期）。仍未做真实 Provider 或发布。
+- 本地实际运行报告（Git 忽略目录 `eval-results/drawing-regression/development-offline-latest.json`）：冻结开发原题 4/4 提交、合成未支持条件 1/1 拒画；5 次尝试、4 份草稿/核验/提交、已知错图提交 0、开发原题义务 33/33、合成负例义务 0/1、合计 33/34（拒画题计入分母）、模型请求 0、只查询一次本地配置；报告区分 safetyGate=通过与 releaseGate=阻断（缺独立留出和人工审核），工作树未提交时明确标脏。由 `scripts/drawing-regression/run.test.ts` 的单次真实 Agent 运行生成，**不属于独立留出或真实 Provider 成功率**。
 - **W5 未完成、发布阻断**：尚无冻结且未参与调参的独立文字作图留出卷、独立人工复核与真实 Provider 读数；已有四题是开发集，不能计作 blind holdout；新增留出计分登记闸要求预先冻结原文哈希、来源及独立 oracle 元数据；登记/授权清单见 docs/evaluation/w5-holdout-intake.md，元数据声明不等于人工复核。未获费用及模型/请求上限授权，不进行付费调用，不发布 Release，不宣称开放题 100%。下一步获取新的可核对原题及独立审签 oracle、完成未调参留出卷双轨实测，确认发布闸；缺证书/过期证书的界面与桥双闸已有工程回归，还需在最终留出卷复核。
 
 ## 2026-11-10 —— W4 纯文字可靠性能力默认全开（工程验收）
