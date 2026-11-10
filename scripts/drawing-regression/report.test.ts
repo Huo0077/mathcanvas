@@ -35,3 +35,23 @@ describe("W5 drawing report fail-closed denominator", () => {
     expect(result.counts.clarification).toBe(1)
   })
 })
+
+describe("W5 preregistered holdout provenance", () => {
+  const source = { caseId: "held-1", promptSha256: "b".repeat(64), sourceReference: "independent-exam-paper#7",
+    oracleReference: "reviewed-oracle#7", reviewer: "external-teacher-1", reviewerIndependent: true,
+    status: "frozen" as const, registeredBeforeRun: true }
+  it("requires a frozen source and independently reviewed oracle before reporting holdout", () => {
+    const outcome = run({ caseId: "held-1", sourceSha256: source.promptSha256, sourceSet: "holdout" })
+    expect(summarizeDrawingRuns([outcome], { independentHoldout: true, preregistered: [source] }).counts.committed).toBe(1)
+    for (const invalid of [{ ...source, reviewerIndependent: false }, { ...source, registeredBeforeRun: false },
+      { ...source, promptSha256: "c".repeat(64) }, { ...source, oracleReference: "" }]) {
+      expect(() => summarizeDrawingRuns([outcome], { independentHoldout: true, preregistered: [invalid] })).toThrow(/holdout|oracle|independent|hash/i)
+    }
+    expect(() => summarizeDrawingRuns([outcome], { independentHoldout: true })).toThrow(/preregistered/i)
+  })
+  it("refuses duplicate registration and excludes tuned source from the holdout score", () => {
+    const held = run({ caseId: source.caseId, sourceSha256: source.promptSha256, sourceSet: "holdout" })
+    expect(() => summarizeDrawingRuns([held], { independentHoldout: true, preregistered: [source, source] })).toThrow(/duplicate/i)
+    expect(() => summarizeDrawingRuns([run()], { independentHoldout: true, preregistered: [source] })).toThrow(/holdout/i)
+  })
+})

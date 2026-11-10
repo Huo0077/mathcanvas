@@ -16,6 +16,18 @@ export interface DrawingRun {
   reasonCodes: readonly string[]
 }
 
+/** Attestation metadata. External source and reviewer must be independently checked before release. */
+export interface PreregisteredDrawingCase {
+  caseId: string
+  promptSha256: string
+  sourceReference: string
+  oracleReference: string
+  reviewer: string
+  reviewerIndependent: boolean
+  status: "frozen" | "draft"
+  registeredBeforeRun: boolean
+}
+
 export interface DrawingSummary {
   counts: { attempted: number; drafted: number; staged: number; verified: number; committed: number;
     committedWithKnownError: number; clarification: number; unsupported: number; failed: number }
@@ -26,7 +38,14 @@ export interface DrawingSummary {
   releaseGate: { passed: boolean; violations: { caseId: string; code: string }[] }
 }
 const hash = /^[a-f0-9]{64}$/i
-export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { independentHoldout?: boolean } = {}): DrawingSummary {
+export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { independentHoldout?: boolean; preregistered?: readonly PreregisteredDrawingCase[] } = {}): DrawingSummary {
+  const registrations = options.independentHoldout ? options.preregistered : undefined
+  if (options.independentHoldout && !registrations?.length) throw new Error("independent holdout requires preregistered source and oracle")
+  const registered = new Map<string, PreregisteredDrawingCase>()
+  for (const entry of registrations ?? []) {
+    if (!entry.caseId || registered.has(entry.caseId)) throw new Error("duplicate holdout preregistration")
+    registered.set(entry.caseId, entry)
+  }
   const ids = new Set<string>()
   const counts: DrawingSummary["counts"] = { attempted: 0, drafted: 0, staged: 0, verified: 0, committed: 0,
     committedWithKnownError: 0, clarification: 0, unsupported: 0, failed: 0 }
@@ -38,7 +57,13 @@ export function summarizeDrawingRuns(runs: readonly DrawingRun[], options: { ind
     ids.add(item.caseId)
     if (item.kind !== "drawing") throw new Error("answer-only results need their own denominator, not drawing")
     if (!hash.test(item.sourceSha256)) throw new Error("invalid source SHA-256")
-    if (options.independentHoldout && item.sourceSet !== "holdout") throw new Error("development or synthetic cases are not independent holdout")
+    if (options.independentHoldout) {
+      if (item.sourceSet !== "holdout") throw new Error("development or synthetic cases are not independent holdout")
+      const entry = registered.get(item.caseId)
+      if (!entry || entry.promptSha256 !== item.sourceSha256 || !hash.test(entry.promptSha256)) throw new Error("holdout source hash does not match preregistration")
+      if (entry.status !== "frozen" || !entry.registeredBeforeRun || !entry.sourceReference || !entry.oracleReference
+        || !entry.reviewer || !entry.reviewerIndependent) throw new Error("holdout independent oracle preregistration incomplete")
+    }
     const all = new Set(item.requiredObligations), passed = new Set(item.verifiedObligations)
     if (all.size !== item.requiredObligations.length || passed.size !== item.verifiedObligations.length
       || [...passed].some(id => !all.has(id))) throw new Error("invalid obligation identity")
