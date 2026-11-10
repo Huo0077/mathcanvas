@@ -25,6 +25,7 @@ it("adapts one explicit final option but never infers a choice from derivation o
   expect(answer).toHaveLength(1)
   expect(answer[0]).toMatchObject({ goalId: context.understanding.goals[0]?.goalId, kind: "single_choice",
     value: { kind: "single_choice", optionId: "C" } })
+  expect(adaptLegacyAnswer(context, "\u6700\u7ec8\u7b54\u6848\uff1aB\uff0842\uff09")[0]?.value).toEqual({ kind: "single_choice", optionId: "B" })
   for (const text of ["C 的方程是正确的", "最终答案：A，最终答案：C", "最终答案：E", "最终答案：C，但证明选择 D"]) {
     expect(adaptLegacyAnswer(context, text), text).toEqual([])
   }

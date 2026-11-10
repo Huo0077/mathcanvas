@@ -1,6 +1,6 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
-import { createSolveContext, type WorkspaceId, type SolveAuditEvent } from "@draw/agent-core"
+import { createSolveContext, taskIntentFor, type WorkspaceId, type SolveAuditEvent } from "@draw/agent-core"
 import { createDefaultSolveSession } from "../../services/solveSession"
 import { createAgentReliabilityFlags } from "../reliabilityFlags"
 import { selectProblemPlanner, startProblemSolve } from "../problemSolveService"
@@ -43,6 +43,7 @@ export async function runProductionScenario(input: ProductionScenario): Promise<
   let liveWrites = 0
   const auditEvents: SolveAuditEvent[] = []
   const selection = await selectProblemPlanner({ prompt: input.prompt, imageNotes: "", solveSession: session,
+    taskIntent: taskIntentFor(context.understanding, input.prompt, context.attachments.length > 0),
     requiredGoals: context.understanding.goals.map(goal => ({ goalId: goal.goalId, kind: goal.expectedKind,
       sourceText: context.understanding.ir.obligations.find(item => item.id === goal.goalId)?.sourceText ?? "" })),
     modelPlanner: {

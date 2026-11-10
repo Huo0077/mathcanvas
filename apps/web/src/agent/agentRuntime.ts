@@ -74,6 +74,7 @@ export interface AgentRuntimeDependencies {
   solveContext?: SolveContext
   /** Always present on text-problem runs, regardless of answer reliability rollout. */
   drawingContext?: SolveContext
+  taskIntent?: import("@draw/agent-core").TextTaskIntent
   hashText?: HashText
   trustedMathFacts?: readonly MathFact[]
   /** W4：宿主审计出的图证据缺口；有必答缺口时这一题不会被当成已回答。 */
@@ -442,6 +443,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
+    taskIntent: dependencies.taskIntent,
     ...(dependencies.solveContext === undefined ? {} : { solveContext: dependencies.solveContext, hashText: dependencies.hashText, trustedMathFacts: dependencies.trustedMathFacts, onSolveAudit: dependencies.onSolveAudit }),
     // W4：缺口只由宿主审计产生；模型输出不构成它。
     ...(dependencies.imageGaps === undefined ? {} : { imageGaps: dependencies.imageGaps }),

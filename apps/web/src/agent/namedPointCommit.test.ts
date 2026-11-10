@@ -20,7 +20,7 @@ import { createAgentRunner } from "./agentRunner"
  * `(0,0,0)`** —— 于是"算对了"和"根本没算"是同一个值，判据退化成恒真。把整只四面体平移到
  * 别处，占位值与正确答案才分得开。
  */
-const PROMPT = "在三棱锥 A-BCD中，平面 ABD⊥平面 BCD，且 AB=AD，O为 BD的中点。"
+const PROMPT = "在三棱锥 A-BCD中，平面 ABD⊥平面 BCD，且 AB=AD，O为 BD的中点。请画题设示意图。"
 const OFFSET = { x: 3, y: 0, z: 2 }
 const VERTICES = [
   { x: 0, y: 0, z: 1 },

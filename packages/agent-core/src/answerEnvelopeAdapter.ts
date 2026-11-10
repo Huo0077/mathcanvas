@@ -1,3 +1,4 @@
+import { readExplicitFinalChoices } from "./answerAcceptance"
 import type { GoalAnswer } from "./answerResult"
 import type { SolveContext } from "./solveContext"
 
@@ -18,11 +19,11 @@ export function adaptLegacyAnswer(context: SolveContext, text: string): GoalAnsw
       if (number) candidates.push({ goalId: goal.goalId, kind: "numeric", displayText: segment, value: { kind: "numeric", expression: number }, evidenceRefs: [] })
     } else if (goal.expectedKind === "single_choice") {
       // The model must state one final option; option letters in its reasoning are not answers.
-      const finals = [...segment.matchAll(/最终答案\s*[:：]\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
+      const finals = readExplicitFinalChoices(segment)
       const otherClaims = [...segment.matchAll(/(?:答案为|选择|(?<!最)选)\s*[:：]?\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
-      if (finals.length === 1 && otherClaims.every(claim => claim[1] === finals[0]![1])) {
+      if (finals.length === 1 && finals[0] !== null && otherClaims.every(claim => claim[1] === finals[0])) {
         candidates.push({ goalId: goal.goalId, kind: "single_choice", displayText: segment,
-          value: { kind: "single_choice", optionId: finals[0]![1]! }, evidenceRefs: [] })
+          value: { kind: "single_choice", optionId: finals[0]! }, evidenceRefs: [] })
       }
     } else if (goal.expectedKind === "conversation") {
       candidates.push({ goalId: goal.goalId, kind: "conversation", displayText: segment, value: { kind: "conversation", text: segment }, evidenceRefs: [] })

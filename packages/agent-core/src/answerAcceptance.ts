@@ -20,6 +20,12 @@ import { SOLVE_RESULT_SCHEMA_VERSION } from "./answerResult"
  * 其余状态（含 `verified_instance` / `sampled`）只表示"有证据"，不代表答案是形式证明。
  */
 
+/** The final clause must be a single option, optionally followed by one balanced explanation. */
+export function readExplicitFinalChoices(text: string): (string | null)[] {
+  return [...text.matchAll(/\u6700\u7ec8\u7b54\u6848\s*[:\uff1a]\s*([^\n\u3002\uff01!]+)/gu)]
+    .map(match => /^([A-D])(?:[\uff08(][^\uff08\uff09()\n]*[\uff09)])?$/u.exec(match[1]!.trim())?.[1] ?? null)
+}
+
 export interface AnswerAcceptanceInput {
   problemRevision: string
   goals: readonly AnswerGoal[]
@@ -87,8 +93,8 @@ function assess(goal: AnswerGoal, candidate: GoalAnswer): Assessment | null {
   if (goal.kind !== "unknown" && candidate.kind !== goal.kind) reasons.push("goal_kind_mismatch")
 
   const value = normalizedValue(candidate)
-  const explicitFinals = [...candidate.displayText.matchAll(/最终答案\s*[:：]\s*([A-D])(?=$|[\s。！!，,、）)*])/gu)]
-  if (value?.kind === "single_choice" && explicitFinals.some(match => match[1] !== value.optionId.trim())) {
+  const explicitFinals = readExplicitFinalChoices(candidate.displayText)
+  if (value?.kind === "single_choice" && explicitFinals.some(option => option !== value.optionId.trim())) {
     reasons.push("inconsistent_final_option")
   }
   const problem = valueProblem({ ...candidate, value })

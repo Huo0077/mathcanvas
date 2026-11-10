@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { parseDiagramObligations } from "./diagramObligations"
 import { toLegacyObligationSet } from "./obligationIR"
-import { understandProblem, type ProblemUnderstanding } from "./problemUnderstanding"
+import { understandProblem, taskIntentFor, type ProblemUnderstanding } from "./problemUnderstanding"
 
 /**
  * **W3 / T3：题意层要回答"原题给了什么、问了什么"，而不是"模型猜了什么"。**
@@ -232,4 +232,13 @@ it("does not convert a multi-part math question to one single-choice goal", () =
   const prompt = "在三角形 ABC 中，(1) 求 AB 的长度；(2) 求面积。备选项 A. 1 B. 2 C. 3 D. 4"
   expect(understand(prompt).goals).toHaveLength(2)
   expect(understand(prompt).goals.map(goal => goal.expectedKind)).not.toEqual(["single_choice"])
+})
+
+it("separates drawing, answer-only and mixed textual requests without treating a pictured solid as an order to draw", () => {
+  expect(taskIntentFor(understandProblem({ prompt: "\u6c42\u6b63\u65b9\u4f53\u4f53\u79ef\u3002", problemRevision: "r" }), "\u6c42\u6b63\u65b9\u4f53\u4f53\u79ef\u3002")).toBe("readonly-answer")
+  expect(taskIntentFor(understandProblem({ prompt: "\u8bf7\u753b\u4e00\u4e2a\u7acb\u65b9\u4f53\u3002", problemRevision: "r" }), "\u8bf7\u753b\u4e00\u4e2a\u7acb\u65b9\u4f53\u3002")).toBe("drawing")
+  expect(taskIntentFor(understandProblem({ prompt: "\u7c97\u7ebf\u753b\u51fa\u7684\u662f\u4e09\u89c6\u56fe\uff0c\u6c42\u4f53\u79ef\uff08 \uff09A. 3 B. 4 C. 5 D. 6", problemRevision: "r" }), "\u7c97\u7ebf\u753b\u51fa\u7684\u662f\u4e09\u89c6\u56fe\uff0c\u6c42\u4f53\u79ef\uff08 \uff09A. 3 B. 4 C. 5 D. 6")).toBe("readonly-answer")
+  expect(taskIntentFor(understandProblem({ prompt: "\u753b\u51fa\u7684\u662f\u4e09\u89c6\u56fe\uff0c\u6c42\u4f53\u79ef\uff08 \uff09A. 3 B. 4 C. 5 D. 6", problemRevision: "r" }), "\u753b\u51fa\u7684\u662f\u4e09\u89c6\u56fe\uff0c\u6c42\u4f53\u79ef\uff08 \uff09A. 3 B. 4 C. 5 D. 6")).toBe("readonly-answer")
+  expect(taskIntentFor(understandProblem({ prompt: "\u8bf7\u753b\u6b63\u65b9\u4f53\u5e76\u6c42\u4f53\u79ef\u3002", problemRevision: "r" }), "\u8bf7\u753b\u6b63\u65b9\u4f53\u5e76\u6c42\u4f53\u79ef\u3002")).toBe("drawing-and-answer")
+  expect(taskIntentFor(understandProblem({ prompt: "\u5982\u56fe\uff0c\u6c42\u8be5\u51e0\u4f55\u4f53\u7684\u4f53\u79ef\u3002", problemRevision: "r" }), "\u5982\u56fe\uff0c\u6c42\u8be5\u51e0\u4f55\u4f53\u7684\u4f53\u79ef\u3002")).toBe("clarification")
 })

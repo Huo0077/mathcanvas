@@ -32,11 +32,11 @@ function objectRows(page: import("@playwright/test").Page) {
   return page.locator(".algebra-panel .object-row")
 }
 
-async function send(page: import("@playwright/test").Page, prompt: string) {
+async function send(page: import("@playwright/test").Page, prompt: string, explicitDrawing = true) {
   await page.addInitScript(() => localStorage.clear())
   await page.goto("/")
   await page.getByRole("button", { name: "Agent 工作区" }).click()
-  await page.getByRole("textbox", { name: "对话输入" }).fill(prompt)
+  await page.getByRole("textbox", { name: "对话输入" }).fill(explicitDrawing ? `${prompt}\u8bf7\u753b\u9898\u8bbe\u793a\u610f\u56fe\u3002` : prompt)
   await page.getByRole("button", { name: "发送" }).click()
 }
 
@@ -100,4 +100,12 @@ test("Case 4 修订版：出草稿 → 一次提交 → 一步撤销", async ({ 
   await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThan(0)
   await page.keyboard.press("Control+z")
   await expect.poll(() => objectRows(page).count()).toBe(0)
+})
+
+test("proof-and-measurement text alone does not stage a drawing", async ({ page }) => {
+  await send(page, CASE_1, false)
+  await expect(page.getByRole("region", { name: "\u8fd0\u884c\u72b6\u6001" }).locator(".agent-run-state")).toHaveText("\u5df2\u56de\u7b54", { timeout: 30_000 })
+  await expect(page.getByRole("button", { name: "\u786e\u8ba4\u5e76\u63d0\u4ea4" })).toHaveCount(0)
+  await page.getByRole("button", { name: "\u8fd4\u56de\u753b\u5e03" }).click()
+  await expect(objectRows(page)).toHaveCount(0)
 })

@@ -1,4 +1,5 @@
-import { acceptAnswer } from "./answerAcceptance"
+import { acceptAnswer, readExplicitFinalChoices } from "./answerAcceptance"
+import type { TextTaskIntent } from "./problemUnderstanding"
 import { adaptLegacyAnswer } from "./answerEnvelopeAdapter"
 import { acceptSolvedCandidate, candidateHash, bindHostEvidence, type BoundEvidenceRecord, type SolveContext, type HashText } from "./solveContext"
 import { verifyMathAnswer, type MathFact } from "./verification/mathAnswerVerification"
@@ -120,6 +121,8 @@ export interface CoordinatorDependencies {
   onSolveResult?: (result: SolveResult) => void
   /** Opt-in host-created context; old conversations retain the legacy answer contract. */
   solveContext?: SolveContext
+  /** Host-derived text intent; never trust the model plan as an instruction to draw. */
+  taskIntent?: TextTaskIntent
   hashText?: HashText
   trustedMathFacts?: readonly MathFact[]
   /**
@@ -335,10 +338,10 @@ async function solveResultFromTrustedContext(candidate: PlanEnvelope, context: S
   // silently override “no matching option” or “compare the figure yourself”.
   const declaredChoice = candidates.find(answer => answer.kind === "single_choice" && answer.value?.kind === "single_choice")
   const visibleAnswer = candidate.kind === "clarification" ? "" : candidate.answer ?? ""
-  const finals = [...visibleAnswer.matchAll(/最终答案\s*[:：]\s*([^\n。！!]+)/gu)]
+  const finals = readExplicitFinalChoices(visibleAnswer)
   const structuredOption = declaredChoice?.value?.kind === "single_choice" ? declaredChoice.value.optionId : null
   const choiceConflict = structuredOption !== null && (
-    finals.some(match => match[1]!.trim() !== structuredOption)
+    finals.some(option => option !== structuredOption)
     || /无匹配选项|各选项均不符|需对照(?:原题)?(?:选项)?图(?:确认)?/u.test(visibleAnswer)
   )
   const accepted = acceptSolvedCandidate({ context, candidates, candidateHashes, evidence: boundEvidence,
@@ -800,6 +803,12 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
           const detail = `the plan needs objects this run did not observe: ${missing.join(", ")}`
           const waiting = ledger.transition("waiting", detail)
           if (waiting.ok) yield waiting.event
+          return
+        }
+
+        if (candidate.kind === "plan" && candidate.actions.length > 0 && (dependencies.taskIntent === "readonly-answer" || dependencies.taskIntent === "clarification")) {
+          const refused = ledger.transition("failed", "answer-only or missing-diagram text cannot authorize a drawing plan")
+          if (refused.ok) yield refused.event
           return
         }
 

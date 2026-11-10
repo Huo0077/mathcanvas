@@ -1,4 +1,4 @@
-import { routeDeterministicProblem, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort } from "@draw/agent-core"
+import { routeDeterministicProblem, taskIntentFor, SKILL_MANIFESTS, conditionMathFacts, type HashText, type SolveContext, type MathFact, type PlannerPort, type TextTaskIntent } from "@draw/agent-core"
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeDependencies } from "./agentRuntime"
 import { validateReliabilityConfig, type AgentReliabilityFlags } from "./reliabilityFlags"
 import type { SolveSession } from "../services/solveSession"
@@ -35,29 +35,45 @@ export interface PlannerRouteInput {
   planner?: PlannerPort
   solveSession?: SolveSession
   requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]
+  taskIntent?: TextTaskIntent
   onDiagnostic?: (line: string) => void
+}
+
+/** Only a trusted local solver can supply a read-only answer from a drawing-shaped plan. */
+function localReadOnly(planner: PlannerPort): PlannerPort {
+  return { plan: async request => {
+    const outcome = await planner.plan(request)
+    if (!("plan" in outcome) || outcome.plan.kind !== "plan" || !outcome.plan.answer?.trim()) return outcome
+    const plan = outcome.plan
+    return { ...outcome, plan: { schemaVersion: plan.schemaVersion, kind: "answer", goal: plan.goal,
+      factIds: plan.factIds, answer: plan.answer!, toolResultRefs: [],
+      ...(plan.goalAnswers === undefined ? {} : { goalAnswers: plan.goalAnswers }),
+      ...(plan.assumptions === undefined ? {} : { assumptions: plan.assumptions }) } }
+  } }
 }
 
 /** Same deterministic/provider/offline router for the UI and evaluation. */
 export async function selectProblemPlanner(input: PlannerRouteInput): Promise<ProblemPlannerSelection> {
+  if (input.taskIntent === "clarification") return { planner: { plan: async () => ({ plan: { schemaVersion: "mathcanvas.plan.v1", kind: "clarification", goal: "missing diagram details", factIds: [], questions: ["\u8bf7\u7528\u6587\u5b57\u8865\u5145\u56fe\u4e2d\u5fc5\u9700\u7684\u70b9\u540d\u3001\u5c3a\u5bf8\u548c\u5173\u7cfb\u6761\u4ef6\uff1b\u672c\u529f\u80fd\u4e0d\u8bfb\u53d6\u9898\u56fe\u3002"] }, requestId: "local-clarification", attemptId: "local-clarification" }) }, requestedSkillIds: [], textProfileId: "local-planner" }
   if (input.planner) return { planner: input.planner, requestedSkillIds: [], textProfileId: "local-planner" }
   const answerOnlyChoice = input.requiredGoals?.length === 1 && input.requiredGoals[0]?.kind === "single_choice"
   const deterministic = answerOnlyChoice ? null : routeDeterministicProblem(input.prompt)
   if (deterministic) return {
-    planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
-    diagramPrompt: deterministic.diagramPrompt, requestedSkillIds: [deterministic.family], textProfileId: "local-planner"
+    planner: input.taskIntent === "readonly-answer" ? localReadOnly({ plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) })
+      : { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
+    ...(input.taskIntent === "readonly-answer" ? {} : { diagramPrompt: deterministic.diagramPrompt }), requestedSkillIds: input.taskIntent === "readonly-answer" ? [] : [deterministic.family], textProfileId: "local-planner"
   }
   const resolution = await (input.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
   if (!resolution.ok) {
     const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
-    return { planner: createLocalPlanner(options), requestedSkillIds: answerOnlyChoice ? [] : localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
+    return { planner: input.taskIntent === "readonly-answer" ? localReadOnly(createLocalPlanner(options)) : createLocalPlanner(options), requestedSkillIds: input.taskIntent === "readonly-answer" || answerOnlyChoice ? [] : localIntentSkillIds(input.prompt, options), textProfileId: "local-planner" }
   }
   return {
     planner: createModelPlanner({ ...input.modelPlanner, imageNotes: input.imageNotes, solveSession: input.solveSession,
       requiredGoals: input.requiredGoals, resolveProvider: async () => resolution,
       onDiagnostic: (line) => { input.modelPlanner?.onDiagnostic?.(line); input.onDiagnostic?.(line) }
     }),
-    requestedSkillIds: answerOnlyChoice
+    requestedSkillIds: input.taskIntent === "readonly-answer" || answerOnlyChoice
       ? [] : SKILL_MANIFESTS.map(manifest => manifest.id), textProfileId: resolution.provider.id
   }
 }
@@ -92,7 +108,7 @@ export function startProblemSolve(input: ProblemSolveInput): AgentRuntime {
    */
   const config = validateReliabilityConfig(input.flags)
   if (!config.ok) throw new Error(`invalid reliability configuration: ${config.errors.map((error) => error.code).join(",")}`)
-  return createAgentRuntime({ ...input.runtime, drawingContext: input.context,
+  return createAgentRuntime({ ...input.runtime, drawingContext: input.context, taskIntent: taskIntentFor(input.context.understanding, input.context.prompt, input.context.attachments.length > 0),
     ...(input.flags.goalTrackingV1 && input.flags.answerSemanticsV1
       ? { solveContext: input.context, hashText: input.hashText,
           ...(input.flags.mathVerificationV1 ? { trustedMathFacts: deriveTrustedMathFacts(input.context) } : {}),

@@ -67,7 +67,7 @@ function unaccountedSource(prompt: string, spans: readonly { start: number; end:
   // Removing individual characters globally can erase a second instruction.
   const first = new Set(["\u5982\u56fe", "\u5728", "\u5982\u56fe\u5728", "\u8bf7\u753b\u4e00\u4e2a", "\u5efa\u4e2a", "\u5efa\u4e00\u4e2a", "\u753b\u4e00\u4e2a", "\u518d\u5efa\u4e00\u4e2a", "\u8bf7\u4f5c\u56fe"])
   const middle = new Set(["\u4e2d", "\u7684", "\u753b\u51fa", "\u5e95\u9762\u8fb9\u957f", "\u4fa7\u68f1\u957f", "\u70b9", "\u6c42\u8bc1", "\u8bc1\u660e", "\u6c42", "\u4e0e", "\u4f7f\u5f97", "\u4f7f", "\u4e14", "\u4e14\u9898\u4e2d\u5f15\u7528\u7684"])
-  const last = new Set(["\u8bf7\u4f5c\u56fe", "\u753b\u793a\u610f\u56fe"])
+  const last = new Set(["\u8bf7\u4f5c\u56fe", "\u753b\u793a\u610f\u56fe", "\u8bf7\u753b\u9898\u8bbe\u793a\u610f\u56fe"])
   for (const gap of gaps) {
     const valid = gap.start === 0 ? first.has(gap.text) || /^(?:\d+)?\u5df2\u77e5\u51fd\u6570$/u.test(gap.text) || scoped && /^(?:\d+)?\u2605\u672c\u5c0f\u9898\u6ee1\u5206\d+\u5206\u5982\u56fe$/u.test(gap.text)
       : gap.end === prompt.length ? last.has(gap.text)

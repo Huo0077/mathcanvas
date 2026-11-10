@@ -1,3 +1,4 @@
+import frozenExams from "../../../../test-fixtures/real-exams-20261105/cases.json"
 import { createEmptyDocument } from "@draw/dsl"
 import { createSolveContext, type PlanEnvelope } from "@draw/agent-core"
 import { expect, it, vi } from "vitest"
@@ -254,6 +255,32 @@ it("rejects a structured image option when the visible final answer asks the use
     answer: "函数可写为 f(x)=|sin 2x|。具体是 A/B/C/D 中哪一幅，需对照原题图确认。最终答案：以上述函数解析式对应的图象为准。",
     goalAnswers: [{ goalId, kind: "single_choice", displayText: "C", value: { kind: "single_choice", optionId: "C" }, evidenceRefs: [] }] })
   const output = await runProductionScenario({ prompt: "如图，下列图象是（ ）A. 图1 B. 图2 C. 图3 D. 图4", workspace: "conics", flags: "reliability", providerReplies: [reply] })
-  expect(output.stageNames.at(-1)).toBe("failed")
+  expect(output.stageNames.at(-1)).toBe("waiting")
+  expect(output.providerCalls).toBe(0)
+  expect(output.stageNames).not.toContain("compiling")
   expect(output.solveStatus).not.toBe("answered")
+})
+
+it.each(["text-131", "text-143", "text-151", "text-158", "text-167", "text-176", "text-186", "text-204"])("keeps frozen read-only text exam %s out of document staging in the legacy session", async (id) => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const source = frozenExams.find(item => item.id === id)!
+  const output = await runProductionScenario({ prompt: source.question, workspace: source.workspace as "conics" | "geometry3d", flags: "legacy", providerReplies: [
+    { schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "invented diagram", factIds: [], actions: [{ actionId: "solid.create_template", actionKey: "solid", factIds: [], inputs: { alias: "solid", template: "cube", origin: { x: 0, y: 0, z: 0 }, size: { x: 2, y: 2, z: 2 } } }] }
+  ] })
+  expect(output.stageNames, id).not.toContain("compiling")
+  expect(output.liveWrites).toBe(0)
+  expect(output.requestedSkillIds).toEqual([])
+})
+
+it("delivers a structured choice with a numeric parenthetical explanation, but not a conflicting option", async () => {
+  const { runProductionScenario } = await import("./fixtures/productionSolveScenario")
+  const prompt = "\u7532\u3001\u4e59\u3001\u4e19\u3001\u4e01\u4e2d\u9009\u62e9\u6b63\u786e\u9879\uff1a\uff08 \uff09A. \u7532 B. \u4e59 C. \u4e19 D. \u4e01"
+  const reply = (goalId: string, optionId: string, answer: string) => ({ schemaVersion: "mathcanvas.plan.v1", kind: "answer", goal: "choice", factIds: [], toolResultRefs: [], answer,
+    goalAnswers: [{ goalId, kind: "single_choice", displayText: answer, value: { kind: "single_choice", optionId }, evidenceRefs: [] }] })
+  const valid = await runProductionScenario({ prompt, workspace: "conics", flags: "reliability", providerReplies: [(id: string) => reply(id, "B", "\u6700\u7ec8\u7b54\u6848\uff1aB\uff0842\uff09")] })
+  expect(valid.stageNames.at(-1)).toBe("completed")
+  expect(valid.solveStatus).toBe("answered")
+  expect(valid.liveWrites).toBe(0)
+  const conflict = await runProductionScenario({ prompt, workspace: "conics", flags: "reliability", providerReplies: [(id: string) => reply(id, "C", "\u6700\u7ec8\u7b54\u6848\uff1aB\uff0842\uff09")] })
+  expect(conflict.solveStatus).not.toBe("answered")
 })

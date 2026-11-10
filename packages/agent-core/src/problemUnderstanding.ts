@@ -457,3 +457,14 @@ function conditionUsage(input: {
 
   return usage
 }
+
+/** Product intent derives from the original goals, never from a proposed model plan. */
+export type TextTaskIntent = "readonly-answer" | "drawing" | "drawing-and-answer" | "clarification"
+export function taskIntentFor(understanding: ProblemUnderstanding, prompt: string, hasAttachment = false): TextTaskIntent {
+  const kinds = understanding.goals.map(goal => goal.expectedKind)
+  const drawing = kinds.includes("drawing") || /(?:^|[\u3002\uff1b;\uff0c,\uff1a:\n])\s*(?:\u8bf7|\u5e2e\u6211)?\s*(?:\u753b(?!\u51fa\u7684\u662f|\u7684\u662f)|\u4f5c\u56fe|\u7ed8\u5236|\u521b\u5efa|\u6784\u9020|\u5efa\u4e00\u4e2a|\u5efa\u4e2a)/u.test(prompt)
+  if (drawing) return kinds.some(kind => kind !== "drawing" && kind !== "conversation") || /(?:\u6c42|\u8bc1\u660e|\u8ba1\u7b97)/u.test(prompt) ? "drawing-and-answer" : "drawing"
+  const explicitGivens = understanding.ir.obligations.some(item => item.role === "given" || item.role === "construction")
+  if (!hasAttachment && /\u5982\u56fe|\u56fe\u4e2d/u.test(prompt) && !explicitGivens && !/[=\u22a5\u2225]/u.test(prompt) && kinds.some(kind => kind !== "conversation")) return "clarification"
+  return "readonly-answer"
+}

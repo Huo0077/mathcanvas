@@ -16,7 +16,7 @@ import { type ModelPlannerDependencies } from "./modelPlanner"
 import { splitImagePrompt } from "../services/problemImagePrompt"
 import { createAgentReliabilityFlagsForSession, type AgentReliabilityFlags } from "./reliabilityFlags"
 import { readRolloutPercentage } from "../persistence/rolloutPreferences"
-import { createSolveContext } from "@draw/agent-core"
+import { createSolveContext, taskIntentFor, type TextTaskIntent } from "@draw/agent-core"
 import { createDefaultSolveSession, type SolveSession } from "../services/solveSession"
 import { readReliabilityPreferences } from "../persistence/reliabilityPreferences"
 
@@ -525,9 +525,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 两次（含那次修复），两次必须用同一份配置与同一批能力证据，否则第二次尝试其实换了题目，
    * 事后没法判断"是模型改好了还是条件变了"。
    */
-  async function selectPlanner(prompt: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[]): Promise<PlannerSelection> {
+  async function selectPlanner(prompt: string, runId?: string, solveSession?: SolveSession, requiredGoals?: readonly { goalId: string; kind: string; sourceText: string }[], taskIntent?: TextTaskIntent): Promise<PlannerSelection> {
     return selectProblemPlanner({ prompt, imageNotes: "", planner: dependencies.planner, modelPlanner: dependencies.modelPlanner,
-      solveSession, requiredGoals, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
+      solveSession, requiredGoals, taskIntent, onDiagnostic: (line) => useAgentStore.getState().recordDiagnostic(line, runId) })
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
@@ -565,17 +565,17 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const reliability = dependencies.reliabilityFlags
         ?? createAgentReliabilityFlagsForSession(pinned?.conversationId ?? runId, readRolloutPercentage())
-      const requiresGoalTracking = reliability.goalTrackingV1 && reliability.answerSemanticsV1
       const hashText = async (source: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(source)))].map(byte => byte.toString(16).padStart(2, "0")).join("")
-      const preparedSolveContext = requiresGoalTracking ? await createSolveContext({
+      const preparedSolveContext = await createSolveContext({
         runId, conversationId: pinned?.conversationId ?? "local", prompt, attachments: [], corrections: [],
-        sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText) : undefined
-      const requiredGoals = preparedSolveContext?.understanding.goals.map(goal => {
+        sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText)
+      const taskIntent = taskIntentFor(preparedSolveContext.understanding, prompt)
+      const requiredGoals = preparedSolveContext.understanding.goals.map(goal => {
         const source = preparedSolveContext.understanding.ir.obligations.find(item => item.id === goal.goalId)
         return { goalId: goal.goalId, kind: goal.expectedKind, sourceText: source?.sourceText ?? "" }
       })
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
-      const selection: PlannerSelection = await selectPlanner(prompt, eventRunId, solveSession, requiredGoals)
+      const selection: PlannerSelection = await selectPlanner(prompt, eventRunId, solveSession, requiredGoals, taskIntent)
       lastSelection = selection
       /**
        * 会话上下文在**建运行时之前**读一次：绑定、历史、摘要、事实、草稿视图都钉在这一刻。
@@ -595,8 +595,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        */
       const history = conversation.messages.filter((message) => message.id !== promptMessageId)
       useAgentStore.getState().recordDiagnostic(`[context] conversation ${conversation.binding.conversationId}: ${conversation.facts.length} confirmed fact(s), ${history.length} message(s)`, eventRunId)
-      const active = startProblemSolve({ context: preparedSolveContext ?? await createSolveContext({ runId, conversationId: pinned?.conversationId ?? "local",
-        prompt, attachments: [], corrections: [], sceneRevision: contentFingerprint(useSceneStore.getState().document) }, hashText),
+      const active = startProblemSolve({ context: preparedSolveContext,
         session: solveSession, flags: reliability, hashText,
         /**
          * **W8：独立候选的授权来自设置里的一条引用**（只存 profile id）。

@@ -26,6 +26,20 @@ const makeContext = () => createSolveContext({ runId: "r1", conversationId: "c1"
 const accepted = async () => buildDrawingCertificate({ context: await makeContext(), draft, diagram: report, toolVerification: tools, structuralChecks: [{ sourceText: "正方体ABCD-A1B1C1D1", status: "passed", entityIds: ["solid-1"] }], verifierVersion: "v1" })
 
 describe("drawing certificate rejects incomplete evidence", () => {
+  it("accepts a separate explicit request to draw the already specified diagram", async () => {
+    const prompt = CASE_1.prompt + "\u8bf7\u753b\u9898\u8bbe\u793a\u610f\u56fe\u3002"
+    const plan = deterministicPlanForPrompt(prompt)
+    if (plan?.kind !== "plan") throw Error("missing deterministic plan")
+    const base = createEmptyDocument("geometry3d")
+    const compiled = compilePlan(plan, { document: base, workspace: "geometry3d", capabilityRevision: "test", conversationId: "test", documentGeneration: base.revision })
+    if (!compiled.ok || !compiled.draftDocument) throw Error("missing candidate")
+    const context = await createSolveContext({ runId: "r1", conversationId: "c1", prompt, attachments: [], corrections: [], sceneRevision: draft.sceneRevision }, hash)
+    const diagram = verifyDiagramObligations(parseObligationWithLegacy(prompt).legacy, plan, compiled.draftDocument, base)
+    const structure = verifyNamedSolidDrawingStructure(prompt, plan.actions, compiled.draftDocument, base)
+    const result = buildDrawingCertificate({ context, draft, diagram, structuralChecks: structure, toolVerification: tools, verifierVersion: "v1" })
+    expect(result.status, result.status === "unsupported" ? result.reason : "").toBe("passed")
+  })
+
   it.each([CASE_1, CASE_2, CASE_3])("covers every given and structure of $id", async (fixture) => {
     const plan = deterministicPlanForPrompt(fixture.prompt)
     if (plan?.kind !== "plan") throw Error("expected deterministic plan")

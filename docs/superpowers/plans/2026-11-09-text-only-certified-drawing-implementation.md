@@ -1,6 +1,6 @@
 # 纯文字题可核验作图：分阶段实施方案（2026-11-09）
 
-> 状态：**W0–W1 已完成工程验收；W2–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
+> 状态：**W0–W2 已完成工程验收；W3–W5 未实施**。实施时每块先写失败测试（RED），再写最小修复（GREEN），过闸后单独提交并更新 `docs/current-status.md`。不把既有提交或本方案的勾选视为功能完成。
 
 ## 一、目标、边界和证据
 
@@ -60,6 +60,8 @@
 1. RED：`text-131/143/151/158/167/176/186/204` 仅求选项时不得产生作图草稿；明确“请画/作图”的文字题进入作图；“如图”缺必要图示条件请求用户**用文字**补齐；混合题不得漏目标。E10 合并问、E15 折前、E19/E23 的既有分问保持对应；`最终答案：B（42）` 解析为 B，结构化答案真冲突/无匹配继续拒绝。
 2. GREEN：路由类型固定为 `readonly-answer | drawing | drawing-and-answer | clarification`；依据原文目标 span 与用户明确动作定路由，不能由“提到立体”推断必须画图。先答后画的两个子结果分别标记，只有**图形提交**需要证书；不将文字选项的宿主校验与图的实例核验混称。
 3. 验证：`npx vitest run packages/agent-core/src/problemUnderstanding.test.ts packages/agent-core/src/answerAcceptance.test.ts apps/web/src/agent/problemSolveService.test.ts apps/web/src/agent/agentRunner.test.ts`；完成标志：只读题不产生草稿，明确作图题走 W1 硬闸。
+
+**W2 完成证据（工程夹具，非真实模型）：** 历史八道默认文字选择题 8/8 不作图，显式作图与只读浏览器 6/6；全量 Vitest 556 文件 / 5983 通过 / 0 失败 / 1 todo；typecheck、lint、文档检查与差异检查通过。只读题无画布草稿，图形仍须 W1 证书。未做 W5 留出卷、人工 oracle 或付费 Provider 评价。
 
 ### W3：历史“画不出/画错”定向扩展（W0、W1 后）
 

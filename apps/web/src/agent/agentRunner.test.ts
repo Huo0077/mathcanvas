@@ -54,14 +54,14 @@ describe("answer delivery independently of document changes", () => {
     expect(runner.hasDraft()).toBe(false)
   })
 
-  it("keeps the computed length through preview, confirmation and commit", async () => {
+  it("keeps the computed length as read-only text without preview or document writes", async () => {
     const runner = createAgentRunner()
-    const result = await runAndWait(runner, "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。求折后 BD 的长。")
-    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
-    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
-    await runner.confirm()
-    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
-    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2√85/5")
+    const result = await runAndWait(runner, "\u77e9\u5f62 ABCD \u4e2d\uff0cAB=4\uff0cBC=2\uff0c\u6cbf\u5bf9\u89d2\u7ebf AC \u628a \u25b3ABC \u6298\u8d77\uff0c\u4f7f\u5e73\u9762 ABC \u22a5 \u5e73\u9762 ACD\u3002\u6c42\u6298\u540e BD \u7684\u957f\u3002")
+    expect(result.phase).toBe("completed")
+    expect(useAgentStore.getState().activeConversation!.messages.at(-1)?.text).toContain("2\u221a85/5")
+    expect(runner.hasDraft()).toBe(false)
+    expect(runner.confirm().status).toBe("rejected")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
   it.each([
@@ -69,20 +69,16 @@ describe("answer delivery independently of document changes", () => {
 （1）求 $f(x)$ 的单调递增区间；`,
     String.raw`17. 已知函数 $f(x)=4\sin x\cos(x-\frac{\pi}{4})-\sqrt{2}$。
 (i) 求函数 $f(x)$ 的递增区间。`
-  ])("solves and commits the LaTeX trigonometric problem without a provider", async (problem) => {
+  ])("answers the LaTeX trigonometric problem without a provider or drawing", async (problem) => {
     const resolveProvider = vi.fn(async () => { throw new Error("this problem should be planned locally") })
     const runner = createAgentRunner({ modelPlanner: { resolveProvider } })
     const result = await runAndWait(runner, problem)
     expect(resolveProvider).not.toHaveBeenCalled()
-    expect(result.phase, useAgentStore.getState().activeConversation?.messages.at(-1)?.failure?.message).toBe("awaiting_confirmation")
+    expect(result.phase).toBe("completed")
     const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
-    expect(reply.text).toContain("[-π/8+kπ, 3π/8+kπ]")
-    expect(reply.draft?.diagramVerification?.checks).toEqual(
-      expect.arrayContaining([expect.objectContaining({ kind: "functionGraph", status: "passed" })])
-    )
-    await runner.confirm()
-    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
-    expect(useSceneStore.getState().document.primitives.filter(({ type }) => type === "function")).toHaveLength(1)
+    expect(reply.text).toContain("[-\u03c0/8+k\u03c0, 3\u03c0/8+k\u03c0]")
+    expect(reply.draft).toBeUndefined()
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 
   it.each([
@@ -103,7 +99,7 @@ describe("answer delivery independently of document changes", () => {
 如图，四棱锥 $P-ABCD$ 中，$PA\perp$ 底面 $ABCD$，$PA=AC=2$，$BC=1$，$AB=\sqrt{3}$。
 (1) 若 $AD\perp PB$，证明：$AD\parallel$ 平面 $PBC$；
 (2) 若 $AD\perp DC$，且二面角 $A-CP-D$ 的正弦值为 $\frac{\sqrt{42}}{7}$，求 $AD$。`
-  ])("builds and commits the scoped pyramid from a transcribed problem", async (problem) => {
+  ])("answers the scoped pyramid from transcribed text without staging", async (problem) => {
     const document = createEmptyDocument("geometry3d")
     document.primitives.push({ id: "existing-a", type: "point3", label: "A", position: { x: 5, y: 5, z: 5 } })
     useSceneStore.setState({ document, workspaceDocuments: { geometry3d: document } })
@@ -113,18 +109,13 @@ describe("answer delivery independently of document changes", () => {
     expect(resolveProvider).not.toHaveBeenCalled()
     const reply = useAgentStore.getState().activeConversation!.messages.at(-1)!
     expect(reply.failure).toBeUndefined()
-    expect(result.phase).toBe("awaiting_confirmation")
-    expect(reply.text).toContain("AD ∥ 平面 PBC")
-    expect(reply.text).toContain("AD = √3")
-    expect(reply.draft?.diagramVerification?.status).toBe("passed")
-    const verified = reply.draft?.diagramVerification?.checks.map((check) => check.sourceText.replace(/\s/g, ""))
-    expect(verified).toContain("AD⊥DC")
-    expect(verified).toContain("二面角A-CP-D的正弦值为√42/7")
-    expect(verified).not.toContain("AD⊥PB")
-    await runner.confirm()
-    await expect.poll(() => useAgentStore.getState().activeConversation!.messages.at(-1)?.commit?.status).toBe("committed")
-    expect(useSceneStore.getState().document.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
+    expect(result.phase).toBe("completed")
+    expect(reply.text).toContain("AD \u2225 \u5e73\u9762 PBC")
+    expect(reply.text).toContain("AD = \u221a3")
+    expect(reply.draft).toBeUndefined()
+    expect(runner.hasDraft()).toBe(false)
     expect(useSceneStore.getState().document.primitives).toContainEqual(document.primitives[0])
+    expect(useSceneStore.getState().document.primitives).toHaveLength(1)
   })
 })
 
@@ -440,7 +431,7 @@ describe("the confirm and commit cycle", () => {
     }
     const runner = createAgentRunner({ planner })
 
-    const result = await runAndWait(runner, "平面四边形 ABCD 中，AB=8。")
+    const result = await runAndWait(runner, "平面四边形 ABCD 中，AB=8。请画示意图。")
     expect(result.phase).toBe("failed")
     const message = useAgentStore.getState().activeConversation!.messages.at(-1)!.failure?.message ?? ""
 
