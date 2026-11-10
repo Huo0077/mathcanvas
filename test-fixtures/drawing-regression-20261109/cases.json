@@ -1,0 +1,242 @@
+{
+  "version": "2026-11-09-v1",
+  "cases": [
+    {
+      "id": "case-1-right-trapezoid-pyramid",
+      "source": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-1-right-trapezoid-pyramid",
+        "sha256": "b91965086d81dc74f57fa90356162b99b733428f7978129446fbea726babf4dd"
+      },
+      "prompt": "如图，在四棱锥P-ABCD中，底面ABCD为直角梯形，AB∥CD，AD⊥AB，PA⊥底面ABCD，PA=AB=AD=2，CD=1。点E为棱PB的中点。求证：AE⊥平面PBC；求直线PC与平面ADE所成角的正弦值。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "底面ABCD为直角梯形",
+        "AB∥CD",
+        "AD⊥AB",
+        "PA⊥底面ABCD",
+        "PA=AB=AD=2",
+        "CD=1",
+        "点E为棱PB的中点",
+        "AE⊥平面PBC",
+        "直线PC与平面ADE所成角"
+      ],
+      "forbiddenBehaviors": [
+        "不得将实例图当作全称证明",
+        "不得将错误的待证结论改造成真命题",
+        "不得在缺乏逐条条件核验时提交"
+      ],
+      "oracle": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-1-right-trapezoid-pyramid"
+      }
+    },
+    {
+      "id": "case-2-regular-triangular-prism",
+      "source": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-2-regular-triangular-prism",
+        "sha256": "e3cbaa06007394f0e2b708a7517e6d9e13d0f9271d717ed6a5a52166a5abf0f8"
+      },
+      "prompt": "如图，在正三棱柱ABC-A₁B₁C₁中，底面边长AB=2，侧棱长AA₁=3。点D为棱AC的中点，点E在棱BB₁上，且BE=1。证明：A₁C∥平面B₁DE；求二面角A-DE-B₁的余弦值。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "正三棱柱ABC-A₁B₁C₁",
+        "AB=2",
+        "AA₁=3",
+        "点D为棱AC的中点",
+        "点E在棱BB₁上",
+        "BE=1",
+        "A₁C∥平面B₁DE",
+        "二面角A-DE-B₁"
+      ],
+      "forbiddenBehaviors": [
+        "不得将实例图当作全称证明",
+        "不得将错误的待证结论改造成真命题",
+        "不得在缺乏逐条条件核验时提交"
+      ],
+      "oracle": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-2-regular-triangular-prism"
+      }
+    },
+    {
+      "id": "case-3-rhombus-pyramid",
+      "source": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-3-rhombus-pyramid",
+        "sha256": "eba144a32140add0bf45eb7810e5a4a4105dd5dbe5a414fe61994cf46481d4b1"
+      },
+      "prompt": "如图，在四棱锥P-ABCD中，底面ABCD是边长为2的菱形，∠BAD=60°，AC与BD相交于点O。PO⊥平面ABCD，PO=√3。点M为棱PC的中点。证明：PA∥平面BDM；求点A到平面PBD的距离。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "底面ABCD是边长为2的菱形",
+        "∠BAD=60°",
+        "AC与BD相交于点O",
+        "PO⊥平面ABCD",
+        "PO=√3",
+        "点M为棱PC的中点",
+        "PA∥平面BDM",
+        "点A到平面PBD"
+      ],
+      "forbiddenBehaviors": [
+        "不得将实例图当作全称证明",
+        "不得将错误的待证结论改造成真命题",
+        "不得在缺乏逐条条件核验时提交"
+      ],
+      "oracle": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-3-rhombus-pyramid"
+      }
+    },
+    {
+      "id": "case-4-folded-trapezoid-original",
+      "source": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-4-folded-trapezoid-original",
+        "sha256": "0ce671dcf98f9afa491fe0feed57e5dda4bfcd86ee5b3b6554d9e7b7c6cdcff7"
+      },
+      "prompt": "如图，在直角梯形ABCD中，AB∥CD，AD⊥AB，AB=2，AD=CD=1。将△ACD沿AC折起成△PAC，使得平面PAC⊥平面ABC。点M为PB的中点。证明：AP⊥CD；求二面角P-AB-C的大小。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "直角梯形ABCD",
+        "AB∥CD",
+        "AD⊥AB",
+        "AB=2",
+        "AD=CD=1",
+        "将△ACD沿AC折起成△PAC",
+        "平面PAC⊥平面ABC",
+        "点M为PB的中点",
+        "AP⊥CD",
+        "二面角P-AB-C"
+      ],
+      "forbiddenBehaviors": [
+        "不得将实例图当作全称证明",
+        "不得将错误的待证结论改造成真命题",
+        "不得在缺乏逐条条件核验时提交"
+      ],
+      "oracle": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-4-folded-trapezoid-revised"
+      }
+    },
+    {
+      "id": "case-4-folded-trapezoid-revised",
+      "source": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-4-folded-trapezoid-revised",
+        "sha256": "478e17a735902e137a7b7b4b1b232b7006db03c16cac3f10a65210558adb4975"
+      },
+      "prompt": "如图，在直角梯形ABCD中，AB∥CD，AD⊥AB，AB=2，AD=CD=1。固定A、C，将点D绕直线AC旋转90°得到点P，使得平面PAC⊥平面ABC，且题中引用的CD指折前线段。点M为PB的中点。证明：AP⊥CD；求二面角P-AB-C的大小。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "直角梯形ABCD",
+        "AB∥CD",
+        "AD⊥AB",
+        "AB=2",
+        "AD=CD=1",
+        "固定A、C",
+        "点D绕直线AC旋转90°得到点P",
+        "平面PAC⊥平面ABC",
+        "CD指折前线段",
+        "点M为PB的中点",
+        "AP⊥CD",
+        "二面角P-AB-C"
+      ],
+      "forbiddenBehaviors": [
+        "不得将实例图当作全称证明",
+        "不得将错误的待证结论改造成真命题",
+        "不得在缺乏逐条条件核验时提交"
+      ],
+      "oracle": {
+        "file": "packages/agent-core/src/fixtures/solidGeometryFourCases.ts",
+        "entry": "case-4-folded-trapezoid-revised"
+      }
+    },
+    {
+      "id": "E19",
+      "source": {
+        "file": "test-fixtures/agent-answer-validation-20261102.json",
+        "entry": "E19",
+        "sha256": "fcfac26599a3410b17650f01760daa8be425560550190fcf23ce93e664be21c7"
+      },
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。设 E 为 B 在 AC 上的垂足。求证 BE⊥AC。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "矩形 ABCD",
+        "AB=4",
+        "BC=2",
+        "沿对角线 AC 把 △ABC 折起",
+        "平面 ABC ⊥ 平面 ACD",
+        "E 为 B 在 AC 上的垂足",
+        "BE⊥AC"
+      ],
+      "forbiddenBehaviors": [
+        "不得只生成文字而遗漏题面要求的辅助图元",
+        "不得把实例核验当形式证明"
+      ],
+      "oracle": {
+        "file": "test-fixtures/agent-answer-validation-20261102.json",
+        "entry": "E19"
+      }
+    },
+    {
+      "id": "E23",
+      "source": {
+        "file": "test-fixtures/agent-answer-validation-20261102.json",
+        "entry": "E23",
+        "sha256": "e204403f995f05302fa49531826263265d82c21e68a28809ab18695554db4c7a"
+      },
+      "prompt": "矩形 ABCD 中，AB=4，BC=2，沿对角线 AC 把 △ABC 折起，使 BD=3。求折角。",
+      "expectedDisposition": "verified_drawing",
+      "requiredConditions": [
+        "矩形 ABCD",
+        "AB=4",
+        "BC=2",
+        "沿对角线 AC 把 △ABC 折起",
+        "BD=3",
+        "求折角"
+      ],
+      "forbiddenBehaviors": [
+        "不得只生成文字而遗漏题面要求的辅助图元",
+        "不得把实例核验当形式证明"
+      ],
+      "oracle": {
+        "file": "test-fixtures/agent-answer-validation-20261102.json",
+        "entry": "E23"
+      }
+    }
+  ],
+  "missingSources": [
+    {
+      "id": "joint-06",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    },
+    {
+      "id": "joint-11",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    },
+    {
+      "id": "joint-13",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    },
+    {
+      "id": "joint-14",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    },
+    {
+      "id": "joint-17",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    },
+    {
+      "id": "joint-25",
+      "reason": "仓库只有历史评测摘要和数值残差，没有完整逐字原题；不能以摘要补题或计入原题通过分母。",
+      "evidence": "docs/agent-drawing-eval-20261019.md"
+    }
+  ]
+}
