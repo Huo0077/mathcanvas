@@ -379,6 +379,9 @@ pub fn import(bytes: &[u8], blobs: &BlobStore) -> Result<ImportOutcome, PackageE
     // 附件：先验完**每一份**，再落盘。
     let mut verified: Vec<(String, Vec<u8>)> = Vec::new();
     for attachment in &manifest.attachments {
+        if attachment.byte_size > crate::repository::blobs::MAX_ATTACHMENT_BYTES as u64 {
+            return Err(PackageError::Limit { detail: format!("the attachment `{}` exceeds the {}-byte attachment limit", attachment.content_hash, crate::repository::blobs::MAX_ATTACHMENT_BYTES) });
+        }
         let name = format!("attachments/{}", attachment.content_hash);
         let raw = entries.get(&name).ok_or_else(|| PackageError::Missing { name: name.clone() })?;
         if raw.len() as u64 != attachment.byte_size {
@@ -461,15 +464,26 @@ pub fn write_export_file(export_root: impl AsRef<Path>, file_name: &str, bytes: 
     Ok(target)
 }
 
-/// 读一个包文件。**大小也要先看**：一个几百兆的包不该被整个读进内存再判。
+pub fn read_bounded<R: std::io::Read>(reader: R, limit: u64) -> Result<Vec<u8>, PackageError> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    reader.take(limit + 1).read_to_end(&mut bytes).map_err(|error| PackageError::Blob { detail: format!("cannot read the bounded package input: {error}") })?;
+    if bytes.len() as u64 > limit {
+        return Err(PackageError::Limit { detail: format!("the package exceeds the {limit}-byte raw input limit") });
+    }
+    Ok(bytes)
+}
+
+/// 读一个包文件。metadata只作预检，实际读取仍以max+1为界，拒绝增长后的文件。
 pub fn read_from_file(path: impl AsRef<Path>) -> Result<Vec<u8>, PackageError> {
     let path = path.as_ref();
     let metadata = std::fs::metadata(path).map_err(|error| PackageError::Blob { detail: format!("cannot open {}: {error}", path.display()) })?;
-    let limit = (archive::MAX_ENTRY_BYTES * 4) as u64;
+    let limit = archive::ArchiveLimits::default().raw_bytes as u64;
     if metadata.len() > limit {
         return Err(PackageError::Limit { detail: format!("the package is {} bytes; the limit is {limit}", metadata.len()) });
     }
-    std::fs::read(path).map_err(|error| PackageError::Blob { detail: format!("cannot read {}: {error}", path.display()) })
+    let file = std::fs::File::open(path).map_err(|error| PackageError::Blob { detail: format!("cannot open {}: {error}", path.display()) })?;
+    read_bounded(file, limit)
 }
 
 /// `BTreeMap` 的别名，让 `import` 的签名读起来短一点。

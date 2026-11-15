@@ -178,3 +178,20 @@ describe("在浏览器里", () => {
     await screen.findByText(/需要桌面版/)
   })
 })
+
+
+describe("R05 attachment input limit", () => {
+  it("rejects an oversize file before FileReader starts", async () => {
+    makeClient({ head: { generation: 7, epoch: "epoch:doc-1", content: "{}" } })
+    panel()
+    const file = new File([new Uint8Array([1])], "oversize.bin")
+    Object.defineProperty(file, "size", { value: 32 * 1024 * 1024 + 1 })
+    const read = vi.spyOn(FileReader.prototype, "readAsArrayBuffer")
+
+    fireEvent.change(screen.getByLabelText("选择附件"), { target: { files: [file] } })
+
+    await screen.findByText(/附件不能超过 32 MiB/)
+    expect(read).not.toHaveBeenCalled()
+    read.mockRestore()
+  })
+})

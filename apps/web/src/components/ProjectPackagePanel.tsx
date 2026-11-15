@@ -10,7 +10,8 @@ import {
   importPackage,
   putAttachment,
   readDocumentAttachments,
-  suggestedPackageName
+  suggestedPackageName,
+  MAX_ATTACHMENT_BYTES
 } from "../services/projectPackageClient"
 
 /**
@@ -195,6 +196,10 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
   async function attach(file: File) {
     setBusy("attach")
     try {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        report({ kind: "error", text: "附件不能超过 32 MiB；请先压缩或拆分文件。" })
+        return
+      }
       const head = await readHead()
       if (!head.ok) {
         // 不拿一个假的 generation 去写：附件真的会挂在一版**不存在**的快照上。

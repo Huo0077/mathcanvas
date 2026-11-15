@@ -17,7 +17,7 @@
 //! 拒绝加密、拒绝 ZIP64、拒绝任何指向容器外的名字。一个打包格式的读取器
 //! 天生是"处理不可信输入"的地方，所以这里的判据是**默认拒绝**。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// 容器层的错误。**每一种都能被翻译成一句给用户看的话**。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,65 +204,177 @@ fn read_u32(bytes: &[u8], at: usize) -> Result<u32, ArchiveError> {
 /// 从头往后走**中央目录**（不是从头扫本地头）：中央目录是权威的那一份，
 /// 而"本地头说 A、中央目录说 B"这种包必须以中央目录为准 —— 否则同一个包在
 /// 我们这里与在别的工具里能解出不同的内容。
-pub fn read(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, ArchiveError> {
-    // 结尾记录在最后，但它前面可能有注释（我们不写注释，但别人写的包可能有）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArchiveLimits {
+    pub raw_bytes: usize,
+    pub unpacked_bytes: usize,
+    pub entry_bytes: usize,
+    pub entries: usize,
+    pub attachment_bytes: usize,
+}
+
+impl Default for ArchiveLimits {
+    fn default() -> Self {
+        Self {
+            raw_bytes: 256 * 1024 * 1024,
+            unpacked_bytes: 256 * 1024 * 1024,
+            entry_bytes: MAX_ENTRY_BYTES,
+            entries: MAX_ENTRIES,
+            attachment_bytes: 32 * 1024 * 1024,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct CentralEntry {
+    name: String,
+    crc: u32,
+    data_start: usize,
+    data_end: usize,
+}
+
+fn malformed(detail: impl Into<String>) -> ArchiveError {
+    ArchiveError::Malformed { detail: detail.into() }
+}
+
+fn checked_end(start: usize, length: usize, limit: usize) -> Result<usize, ArchiveError> {
+    let end = start.checked_add(length).ok_or_else(|| malformed("an archive offset overflows the address space"))?;
+    if end > limit {
+        return Err(malformed("an archive field runs past the end of the input"));
+    }
+    Ok(end)
+}
+
+pub fn read_with_limits(bytes: &[u8], limits: ArchiveLimits) -> Result<BTreeMap<String, Vec<u8>>, ArchiveError> {
+    read_with_limits_observer(bytes, limits, crc32)
+}
+
+pub fn read_with_limits_observer<F>(bytes: &[u8], limits: ArchiveLimits, mut crc: F) -> Result<BTreeMap<String, Vec<u8>>, ArchiveError>
+where
+    F: FnMut(&[u8]) -> u32,
+{
+    if bytes.len() > limits.raw_bytes {
+        return Err(ArchiveError::TooLarge { detail: format!("the raw package is {} bytes; the limit is {}", bytes.len(), limits.raw_bytes) });
+    }
     let end = find_end_record(bytes).ok_or(ArchiveError::NotAnArchive)?;
+    let comment_length = read_u16(bytes, end + 20)? as usize;
+    if checked_end(end, 22 + comment_length, bytes.len())? != bytes.len() {
+        return Err(malformed("the end-record comment length is inconsistent"));
+    }
     let count = read_u16(bytes, end + 10)? as usize;
+    if read_u16(bytes, end + 8)? as usize != count {
+        return Err(malformed("the central directory counts differ"));
+    }
+    if count > limits.entries {
+        return Err(ArchiveError::TooLarge { detail: format!("a package may hold at most {} entries", limits.entries) });
+    }
     let directory_offset = read_u32(bytes, end + 16)? as usize;
-    if count > MAX_ENTRIES {
-        return Err(ArchiveError::TooLarge { detail: format!("a package may hold at most {MAX_ENTRIES} entries") });
+    let directory_size = read_u32(bytes, end + 12)? as usize;
+    if checked_end(directory_offset, directory_size, bytes.len())? != end {
+        return Err(malformed("the central directory does not end at the end record"));
     }
 
-    let mut out = BTreeMap::new();
     let mut cursor = directory_offset;
+    let mut names = BTreeSet::new();
+    let mut offsets = BTreeSet::new();
+    let mut spans = Vec::new();
+    let mut entries = Vec::new();
+    let mut unpacked_bytes = 0usize;
     for _ in 0..count {
         if read_u32(bytes, cursor)? != 0x0201_4b50 {
-            return Err(ArchiveError::Malformed { detail: format!("the central directory entry at {cursor} has the wrong signature") });
+            return Err(malformed(format!("the central directory entry at {cursor} has the wrong signature")));
         }
         let flags = read_u16(bytes, cursor + 8)?;
         let method = read_u16(bytes, cursor + 10)?;
-        let crc = read_u32(bytes, cursor + 16)?;
+        let expected_crc = read_u32(bytes, cursor + 16)?;
+        let compressed_size = read_u32(bytes, cursor + 20)? as usize;
         let size = read_u32(bytes, cursor + 24)? as usize;
         let name_length = read_u16(bytes, cursor + 28)? as usize;
         let extra_length = read_u16(bytes, cursor + 30)? as usize;
-        let comment_length = read_u16(bytes, cursor + 32)? as usize;
+        let entry_comment_length = read_u16(bytes, cursor + 32)? as usize;
         let local_offset = read_u32(bytes, cursor + 42)? as usize;
-        let name_bytes = bytes
-            .get(cursor + 46..cursor + 46 + name_length)
-            .ok_or(ArchiveError::Malformed { detail: "an entry name runs past the end".to_string() })?;
-        let name = String::from_utf8_lossy(name_bytes).into_owned();
-
+        let record_end = checked_end(cursor, 46 + name_length + extra_length + entry_comment_length, end)?;
+        let name_bytes = bytes.get(cursor + 46..cursor + 46 + name_length).ok_or_else(|| malformed("an entry name runs past the end"))?;
+        let name = std::str::from_utf8(name_bytes).map_err(|_| malformed("an entry name is not valid UTF-8"))?.to_string();
         if !is_safe_name(&name) {
             return Err(ArchiveError::UnsafeName { name });
         }
         if flags & 0x0001 != 0 {
             return Err(ArchiveError::Encrypted { name });
         }
+        if flags & !0x0800 != 0 {
+            return Err(malformed(format!("the entry `{name}` uses unsupported flags")));
+        }
         if method != 0 {
             return Err(ArchiveError::Compressed { name });
         }
-        if size > MAX_ENTRY_BYTES {
-            return Err(ArchiveError::TooLarge { detail: format!("`{name}` is {size} bytes; the limit is {MAX_ENTRY_BYTES}") });
+        if compressed_size != size {
+            return Err(malformed(format!("the stored entry `{name}` has different compressed and uncompressed sizes")));
+        }
+        if size > limits.entry_bytes {
+            return Err(ArchiveError::TooLarge { detail: format!("`{name}` is {size} bytes; the limit is {}", limits.entry_bytes) });
+        }
+        unpacked_bytes = unpacked_bytes.checked_add(size).ok_or_else(|| ArchiveError::TooLarge { detail: "aggregate package size overflow".to_string() })?;
+        if unpacked_bytes > limits.unpacked_bytes {
+            return Err(ArchiveError::TooLarge { detail: format!("aggregate package contents exceed {} bytes", limits.unpacked_bytes) });
+        }
+        if !names.insert(name.clone()) {
+            return Err(malformed(format!("the entry name `{name}` is duplicated")));
+        }
+        if !offsets.insert(local_offset) {
+            return Err(malformed(format!("the local header at {local_offset} is shared by multiple entries")));
         }
 
-        // 本地头：名字与扩展字段的长度可能与中央目录不同，所以必须**按本地头**算数据起点。
         if read_u32(bytes, local_offset)? != 0x0403_4b50 {
-            return Err(ArchiveError::Malformed { detail: format!("the local header for `{name}` has the wrong signature") });
+            return Err(malformed(format!("the local header for `{name}` has the wrong signature")));
         }
+        let local_flags = read_u16(bytes, local_offset + 6)?;
+        let local_method = read_u16(bytes, local_offset + 8)?;
+        let local_crc = read_u32(bytes, local_offset + 14)?;
+        let local_compressed_size = read_u32(bytes, local_offset + 18)? as usize;
+        let local_size = read_u32(bytes, local_offset + 22)? as usize;
         let local_name_length = read_u16(bytes, local_offset + 26)? as usize;
         let local_extra_length = read_u16(bytes, local_offset + 28)? as usize;
-        let data_start = local_offset + 30 + local_name_length + local_extra_length;
-        let data = bytes
-            .get(data_start..data_start + size)
-            .ok_or(ArchiveError::Malformed { detail: format!("the data of `{name}` runs past the end") })?;
-        let actual = crc32(data);
-        if actual != crc {
-            return Err(ArchiveError::Corrupt { name, expected: crc, actual });
+        if local_flags != flags || local_method != method || local_crc != expected_crc || local_compressed_size != compressed_size || local_size != size {
+            return Err(malformed(format!("the local and central metadata for `{name}` differ")));
         }
-        out.insert(name, data.to_vec());
-        cursor += 46 + name_length + extra_length + comment_length;
+        let local_name = bytes.get(local_offset + 30..local_offset + 30 + local_name_length).ok_or_else(|| malformed("a local entry name runs past the end"))?;
+        if local_name != name_bytes {
+            return Err(malformed(format!("the local and central names for `{name}` differ")));
+        }
+        let data_start = checked_end(local_offset, 30 + local_name_length + local_extra_length, bytes.len())?;
+        let data_end = checked_end(data_start, size, bytes.len())?;
+        if data_end > directory_offset {
+            return Err(malformed(format!("the data of `{name}` overlaps the central directory")));
+        }
+        spans.push((local_offset, data_end));
+        entries.push(CentralEntry { name, crc: expected_crc, data_start, data_end });
+        cursor = record_end;
+    }
+    if cursor != end {
+        return Err(malformed("the central directory size is inconsistent with its entries"));
+    }
+    spans.sort_unstable();
+    for pair in spans.windows(2) {
+        if pair[0].1 > pair[1].0 {
+            return Err(malformed("local headers or entry data overlap"));
+        }
+    }
+
+    let mut out = BTreeMap::new();
+    for entry in entries {
+        let data = &bytes[entry.data_start..entry.data_end];
+        let actual = crc(data);
+        if actual != entry.crc {
+            return Err(ArchiveError::Corrupt { name: entry.name, expected: entry.crc, actual });
+        }
+        out.insert(entry.name, data.to_vec());
     }
     Ok(out)
+}
+
+pub fn read(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, ArchiveError> {
+    read_with_limits(bytes, ArchiveLimits::default())
 }
 
 /// 找中央目录结尾记录。**从后往前扫**，因为注释在最末尾（最长 65535 字节）。

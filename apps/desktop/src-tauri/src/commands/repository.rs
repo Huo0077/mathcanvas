@@ -155,7 +155,7 @@ pub fn put_attachment(
     media_type: String,
     base64_bytes: String
 ) -> Result<serde_json::Value, String> {
-    let bytes = decode_base64(&base64_bytes).ok_or("the attachment is not valid base64")?;
+    let bytes = decode_base64(&base64_bytes, repository::blobs::MAX_ATTACHMENT_BYTES).ok_or("the attachment is not valid base64 or exceeds the attachment limit")?;
     let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
     // **① 落盘**（哈希门在里面：对不上就一字节都不写）。
     let staged = blobs.blobs.write(&bytes, &content_hash).map_err(|error| error.to_string())?;
@@ -334,15 +334,32 @@ pub fn run_event_count(app: tauri::AppHandle) -> Result<i64, String> {
     repository.run_event_count().map_err(|error| error.to_string())
 }
 
-/// 把 base64 解成字节。**不用 crate**：这里只有解码与编码两个方向，而它们的形状是固定的。
-fn decode_base64(text: &str) -> Option<Vec<u8>> {
+/// 把 base64 解成字节。只允许CR/LF换行和末尾至多两个padding，先校验输出预算。
+pub fn decode_base64(text: &str, max_output_bytes: usize) -> Option<Vec<u8>> {
     const TABLE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = Vec::with_capacity(text.len() / 4 * 3);
+    let significant = text.bytes().filter(|byte| !matches!(byte, b'\n' | b'\r')).count();
+    let padding = text.bytes().rev().filter(|byte| !matches!(byte, b'\n' | b'\r')).take_while(|byte| matches!(byte, b'=')).count();
+    if significant % 4 != 0 || padding > 2 {
+        return None;
+    }
+    let output_bytes = significant / 4 * 3 - padding;
+    if output_bytes > max_output_bytes {
+        return None;
+    }
+    let mut out = Vec::with_capacity(output_bytes);
     let mut buffer = 0u32;
     let mut bits = 0u32;
+    let mut saw_padding = false;
     for byte in text.bytes() {
-        if byte == b'\n' || byte == b'\r' || byte == b'=' {
+        if byte == b'\n' || byte == b'\r' {
             continue;
+        }
+        if byte == b'=' {
+            saw_padding = true;
+            continue;
+        }
+        if saw_padding {
+            return None;
         }
         let value = TABLE.find(byte as char)? as u32;
         buffer = (buffer << 6) | value;

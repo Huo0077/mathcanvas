@@ -631,3 +631,151 @@ fn r04_export_root_rejects_a_junction() {
     assert!(result.is_err(), "a junction must not become an export root");
     assert!(!outside.join("demo.mcanvas").exists(), "no file may be written through the junction");
 }
+
+
+fn r05_limits() -> archive::ArchiveLimits {
+    archive::ArchiveLimits {
+        raw_bytes: 1024,
+        unpacked_bytes: 128,
+        entry_bytes: 64,
+        entries: 8,
+        attachment_bytes: 32,
+    }
+}
+
+fn r05_central_positions(bytes: &[u8]) -> Vec<usize> {
+    let end = bytes.windows(4).rposition(|window| window == b"PK\x05\x06").expect("end record");
+    let mut cursor = u32::from_le_bytes(bytes[end + 16..end + 20].try_into().expect("directory offset")) as usize;
+    let count = u16::from_le_bytes(bytes[end + 10..end + 12].try_into().expect("entry count"));
+    let mut positions = Vec::new();
+    for _ in 0..count {
+        positions.push(cursor);
+        let name = u16::from_le_bytes(bytes[cursor + 28..cursor + 30].try_into().expect("name length")) as usize;
+        let extra = u16::from_le_bytes(bytes[cursor + 30..cursor + 32].try_into().expect("extra length")) as usize;
+        let comment = u16::from_le_bytes(bytes[cursor + 32..cursor + 34].try_into().expect("comment length")) as usize;
+        cursor += 46 + name + extra + comment;
+    }
+    positions
+}
+
+fn r05_write_u32(bytes: &mut [u8], at: usize, value: u32) {
+    bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+}
+
+#[test]
+fn r05_aggregate_budget_is_checked_before_any_crc_or_clone() {
+    let entries = ["a", "b", "c"].map(|name| Entry { name: name.to_string(), bytes: vec![b'x'; 64] });
+    let bytes = archive::write(&entries).expect("write small archive");
+    let mut crc_calls = 0;
+
+    let result = archive::read_with_limits_observer(&bytes, r05_limits(), |data| {
+        crc_calls += 1;
+        archive::crc32(data)
+    });
+
+    assert!(matches!(result, Err(archive::ArchiveError::TooLarge { .. })));
+    assert_eq!(crc_calls, 0, "metadata rejection must precede CRC and allocation");
+}
+
+#[test]
+fn r05_rejects_shared_local_offsets_and_duplicate_names_before_crc() {
+    let bytes = archive::write(&[
+        Entry { name: "a".to_string(), bytes: b"first".to_vec() },
+        Entry { name: "b".to_string(), bytes: b"second".to_vec() },
+    ]).expect("write archive");
+    let positions = r05_central_positions(&bytes);
+    let first_offset = u32::from_le_bytes(bytes[positions[0] + 42..positions[0] + 46].try_into().expect("first local offset"));
+    let mut shared = bytes.clone();
+    r05_write_u32(&mut shared, positions[1] + 42, first_offset);
+    let mut crc_calls = 0;
+    let result = archive::read_with_limits_observer(&shared, r05_limits(), |data| {
+        crc_calls += 1;
+        archive::crc32(data)
+    });
+    assert!(matches!(result, Err(archive::ArchiveError::Malformed { .. })));
+    assert_eq!(crc_calls, 0);
+
+    let duplicate = archive::write(&[
+        Entry { name: "same".to_string(), bytes: b"one".to_vec() },
+        Entry { name: "same".to_string(), bytes: b"two".to_vec() },
+    ]).expect("write duplicate-name fixture");
+    assert!(matches!(archive::read(&duplicate), Err(archive::ArchiveError::Malformed { .. })));
+}
+
+#[test]
+fn r05_rejects_local_central_mismatch_and_overlap_before_crc() {
+    let bytes = archive::write(&[
+        Entry { name: "a".to_string(), bytes: b"first".to_vec() },
+        Entry { name: "b".to_string(), bytes: b"second".to_vec() },
+    ]).expect("write archive");
+    let positions = r05_central_positions(&bytes);
+    let second_offset = u32::from_le_bytes(bytes[positions[1] + 42..positions[1] + 46].try_into().expect("second local offset")) as usize;
+    let mut mismatch = bytes.clone();
+    r05_write_u32(&mut mismatch, second_offset + 8, 8);
+    let mut overlap = bytes;
+    r05_write_u32(&mut overlap, positions[1] + 42, 1);
+
+    for candidate in [mismatch, overlap] {
+        let mut crc_calls = 0;
+        let result = archive::read_with_limits_observer(&candidate, r05_limits(), |data| {
+            crc_calls += 1;
+            archive::crc32(data)
+        });
+        assert!(matches!(result, Err(archive::ArchiveError::Malformed { .. }) | Err(archive::ArchiveError::Compressed { .. })));
+        assert_eq!(crc_calls, 0);
+    }
+}
+
+#[test]
+fn r05_accepts_the_frozen_boundary_and_checks_raw_size_and_entry_count() {
+    let entries = ["a", "b"].map(|name| Entry { name: name.to_string(), bytes: vec![b'x'; 64] });
+    let bytes = archive::write(&entries).expect("write boundary archive");
+    let mut crc_calls = 0;
+    let entries_read = archive::read_with_limits_observer(&bytes, r05_limits(), |data| {
+        crc_calls += 1;
+        archive::crc32(data)
+    }).expect("the exact aggregate boundary is legal");
+    assert_eq!(entries_read.len(), 2);
+    assert_eq!(crc_calls, 2);
+
+    let mut raw_limits = r05_limits();
+    raw_limits.raw_bytes = bytes.len() - 1;
+    assert!(matches!(archive::read_with_limits(&bytes, raw_limits), Err(archive::ArchiveError::TooLarge { .. })));
+    let mut count_limits = r05_limits();
+    count_limits.entries = 1;
+    assert!(matches!(archive::read_with_limits(&bytes, count_limits), Err(archive::ArchiveError::TooLarge { .. })));
+}
+
+
+#[test]
+fn r05_base64_is_bounded_and_rejects_invalid_shapes() {
+    use mathcanvas_desktop_lib::commands::repository::decode_base64;
+
+    assert_eq!(decode_base64("iVBO\nRw==", 4).expect("valid base64"), vec![0x89, 0x50, 0x4e, 0x47]);
+    for invalid in ["!!!!", "YW Jj", "YW=J", "YWJj=", "YWJj===", "YQ"] {
+        assert!(decode_base64(invalid, 4).is_none(), "{invalid:?} must be rejected");
+    }
+    assert!(decode_base64("YWJj", 2).is_none(), "the declared output budget must be enforced before allocation");
+}
+
+#[test]
+fn r05_bounded_reader_rejects_input_past_the_limit() {
+    let input = vec![b'x'; 16];
+    let result = mathcanvas_desktop_lib::repository::package::read_bounded(std::io::Cursor::new(input), 4);
+    assert!(matches!(result, Err(mathcanvas_desktop_lib::repository::package::PackageError::Limit { .. })));
+    let valid = mathcanvas_desktop_lib::repository::package::read_bounded(std::io::Cursor::new(vec![b'x'; 4]), 4).expect("exact boundary");
+    assert_eq!(valid, vec![b'x'; 4]);
+}
+
+
+#[test]
+fn r05_attachment_budget_is_checked_before_blob_read_or_clone() {
+    let blobs = store("r05-attachment-budget");
+    let (hash, media_type) = export_png(&blobs);
+    let (bytes, _) = package::export("p", &[], &[(hash, media_type)], &[], &blobs, 1, None).expect("export");
+    let oversized = rewrite_manifest(&bytes, |manifest| manifest["attachments"][0]["byteSize"] = serde_json::Value::from(u64::MAX));
+
+    let result = package::import(&oversized, &blobs);
+
+    assert!(matches!(result, Err(PackageError::Limit { .. })), "the attachment budget must be independent of the 64 MiB archive-entry budget");
+}

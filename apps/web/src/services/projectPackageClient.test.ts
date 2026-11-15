@@ -185,3 +185,14 @@ describe("两种失败分开说", () => {
     }
   })
 })
+
+
+describe("R05 bounded base64", () => {
+  it("rejects invalid characters, whitespace, padding and output overflow", () => {
+    expect([...base64ToBytes("iVBO\nRw==", 4)]).toEqual([0x89, 0x50, 0x4e, 0x47])
+    for (const invalid of ["!!!!", "YW Jj", "YW=J", "YWJj=", "YWJj===", "YQ"]) {
+      expect(() => base64ToBytes(invalid, 4)).toThrow()
+    }
+    expect(() => base64ToBytes("YWJj", 2)).toThrow()
+  })
+})

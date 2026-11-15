@@ -85,23 +85,43 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return out
 }
 
-/** base64 → 字节。与 Rust 侧的解码器同一套宽容度：换行与填充符跳过。 */
-export function base64ToBytes(text: string): Uint8Array {
-  const out: number[] = []
+export const MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
+
+/** base64 → 字节。只允许CR/LF换行和末尾至多两个padding，解码前先冻结输出预算。 */
+export function base64ToBytes(text: string, maxBytes = MAX_ATTACHMENT_BYTES): Uint8Array {
+  let significant = 0
+  let padding = 0
+  for (const character of text) {
+    if (character === "\n" || character === "\r") continue
+    significant += 1
+    padding = character === "=" ? padding + 1 : 0
+  }
+  if (significant % 4 !== 0 || padding > 2) throw new Error("invalid base64 shape")
+  const outputBytes = Math.floor(significant / 4) * 3 - padding
+  if (outputBytes > maxBytes) throw new Error("base64 output exceeds the attachment limit")
+  const out = new Uint8Array(outputBytes)
+  let offset = 0
   let buffer = 0
   let bits = 0
+  let sawPadding = false
   for (const character of text) {
-    if (character === "\n" || character === "\r" || character === "=") continue
+    if (character === "\n" || character === "\r") continue
+    if (character === "=") {
+      sawPadding = true
+      continue
+    }
+    if (sawPadding) throw new Error("base64 data follows padding")
     const value = BASE64_TABLE.indexOf(character)
-    if (value < 0) continue
+    if (value < 0) throw new Error("invalid base64 character")
     buffer = (buffer << 6) | value
     bits += 6
     if (bits >= 8) {
       bits -= 8
-      out.push((buffer >> bits) & 0xff)
+      out[offset] = (buffer >> bits) & 0xff
+      offset += 1
     }
   }
-  return new Uint8Array(out)
+  return out
 }
 
 const PACKAGE_EXTENSION = ".mcanvas"
