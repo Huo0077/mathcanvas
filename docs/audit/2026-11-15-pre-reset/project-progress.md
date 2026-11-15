@@ -1,0 +1,2120 @@
+# MathCanvas 项目进度（归档）
+
+> **当前状态**：见 [当前状态](current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
+
+> **2026-10-11 四家族真题驱动升级：本轮过程记录（只改文档）**。用户将目标限定为四家族，真题的原卷/转载题号与作图难点已归入[调研报告](research/2026-10-11-four-family-exam-diagram-survey.md)；未解决的模型动作合同、共享预算、缺宿主与目标折角等按[新实施/进度计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)分块。此处**没有**记录新的功能 RED→GREEN、真实 provider/浏览器结果或真题成功率；历史数字继续只在原来的时刻有效。
+
+> **这是归档，不是当前状态。** [**`docs/current-status.md`**](current-status.md) 是"现在时"的唯一一处
+> —— 当前门禁读数、各方案做到哪一步、还没做什么，都在那里。
+>
+
+> **早期记录已拆分**：2026-09 及更早（含 10-04～10-06 的后补条目）见 [project-progress-early.md](project-progress-early.md)；本文件保留 2026-10-01 之后的记录。查 2026-09 的小节（G1 阶段状态、解析二次曲面 A1、场景增量同步、P1 数学内核、工程制图可用性修复等）请到拆分文件里搜同一个标题。
+
+## 2026-11-06 —— 题图识别实测、交接修复与 Agent 回归
+
+- 用用户提供的四棱锥和三棱柱题图复现题干、配图定位与规划问题，再分三批首读 32 道公开真题。浏览器回放分开记录读取、复核和交接结果。公开题来源、失败案例与修复后的复测见 [题图识别实测与修复记录](audit/2026-11-06-problem-image-validation.md)。
+- 将四棱锥小问按条件作用域建草稿，直三棱柱和三角函数递增题复用产品与评测的本地规划入口。对齐工具计划格式、公式归一化、动作依赖诊断及主函数曲线核验，并把构建标识写入设置与运行事件。离线及记录回放各通过 31/31，桌面运行事件测试通过 10/10。更广的覆盖缺口见 [可靠性审计](audit/2026-11-05-agent-reliability-gap-plan.md)。
+- 最后一轮补上 A–D 图形选项复核和数字格定位，80 项定向测试、14 项浏览器回归通过，并构建了本地桌面开发版。
+- 提交前复测全量 Vitest，5,521 项通过、1 项待办。文档一致性检查 22 项通过，类型检查和 31 项离线可靠性评测均通过。
+
+## 2026-11-05 —— 四道立体几何题修复 T8：浏览器闭环、回归与发布证据
+
+新增 `e2e/agent-solid-four-cases.spec.ts`（5 条用例）。首跑 **4 通过 / 1 失败**：失败的是 Case 4 原题那条的 locator（`.agent-bubble` 为空），而失败 trace 的 `error-context.md` 证明澄清**已经渲染**在运行状态那一栏——改的是用例，不是 oracle；同时把澄清文案里"折后 ACD 变成的那条边"改成"折后 CP"。复跑 **5/5 通过**：Case 1/2/3 各走"隔离草稿 → 确认前主文档 0 对象 → 提交 → 对象数 > 0 → `Ctrl+Z` 一步回到 0"；Case 4 原题显示「等待补充信息」+ `D→P`/`折前线段`/`CP` 且**没有**「确认改动」区域；Case 4 修订版同样能出草稿、提交、撤销。
+
+截图 `test-results/solid-four-cases-case-{1,2,3}.png` 已人工查看：Case 1 画布上 A/B/C/D/P 与 **E** 都在（对象列表 `solid-1` + `E`，20 个对象）；Case 3 有 **O**（对角线交点）与 **M**（PC 中点），对象列表 `solid-1`/`segment-1`/`O`/`M`（22 个对象）。既有折叠链浏览器回归 `agent-rectangle-fold` + `agent-fold-chain` **4/4 通过**。
+
+验证矩阵：`npm run typecheck` exit 0；`npm run build` 首跑因我自己测试文件里的 `import type` 路径（`../geometry3d`，Vite 擦掉类型导入所以 vitest 没暴露）失败，改成 `./geometry3d` 后 **exit 0**；`npm run test:docs` 22 项通过。**未报告**：重试不重复实体、Case 4 多轮澄清闭环、在线 provider、桌面端、全量 Playwright。
+
+## 2026-11-05 —— 四道立体几何题修复 T7：目标结果与题设核验分离
+
+新增内核 `solidGoalMeasurements.ts`：`linePlaneSine`、`pointPlaneDistance`、`dihedralCosine`、`dihedralDegrees`、`planeAngleCosine`、`planeNormalOf`，退化输入结构化拒绝不返回 NaN。三种角**分开量**——线面角用 `sin=|d·n|/(|d||n|)`、二面角用半平面夹角且**不取绝对值**（120° 就是 120°）、平面夹角才取锐角。二面角复用既有 `dihedralAngleDetail3` 的半平面口径，其余三个没有既有同义函数才新增。
+
+新增 `solidGoals.ts`：读目标（既有 obligation 的线面垂直/平行、线段垂直 + 四种数值写法），对**已通过题设核验**的点表求值，产出 `holds/disproved/measured/unverified` 与非零残差，再落文案：不成立时明说「题设本身仍然通过核验、图形可以保留」；成立时明说「坐标核验、是实例证据、不等于形式化证明」；从不出现 `formally_proved`。
+
+接线：`parametricSolidPlan` 把目标文案放进计划的 `answer`（与 `assumptions` 分栏）；`polygonFoldPlan` 用**折前 ∪ 折后**点表求目标（跨状态的 `AP⊥CD` 也量得出来）；新增 `deterministicPlanForPrompt`，`agentRunner.selectPlanner` 在问 provider 之前先试它（识别完整且题设已核验才返回计划）；`systemPrompt` 新增两条纪律：**不要手算顶点坐标**（只报结构与参数）、**目标结论与题设核验分开说**。
+
+验证：`solidGoalMeasurements` 6 项、`solidGoals` 6 项、`systemPrompt` 30 项、`agentRunner`+`agentRuntime` 93 项全过。四题目标实况：Case 1 `AE⊥PBC` **假** / `sin=1/√2`；Case 2 `A₁C∥B₁DE` **假** / `cos=0`；Case 3 `PA∥BDM` **真** / `d=√3`；Case 4 修订版 `AP⊥CD` **假** / `cos=1/√3`。**未做**：UI/权限测试（只读证明请求、目标为假但题设可画、题设矛盾、解析未完成的界面呈现）、在线模型实跑、形式证明产物。
+
+## 2026-11-05 —— 四道立体几何题修复 T6：梯形翻折、显式状态与一次澄清
+
+新增 `polygonFoldPlan.ts`。原题「将 △ACD 沿 AC 折起成 △PAC」按有序顶点读会移动折痕端点，且目标里的 `CD` 没说清是折前线段还是折后 `CP` —— 两者任一没说清就落成**一条**合并澄清、**不出计划**（`destinationExplicit` 只在"点 D 绕 AC 旋转 n° 得到点 P"这种语序为真；`折起成 △PAC` 不算把 D→P 说死）。修订版（写明 D→P 与 CD 指折前）才出计划：底面复用 T3 的 `rightTrapezoidEdges` / `rightTrapezoidPolygon`，折后位置复用既有 `foldPointAboutHinge`，折角取明写的 `n°` 或"平面…⊥平面…"的 90°，出计划前自检折痕不动 / 折片刚性 / 转过角相等。`M 为 PB 中点` 落成 `solid.create_segment` + `dynamic.create_bound_point`（参数 1/2）。
+
+`localPlanner` 新增 `POLYGON_FOLD` 意图（`梯形` + 折起/翻折/旋转/折前），三个终态各自翻译成信封；`kernelRelationsFromObligations` 导出，翻折层与见证搜索读**同一份**题设翻译。
+
+验证：`polygonFoldPlan / solidGeometryFourCases / localPlanner` **3 文件 90 项通过**；矩形折叠回归 `rectangleFold / rectangleFoldPlan / rectangleFoldStateVerification / foldChain.sequence / userFoldClauses` **5 文件 66 项通过**。修订版从编译后的文档自量：折痕不动、`|AP|=|AD|=1`、`|CP|=|CD|=1`、折角 90°、`PAC⊥ABC`、`P=(1/2,1/2,±1/√2)`、`M=(P+B)/2`；镜像分支 `z` 互为相反数；折角缺失 ⇒ 问折角；折痕不在折片上/无梯形底面 ⇒ `not-applicable`。**未做**：澄清答案接回计划的多轮闭环、目标层（T7）、保留折前 D 的显示状态。
+
+## 2026-11-05 —— 四道立体几何题修复 T5：确定性计划适配与命名分点（Case 1–3 全链路通过）
+
+内核关系词表补 `midpoint` 与 `point-on-segment` 两档；新增 `resolveNamedPointRelations` 按**最终坐标**算辅助点：中点参数 1/2，棱上点 `t = 距离/|宿主|`（题面从另一端给长度时换算成 `1−d/|宿主|`，`EB₁=2` 与 `BE=1` 必须落到同一处），只说"在棱上"、没给长度就**不落点**，参数不在 (0,1) 内 `degenerate-base`、与已有顶点重名 `duplicate-name`。派生点（T4 的 O）与命名点（T5 的 D/E/M）走同一条 `auxiliaryPoints` 通道，都不进 `names`/`points`/`faces` 的下标空间。
+
+落盘统一走 `auxiliaryPointActions` / `solidWitnessActions`：宿主是多面体的一条棱就直接 `hostEdge` 绑定，是底面对角线就先建线段再绑。新增 `parametricSolidPlan.ts`（`tryBuildParametricSolidPlan`）把"题面 → spec → 见证候选 → 动作链"收成**一处**，两个产品入口都从它取，`localPlanner` 里自己拼动作的代码随之删掉。
+
+**四题的终态**：Case 1 解析 10 条 / 0 残留 / `verified_instance`（E@PB:1/2）；Case 2 5 条 / 0 残留 / `verified_instance`（D@AC:1/2、E@BB₁:1/3，顶环保留 A₁B₁C₁）；Case 3 10 条 / 0 残留 / `verified_instance`（O@AC:1/2、M@PC:1/2，垂足 O 不是环顶点）。`parametricSolidPlan.test.ts` 8 项从**编译后的文档**自量：三题都 `compilePlan.ok` 且 `diagramVerification=passed`，四个辅助点 `binding.kind="onHost"`，整只实体沿 +z 平移 3 时 E 也跟 3、参数不变。
+
+两处既有测试的**断言方向**改了并写明理由：`witnessSearch.test.ts` 的 `O为BD的中点` 从"未核验"改为"已核验"（能力增加，同时保留"判性不明仍不许升格"那半条）；`planCompiler.test.ts` 的台体题面在 T2 已改。**未做**：`segmentRatio` 比例分点、参数滑块 `parameterId`、浏览器实测（T8）。
+
+## 2026-11-05 —— 四道立体几何题修复 T4：底面内部派生垂足（Case 3 的 O）
+
+`AC 与 BD 相交于点 O` 读成两条 `pointOnSegment`（`O∈AC`、`O∈BD`）——**不新增判据种类**，核验器零改动；`底面ABCD是边长为2的菱形` 补 `底面` 前缀与 `边长为 N 的` 定语，并补一条 `fixedLength`。内核新增 `derivedBasePoints`（`DerivedBasePoint.kind = "diagonal-intersection"`）：先解底面、再解对角线交点、最后放顶点；垂足可以是环顶点**或**派生点，底面环仍然严格只有 A/B/C/D。交点解析对引用缺失、重名、自引用、平行/重合、交点不在线段内、两线异面全部结构化拒绝，不回退到 A 或自由高度。
+
+`O` 作为 `auxiliaryPoints` 带 `hostEdge`+`parameter`+`source` 返回，**不进** `names`/`points`（那两列与 `faces` 共用下标空间，塞进去会报 `unused-vertex`）。落盘统一走新增的 `solidWitnessActions`：宿主是多面体的一条棱就直接 `hostEdge` 绑定，是对角线就先建线段再绑；见证搜索与 `localPlanner` 共用这一份动作链，所以 `O` 是**绑定点**而不是自由点。
+
+Case 3 阶段读数：解析 **10 条 / 0 残留**（原来 4 条 + 2 条残留），形状 `ok`（底环 ABCD、顶点 P、垂足 O），构造出四底点 + P + 辅助点 O（AC 上参数 1/2），核验只剩 `点名缺失：M`（T5）。内核层独立断言：四边=2、∠BAD=60°、O 同时是 AC 与 BD 的中点、PO=√3 且竖直、底面 z 全 0。定向 9 文件 **412 项通过**。
+
+## 2026-11-05 —— 四道立体几何题修复 T3：底面解析构造（直角梯形 / 显式菱形角）
+
+新增 `witness/basePolygons.ts`（纯数值 → 坐标）：`rightTrapezoidPolygon` 给 `A(0,0) B(w,0) C(top,h) D(0,h)`，`rhombusPolygon` 给 `A(0,0) B(s,0) D(s·cosθ,s·sinθ) C=B+D`，退化输入全部结构化拒绝、浮点噪声按回 0。`constructors.ts` 新增 `rightTrapezoidEdges`（按环上**任意顶点**找"直角 + 一组平行边 + 另一组不平行"，再点一个直角就跳过——那是矩形的活）、`deriveRightTrapezoidBase`（三个长度各自独立，坐标按直角顶点在环上的位置旋转回题面环序，`BCDA` 循环点序也认）、`deriveRegularTriangleBase`（`AB=BC=CA` ⇒ 正三角形）。菱形角度来源分成两路：题面给了角就用题面的角（**不写进 freeValues**），没给才取代表角 60°；邻角按 180°−θ 换算，矛盾角/对角线角/0°/90°/180° 全拒绝。
+
+`specForRightPrism` 在 `正` + 三角形底时补三条 `equal-length`（且先补关系再算自由标量，否则 `BC` 仍被说成系统自选）；`orderedBaseWithFreeEdges` 对直角梯形只把 AB/AD/CD 里题面没给的列为自由边。修掉了此前"Case 1 底面落进矩形分支、CD 长度根本没用上"与"正三棱柱底面 BC 是自由标量"两个缺口。
+
+验证：`packages/geometry-kernel` + `packages/agent-core` **240 文件 / 2724 项通过**。Case 1 断言 AB=2、AD=2、CD=1、AD⊥AB、AB∥CD、BC≠AD；Case 2 断言 AB=BC=CA=2、AA₁=3 且竖直、顶面点名保留 A₁B₁C₁。**未做**：`正四棱柱` 的正方形底面（四边相等在现有规则里先落到菱形 60°，不顺手改）。
+
+## 2026-11-05 —— 四道立体几何题修复 T2：入口语法与关系保真
+
+顶环对应规则从"必须等于 `A′`"改成"**底环点名 + 同一个后缀**"（撇号或下标 1–6），混写与点数不同仍然问路，**题面原名原样保留**；内核 `PrismConstructRequest` 新增可选 `topNames`，省略时 `withPrimes` 行为逐字不变。入口另补三处有边界的写法：`A_1`/`A_{1}` 归一为 `A₁`（ASCII `A1` 仍不认）、`在` 可省、`以…为底面的` 前缀（限 24 字）；`P-ABCA` 这类环内重复点直接问路。`正`/`直` 修饰词 + 两个环都写清的棱柱不再报"没有给出侧棱⊥底面"。
+
+Case 2 阶段读数推进：形状从 `unrecognised` 变为 `ok`，底环 `ABC`、顶环 **`A₁B₁C₁`**（不是默认 `A′B′C′`）；搜索停在 `点名缺失：D/E`（T5）。新增关系保真断言：连等式每条长度都进题设（Case 1 四条、Case 4 三条）、`BE=1` 是定长而非中点、目标不混进 givens、读不出的条件继续显形。
+
+验证：`shapeGrammar / lengthEquality / explicitSolidConditions / witnessSearch / examSolidVariants / trapezoidPrism / pointNames / constructors / solidGeometryFourCases` **9 文件 227 项通过**。**未做**：Case 2 底面还不是正三角形（T3）、Case 4 直角梯形入口、Case 3 菱形与交点、命名分点。
+
+## 2026-11-05 —— 四道立体几何题修复 T1：四题可重复基线与证据
+
+按 [实施计划](superpowers/plans/2026-11-05-solid-geometry-four-cases.md) 开工，T1 只建立基线、不修业务。四段原题固定进 `packages/agent-core/src/fixtures/solidGeometryFourCases.ts`（Case 4 的 `D→P` 与 `CD` 折前/折后歧义**保留**，另设独立 ID 的修订版）；oracle 是设计 §3 的人工坐标手抄，测试不拿实现生成期望值。
+
+新增 `solidGeometryFourCases.test.ts` 跑与产品同一条链路并逐阶段留证。实况：**Case 1** 解析 10 条、形状认对（pyramid/ABCD/P/A），卡在"`E` 没有落到 `PB` 上"；**Case 2** 解析 5 条，卡在顶环 `A₁B₁C₁` 与内核 `A′` 命名约定对不上 ⇒ 形状从句整句 `null`；**Case 3** 4 条题设 + **2 条残留**（`AC与BD相交于点O`、`底面ABCD是边长为2的菱形`），且 `PO⊥平面ABCD` 的 `O` 不是环顶点 ⇒ 拒绝；**Case 4** 原文与修订版都卡在入口词表不认"直角梯形"。原报告两条判断被实测推翻：`如图，` 前缀不影响识别；`PA=AB=AD=2` 的连等式**已经**展开成 3 条定长 + 2 条等长（只补回归，不重复实现）。
+
+定向基线 `lengthEquality / shapeGrammar / trapezoidPrism / examSolidVariants / pointNames` **5 文件 66 项通过**；新增 `solidGeometryFourCases.test.ts` **6 项通过**。模型入口离线桩、Playwright、在线模型本轮**未运行**，明确记为未运行而不是通过。逐阶段读数与"后续任务改哪一格"的对照表见 [实施证据](audit/2026-11-05-solid-four-cases-implementation-evidence.md)。
+
+## 2026-11-04 —— 桌面题图识别与直三棱柱回归
+
+本地 HTTP 回归确认模型请求只发送一个 `Content-Type`。桌面端用带验证码的 PNG 验证图像读取，配置通过新版验证后可在题图识别面板选用。识别面板合并了发送步骤，配图参考与参与数学核验的题干分开。
+
+直三棱柱第 15 题的回归分别覆盖新版交接和旧版「配图已核对」消息。浏览器用模拟识别结果检查模糊文字的修正及定位，再走实际的本地推导、题设核验和草稿提交。已有点 \(I\) 的场景中，提交后保留该点，新增 \(D\)、\(E\) 与线段 \(DE\)，距离结果为 \(1\)。同轮浏览器回归包含原有矩形翻折的三个用例，共五项通过。桌面开发版已构建并通过启动检查。
+
+## 2026-11-04 —— 属性栏和绘图交互 4.2.0
+
+平面落点改用 SVG 到屏幕坐标的实际变换，修复画布留白造成的偏移。空间圆动点按屏幕中的圆轨道投影计算参数，保留轨道约束和一步撤销。右键命中使用立体画布已有的拾取规则。属性栏和菜单统一沿用工作台的配色及间距，并加入可记忆的分栏宽度。
+
+浏览器回归覆盖直线与圆落点、面板宽度持久化、立体菜单及圆轨道动点拖动。版本与下载说明见 [4.2.0 发布说明](release/v4.2.0.md)。
+
+## 2026-11-03 —— Agent 折叠 24 题效果验证
+
+针对“缺少例题、难以验证效果”的反馈，在 `ab7589e2` 源码上设计 24 道变式，以投影及余弦关系独立计算参考答案，再逐题输入独立 Edge 浏览器。本地求解器满足 18 题的数值／诊断要求，页面交付 17 题；E23 内部算出角度但正文为空，说明核心通过数不能替代用户实际收到的答案数。E06/E19 明确能力边界，E10/E13/E15/E18/E23 仍有缺口。单折 14 对象、两折 21 对象均确认提交并一次撤销回 0，答案保留。
+
+完整题面、运行方法、实际结果及后续建议已归档至 [24 题评估](audit/2026-11-03-agent-example-validation.md)。本轮仅新增评估资产与文档，不将新发现的问题写成已修复，不复用上轮全量测试读数冒充本轮验证。
+
+## 2026-11-02 —— 桌面端图标 PE 资源重编译生效与右侧属性栏人机工程重排（Block 11）
+
+**目标**：彻底解决 Windows 桌面端 `.exe` 图标因 Cargo `resource.lib` 缓存未重编而未生效的问题，并按照符合直觉的操作逻辑重构右侧属性栏（`PropertiesBar`）的分区层次、控件顺序与 3D 图元覆盖。
+
+**实施与证据**：
+1. **桌面图标 PE 资源与运行时窗口图标修复（build.rs / lib.rs / BrandMarkIcon.tsx）**：
+   - 在 `build.rs` 中补充 `icons/icon.ico` 等 `cargo:rerun-if-changed` 规则，清除旧构建缓存后重跑 `tauri build`，确认 `resource.lib` 由 `38,852` 字节更新为 `56,592` 字节；在 `lib.rs` 中增加 `window.set_icon(icon)`；同步将免安装可执行文件复制至 `target/release/MathCanvas_4.1.0_x64.exe` 与 `target/release/bundle/MathCanvas_4.1.0_x64.exe`。
+2. **右侧属性栏三级手风琴与卡片内部人机工程重排（PropertiesBar.tsx / inspectorFields.tsx / inspectorModel.ts / global.css）**：
+   - 修复 `<InspectorAccordion>` 容器包裹关系与 `外观样式` 分区顺序；
+   - 按“名称标识 → 核心坐标/尺寸输入 → 约束绑定与滑轨 → 只读几何读数 → 快捷派生作图 → 简明尾注”重排全部 2D/3D 图元卡片，并将 3D `(X, Y, Z)` 升级为 3 列网格（`.vector3-grid`），新增 `selectedLinear3`、`face3Metrics` 与 `polyhedron3Metrics` 卡片及单测。
+
+**验证读数（2026-11-02 本机）**：
+- `inspectorModel.test.tsx`（9 项）、`EngineeringInspector.test.tsx`（20 项）、`App.test.tsx`（116 项）145 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 15 警告**。
+
+## 2026-11-02 —— MathCanvas 专属多层几何特色品牌图标设计与全端接入（Block 10）
+
+**目标**：替换原有的通用求和字符 `∑`，为 MathCanvas 设计一枚一眼就能看出“2D 解析几何与圆锥曲线 + 3D 空间立体与截面 + 动态顶点交互与 AI 智能推理”特色的专属品牌与网页/桌面图标。
+
+**实施与证据**：
+1. **视觉与几何结构设计（BrandMarkIcon.tsx / favicon.svg / icon.svg）**：
+   - 以冷调深板岩蓝圆角方片为底座，中心绘制三维等轴测六面体（含顶面/左侧面半透明明暗面片与内部虚线剖切三角形）；
+   - 外围绘制 2D 内接解析基准虚线圆与 `-24°` 倾角的椭圆圆锥曲线轨迹环，与三维立体在空间交汇；
+   - 在关键交汇处标出高对比度几何控制顶点，并在正上方顶点处融合一枚 AI 智慧四芒星，精准传达“代数解析 + 立体几何 + AI 共创”的三位一体特色。
+2. **全端挂载与弹簧动效（WorkspaceHeader.tsx / ModuleRail.tsx / index.html / global.css）**：
+   - 接入顶栏 `.brand-mark`、侧栏 `.app-rail-mark` 与 `index.html` 的 `/favicon.svg`，并在 `WorkspaceHeader.test.tsx` 中新增 `[data-brand-icon="mathcanvas-prism"]` 单元测试守卫。
+
+**验证读数（2026-11-02 本机）**：
+- `WorkspaceHeader.test.tsx`、`ModuleRail.test.tsx`、`AppChrome.test.tsx` 全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
+## 2026-11-02 —— 灵动柔和的 UI 动效与触感升级（Block 9，保持配色不变）
+
+**目标**：在不修改任何既有色彩令牌（冷白画布与深板岩蓝体系）的前提下，消除界面切换与按钮点击的生硬感，赋予全工作台物理弹簧级的灵动微交互、柔和舒适的卡片过渡以及明确的 3D 抓取光标反馈。
+
+**实施与证据**：
+1. **CSS `linear()` 阻尼弹簧缓动令牌（tokens.css）**：
+   - 新增 `--ease-spring`、`--ease-spring-fallback`、`--ease-soft-out` 与 `--duration-fast` / `--duration-normal` / `--duration-spring`，零色彩改动。
+2. **3D 画布抓取光标反馈（threeSceneInteraction.ts / global.css）**：
+   - 在 `handlePointerMove` 未按下阶段检测指针是否悬停于旋转手柄、半径手柄或可拖拽图元，写入 `sceneShell.dataset.hoverDraggable`；在拖拽会话激活期间写入 `sceneShell.dataset.dragging`，抬手自动清除，配合 CSS 呈现 `grab` / `grabbing` 光标与 `user-select: none` 防误选。
+3. **全工作台柔和触感与无障碍保护（global.css）**：
+   - 为 `.ribbon-command`、`.workspace-tabs button`、`.three-scene-controls button`、`.object-row` 等高频交互元素注入弹簧升起与按压回弹；为属性面板卡片与引导条加入 `mc-card-soft-enter` 柔和淡入与 `prefers-reduced-motion: reduce` 降级保护。
+
+**验证读数（2026-11-02 本机）**：
+- `threeScene.test.ts`（59 项）与 `App.test.tsx`（116 项）175 项全过；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
+## 2026-11-02 —— 2D/3D 点、线、面、体深度交互逻辑审计与闭环修复（Block 8）
+
+**目标**：对全仓 2D 与 3D 的点、线、面、体交互链路进行代码级深度体检，彻底解决“拖动顶点松手后原位重现未变形立方体、拖动正四面体或变形后实体表面把单块面扯飞、变形后实体无法整体平移/旋转、拖动顶点时相连棱面静止不拉伸、2D 动点圆与切线拖拽中不预览”等一切不合理操作现象。
+
+**排查与根因**：
+1. **变形后原位重现未变形实体（“松手后图形复位而标注点未复位”的第二重真凶）**：
+   - 拖动立方体 `cube-1` 的一个顶点后，`cube-1-polyhedron.construction` 从 `{ kind: "template", sourceIds: ["cube-1"] }` 升级为 `{ kind: "fromFaces", sourceIds: [...], sourceId: "cube-1" }`。
+   - 然而 `threePrimitives.ts` 的 `visibleSolids` 与 `projectionVisuals.ts` 的 `resolveProjectedDrawing` 仅排除了 `construction.kind === "template"` 的源实体！一旦变成 `fromFaces`，`visibleSolids` 立即把 `cube-1` 当作未物化的独立实体，在原位置画出一只未变形的不透明 `BoxGeometry` 盖在变形后的面片上；同时 `intersectionPreviews3d.ts` 把 `cube-1` 与 `cube-1-polyhedron` 当成两只重合实体求交，铺满红色虚线。
+   - **修复**：在 `visibleSolids`、`resolveProjectedDrawing`、`intersectionPreviews3d` 与 `AlgebraView` 中统一识别 `construction.kind === "fromFaces" && construction.sourceId`。
+2. **正四面体（`fromPoints`）与变形后实体（`fromFaces`）的子元素拾取归属缺失与整体变换失效**：
+   - `threePicking.ts` 的 `templateTopologyOwners` 此前只认 `template` 与 `prism`，漏掉了 `fromPoints` 与 `fromFaces`，导致点击或拖动正四面体或变形立方体的面/棱时落到单个 `face3` 上，一拖就把立体扯散；且 `apply.ts` 在整体平移/旋转已降级为 `fromFaces` 的模板实体时只改了模板自身的 `origin`/`rotation`，没有同步移动 `polyhedron.vertexIds`。
+   - **修复**：在 `templateTopologyOwners` 中补齐 `fromPoints` 与 `fromFaces` 归属；在 `apply.ts` 的 `translatePrimitive3` 与 `rotatePrimitive3` 中同步变换 `fromFaces` 实体的全部显式顶点。
+3. **3D 线/面刚体族越界与顶点拖拽期间相连棱面实时拉伸**：
+   - 在 `threeDrag.ts` 的 `dragFamilyIds` 中收敛线/棱/面/平面的刚体平移族，只纳入其受控点及完全由这些点决定的图元；在 `threeSceneInteraction.ts` 中新增 `deformDependents` 逐帧更新机制，使拖动顶点时相连的边与面实时跟手拉伸变形。
+4. **2D 拖拽预览与提交不一致**：
+   - 在 `GraphicsView.tsx` 的 `previewDocument` 中同步 `App.tsx` 的圆心点重定向、切线定位点重定向与旋转中心跟随曲线更新。
+
+**验证读数（2026-11-02 本机）**：
+- 核心场景图与 3D 单元测试 7 文件 / 260 项全过（含 `threeScene.test.ts` 59 项全过）；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
+## 2026-11-02 —— 3D 空间顶点拖拽隔离、视觉位移归零与视口 HUD 排版优化
+
+**目标**：彻底解决用户在立体几何中遇到的“拖动立方体的一个点整个立方体跟着动、松手后图形复位而标注点未复位”的严重体感缺陷，以及 3D 视口浮动控件排版杂乱、遮挡画布的视觉问题。
+
+**排查与根因**：
+1. **立方体整体连带移动的根因**：
+   - 在 `threeDrag.ts` 的 `dragFamilyIds` 中，算法构建了依赖图并正向拉入依赖项。由于空间点被空间多面体（`polyhedron3`）依赖，算法将多面体加入了拖动族；随后第 46 行 `for (const member of [...family]) for (const parentId of parents.get(member) ?? []) family.add(parentId)` 又逆向查询多面体的父级，将整个立方体模板（`cube-1`）以及立方体的全部 8 个顶点全部加入了拖动族，导致用户按住一个顶点拖动时，Three.js 场景把整个立方体及其 8 个点全部加上了临时位移。
+   - **修复**：在 `dragFamilyIds` 中增加针对空间点的原子隔离保护：`if (primitive?.type === "point3") return new Set<string>([id])`，确保拖动一个点只移动该点本身，绝不连带拉入父级多面体或兄弟顶点。
+2. **松手后图形复位但点标注不复位的根因**：
+   - 包含双重原因：
+     - 首先，`transforms.ts` 中的 `isFreeDraggable3` 在首部包含了 `if (generated.has(primitive.id)) return false`，导致模板立体生成的物化顶点被判定为不可自由拖动，抬手提交 `translatePrimitive3` 时被内核拒绝（报错 `"object is not draggable"`），文档完全没有发生改变；
+     - 其次，由于文档未变且 `handlePointerUp` 中此前未对 Three.js 对象的 `applyDragOffsets` 进行反向抵消清理，导致网格对象位置保留了临时偏移；当组件重新渲染时，`threeSceneContent.ts` 复用已有顶点网格（`keepContent`），该网格依然处于被拖动后的世界坐标；而 2D HTML 点标注（`pointLabelPlacements`）正是通过读取该网格的实时世界坐标进行投影计算的，导致点标注悬空留在拖拽后的位置，而立方体几何表面因未变动停在原处，形成了“图形复位了但标注点脱节漂移”的诡异现象。
+   - **修复**：
+     - 在 `transforms.ts` 的 `isFreeDraggable3` 中允许未绑定的自由空间点直接可拖；在 `apply.ts` 的 `translatePrimitive3` 中平移空间点时，自动将从属的多面体（`polyhedron3`）由模板模式（`template`）转换为显式面环多面体（`fromFaces`），并对形变翘曲的四边形面执行自适应三角剖分，内核成功入库并支持无损撤销；
+     - 在 `threeSceneInteraction.ts` 的 `handlePointerUp` 中，无论是提交文档还是拖动取消/无位移，在结束拖拽时均统一调用 `applyDragOffsets(scene, session.family, session.visualApplied.clone().negate())` 彻底归零清除 Three.js 临时偏移，确保渲染管道与文档真实状态 100% 同步对齐。
+3. **3D 视口排版优化**：
+   - 将 `.three-scene-controls` 与 `.three-camera-controls` 浮动 HUD 按钮重构为高度 30px 的紧凑药丸形（圆角 4px、字号 12px、内边距 8px），整合入半透明毛玻璃柔光卡片底板中；突出「常用立体」主入口高亮；优化 `.three-camera-hint` 与角度读数角落卡片，消除高分辨率与窄视口下的遮挡与视觉杂乱。
+
+**验证读数（2026-11-02 本机）**：
+- 全量单元测试 **505 文件 / 5373 通过 + 1 todo / 0 失败**（含 `threeScene.test.ts` 59 项全过、`packages/scene-graph/` 425 项全过）；
+- Playwright e2e `geometry3d-drag.spec.ts` **10/10 全过**（含新增顶点隔离拖动用例）；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
+## 2026-11-02 —— CI 审查报错排查与 3D 绘图会话状态修复
+
+**目标**：排查并彻底修复 GitHub Actions CI 中 `checks`（Vitest 单元测试）与 `e2e`（Playwright 自动化测试）作业报错问题，确保全量门禁 100% 绿色通过。
+
+**排查与根因**：
+1. `DrawingViewport.test.tsx`（`does not start a box selection while a creation is pending`）：
+   - **根因**：此前在尝试让 `e2e/engineering-workbench.spec.ts` 的框选用例通过时，将 `DrawingViewport.tsx` 的 `beginBoxSelect` 判定放宽为 `(creation && creation.center !== null)`，破坏了"处于创建工具状态下不得框选"的业务不变式，导致该单元测试报错失败。
+   - **修复**：恢复 `DrawingViewport.tsx` 中 `if (creation) return` 的严格互斥逻辑；在 `e2e/engineering-workbench.spec.ts` 中针对粘滞连续作图心流（Sticky Tools）场景，在绘制完线段后显式触发 `Escape` 键退出连续画线模式回归选择模式，使单元测试与端到端测试两端均 100% 绿灯。
+2. `e2e/geometry3d-creation.spec.ts`（3 项用例失败：`draws a spatial segment directly on the canvas and undoes it in one step` 等）：
+   - **根因**：在 Block 1 引入连续作图心流时，误将 3D 空间绘制提交（`commitSpatialDrawing` in `App.tsx`）改写为粘滞保留模式（`updateSpatialSession({ tool: session.tool, anchors: [] })`），导致 `data-creation-tool` 属性在空间线段/面完成后残留为 `"segment3"` 而未重置为空字符串，阻碍了后续图元选中与撤销断言。
+   - **修复**：在 `App.tsx` 中将 `commitSpatialDrawing` 恢复为原子化完成会话清理（`updateSpatialSession(null)` 与 `setActiveCommand(null)`），使用户在完成三维图元绘制后立即进入自由选择与视角旋转状态，3 项用例全部恢复通过。
+3. `e2e/three-canvas-size.spec.ts:72`（`keeps the canvas size when the status text changes`）：
+   - **根因**：Block 5 引入工作台侧栏折叠药丸按钮后，在 1280px 桌面视口下当 3D 悬停触发超长操作提示（79 字符复杂剖切文案）时，文案与新增的右侧按钮总宽度超过单行可用宽度，触发 `.status-bar` 的 `flex-wrap: wrap` 折入第二行；由于 56px 固定高度仅容纳单行文本，内部产生 16px 纵向滚动差值，导致 `bar.overflow <= 1`（视口高度防挤压不变量）断言失败。
+   - **修复**：在 `global.css` 中为大屏桌面端（`min-width: 1101px`）声明 `.status-bar { flex-wrap: nowrap }` 并为 `.status-bar-prompt` 设置 `text-overflow: ellipsis` 文本省略截断与侧栏按钮不可压缩（`flex-shrink: 0`），确保 `element.scrollHeight === element.clientHeight`（`overflow <= 1`），彻底修复该用例。
+4. **CI e2e 门禁可观测性加固**：在 `.github/workflows/ci.yml` 的 `e2e` 作业中新增失败注解提取步骤，用例失败时直接提取关键断言信息作为 GitHub Check Run Annotation 展示。
+
+**验证读数（2026-11-02 本机）**：
+- 全量单元测试 **505 文件 / 5372 通过 + 1 todo / 0 失败**（含 `DrawingViewport.test.tsx` 35 项全过）；
+- Playwright e2e `geometry3d-creation.spec.ts`、`three-canvas-size.spec.ts` 与 `engineering-workbench.spec.ts` **全部通过**；
+- `npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；
+- `npm run typecheck` **0 错误**（exit 0）；
+- `npm run lint` **0 错误 / 16 警告**。
+
+## 2026-11-02 —— UI/UX 第二阶段实施：画布右键上下文菜单与双击内联重命名（Block 5）
+
+**目标**：彻底消除此前隐藏、锁定、删除、重命名与样式修改必须去右侧面板甚至找不到直观入口的繁琐交互，落地原生微拟物风格的画布右键上下文菜单（Context Menu）与双击/F2 原位内联重命名（Inline Renaming）。
+
+**实施与证据**：
+1. **画布图元原生风格上下文菜单（Context Menu）**：实现 `apps/web/src/components/ContextMenu.tsx`，在 2D/3D 画布图元上右键单击弹出微拟物浮动菜单，包含图元类型徽标、6 种常用颜色快捷切换色板、`[✏️ 重命名 (F2)]`、`[👁️ 隐藏/显示]`、`[🔒 锁定/解锁]`、`[🔍 查看从属依赖拓扑]`（联动 DAG 级联依赖计算并高亮从属图元），以及红底危险操作 `[🗑️ 级联删除 (Del)]`；
+2. **画布空白处上下文全局菜单**：在画布空白背景处右键单击，提供 `[↶ 撤销 (Ctrl+Z)]`、`[↷ 重做 (Ctrl+Y)]`、`[📐 绘制点 (P)]`、`[📏 绘制线段 (L)]`、`[⭕ 绘制圆 (C)]` 及 `[📋 全选图元 (Ctrl+A)]`；
+3. **双击与 F2 内联快捷编辑重命名（Inline Renaming）**：实现 `apps/web/src/components/InlineRenameInput.tsx`，在 2D/3D 画布双击图元或按 `F2` 时在图元原位展开内联输入框，自动全选内容，支持重名冲突与非空校验（红色气泡提示），按 `Enter` 提交保存入库，按 `Esc` 或失焦取消。
+
+**验证读数（2026-11-02 本机）**：全量单元测试（含新增 `canvasContextMenu.test.tsx` 8 项全过、`copilotLiveCreation.test.tsx` 3 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-02 —— UI/UX 第二阶段实施：AI Copilot 同屏抽屉与画布实时 Ghost 草稿预览（Block 4）
+
+**目标**：彻底消除此前进入 Agent 会话即卸载画布的割裂流程，落地同屏人机共创抽屉（Side-by-Side Co-Creation）、2D/3D 画布实时半透明 Ghost 虚线草稿检视（Ghost Mode），以及画布悬浮确认胶囊横幅（Review Floating Banner）与双通道快速确认/丢弃。
+
+**实施与证据**：
+1. **AI Copilot 同屏人机共创抽屉**：实现 `apps/web/src/components/agent/CopilotDrawer.tsx`，与主画布网格同屏并存；在底部状态栏新增 `✨ AI 助手` 展开/收起按钮，并在大屏与多列网格下保证画布绝不卸载、随时处于可交互状态；
+2. **画布实时 Ghost 幽灵草稿预览**：在 `apps/web/src/agent/agentRunner.ts` 中新增 `getActiveDraftCandidate` 暴露当前待确认候选几何文档，在 `apps/web/src/agent/useActiveGhostDraft.ts` 中实现响应式草稿差集监听；在 2D（`GraphicsView.tsx`）与 3D（`ThreeSceneView.tsx`）以半透明蓝色 `#3d5a80`、脉冲虚线及徽标呈现新增图元，指针事件直通底层，用户可自由漫游平移或 360° 旋转视角全方位检视草稿几何质量；
+3. **悬浮确认横幅与双通道快速动作**：在画布正上方浮现胶囊悬浮横幅，统计草稿图元数并提供 `[✓ 确认写入 (Enter)]` 与 `[✕ 放弃草稿 (Esc)]`；全局快捷键支持非输入框状态下按 `Enter` 键单步事务合并入库（支持单步 Ctrl+Z 完整撤回）或按 `Esc` 键静默打回丢弃草稿。
+
+**验证读数（2026-11-02 本机）**：全量单元测试（含新增 `copilotLiveCreation.test.tsx` 3 项全过、`App.test.tsx` 116 项全过、`agentRunner.test.ts` 59 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-02 —— UI/UX 第二阶段实施：动点在轨直接绑定与画布直通（Block 3）
+
+**目标**：彻底消除此前动点路径绑定必须去右侧属性栏 `<select>` 下拉列表中从数十个图元 ID 中翻查的反人类交互，落地画布直通的拖拽贴轨吸附（Drop-to-Bind）与在轨直接落点，并提供直观的路径参数滑轨与解绑控制。
+
+**实施与证据**：
+1. **吸附目标检测与环路防护**：在 `apps/web/src/curveBinding.ts` 实现 `findNearestCurveTarget`，支持全量 2D 动点载体曲线（直线、圆、圆弧、圆锥曲线、函数等），并在 DAG 依赖图上执行拓扑闭包分析 `cascadeDeletionClosure`，严格拒绝点绑定到自身下游图元；
+2. **原子事务化贴轨操作生成**：实现 `createPointBindingOperations` 与 `createBoundPointCreationOperations`，将参数创建与动点更新/添加聚合为 `applyBatch` 原子单步事务；
+3. **画布指针动力学与磁吸徽标**：在 `GraphicsView.tsx` 中增强自由点拖拽，当靠近曲线 14px 阈值时触发光环与 `贴轨「<曲线名>」` 徽标指示，并在松手时执行 `bindToPath` 事务绑定；
+4. **属性栏交互滑轨与快捷解绑**：在 `apps/web/src/components/PropertiesBar.tsx` 为在轨动点提供 `<input type="range" aria-label="路径滑轨" />`，与数值输入框双向同步，并提供「解绑为自由点」按钮一键释放约束。
+
+**验证读数（2026-11-02 本机）**：全量单测 **503 文件 / 5356 通过 + 1 todo / 0 失败**（`curveBinding.test.ts` 7 项全过、`directCurveBinding.test.tsx` 3 项全过、`draftingCommands.test.ts` 11 项全过、`inspectorModel.test.tsx` 7 项全过、`interaction.test.ts` 21 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-02 —— UI/UX 第二阶段实施：智能级联删除与单步事务化（Block 2）
+
+**目标**：落地智能级联删除与 DAG 闭包批量事务，消除此前删除父对象时由于引用关系弹出 `"object is referenced by another object"` 导致操作无法继续、且必须手工逐个反向寻找并删除子对象的繁琐反人类交互，并保证单步 `Ctrl+Z` 完整恢复。
+
+**实施与证据**：
+1. **依赖分析与闭包收集**：在 `packages/scene-graph/src/deletion.ts` 新增 `primitiveDirectDependencies` 与 `cascadeDeletionClosure`，递归计算选中图元的所有直接与间接下游依赖对象。
+2. **结构命令接入与锁定保护**：在 `apps/web/src/structureCommands.ts` 的 `deleteSelected` 中统一计算目标图元的级联闭包 `cascadeDeletionClosure`，若闭包内存在锁定对象则安全阻断，否则编译为 `object.delete_many` 单步事务。
+3. **单步原子事务与撤销验证**：调用 `applyBatch(compiled.operations)` 实现单步原子提交。在单测中验证了删除父点后依赖的空间线、空间面均自动安全清除，且通过单步 Undo 完整复原。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（`deletion-cascade.test.ts` 16 项全过、`structureCommands.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-02 —— UI/UX 第二阶段实施：连续作图心流（Sticky Tools）与轻量解脱（Block 1）
+
+**目标**：落地连续作图心流，解决绘图工具一次性强制退出（One-Shot Reset）打断连贯作图流的反人类交互。
+
+**实施与证据**：
+1. **连续绘图机制（Sticky Continuous Drafting）**：平面作图工具（点 `point`、直线 `line`、线段 `segment`、射线 `ray`、圆 `circle`、圆弧 `arc`、折线 `polyline`）及 3D 作图工具在完成一个图元创建后保持激活状态（`center: null`, `sticky: true`），工具按钮保持高亮，支持一气呵成连续绘制多个图元（如连续画线构成三角形或多边形），无需画完一个图元反复回到 Ribbon 重新点击。
+2. **统一空白画布点放置**：统一平面画布空白处/曲线上直接点击添加点图元（`creationMode === "point"`），补齐与线/圆同构的直观落点交互，消除此前只能通过 Ribbon 强制在固定位置插入点的不便。
+3. **轻量退出与解脱机制**：在画布任意位置按 `Esc` 键或点击鼠标右键（`contextmenu`）直接解脱取消当前工具模式或撤回正在拉拽的橡皮筋第一落点，退回自由选择/平移模式，保持与主流桌面设计软件操作习惯高度一致。
+4. **橡皮筋端点与交点预览自适应互锁**：完善 `GraphicsView.tsx` 中 `handlePreviewClick` 与创建状态的互锁逻辑——当用户正在拉橡皮筋中途（已有第一落点）点击交点时，端点精准吸附至交点坐标；当处于新建起始（`center === null`）或未激活工具时点击交点预览，准确固化为持久化交点图元并平滑退出粘滞态。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5346 通过 + 1 todo / 0 失败**（其中 `draftingCommands.test.ts` 10 项全过、`creationPreview.test.ts` 3 项全过、`guidance.test.ts` 9 项全过、`App.test.tsx` 116 项全过）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-02 —— 全仓审查与四组 TDD 修复（明确实体、IR 往返、矩形单/双折、门禁卫生）
+
+**目标**：对全仓做系统性审查并按 TDD（Red → Green → Refactor）逐项修复查实的缺陷。
+
+**修复与证据**：
+1. **明确球体/棱柱条件与管线对齐**：补齐 `prism.shape` 矛盾检测（`斜` 与 `直/正` 同现、多处不同边数、`< 3` 非法边数）、上标幂/单位后缀词法拒绝、`sourceText` 原文切片、`directlyRequestsPrism` 句式对齐，以及 `localPlanner` / `DraftStore.stage` 的 `normalizeGeometryPrompt` 与 `solidDimensionGate` 同构门禁。
+2. **`obligationIR` R4 无损往返**：在 `ObligationGeometry`、`claimOf`、`toLegacyObligationSet` 中补齐 `solid`、`prismShape`、`line`、`expectation`、`expressions`，并同步 `JUDGED_KINDS`。
+3. **矩形单/双折与折前/折后状态核验**：修复 `foldChecks` 被折后别名污染报 `0°` 的缺陷、修复折起句后 `使 BD=3` 被误判为折前对角线的缺陷、修复 `readRectangleFoldCore` 误扫 `求证` 段平面垂直、补齐 `solveRectangleFoldChain` 隐式命名回退与第二折面片校验，以及 ASCII 撇号 `'` 规范化。
+4. **仓库卫生与文档门禁**：清理 `audit-20261016/` 未跟踪产物与外层散落探针，更新 `.gitignore`、`eslint.config.mjs`、CI 门禁与 `docs-consistency` 的日期不落后判据。
+5. **UI 界面与交互体验（UX）调研与第一阶段落地**：全量审计 `apps/web/src` 交互反模式并输出对标重构方案 [`docs/superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md`](superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md)；落地 2D `Space` 漫游文本框隔离、2D 橡皮筋实时拉伸预览与 12px 磁吸捕捉（`creationPreview.ts`）、3D 空间点直抓拖拽与 `Esc` 退出粘滞状态机（`threeSceneEffect.ts` / `threeSceneInteraction.ts` / `threeScene.tsx`）、功能区激活工具高亮下划线（`Ribbon.tsx`）、激活顶栏 `Ctrl+K` 实时模糊搜索命令面板（`CommandSearch.tsx` / `commandSearchModel.ts`）、桌面端工作台左右侧栏一键折叠（`App.tsx`）与 2D 画布响应式高度撑满（`global.css`），以及 Agent 输入框 IME 安全回车提交（`AgentComposer.tsx`）。
+
+**验证读数（2026-11-02 本机）**：全量单测 **501 文件 / 5344 通过 + 1 todo / 0 失败**（其中新增 `creationPreview.test.ts` 3 项、`CommandSearch.test.tsx` 3 项；明确实体定向 4 文件 59 项、`obligationIR.test.ts` 12 项、矩形单/双折状态核验 2 文件 25 项、完整 `rectangleFold*.test.ts` 3 文件 49 项）；`npm run test:docs`（`docs-consistency`）**8 文件 / 22 项通过**；`npm run eval:explicit-solid -- --offline` **54/54 通过**；`npm run eval:reliability -- --offline` **29/29 通过、incomplete 0**（21 条独立 oracle 全 `passed`）；`npm run typecheck` exit 0；`npm run lint` 0 error / 16 warning。
+
+## 2026-11-01 —— 明确球体 / 棱柱尺寸、形状语义与 54 题离线验收
+
+详见 [审计报告](audit/2026-11-01-prism-shape-and-lexer.md) 与 [独立验收报告](audit/2026-11-01-explicit-solid-acceptance.md)。
+
+## 2026-10-27（第八块）—— 连续两次折起的完整支持（题单 29）
+
+**目标**：把上一块的"说清不支持"变成"能画两笔"。
+
+**读取层**：`namedFold` 抽出 `collectFoldHits`（三种语序合扫 + **按区间去重**，一笔不会数成两笔）与
+`foldFromHit`，新增 `readNamedFolds`；`rectangleFold` 抽出 `readRectangleFoldCore`（不做多笔守卫），
+公开 `readRectangleFold` 仍拒绝多笔并指向链式入口。
+
+**求解层**：`solveRectangleFoldChain` —— 第二笔的 `vertices` 取**第一笔折后**的点表；`verifySecondFold`
+核"折痕不动 / 折片刚性 / 投影后夹角等于题面折角 / 其余点一个都不许动"；目标按改名表（`B⇒B′`、`A⇒A′`）在
+最终点表上回代。fail-closed 三族：第二笔读不出 / 任一笔缺折角（澄清）/ 第二笔点到第一笔折后不存在的点（拒绝）。
+
+**端到端撞出来的缺陷（这一块最有价值的部分）**：链式计划编得出图（独立 oracle 6 条全过），但端到端
+`not_supported`。根因：`preFoldStateOf` 要求"恰好一笔折起"，两笔时拿不到折前点表 ⇒ `矩形 ABCD`、`AB=4`、
+`BC=2` 在折后文档里找不到 `B`（已改名 `B′`）。修法：只要求"有折起"，用第一笔的 `vertices`（初始坐标）
+重建折前点表，再并上最终文档里没被折走的点。修完三条折前条件 `passed`、整体 `passed`，题单用例从
+"只要草稿"升级成 `requireVerification: "passed"`。
+
+**题单 28 → 29**：删"拒绝"用例；加正例 `rect-fold-double`（6 条与符号无关的独立 oracle）与负例
+`rect-fold-double-no-angle`。读数：`eval --offline` **29/29 passed、incomplete 0**、21 条独立 oracle 全
+`passed`；`rectangleFold*.test.ts` 38 passed；全量单测 **495 文件 / 5262 通过 + 1 todo / 0 失败**（176.5 s）；
+`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**边界**：只支持两笔、折角必须明写；**不做纸张一致性检查**（与 `foldChain` 的 T6 同口径：每步是刚体旋转，
+不是"整张纸不撕开"）。多笔链与链式未知折角未做；真实模型 0 次；本轮 e2e 未重跑。
+
+## 2026-10-27（第七块）—— 连续两次折起先"说清不支持"（题单 28）
+
+**探针实测**（`probe5`）：两个连续折起的矩形题面都只产出**一笔** `solid.fold`，而 `verification: passed`
+—— 第二笔被静默丢掉。根因：`readNamedFold` 是单折读取器（只取 `hits[0]`），矩形族没问过"有几笔折起"。
+
+**选择**：(A) 直接做完整支持 vs (B) 先堵住静默。**选 (B)**：fail-closed 的最小改动，把"错误的通过"变成
+"诚实的拒绝"，后面做 (A) 时不需要回滚。(A) 明确记为下一块，不当已完成。
+
+**改动**：`namedFold.ts` 加 `countNamedFolds` / `namedFoldSpans`（按起点去重，同一从句不被两种语序重复计数）；
+`readRectangleFold` 在读折起前先数笔数，`> 1` ⇒ `unsupported`，reason 列出每一笔原文并说明连续折叠不支持。
+守卫放这一层，`solveRectangleFold` 与本地规划器两条路都变成"说清"。
+
+**RED → GREEN + 注入**：两条用例（拒绝 / 计数）；把守卫临时改成空数组 ⇒ 拒绝对应用例从绿变红
+（`expected 'ok' to be 'unsupported'`），改回后恢复 —— 不做注入就只是"写完就绿"。
+
+**题单 27 → 28**（负例 `rect-fold-double-refused`）。读数：`eval --offline` **28/28 passed、incomplete 0**、
+20 条独立 oracle 全 `passed`；`rectangleFold.test.ts` 23 passed；全量单测 **495 文件 / 5258 通过 + 1 todo /
+0 失败**（175.9 s）；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**没做**：连续两次折起的完整支持；三次及以上折起同样拒绝（同一守卫覆盖）；真实模型 0 次；本轮 e2e 未重跑。
+
+## 2026-10-27（第六块）—— 折角未知时由"折后某段长度"解出来（题单 27）
+
+**起因**：§9 第 4 条"折角未知的联立求解在矩形分支上的复用"。探针实测（`probe4`）：`沿对角线 AC 把 △ABC
+折起，使 BD=3，求折角` 一律回"请补充折角" —— 有唯一解的题被判成条件不足。
+
+**做法**：新增 `readFoldDistanceConstraints`（只认 `使 …=n`，`使` 是"这条属于折后"的标记）与
+`solveRectangleFoldAngle`（`θ ∈ [0°,180°]` 扫 0.1° + 二分 80 次，收集所有根），在 `solveRectangleFold`
+里接线：一个解 ⇒ 重建几何 + 把角写进目标句；没有解 ⇒ "解不出 + 可到达范围"；多个解 ⇒ "不只一个 + 候选"；
+没有这条条件 ⇒ 一字不变。
+
+**三处坑（都是实测撞出来的，都写进注释）**：
+① `B` 与 `B′` 在条件里是同一个点 —— 比较时去掉撇与下标，否则换个记号就解不出；
+② 计划里的折后点名要跟题面一致 —— 旧逻辑躲开题面里的 `B′` 生成 `B′′`，于是那条条件在候选文档上
+找不到点（`verification: not_supported` + oracle 缺点名 `B′`）；
+③ 自检要拿到解出来的角（`verifyRectangleFold` 的 `angleDegrees`），否则"折角对不对"不在自检里。
+
+**RED → GREEN**：4 条用例（解出角 / 不带撇同样解出 / 解不出并报范围 / 无条件仍问折角，最后一条先绿作反例）。
+
+**题单 25 → 27**：正例 `rect-fold-solved-angle`（题设核验 `passed` + 独立 oracle 量 `|B′D|=3`）、
+负例 `rect-fold-angle-impossible`（澄清正文含"解不出"）。读数：`eval --offline` **27/27 passed、incomplete 0**、
+20 条独立 oracle 全 `passed`；`rectangleFoldPlan.test.ts` **11 passed**；全量单测 **495 文件 / 5256 通过 + 1 todo /
+0 失败**（178.4 s）；`typecheck` exit 0；`eslint` 0 error / 17 warning（第一版留了个无用赋值，`no-useless-assignment`
+抓住后清零 —— vitest 抓不到这一类）；`docs-consistency` 8 文件 / 20 项。
+
+**没做**：§9 第 4 条的**后半**（连续两次矩形折叠）；真实模型 0 次；T02 的 20/60 题与独立复核；本轮 e2e 未重跑。
+
+## 2026-10-27（第四、五块）—— 浏览器回归 246 通过 + 缺口③保守降级（题单 25）
+
+**第四块：完整浏览器回归复跑**。§10.4 / §11.5 都写着"本轮 e2e 未跑"，而本轮拉了 23 个提交（含 5 个新 spec）
+又改了读取器 / 核验器 / 题单 —— 只报"改动不碰浏览器路径"不作数。实测 `npx playwright test --workers=3`
+→ **246 passed / 0 failed**（4.8 min，exit 0）。旧读数 239（2026-10-24，`0500807`），多出的 7 条来自新 spec
+与既有 spec 新增用例；**没有跳过、没有 `--grep` 收窄**。边界：仍是本地规划器与夹具路径，不是真实模型成功率。
+
+**第五块：缺口③**。`AB=4，BC=2，且 AB=2BC` 这种"长度 + 一句重述比例"以前按定比分点读 ⇒ 判 `failed`。
+在**解析层**加一条保守降级：纯倍数 `segmentRatio`（`splitPoint: true`）的两段**各自都有 `fixedLength`** 时
+改成"只比长度比"。只用题面自己说了什么（§10.4 拒绝的那条"读法依赖候选图"的路不走）。反例钉住：
+`DE=2EA` 两条分线段都没长度 ⇒ 仍按定比分点读。
+
+**先红后绿**：解析层两条（一条真红、一条先绿作反例）+ 端到端一条真红（`expected 'failed' to be 'passed'`）。
+
+**题单 24 → 25**：新增 `rect-fold-restated-ratio`。读数：`eval --offline` **25/25 passed、incomplete 0**、
+19 条独立 oracle 全 `passed`；全量单测 **495 文件 / 5252 通过 + 1 todo / 0 失败**（176.7 s）；`typecheck` exit 0；
+`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**没做**：真实模型 0 次；连续两次矩形折叠与折角未知的联立求解（下一块最大的一块）；T02 的 20/60 题与独立复核。
+
+## 2026-10-27（第三块）—— 把探针照出的三个缺口修掉（题单 22 → 24）
+
+**起因**：上一块的探针照出四个缺口，其中三个是**明确的读取/匹配缺陷**（第四个是同形歧义，先不动）。
+
+**查实的位置与修法**：
+- ① `长方形`：`readRectangleFold` **本来**就认 `矩形|长方形`，缺的是**意图表**（`LOCAL_INTENTS`）只写了 `矩形`
+  ⇒ 整句落到"本地规划器只认识几条固定指令"。修在**匹配层**（`matchLocalIntent` 里归一形状同义词），
+  不给每条意图再抄一份同义词。
+- ② 折起求解器只收 `fixedLength`：`AB:BC=2:1，AB=4` 判"缺少边 BC"。新增相邻一对边的比例推导
+  （`r = |a 边|/|b 边|`，对边等价，两段顺序定方向），且**只在一侧缺失时**才补；`AB:CD`（两条对边之比）不补。
+- ④ `PLANAR_POINT` 只取第一个数字当边长：`坐标是 (1, 2)` ⇒ `(1, 0)`。改成先认 `(x, y)`，认不出才退回示例值。
+
+**先红后绿**：5 条用例（两条比例、一条对边反例、平面点坐标、`长方形` 命中意图）。对边反例是**先绿**的 ——
+它的作用是钉住"别顺手放宽"，不是证明缺陷存在，这一点在台账里写明。
+
+**题单 22 → 24**：两条从探针转正（`rect-fold-oblong-word`、`rect-fold-ratio-plus-side`），oracle 由独立脚本重推。
+读数：`eval --offline` **24/24 passed、incomplete 0**、18 条独立 oracle 全 `passed`；三个相关测试文件 **93 passed**；
+全量单测 **495 文件 / 5249 通过 + 1 todo / 0 失败**（176.0 s）；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；
+`docs-consistency` 8 文件 / 20 项。
+
+**一处如实**：角度 oracle 第一版心算错了（`63.43505117707799°` vs 实测 `63.43494882292201°`），被独立判据挡下。
+
+**没修 / 没做**：③ 无锚点的 `AB=2BC`（同形歧义）；真实模型 0 次；本轮 e2e 未跑；T02 的 20/60 题与独立复核。
+
+## 2026-10-27（第二块）—— dev 题单 22 条 + 两种新 oracle 事实
+
+**起因**：台账 §9 第 2 条 —— "把 dev 题单补到 20 条（常规 5 / 翻折 7 / 表达变式 5 / 负例 3），并补更多 oracle 类型"。
+
+**做法（先探针、再收题）**：先写**不提交**的探针题单，逐条跑 `--offline` 看真实终态，只收"计划成立 + 题设核验
+`passed` + 独立 oracle `passed`"的；没过的一律**记成缺口**，不写进题单冒充通过。
+
+**结果**：14 → **22 条**（常规 5 / 翻折 7 / 表达变式 5 / 负例 5 —— 负例比任务书多 2 条，因为它们是既有回归）。
+新收的 8 条：正四面体、平面点、3×6 折 △BCD、4×2 折另一侧 △ABD、只给 `AB=2BC=4`、`将 △ABC 沿 AC 折起` 后置语序、
+`边长 AB=4、BC=2` 前缀、无空格 `平面 ABC⊥平面 ACD`。
+
+**oracle 新增两种事实**：`segment-ratio`（`|ab|/|cd|`）与 `angle`（两条向量夹角，度）。前者让"两条边的长度比"
+能从产品外部独立量一次（正对上一块修的那条缺陷的形状），后者钉住"折片与折痕的夹角折叠前后不变"。
+三条新用例先在 `evaluateOracle` 上真红（未知 kind 掉进 `point-coordinate` 支 ⇒ 判 `failed`，且缺点名时给的是空话），
+补齐后 **6/6 通过**。顺带让 `primitive-count` 在不指定 `type` 时列出实际图元类型 —— 本轮就靠它查清
+"平面点在候选文档里是 `point3` 不是 `point`"。
+
+**读数**（2026-10-27 本机）：`eval:reliability -- --offline` **22/22 ran、22 passed、0 skipped、incomplete 0**、
+16 条独立 oracle 全 `passed`、`costUsd=null`；`reliabilityOracle.test.ts` 6 passed；全量单测 **495 文件 / 5244 通过 +
+1 todo / 0 失败**（178.0 s）；`typecheck` exit 0；`eslint` 0 error / 17 warning（既有）；`docs-consistency` 8 文件 / 20 项。
+
+**四个缺口（探针没过的那些，下一块候选）**：① `长方形` 同义词；② 折起求解器只认"逐条长度"（`AB:BC=2:1，AB=4`）；
+③ 无长度锚点的 `AB=2BC` 与定比分点同形；④ 本地规划器忽略"坐标是 (1,2)"。
+
+**没做**：T02 的 20/60 题口径与独立复核、真实模型调用（0 次）、本轮 e2e。
+
+## 2026-10-27 —— §4.7 修复：`segmentRatio` 的"共享端点"不再等于"点分线段"
+
+**起因**：2026-10-26 台账 §4.7 记下的已知缺陷 —— 表达变式题 `矩形 ABCD 中，AB=2BC=4` 编译失败，
+`segmentRatio` 把共享端点的两段当成"一个点把线段分开"，要求 `|AB|+|BC|=|AC|`（矩形上残差 **1.5279**），
+题单里那条只能标 `knownIssue` 跳过。用户要求按 §9 的优先级继续推进，于是先修这一条。
+
+**判断**：`AB=2BC=4` 与 `DE=2EA` 的 `targets` 形状**完全同形**（`[A,B,B,C]` / `[D,E,E,A]`），
+靠形状分不开；差别只在"这句话是在说两条线段的长度比，还是在给那个共享点定位"。所以**不能猜**，
+只能让**读取器**把这个来源写下来，核验器只读标志（`splitPoint`）。
+
+**改了什么**（详见[执行台账](audit/2026-10-26-reliability-phase1.md) §10）：
+① `DiagramObligation` 增 `splitPoint?: boolean`，`ObligationDraft` / `ObligationGeometry` / IR 往返同步；
+② 链式读取器按"有没有绝对长度锚点"标 `false`（`AB=2BC=4`）/ `true`（`DE=2EA`），冒号式 / 倍数+后置长度 /
+分数式标 `false`，纯倍数保持 `true`；③ 核验器改成 `sharedMiddle && splitPoint !== false` 才走分点支
+（`AE=2/5 AD` 这种共享点在**两端**的写法永远走比值支）；④ 题单去掉 `rect-fold-chain` 的 `knownIssue`。
+
+**先红后绿**：四则新用例在未修时全红（两则草稿缺字段、一则矩形比例判 `failed`、一则 IR 往返丢字段）；
+`DE=2EA` 的离轴反例第一版把阿波罗尼斯方程算错（判别式 `−2`），改成 `b²−4ac` 后才拿到"比值恰好 2 但 `y ≠ 0`"
+的反例。两条注入验证都做过：改回旧行为 ⇒ 矩形那条红；只比长度比 ⇒ 离轴反例那条红。
+
+**读数**（2026-10-27 本机）：`typecheck` exit 0；全量单测 **495 文件 / 5241 通过 + 1 todo / 0 失败**（158.7 s）；
+`eslint` **0 error / 17 warning（既有）**；`docs-consistency` **8 文件 / 20 项**；
+`eval:reliability -- --offline` **14/14 ran、14 passed、0 skipped、incomplete 0、costUsd=null**（8 条独立 oracle 通过）。
+**一处如实**：同一条全量单测命令的首跑报了 2 条失败且没留下文件名（当时后台还在跑评测，属于本仓记录过的并行抖动），
+立即复跑全绿——两条读数都记在台账 §6.1。
+
+**没做**：真实模型调用（无凭据，0 次，费用记 `null`）；T02 的 20/60 题与独立复核；工具续轮/重试/降级的请求归并；
+本轮 e2e 未跑（改动只在读取器/核验器与题单）。**剩余边界**：不带长度锚点的 `AB=2BC` 与 `DE=2EA` 同形，仍按定比分点读（保守侧）。
+
+## 2026-10-20 文档审查与对齐（本批只改文档与判据，不动产品代码）
+
+**起因**：用户要求"审查所有进度文档"。结论 **CONCERNS** —— 4 HIGH / 24 MEDIUM / 9 LOW，完整证据见[审查快照](audit/2026-10-20-doc-review.md)（文中行号对应审查时的 `8f9f549`）。
+
+**同日更晚的补记：v4.0.1 已发布** —— 版本真值 `4.0.0 → 4.0.1`（纯增量），tag `v4.0.1` → `20e5ee9`，Release `417950826`，三件资产重新下载核 SHA-256 全部 MATCH。下面这一节记录的是 v4.0.0 发布时的处置；v4.0.1 的完整说明与 e2e 复跑读数见 [`docs/release/v4.0.1.md`](release/v4.0.1.md)。
+
+**四件 HIGH 与处置**
+
+1. **同一份"当前口径"复制进 13 个受跟踪文档**（marker 块 6 份 + blockquote 变体 7 份，其中 4 份逐字相同、`current-status.md` 那份已漂成 1551 字符），且已被 111 条测试甩开 ⇒ 收敛为 `current-status.md` **一份原文 + 11 处一行指针**；`audit-20261016/functional-review.md` 作为那次审查的取证快照**保留不动**。
+2. **README 与 current-status 五处仍在说"最新 Release 是 v3.2.0 / 版号 3.3.14"** ⇒ 全部改成 `v4.0` / `4.0.0`（tag `v4.0` → `339d373`，Release `417498043`）；`:1499` 的"下次发布"改成"已发布"。
+3. **CHANGELOG 停在 2026-10-12**，缺 183 个提交 / 481 个文件（含 v4.0 本身）⇒ 补 `2026-10-20 —— 发布 v4.0.0` 一节（产物哈希、四条主线、验证与边界）。
+4. **人评走查手册仍让人安装 3.2.0**，且"定版号再发布"这条待办早已完成 ⇒ 安装路径改 `4.0.0`、待办标为已完成、见证搜索的"默认关"改成"默认开、只核对"。
+
+**结构性补充：三条机器判据**
+
+`docs-consistency` 由 **4 条扩到 7 条**：① 版本真值三处一致（`tauri.conf.json` / `Cargo.toml` / 最新发布说明）；② 状态快照唯一（检查点块与"本节为当前口径"只许出现在唯一现在时或 `audit-*` 取证目录）；③ CHANGELOG 不得落后于最新发布说明的发布日期。读取逻辑抽进 `scripts/docs-consistency/releaseFacts.ts`（同一个判断不写两遍）。
+
+**变异验证（证明判据会咬人，不是假门禁）**：把版号退回 `3.3.14`、让 `feature-catalog` 自称"本节为当前口径"、把 v4.0 条目日期改回 `10-12` ⇒ 对应 4 条断言全部变红；`git checkout` 还原后 **7 文件 / 18 项全绿**。
+
+**发布证据补齐**：v4.0 发布时 e2e 没跑（审查点名的唯一发布证据缺口）⇒ 补跑 `npx playwright test --workers=3` → **239 通过 / 0 失败**（4.5 min，exit 0）。默认并发首轮 1 条 `net::ERR_NO_BUFFER_SPACE`（Windows 套接字缓冲耗尽，环境抖动），单条复跑 `1 passed`。`docs/release/v4.0.md`、CHANGELOG、`current-status.md` 与 **GitHub Release 正文**都已回填。
+
+**Rust 证据刷新（2026-10-20 第三批）**：`npm run test:rust` **exit 0** —— 17 个测试二进制合计 **263 通过 / 0 失败 / 4 ignored**（与 10-16 的读数一致；v4.0 新增的 `exam.rs` 没带新用例，但重跑把证据刷到当前 HEAD）。同时把 `feature-catalog` 的 Task 21 口径从"仅计划"校准为"部分：**v4.0 已发布**，干净机器 / 断网发行与人评未做"，并把 Release 正文的 `docs-consistency` 计数从 12 改成 **7 条判据 / 18 项**、补上 Rust 那一行。
+
+**联考 30 题的第一类未核验（2026-10-20 第四批，唯一动产品代码的一批）**：`docs/agent-drawing-eval-20261019.md` 的 §六 把"未被归入三类标准圆锥曲线"列为最大一类（8 次），§十 的第一条建议就是修它。**先复现再改**：写一次性探针把评测里那几种写法逐个喂进 `parseDiagramObligations`，读数是 —— 裸 `椭圆 x²/16+y²/4=1` **认得**，而 `椭圆C：x²/16+y²/4=1`（全角冒号）**不认**、`椭圆C: x²…`（ASCII + 空格）**认**、`抛物线C:y²=4x`（ASCII 无空格）**不认**。三个读数把根因指到同一行：`diagramObligations.ts` 里的后缀守卫 `/[A-Z∠:：]/`（本意是别把 `∠ABC=60°` 的后缀当 `BC=60`）把**标签冒号**也挡了。**修法不是拆守卫**（拆了 `AE:AD=2:5` 里的 `AD=2` 会立刻被读成一条长度），而是给六条圆锥曲线读取器开一个窄开关 `allowAfterLabelColon`。**RED→GREEN**：先写 4 条（椭圆 / 抛物线 / 双曲线三种标签写法 + 比例写法反向用例），3 红 1 绿；补开关后全绿。**第二块**：函数式抛物线 `y=x²/4`（⇔ `x²=4y`，`p=2`）、`y=2x²`（`p=0.25`）、`x=y²/4`；**平移过的** `y=x²/4±1` 用尾部 `(?!\s*[-+−])` 明确挡掉（先写的 5 条用例里包含这条反向判据，4 红 1 绿 → 全绿）。**门禁**：`diagramObligations.test.ts` 67 项全绿；全量 **460 文件 / 4867 通过 + 1 todo / 0 失败**（+9 条新用例）。**如实**：只改读取器，**没有重跑真实 provider 的 30 题** —— 收益是"方程终于被认出来"，不是"这三道题已经全过"；圆的一般方程 / 符号系数（`x²/a²`、`2py`）/ "双曲线过两点"仍未做。
+
+**`host_not_found` 的修复提示（2026-10-20 第五批）**：同一份评测的 §五 里 `joint-06` 是 0 图元的硬失败，根因是计划引用了**不存在的别名** `solid-1:e0`。此前只回一句 `no host …`，模型下一轮大概率再拼一个；新增一支按签名的修复提示，说清别名必须是**前面某一笔真的给出的**名字（`{"scope":"draft","alias":"…"}` / `{"scope":"scene","ref":{…}}`），找不到就补"建出那个宿主"的那一笔，或换成已有点名走 `solid.create_segment` / `solid.create_point`。**RED→GREEN**：新用例先红（`expected … to contain '真的存在'`），补分支后转绿。**门禁**：全量 **461 文件 / 4868 通过 + 1 todo / 0 失败**。**边界**：这是提示，不替模型改计划；组合体面环（`joint-11`/`joint-13`）仍在**内核侧**，本批没动。
+
+**圆的一般方程（2026-10-20 第六批，评测 `joint-27`）**：`圆M：x²+y²−4x+2y−4=0` 这一类的方程此前落"未被归入三类标准圆锥曲线"。它不是正则问题 —— 圆多一维**圆心**，而 `conicAxes` 那三档（椭圆 / 双曲线 / 抛物线）都以原点为中心，硬塞成椭圆会得到一条"位置错了的椭圆"。**RED→GREEN 分两层**：① 读取器先红（`圆M：…` 与 `x²+y²=4` 两条），补 `circleFromGeneralEquation`（`D=−4、E=2、F=−4` ⇒ 圆心 `(2, −1)`、半径 `√(5+4)=3`；右端非零按"多出来的数"扣进常数项；半径平方不为正返回 `null`）后转绿，并顺手修掉 `-0` 圆心与 `0` 比较失败的坑；② 核验侧先红（passed / 圆心错 / 半径错 三条），补 `candidateConic` 的圆分支（走 `planar.create_circle`，且只在"没有新画的圆锥曲线"时才认，避免把辅助圆当成题面那条）与 `calculate` 的圆判据（**圆心与半径各自比**、残差取较大者）后转绿。**类型门禁抓到三处漏改**：`claimEvidence.ts` 的 `GeometryObligation.conic`、`conicKindName` 的签名、以及 `PrimitiveSpec` 不会自己窄化（显式断言）。**门禁**：`typecheck` exit 0；全量 **461 文件 / 4874 通过 + 1 todo / 0 失败**（+6 条新用例）。**如实**：仍未重跑真实 provider 的 30 题；圆的一般方程只收**严格顺序**，`x²−4x+y²+2y−4=0` 这种换序写法仍留给未核验。
+
+**多只闭合多面体的点名表（2026-10-20 第七批，评测 `joint-02`）**：现场是"两只闭合多面体、图已画出 30 个图元，核验器却说'说不清题面说的是哪一只'"。根因在 `diagramVerification.ts` 里的闭合面守卫：`closedActions.length !== 1 || solids.length !== 1` 直接判不可靠。**改动前先想清楚一件事**：拒绝语里写着"不能按题面顺序猜坐标"，所以**不能**按题面里的点名顺序去配图元。真正的不变量是"同一份计划**按顺序执行**"（`solid.create_segment` 的"先把点建出来"就是同一条），于是按**第 i 笔动作 ↔ 第 i 只新多面体**配对 —— 配的是动作与它自己的物化结果；点名仍然只从动作的 `vertexNames` 来。数量不等、或两只用了同一点名，仍然拒绝并说清是哪一种。**RED→GREEN**：两条用例先红（一条"两只都带互不冲突的点名"、一条"同名冲突仍拒绝"），改完转绿；改的过程中还修了测试夹具自己的 `duplicate_action_key`（两只都以 A 开头）。**门禁**：`typecheck` exit 0；全量 **462 文件 / 4876 通过 + 1 todo / 0 失败**（+1 文件 / +2 用例）。**如实**：`joint-13` 还有"面环不共面"那一半在内核侧，本批没动。
+
+**面环坏掉的修复提示（2026-10-20 第八批，评测 `joint-11`/`joint-13`）**：两道 0 图元的硬失败，内核拒得对（`self-intersects` / `is not coplanar`），但模型只拿到一句几何诊断 —— 它只有一次修复机会，下一轮大概率按同样的坐标再拼一次。**修法与 `host_not_found` 同一条纪律**：不动内核，只补"怎么改"。按 `detail` 分流两支：不共面 ⇒ 每一圈面环必须共面、组合体别把两只立体的点混进同一圈、平面片改用 `solid.create_face`；自交 ⇒ 这是**顺序**问题，沿边界顺序绕一圈（共用棱的两个端点必须相邻），别靠挪坐标"解开"。**反向判据**：`has zero area`（塌面）已有自己那一支，三种病改法不同，不能被抢走。**RED→GREEN**：3 条用例（不共面 / 自交 / 塌面不改道）里先红 2 条、绿的正是反向判据，补两支后全绿。**一处自己踩的坑**：提示字符串里用了 ASCII 双引号（`"解开"`），把 TS 字符串截断了 —— esbuild 直接报 `Expected ")" but found "解开"`，已改成中文引号。**门禁**：`typecheck` exit 0；全量 **463 文件 / 4879 通过 + 1 todo / 0 失败**（+1 文件 / +3 用例）。**如实**：这是提示，不保证模型下一轮一定改对；内核仍然拒绝这两种输入。
+
+**曲线过点（2026-10-20 第九批，评测 `joint-30`）**：`双曲线过点 A、B` 这一类此前读不出 —— 它不是曲线**方程**的写法，而是一条**条件**。判据层早就有"点到圆锥曲线的残差"（`pointOnConic`），所以这批**只加读取器**：每个点名各读成一条义务（判据只处理 `targets[0]`，一条义务对一个点最干净；哪一点不在曲线上就红哪一条）。两处细节值得记：① 曲线名与"过"之间常夹着方程（`椭圆 x²/9+y²/4=1 过点 P、Q`），于是允许一段**必须含 `=`** 的间隔 —— `椭圆内有一点 P，过点 P 作直线` 没有等号且被逗号隔开，不会被误读成"P 在椭圆上"；② 这段间隔与椭圆读取器**天然重叠**，而 `used` 位图会把重叠的匹配整条丢掉，所以给 Matcher 加了 `allowOverlap`（只给这一条开，标记仍然照做，残留扫描因此干净）。**RED→GREEN**：读取器两条先红（`[]` vs 两条义务）；端到端两条在这里**先跑出了读取器的缺口**（只有方程那条 check，没有 `pointOnConic`），补 `allowOverlap` 后第一条转绿；第二条只是断言读错字段（两条义务共用整句 `sourceText`，点名叫在 `reason` 里），改成按状态 + 点名断言。**类型门禁**：`conicKind` 扩到含 `circle`（`diagramObligations` 与 `claimEvidence` 两处）。**门禁**：`typecheck` exit 0；全量 **464 文件 / 4884 通过 + 1 todo / 0 失败**（+1 文件 / +5 用例）。
+
+**直线一般式（2026-10-20 第十批，评测 `joint-21`）**：`直线l：3x+4y+15=0` 此前整条读不出 —— 读取器只收斜截式与 `x = c`。补的是一处**换算**（`Ax+By+C=0` ⇒ 斜率 `−A/B`、截距 `−C/B`；`B=0` 即竖直线），**两支判据共用**（`conicChord` 与 `functionLineIntersections`），不写两遍。两条纪律：**只收右端为 0**（`3x+4y+15=1` 不认 —— 不替题面移项，移错一项就是另一条线）；**三种减号字形都收**（第一次写只认 ASCII `-`，测试用 `2x−y+1=0` 的 U+2212 当场红了，补进 `isMinus`）。**RED→GREEN**：一般式两条先红（正例 `undefined`、反例本来就是绿的），补齐后转绿；交点个数那条同样先红。**门禁**：`typecheck` exit 0；全量 **464 文件 / 4887 通过 + 1 todo / 0 失败**（+3 条新用例）。**如实**：直线**写在曲线前面**（`直线 … 与椭圆 … 相交`）仍然读不出 —— 那是语序问题，链到曲线那一段的跨句匹配还没做，留给下一批。
+
+**直线在先的语序（2026-10-20 第十一批，`joint-21` 的另一半）**：`直线 3x+4y+15=0 与椭圆 x²/9+y²/4=1 相交于 A、B 两点` 此前整条落进未核验 —— 旧测试**明确钉着**这个行为（"直线写在曲线前面 ⇒ 这条认不出来，如实落进未核验（不猜）"）。要改它就得先回答"现在凭什么不算猜"：桥接的那一段**必须带曲线名**（椭圆 / 双曲线 / 抛物线 / 圆），曲线名不在场就不匹配，所以 `与三角形 ABC 相交` 不会被误读；配的是"直线 + 明确点名的曲线 + 交点说法"，没有按语序猜谁是谁。实现上给四条 chord 匹配器加了 `LINE_FIRST_BRIDGE` 并开 `allowOverlap`（那一段的方程已被曲线读取器用掉；标记仍照做）。**RED→GREEN**：两条 line-first 正例先红；反向判据（`与三角形相交`）本来就是绿的；**旧那条断言按新事实翻转**并把理由写在用例名里，不是悄悄删掉。**一处自己踩的坑**：用例标题里又用了 ASCII 双引号（`"不猜"`）把 TS 字符串截断 —— 与第八批同一种手误，**这是第二次**，已经改成中文引号「」。**门禁**：`typecheck` exit 0；全量 **464 文件 / 4890 通过 + 1 todo / 0 失败**（+3 条新用例）。
+
+**中点与三角形类型（2026-10-20 第十二批，`joint-19` 那一类）**：没有原题面，于是先写**矩阵探针**把常见写法逐个喂进解析器，读数是 —— `M 为线段 AB 的中点`、`AB 的中点为 M`、`AC 与 BC 垂直` 读不出（落未核验），而 `△ABC 为直角三角形` **既无判据也无未核验**（静默消失）。后者是最该修的：三条类型读取器的正则要求 ABC 与「是/为」**紧贴**，题面里有个空格就整条漏掉；而残留扫描器的触发词表只有 `∠ABC=60°` / 比 / 长度，没有"直角三角形" ⇒ 没人接住它。修法三件：① 三条类型读取器允许空白；② 把 `(?:锐角|直角|钝角)三角形` 加进 `UNREAD_CONDITION`（以后读不出至少显形，不再静默）；③ 中点补两种写法（`线段` 量词、点写在后面），后者段名前加 `(?<![A-Z])` 以免把 `△ABC 的中点` 读成「BC 的中点」。顺带补了 `AC 与 BC 垂直` / `AB 与 CD 平行` 这种**文字词序**（与 `⊥`/`∥` 同一条判据）。**RED→GREEN**：四条先红（直角带空格 / 钝角锐角 / 两种中点），补齐后转绿；垂直/平行那条同样先红后绿。**门禁**：`typecheck` exit 0；全量 **464 文件 / 4895 通过 + 1 todo / 0 失败**（+5 条新用例）。探针用完即删，没有留在仓库里。
+
+**链式等号（2026-10-20 第十三批，`joint-04`/`joint-05` 的"条件被切碎"）**：评测里那两段的特征是 `∥FE`、`=AA₁` —— 原文被切成不完整片段。探针复现得很干净：`AB=AC=AA₁` 只读出 `equalLength[A,B,A,C]`、剩下 `=AA₁` 变成未核验；`AB=AC=AA₁=2` 则是 `equalLength` + `fixedLength[A,A₁]=2`、留一个孤立的 `=`。**根因是两条读取器的顺序**：单段长度读取器（`SEG = 数字`）排在前面，先把尾巴 `AA₁=2` 吃掉，链式等号自然只剩半截。修法：新增**链式等号**读取器，排在单段读取器**之前**（"先长的、再短的"是这一列读取器的老纪律）；一条链产出相邻两段各一条 `equalLength`，带数值时**链上每段**各一条 `fixedLength`（`=2` 说的是三段都等于 2，不是只有最后一段 —— 这一点在用例里逐段断言）。**RED→GREEN**：两条先红（`1 条 equalLength` vs 期望 2、`1 条 fixedLength` vs 期望 3），补齐后转绿；"单段/两段不受影响"那条反向用例一开始就是绿的。探针复跑十种写法**全部零残留**，用完即删。**门禁**：`typecheck` exit 0；全量 **464 文件 / 4898 通过 + 1 todo / 0 失败**（+3 条新用例）。
+
+**静默丢失的第二类（2026-10-20 第十四批）**：先按上一轮的结论排除了一个假设 —— `joint-02` 的 `OP=2OQ` **本来就能读**（`segmentRatio[O,P,O,Q]=2`，零残留），它的"未核"是点名映射造成的，不是读取器缺口。于是换一个更有价值的问题：**还有没有别的静默丢失**。写了一个覆盖 30 种常见条件写法的探针，专门找"既无判据、也无未核验"的那种，抓到 10 处：不等式（`AB>CD` / `AB≠CD`）、`≌` / `∽`、直径（`AB 是⊙O 的直径`）、`交于点`、`重心` / `垂心`、`矩形`、`正三角形`。处理分两类：**能读的就读** —— `正三角形` 收进 `equilateral`（判据早就有，读取器只认"等边三角形"）；**没有判据的至少显形** —— 其余全部加进 `UNREAD_CONDITION`。**一处被全量单测当场拦下的错误**：第一版把 `内心` / `外心` 也加了进去，`planCompiler.circumcenter.test.ts` 立刻红（`expected 'unverified' to be 'passed'`）—— `外心` 已经被"外心救援"使用，触发词把它变成了未核验残留。于是只保留**确实没有任何处理**的家族（重心 / 垂心）。这条经验写进了 feature-catalog：触发词不能按"看起来像条件"来加。**RED→GREEN**：7 条先红，补齐后转绿；随后全量又红了 1 条（上面那条），收窄后全绿。**门禁**：`typecheck` exit 0；全量 **465 文件 / 4906 通过 + 1 todo / 0 失败**（+7 条新用例）。
+
+**立体系探针（2026-10-20 第十五批）**：把同一个"静默丢失"扫描扩到立体几何的常见写法，抓到 7 处；分两类处理。**能读的就读**：`点 E 在棱 AB 上` —— 这里的「棱 / 边」**已经排除了"直线"的歧义**（棱是线段），所以不必靠"一点"那截尾巴也能读成 `pointOnSegment`；没有量词的 `E 在 AB 上` 仍然不收（可能是线段也可能是直线，那条反向用例钉着）。**没有判据的显形**：异面直线所成角、点到平面的距离、体积。**第二处被全量单测拦下的错误（与上一轮"外心"同一类，但这次是我自己刚记过的教训）**：第一版触发词写成光秃秃的 `体积` / `距离`，`regularPyramidRescue.test.ts` 立刻红（`expected 'solid.create_point' to be 'solid.create_polyhedron'`）—— 那道题的题面是"求内切球的体积为()"的**分析题**，被新的触发词标成未核验之后，正四棱锥救援不再触发。修法：触发词**只在真的给了数值时**才算条件（`体积(?:为|是)\s*[√\d]` 等）。**RED→GREEN**：两条先红（`在棱上` 读不出、三类条件消失），补齐后转绿；随后全量红了 1 条，收窄后全绿。**门禁**：`typecheck` exit 0；全量 **465 文件 / 4909 通过 + 1 todo / 0 失败**（+3 条新用例）。
+
+
+**「无核验项」7 道审计（2026-10-20 第十六批，本轮唯一动产品代码的一批）**：上一批修的是"读不出就显形"，这一批去追同一条账上**最难解释的一栏** —— 2026-10-19 评测的 `无核验项 7/30`。**先确认证据还在不在**：`build-check/` 是 gitignore 目录，本次审计时 `joint-exam-report.json` / `joint-exam-cases.json` **已经被清掉**（整个 `D:\draw` 下都搜不到 `joint-exam*`），所以"当时每题落了哪些未核验项"没法逐条复核。补救是**按题面重读**：评测文档列了 9 份试卷的公开页面，`Invoke-WebRequest` 抓原文（HTTP 200、游客可见全文），再按评测口径裁成"画图所需部分"。**重抓当场照出归档里两处偏移**：`joint-10` 记的是"重庆金太阳 第 1 题 / 只给正四棱锥尺寸"，第 1 题其实是**建筑测高**（地面 D 处对楼顶 A、楼底 B 的仰角 60°/30°，楼底高出地面 20 m）；`joint-23` 记的是"湖北 T8 第 17 题 / 双曲线"，第 17 题是**多面体 ABCDE**（对应 `joint-08`），双曲线在**第 18 题**。结论按题面内容对齐，不按归档题号。
+
+**三件读数（探针，不发网络请求）**
+
+1. **口径改对**：归档写的「无核验项（`verification` 为空）」不成立 —— `verifyDiagramObligations` 在 `checks` 为空时会补一条"没有可靠识别到可核验的题设"（`diagramVerification.ts` 的"没有可靠识别到可核验的题设"分支），报告**永远不会是空的**。7 道的实情是 **`givens` 为空**；逐题跑 `parseDiagramObligations` 得：`joint-01` **0 义务 / 1 未核验**（`母线长为3`，通用理由），`joint-07`/`09`/`10`/`12`/`23` **0 / 0**，`joint-16` **2 条 `conicAxes` / 0**。也就是说：**5 道连未核验都没有 ⇒ `diagramVerification === undefined` ⇒ 核验根本没跑**（`planCompiler.ts:742` 的闸门要求"有义务或有未核验"才出报告）。
+2. **编译期复核**：拿一份 `solid.create_template`（template=cone，radius 2、height √5）计划 + 圆锥题面走 `compilePlan` ⇒ `ok = true, diagramVerification = undefined, diagnostics = []`；换成 `solid.create_regular_pyramid`（sides 6）同样三项。**图出得去、核验没发生、也没有一句话说它没发生。**
+3. **分类**：**A 标量尺寸 5 道**（底面半径 / 母线 / 底面积 / 侧面积 / 底面周长 / 侧棱 / 仰角）—— 主因不在解析器，而在 `planCompiler.planHasVerifiableFigure`（`:80`，白名单 `:51`）**不认圆锥与正 N 棱锥**：它们的顶点只有模板自己的顺序编号（`P1…Pn`），题面点名 A/B/C 对不上，于是 `obligations === null`。这条边界是**刻意**的（注释就写着"模板实体的原文核验是另一件工作"），不是疏忽。**B 曲线参数 1 道**（`joint-23`：中心 + 右焦点 + 离心率 ⇒ 方程要解出来，今天没有"焦点/离心率 ⇒ 曲线参数"的判据）。**C 已被后续批次覆盖 1 道**（`joint-16`：圆的一般方程与双曲线方程今天各读出一条 `conicAxes`，是第六批与第四批的收益；但**没有复跑**，只能算"方程认出来了"）。
+
+**找到的真问题（产品侧）**：确认面板对 `diagramVerification === undefined` **整段不渲染**，而"确认并提交"的闸门是 `undefined || passed`（`ConfirmationPanel.tsx:269`）—— 于是**"系统没有核"与"系统核过了"在界面上一模一样**，联考那 4 道正好落在这一格。**修法很小、只消灭沉默**：`undefined` 时渲染一段 `data-status="not-run"` 的「题设核验」区，说清两条来路（不带题面点名的实体 / 题面本来没有可核条件）并明说"核对这一步**没有发生**"。**不动确认闸门** —— `undefined` 也覆盖"画一个正方体"这类本来就没有题设要核的题面，一刀切成不许确认是另一件事，需要单独裁决。**RED→GREEN**：`diagramConfirmation.test.tsx` 新增 5 条（无报告⇒这一段在 + `data-status="not-run"` + 确认按钮仍在；`passed`/`unverified`/`failed` 三档⇒这一段不出现、原读法一字不动），先红 2 条、绿的 3 条正是反向判据，补齐后全绿。
+
+**门禁**：`typecheck` exit 0；全量单测 **465 文件 / 4914 通过 + 1 todo / 0 失败**（+5 条用例，上一批是 465/4909）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.6 min，exit 0，`--workers=3`）。**e2e 的一处如实**：那一跑的 bundle 是在"补 `<strong>` 排版"之前那一版构建的（只差一处强调标签，文案文字与判据都不受影响），改完 `<strong>` 之后聚焦单测重跑 10 通过。**如实**：本轮**没有**重跑真实 provider 的 30 题（要花钱，等用户批）；让 A 类真正变成可核的两条路（给圆锥/正 N 棱锥加**题面点名**，或新造"标量尺寸"义务 + 判据）**都没做**，因为它们要改内核/场景图的实体形状；B 类判据也没有（**下一批就补上了，见下面的第十七批**）。审计全文在 `docs/audit/2026-10-20-unverified-audit.md`。
+
+**「焦点 + 离心率」能读成曲线（2026-10-20 第十七批，审计的 B 类）**：上一批的审计把 7 道"无核验项"分成三类，B 类只有一道（`joint-23`），但它的形状**在高考里到处都是**：`双曲线C的中心为坐标原点，右焦点为(2√5,0)，离心率为√5` —— 方程要自己解出来，而读取器只认**方程**。**先写下的是"这不需要新判据"**：中心（顶点）在原点 + 焦点在一条坐标轴上 + 离心率，把标准位置的曲线**唯一确定**（`a = c/e`；椭圆 `b² = a² − c²`、双曲线 `b² = c² − a²`、抛物线 `p = 2c`），推出来的 `a`、`b`、轴就是既有 `conicAxes` 判据要量的三样 ⇒ **判据层一行没改**。**实现形态是一个后置解算器**（`resolveFocusEccentricity`）而不是一条正则：要同时看曲线名、焦点坐标、离心率三块数据，写成一条正则要么漏语序、要么把隔壁从句一起吃进去。它排在残留扫描**之前**，因为"数据不全"必须能落成一条未核验。**四条边界都先写成用例**（没说中心在原点 / 只有离心率 / 只有焦点坐标 / 离心率与种类矛盾 ⇒ 一律未核验并给理由），另外两条钉住"方程优先"（同一句里已有方程时不再从参数推一遍）与"焦点必须在坐标轴上"（斜置的不认）。**RED→GREEN**：9 条读取器用例先红 8 条（第 9 条是"方程优先"的反向判据，本来就绿），补完解算器全绿；再接两条**接缝**用例（同一份计划喂 `compilePlan`：半轴对 ⇒ `conicAxes: passed`；两个半轴对调 ⇒ `failed`），共 **11 条**。**一处工具坑**：`radicalValue` 只收正数，焦点坐标 `(-2√5, 0)` 取绝对值当"到中心的距离"，否则左焦点读不出来。**门禁**：`typecheck` exit 0；全量 **466 文件 / 4925 通过 + 1 todo / 0 失败**（+1 文件 / +11 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：中心不在原点、焦点不在坐标轴上（斜置）、"焦点 + 离心率 + 过某点"要联立的写法**都没做**；**没有复跑**真实 provider 的 30 题。
+
+**点写在线段后面也能读了（2026-10-20 第十八批）**：这一批挑的是"**判据有、读取器没有**"里最后一条常见缺口。`pointOnSegment`（共线 + 落在线段内）2026-10-15 就有了，但三条既有读取器都要求点写在前面 —— `D 为 AC 上一点`（点 + 是/为/在 + 线段 + 上 + 尾巴）或 `点 E 在棱 AB 上`（量词消歧）。而卷面上更常见的是**点写在线段后面**：`AC 上一点 D`、`在线段 AC 上取一点 D`、`在 AC 上取点 D` —— 这些此前一律落"未核验"，理由文案里还专门点了这一种写法（"是这一句的点名没排成能读的顺序"）。**先翻旧断言**：`pointOnSegment.test.ts` 里那条钉着"读不出"的用例按它自己写明的条件翻转（"真判据做到之后这条断言要翻转"是同一条规矩）。**RED→GREEN**：4 条先红（写后语的三种写法 + 一条接缝"点落在线段外仍判 failed"），补齐读取器后全绿；再补一条 `点 D 在线段 AC 上`（带「线段」量词、没有「一点」尾巴）先红、把「线段」加进量词表后转绿 —— 它与 `点 E 在棱 AB 上` 是同一件事（量词已经把"直线"排除掉了）。**三条守卫先写成反向判据**：`直线 AC 上一点 D`（说整条直线，D 可以在延长线上）、`射线 AC 上一点 D`、`AC 的延长线上一点 D` 都不许读成 `pointOnSegment` —— 读错就是替题面加条件、并为一句没有的条件报"不满足"。实现上守卫用**定宽后顾**（`(?<!直线)(?<!直线\s)(?<!射线)(?<!射线\s)`）贴在段名之前，**不把前缀吃进匹配范围**：吃进去会把前一个字符也标成"已用"，那是本仓最熟的一类静默丢条件。**顺带改了未核验理由的口径**：不再是"点写在后面读不出"，而是"这一句两种语序都不是"（举的例子换成真正还读不出的 `D 在 AC 上`）。**门禁**：`typecheck` exit 0；全量 **466 文件 / 4932 通过 + 1 todo / 0 失败**（+7 条用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：`AC 的延长线上一点 D` 仍读不出（它是**另一件事**，今天没有"点在延长线上"的判据，只有"共线但 `t ∉ [0,1]`"那一种失败说法）；`D 在 AC 上`（无量词）仍然不收。
+
+**实体的标量尺寸（2026-10-20 第十九批，审计 A 类的前半）**：审计说 A 类 5 道的主因**不在解析器** —— 圆锥 / 正 N 棱锥用的是 `solid.create_template`（顶点只有模板编号），`planHasVerifiableFigure` 为假 ⇒ `obligations` 是 `null`、`diagramVerification` 是 `undefined`，**核验根本没跑**。这一批补**圆锥 / 圆柱**这一族。**先算清楚"量什么"**：图元里有 `radius` 与 `height`，于是五个度量全是这两个数的函数 —— 半径 `r`、高 `h`、**圆锥母线 `√(r²+h²)`、圆柱母线 `= h`**、底面积 `πr²`、侧面积（圆锥 `πrl` / 圆柱 `2πrh`）。这也顺带回答了"这算不算拿模型自报的数给自己盖章"：半径是模型填的，但**母线 / 面积不是** —— 随手填个高度就对不上（`joint-01` 的"半径 2、母线 3"要求 `h = √5`）。**判据层不新造**：新义务 `solidDimension` 只带"形状 + 度量名 + 题面写的数"，核验时在**候选图**里认那条新画的圆锥 / 圆柱（与 `candidateConic` 同一条纪律：恰好一条才算数），再由 `radius`/`height` 算出实测值。**闸门是最容易写错的地方**：直接把 `solid.create_template` 加进 `VERIFIABLE_FIGURE_ACTION_IDS` 会让"画一个圆锥"这种**没有任何尺寸**的题面凭空多出一份核验报告（里面只有一句"没有可靠识别到可核验的题设"），把本来能确认的草稿拦下来。所以新开 `solidDimensionGate`：**计划里有 `solid.create_template` 且题面真的读出了 `solidDimension`** 才放行，并写了两条反向用例钉住"`画一个圆锥` ⇒ 仍 `undefined`"与"`正方体的棱长为2` ⇒ 仍 `undefined`"。**读取器两条守卫**：只收 `底面半径`、不收裸 `半径`（`圆锥的侧面展开图是半径为3的半圆` 里的半径属于**扇形**，读成圆锥的半径就是替题面改题）；形状名与度量名之间出现 `展开图` / `内切球` / `外接球` 或**另一个形状名**时不猜。**RED→GREEN**：11 条用例，读取器 5 条（其中两条守卫本来就绿，是反向判据）+ 接缝 6 条；中间踩了两个坑：① 面积字面量 `π` 裸写在句尾，数值模式要求"π 前后都得有数字" ⇒ 补一条裸 `π` 分支；② 我自己写的一条用例**算错了期望**（`r = 3` 时母线 √14 本来也不等于 3，所以是两条都红），改成 `r = 1.5、h = √6.75`（母线仍为 3）之后失败**只来自半径那一条** —— 用例错就改用例，不改产品。**门禁**：`typecheck` exit 0；全量 **467 文件 / 4943 通过 + 1 todo / 0 失败**（+1 文件 / +11 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：正 N 棱锥（图元是模板编号，或 `pyramid` 那种只带矩形底的形状）**没做**；`joint-10` 的仰角类文字应用题**没做**；**没有复跑**真实 provider 的 30 题。
+
+**正 N 棱锥的标量尺寸（2026-10-20 第二十批，审计 A 类的后半）**：上一批把圆锥 / 圆柱接进了 `solidDimension`，这一批接**正 N 棱锥**（联考 `joint-07` / `joint-09`）。**先探针再动手**：`solid.create_regular_pyramid` 物化出来的是**一整组** `point3 ×7 + edge3 ×12 + face3 ×7 + 一个 polyhedron3`，`construction` 只有 `{kind:"fromPoints", sourceIds}` —— **图元里没有 `radius` / `height`**，那两个数只在动作里。所以不能照抄圆锥那条"读图元参数"的路，改成**从坐标量**：只用一条几何事实 —— **非底面的侧面全是三角形，底面是 N 边形** ⇒ 取 `face3` 里**点最多的那一张**当底环（唯一且 > 3 个点），剩下那个顶点当锥顶；于是底边长 / 底面周长 / 底面积（Newell 法向 + 鞋带公式）/ 侧棱长 / 高（锥顶到底面的距离）全部量得出来。**两条边界先写成用例**：① `正三棱锥`（N = 3）四张面全是三角形，**几何上分不出哪一张是底面** ⇒ 返回 `null` 落未核验、理由点名"底面分不出"，**不按题面顺序猜**；② `正三 / 正四棱锥` 同时给了**底面边长**时**不读** —— 那一组数已经由 `rescueWithRegularTriangularPyramid` / `rescueWithRegularSquarePyramid` 解析构造成坐标，同一句再发一条标量义务会让救援的复核从 `passed` 变成 `unverified`，把**已经画对的图**打回去。**两处实测踩到的坑**：① 联考原文写的是"**底面面积**为 6√3"（不是"底面积"），只认 `底面积` 会整句读不出 —— 补成 `底(?:面)?面积`；② **我自己的用例又算错了一次期望**（`R = 3` 时侧棱 √30 也不等于 5，于是两条都红）—— 两个度量是**耦合**的，改成 `R = 3、h = 4`（侧棱仍为 5）之后失败只来自底面积。用例错就改用例，不改产品（这是本轮第二次，上一批也是同一类错，已写进用例注释）。**RED→GREEN**：8 条（读取器 4 条 + 接缝 4 条），先红 6 条、两条反向判据本来就绿。**门禁**：`typecheck` exit 0；全量 **468 文件 / 4951 通过 + 1 todo / 0 失败**（+1 文件 / +8 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：`joint-10` 那类**仰角文字应用题**没做（它连实体度量都不是）；`正三棱锥` 的底面归属要题面点名才量得动；**没有复跑** 30 题。
+
+**第三批条件家族（2026-10-20 第二十一批）**：做法跟前两批一样 —— **先探针、再改**。41 个常见写法逐个喂进 `parseDiagramObligations`，照出 **19 处"既不产义务、也不落未核验"**。这一批按"能不能读"分两半。**能读的**：① `线段 AB 的长度为 3` / `AB 的长为 3` / `AB 的长是 3` —— 此前**只有带「弦」字**的那种写法能读（`弦 AB 的长为 3`），而"某条线段的长度为 n"是最常见的长度说法之一；它的隐蔽之处在于**既不影响画图、也不落未核验**（报告是干净的）。两个守卫：`(?<!弧)`（`弧 AB 的长` 说的是**弧长**，差一个字就是另一件事）与"数值后面还跟着 `|` 就不算长度"。② `AD 是 BC 边上的中线` ⇒ `D` 就是 `BC` 的中点，直接落既有的 `midpoint`；`AD 是 △ABC 的中线` 没说哪条边，**不猜**、落未核验并说清。**没判据的显形**：角平分线 / 中位线 / 内心 / 旁心 / 弦心距 / 弧长 / 轴截面 / 展开图 / 球的半径与表面积 / 棱数 / 仰角 / 俯角 / 坡度 —— 每族一句**具体**理由（"要新造一条：角的内部一条射线…""要求先有「水平面」这个对象"），而不是那句什么都可能、也什么都说不清的兜底。**顺带修掉一条假义务**：`|AB|=2|AC|` 曾被读成"AB 长 2"（把 `|AC|` 丢了）—— 假义务比读不出更糟：它会让**画对的图**被判"不满足"。**一处撞车，是第三次同一类**：第一版把光秃秃的 `内切球` 加进触发词，全量单测当场红 —— `regularPyramidRescue.test.ts` 那道题是"求内切球的**体积**为()"，被标成未核验之后**正四棱锥救援不再触发**，第一条动作退化成 `solid.create_point`。收窄成 `(?:内切|外接)球的?(?:半径|表面积|面积)` 之后转绿。**教训连起来看**：`体积`/`距离`（第十四批）、`外心`（第十三批）、`内切球`（本批）—— **触发词只能加在确实没有任何处理的家族上，而且必须避开救援路径里出现过的字**；每加一个都要跑全量单测，不能只跑新用例。**RED→GREEN**：18 条用例先红 16 条（两条反向判据本来就绿）。**门禁**：`typecheck` exit 0；全量 **469 文件 / 4969 通过 + 1 todo / 0 失败**（+1 文件 / +18 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：这 13 个家族**仍然没有判据**（本轮只让它们不再消失）；"一条线段是另一条的两倍"（`|AB|=2|AC|`）只做到**不误读**，没有读成 `segmentRatio`。
+
+**角平分线的判据（2026-10-20 第二十二批）**：上一批把 13 个"没有判据的家族"变成"如实未核验"—— 但**未核验只是诚实，不是能力**。这一批挑出现频率最高的一族补真判据。**先定判据，再写读取器**：`AD 平分 ∠BAC` 的数学内容是**两件事**（① `∠BAD = ∠DAC`；② `D` 在角**内部**，即 `∠BAD + ∠DAC = ∠BAC`），残余取两者较大者、容差用角度尺。**第②条不是洁癖**：只判相等的话，`D` 落在平分线的**反方向**上时两个角同样相等 —— 实测反例 `A(0,0)、B(4,0)、C(0,4)、D(-2,-2)` 得 `135°` 与 `135°`，而 `∠BAC` 只有 `90°`；那条射线根本不在角里，判据必须把它判成不满足（用例里单独钉了这一条）。**读取器收三种写法**：`AD 是 ∠BAC 的平分线`、`AD 平分 ∠BAC`、`∠BAC 的平分线交 BC 于点 D` —— 前两种要求"线段首字母就是角的顶点"（`AD` 的 `A` 必须是 `∠BAC` 的顶点，否则说的不是同一个角），否则返回 `null` 交给未核验。`AD 是角平分线`（没说哪个角）**仍然不猜**。**判据从最终坐标自己算**（与 `planarAngle`/`area` 同一条纪律），不读构造过程留下的量。**一处"同一个判断写了两次"被抓住**：核验器给的是角度容差，而 IR 层 `toleranceFor` 没有这一档，会掉进默认的 `undefined` —— 补上并做**变异验证**（把那一行抽掉，IR 用例立刻红：`expected undefined to be 'angular'`），随后还原。**RED→GREEN**：9 条用例（读取器 4 条 + 接缝 4 条 + IR 1 条），先红 7 条。**门禁**：`typecheck` exit 0；全量 **470 文件 / 4978 通过 + 1 todo / 0 失败**（+1 文件 / +9 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**一处自己踩的坑（值得留档）**：做变异验证时用 PowerShell `Set-Content -Encoding utf8` 还原了 `obligationIR.ts`，而 **PowerShell 5.1 的 `utf8` 会写 BOM** ⇒ 全量单测红在 `docs-consistency/file-hygiene.test.ts`（"除 PowerShell 脚本外，受跟踪文件都不许带 BOM"）。这不是产品问题、也不是判据太严 —— 与 2026-10-16 那六份 UTF-16 证据日志是同一类，**写文件一律用工具、不用 shell 重定向**。已用 Node 去掉 BOM 并复跑。**如实**：其余 12 个家族仍然只有"显形"；不带角名的 `AD 是角平分线` 仍然读不出。
+
+**弦心距与弧长（2026-10-20 第二十三批，接着上一批"把显形变成能力"）**：上一批给 13 个家族都写了"如实未核验"，这一批把**同一族里的两个度量**（都在圆上量）接成真判据。**先看判据能不能"问图"**：`弦心距` 是圆心到弦的距离、`弧长` 是 `r·θ` —— 两个数都能从**圆图元自己**算出来（`planar.create_circle` 物化成 `circle`，带 `center` 与 `radius`），所以义务的 `targets` **只要弦/弧的两个端点**：**不要求**题面把 `⊙O` 的 `O` 建成点名 —— 要求了就等于替题面加条件（题面从没说 O 是图上的点）。**两条边界如实**：① `A`、`B` 必须是图上有的点名，否则落"点名缺失"（不替它找点）；② **弧长只按劣弧算**（`θ ∈ [0, π]`），题面写「优弧」时读取器用 `(?<!优)` **明确不收** —— 默认取劣弧就是替题面选了一条弧。**一处"同一个判断写两遍"被提前挡住**：这两条也要数值词法（`2√5`、`π`、`2π`），而实体尺寸那边已经有一份 —— 把 `SOLID_SIZE_LITERAL` 收成 `NUMERIC_MEASURE_LITERAL` 的别名、`solidSizeValue` 改名 `measureValue` 共用，没有写第二份正则。**两处旧断言按新事实翻转**：① `clauseFamiliesThirdPass.test.ts` 里那两条"没判据"的样例（弦心距 / 弧长）改成"读成义务、不再落未核验"；② `UNSUPPORTED_FAMILIES` 里那两句理由从"今天没有判据"改成"**已经有判据了**，但只按劣弧 / 要求端点点名"—— 理由文案会随事实腐烂，改判据就得改它。**RED→GREEN**：9 条（读取器 5 条 + 接缝 4 条），先红 7 条。**门禁**：`typecheck` exit 0；全量 **471 文件 / 4986 通过 + 1 todo / 0 失败**（+1 文件 / +9 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：其余 10 个家族仍然只有"显形"；「优弧」的弧长也还不读。
+
+**内心的判据（2026-10-20 第二十四批）**：与角平分线同一族（"到边等距"）的第二个条件。**判据的关键不是"等距"，而是"量什么"**：`O 是 △ABC 的内心` ⇔ 到三条边等距 —— 但如果量的是**直线**，直角三角形的 `A`-旁心也会被判成内心（它到三条直线的距离同样等于旁切圆半径，只是那是个**不同**的点）。所以判据量的是**线段**：旁心的两条垂足落在边的延长线上，距离于是变大，冒充不了。实测（`A(0,0)、B(6,0)、C(0,8)`，内切半径 2、`A`-旁切半径 12）：内心 `(2,2)` 到三条线段各 2 ⇒ 通过；`(12,12)` 到三条**直线**各 12、到三条**线段**却是 13.42 / 12 / 12.65 ⇒ 不满足。**好处是不必往残余里塞一个"点在三角形内"的布尔** —— 一个数（`max − min`）就说完了，失败文案也自然。**用例照出一条老约定的越界**：`O 按原点` 是**解析几何**的约定，却被用在了纯几何的条件上 —— `O 是 △ABC 的内心` 里"图上没有 O"时，它把 O 补成原点，于是报"不满足"（看起来合理、其实是编的坐标）。收紧成：**`incenter` / `angleBisector` 不吃这个约定**，如实报"点名缺失"。`pointOnSegment` 那条老用例仍然绿（它用的不是这两个 kind）。**RED→GREEN**：7 条（读取器 3 条 + 接缝 4 条），先红 6 条；随后全量红 1 条 —— 第三批里把 `内心` 当"没判据"的样例，按新事实翻转（与上一批 弦心距 / 弧长 同一个动作）。**门禁**：`typecheck` exit 0；全量 **472 文件 / 4992 通过 + 1 todo / 0 失败**（+1 文件 / +7 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：`旁心` 仍然没有判据（它在三角形外，是另一个判定）；其余 8 个家族仍只有"显形"。
+
+**三角形的三个心（2026-10-20 第二十五批）**：前两批接了 `angleBisector` 与 `incenter`，这一批把**重心 / 垂心 / 旁心**补齐，"心"这一族收口（`外心` 例外 —— 它已被外心救援用作**构造**入口，加判据要另想与救援的关系）。**先想清楚"判什么"**，三条各不相同、而且都必须能从**最终坐标**算：**重心** = `(A + B + C) / 3`（一个点，直接比坐标）；**垂心** = 落在**三条高线**上 —— 量的是**直线**不是线段，因为垂足经常落在边外（`(O−A)·(C−B)/|C−B|` 就是到那条高线的距离）；**旁心** = **三个旁心之一** —— 一个三角形有**三个**旁心，题面只说"是旁心"、没说哪一个，所以判据取"到最近那个旁心"的距离，**不挑一个猜**（挑一个就是把"任意一个"读成了"那个"）。**用例的纪律是"三个心必须分得开"**：每个心都拿另外两个心的位置试过一遍 —— `T1 = A(0,0)、B(6,0)、C(2,4)` 的重心 `(8/3, 4/3)` 与垂心 `(2,2)`（自己解：`AB` 水平 ⇒ 从 `C` 的高是 `x=2`；`BC` 斜率 −1 ⇒ 从 `A` 的高是 `y=x`）；`T2 = 6-8-10` 的三个旁心 `(12,12)`、`(−6,6)`、`(4,−4)` 与内心 `(2,2)`。**两处旧断言按新事实翻转**：① 第三批"没判据"样例里的 `旁心`；② 上一批我自己写的"`O为△ABC的旁心` ⇒ 不读"—— 现在它读成 `excenter`，**不是** `incenter`（两者在几何上是两个判定：内心量线段、旁心量直线）。**新加的 kind 也带上 IR 容差**（三条都是长度量，同一把尺子）。**RED→GREEN**：11 条，先红 11 条；随后全量红 2 条，正是那两条旧断言。**门禁**：`typecheck` exit 0；全量 **473 文件 / 5002 通过 + 1 todo / 0 失败**（+1 文件 / +11 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：`外心` 仍然只有"救援用它构造"，**没有判据**；中位线 / 轴截面 / 展开图 / 球的半径与表面积 / 棱数 / 仰角 / 俯角 / 坡度 仍然只有"显形"。
+
+**外心的判据（2026-10-20 第二十六批）**：「三角形的心」这一族的最后一块。`O 是 △ABC 的外心` ⇔ **到三个顶点等距**，残余取"最远减最近"、从最终坐标自己算。**这一批真正花时间的不是判据，是"别把救援打坏"**：`外心` 这两个字**已经有一个构造入口** —— `rescueWithCircumcenterPoint` 吃 `2AB·AO=|AB|²`、`2AC·AO=|AC|²` 两条点积条件，自己把外心重建出来（我先验了一遍它的坐标确实是外心：`A(0,0)、B(4,0)、C(1,3)`、`O(2,1)`，到三个顶点距离平方都是 5）。而那条救援的题面里**就带着"外心"**（`则点O为该三角形的外心`）。于是两条决定：① **判据要加**；② **触发词不加、指代写法（`该三角形的外心`）也不读** —— 读了会让救援的复核从 `passed` 变 `unverified`，把已经画对的图打回去。为把这件事钉住，专门写了一条用例："`则点O为该三角形的外心` ⇒ 不产义务"，它和 `planCompiler.circumcenter.test.ts`（救援那条）一起跑，两条都绿。**顺带把「O 按原点」的豁免名单收成一组**：`incenter` / `angleBisector` / `circumcenter` / `centroid` / `orthocenter` / `excenter` —— 这些 `O` 都是题面**自己定义的点**，按解析几何的约定补成原点就是把"图上没有 O"变成编出来的坐标。**RED→GREEN**：7 条（读取器 3 条 + 接缝 4 条），先红 6 条（"指代写法不读"那条本来就绿 —— 它是**反向判据**，防的正是把救援题面吃进来）。**门禁**：`typecheck` exit 0；全量 **474 文件 / 5009 通过 + 1 todo / 0 失败**（+1 文件 / +7 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：中位线 / 轴截面 / 展开图 / 球的半径与表面积 / 棱数 / 仰角 / 俯角 / 坡度 仍然只有"显形"。
+
+**球的尺寸（2026-10-20 第二十七批）**：`solidDimension` 的延伸，接 `solid.create_sphere`。球的图元只带一个 `radius`，三个常用度量全是它的函数（表面积 `4πr²`、体积 `4/3·πr³`），所以**判据不新造**。**两个设计点**：① **球不走"就近归属"那套锚点**，改用自带锚点的专用句型（`球(心/点名)? 的? 半径/表面积/体积`）—— 因为 `球` 会出现在 `内切球` / `外接球` 里，而那两个是**挂在别的实体上的派生对象**；`(?<![切接])` 把它们挡在外面，用例里 `正方体的外接球半径为 3` 明确不读。② **闸门 `solidDimensionGate` 把 `solid.create_sphere` 也收进来**。**过程中抓住三处真问题**（都不是新功能的活，而是把已有的口子补上）：① `solidDimension` 一直**没进 IR 的 `toleranceFor`**，掉进默认 `undefined` —— 与角平分线那次同一类漏（判据给尺子、IR 不给）；② 核验器那边容差是固定的 `distanceTolerance(1)`，而面积是 L²、体积是 L³，同一把 1e-6 的尺子会让大数永远过、小数永远不过 ⇒ 改成**随量级走**；③ **读取器表那道"至少两个点名"的过滤**会把 `solidDimension` 整条丢掉（它的 `targets` 是空数组）—— 圆锥 / 圆柱 / 棱锥那几族因为走**后置解算器**、绕过了过滤器，所以这个坑一直没暴露；把 `solidDimension` 加进白名单后，球的三条读取器一次就通了。**RED→GREEN**：11 条，先红 9 条（两条反向判据本来就绿：`外接球`/`内切球` 不读、`画一个球` 不开核验）。**一处旧断言按新事实翻转**：第三批"没判据"样例里的 `球的表面积`。**门禁**：`typecheck` exit 0；全量 **475 文件 / 5019 通过 + 1 todo / 0 失败**（+1 文件 / +11 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：`内切球` / `外接球` 这类派生对象的尺寸仍然没读；中位线 / 轴截面 / 展开图 / 棱数 / 仰角 / 俯角 / 坡度 仍然只有"显形"。
+
+**长方体的外接球 / 内切球半径（2026-10-20 第二十八批）**：接着上一批"派生对象"的口子往下走一步，但**只走能走的那一步**。`正方体的外接球半径为 3`、`正方体的内切球半径为 1` 这两句在卷面上极常见，而它们是**派生对象**的度量 —— 判据如果去找那个球，就要认球、还要认它是谁的（**同一张图上可能有两个球**）。**换一条路：两条半径都是长方体三条棱的函数**（外接球 = 体对角线一半 `√(a²+b²+c²)/2`；内切球 = 最短棱一半 `min(a,b,c)/2`），而棱长就在 `cube` 图元的 `size` 里 ⇒ **不用求球心、不用解方程组**。`candidateSolid` 的 template 那一支先认 `cube`（与圆锥 / 圆柱同一个"恰好一条新画的"纪律）。**一条边界如实**：内切球 `min/2` 只在**正方体**上是"与三条棱都相切"的严格意义，长方体上球在另外两条方向悬空 —— 判据量的是"到最近的面"这个严格定义，文档里写清楚。**读取器必须带形状名**（可带 `该 / 其`）：没有形状名的 `外接球半径为 3` 不知道该问哪个实体，不猜。**一处旧断言收窄**：上一批写的那条"`正方体的外接球半径为 3` ⇒ 不读"本意是"**不许读成图上那条球**"，现在它有主了（`cuboid:circumradius`），断言改成钉"不许产成 `sphere` 那一条"。**RED→GREEN**：9 条，先红 7 条（两条反向判据本来就绿）。**门禁**：`typecheck` exit 0；全量 **476 文件 / 5028 通过 + 1 todo / 0 失败**（+1 文件 / +9 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（4.4 min，exit 0，`--workers=3`）。**如实**：正棱锥的内切球（要 `3V/S`，得从网格算体积与表面积）与三棱锥的外接球（要解球心）**都没做**；其余 7 个家族仍只有"显形"。
+
+**正 N 棱锥的外接球 / 内切球半径（2026-10-20 第二十九批）**：上一批给长方体接了派生球半径（三条棱的闭式子），这一批接**正 N 棱锥** —— 它没有"三条棱"，但**底环与锥顶已经把需要的数都量出来了**（`candidatePyramid` 从 `face3` 认底环、`measureSolid` 已有 `sides`/`baseEdge`/`baseArea`/`height`）：**外接球** `(h² + R_base²)/(2h)`（`R_base = a/(2·sin(π/n))` —— 球心在轴上，两个距离相等解出 `z₀`）；**内切球** `3V/S`（`V = ⅓·S_base·h`、`S = S_base + n·(½·a·斜高)`，斜高用底面**边心距** `a/(2 tan(π/n))` 与高）。**`3V/S` 的口径必须写清**：它是"存在内切球"时的**必要条件**（`V = ⅓·r·S_total`），所以拿它当判据**不会放过错的**（题面自己声称有内切球）；但**球心是不是真的到每个面都等距，今天不验** —— 那是下一步（要做的是"到各面距离相等"的求解，不是这条公式）。**用例的算法**：接缝用例**自己算期望值**（`√2 − 1`）再用 `toPrecision(12)` 拼进题面，这样"读出来的数"与"判据要的数"是两条独立路径，避免拿被测代码的输出当期望。**RED→GREEN**：7 条，先红 6 条（正方体/长方体那条回归判据本来就绿 —— 读取器把形状并进同一条正则之后它仍然正确分流到 `cuboid`）。**门禁**：`typecheck` exit 0；全量 **477 文件 / 5035 通过 + 1 todo / 0 失败**（+1 文件 / +7 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（exit 0，`--workers=3`）。**如实**：一般多面体（`polyhedron3`，例如任意三棱锥）的外接球 / 内切球**还没接**（那要 `3V/S` 从网格算，或解球心方程组）；其余 7 个家族仍只有"显形"。
+
+**一般多面体的派生球（2026-10-20 第三十批，"派生球"这条线的收口）**：前两批靠**闭式子**（长方体的三条棱、正 N 棱锥的底环 + 锥顶），这一批接**任意闭合多面体**（`polyhedron3`）—— 判据从**网格**算：**体积**用散度定理 `V = |Σ a·(b×c)|/6`（每个三角面片）、**表面积**面面积求和、**内切球** `3V/S`、**外接球**解"到所有顶点等距"的**最小二乘**（4 个未知量：球心 `c` 与 `k = R² − |c|²`；高斯消元 + 部分主元；主元近 0 就返回 `null`，**不猜一个解出来**）。**一处判据设计上的升级值得记**：外接球那条残余取**两件事的较大者** —— ① 顶点**是不是真的在同一个球面上**（最小二乘残差）；② 这个半径与题面差多少。**少了①会怎样**：顶点根本不共球时，最小二乘照样能凑出一个像模像样的 `R`，判据就变成"随便什么图都能过"（用例里把顶点 D 挪高 0.35 专门钉这一条）。**读取器的分界线**：`(?<!正)` —— `正三棱锥` 归 `pyramid`（闭式子，更准更便宜），`三棱锥` / `四面体` / `多面体` 归 `polyhedron`；有回归判据钉着。**RED→GREEN**：8 条，先红 7 条（`正三棱锥` 那条分流回归判据本来就绿）。**门禁**：`typecheck` exit 0；全量 **478 文件 / 5043 通过 + 1 todo / 0 失败**（+1 文件 / +8 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（exit 0，`--workers=3`）。**如实**：内切球只验 `3V/S`，**球心是否真的到每个面等距今天不验**（那是下一件）；其余 7 个家族仍只有"显形"。
+
+**内切球升级成真判据（2026-10-20 第三十一批，"派生球"这条线的最后一步）**：上一批的内切球量的是 `3V/S` —— 它在"内切球存在"时是恒等式，所以**不会放过错的**，但**它没有验过球心是不是真的到每个面都等距**（诚实地说，那只是一条必要条件）。这一批改成**解**：每个面写成单位法向 `nᵢ` 与偏移 `dᵢ`，球心 `c` 与半径 `r` 满足 `nᵢ·c + r = dᵢ` —— **四个未知量的线性最小二乘**（复用外接球那把高斯消元），而**残差 `max|nᵢ·c + r − dᵢ|` 就是"这些面是不是都与这个球相切"**。于是残余与外接球那条**同构**：`max(相切残差, |r − 题面|)` —— 两条判据现在是同一个形状，读起来也一致。**一个必须处理的细节**：法向得朝**外**，否则解出来的 `r` 是负数；办法是用多面体自己的**质心**当内点（凸多面体成立），质心在某面正侧就把那条法向翻过来。**失败文案把 `V`、`S`、`3V/S` 一并摆出来**：用户可以拿上一批那个数与这批解出来的 `r` 交叉复核（对切球存在的图两者相等）。**用例专门钉住"残余里确实有相切项"**：把顶点挪歪 0.4 ⇒ 四个面不再共切一球 ⇒ `failed`，且理由里读得到"相切" —— 否则这条判据就退化成"只比了一个数"。**RED→GREEN**：3 条新用例，先红 1 条（正向那条本来就绿 —— 它是上一批的正四面体用例，正好证明"闭式子与解"在真图上给同一个数）。**门禁**：`typecheck` exit 0；全量 **478 文件 / 5046 通过 + 1 todo / 0 失败**（+3 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（exit 0，`--workers=3`）。**如实**：`pyramid` / `cuboid` 的内切球仍走闭式子（对那两类形状**是精确的**，不是近似）；其余 7 个家族仍只有"显形"。
+
+**中位线（2026-10-20 第三十二批）**：那批"只有显形"的家族里最常用的一个。**难点不是判据，是"哪两条边"** —— `DE 是 △ABC 的中位线` 不说 D、E 是哪两条边的中点，而三对边各有一条中位线。所以判据**不去猜**：三条边的中点全算出来（`M_AB`、`M_BC`、`M_CA`），问 `D`、`E` 是不是**恰好落在其中两个不同的中点**上 —— **存在性**，与"旁心是三个之一"同一种读法。**顺带省掉了两条判据**：中位线定理的另外两条（`DE ∥ 第三边`、`DE = 第三边的一半`）在"两端都是中点"成立时**自动成立**，多判一条只是把同一件事说三遍。**一条边界**：`梯形 ABCD 的中位线` 是**另一条定理**（上下底之和的一半），而句型要求"两个点名 + 三角形三顶点"，所以梯形写法读不出来、如实落未核验（用例钉着）。**用例的两条纪律**：① 端点顺序无关（`DE` 与 `ED` 是同一件事的两端）；② **两个端点落在同一个中点不算中位线**（那是退化成一个点）。**RED→GREEN**：8 条，先红 8 条；随后全量红 1 条 —— 第三批里把 `中位线` 当"没判据"的样例，按新事实翻转（这是第六个"毕业"的家族）。**门禁**：`typecheck` exit 0；全量 **479 文件 / 5054 通过 + 1 todo / 0 失败**（+1 文件 / +8 用例）；`docs-consistency` 7 条判据 / 18 项通过；全量 e2e **239 通过 / 0 失败**（exit 0，`--workers=3`）。
+
+**安装 / 卸载 / 断网验收（2026-10-20 第三十三批，用户授权后）**：用户放开了 Task 20 / Task 21 / MSI 三块，这一批把**本机做得到的**都做了，做不了的留下**原始报错**而不是"大概不行"。**① MSI 装不上，证据是 MSI 自己的日志**：本机 `admin=False`、完整性 Medium，`msiexec /i … /qn` 退出码 **1603**，日志里是 `Error 1925 You do not have sufficient privileges to complete this installation for all users of the machine`。**② 但 MSI 的载荷是好的**：用**管理安装**（`/a`，无需管理员）解出文件树，`mathcanvas-desktop.exe` = **17,595,392 B**，与 Release 免税资产**逐字节同尺寸**；再把这个**从 MSI 里解出来的** exe 在断网环境（`HTTP(S)_PROXY`/`ALL_PROXY` 全指向死端口 `127.0.0.1:9`）启动 —— 真窗口 `MathCanvas`、`Responding=True`、存活 13 s。**③ 退一步用 NSIS 走通了「装 → 启动 → 卸载」**：`/S /CURRENTUSER /D=D:\draw\_nsis-install`（无需管理员）exit 0 → 断网启动成功 → `uninstall.exe /S` exit 0、目录删除、卸载注册项移除。**④ 一处副作用如实记**：NSIS 卸载注册项用**固定产品 id** `MathCanvas`，所以装 4.0.0 时覆盖了 10-16 审计安装（3.3.14）的注册项，卸载后被移除；那份审计安装的**文件仍在原处**，只是不再出现在"应用和功能"里 —— **没有替它重建注册项**，重建等于改证据。**⑤ Task 20 一步都动不了**：凭据管理器没有 `ds.MathCanvas`、环境变量没有 `DEEPSEEK_API_KEY`、仓库没有 `.env`；**没有 key 就不跑，不跑就不编读数**。**⑥ Task 21 只做到能自动化的那一半**（断网启动、装→启动→卸载闭环、载荷同尺寸），干净机器 / 真断网 / 真人走查都缺。证据全文见 `docs/audit/2026-10-20-install-offline-evidence.md`，MSI 日志留在仓库外 `D:\draw\_msi-install.log`。**门禁**：`docs-consistency` 7 条判据 / 18 项通过（本轮只动文档与 PowerShell，没有改产品代码，所以单测与 e2e 读数沿用上一批的 479 文件 / 5054 通过 + 1 todo / 0 失败与 239 通过 / 0 失败）。
+
+**如实**：更早那一批（**文档批**）没有动产品代码。Task 19/20/21 的发行与付费验收仍缺（干净机器 / 钱 / 人评），没变。审查报告里的 LOW 项已全部修掉（“仍未做”里放已完成项、“见下一行”指向空行、英文时态与 scorecard 表头日期），**唯一保留的是 `current-status` 里“222 通过 / 1 失败”那条算术矛盾** —— 当时那次执行的条数无法复原，宁可留着也不编一个数字。
+
+
+
+## 2026-10-11 当次纠正：任务编号就是唯一执行顺序（文档批次）
+
+用户发现之前的主计划“Task 14 先执行”“Task 12a 提前做、12b 后做”与数字编号抵触。现将[新主计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)改为**严格 Task 1→21**：旧基线=1、协议/预算/bug=2–5、图形合同/Worker/离线评测=6–9、分点/三角/折角/立体/圆锥/函数/真画布=10–16、Lean=17–19、真实模型=20、分别放行=21。旧号只在主计划迁移表和此类历史过程里保留；README 与各现行镜像均指向连续新号。未获 GB 级 Lean 下载许可仍默认关，Task 20 未获付费授权即暂停而非跳号。**只改文档、未执行新的产品任务。**
+
+## 2026-10-11 再对账：稳定实施顺序（只改计划）
+
+上一版 18 张任务卡有文件/命令，但 Task 12 与 13 把可提前做的 Worker 合同/离线工件与需等四族完成的真实画布/付费评测放在同一块，Task 18 也混了必须先修的 null 边界和需用户裁决的文案。现于[主计划 O1 波次表](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)固定前置和退出门槛、不重排 Task ID：先 Task 14 基线，后 W1 协议/18a，W2 图形合同/12a，W3 家族按依赖并进，W4 画布/13b/13c；Lean 自 Task 4 锚点与 Task 12a 版本合同稳定后走 Task 15→16→17 的独立门禁。**这里只改计划，不声称任一波已实施或已解决 bug。**
+
+## 2026-10-11 同日追加：保护旧能力、Lean 独立收口与已确认缺陷（只改文档）
+
+用户指出“下一步不只是新 Agent 作图”：旧 2D/3D/CAD/保存导出及已有 Agent/实验开关须兼容；证明已有**四目标类、默认关且可从设置开启的实验入口/面板、受限 Rust 命令、pin 的 Lean/mathlib 工程**，不能再误称“设置打不开”或“尚未 pin”；真正未完的是**原题其余前提未完整进 Lean 命题、慢证明结果/改题旧图 stale、真桌面自动往返、干净机无网/许可/发行**。旧能力先跑当前 HEAD 基线，然后新修复才有资格说“不回退”。此外 `constraint-authoring` 空间能力表无实际入口、非法 `relations`/`unverified` 边界和诊断 golden 要分别复现/裁决。
+
+[下一步计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)从 Task 1–13 扩为 **Task 1–18**，新增 Task 14 兼容、Task 15–17 Lean 正确性/生命周期/发行、Task 18 已知缺陷；[GitHub 源码取舍](research/2026-10-11-github-agent-implementation-survey.md)补 Lean/mathlib 的官方来源。不改任何产品代码/预算，不运行 Lean 慢集成或付费 provider；`proof/lean4/README.md` 原“四个工程文件”按已跟踪的 `lake-manifest.json` 修为五个工程文件（另有 README），**这只是文案纠错**，不等于完成干净机安装或任何新证明验收。同一轮定向旧证明路径 `vitest` **7 文件 / 88 项通过**（桥接/产物/自动阶段/桌面通道假体/设置与确认面板），未运行真 `lake env lean`、Rust 或桌面真实 UI，不能把这组单元当 Task 15–17 的出口。
+
+## 2026-10-11 新计划改为源码级任务卡（过程记录，文档批次）
+
+用户指出仅列升级目标不足以执行。本轮在[已完成的四家族真题研究](research/2026-10-11-four-family-exam-diagram-survey.md)上，核对 [GeoGebra、SolveSpace、SymPy、JSXGraph、Mafs 与 Z3 的仓库/源码](research/2026-10-11-github-agent-implementation-survey.md)，明确仅借鉴依赖传播、状态区分、数值边界和视觉回归，不复制外部代码/增加依赖。将[新计划](superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)扩成 13 张逐文件任务卡，分别列现有文件、新测试、RED、最小 GREEN、具体复跑命令与停止条件。**没有产品代码提交、没有用户折面题成功画出的证据、没有付费 provider 请求。**旧 V0–V3 与发布历史数字保持不动。
+
+> 这份文件保留**过程**：每一轮的 RED→GREEN 证据、被实测推翻的方案、当时的门禁数字、
+> 误报与如实缺口。**下面任何数字都只代表"写它的那一刻"**，不要当作当前值。
+>
+> 纪律：引用本文件一律用**小节标题**，不写行号 —— 行号会随任何一次编辑静默失效。
+
+> 下方 2026-09-22 的"最后更新 / 当前阶段 / 总体状态"三行保留为**当时快照**，不再维护。
+
+## 2026-10-10 —— 全仓进度文档 + README 对齐（**只改文档**；把这一整天的能力变化补进各张表）
+
+**为什么要单独做**：这一天的能力变化集中在 [当前状态](current-status.md) 顶部的逐块摘要与 §一 读数里，**其他几张表还停在旧口径** —— 用户要求"结合当前进度更新所有进度文档和 README"，于是逐份查一遍"哪句话今天已经不成立"，而不是逐份重抄一遍。**只改文档、产品代码一行未动。**
+
+**查出并改掉的旧口径（逐条）**：
+
+| 文件 | 旧口径（已不成立） | 改成 |
+| --- | --- | --- |
+| `README.md` | "另有两条**已查实**的缺陷：画布顶点标签…（**未修**，需裁决）"；"旗**默认关且偏好打不开**（缺实验入口）"；"当前开发重点"停在 `b1ee3d3` / N1 / N2；"当前待完成"只有三项、且把 MSI 写成未做 | 标签缺陷与球状态词表**都已结清**；§3-D **入口与呈现都做好**（并保留"仍不能宣称自动证明可用"的剩余三条）；开发重点补上这一天后半程的四件事（三个自测问题、数值角阶段 A + B1、空间线重合设计、逐提交核对 CI）；"待完成"改成"用户侧走查（V0 出口唯一缺口）/ 管理员验收（用户已报告通过、本轮不发布）/ 真实 provider 作图题基线 / **§3-F 剩下的四条能力缺口**"，并补上四份新设计页的链接 |
+| `docs/agent-next-round-progress.md` | V2 行的"仍缺"里还写着"**设置页开启入口与用户可见产物**"（与同一文件 N5 行的"§3-D 起有产品入口"**自相矛盾**）；N2 行的"带撇棱柱、四边形特殊底面…仍不足"；N3 行只写到"安全拒绝" | V2 行改成"入口与产物**已补齐**、仍缺原题前提/桌面往返/发行链"；N2 行写清**带撇棱柱与数值角都已不再是缺口**，并列出**仍缺的五类**；N3 行补上**设计已写 + "今天没有任何产品入口"**的查实结论；表头补这一天后半程的三件事 |
+| `docs/feature-catalog.md` | "当前已实现"里**没有**数值角、也没有这一天修掉的三个自测问题；N3 那节停在"只做安全拒绝"；顶部那句指向 §四 的"还差什么"写着 **2026-10-02 最新** | 新增三条 2026-10-10 的能力条目（数值角族 / 三个自测问题 / 空间线重合"已设计但无入口"）；N3 那节补设计要点与护栏；§四 指针改成 2026-10-10 的 A–H 分栏 |
+| `docs/acceptance/agent-tool-loop-scorecard.md` | 顶部更新行写"**S6 未收口**"；Formal proof 的 Status 列写"**three** goal classes closed"；约束拖动行没写设计/入口结论；"Witness-search success rate"写"**not reachable from any UI/CLI**"；2026-10-04 那行的 3319/186 被写成"current workspace" | S1–S6 **全部收口** + 数值角与空间线重合的结论；Status 列改 **four**；约束拖动行补设计与"无入口 ⇒ 暂不实施"；witness 行改成"**可从 UI 开**（设置里那个开关）+ 离线读数已测，缺的是真实题集成功率"；3319/186 标注日期并指向 §一 |
+| `docs/acceptance/next-phase-flag-and-dependency-review.md` | `proofExport` 那一行整行："**目前无普通 Agent 产品读取点** / 无产品行为可测" | 追加一条 **⚠️ 2026-10-10 更正**：读取点与面板都在（`committerAdapter` → `draftStore.stage` → 面板），并记下**同一块修掉的那处断线**；`openProblemCompiler` 那格**仍然成立**（复核过），开关总数没变 |
+| `docs/acceptance/human-acceptance-walkthrough.md` | "这一版是什么"用的是 10-10 早先那次 bundle 的说法，`bundle/` 里的 MSI/NSIS 未标明比源码旧 | 改成"当天重建过两次、最后一次 `04:49:58`（B1 之后）"，并标明 **`bundle/` 比源码旧（3.3.10 批次）**；新增 **A.5 可选**：两条刚做出来的数值角题面（**与两条 e2e 用的原句逐字相同**）+ 一眼能判的观察点 + "别记成失败"的边界清单 |
+| `docs/current-status.md` | §四 缺"§3-F 剩下的能力缺口"这一栏（那四条只散在计划页里） | 新增 **§四 H**：数值角剩余三类、`∠A′AB`（已裁决不做 + 护栏）、棱柱顶环角、**空间线重合（已设计、因无入口暂不实施）** |
+| `docs/acceptance/agent-release-gate.md` | "一句话结论"未提这一天两处能力前进 | 补一小段：数值角做到"读/造/核"、空间线重合"已设计但无入口"，**并明说两者都不改放行结论** |
+
+**门禁**：`scripts/docs-consistency` **4 文件 / 12 通过**（README 的每一个仓库内链接都存在、四份导航文件双向可达、BOM/UTF-8/页头日期都过）。本块**没有**产品代码改动，所以没跑全库与 e2e —— 照实记，不拿文档块冒充产品回归。**CI**：`1211345` ⇒ **#278 四 job 逐 job `success`**（连只改文档的提交也把 build / checks / rust / e2e 跑绿了）。
+
+**一条自己踩的手法教训（第二次同型）**：`git commit --amend` 的多段 `-m` 在 PowerShell 里一旦夹了中文与引号就很难读回来，我中途还把一条提交信息改坏（多了一个无意义的词、正文被占位行顶掉）。改用**把信息写进临时文件 + `git commit -F`**（写完即删）就一次成了 —— 这与仓库里"本仓源码/文档不用 PowerShell 文本替换"是同一条纪律的延伸：**多行中文内容别走命令行参数**。
+
+## 2026-10-10 —— §3-F 阶段 B（B1）的**浏览器证据**：顶点参与的角在浏览器里也画得出（判据能咬人由"只回退内核源码"证明）
+
+**为什么紧接着补这一条**：B1 的实现块只在**内核**与**见证搜索**两层钉了判据（11 条），`e2e/` 里一条都没有 —— 而本仓的纪律是"每条能力都要有浏览器证据"。这一块**产品代码一行没改**，补的是证据。
+
+新 spec `e2e/agent-apex-angle.spec.ts` 走既有离线路线（设置里打开「示意图见证搜索」⇒ `parseShapeClause` ⇒ **浏览器里**跑见证搜索 = `solveApexAngleHeight` 的入口）。题面三件事缺一不可，而且**第三件正好印证了"环外的角帮不上底面的忙"**：① **四棱锥**（三棱锥是 V0a 的地盘，那条路不接）；② `PA⊥平面ABCD`（见证搜索靠它定底面环 / 垂足 / 顶点）；③ `AB⊥AD`（四边形底面要有**环上**的定形条件 —— 环外的角定不了底面，所以另给一条环上的）。
+
+**判据三段**：① 面板 `data-status="passed"` 且含 `∠PBA`；② 提交后按**画布标签**取点、测试**自己算** ∠PBA = 60°；③ **旁证求根真的在起作用**：顶点在垂足 `A` 正上方 ⇒ 解析解 `h = |AB|·tan60°`，落盘的高必须与它一致（`toBeCloseTo(…, 4)`）。
+
+**这条判据能咬人由对照实验证明**：只把**内核源码**回退到上一块（`git checkout 83ce444 -- packages/geometry-kernel/src/witness/constructors.ts`）⇒ 本 spec **真红**，确认面板根本不出现，面板原文 `没有完成这条题设目前给不出可核验的图形：no-candidate-verified: 13 个候选通过了几何构造，但没有一个满足全部可判题设。；failed-given: ∠PBA=60°：实测 45.000，题设要求 60。（在 4 个候选上）` —— 那正是"自由高是常量、搜索试不到别的高"的现场；`git checkout HEAD -- …` 还原 ⇒ **1 passed**。
+
+**门禁**：本块只新增一个 e2e spec（非 Lean 单测面与产品代码都没动）；`typecheck` exit 0（它覆盖 `e2e/`）；`lint` 0 error / 13 warning；全量 e2e **首跑 222 通过 / 1 失败**（比上一读数 +1 = 本条）—— 那 1 条是本文档早已记过的负载敏感抖动 `main-thread-responsiveness.spec.ts`（帧间隔阈值被负载顶破），**孤立复跑 1 passed**；按本仓口径记成抖动，**不**说成全绿。
+
+## 2026-10-10 —— §3-F 阶段 B（B1）实施：环外点参与的数值角**能造了**（自由高从"常量"改成"按角求根"）
+
+**这一块按上面那份设计做 B1**（顶点在底面环上、恰一条腿的另一个端点是本题顶点：`∠PBA=60°`、`∠DBA=60°`）。**改的是内核两处**：`deriveApexHeight` 的 `free` 分支里新增 `solveApexAngleHeight`（自由高不再是一个写死的常量，而是**按那个角有界求根**解出来的标量）；`deriveBasePolygon` 的四边形拒绝文案把"**底面缺什么**"与"**那个角为什么帮不上忙**"分开报（设计 §5.3 —— 探针实测过 `PA⊥平面ABCD，∠PBA=60°` 报的是"底面缺少点名在 A 处的直角"，让人去补一个错的条件）。新增两个**机器可读**拒绝码：`contradictory-angle`（**算出来的**矛盾）与 `unsupported-angle-shape`（形状出范围 / 联立 / 允许范围内没有根）。
+
+**RED 11 条**（内核 7 + 搜索层 4），改动前 6 条真红（另 5 条是行为保持的钉子：`∠DAB=90°` 冗余成立、题面给了高、以及搜索层那 4 条里的三条对照/护栏）：
+
+- 内核：`∠DBA=60°` 能造、**自算** 60°、且与**解析旁证** `h=|AB|·tan60°` 一致、文案带"有界求根"；`∠DBA=120°` 允许范围内取不到 ⇒ 如实拒绝并**报出实测变化范围**；`∠DAB=60°`（A 是垂足）⇒ **矛盾**并说出"恒为 90°"；`∠DAB=90°` ⇒ **仍然通过**且说明"由其它题设必然成立"；`∠APB=60°`（顶点本身是角的顶点）⇒ 形状出范围；两个含顶点角同时在场 ⇒ **联立**拒绝；题面给了高又给角 ⇒ 高照题面（构造期不做联立）。
+- 搜索层（整条链）：三棱锥 `AD⊥平面ABC，∠DBA=60°` 与四棱锥 `PA⊥平面ABCD，AB⊥AD，∠PBA=60°` 各自走到 **`verified_instance`** 且角由测试自己算；矛盾那条不给通过核验的候选、理由含 `contradictory-angle`；**护栏**：斜棱柱 + 菱形底面 + `∠A′AB=60°` **仍然不通过**（理由落在那个角上），而**去掉角**的那句仍然 `verified_instance`。
+
+**变异**：把求根扫描的步数上限改成 `0`（等于关掉扫描）⇒ **两层同时真红** —— 内核那条 `expected 'rejected' to be 'candidate'`，搜索层两条 `unverified_instance`，理由原文 `unsupported-angle-shape: 点名角 DBA = 60° …实测这个角只在 50.7° 到 87.1° 之间变化`；还原 ⇒ 定向 11 条复绿。
+
+**实施时被自己的判据抓住的三个坑（照实记，前两个是设计页里写错的地方）**：
+
+1. **`angleBetween` 是二维原语**（`dynamic-measurements`，只读 `x` / `y`）。顶点沿 `z` 抬高时它的二维投影与原方向**完全重合**，于是那个角被**恒量成 0°** —— 四条判据当场红，报出来的错是"角与高无关、恒为 0° ⇒ 矛盾"。改用与**统一核验器同一条规则**的空间内角（`subtractVector3` + 归一化点积 `acos`，出度）。两份设计页里"量角的工具早就有 `angleBetween`"那句话因此**当场更正**。教训是本仓那条老话：**一个原语在它自己的那条路上验过，不等于它在另一条路上也成立**。
+2. **常性判据必须先看，不能只看根**。角与高无关时（腿沿底面法向）**任何高都满足它**，扫描会"立刻找到一个根"，照根那套文案就会把"**这个角定不了高**"说成"**高由这个角求出**"。改成**一次探测同时给** `{root, lowDegrees, highDegrees}`：**常性决定话怎么说，根决定图能不能画出来**（设计页 §4 已按此更正顺序）。
+3. **markdown 的 `**` 写进了内核给用户看的文案里** —— 本仓明文写着面板文案是**逐字渲染**的（圆台那次就为此清过星号）。这次是 `∠DAB=60°` 那条判据的 `toContain("恒为 90")` 把它照出来的（实收 `恒为** 90`）。已清掉。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4151 通过 + 1 todo / 0 失败**（比上一读数 +11 = 本块新增的 7 条内核 + 4 条搜索层判据）；全量 e2e **首跑 221 通过 / 1 失败** —— 那条失败是**环境级**的 `page.goto: net::ERR_NO_BUFFER_SPACE at http://127.0.0.1:4173/`（浏览器缓冲耗尽，**不是**产品行为、也不是本块改动的那条路），**孤立复跑 7 passed**；按本仓口径记成抖动，**不**说成全绿。
+
+**边界（如实留着）**：**B3**（`∠APB`，位置要两个以上未知量）与**棱柱侧棱方向的角**（`∠A′AB`，早已裁决不做）都在本层**如实拒绝**，护栏那条把"棱柱不许被顺手打开"钉住了；**棱柱顶环上的角**（`∠A′B′C′`）仍不做（要先有"环外环"的点名映射）。**这一块的浏览器证据仍然只有在阶段 A 那条 spec 上**（新分支的浏览器判据本块没加）。
+
+## 2026-10-10 —— §3-F 阶段 A 的**浏览器证据**：数值角在浏览器里画得出、核得过（"判据能咬人"由**只回退内核源码**的对照实验证明）
+
+**为什么单开一块补证据**：上一条如实记着"这一支只动内核见证构造，浏览器面本就覆盖不到它的新分支" —— 翻成可核对的句子就是：**这条能力在 `e2e/` 里一条判据都没有**（`e2e/` 里 `∠` 只出现在"读不懂的样本" `sin∠PAB=0.5` 那一条上）。本仓的纪律是"每条能力都要有浏览器证据"，所以这一块补的是**证据**，**产品代码一行没改**。
+
+**走的是既有路线，不是夹具坐标那条路**：设置里打开「示意图见证搜索」⇒ `solidShapeIntentFor` 用 `parseShapeClause` 认出形状从句 ⇒ **在浏览器里**跑见证搜索 —— 那正是 `deriveAngledTriangleBase`（含四边形那一支）的入口。判据三段：① 确认面板 `data-status="passed"`，**实录** `PA⊥平面ABCD：通过。已按候选图坐标核验。∠ABC=60°：通过。已按候选图坐标核验。`（**通过 2 / 失败 0 / 未核验 0**）；② 提交后读**真实落盘**坐标、**按画布标签**取 A/B/C/D（于是"面板说的名字"与"画布上的名字"必须指同一批点），测试**自己算** ∠ABC = 60°；③ 两组对边都不平行 —— 四边形那一支的红线就是"第四条边是代表值，但不许顺手做出题面没说的特殊关系"。
+
+**RED 有两次，都是真信息**：① 第一版题面（只有角、没有"线 ⊥ 面"）跑出来**面板根本不出现**，状态行原文 `unsupported-shape: 题面没有给出「某条线段 ⊥ 某个点名平面」的写法，首批无法确定底面环、垂足与顶点` —— **这条路线的前提**是题面必须给出那句话；② 补上之后面板出现且 `passed`，但我的断言写的是"通过 1"，**实收 2**（那条"线 ⊥ 面"也在核，且由核验器自己算残差）。两条都照实改进，并把实录文案写进注释。
+
+**"这条判据能咬人"由对照实验证明**（这一块没有产品代码改动，所以变异只能这么做）：只把**内核源码**回退到上一块（`git checkout a44c54b -- packages/geometry-kernel/src/witness/constructors.ts`）⇒ 本 spec **真红**，确认面板不出现，状态行实录 `no-candidate-constructed: 13 个候选都在构造期被拒，没有得到任何可核验的坐标。；unsupported-base-shape: 底面缺少「点名在 A 处的直角」（AB ⊥ AD）…（13 个候选）`；`git checkout 48c2ee9 -- …` 还原 ⇒ **1 passed**。也就是：这条 e2e **确实踩在四边形那一支的内核路径上**，不是"碰巧画出来了"。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4139 通过 + 1 todo / 1 失败** —— 那 1 条是本文档早已记过的负载敏感抖动 `apps/web/src/persistence/fileExports.test.ts`（CAD 导出 5 s 超时），**孤立复跑 9/9 通过**（本块非 Lean 单测面一行没动）；全量 e2e **222 通过 / 0 失败**（2.8 m，比上一读数 +1 = 本条新增的那一条）。
+
+**边界（如实留着）**：这条 spec 覆盖的是**四边形底面**那一支（也顺带走了核验与标签那两段）。**三角形底面**那一支**仍然没有浏览器证据** —— 三棱锥是 V0a 的地盘（`solidShapeIntentFor` 明确不接），要给它浏览器证据得走 `freeApexIntentFor` 那条固定句式，那是另一个决定。
+
+## 2026-10-10 —— §3-F 阶段 A 补完最后一格：**四边形底面**上的点名数值角也认（上一条记的"仍拒绝"当场作废）
+
+**上一条的边界写的是"四边形底面点名角仍拒绝"**，理由也记了（`D = A + k·C` 那版会顺带做出 `AD ∥ BC`）。**理由对，结论过宽**：四边形比三角形多一个自由度，而题面**只说了那个角** ⇒ 剩下的本来就该取**代表值**；真正的要求不是"不能有代表值"，而是"**代表值不许顺手做出别的特殊关系**"。顺着这条把那个反例当判据用，这一支就通了。
+
+**规则（`deriveAngledTriangleBase` 的 `names.length === 4` 分支）**：角在环上第二位（`∠ABC` 这种最常见写法）时，第四个点取 `D = A + 0.8·|AB|·(cos(θ+35°), sin(θ+35°))`。**为什么是 35°/0.8**：它刻意避开三件事，而且**三件都由判据逐条自算钉住** —— ① 两组对边都不平行（`AD ∦ BC`、`AB ∦ DC`，否则就成了梯形/平行四边形）；② 四个顶点都不是直角、四条相邻边没有一对等长（否则是矩形/等腰/菱形那一类）；③ 环仍然**凸**（四个转向同号）且非退化。**角不在环上第二位**（例如 `∠BCD`）**仍旧拒绝**（`unsupported-base-shape`）—— 那条代表方向的规则在那里不成立，硬套就是替题面编形状。这条规则也**写进了假设文案**（面板上那句会多一句"第四条边取代表方向…刻意不与任何已有边平行、也不做出直角"），因为它是系统替用户做的选择。
+
+**判据两条**（同文件 `constructors.test.ts`）：① 正例 —— 题面那个角**自算**为 60°（不读构造过程），外加"没有多加"的四组断言与凸性断言；② 反例 —— `∠BCD=60°` 仍 `rejected` / `unsupported-base-shape`。**变异**：把那个 35° 改成 0°（也就是上一条记的那个 `D = A + k·C` 反例本身）⇒ 判据当场红，读数是 **`AD ∦ BC: expected 0 to be greater than 0.000001`**；还原 ⇒ 定向 **47/47**。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4140 通过 + 1 todo / 0 失败**（比上一条 +1 用例 = 本条把原来那条"四边形 ⇒ 拒绝"的用例拆成正反两条）；全量 e2e **221 通过 / 0 失败**。**离线 benchmark 逐字复查**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048` 与 `BENCHMARK_WITNESS_CODES {"(no-code)":1,"requires-candidates":7,"witness-search":20,"unsupported-shape":9,"no-candidate-constructed":2,"unsupported-base-shape":2,"unverified-obligation":26}` **改前改后一字未变**（题集里没有"四边形底面 + 点名数值角"这种案例，所以这一支动不到码表）。
+
+**两条如实记账**：① 改完文档后跑 `scripts/docs-consistency` **首跑 1 failed**，红的正是 `file-hygiene` 那条"读全部受跟踪文件查 BOM"的用例 —— 它是本文档早已记过的**负载敏感用例**（同文件另有 5 s 超时那条的记法）。当次我只过滤了行名、**没有留下错误原文**，所以按本仓口径记成"**抖动那次既不算绿也不算红**"：孤立复跑 **12/12 通过**，并事后用 `ReadAllBytes` 逐个核对本批 **7 个改动文件的头三字节都不带 BOM**（"受跟踪文件编码"这条判据现在是过的）。② 桌面端**重新构建并重启**时第一次**构建失败**：`failed to remove file …\mathcanvas-desktop.exe` / `os error 5`（拒绝访问）—— 原因是**旧实例还在跑、exe 被占用**，不是代码问题；先 `Stop-Process` 停掉旧进程（PID 48220）再构建 ⇒ **exit 0**，新 exe 时间戳 **03:40:04**，重启后 **PID 55632 / `Responding=True`**。**CI**：`48c2ee9` ⇒ **#265，四个 job（build / e2e / rust / checks）逐 job 查过，全 `success`**。
+
+**边界（如实留着）**：只做**四边形底面环上、角在环上第二位**这一支；**五边形以上**（走代表正多边形那条路）与**环上其它位置的角**仍旧拒绝；**涉及顶点／环外点的角**（`∠PAB`）是**阶段 B**，要有界求根，设计里另开一页 —— 这两条都没有变。
+
+## 2026-10-10 —— §3-F 阶段 A：平面数值角 —— 读、造、量**同一块落地**（12 处样本要换）
+
+**这一块按 [设计](superpowers/specs/2026-10-10-planar-angle-conditions-design.md) 做了一半（阶段 A）**：`∠ABC=60°` 这类句子此前**整句落 `unverified`**，后果不是"画不出来"，而是**整题永远有一条条件没核**（确认按钮因此永不出现）。现在三角形底面上的这种角**读得出、造得出、量得动**。
+
+**设计里那条"实施顺序是硬约束"当场兑现**：角一旦进 `givens`，核验器立刻拿现有坐标去量；量不过就是 `failed`，而 `failed` 让整份计划 `compile_failed`。**"只加读"不是第一步，而是回归**（把"画得出来但没核"变成"什么都出不来"）—— 所以读（`diagramObligations`）、量（`diagramVerification`）、造（内核 `deriveAngledTriangleBase`）三处必须在同一块里落地，测试也要在同一块里改完。
+
+**RED 是 12 处真实的行为变化，分两批照出来（这一点值得记）**：
+- **定向跑**照出 7 处：`diagramObligations`（3 条"整句引用"类用例的样本不再读不懂）、`obligationIR`（角从 `ambiguous` → `supported`）、`diagramVerification`（`unverified` → `failed`）、`diagramPipeline`（同上）、`witnessSearch`（residue 样本失效 ⇒ 搜索结果从 `unverified_instance` 变 `no_witness`）。
+- **全库首跑**又照出 5 处：`agentRunner` / `diagramDraftStage` / `hostBridge` / `localPlanner` / e2e `agent-underdetermined-diagram` —— **它们全都拿 `∠ABC=60°` 当"读不懂的样本"**（未核验可见、不签同意票、不能提交…）。定向那 6 个文件**一个都没覆盖到**它们。
+  这正是一条**可复用的教训**：**"这个样本读不懂"这类前提会被"多认了一种写法"整体推翻**，而它散落在各处；只跑定向 = 只跑了你想到的那几处。
+
+**处理方式（每条都保持原意图）**：把样本换成**真正读不出来**的那一类 —— `sin∠PAB=0.5`（三角函数值不是角本身，设计里明确列为不做）。例如"未核验的条件要可见、不能提交"那条 e2e，判据（状态是"没有完成"、`确认并提交` 按钮不存在、画布上没有对象）**一字未改**，只换了那句话。共享夹具 `PYRAMID_UNVERIFIED_PROMPT` 同步改（`localPlanner` 的命中关键词里那个 `∠` 仍在）。
+
+**新判据（10 条）**：句型三条（读得出 / 三种退化写法读不出）；核验器两条（图不满足 60° ⇒ `failed` 且**报出量到的度数**；真读不懂的仍 `unverified`）；管线两条（图满足 ⇒ `passed`；不满足 ⇒ `ok=false` 且诊断点名）；内核三条（自算角度=60°、两条邻边**不等长**、非退化；角在任意顶点都认；`0/180/负` ⇒ `degenerate-base`；四边形 ⇒ `unsupported-base-shape`）。**最后那半条"四边形 ⇒ 拒绝"当日就被补掉了**（见上方同名块：四边形现在认，角必须在环上第二位），此处保留原文以便读出当时的口径。
+
+**"不许多加题面没说的东西"照旧管着**：两条邻边取代表值时**故意不相等**（等长就是等腰三角形）—— 与候选池"两条自由底边不许取相等"、菱形"不许取直角"同一条账。
+
+**变异**：把新构造短路回 `null` ⇒ 内核那两条当场红：实测 **73.78°** 而不是 60°、**66.42°** 而不是 45°（判据自己算的，不是读构造方的自述），还原复绿。
+
+**边界（如实留着）**：**阶段 B 未做** —— 涉及顶点或环外点的角（`∠PAB`）要有界求根，设计里另开一页；**四边形底面点名角仍拒绝**（它需要一个"不额外引入平行"的代表形状，那是该单独决定的构造：`D = A + k·C` 那版会顺带做出 `AD ∥ BC`，属"悄悄加特殊性"，所以没做）。**⬅ 这一格当日晚些时候就补上了**：四边形底面（角在环上第二位）现在**认**，正是拿这里写的那个反例当判据用的 —— 见上方同名块。
+
+**门禁**：`typecheck` exit 0（先跑）；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4139 通过 + 1 todo / 0 失败**（537.52 s）；全量 e2e **221 通过 / 0 失败**（2.7 m）。
+
+**一次自己踩的坑（照实记，因为它是第三次同型）**：为了让 `-t` 过滤匹配我的新用例，我用 PowerShell `Set-Content` 重写了一个测试文件 —— PS 5.1 默认 **ANSI** 编码，**整个文件的中文当场变乱码**（diff 225 增 / 165 删，而我只加了 60 行；文件头也丢了 BOM-less 的 UTF-8）。仓库里早就写着这条纪律（"**本仓源码不能用 PowerShell 文本替换，只能用 `edit` 工具**"，V0c 那次为此回滚重做过一次），我当场 `git checkout --` 还原（`git diff --stat` 立刻回到空）再用 `edit` 重做。**教训不是"小心一点"，而是：批量改文件这种事，工具选错一次就会静默毁掉整个文件的中文，而 diff 会看起来"改了很多"。**
+
+## 2026-10-10 —— §一 门禁表逐行复测（**只改读数，不改代码**）
+
+**为什么单独做**：`current-status` 的 §一 是**现在时**那一页，但表里好几行的日期是 2026-10-05 / 10-06 —— 而本仓的纪律正是"历史读数不能当现值"（CI 那一行刚刚才被逐个提交核对过）。所以把还没有当日读数的那几行**逐条重跑**。
+
+| 行 | 上次读数 | **本次实测（2026-10-10）** | 结论 |
+| --- | --- | --- | --- |
+| Rust provider 测试 | 250 / 3 ignored / 0 失败（同日） | **250 / 3 ignored / 0 失败，exit 0**（逐二进制加总：9+26+26+12+25+19+22+20+16+16+31+10+9+9；ignored 2+1） | 逐项相同 |
+| 证明边界 smoke | 8 通过（10-06） | **8 通过 / 0 失败，exit 0**；`PROOF_BACKENDS` 仍是 `wired:["lean4"]`、`verdict:passed` | 同数 |
+| 依赖许可扫描 | 通过、快照重写后工作树无变化（10-05） | `packages=550 distinctExpressions=33`，exit 0；**回写快照后内容一字未变**（`git diff` 与 `-w` 都空，只有行尾差异，已还原） | 同一条结论：快照与 `Cargo.lock` 一致 |
+| Agent 评测（离线） | pass@1 4/8、pass@3 4/8、45/45、3/45（10-05） | **逐项相同**（另 `average latency 7 ms`） | 离线回归没动 |
+| 生产构建（web） | 1,803.76 kB / gzip 527.62 kB（10-05） | **1,954.26 kB / gzip 577.66 kB**（+150.5 kB） | 体量确实长了 —— 中间落地了现场修复批次、题面改写通道、`solid.create_face`、形式证明入口与面板 |
+| 性能基线 | `drag/300-frames` 479–488 ms（10-05） | **1652.3 / 1665.4 ms**（两次采样：一次在全套门禁里、一次空载单独跑，读数一致） | **不构成"变慢"的结论**，理由见下 |
+
+**性能那一行必须说清，否则它会被读成一个回归**：那条用例的护栏是 `expect(elapsed).toBeLessThan(30_000)`，代码注释写着"这里只抓**复杂度写错了**" —— **绝对毫秒不是门禁**，而本仓早就写明"性能与机器负载相关，故两说并存"。校准那一对仍然单调：`calibration/solidStatusReport-1x` **15.9 ms** / `-4x` **55.5 ms**（≈3.5 倍，四趟确实更慢）。所以历史上三组数字（**686–711** / **479–488** / **1652–1665**）**并存**，各自只代表写下它的那台机器与那次负载。**我没有把 1652 写成"退化"** —— 那需要同一台机器、同一负载下与旧代码对照，而今天没有做那个对照。
+
+**一条操作细节（照实记）**：`licences:scan` 会**回写** `scripts/dependency-licences/rust-licences.json`；这次工作树立刻显示为 `M`，但 `git diff` 与 `git diff -w` **都是空的** ⇒ 那是**行尾差异**（Windows 上写文件的老毛病），内容没变。处理是 `git checkout --` 还原，**不把行尾噪音提交进去**。这与 2026-10-05 记的"快照重写后工作树无变化"是同一条结论的两种表象。
+
+**边界（不许含糊）**：这一块**只改文档**，产品代码一行未动；**这次提交自己的 CI 也没重跑**（推送之后才有结论，见 §一 那一行"按定义滞后一次提交"的口径）。**Lean 慢集成**（`lean4EndToEnd.test.ts`）今天仍未跑 —— 它是显式 gated 的集成用例（约 6 分钟、GB 级 I/O），要在意它就得单独跑，见 §一 那一行的冷/热两读。
+
+## 2026-10-10 —— CI 逐个提交核对（本会话 19 个提交；**不看推断，查 API**）
+
+**为什么要单独做这一块**：`current-status` 的 CI 行一直写着"§一 CI 行的最近列举 SHA 早于该 HEAD，**未在本次审核核对该 HEAD 的 CI 结果**"。也就是说，本会话推上去的每一个提交，**没有一个有 CI 结论被记下来过** —— 而仓库自己的纪律是"不要从历史 SHA 推断当前 CI 必绿"。
+
+**做法**：用 GitHub API 按 `head_sha` 逐个查（`/actions/runs?head_sha=<full sha>`），而不是按分支列表猜。19 个提交里已核对的结论：
+
+| 提交 | run | 结论 |
+|---|---|---|
+| `1211345` docs（全仓进度文档 + README 对齐） | **#278** | **四 job 全绿**（build / e2e / rust / checks，逐 job 查过 `success`）—— **连"只改文档"的提交也把 e2e 跑绿了** |
+| `2c947bd` docs（空间线重合设计因果改正） | **#276** | **四 job 全绿** |
+| `19aa6b6` docs（空间线重合设计） | **#275** | **`cancelled`** —— 被紧随其后的 #276 取代，内容被它跑到 |
+| `0fed350` e2e（阶段 B 浏览器证据） | **#273** | **四 job 全绿** —— 本批补记 |
+| `e0e2f64` §3-F 阶段 B（B1）实现 | **#272** | **四 job 全绿** —— 本批补记（**实现块的 CI 也把 e2e 跑绿了**） |
+| `40ce9b2` docs（阶段 B 设计分类修正） | **#270** | **四 job 全绿**（build / e2e / rust / checks，逐 job 查过 `success`）—— 本批补记 |
+| `6105061` docs（阶段 B 设计） | **#269** | **`cancelled`** —— 被紧随其后的 #270 取代，内容被它跑到（"每个提交都被某一次绿覆盖"那条判据） |
+| `e00dc99` 数值角浏览器证据 | **#267** | **四 job 全绿**（build / e2e / rust / checks，逐 job 查过 `success`）—— 本批补记 |
+| `cfa9588` docs（CI 补记） | **#266** | **四 job 全绿** —— 本批补记 |
+| `48c2ee9` §3-F 四边形底面数值角 | **#265** | **四 job 全绿**（build / e2e / rust / checks，逐 job 查过 `success`） |
+| `b699544` §3-F 圆台近似声明 | **#259** | **四 job 全绿**（build / e2e / rust / checks；逐 job 查过） |
+| `549c85c` docs（哈希不再记） | #258 | 绿 |
+| `8db3cce` §3-F 直角梯形 | #257 | **cancelled** |
+| `4d13332` docs（哈希刷新） | #256 | 绿 |
+| `d61b5cc` §3-F 球状态词表 | #255 | **cancelled** |
+| `12c3b47` docs（发布决定） | #254 | 绿 |
+| `15102e9` §3-D 形式证明入口 | #253 | **cancelled** |
+| `6a869bc` P2-C 顶点标签 | #252 | 绿 |
+| `5404a4a` P0-A 引用写法 | #251 | 绿 |
+
+**三条 `cancelled` 是"被取代"而不是"漏网"**：它们各自被**紧随其后的推送**取代（`15102e9` → `12c3b47`、`d61b5cc` → `4d13332`、`8db3cce` → `549c85c`），而后续那三次**都是绿的**，且是同一分支的**后代**提交（内容包含前者）⇒ **有机器门禁覆盖**。这与 `#182 / 2532c1a` 那种"取消了就真的没验过（里面确实有一个真类型错误）"是两回事 —— 判据是**后代里有没有一次绿**，不是"有没有 cancelled"。
+
+**为什么会被取消**：本会话提交很密（九个提交在约两小时内），而工作流是 `cancel-in-progress` 语义 —— 新推送一到就把在跑的那次掐掉。**这不是缺陷，但它意味着"每个提交都有一次独立的绿"这句话在本仓不成立**，能成立的是"**每个提交都被某一次绿覆盖**"。
+
+**如实留着的边界**：写下这一行的那次提交是 **docs-only**，**它自己的 CI 结论没有核对**（写下它时还在跑）—— 与 CI 行那句老规矩一致：不要从历史 SHA 推断当前 CI 必绿。真要看当前状态就当场查。
+
+## 2026-10-10 —— §3-F 之一：圆台的"这是近似、差多少"接到**模型那条路**上
+
+**这一块的起点是一处落差**：2026-10-07 的 Task 4.3（圆台近似口径）标着完成，证据行写着"'近似'如实声明：假设里给段数与弦高误差、对象标签写'（近似）'"。**那句话只在夹具那条路上是真的** —— `localPlanner` 的圆台夹具自己把那两句写进了 `assumptions`；而**动作那条路（模型给三个数、调 `solid.create_round_frustum`）一个字都没说**：用户看到的是一只 48 边形的多面体，面板上没有任何"这是近似"的字样。这与设计 §S4.3 那句"在文档与面板上**如实声明**是近似"不符，而且是**用户看得见**的那一侧不符（夹具页看得见的那份反而写得很好）。
+
+**改法：挂到"编译期补出来的假设"那条既有通道上。** `approximationAssumptions(audit.actions)` 为每一笔 `solid.create_round_frustum` 生成一条 `StructuredAssumption`：段数、两个底面是内接正 N 边形、侧面 N 个等腰梯形、**弦高误差**（并指名按哪一环算），末句"它是近似，不是那个真的圆台"。为什么修在编译期而不是动作层：动作层（`compileSolidRoundFrustum`）只产出图元与诊断、**没有"假设"这条通道**，而编译期的假设有一条能走到用户眼前的路（`completionAssumptions` → 草稿预览 → 运行时 `assumptions()` → 确认面板，这条路是 §3-D 那次也走过的）。
+
+**顺带更正三处（都属于"少报"或"看着像那么回事"那一类）**：
+1. **弦高误差原写死按"下底"半径算**，注释给的理由是"它是两个环里较大的那个风险"。那句话只在 `R下 > R上` 时成立；题面完全可以给一只**上底更大**的圆台（合法），那时按小环报误差就是**少报** —— 而用户正是拿这个数判断"这张图够不够用"。现在取 `max`，文案里**指名**哪一环。
+2. **公式抽成 `roundFrustumChordError(radius, segments)`**：夹具那条路与编译期那条路同一个真源。两边各写一份，分叉出来的数字看起来一样"像那么回事"。
+3. 夹具文案里的 markdown 星号清掉 —— 那两句是**逐字渲染**在面板上的，星号会原样出现在用户眼前。
+
+**RED（四条，跑出的是行为失败）**：`planCompiler` 两条 —— 默认段数那条实收只有"分段数未指定：取 48（与圆柱 / 圆锥同一个数）。"；**显式给了 16 段那条更直接：假设列表整个是空的**（没有缺省要补，就一句都不说）。`agentRuntime` 一条：`runtime.assumptions()` 里没有那句。`localPlanDefaults` 一条：上底更大的那只圆台，弦高按小环算 ⇒ 与另一只**不是同一个数**。
+
+**GREEN**：`localPlanDefaults`（新导出 + 取 `max`）、`contracts`（`StructuredAssumption["kind"]` 加 `"approximation"` —— 它既不是缺省默认、也不是搜出来的坐标，是"这份几何本身是近似的"，所以不借 `witness` / `symbolic` 的名字）、`planCompiler`（那条 spread + helper）。
+
+**变异**：把那条 spread 撤掉（**就是修复前的状态**）⇒ 编译与运行**两层同时真红**；还原后 96 条定向复绿。
+
+**门禁**：**这次先跑 `typecheck` 再跑全库**（上一轮那条"vitest 绿、tsc 红"的教训直接落到顺序上）—— exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4134 通过 + 1 todo / 0 失败**（543.66 s）；全量 e2e **221 通过 / 0 失败**（2.7 m，没有抖动）。
+
+**这一块的形状值得记住**：Task 4.3 的证据行并不是假的 —— 它验的是**夹具那条路**（浏览器 1/1）。**"在一条路上验过"与"在这条能力的所有路上都成立"是两件事**，而机器判据只覆盖被写出来的那条路。这类落差在本会话已经出现三次（P0-A 的引用写法、§3-D 那个从没被传过的第八参数、这一次），共同点是**判据挂在夹具上而不是挂在产品路径上**。
+
+## 2026-10-10 —— §3-F 之一：底面点名两个直角 —— 从"拒绝"改成**造直角梯形**
+
+**这一条的现场是一句拒绝文案**（内核那侧的原话）：`底面在 B 处另有一个点名直角：那与「环首直角 ⇒ 矩形」的构造冲突（可能是直角梯形，也可能是冗余的特殊性），首批按更强的假设处理 —— 拒绝。` —— 而且它被**逐字钉在两条用例里**（`constructors.test.ts` 的梯形与"拆分编码"两支）。
+
+**那条理由没错，结论过宽。** 环首直角（`AB ⊥ AD`）加 B 处直角（`AB ⊥ BC`）把 `AB` 钉成两条平行边的**公垂线**，底面闭式可构造：`A=(0,0)`、`B=(w,0)`、`C=(w,c)`、`D=(0,d)`。**"首批不做通用非线性求解"这个借口在这支上不成立** —— 它需要的只是一次减法。而 `perpendicular` / `parallel` 两条判据核验器本来就有，所以这条能力**能端到端走完**（构造 ⇒ 逐条核验），不是"造出来看看"。
+
+**改法（`deriveBasePolygon` 的四边形分支，原先那个"一律拒绝"的 `if` 里分出四支）**：
+1. 第二个直角在 **B** ⇒ 直角梯形；`c ≠ d`（相等就是矩形，那是题面没说的额外特殊性 —— 与候选池"两条自由底边不许取相等"同一条账）；
+2. 题面另点 `AB ∥ DC` ⇒ 四个角都是直角，**那就是矩形**，按矩形造（`c = d`）；此时若又给了两个**不同**的 `AD`/`BC` ⇒ **自相矛盾**，如实拒绝，不替它挑一个；
+3. 题面点了 `CD` 的长度 ⇒ 拒绝（它在梯形里由另外三条边决定，是联立关系，本层不做）；
+4. 第二个直角在 **C / D** ⇒ 仍旧拒绝（配上环首直角推出来的是矩形，题面没说那件事），文案改成**说清哪一支支持、哪一支不支持**。
+
+顺带补了一个**只看底面的**平行判据 `baseEdgeParallel`（与既有 `baseEdgePerpendicular` 同一口径：要求两条边被**同一条**关系点到、且两端点都在底面环内，方向不限）。第一版我把"另一组对边"的参数传错（写成 `BC ∥ AB`），管线用例当场报 `AB∥DC：实测 0.44721，题设要求 0` —— **是核验器把它抓出来的**，不是我自己看出来的；这条记账留着，因为它是"构造必须落在判据之下"的现成例子。
+
+**RED → GREEN**：内核那条实收 `rejected` + 那句旧文案；改完后 `candidate`，并**自算**三条题面条件（`AB ⊥ AD`、`AB ⊥ BC`、`BC ∥ AD`）与两条"没有多加"（`AD ≠ BC`、C/D 处不是直角）。**管线级三条**（`witnessSearch.test.ts`）：直角梯形句 ⇒ `verified_instance`；矩形那一支 ⇒ `verified_instance`；`AB ∥ DC` + `AD=3`/`BC=5` ⇒ **不给通过核验的候选**。
+
+**变异**：把新分支短路（`internalRightAngle === 99`）⇒ 内核 `rejected`、管线报 `no-candidate-constructed … unsupported-base-shape（12 个候选）` ⇒ **两层同时真红**；还原后 90 条定向复绿。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4130 通过 + 1 todo / 0 失败**（474.56 s）；全量 e2e 首跑 **220 通过 / 1 失败**（`conversation-isolation.spec.ts:52`，**本文档早已记过**的抖动，孤立复跑 1 passed）。
+
+**离线 benchmark 如实复查（结论：本块没移动它）**：`BENCHMARK_WITNESS verified=1 unverified=20 no_witness=0 error=0 solveRate=0.048` 与码表 `{"(no-code)":1,"requires-candidates":7,"witness-search":20,"unsupported-shape":9,"no-candidate-constructed":2,"unsupported-base-shape":2,"unverified-obligation":26}`。做法是**只 stash 内核源码**（`git stash push -- …constructors.ts`）跑一遍改前、再 `stash pop`：两次**逐字相同** ⇒ 那批题面里没有"两个底角直角"这一类。**顺带改正一处陈旧读数**：`docs/current-status.md` §一 里记的 `no-candidate-constructed:4 / unsupported-base-shape:4` 是更早某次的分布（文档自己就记过"码表构成变过、不是同一个分布"），今天实测 **2 / 2**。
+
+**一条过程教训（本会话第三次同型）**：新用例的辅助函数把参数类型写成 `PyramidConstructRequest["relations"]`（readonly），而 `pyramidRequest` 收可变数组 ⇒ `tsc` 报 **TS4104**，而 vitest 全绿。**"跑过测试"第三次不等于"过了类型门"**：三次都是先跑全库、再补类型（`PlanEnvelope` 判别联合、`planeLines` 元组、这一次的 readonly）。**先跑 `typecheck` 再跑全库**这条顺序值得写进收口清单。
+
+**仍未做（§3-F 的剩下两项，按需）**：空间"线重合"的求解、**数值角**（`∠ABC=60°` 这类 —— 它今天落在"未核验"那一类，要真支持得先有一条 angle 关系 + 判据）。
+
+## 2026-10-10 —— §3-F 之一：球的状态词表 —— 新增第五个词 `stale`（"不再成立"）
+
+**这条待裁决项的最后一句是"今天借用 `undefined`，徽章显示'不存在'"** —— 也就是说，用户看到的是**一句假话**：派生球与宿主对不上时（`derived.sphere_stale`），报告借 `undefined`，而界面把 `undefined` 说成"不存在"，可那只球**就画在屏幕上**。
+
+**词表的边界（裁决的理由）**：四个求解器状态（`exact` / `approximate` / `undefined` / `degenerate`）说的是"**解**怎么了"；这一条说的是"**解还在，但已经不是这只实体的解了**"（宿主现在没有这种球了 / 球被改过 / 重算没跑到）。所以它是**报告**自己的第五个词，不是任何求解器的返回值 —— `SolidDerivedStatus["status"]` 写成 `DerivedSolidResult<unknown>["status"] | "stale"`。
+
+**一处"当年写对了、今天才兑现"的细节**：`derivedStatusLabels` 那张表早就写成 `Record<SolidDerivedStatus["status"], string>`，注释写着"内核将来多一个状态，这里会**编译不过**，而不是静默少一行"。这次加词时它**真的编译不过**，`stale` 是被类型门逼出来的 —— 与"类型里有 ≠ 界面上有"那次相反的、好的一面（**类型里有，界面就必须有**）。
+
+**同一个词表要跟到模型那一侧**：`ObservedDerivedStatus`（观察层给模型看的读数）同步扩到五个词，`systemPrompt` 的读数口径加一句"`stale` 说「不再成立」，**不要**说成「不存在」"。少了这一步，界面说对了而模型仍会说"不存在" —— 那就成了"两个词表、一句假话"。
+
+**RED（三层，跑出的是行为失败）**：报告那条实收 `status: "undefined"`；界面那条实收徽章 `undefined`（且文案含"不存在"）；提示词那条 `expected policy to contain 'stale'`。
+
+**GREEN**：`operations.ts`（类型 + 那一格）、`inspectorLabels.ts`（`stale: "不再成立"`，两处注释同步）、`inspectorReadings.tsx`（脚注补第五种 + 文件头）、`sceneObservation.ts`（模型侧词表）、`systemPrompt.ts`（那句教学）。
+
+**变异**：把报告那一格改回 `undefined` ⇒ **报告与界面两层同时真红**；**提示词那条不随它动** —— 它守的是"话有没有说到"而不是报告本身，这一点照实记，免得被读成"变异没红"。
+
+**判据的对照面（刻意留的）**：`EngineeringInspector.test.tsx` 里那条 `undefined` 用例被加上一句"**真的没有这只球**时仍旧读作'不存在'"——新词加进来之后，最需要钉住的恰恰是**两者仍然分得开**。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4127 通过 + 1 todo / 0 失败**（537.26 s）；全量 e2e 首跑 **220 通过 / 1 失败** —— `agent-oblique-prism.spec.ts:35`（提交后等"已提交"标签 5 s 可见性超时，**本仓早已记过的抖动**），**孤立复跑 3 passed**。
+
+**至此 §3-F 里"待裁决"的两项都结清了**（标签错位 P2-C、球状态词表），**"圆台近似口径"也在同一天补上了模型那条路**（见上方同名块）。剩下的两项是"按需排期"的能力缺口：空间线重合的**求解**、底面**点名数值角**的构造。**⬅ 后者同日已做（阶段 A：三角形 + 四边形底面；五边形以上、环上其它位置、涉及顶点的角仍未做）—— 见文件顶部同名块。**
+
+## 2026-10-10 —— §3-D：`proofExport` 的实验入口 + 产物呈现 —— 以及**一处让开关事实上不生效的断线**
+
+**这一块把"库里有、却打不开"变成"用户点得到、看得见结果"**，计划 §3-D 要的正是两件事一起做。
+
+**① 设置 → 实验性功能 → 形式证明导出**（默认关）。与另外两个开关同一条口径（`=== true` 才算开、只写自己那个键、坏数据读成关）；文案说清两边：关着**不会调用证明后端**，打开后跑完作图顺手证一次题面里那一条能形式化的目标（**只有桌面版能真跑**，且**原题其余题设不会进命题**）。
+
+**② 确认面板新增「形式证明」那一段**：结局、**正文是谁给的**（`system-canonical` = 系统按这一类给出的）、**系统替你做了哪些选择**，外加一句不能省的边界。三处刻意的措辞：结局词只做**翻译**（判定仍只在内核与适配器那一侧，界面多一句解读就可能把"没跑成"说成"证不出来"）；库里的 `detail` **原样显示**；那句边界**必须在** —— 少了它，"已验证"三个字会被读成比事实更强的东西。
+
+**③ 顺带查实并修掉一处真断线（本块最该记的一条）**：写测试时发现开关打不开结果 —— 追下去是 `packages/agent-core/src/committerAdapter.ts` 把 `DraftStore.stage` 的**第八个参数写成 `undefined`**，注释还理直气壮地写着"证明那一次尝试由草稿层按它自己的开关做，不经过这里"。**那句话是错的**：草稿层没有自己的开关，它收的就是调用方传进来的布尔。后果具体：**在这之前，设置里打开"形式证明导出"在生产主路上什么也不会发生** —— 只有"模型自己调草稿工具"那条路会传，而那条不是主路。修法：两条暂存路径都传 `nextPhaseFlags.proofExport`；**预检显式传 `false`**（预检的用途是"这份计划能不能编"，在那里起证明进程等于同一轮跑两次，而预检结果本来就要丢掉）。这是一条**"文档说的与代码做的不是一回事"**的现成例子：`docs/current-status.md` 早就写着"产品调用点已接（`draftStore.stage` 第八个参数）"——**接在 store 上**是对的，**调用方没传**也是真的。
+
+**RED（6 条，跑出的是行为失败）**：`featureFlags`（偏好还开不了它）／开关 UI（`Unable to find role "switch" name "形式证明导出"`）／面板两条（`Unable to find role "region" name "形式证明"`）／运行器一条（`expected undefined to be defined`）。
+
+**GREEN**：`nextPhasePreferences` 加一对 load/save；`featureFlags` 读它（并更正那段"proofExport 不许被偏好打开"的注释）；`ExperimentalFeatures` 第三个开关；`agentStore.AgentDraftView` / `hostBridge.PreviewArtifact` 加 `proofAttempt`（可选，缺省不存在）；`agentRunner` 用**条件展开**把它带进草稿视图（不是"值是 undefined"）；`ConfirmationPanel` 那一节；`agentRuntime` 两处暂存 + `committerAdapter` 的类型与那一格。
+
+**判据（8 条，含控制组）**：偏好/flags 三条；开关 UI 两条；面板三条（含"关着时整段不存在"）；**运行器一条**（开着 ⇒ 那一次尝试在预览里、没"求证"句的题如实 `no_goal`；关着 ⇒ **连键都不写**）；**浏览器 3 条**（开关默认关 / 能开 / 只开自己；关着时面板没有这一段；打开后同一句话的确认面板上真的出现这一段）。
+
+**变异**：把 `committerAdapter` 那一格改回 `undefined` ⇒ **单元与浏览器两层同时真红**（浏览器那条报"找不到那段"），还原后复绿。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4127 通过 + 1 todo / 0 失败**（530.08 s）；全量 e2e **221 通过 / 0 失败**（2.6 m）。
+
+**同一天把 §3-E 的决定定下来（不改代码）**：1 MiB 响应上限**维持现状**。三条理由：① 实测行为是**如实停下**而不是返回半成品，这是安全的那一侧，抬上限只会把"看得见的失败"换成"看不见的内存/超时风险"；② 抬上限要一起论证内存与超时预算，而**今天没有证据表明上限挡住了本该成功的题目**（那两条 planning 失败里，模型是先输出超长内容才撞上它）；③ 真要改，该改的是"让计划更小"（提示词/输出预算）—— 那是另一件事，不能拿抬上限当替代。**代价如实留着**：planning 3 条里有 2 条因此走不到计划。
+
+**仍未验（如实留着）**：**真桌面 UI 里那次自动往返**仍需人操作 —— 开关与面板给了入口，但那一次"真的起 Lean 并看到结果"没有自动化证据；发行链（Lean + 7.5 GB mathlib）未决。
+
+## 2026-10-10 —— 自测问题 P2-C：顶点标签跟随 `vertexNames` —— **修了一处判据，重抓了一次基线**
+
+**用户报的是**："点的名称对不上"。这条**早就查实**（本文档里记了三轮，最近一次写着"不能顺手修"），卡点在 `planCompiler.offPath.golden.test.ts`：它要求关着开关时与 `4707b64` **逐字节相同**，而草稿文档（含标签）就在比较范围内。本次按裁决**修 + 有据重抓**。
+
+**根因（一处）**：`solid.create_polyhedron` 的顶点标签由 `packages/scene-graph/src/actions/index.ts` 的 `labelSolidChildren` 按**下标顺序**生成 `A`、`B`、`C`…，而题设核验器（`diagramVerification.candidatePoints`）按 `vertexNames` 的**下标**认顶点。题面把顶点写在前面时（`P-ABCD` / `P-ABCDE` / `ABCD-A′B′C′D′`），两套名字**整体错位一格**：学生在画布上把**顶点**读成 `A`，面板说的 `A` 却是底面上那个点。
+
+**一件必须先说清的事**：**核验一直是对的**。点名表只从 `vertexNames` 建；标签扫描那一步是"补名字"，而且写入时**顶点名优先**（`!points.has(label)`）—— 所以错位**没有**污染核验结论，它污染的是"面板说的名字"与"用户读到的名字"之间的关系。这正是"绿门禁挂在错的对象上"那一类，也解释了它为什么能活这么久：所有机器判据都是绿的。
+
+**GREEN（一处 + 一处接线）**：`labelSolidChildren(primitives, label, vertexNames?)` —— 给了点名就按下标用点名，没给仍按位置顺延；`compileSolidPolyhedron` 收 `vertexNames`；`compileSolidPolyhedronAction` 把 `inputs.vertexNames` 传下去。**没给点名的路一律不变**：手工工具（`spatialSolidCommands` 用选中的底面 + 顶点建棱锥）与旧文档都靠 `A…Z` 这一套，而 `apps/web/src/solidTemplates.ts` 的迁移正是拿 `templatePointLabel(index)` 判"这个标签是不是自动生成的、能不能重编"—— 动它会覆盖用户自己改过的名字。
+
+**RED → GREEN 的读数**（三层）：内核一条用例——`vertexNames: ["P","A","B","C"]`，实收 `[ 'A', 'B', 'C', 'D' ]`、期望 `[ 'P', 'A', 'B', 'C' ]`；浏览器一条（`agent-derived-sphere`，`P-ABCD` 的外接球题）——`Object.keys(byLabel).sort()` 实收 `["A","B","C","D","E"]`、期望含 `P`。修完两层都绿。
+
+**三处"钉住缺陷"的用例反向（这是本块的真实代价，逐条说明）**：本仓此前把这条缺陷**逐字钉在**三条浏览器用例里，写明"修法牵动 DSL 与渲染，属**待裁决**，本用例不替它选"。裁决下来是"修"，所以它们必须反向，而且**反向成"名字与下标一一对上"**，不是把期望字符串换个字：
+- `e2e/agent-prism-path.spec.ts`：`A…F` → **`A,B,C,A′,B′,C′`**（顺序即点名顺序）；
+- `e2e/agent-solid-family-path.spec.ts` 台体：`A…H` → **`A…D′`**，并逐条断言 `byLabel[names[i]] === byIndex[i]`；
+- 同文件五棱锥：底面 `A…E`、**顶点就叫 `P`**（原来是 `F`）——几何判据因此**改用点名**，不再靠位置标签；
+- `e2e/agent-diagram-free-apex.spec.ts` 的注释同步更正（那条断言形式没变，但含义从"位置巧合"变成"名字一致"）。
+
+**变异**：把标签改回按位置（`templatePointLabel(index)`）⇒ **内核、golden、浏览器三层同时真红**，还原后复绿。
+
+**golden 有据重抓（本块最需要证据的一处）**：重抓**之前**先写了临时探针（跑完即删）逐字段对读黄金样本与当前代码的输出，得到：
+- `pyramid-verified` 与 `pyramid-verified-with-ir-on` **各 10 处**差异 = 5 个 `label` ×（`operations[0].primitives` 与 `draftDocument.primitives`），一律 `A,B,C,D,E` → `P,A,B,C,D`；
+- 其余 5 个用例 **0 差异**（含 `pyramid-fail-closed` / `pyramid-unverified-without-names` / `transport-invalid` / `audit-completes-defaults`）；
+- 报错文案、别名、`resultKeys`、`diagramVerificationKeys` 一处都没动。
+
+然后才重抓，并把修订写进样本的 `revised`：`{date, reason, fieldPath, changedLabels: 20, cases}`。用例那边**加了一条断言要求它存在**（`changedLabels === 20`、`cases` 逐字、`reason` 非空），describe 标题也改成"matches its recorded baseline（`4707b64` + the 2026-10-10 label revision）"。**理由**：这份文件的全部价值就是"不随被测代码变化"；悄悄重抓一次，它就退化成"新代码自己跟自己比" —— 所以修订必须留痕、且可核对。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4119 通过 + 1 todo / 2 失败**（451.29 s）—— 两条都是**负载超时**（`scripts/docs-consistency/file-hygiene.test.ts` 的 5 s、既有 `fileExports.test.ts:189` 的 CAD 导出 5 s），两条**孤立复跑 12 通过**；全量 e2e 首跑 **217 通过 / 1 失败** —— `agent-diagram-free-apex.spec.ts:84` 的 **`beforeEach`**（`page.goto` 30 s 被 `ERR_ABORTED`，不是断言失败），**孤立复跑 6 passed**。
+
+**至此自测的三个问题全部修掉**（P0-A 引用写法、P1-B 工作区判据、P2-C 顶点标签）。**仍如实留着的**：用户在修好之前跑过的那一版桌面构建已经被替换（同一句切线题在桌面版已能出图，用户当场确认）；**教师/学生正式走查、人工可读性标注**这两项等人，不因本块而改变。
+
+## 2026-10-10 —— 自测问题 P0-A：切线题的真实死因 —— **引用写法的两种方言**（报错原文推翻三条猜测）
+
+**用户回传的报错原文（这是本块的全部起点）**：`run_failed` —— **`the plan never matched the schema: invalid_type@envelope.actions[1].inputs.sourceId: expected a string`**；轨迹是 检查环境 ✓ → 读取场景 ✓ → 规划 ✓ → **暂存草稿 2 action(s) ✓** → 修复轮（shape 1/1, geometry 1/1）✓ → 失败。
+
+**它推翻了什么（照实记）**：计划里原写的三条嫌疑 —— ① 采样区间过宽 ⇒ 三次函数取值极大 ⇒ 取景/坐标**数值溢出**；② 切线被曲线量级压扁；③ 桌面版工作区停在 3D —— **一条都不成立**。草稿**已经暂存了两笔动作**，说明几何与工作区都走通了；死在**计划形状**上，而且卡在 `actions[1]`（切线）的 `sourceId`（它指的那条曲线）这一栏。
+
+**根因：两种引用写法，而模型只被教了其中一种。** 动作表里 `dynamic.create_bound_point.host` / `derived.create_circumsphere.solidId` 发布给模型的是**对象** `{scope:"draft",alias:"…"}` —— `skills/manifest.ts` 里还逐字写着"`solidId` 写宿主实体的引用（形如 `{scope:\"draft\",alias:\"...\"}`）"。而 `function.create_tangent.sourceId` / `function.analyze.sourceId` / `section.create.sourceId` 登记为 `{kind:"id"}`，**是裸 id 字符串**。模型把同一套语法用在了 `sourceId` 上 ⇒ 传输层 `boundedString` 判 `invalid_type`；那句 `expected a string` **没有告诉它该写什么**，于是唯一一次修复机会也没救回来。
+
+**"为什么离线永远照不出来"这件事也查清了**：夹具写的是**合规**的 `sourceId: "draft:f"`（`representativeFixtures.ts` / `agent-function-tangent.spec.ts`）—— **离线替模型把这句话写对了**。这正是"离线夹具全绿 ≠ 真模型那条路通"的又一个现成例子。
+
+**RED（两条，都先跑出与用户同一句话的失败）**：
+- 传输层：`parseDraftAction` 给 `function.create_tangent` 传 `sourceId: {scope:"draft",alias:"f"}` ⇒ 实收 `invalid_type @ action.inputs.sourceId / expected a string`；
+- 管线级：`function.create_graph` + 同样的对象写法 ⇒ 实收 `[{"stage":"transport","code":"invalid_type","path":"envelope.actions[1].inputs.sourceId","detail":"expected a string"}]` —— **与用户回传的那一行逐字相同**。
+
+**GREEN（一处判据 + 三处接线 + 两处发布/报错）**：
+1. `schemaReaders.readIdReference`：`kind:"id"` 引用收**两种**写法，草稿作用域对象收成 `draft:<alias>`（编译器认的唯一别名写法）；`DRAFT_ID_PREFIX` 的真源也搬来这一层（`planCompiler` 转出去），**免得"哪种写法算别名"再多一处真源**；
+2. 三处接线共用它：默认分支的平铺引用、**嵌套的** `anchor.pointId`、`section.create` 自己那个分支（同一个判断不许有两个实现 —— 那个分支的旧注释还把"对象形状一律拒"当成设计）；
+3. `actionSchemas` 把**接受的形状**发布出去（`oneOf: [string, {scope:"draft",alias}]`），因为"发布出去的 schema 与真正接受的载荷必须是同一种东西"就写在这个文件里；
+4. 拒绝时把**两种写法**写进报错。
+
+**三条边界（都不是放宽校验）**：`scope:"scene"` 照旧拒绝（它带着 `documentId`，摊平成裸 id 会丢掉跨文档判据 `cross_document_reference`）；`parameter` 引用照旧只收字符串（参数不是草稿别名）；长度与去空仍走 `boundedString`。
+
+**变异**：把草稿作用域那一支短路（`scope === "draft"` → `scope === "never"`）⇒ **两层同时真红**，管线那条报出的正是用户那一行；还原后 `agent-core` **68 文件 / 1016 通过**、`typecheck` exit 0。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4120 通过 + 1 todo / 0 失败**（398.11 s，+2 = 本块两条判据）；全量 e2e 首跑 **215 通过 / 3 失败** —— 三条是 `agent-diagram-free-apex:33` / `agent-oblique-prism:35` / `main-thread-responsiveness:28`，**都是本文档早已按轮记过的负载敏感抖动**（前两条的原文分别是"`page.goto` 30 s 没回"与"提交后等『已提交』标签 5 s 可见性超时"），`--workers=1` **孤立复跑 10 passed**；关旗逐字契约 `planCompiler.offPath.golden` 在同一趟全库里通过 —— **本块没有动 golden 基线**。
+
+**边界（如实说，别读成"这道题从此必成"）**：这一块修的是"**我们收不收模型写的这种写法**"。它是否会在别处换一种错法（写一个不存在的别名、或干脆编个 id）不在本块范围内 —— 那些仍旧由引用解析如实拒绝（`unresolved_alias`）。**真桌面往返仍要人跑**：本机的桌面构建已按本块重出，用户可用同一句题面复测。
+
+## 2026-10-10 —— 自测问题 P1-B：平面与立体不主动区分 —— **判据缺失**（`dynamic.*` 拖走了每一道带动点的平面题）
+
+**用户报的是现象**："图能画出来，但平面题该在平面、立体题该在立体没被主动区分。" 计划里给的第一步是**先分清"说明问题 vs 判据缺失"**，这一步当场就有结论：**判据缺失**。
+
+**读代码得到的机制**：`apps/web/src/agent/agentRunner.ts` 的 `planWorkspaces` 按**动作族**投票 —— `solid.*` / `section.*` / **`dynamic.*`** → 立体几何，`planar.*` / `function.*` → 平面几何；两类同时出现时 `prepareWorkspaceFor` **三维优先**（3D 文档接受平面图元，包含关系单向）。问题就在那一票 `dynamic.*` 上：**这一族自己不要工作区**，工作区由**宿主**决定（`dynamic.create_bound_point` 绑在椭圆上是平面题、绑在棱柱的棱上是立体题），而宿主**总是同一份计划里的另一笔 `planar.*` / `solid.*`** —— 那一笔已经投过票了。
+
+**这个判据缺口在产品路径上真的发生**：`localPlanner.ts` 在「椭圆 + 切线 + 恒/定值/任意」那句话上给出 `conicInvariantPlan`（椭圆 + 两条坐标轴 + **三个** `dynamic.create_bound_point` + 切线），于是判成"又要平面又要立体" ⇒ 切到**立体几何**。而**图照样画得出来**（3D 文档收平面图元），所以：单元全绿、e2e 全绿、用户在立体工作区里看一道圆锥曲线题。`e2e/agent-conic-invariant.spec.ts` 里那句"（工作区被切到圆锥曲线）"**只是注释**，从来没有断言看过工作区本身 —— 这正是"文档写着、判据没有"的现成例子。
+
+**RED（两层，都先跑出了失败）**：
+- 单元（真夹具，不是手搓动作）：`planWorkspaces(conicInvariantPlan())` ⇒ 实收 `[ 'conics', 'geometry3d' ]`，期望 `[ 'conics' ]`；
+- 浏览器：提交后 `跳转到平面几何` 的 `aria-pressed` 实收 `"false"`。
+
+**GREEN（一处）**：`dynamic.*` 从判据里去掉（与 `parameter.*` / `object.*` 同属中性动作）；只有中性动作的计划**不切工作区**（不替用户猜）。`systemPrompt.ts` 里那句"计划里有 `solid.*` / `section.*` / `dynamic.*` 就切立体几何"的**注释**同步更正（给模型的指示本身不受影响：它要求的是"画立体就用 `solid.*`"）。
+
+**变异（两层同时真红）**：把 `dynamic.` 加回判据 ⇒ 单元又一次 `expected [ 'conics', 'geometry3d' ] to deeply equal [ 'conics' ]`，浏览器 `Expected: "true" / Received: "false"`（**就是用户看到的现象**）；隔离还原后定向 **91 通过**（`planWorkspaces` / `agentRuntime` / `localPlanner`）+ **11 条** agent e2e 复绿。
+
+**门禁**：`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **353 文件 / 4118 通过 + 1 todo / 0 失败**（404.24 s）；全量 e2e **218 通过 / 0 失败**（2.5 m）；关旗逐字契约 `planCompiler.offPath.golden` 在同一趟全库里通过（本块**没有**动 golden）。
+
+**两条如实记账（照实写，因为都差点被读成别的东西）**：
+1. **新用例第一版让类型门红了**：`conicInvariantPlan()` 的类型是判别联合 `PlanEnvelope`，我直接读了 `.actions` ⇒ `tsc` 报 **TS2339**；而 vitest 跑得好好的。**"跑过测试"确实不等于"过了类型门"** —— 这个仓已经栽过同型的跟头（上一批的 `planeLines` 元组），所以这一次按纪律**先修类型再重跑全库**，上面那个 4118 是修完之后的读数。
+2. **首跑全库有两个红**：`fileExports.test.ts:189`（CAD 导出 5 s 超时）与 e2e `main-thread-responsiveness.spec.ts:28`（帧间隔阈值被负载顶破）。两条都是本仓**早已记过**的既有抖动，**各自孤立复跑一次即通过**（9 passed / 1 passed）—— 记在这里，免得下一个读日志的人把它当成 P1-B 的回归。
+
+**仍未修（本块的边界）**：P0-A（切线题在桌面版失败）与 P2-C（点名与画布标签错位）—— **两者都在同一天随后的区块里修掉了**（见上方同名块）。P0-A 在本次拿到了**用户给的报错原文**：`invalid_type@envelope.actions[1].inputs.sourceId: expected a string`（`run_failed`）—— 这一句把原先"采样区间/取景数值范围溢出"的猜测**当场推翻**，方向见下一块。
+
+## 2026-10-10 —— 人工自测结果归档 + 下一步计划（**不改产品代码**）
+
+**这一块只写文档**：把用户 2026-10-10 的自测结果如实归档，并写出下一步计划（[`2026-10-10-selftest-followups-and-release-plan.md`](superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md)）。
+
+**人做项结果（用户报告，控制器未旁观）**：**管理员 MSI 安装验收 ✅ 通过**（装 → 启动 → 卸载）；**真实 provider 两轴都跑了**：工具环 `pass@1 1/8` / `pass@3 2/8` / `tool selection 45/45` / `tool error rate 5/45` / 延迟 3704 ms / `attempts 24` / 成本 `not measured`；题集 planning `planned 0/3` / `clarification 1/3` / `error 2/3` / 延迟 27652 ms / 成本 `not measured`，**两条 error 的原文都是我们自己的 1 MiB 上限**（`the response exceeded 1048576 bytes` ⇒ `MAX_BODY_BYTES = 1 MiB`）。
+
+**两条读数上的结论**：① 工具环三项与上次同一量级（错误 4/45 → 5/45，n=24 下不当"变差"）；② **「>1 MiB 响应未测」这条缺口现在闭合了** —— 实测行为是**超限即如实停下**（fail-closed），代价是 planning 那两道题走不到计划。
+
+**看图自测发现三个问题（用户报告）**：① 切线题（`画出 f(x)=x³−3x 的图像与它在 x=1 处的切线`）在桌面版失败、"溢出了" —— **而同一句题面有一条通过的浏览器用例** ⇒ 嫌疑在采样区间/取景的数值范围，最小复现列在计划 §1 P0-A；② 平面与立体**不主动区分** —— 已核到 `planWorkspaces` 的机制（动作族决定工作区、两类同时优先立体、工图里拒绝而非切走），下一步先分清"说明问题 vs 判据缺失"；③ **点名与画布标签对不上** —— 就是早就查实的那条缺陷（`templatePointLabel(index)` 与 `vertexNames` 下标语义不同），计划里已定**裁决：修**，并写清"动 golden 基线必须逐字说明理由"。
+
+**同步**：`current-status`（顶部加自测块、真实 provider 行补读数、MSI 标通过）、`agent-next-round-progress`（N4 的 >1 MiB 改成已实测、V3 行改"部分"）、`README`（加下一步计划与走查手册的链接）。**产品代码一行未动。**
+## 2026-10-10 —— V2 GREEN ① 第四刀：第四个目标类「线在平面内」+ 查实"曲线性质"做不了
+
+**加第四类** `lineInPlane`（立体关系第四类）：平面内两点的连线仍在该平面内（子空间对减法封闭）。位置关键 —— 它是**判定定理的前置**；此前"BD 落在底面内"在前提桥里只能标 `fromFigure`（系统补的），现在**可证**。
+
+**真跑**：gated 用例 ⇒ `formally_proved` / `verified` / `exit=0` / **48154 ms** / 三个白名单公理。四类四个定理名；桌面白名单加到 4 条（跨语言判据钉住）。
+
+**两次"真红"（假 runner 全绿、只有真跑抓得到）**：① 正文 `sub_mem _ h1 h2` **参数顺序反了**（算出 `B - D`，结论要 `D - B`）⇒ `unsolved goals`；② 正文**续行缩进不齐**（首行 0 空格、后两行 2 空格，而适配器给每行统一加 2）⇒ 后两行被算进 `have … := by abel` 的块里 ⇒ 又一次 `unsolved goals` + 语法错。修法与理由都写进 `canonicalProof.ts` 注释。
+
+**另一半是查实的做不到**：计划 ① 点名的"**曲线性质**"那一族 —— **mathlib 里没有圆锥曲线的形式化**（`Ellipse`/`Parabola`/`Hyperbola`/`Conic` 只命中范畴论无关的 "conical"；`Mathlib/Geometry` 下无定义）⇒ 要做先得自己形式化。计划里那条"还没到的"因此改成"**有据的做不到**"。
+
+**门禁**：`test:rust` 250 passed / 0 failed / 3 ignored；定向 15 文件 / 178 通过；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean 347 文件 / 4066 通过 + 1 todo / 0 失败 / exit 0（390.51 s）；全量 e2e 218 通过 / 0 失败。
+## 2026-10-10 —— 补齐收口清单一直漏掉的一项：README 同步（+ README 导航/链接判据）
+
+**为什么会有这一块**：用户给每个区块定的收口清单点名要同步 `README`，而本次会话前 16 个区块**一次都没动过它** —— 里面留着两条**过期断言**。
+
+**改掉的两条**：① "当前待完成"里写着"**N5 仅一类条件引理且没有自动产品调用**的限制依旧" —— 两半都不成立了（现在**三类**目标类 + **产品侧已有一条会去调 Lean 的路径**，默认关）；改写成更新后的现状 + **仍不能宣称可用**的理由，并把 mathlib pin 写进去。② 链接文字把立体图形覆盖扩宽设计写成"**待评审、未实施**"，而 S1–S6 已实施收口 —— 改成事实。另加一段 2026-10-10 增量块，并明确**仍未做的三项都等人**（走查 / MSI / 付费基线）。
+
+**新增 `scripts/docs-consistency/readme-navigation.test.ts`（2 条）**：README 必须链到那几份导航文件且**相对路径真的指得到**；README 里**每个**仓库内链接都必须存在。**只钉结构不钉措辞**（与 `progress-claims.test.ts` 同一条纪律）。
+
+**两处类型门/平台坑**：① `path.basename` 不在最小 node 声明里 ⇒ 换写法，**没有为它加宽共享声明**；② 只把 `path.normalize(link)` 规范化、却拿未规范化的 target 比 —— Windows 上 normalize 把 `/` 变 `\`，**永远比不中**（用例当场红）。
+
+**门禁**：文档门禁 **4 文件 / 12 通过**（原 3/10）；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **347 文件 / 4062 通过 + 1 todo / 0 失败 / exit 0**（529.68 s）；全量 e2e **217 通过 / 1 failed** —— 那条红在 `agent-oblique-prism.spec.ts:35`（提交后等「已提交」标签，5 秒可见性超时），本块只改 README 与一条文档判据（碰不到应用）⇒ **孤立复跑两次均 3 passed（25.6 s）**，记为抖动。**变异**：把 README 一个链接指向不存在的文件 ⇒ 两条判据同时红（当场还原）。
+## 2026-10-10 —— V3 / N5 收尾：mathlib revision 钉住了（rev="master" → 具体 commit + 提交 lockfile）
+
+**关掉"旧问题归属"里唯一未完成的一项。** 原状：`lakefile.toml` 是 `rev = "master"`、`lake-manifest.json` 被 ignore ⇒ "用的是哪一版 mathlib"只是**实测值**，仓库里复算不出来（`.gitignore` 自己写着这条代价与"要真钉住得怎么做；本批没做也没实测"）。
+
+**现在**：`rev = "c20717eaa791af9dd3f7847f5ba91623bda9ab6b"`（= 当时磁盘上 mathlib 的 HEAD ⇒ **这次 pin 没顺带升级任何东西**）；lockfile 取消 ignore 并提交；`.gitignore` 改成"为什么现在可以跟踪它 + 不许加回 ignore"。
+
+**一次真实弯路**：只改 `rev` 不够 —— `lake env lean` 立刻报 **`manifest out of date: git revision of dependency 'mathlib' changed`**（lockfile 的 `inputRev` 还是 `master`）。跑 `lake update mathlib` 触发了 mathlib 的 **post-update hook**（取/建缓存），6 分钟没跑完被我掐掉；查状态发现**该落盘的已经落了**：manifest 只变**一行**（mathlib `inputRev` → 钉住的 commit），**没有依赖被顺带升级**，checkout 与 olean 完好。正确做法是"改 rev → 跑一次对齐 → 只接受那一行变化"。
+
+**实测（改 pin 之后必须重跑真证明）**：`lake env lean DrawProof.lean` exit 0（三条真命题仍只依赖三个白名单公理）、**不再报 manifest 警告**；经适配器 gated 真跑 ⇒ **`formally_proved` / `verified` / `exit=0` / 68607 ms**。十栏记录的 `version` 栏补上了这条 pin。
+
+**仍如实留着**：强沙箱（只读 + 无网）下的证明运行未测；打包发行怎么带 Lean + 7.5 GB mathlib 未决。
+## 2026-10-10 —— V3 第一项：旧问题归属（N1–N5 + 文件卫生）
+
+**逐条对账；历史已修项保留证据不重做。** 落点：文件卫生的编码/日期（**本块修**）、N3 的覆盖判据（**本块修**）、N4（**卡用户**）、N5 的 revision 固定（**仍缺**）。
+
+**① 文件卫生：仓里当时有 30 个受跟踪文件带 UTF-8 BOM**（18 `.ts` / 5 `.tsx` / 1 `.css` / 3 `.md` / 3 `.ps1`）—— 查实，不是推测。新增 `scripts/docs-consistency/file-hygiene.test.ts`（3 条；写它的时候**确实红了**）：`.ps1` 外一律不许带 BOM（清掉 27 个文件，diff 恰是 27×1 行）；**`.ps1` 是有理由的例外**（三个 `scripts/sdd/*.ps1` 满是中文，非 ASCII 字节 612/1929/795，**PowerShell 5.1 读无 BOM 的 UTF-8 按 ANSI 解** ⇒ 去掉会乱码/语法错）；受跟踪文本必须合法 UTF-8（顺带发现 `icon.icns` 是二进制，判据补白名单）；页头日期必须真且不在未来。**换行卫生不做**（由 `.gitattributes`/autocrlf 决定，逐文件改会动 1000+ 文件而收益为零）—— 理由写在判据注释里。
+
+**⚠️ 同时更正我自己上一轮的一句话**：我写过"BOM 是 `Set-Content -Encoding UTF8` 造成的" —— 那只解释我撞到的那几处；仓里**本来就有 30 个**（在提交历史里）。
+
+**② N3：把"按 8 个成员枚举核过"从文案变成编译期判据**。原来集合是手写的，"加第 9 个 `ConstraintType`"会**静默**落进 `no-projection-rule`。现在 `CONSTRAINT_PROJECTION_DECISION: Record<ConstraintType, "project" | "planar-only">`（少一个键编译不过），`PROJECTABLE` 由它推导。**变异**：删掉 `coincident` ⇒ `tsc` 报 **TS2741**。
+
+**③ 逐条归属**：N1 已修保留（`claimEvidence.test.ts` + `obligationIR` 来源区间）；N2 撇点名已修（S1）、自由点走见证搜索、`degreesOfFreedom: null` 是 **R33 裁决**（`claimEvidence.test.ts:48`）；N3 见上；**N4 卡用户**（真实轴跑过 planning n=3 / 工具环 8×3，但 `cost: null`、无价目表、>1 MiB 未测 ⇒ 准备好 + 门禁如实留住，**不擅自触发付费**）；N5 产物通道**已修**（V2 ③），**mathlib `rev` 仍未 pin**、强沙箱未测、打包未决。
+
+**门禁**：文档门禁 **3 文件 / 10 通过**（原 2/7）；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **346 文件 / 4060 通过 + 1 todo / 0 失败 / exit 0**（530.62 s）；全量 e2e **218 通过 / 0 失败**。**变异两次**：加回一个 BOM ⇒ 那条红；删掉决策表一个成员 ⇒ 编译期 TS2741（都还原）。
+
+**一条过程教训（照实记）**：本块我曾**一边跑全库、一边改源码** —— 那次读数（`1 failed | 345 passed`）落在我自己制造的一处语法错误中间，**不能用来判断任何事**；改动停手后重跑才有上面那个干净读数。**"全库在跑时不要动文件"这条纪律我自己违反了一次。**
+
+## 2026-10-10 —— V2 GREEN ③ 收尾：桌面命令报版本了（产物终于绑得上）
+
+**关掉上一轮钉出来的缺口**："这条链能跑、但绑不上" —— 适配器要求实测版本串才产出产物，而桌面命令不报版本。
+
+**Rust**：`LeanRunOutcome.backendVersion`（`lake env lean --version` 的第一行）；`run_lean` **先问版本再跑证明**（适配器跑完之后才读版本，顺序不能反）；拿不到 ⇒ `None`（不猜）。`lean_proof_availability` 改成 async 并把版本问回来。
+
+**TS**：`Lean4RunResult.backendVersion`（放**运行结果**里 —— 只有起进程那层知道执行了哪个二进制）；`produceLean4Artifact` = `options.backendVersion ?? run.backendVersion ?? ""`；`ProofChannelResult` 也带上，web 的 IPC 回包校验对它是 **fail-closed** 的。
+
+**一次接错线被用例抓出**：第一版"传同一个 options 对象、让通道回调补版本" —— 失败，因为 `runLean4ClosedLoop` 会 `{ ...options, claimId }` **拷贝**，改原对象到不了适配器。改成"结果自己带版本"。
+
+**判据 +6 条**（Rust 2 / 适配器 3 / 产品级 1 / web 1），其中产品级那条是"**调用方不给版本、版本由桌面命令带回来 ⇒ 产物绑得上**"。
+
+**门禁**：`test:rust` **250 passed / 0 failed / 3 ignored**；定向 **172 通过**；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **345 文件 / 4056 通过 + 1 todo / 0 失败 / exit 0**（537.98 s）；全量 e2e **217 通过 / 1 failed** —— 那条红是 `agent-diagram-free-apex.spec.ts:57` 的 **`beforeEach` 加载超时**（`page.goto("/")` 30 s 没回，不是断言失败），**孤立复跑两次均 6 passed（24.2 / 24.5 s）**，与本块无关。**变异**：通道不把版本交回去 ⇒ 产品级那条红（还原复绿）。
+
+## 2026-10-10 —— V2 GREEN ③ 收口：产品调用点接上了（草稿暂存顺手问一次形式证明）
+
+**这一块把 ③ 接上产品路径**：`draftStore.stage` 新增**第八个参数** `proofExport`（与 `obligationIR` / `witnessSearch` 同一条通道）；跑完作图、题设核验过之后顺手问一次"这道题的目标能不能形式证明"。调用点逻辑在新模块 `apps/web/src/agent/automaticProofStage.ts`（复用 `proofGoalReader` + `canonicalProof` + 桌面通道），结果压成 `DraftProofAttempt` 随**预览**回带。
+
+**于是 ③ 的原话（"没有任何一条产品路径会去调 Lean"）不再成立** —— 但**不能读成"自动证明可用了"**，两条理由都写在代码里：① **旗仍然打不开**（`agentNextPhaseFlags()` 照旧不读偏好里的 `proofExport`）；② **产物今天绑不上**（见下）。
+
+**钉出来的真实缺口**：适配器要求**实测的后端版本串**才产出产物（"没有版本的证明不算证明"），而桌面命令 `check_lean_proof` **不报 Lean 的版本** ⇒ 这条链**能跑、但绑不上**：Lean 真验过了也升不了证据状态。**写成判据**（`automaticProofStage.test.ts`：缺版本 ⇒ `rejected` 且理由点名"版本"），下一步是让桌面命令把版本报回来（跑一次 `lean --version` 或读 `lean-toolchain`）。
+
+**三条"不阻塞作图"的判据（本块核心验收）**：旗关着 ⇒ **预览里连 `proofAttempt` 这一栏都没有**（不是 `undefined`）；没有可证目标 ⇒ 如实 `no_goal` 且**通道零调用**；跑不了（浏览器/没工具链）⇒ 如实记一条、`stage` 照样 `ok`。调用点模块**永不抛**。
+
+**门禁**：定向 3 文件 / 34 通过；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **345 文件 / 4051 通过 + 1 todo / 0 失败 / exit 0**（526.39 s）；全量 e2e **218 通过 / 0 失败**。**变异**：让 `stage` 不看开关就跑证明 ⇒ "关旗时预览里没有那一栏"红（当场还原、复跑全绿）。
+
+**旗治理的文档同步**：`featureFlags.ts` 与 `featureFlags.test.ts` 里那句"`proofExport` 至今没有任何读取点"**已按事实更正**（现在有一个读取点），并写清"偏好仍然打不开它、缺的是实验入口 + 验收证据（证据差上一条那个版本串）"。
+
+## 2026-10-10 —— V2 GREEN ③ 第四半：系统按类给出的证明正文（canonical）——链路不再依赖模型
+
+**这一块加 `packages/agent-core/src/proof/canonicalProof.ts`**：三类的证明正文由**系统**给出（本来就是一行的数学步骤）。这样"读目标 → 前提桥 → 跑 Lean"这条链**不需要模型在场**也能走完；**缺口③ 现在只差一个产品调用点**。
+
+**来源如实标出来**：`AutomaticProofResult.proofSource` ∈ {`model`, `system-canonical`}，`verified` 时的 `detail` 也写明"正文由**系统**按这一类给出"（内核验的是正文本身 —— 判据那层刻意不看正文 —— 但用户有权知道是谁写的）。
+
+**常量 vs 按目标生成**：判定定理与切线两份是常量；**性质定理那一份必须按目标生成**（要写出目标线那一段的具体表达式 `(D - B)`，并带 `inner_eq_zero_symm` —— 两条都是实测撞出来的）。
+
+**两条被用例逼出来的设计更正**：① 第一版"`proof` 空 ⇒ 自动用系统那份" ⇒ **用例红了**（调用方给空正文的意思是"别跑"，静默替换会让这条意图消失）⇒ 改成**显式开关**（只有明说 `proofSource: "system-canonical"` 才走系统表）；② 表外目标类的判据原来排在正文之后 ⇒ 一条"我们不支持这一类"被报成"没有正文"（误导）⇒ 把 `goal_unsupported` 提到最前。
+
+**判据 +6 条**：三类正文的形状（含"换一条目标线正文就变"）；明说用系统正文时链路真跑得动且来源标注对；模型给正文时来源是 `model`（既有行为不变）。
+
+**门禁**：proof **10 文件 / 157 通过**；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **344 文件 / 4043 通过 + 1 todo / 0 失败 / exit 0**（525.33 s）；全量 e2e **218 通过 / 0 失败**。**变异两次**：性质定理的正文写成常量 ⇒ "按目标生成"红；把"空正文自动用系统表"改回去 ⇒ "没有正文 ⇒ 不跑"红（都还原、复跑全绿）。
+
+**一次系统性的假红（照实记，因为它差点被读成回归）**：本块第一次跑全库时出现 **"Failed Suites 89 / Tests 3508 passed / 0 failed"** —— 也就是 89 个**文件**没跑起来、却**没有一条测试失败**。处理方式是**孤立复跑其中三个**（`budget.test.ts` / `functionGraph.test.ts` / `goldCases.test.ts`）⇒ 3 文件 / 19 通过，再**整跑一次**复核（**344 文件 / 4043 通过 / 0 失败 / exit 0**，525.33 s）。结论：那是**跑批层面的抖动**（worker 级），不是本块的回归 —— 但记录里必须写清"怎么排除的"，不能只说"重跑就好了"。
+
+## 2026-10-10 —— V2 GREEN ③ 第三半：题面目标句 → 结构化目标（读目标那一层）
+
+**这一块加 `packages/agent-core/src/proof/proofGoalReader.ts`**：把"求证 PA ⊥ 平面 ABC"读成适配器要的形状。**缺口③ 仍差最后一步（产品调用点）**。
+
+**不新写解析器**：`obligationIR.ts` 早有一张句型表认"求证"那一句（`recognizeObligationText`），本块把它导出、在其上做"消解类别 / 读字段 / **列出系统做的选择** / 读不出就如实拒绝"。
+
+**系统做的选择都列出来**（R51）：判定定理取平面内"第1+第2"与"第1+第3"两条相交线（换一对同样成立）；「线⊥线」目标的**平面来自题面那条"线⊥面"题设**；目标**写反**时对调两条线并说明；切线类命题里的函数变量名取自题面（取不到才退回 `f` 并说明）。
+
+**类型门抓出上一轮的真缺口（本块最重要的一条）**：给 `PremiseBridgeGoal` 加上切线类后，`tsc` 一次报出**三处**没处理第三类的地方 —— 前提桥的 `knownPoints`、自动调用的 `adapterInputFor`、以及**桥根本没有切线那一支**。也就是说**上一轮那个类"能生成命题、真跑通"，却走不通产品链路**（桥会抛）。修法：桥给切线类一支，**如实一律判"没有出处"** —— 那条命题是条件命题，唯一前提（"f 可导"）题面通常不写，而**解析层没有读"可导"的句型**（实测：那种句子整句落进 `unverified`）。**我先写了"找得到就用"的那支，再写用例去证明它 —— 用例红了（证明它永远走不到），于是删掉那支**并写下理由：留一支永远走不到的代码，会让读的人以为"题面写了可导就能走通"。
+
+**顺带查实（记录，未修）**：函数定义句型**只认 `f(x)=…`**，`g(x)=…` 整句落进 `unverified`（函数名就是从 `unverified` 原句里取的）。
+
+**判据 +9 条**：三类目标各自读得出且字段逐字对；写反 ⇒ 对调；缺前提 ⇒ 读不出且理由点名缺什么；面⊥面目标 ⇒ 如实拒绝；函数名取自题面；认不出句型 ⇒ 不猜最近的类；**一路走通**（读目标 → 桥通过 → 自动调用送出**这一类**的模板源码）。
+
+**门禁**：proof **9 文件 / 151 通过**；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **343 文件 / 4037 通过 + 1 todo / 0 失败 / exit 0**（525.63 s）；全量 e2e **218 通过 / 0 失败**。**变异三次**：读目标时拿题设第一条顶替平面 ⇒ 写反那条红；编一个平面 ⇒ 缺前提那条红；切线桥 `ok` 拆成 `true` ⇒ 两条切线判据红（都还原、复跑全绿）。
+
+## 2026-10-10 —— V2 GREEN ① 第三刀：第三个目标类**切线/导数**（换了数学塔）
+
+**这一块加第三个目标类** `tangentSlope`（作图四家族里"切线/导数"那一族的可证明主张）：`f 在 x 处可导、导数为 m ⇒ 割线斜率 slope f x t（t ≠ x）趋于 m`。**① 仍未补完**（曲线性质、其余立体关系没有模板）。
+
+**它是"另一个类"的证据是台阶**：前两类在内积空间，这一类在实分析 —— 加它要同时动**四样**（模板 / 目标词表 `tangentSlope`（载体 = 解析层 `tangentAt`）/ **桌面白名单**的 import 与定理名 / 仓内对照文件）。
+
+**Lean 侧三次真实迭代**：① `𝓝[≠] x` 在独立文件里**解析不了**（`unexpected token '≠'`）⇒ 写成展开形 `nhdsWithin x {x}ᶜ`；② 缺 `open Filter` ⇒ `Tendsto` unknown；③ 缺 `open scoped Topology` ⇒ `𝓝` unknown。**而且每次报错后 Lean 都会补一个 `sorry`** ⇒ axioms 报告里出现 `sorryAx`，**看起来像"证明是空的"**（与 `DrawProof.lean` 里记的那次同型）。冷 import **254 s**、热跑 **65 s**。
+
+**真跑**：gated 用例 ⇒ `formally_proved` / `verified` / `exit=0` / **64702 ms** / 三个白名单公理；`DrawProof.lean`（现在带并集 import）`lake env lean` exit 0，三条真命题 + 一条 `sorry` 反例。
+
+**一条被用例抓出来的设计更正**：第一版留了 `atX` 字段并写着"它进 `proofInputHash`" —— 用例红了：两条只有 `atX` 不同的目标哈希**相同**（`ProofInput` 里没这一栏）。那个字段**不影响任何东西**却会让人以为凭证绑在 x=1 上 ⇒ **删掉**，绑定靠 `claimSourceText`（有用例钉）。**这是"文档说的"与"代码做的"不一致被用例当场抓住的现成例子。**
+
+**新增跨语言判据**（`scripts/proof-spike/lean4TemplateAllowlist.test.ts`，2 条，不需要 Lean）：适配器生成的每条 import/定理名都在桌面白名单里；**反过来**白名单里每条也都要有人生成（挡"白名单越攒越长"）。住在 `scripts/` 是因为 `packages/agent-core` 的 tsconfig 没有 node 类型（typecheck 报 TS2307/TS2580）。
+
+**门禁**：proof **8 文件 / 142 通过**（+6）；`test:rust` **249 passed / 0 failed / 3 ignored**（+2）；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **342 文件 / 4027 通过 + 1 todo / 0 失败 / exit 0**（523.59 s）；全量 e2e **218 通过 / 0 失败**（2.4 m）。**变异两次**：第三类从 Rust 白名单删掉 ⇒ 跨语言判据红；往白名单加一条没人生成的名字 ⇒ "反过来对得上"红（都还原、复跑全绿）。
+
+## 2026-10-10 —— V2 GREEN ③ 第二半：web 侧接线（桌面通道 + 不可信 IPC 回包校验）
+
+**这一块加 `apps/web/src/agent/desktopProofChannel.ts`**（+ 7 条用例）：把库里的 `ProofChannel` 端口接到桌面命令上。**接线有了，但没有任何产品流程在跑完作图之后调用它** —— 缺口③只差一个调用点。
+
+**三条边界**：① 浏览器里**不是错误而是状态** —— 没有 `__TAURI_INTERNALS__` 就是浏览器，通道返回 `unavailable` + 人能读的理由，**不抛、不假装**；② **IPC 回包是不可信输入** —— `check_lean_proof` 的返回值逐字段校验（`outcome` 四个词之一、`exitCode` 数字或 `null`、`stdout`/`stderr` 字符串、`durationMs` 有限数字），形状不对一律 `failed` 并**指明哪一栏**不对，**畸形回包绝不许变成"验证通过"**；③ 命令名与参数**逐字固定**（`check_lean_proof` + `{ source, timeoutMs }`），不接受可执行路径、不接受 shell 文本。
+
+**一处分流**：外壳在但 IPC 抛了 ⇒ `failed`（"没调到"，可能是 bug），**不是** `unavailable`（"没配"，是环境）。
+
+**判据**：浏览器里一个 IPC 都不发；桌面里命令名/参数固定且送出去的是模板生成的源码；**9 种畸形回包逐个按失败处理**；形状对的回包逐字段原样交回（判据要看 `#print axioms` 原文）；IPC 抛 ⇒ `rejected` 状态照旧；桌面说"没配" ⇒ 照抄那句话。
+
+**门禁**：`typecheck` exit 0（**又抓到一条 vitest 看不见的错**：测试常量里 `planeLines` 是数组而非元组 ⇒ TS2345，与上一块同型）；`lint` 0 error / 13 warning；targeted 7 passed；全库非 Lean **341 文件 / 4020 通过 + 1 todo / 0 失败 / exit 0**（519.39 s；+1 文件 / +8 通过，其中 7 条是本块新增、1 条是上一轮那条既有抖动这次没再现）；全量 e2e **217 通过 / 1 failed** —— 那条红是**既有抖动** `main-thread-responsiveness.spec.ts:108`（帧间隔阈值被负载顶破），**孤立复跑两次均 1 passed / 23.9 s**，与本块无关。
+
+## 2026-10-10 —— V2 GREEN ③ 第一半：库里的自动调用与产物通道（产品路径仍未接）
+
+**这一块加 `packages/agent-core/src/proof/automaticProof.ts`**：把"题设 → 前提桥 → 适配器（生成/跑/判公理/造产物/过校验器）→ 证据状态"接成一条链。**这是缺口③的第一半 —— 库里有一条会去调 Lean 的路，但没有任何产品代码调用它。**
+
+**顺序是设计**：四道门（旗 / 正文 / 目标类 / 前提）任何一道不过 ⇒ **通道一次都不会被调用**（不是"先花三分钟再说不行"）。前提不过时的拒绝理由**点名那条凭空编的前提**。
+
+**通道是端口**：`ProofChannel` 注入（桌面壳 = Tauri 命令；浏览器 = `unavailableProofChannel(理由)`，如实报"这台机器上没法跑"）。`channelAsRunner` 做翻译，并把通道 `failed`（起不来）的说明塞进 `stderr` —— 否则人只会看到"退出码 null"。**结局词表封闭**（9 个），**这个函数不抛**（通道抛、模板抛都被接住 ⇒ `internal_error` + 状态原样），因为它**不许阻塞作图**。
+
+**上游性质（顺带核实并钉住）**：解析层**会跳过"求证"从句** —— `求证 PA ⊥ 平面 ABC` ⇒ 0 条给定；`已知 PA ⊥ 平面 ABC，求证 PA ⊥ BC` ⇒ 有那条给定。少了它，前提桥会**拿目标当前提**（循环证明），而那是静默的。已写成断言钉住。
+
+**判据 11 条（假通道）**：四道门 ⇒ 通道零调用；送进通道的源码是**模板生成的那种**（生成标记 / 唯一允许的 import / 白名单定理名 / 正文原样）；真报告 ⇒ `formally_proved` + 产物 `claimId` 对 + **过了校验器**；`sorry` ⇒ 停原地；没配工具链 ⇒ `toolchain_unavailable`；超时 ⇒ `timeout`；通道抛 ⇒ `internal_error`。
+
+**门禁**：proof **8 文件 / 136 通过**；`typecheck` 0；`lint` 0 error / 13 warning；全库非 Lean **340 文件 / 4012 通过 + 1 todo / 1 failed**（521.03 s）——那条红是**既有抖动** `fileExports.test.ts:189`（CAD 导出 5 s 超时），**孤立复跑两次全过**（9 passed / 843 ms），与本块无关；全量 e2e **218 通过 / 0 失败**。
+
+**仍未做**：**产品路径没有一个人调用它**（桌面壳跑完作图后"对可证明的 claim 调一次"没做）；`proofLevelStatus.ts` 里"默认路径不调用它"这句**今天仍然成立**。
+
+## 2026-10-10 —— V2 GREEN ④：桌面侧第一条**窄的**证明运行命令（Rust）
+
+**这一块改 Rust**，把缺口④从"Rust 侧一个 proof / lean 命令都没有"变成"有一条受限的命令"。**不接产品路径**（缺口③仍未做）。
+
+**设计核心：为什么必须窄。** Lean 能执行代码（`#eval` / `IO.Process.run` / `@[extern]`），所以"把一段文本交给编译器执行"是一个**代码执行面**。三条约束：① `proof/source.rs` 在**起进程之前**查形状 —— 生成标记、恰好一条允许的 `import`、一条有上限的 `maxHeartbeats`（≤4_000_000）、一条针对**白名单定理名**的 `#print axioms`，外加 15 个"一个字都不许出现"的关键字（`#eval`/`IO.`/`System.`/`unsafe`/`extern`/`run_cmd`/`elab`/`macro`/`syntax`/`initialize`/`include`…），**形状不过就什么都不执行**；② 工具链**配置而非发现**（只认 `DRAW_LEAN_LAKE`/`DRAW_LEAN_PROJECT`，**不搜 PATH** —— 从 PATH 捡 `lake` 等于让能改 PATH 的人决定我们执行什么），没配 ⇒ `unavailable` 并点名缺哪一个；③ 固定 argv（`lake env lean <临时文件>`，无 shell、无拼接）+ 墙钟上限（默认 180 s，传入值再夹到 10 分钟）+ 输出只留尾部 4 KB（UTF-8 切边修好）。
+
+**这一层不做判定**：只报"进程怎么结束的"（`exited`/`failed`/`timeout`/`unavailable` + exit code + 输出）。**成立与否仍只在 TS 侧判**（公理白名单）——判据不复制第二份，所以 Rust 侧**没有 `verified` 这个词**（`exit=0` 连 `sorry` 都满足）。
+
+**命令与治理摩擦**：`check_lean_proof` + `lean_proof_availability`；两个名字**逐字写进** `tests/shell_smoke.rs` 的 `named` 清单（那份清单守的是"新增命令必须在那里写名字"），并注册进唯一的 `generate_handler!`。都不接受可执行路径、不接受 shell 文本。`tokio` 加 `process` feature（同 crate，无新依赖）。
+
+**门禁（Rust）**：`npm run test:rust` ⇒ **247 passed / 0 failed / 3 ignored**；新增 `tests/proof_command.rs` **9 条**（模板形状收；8 个逃逸关键字逐个拒；四种"不是我们的模板"拒法；**别的定理的 `#print axioms` 与删掉报告都拒**；预算写成摆设拒；超大文件拒；工具链"配置而非发现"四条分支；`tail_of` 不切坏 UTF-8；**形状不过一个字都不执行**）。**本块没改任何 TS 文件**（只有 Rust 与文档）⇒ TS 那几条门禁（typecheck / lint / 非 Lean 全库 / e2e）不重跑，沿用同日读数；文档门禁重跑（文档改了）。
+
+**如实留着**：**真起 `lake env lean` 的那条路本块没有在测试里跑过**（要配两个环境变量，而且冷缓存第一次会撞超时）。交付/打包怎么带 Lean 与 mathlib（7.5 GB、许可证、发行环境）属"默认启用前"那批审查，**未决**。
+
+## 2026-10-10 —— V2 GREEN ② 第二刀：前提桥（每条前提指得出出处；凭空编的前提直接失败）
+
+**这一块加一个新模块** `packages/agent-core/src/proof/proofPremiseBridge.ts`。它把 adapter 文件头那句"模板里的前提是模板给的"从**一句注释**变成**四类来源的机器判据**：
+
+- `fromText`：这条前提**就是题面里的哪一句**（带 `sourceText`，能指给用户看）；
+- `fromDerivation`：题面没直接说，但**一步定理**接得出来（今天只有"线 ⊥ 面 ⇒ 它 ⊥ 平面内任意一条线"，且那一步**点名**）；
+- `fromFigure`：题面没说、由**图形构造**蕴含（"B、D 都是底面上的顶点" ⇒ "BD 落在底面内"）—— **必须列出来**，因为它确实是系统补的；
+- `invented`：既不在题面、也不由图形蕴含 ⇒ **凭空加前提**。**只要有它，`ok` 就是 `false`，不许生成命题。**
+
+**RED → GREEN（7 条用例）**：面⊥面不许当线⊥面那条前提；线⊥面题设下判定定理那两条前提算**一步导出**（走性质定理，且比"结论方向"更早一步：这里要的是它的**逆用**——从线⊥面得到线与平面内任意线垂直）；题面没给垂直 ⇒ 桥失败；「线⊥面」那一步**不能乱用**（平面里没有的那条线接不出来：`PA ⊥ 平面 ABC` 推不出 `PA ⊥ DE`）；两条垂直没有共享端点时第二条不算前提（`PB ⊥ BC` 不是 `PA ⊥ BC`）；性质定理那条路里"目标线落在平面内"如实标 `fromFigure`。
+
+**如实记两件事**：① **这不是"原题前提桥已完成"** —— 它做的是"把前提分类 + fail-closed"，原题其余题设（底面形状、P 在平面外…）**仍然不进命题**；② 过程中**两条用例的期望是我自己写错的**（标签按目标或题面的点名渲染，我用了另一个点名），实现是对的，期望当场改成正确读法 —— 写在这里免得被读成"实现改判据"。
+
+**门禁**：`packages/agent-core/src/proof` **7 文件 / 125 通过**；`typecheck` exit 0；`lint` 0 error / 13 warning；全库非 Lean **339 文件 / 4002 通过 + 1 todo / 0 失败 / exit 0**（521.93 s；比上一读数 **+1 文件 / +7 用例** = 这个新模块与它的 7 条用例）；全量 e2e **218 通过 / 0 失败**。
+
+**变异两次（逐个还原，用反向编辑）**：① `ok` 写死 `true`（fail-open）⇒ **3 条红**（面⊥面那条、线⊥面乱用那条、无共享端点那条）；② 去掉"那条线得真在那个平面里"的判断 ⇒ DE 那条红。还原后 125 passed / exit 0，grep 确认无残留。
+
+## 2026-10-10 —— V2 GREEN ② 第一刀：按点名形状消解目标；修掉「面⊥面被当成线⊥面」
+
+**这一块改代码**：V2 GREEN 缺口②（前提消解）的第一刀 —— 只做"题设 → 证明目标"这一步。**原题前提桥仍未做。**
+
+**查实的错配（一条真缺陷，不是命名口味）**：解析层里 `planePerpendicular` 这个**题设种类**是**面⊥面**（`diagramVerification.ts:436` 比的是两个法向量），而证明目标词表里那条"线垂直于平面"**原来也叫 `planePerpendicular`**，还把解析层的同名 kind 声明成自己的载体。于是 `declaredProofGoal("planePerpendicular")` 会给出一条**"线⊥面"的目标** —— 一条"平面⊥平面"的题设被读成了另一件事。今天没有产品路径自动调用（缺口③）所以没被触发，**但缺口③一接上第一步就踩它**。同一层还有第二处歧义：`perpendicular` / `parallel` 各承载「线与线」与「线与面」两种题设（同一批正则，差别只在点名分组）。
+
+**RED（先写用例，跑出 5 failed）**：其中第一条的失败输出本身就是证据 —— `AssertionError: expected { goal: 'planePerpendicular', …(1) } to be null`。
+
+**GREEN（四条改动）**：① 目标改名 `linePlanePerpendicular`（解析层 kind 不动）；② 删掉错的载体声明 ⇒ 面⊥面如实 `null`；③ 新增 `declaredProofGoalForObligation({ kind, targets })`，按点名个数分流（4 = 线与线；≥5 = 线与面），与 `diagramVerification` 的 `planeCount = vertices.length - 2` **同一口径**；线∥面 / 面⊥面 / 形状不全**一律 `null`**，不借别的目标；④ `declaredProofGoal` 返回 `ambiguous` 与 `note` 两栏，只给 kind 时**说得出这是歧义**。
+
+**连带改名与复验**：上一块加的 Lean 类跟着改名（`goalKind` / 输入字段 / `draw_line_plane_perpendicular_goal` / `buildLinePlanePerpendicularStatement`）。**改名后重跑真 Lean**：`1 passed` / `formally_proved` / `verified` / `exit=0` / **68321 ms**（改名前的 68392 ms，同一量级）—— 名字变了，命题形状与内核结论不变。
+
+**门禁**：`packages/agent-core/src/proof` 六文件 **118 passed**；`typecheck` exit 0；`lint` 0 error / 13 warning；`proof:smoke` 8/8（`PROOF_BACKENDS {"wired":["lean4"],"reviewed":1}`）；全库非 Lean **338 文件 / 3995 通过 + 1 todo / 0 失败 / exit 0**（520.00 s；比上一读数 +5 条，正好是这 5 条新用例）；全量 e2e **218 通过 / 0 失败**（2.6 m）。
+
+**变异验证（三次，逐个还原 —— 用反向编辑，不用 `git checkout`）**：① 把错的载体声明加回去（`linePlanePerpendicular` 的 `obligationKinds` 改回 `["planePerpendicular"]`）⇒ "面⊥面不许被当成线⊥面"那条红；② 让形状入口不看点名个数（`perpendicular` 直接委托 kind-only）⇒ "一个 kind 两种读法"那条红；③ 把 `ambiguous` 恒为 `false` ⇒ "只有 kind 时要说得出歧义"那条红。**三次都当场红、还原后 118 passed / exit 0，并 grep 确认源码无变异残留。**
+
+**过程里的一条小事（照实记）**：批量改名时用 `Set-Content -Encoding UTF8` 写回，**三个文件都被加上了 BOM**（与之前那次提交标题带 BOM 同源）。当场用字节检查（`EF BB BF`）发现并去掉，改回 BOM-less —— 说明这种批量改写之后**必须看一眼文件头**，不能只看 diff。
+
+## 2026-10-10 —— V2 GREEN 第一刀：证明出口加第二类（判定定理），真跑通过 + 变异验证
+
+**这一块改代码**：V2 GREEN 缺口①的第一刀 —— 逐类可信翻译从**一类**到**两类**。**缺口① 未补完**（曲线性质 / 切线·导数 / 其余立体关系仍无模板），GREEN 不勾。
+
+**两类是两个方向相反的定理（这是加它的理由，不是凑数）**：`perpendicular` 是**性质定理**（`hu : u ∈ Dᗮ` ⇒ 线 ⊥ 面内任意线；**前提是模板塞的**），新的 `planePerpendicular` 是**判定定理**（线 ⊥ 面内两条**相交**线 ⇒ 线 ⊥ 面；**前提就是题面那两条垂直**）。合起来才是立体几何里关于线面垂直的那两步。
+
+**RED（7 条新用例，写代码之前跑过一次）**：`buildPlanePerpendicularStatement is not a function` —— 7 failed，逐条都是我待实现的行为（命题形状、两类不同定理名、相交判据、缺字段抛、覆盖清单、闭环真报告升级、报告冒充被拒）。**GREEN 之后 49 passed。**
+
+**Lean 侧不是猜出来的（两次真实失败，值得记）**：
+- 第一版 `refine Submodule.span_induction hy ?_ ?_ ?_ ?_` ⇒ **Type mismatch**：`hy` 被当成目标为 `∀ x ∈ ?m, inner ℝ (Q - P) y = 0` 的东西。**真因**：`refine` 的 `?_` 让 Lean 去猜 motive，猜成了"对成员证明的谓词"。
+- 第二版显式给 `p := fun z => inner ℝ (Q - P) z = 0` ⇒ 还是错：**这个 mathlib revision 的 `span_induction` 的 `p` 作用在成员证明上**（`p : ∀ x, x ∈ span … → Prop`），所以 `<;>` 那种写法不适用。
+- 第三版 `induction hy using Submodule.span_induction with | mem/_/zero/add/smul` 通过（见 `proof/lean4/DrawProof.lean` 里的注释）。**这两条是内核逼出来的，不是我读文档读出来的。**
+
+**真跑（唯一算数的证据）**：`npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts -t "第二个目标类"` ⇒ **1 passed / 68392 ms**，读数 **`status=formally_proved` / `judgement=verified` / `exit=0` / axioms `["propext","Classical.choice","Quot.sound"]`**。仓内对照文件 `DrawProof.lean` 加同一条命题后 `lake env lean DrawProof.lean` ⇒ **exit 0**，三行报告分别是 `perpendicular_general` / `plane_perpendicular_general`（都是那三个公理）与 `perpendicular_cheat`（含 `sorryAx`）。
+
+**变异验证（两次，都当场红、都完全还原 —— 用反向编辑还原，不用 `git checkout`）**：
+- **A：摘掉"相交"判据**（两条 guard 分别弄坏）⇒ 那一组用例红，且**两个方向分别验过**：先弄坏"零共用点"那一支 ⇒ 红在第一条断言；还原后再只弄坏"共点两个"那一支 ⇒ 红在第二条断言。**不是"一组里只有一条在咬人"。**
+- **B：让新类与第一类同名**（`draw_perpendicular_goal`）⇒ **2 failed**："两类用两个不同的定理名" + "报告是另一类的 ⇒ 拒"。这条正是"定理名共用一个常量就能张冠李戴"那个洞的钉子。
+- 还原后 `49 passed / exit 0`，并再次 grep 确认源码里没有变异残留。
+
+**门禁**：`typecheck` exit 0（**过程中真抓到一条错**：测试辅助函数的 `planeLines` 写成数组而非元组 ⇒ `tsc` 报 TS2345，而 vitest 运行时全绿 —— "跑过测试"确实不等于"过了类型门"）；`lint` 0 error / 13 warning；全库非 Lean **338 文件 / 3990 通过 + 1 todo / 0 失败**（524.30 s，**exit code 用文件重定向单独验过 = 0**：管道里那个 `exit 1` 是 PowerShell 把 stderr 当 NativeCommandError 的假象，不是 vitest 的退出码）；全量 e2e **218 通过 / 0 失败**（2.6 m）；`proof:smoke` 8/8。
+
+**如实留着的**：**前提桥仍未做** —— 判定定理那两个前提**确实**是题面那两条垂直，但原题其余题设不在命题里；**产品侧自动调用与产物通道没有**；**Rust 侧没有任何 proof/lean 命令**（缺口④）。**这一块只把缺口①的第一刀切下去。**
+
+## 2026-10-10 —— V2 实测归因更正：那是**冷缓存**，热跑复现 `formally_proved`（**不改行为，只改一条失败文案**）
+
+**被推翻的是我自己上一节的结论。** 上一节把 `judgement=timeout` 记成"本机今天不成立、原因未定论"。补跑后归因确定：**那是冷缓存的第一次运行**。
+
+**证据（两条命令，先后紧挨着跑）**：
+1. 全套单跑 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts` = **3 passed / 1 failed / 1030.47 s**，红的那条 `status=verified_instance judgement=timeout exit=null 300015 ms`（撞 300 s 进程级墙钟被强杀）。
+2. 紧接着只跑那一条 `npx vitest run scripts/proof-spike/lean4EndToEnd.test.ts -t "真证明"` = **1 passed / 69071 ms**，读数 **`status=formally_proved` / `judgement=verified` / `exit=0` / axioms `["propext","Classical.choice","Quot.sound"]`**。
+
+**⇒ 与文档里 68277 ms 的历史读数吻合**（69071 vs 68277，差 1.2%，同一量级）。**机理**：mathlib 展开后每工程 **7.5 GB olean**，第一趟要把它们读进页缓存，成本全落第一趟；`timeout` 是"只读了一次"的产物，**不是能力缺失**。适配器两次的行为都对（冷跑如实报 `timeout` 而不是返回半成品）。
+
+**改了什么**：只改 `scripts/proof-spike/lean4EndToEnd.test.ts` 里那条断言的失败文案，把"**冷跑超时 ≠ 回归，先热跑一次再判**"写进去，避免下一个人重复这次误判。**改完又跑第三次 `-t "真证明"`：`1 passed` / `67954 ms` / `verified` / `exit=0`** —— 证明改的是文案不是判据。**不改预算、不放宽判据** —— 预算不是病因，调大它只会掩盖冷启动成本。`npm run typecheck` exit 0、`npm run lint` 0 error / 13 warning（基线）复核过。
+
+**同步更正处**：`current-status` §一 那一行（改成冷/热两读并列，删掉"不得当作当前能力"，改为"能力成立但首次要热缓存"）、V2 计划 实测节（"原因未定论/不复现"作废）。**仍然不勾 V2 实测**：桌面真 UI 未做，且 Rust 侧没有任何 proof/lean 命令（缺口④）—— 这两件要一起做。
+
+## 2026-10-10 —— V2 对账：RED 全对上；真实 Lean 集成本机今天红（timeout），GREEN 缺口逐条写清
+
+**不改代码**：V2 三条里 **RED 勾上**，**GREEN 与实测都不勾**。
+
+**RED 逐条对上**（`proof:smoke` 8/8）：`sorry`（exit code 是 0，退出码在这层不算数）、自定义 `axiom`、**别的定理的报告**（名字必须逐字对上）、**删题设/换目标**（命题原文进 `statement`，模板一改就对不上）、**未接后端**（`unsupported` 而非 `failed`；形状合格的伪造产物也过不去）、**超时**（如实报 `timeout`，不返回半成品）、**旧 run 回包**、**升级边界**（篡改产物喂回闭环状态不升）。
+
+**GREEN 部分（四条缺口）**：① 逐类翻译只到一类（只有 `perpendicular` 那条带假设的垂直性引理）；② **前提消解/原题前提桥没有**（今天是一般命题，不是"这道题"）；③ 产品侧自动调用与产物通道没有；④ **受限桌面调用没有 —— Rust 侧一个 proof/lean 命令都没有**（241 个 Rust 测试里没有证明相关）。已有那半：报告白名单 + `#print axioms`、目标词表、产物绑定、名单由 passed 记录推导、无工具链 ⇒ gated 跳过、`proofExport` 默认 false。**"默认启用前"的审查记录很详细，但里面自己写着"强沙箱下的证明运行未测"。**
+
+**实测不勾 —— 本批最重要的一条如实记录**：单跑 `lean4EndToEnd.test.ts`（**1030.47 s**）**3 passed / 1 failed**，红的是"真证明 ⇒ `formally_proved`"：实际 **`judgement=timeout`（300015 ms 撞墙钟被杀，如实报 timeout）**；同次 **narrow=69021 ms / full=583065 ms**（narrow 与历史吻合、full 慢约 4 倍）。`sorry` 那条仍正确。**⇒ 文档里"真内核闭环成立 / `formally_proved` / 68277 ms"是 2026-10-06 的历史读数，本机今天不成立**；`current-status` §一 那一行已就地更正并标注"不得当作当前能力"。原因未定论（预算 vs 导入裁剪），下一步先测真证明那轮用的导入宽度。**不记为通过、不记为抖动。桌面真 UI 未做（要人操作）。**
+> **⚠️ 本节结论已被推翻 —— 见上一节《V2 实测归因更正》：那是冷缓存，热跑 69071 ms 得 `formally_proved` / `verified`，与历史读数吻合。**
+
+## 2026-10-10 —— V1 对账：四类题可重复构造/拒绝、拖动不被拖坏、一步撤销（并修正我自己留下的过期摘要）
+
+**不改代码**：V1 三条逐条对账后勾上，两处如实留着的东西写清。
+
+**RED 逐族落点**：三角 `planCompiler.test.ts:971`（C 挪到 `AB` 射线上 ⇒ `AB⊥AC: failed` 且 `ok=false`，这就是点名的 `AB∥AC` 反例）、`:979`（点名点没进文档 ⇒ `unverified`）；圆锥曲线 `diagramVerification.test.ts:327`（轴反了）/`:333`（半轴互换）；切线 `:244`（`tangentAt: failed`）；空间线面 `relations.ts` 残差 + `relation_not_satisfied`。**合法自由点图绿**：四家族 e2e 15 passed。**无空间判据不得被拖坏**：`constrainedDrag3.test.ts`（passthrough / 贴回平面 / 法向抵消报 `noop` / 冗余约束提示 / 锁定与绑定点交给旧路径）。**未核验不当通过**：`agentRunner.test.ts:45` 逐条中文列出且不给确认。
+
+**GREEN**：四家族复用既有图元；自由点走有界见证搜索；多图取直觉代表并**列出系统自选值**；矛盾/超时/不支持各自独立状态拒绝伪提交。**如实留着**：`degreesOfFreedom` 仍 `null`（R33 裁决，`claimEvidence.test.ts:48` 钉住）—— "选了哪些值"有列，**数值自由度没算**，别读成"已列出自由度"。
+
+**顺带修正一处我自己留下的过期摘要**：`current-status` §四 F 的"S1–S6 立体扩宽"段是 S3 菱形那一轮写的，里面还写着"斜棱柱未做、S6 未收口、窄正则未退役"—— 后来做完了却**忘了回填**。**这正是我一开始审查进度文档时批的那类漂移，我自己又犯了一次**；教训：收口时按"文档四处同步"清单**逐文件回读**，不凭印象。
+
+**读数**：全库非 Lean **338 文件 / 3983 通过 + 1 todo / 0 失败**；**全量 e2e 218 通过 / 0 失败**；`typecheck` 0；`lint` 0 error / 13 warning。
+
+## 2026-10-10 —— V0 对账：机器那半已齐、出口仍不勾（缺"人看图"）
+
+第二份计划（V0–V3）的 V0，本批只做对账与收口，**不改代码**。
+
+**出口六条逐条取证**：四家族浏览器正例 **15 passed**（V0a 6 / V0b 1 / V0c 3+2 / V0d 1 / 欠定 2，每条都是提交后重放、读落盘坐标或参数自算）；定向 **6 文件 / 157 通过**（planCompiler / draftStore / workerContracts / planar-constraints / diagramScope / goldCases）；模糊输入拒绝确认三条（欠定额外条件不能提交、符号参数如实标注并等用户、"在底面上方"不静默丢且矛盾坐标被拒）；关旗旧路径真浏览器反例（不产点、不产草稿、不占撤销历史）；`docs/evidence/` 六张截图**逐张目视核对**（V0a 顶点 D 在底面之上；V0b C 在 A 正上方；V0c 椭圆半轴 3/2、双曲线两支、抛物线开口 +x；V0d 三次曲线 + 过局部极小点的水平切线）—— **六张都与各自标签/方程相符**。
+
+**出口仍不勾**：它自己写着"没有 e2e 与**人看图确认**时保持未勾"。机器那半齐了，**"人看图"顶替不了** —— 需要教师/学生走查（§四 A，不需管理员，但必须由人做）。**区块收口那一格勾上。**
+
+**读数**：定向 6 文件 / 157 通过；四家族 + 反例 e2e 15 passed；全库非 Lean **338 文件 / 3983 通过 + 1 todo / 0 失败**；**全量 e2e 218 通过 / 0 失败**；`typecheck` 0；`lint` 0 error / 13 warning。
+
+## 2026-10-10 —— S6 收口：窄正则的"退役"评估后决定保留（附证据），浏览器正例逐族对账
+
+**这一块没改产品代码**：6.1/6.2/6.3 早就在。本批做三件 —— 把 6.2 唯一剩下的一格（`freeApexIntentFor` 窄正则退役）**评估到底**、6.4 逐族核实、6.5 收口。
+
+**6.2 决定：保留。** 探针把 V0a 那族句子逐条喂给两条路，量出那条窄正则的契约里有一件不能丢的事 —— 它**必须传 `spatialPointConditions: true`**（实测两侧都变、方向相反）：`A=(0,0,0)` / `D=(0,0,2)` 在默认下是 `unverified_instance`、带选项才是 `verified_instance`（**丢了选项，写死的坐标进不了图**）；`自由点D在底面ABC上方` 与无等号的 `D(0,0,2)` 恰好相反 —— 默认 `verified_instance`（**静默通过**）、带选项才 `unverified_instance`。而形状族那层**刻意避开整个三棱锥族**。所以"退役"不是删 35 行，而是把 V0a 的整套契约搬进形状族 —— 风险落在一个实验开关后的既有能力上。**决定保留 + 把承重性钉住**（`planCompiler.test.ts` 新增两条判据，两个方向都钉）。
+
+**6.4 逐族对账**：棱锥 `agent-solid-family-path`、棱柱 `agent-prism-path` / `agent-oblique-prism-from-sentence` / `agent-rhombus-base`、棱台 `agent-solid-family-path`、球 `agent-derived-sphere` —— 四族各有至少一条"落盘坐标 → 测试自己算"。
+
+**如实留着的边界**：无点名表的说法仍走夹具、"球"的关系仍有意不认；覆盖度没有穷尽口径，按设计 §6"认不出就问路"。
+
+**一处同批里自己犯又当场改掉的编辑事故**：改计划时一次替换把 **Task 6.3 那段**一起覆盖掉（old_string 含它、new_string 没带上），重读文件时立刻发现并原样补回；没有内容丢失。教训：**批量文档编辑必须回读确认**，不能只看"编辑成功"的回执。
+
+**读数**：定向 5 文件 / 189 通过；全库非 Lean **338 文件 / 3983 通过 + 1 todo / 0 失败**；全量 e2e **216 通过 / 2 失败 ⇒ 单跑复绿（负载抖动）**（`geometry3d-teaching-lines` 标签锚点投影、`main-thread-responsiveness` 帧间隔 350 ms；本块没改产品代码）；`typecheck` 0；`lint` 0 error / 13 warning。
+
+## 2026-10-10 —— S5 拖动那一半：宿主一动球跟着变（两次失败尝试的根因查实，两处修复）
+
+**来历**：计划 5.5 的"拖宿主 ⇒ 球跟着变"在 2026-10-07 **三次都没做成**（拖顶点 / 拖实体 / 先选中再拖），如实记为待办。本批做成。根因**不是"这一版不支持"**，而是两个原因叠起来（用 `data-drag-target` 探针查实）：
+
+1. **外接球把宿主整个包住** ⇒ 射线命中的**最近**物体永远是那只球。三个候选按下点（形心 / 顶点 0 / 底面中心）的探针读数**全是** `solid:sphere-1->sphere` —— 用户"按在实体上"，其实按在球上。
+2. **派生球被当成了可自由拖动**：`isFreeDraggable3` 对 `sphere` 一律 `true`，可派生球的球心与半径由宿主算出来（`derivedFrom`），拖它必被下一次重算覆盖 —— "看起来能拖、其实是假的"。
+
+两件叠起来就是"按在实体上怎么拖都不动"，看着像产品不支持。**这也解释了当时为什么三次尝试都失败：没人想到要去看"按下到底抓到了什么"。**
+
+**修法两处**：① `isFreeDraggable3` 不再把派生球算作可自由拖动（**这个判断此前全仓没有一条用例**，本批补 `packages/scene-graph/src/transforms.test.ts` 4 条：自由点 / 绑定点 / 自由顶点棱柱 / 派生球）；② `pickRaycastHit3` 新增可选 `accept` 过滤，`threeSceneInteraction` 的拖动分支按"解析后的用户级对象 + `isFreeDraggable3`"传它 —— 射线**穿过**那只拖不动的球抓到底下的宿主。**非拖动路径不带过滤**（普通点选 / 剖面取面 / 半径手柄），行为逐字不变。
+
+**判据（自算四条）**：顶点真的动了；**只有它动**；球**跟着重算**（不再是旧的那一只）；**仍是新顶点组的外接球**。拖**顶点**是刻意的：外接球的顶点本来就在球面上，顶点一动球心或半径必须变，"有没有重算"不含糊。
+
+**红→绿**：拖动断言先写后跑，修前实测红（"拖动之后宿主顶点没有动"，正是最初症状）。**变异**：把派生球那行改回 `return true` ⇒ **两层同时真红**，反向编辑还原复绿。**回归**：拖动相关 e2e 三文件 **16 passed**。
+
+**结掉两格**：**Task 5.4** 条件没发生（`recomputeDerivedObjects` 接进去了，没改走物化，如实勾掉）；**5.1/5.3 的"面板没有专门呈现"**核实为已做（`EngineeringInspector` + `derivedCodeLabels` 的「派生球」+ 组件用例）。
+
+**本批我自己搞出来的两处问题（如实记）**：
+1. **过滤第一版写错，打红三条既有用例**：把"可拖"写成 `isFreeDraggable3` —— 而**绑定点**（沿宿主 / 轨道拖）在它眼里不可拖，于是被筛掉、拾取落到后面的线/圆上（`three-orbit-tracks` 的读数逐字是 `line:circle3-1->circle3`）。全量 e2e **4 failed**（另有 1 条是既有负载抖动）。修法：把"能不能开拖动会话"抽成一条**共用**口径 `canStartDragSession`（点：自由 / 绑定两种都算能拖），过滤与拖动分支同用 —— 这才是"同一个判断只写一遍"。复跑三条 spec **5 passed**、全量 **218 passed / 0 failed**。
+2. **自己引入的第 14 条 lint 警告**：`subtract` helper 改写后没人用（13 → 14），删掉回到基线 13。
+
+**读数**：全库非 Lean **338 文件 / 3981 通过 + 1 todo / 0 失败**（522.06 s）；**全量 e2e 218 通过 / 0 失败**（2.4 m）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+## 2026-10-10 —— S4 收口：台体（出口三条逐条核实 + 变异，无新代码）
+
+4.1 / 4.2 / 4.3 于 2026-10-07 落地，本块补收口。出口三条核实：① 正例（内核「顶环逐一对应底环 ⇒ 成功」+ 浏览器台体那条自算"顶棱 = 底棱 × 同一比例且 < 1"）；② **上下底说不清 ⇒ 拒绝**（点数不同 / 名字对不上，**不按顺序硬配**）；③ 圆台是**多边形近似**这件事，`current-status` 里早有，本批把 `feature-catalog` 的 S4 行也补上（此前只提"圆台"，没写"近似"）。
+
+**变异**：短路"上下底逐一对应"判据 ⇒ **2 条真红**（`expected 'candidate' to be 'rejected'` —— 没有它就会静默造出张冠李戴的台体），反向编辑还原复绿。定向 **5 文件 / 194 通过**（含关旗 golden）；全库非 Lean **337 文件 / 3977 通过 + 1 todo / 0 失败**；**全量 e2e 218 通过 / 0 失败**。
+
+## 2026-10-10 —— S3 斜棱柱 + S3 收口：「题面说斜就说得出斜」（代表斜向 + 假设）
+
+**口径**（用户裁决；裁决之后用户改为**自主模式** —— 直接选推荐方案并写进文档，不再逐条问）：走**代表斜向**那一支。题面只说"斜"、没说斜多少 ⇒ 系统取代表值（侧棱与底面法向成 **60°**、朝底面 +x 侧面倾斜）并**写进 assumptions**。**"用题面的角把方向钉死"（`∠A′AB=60°`）明确不做**，已写进计划的"明确不做"一节 —— 它要的是 Task 3.1 点名的"环外点名顶点"概念 + 有界角度求解。
+
+**开工前先查到的一处静默缺陷（本块主要价值）**：`SHAPE_CLAUSE` 用**非捕获组**吃掉「正/斜/直」，`RecognisedShape` 里也没有这个字段 ⇒ `在斜三棱柱ABC-A′B′C′中，AA′⊥平面ABC` 会被**当成直棱柱画出来**并一路绿到提交。**题面说斜、系统画直**，正是本仓最忌的"悄悄换一个题面没说的形状"。现在修饰词是**读得出来的字段**（`modifier`；没写就是 `undefined`，不许默认成"直"）。
+
+**三处落地**：① 修饰词进 `RecognisedShape`；② **自相矛盾题面在入口层问路**（`斜` + 「线段 ⊥ 平面」⇒ `unrecognised` 并说清"斜棱柱的侧棱不垂直于底面"）；③ 正例 `specForObliquePrism` + `SolidShapeSpec.lateralTiltDegrees`（YAGNI 约束要求的那一次"顶层字段落地"）—— 内核按它算拉伸向量（`undefined` = 直棱柱，**原路径逐字不变**），代表斜向写进 `freeValues`，**用户确认之前就看得到"斜多少是系统定的"**。
+
+**红→绿都看过红**：修饰词（`undefined` vs `'斜'`）；自相矛盾（修前 `ok` ⇒ 画成直棱柱）；正例（修前 `unrecognised`：`题面没有给出「某条侧棱 ⊥ 底面」的写法`）。**变异**：忽略代表斜向 ⇒ 真红（"侧棱与底面法向平行 ⇒ 画成了直棱柱"，余弦 1），反向编辑还原后复绿（**没有再用 `git checkout`** —— 上一块的教训）。
+
+**证据与读数**：浏览器 `e2e/agent-oblique-prism-from-sentence.spec.ts` **1 passed**（面板 `题设核验 = passed`、**面板上写着"斜向"那句假设**、落盘坐标自算"三条侧棱同一条向量且侧棱与法向不平行"）；全库非 Lean **337 文件 / 3977 通过 + 1 todo / 0 失败**（494.03 s）；**全量 e2e 218 通过 / 0 失败**（2.5 m）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+**S3 收口（Task 3.5 勾上）**：出口点名的四类形状**各有正反例** —— 正棱柱（3–6 边 / 点名角度 ⇒ 拒绝）、菱形底面（正例 / 菱形 + 直角 = 正方形 ⇒ 拒绝）、斜棱柱（正例 / 斜 + ⊥ ⇒ 问路）、正六边形底面（代表正多边形 / 点名角度 ⇒ 拒绝）。
+
+## 2026-10-10 —— S3 菱形底面：「底面 ABCD 是菱形」（有名字表入口，不新造数学）
+
+**用户裁决**：**只接有名字表的题面**（`在四棱柱ABCD-A′B′C′D′中，底面ABCD是菱形，AA′⊥平面ABCD，画出这个四棱柱`）；**不给无点名表的说法编点名** —— 设计 §19 那句「底面是菱形、侧棱垂直底面的四棱柱」仍走既有夹具，不在本批。
+
+**为什么先问**：设计只给了一句题面，而 Task 6.1 又白纸黑字写着"没有点名表 ⇒ 有意不认"。两条口径顶在一起，**入口从哪进来**是产品决定，不是实现细节 —— 问了，用户选了有名字表那条。
+
+**落法（四处，全部复用既有判据）**：
+- 解析层把「菱形」拆成**三条已有的 `equalLength`**（`AB=BC`/`BC=CD`/`CD=DA` 链式覆盖四条边）；为此把读取器契约从"一条判据"放宽到"一条或一组"。环不是四边形 ⇒ 读不出并**显形为 `unverified`**（`菱形` 进了"未被消费的强几何信号"扫描）。
+- **核验层一行没改**：等长判据只有一处（`diagramVerification` 的 `equalLength`），"菱形 ⇒ 四边相等"是**定义**，不是第二套数学。
+- 内核新增 `equal-length` 关系档 + `hasEqualSideChain` + `deriveRhombusBase`：四边相等由构造保证，**代表角 60°**（题面没说角，与"正 n 边形代表"同口径，写进 assumptions）。三条 fail-closed 拒绝：**加上直角 ⇒ 正方形**（不画比题面更强的形状）、两个不同边长 ⇒ 自相矛盾、边长 ≤ 0 ⇒ 退化。
+- 搜索层：`equalLength` 映射成 `equal-length`；菱形**只给一条自由底边**（`AD` 由 `AB` 决定 —— 说它是"系统自选"是假的自由，且候选池"两条自由底边不许取相等"会让每个候选与四边相等打架）。
+- `obligationIR`：求证段目标句遇到"一组判据"的句型返回 `null`（认不出），**不取第一条** —— 否则"证明是菱形"被降级成"证明 AB=BC"。
+
+**红→绿都看过红**：解析器 2 条（修前 `[]` / 无 unverified）；内核 2 条 —— 其中"菱形 + 直角"修前是 **`candidate`**（被静默画成矩形，正是要拦的那种）；端到端 2 条。**变异**：短路"正方形"拒绝 ⇒ **2 条真红**、还原复绿。**证据**：解析器 24/24、内核 43/43、定向 13 文件/382、**浏览器 `e2e/agent-rhombus-base.spec.ts` 1 passed**（落盘坐标自算四边相等、非正方形、侧棱⊥底面）；全库非 Lean **337 文件 / 3974 通过 + 1 todo / 0 失败**；**全量 e2e 217 通过 / 0 失败**（首次 216/1 那条 `conversation-isolation.spec.ts:52` 单跑复绿 ⇒ 记为抖动）。
+
+**事故与教训（我自己的）**：做变异还原时我对**含未提交改动**的 `constructors.ts` 用了 `git checkout --`，把菱形实现一起还原掉了 —— 4 条用例当场变红（"测试在、实现在不在"）。按本会话改动记录逐条重新落地后复绿；后续变异一律改用**反向编辑**。**没有数据丢失，但这是一次自找的返工**，记在这里以免下次再犯。
+
+## 2026-10-10 —— S2 收口：`SolidShapeSpec` 骨架与棱锥路径迁移（核实 + 变异，无新代码）
+
+**这一块同样没有改代码** —— S2 的三件（2.1 / 2.2 / 2.3）2026-10-07 就落地了，这次补的是收口那一格。
+
+**出口三条逐条核实**：① 现有棱锥路径逐字不变（关旗 golden 在定向里，4 文件 / 151 通过）；② 新增 4–6 边底面正例在 `witnessSearch.test.ts:75-86`（五棱锥、六棱锥各一条，都是"题面 → 候选"整条链）；③ 一条 fail-closed 反例在 `:88-103` —— 题面在底面上点名 `AB ⊥ BC` 时**不许拿正五边形顶替**，理由带机器可读的 `unsupported-base-shape`。
+
+**变异（当场做，两个方向都看过）**：把候选池的轴**写死回 S2 之前的"两条底面边 + 高"**（`witnessSearch.ts` 的 `candidatePool` 只取前两条 `base-edge` + `height`，不再从 `spec.freeScalars` 读全部）⇒ **3 条真红**：`witnessSearch.test.ts` 的台体两条（"顶棱真的比底棱短"与"四棱台题面 ⇒ 通过核验的候选"）与 `localPlanner.test.ts` 的台体那一半。`git checkout --` 还原 ⇒ **151/151 复绿**、工作区干净。
+
+**⚠ 一处与计划原文的出入（如实记，不粉饰）**：计划 Task 2.4 写的是"⇒ **新底面用例**红"。实测**不是**：`orderedBaseWithFreeEdges` 对 **≥5 边**的底面返回 `freeBaseEdges: []`（走代表正多边形），那种 spec 的自由标量本来就只有"高" —— 写死"两条底边 + 高"与它**恰好是同一个集合**，所以五 / 六棱锥用例照样绿。真正只靠"从 spec 读"才成立的是**台体的 `top-scale`（相似比）**，这也正是 Task 2.1 注释里点名的那条收益。判据仍然咬人，只是咬在**靠 spec 才存在的那一族**上；计划那句话的措辞是错的。
+
+**本块读数（当次重测）**：全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**（455.53 s）；`typecheck` exit 0；`lint` 0 error / 13 warning。**全量 e2e 首跑 215 passed / 1 failed —— 如实记成抖动**：红的是 `geometry3d-drag.spec.ts:103`，它自己的失败信息写着"8 次都没抢到取景动画正在跑的窗口（属负载问题，不是取消失效）"；**单跑该 spec 9 passed / exit 0**，同一棵树上 S1 那次全量是 216 passed / 0 failed。不写成"全绿"。
+
+## 2026-10-10 —— S1 收口：点名语法（逐条核实 + 变异验证，没有新代码）
+
+**这一块没有改代码，只有核实与勾选** —— 如实记清楚，免得后来者以为 S1 是这一天写的。
+
+计划 `2026-10-07-solid-shape-coverage-implementation-plan.md` 的 S1 有四个复选框（1.1 / 1.2 / 1.3 / 1.5）一直没勾，而产物早就在仓库里（2026-10-07 落地）。这次按"**只记事实**"的纪律逐条核实：
+
+- **1.1**：`pointNames.ts` + `pointNames.test.ts` 都在，计划 Step 1 点名的六条断言逐条在位；**一处与计划原文不同**：Step 3 当时写一层后缀 `?`，S1.4 用户裁决后落成 `{0,2}`（`A′′` 合法、`A′′′` 不算）。
+- **1.2**：`diagramObligations.test.ts` 三条写法各一条 —— `AA₁` ⇒ 1 条 given、unverified 不再残留；`AA1` 仍进 unverified（**不许凑合解析**）；`AA′` 同样 1 条 given。
+- **1.3**：`diagramVerification.test.ts` 的 `AA₁=1` / `A′B=1` 都能进点名表并判 `passed`。
+- **1.5（本块的重点）**：定向 **8 文件 / 248 通过**（含关旗 golden）；**变异当场做** —— `POINT_NAME_SOURCE` 改回 `[A-Z]`（改完**仍能解析**，所以看到的红是判据命中而不是崩溃）⇒ **11 条真红**（点名模块 3 / 解析器 3 / 核验器 3 / 内核 2），`git checkout --` 还原 ⇒ **100/100 复绿**、工作区干净。
+
+**当次读数**：全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**（431.94 s）；全量 e2e **216 passed / 0 failed**（2.4 m）；`typecheck` exit 0；`lint` 0 error / 13 warning。
+
+**同步的文档**：`current-status`（S1 那一行 + §一 门禁读数）、`agent-next-round-progress`（S1 措辞）、本文件；`feature-catalog` 无变化（S1 是接缝，不是新能力）。
+
+## 2026-10-10 —— S6.3 反例收口：认不出来就问路（**只加判据，不改行为**）
+
+设计 §6 的纪律"认不出一律问路、绝不悄悄改文档"，在浏览器里此前只有一条判据，而且它验的是**实验开关关着**（不是读不懂）。S6 出口要求"两类反例齐全"，于是补了 `e2e/agent-unreadable-prompt.spec.ts`：分析题 / 非立体题 / 说法与形状对不上三类各一条，每条四条判据（无确认面板 / 运行落定且对用户有话说 / 草稿键 `mathcanvas:draft:geometry3d` 逐字未变 / 回画布后对象为空且「撤销」禁用），**3 passed**。
+
+**如实记：一写就绿，没有 RED** —— 规划器层（`shapeGrammar.test.ts` 的反例 + `localPlanner` 的"裸词与问读数不认"）与运行时单元层（`agentRunner.test.ts` 的"认不出 ⇒ `waiting` + 无草稿 + 文档 0 图元"）本来就对，缺的是**这份浏览器判据本身**；把它写成本批"修好了"会是假的。
+
+补的过程里**查实一条待裁决**：`waiting` 经 `failPendingReply({code:"needs_more_information"})` 收尾（`agentRunner.ts:801`），而 `RunStatus` 的 failure 分支把标签写成"**没有完成**"（`data-status="error"`）—— "我问你一个问题"与"这次没做成"在界面上共用同一个词。判据刻意不钉它。
+
+## 2026-10-10 —— S3.4 解除：题面驱动的棱柱到不了面板，根因是**关系抽取的点名块字母表**（一次真修，不是文档修订）
+
+**症状**：`在三棱柱ABC-A′B′C′中，AA′⊥平面ABC，画出这个三棱柱` 在界面上走得到规划、也走得到暂存，但"确认改动"面板始终不出现 —— `e2e/agent-prism-path.spec.ts` 自 2026-10-07 起以 `test.fixme` 挂着。
+
+**复现（计划 Task 3.4 点名的下一手，一次成功）**：把那份**已知的本地计划**（本地规划器给的信封原样）塞进**真实暂存路径**（`draftStore.stage`，见证搜索开），确定性拿到 `compile_failed` + `relation_not_satisfied @ envelope.relations` + 一条 `allowedChanges: ["envelope.relations"]` 的修复请求 —— 与浏览器里那句读数**逐字相同**。本地计划本身是干净的（六点互不重合），所以问题在**核验**这一侧。
+
+**根因**：`relationExtraction.ts` 的"点名块"字母表是 `[A-Z][A-Z0-9]*`，**`′` 不在其中** ⇒ `AA′` 被切成 `AA` ⇒ 读成**自己到自己**的退化线段 ⇒ `AA′ ⊥ 平面ABC` 的 targets 成了 `v0,v0,…`、残差算不出来 ⇒ `planCompiler` 判 `relation_not_satisfied`（一次**失败**，不是"未核验"）⇒ 编译失败 ⇒ 协调器把那唯一一次修复交给模型 —— 可这条关系是**系统从原话抽出来的**，`envelope.relations` 只是投影 ⇒ 模型根本改不动 ⇒ `run_failed` ⇒ 面板永不出现。**上一轮"卡在计划 → 面板之间"的定位，到此收到具体一行代码。** 另外记一条：设计 §5 的 R2 出口原本规定"不支持的题面稳定产出 `unverified_instance`"，而实测是**硬失败并吃掉唯一一次修复** —— 两者不是同一种对待，这次修完才与出口一致。
+
+**修法（一处，最小）**：抽取器的点名块与拆分改为复用 **S1 的唯一定义**（`pointNames.ts` 的 `POINT_NAME_SUFFIXES` + `splitPointNames`），四处写死的 `[A-Z][A-Z0-9]*`（点名块 / 两种中点句型 / `平面` 前缀）**并到同一份**。**数字仍留在块里**：`A1B1` 这类 ASCII 下标必须整块交给 `splitPointNames` 否掉 —— 块一旦在数字处断开，`AA1` 会被读成 `AA`（同一个退化线段），"读不出"就被悄悄升级成"读成了一个错的"。这正是本仓第 N 次"同一个判断写在两处就必然分叉"的现场（S1 已经把另外三处并掉了，抽取器是漏掉的第四处）。
+
+**红→绿（三处都看过红，不是"写完再补测"）**：
+- `relationExtraction.test.ts`：带撇线段 `AA′` ⇒ targets `v0,v3,…`（**修前 `v0,v0,…`**）；带撇平面 `平面A′B′C′` ⇒ 仍是面（**修前被读成 1 个点**）；`A1B1` 仍读不出（S1 契约的诚实性护栏）。
+- `diagramDraftStage.test.ts`：同一句题面走**真实暂存路径**（临时 stash 掉源码改动验证过 RED）⇒ **修前逐字复现** `compile_failed` + `relation_not_satisfied` + 那条改不动的修复请求；修后 `ok` 且 `diagramVerification.status = passed`。
+- `e2e/agent-prism-path.spec.ts`：`test.fixme` 转正 ⇒ **1 passed（18.2 s）**，面板 `题设核验 = passed`、提交后浏览器里**自算**的几何判据（三条侧棱彼此相等、每条都与底面法向平行）全过。
+
+**读数（本批实测）**：全库非 Lean **337 文件 / 3968 通过 + 1 todo / 0 失败**（exit 0）；**全量 e2e 213 通过 / 0 失败**（2.5 m —— fixme 转正之后不再有 skipped）；`typecheck` exit 0；`lint` 0 error / 13 warning（基线）；关旗逐字不变契约 `planCompiler.offPath.golden` 仍 **13/13**；相关 e2e（`agent-solid-family-path` / `agent-derived-sphere` / `agent-round-frustum` / `next-phase-flag-entry`）**9 passed**。
+
+**仍未做**：斜棱柱（要"环外点名顶点"概念）、菱形底面、S6 收口、`freeApexIntentFor` 窄正则退役；画布顶点标签与 `vertexNames` 错位、球"存在但主张不成立"的状态词表仍待裁决。**本次不宣称 S3 整块收口** —— 解开的只是 Task 3.4 那一格。
+
+## 2026-10-09 —— 进度文档现时口径复核（仅文档，不是新增功能）
+
+对照 `04bfed9` 所含的现时摘要、S3.4 阻塞记录与已跟踪的入口/浏览器用例，修正当前状态 §四 F、分块追踪、功能目录、README、发布门禁及记分卡的旧快照语句。S1/S2 已落地，S4/S5 有受限浏览器证据，S6 部分入口已接；但 S3.4 题面驱动棱柱浏览器正例仍因运行时校验拒绝而阻塞，S6 未收口，V0 教师/学生目视走查、自动 Lean 与真实 provider 作图质量未完成。旧研究快照及下列 RED→GREEN 数字不改写；本次没有新产品代码、没有宣称新门禁读数。
+
+## 2026-10-07 —— 立体图形扩宽 S1–S3：点名语法收口 → 形状数据化 → 直棱柱走通
+
+用户裁决"要能处理大部分形状"后的前三块。设计 [`2026-10-06-solid-shape-coverage-design.md`](superpowers/specs/2026-10-06-solid-shape-coverage-design.md)，
+计划 [`2026-10-07-solid-shape-coverage-implementation-plan.md`](superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md)。
+
+- **S1 点名语法收成一处**：`A′` / `A₁` 此前在解析层被按**码位**拆开（`["A","′","B"]`），棱柱题面 **0 条给定**；核验器又只认 `/^[A-Z]$/`，内核产出的 `A′` 拿不到坐标。三处收进 `pointNames.ts`。
+  - RED 是**行为**失败（先按旧行为写最小实现，让 `expected [ 'A', '′', 'B' ] to deeply equal [ 'A′', 'B' ]` 出现），不是"模块不存在"。
+  - 块级变异（去掉"撇"这一支）**三层 5 条红**；关旗逐字契约 `planCompiler.offPath.golden` 13/13。
+  - **变异逼出一个覆盖缺口**：解析层当时全绿 ⇒ "解析器认撇"此前没有用例真咬住过；补的那条是在**变异态下先看到它红**才还原的。
+  - **S1.4 未收口**：`withPrimes` 的冲突回退产 `A′2` / `A′′`，**不在**共享定义里 ⇒ 核验器判整张表不可靠；扩语法还是明确拒绝**需裁决**。那两个不合格命名已被断言逐字钉住（**记录不等于认可**）。
+- **S2 形状数据化**：`SolidShapeSpec` 落地（内核 barrel 导出），搜索层候选池与 `requestFor` 改读 spec；高的来源从 spec 的 `relations` 读回，不夹带第二个载体。**迁移护栏**先立：标准四棱锥候选坐标钉成逐字快照，迁移后**逐字相同**（用例数不变 = 纯换载体）。
+  - 底面从"只支持三 / 四边形"扩到 **3–6 边**（n ≥ 5 走正 n 边形代表）；题面点名底面角度/平行 ⇒ 仍拒绝。
+  - **一次真实的覆盖缺口**：内核那道闸打开后五边形仍走不通 —— 解析层平面子模式只到 4 个点名、搜索层 `lineAndPlane` 只认 5/6 个 targets、核验器只处理"恰好四点"平面；三道闸一起开后五棱锥/六棱锥端到端通过。第一段 RED 的报文还是**误导**的（"题面没有给出线段⊥平面的写法"，而题面明明写了 —— 是解析层没产出来）。
+- **S3 直棱柱走通**：`AA′⊥平面ABC` ⇒ 底面环 + 拉伸方向 ⇒ 通过核验；底面 3–6 边。
+  - 旧注释把棱柱卡住的原因写成两条依赖（解析层认不出 `A′`、核验器只认单字母）—— **两条都已由 S1 解开**，注释成了过期的话；这一批顺手把那段注释改正。
+  - **只做直棱柱**：内核 `{kind:"points"}` 拉伸分支按设计不可用（底面顶点全在 z = 0）⇒ 斜棱柱要等"环外点名顶点"概念，理由写在拒绝文案与注释里，不硬凑。
+  - `AA₁` 写法如实拒绝并说明按 `A′` 出题（**不擅自改名**）。
+- **两条被机器逼出来的修正**：正六边形 `sin(π) = 1.2e-16` 触发内核"量级跨度过大"守卫被**如实拒绝** —— 修在**构造侧**（浮点噪声按回 0），**没有放宽守卫**；`statedLength` 的返回值是 `WitnessStatedValue` 不是 `number`（`typecheck` 报出来的）。
+- **两次事故如实记**：① 一个类型错误（在判别联合上读了不存在的 `reasons`）曾被推到远端，而对应的 CI run **被后续推送取消** ⇒ **没有门禁碰过它**，是补跑 `typecheck` 才发现的；② 有一次变异验证后**还原被工具守卫拒**，工作树停在**变异态**过了一轮 —— 教训：变异与还原要成对落地。
+- 读数（各次提交的当次数）：全库非 Lean 由 3878 走到 **3899 通过 + 1 todo / 0 失败**；`typecheck` 0；`lint` 0 error / 13 warning（基线）；`witnessSearch.test.ts` 30/30。
+
+## 2026-10-06 —— V0b–V0d：把"原文题设核验"从只有多面体扩到四类图形
+
+- **起点是一个洞**：核验的触发条件写死了 `solid.create_polyhedron`，于是**任何平面图形、任何圆锥曲线、任何函数曲线都从不进入核验** —— "动作编译成功"就等于"图符合题意"。这与 V0a 修掉的是同一类洞，只是换了工作区。触发条件收成一个导出的 `planHasVerifiableFigure`（多面体 / 平面点 / 圆锥曲线 / 函数曲线 / 切线）。
+- **V0b 平面三角**：核验器的点名表收 2D `point`（补 `z = 0` 后交给**同一套**判据，不为 2D 另开数学分支）；本地入口不挂实验开关。
+- **V0c 圆锥曲线（只做椭圆）**：`x²/9+y²/4=1` 会被解析并核验。判据只比两个半轴，但**结论带焦点** —— 焦点是半轴的函数（`c = √(a²−b²)`），半轴对调会把焦点从 `(±√5, 0)` 挪到 `(0, ±√5)`，那是另一条曲线。**自己犯的错**：第一版把方程分母直接当半轴（报出 `(9, 4)` 而不是 `(3, 2)`），正面用例当场红。
+- **V0d 函数图像与切线**：新增 `function.create_graph`（此前 `function.analyze` / `function.create_tangent` **都要求先有一条曲线**，"求 f 的导数"能表达、"先把 f 画出来"不能）。跨七处接线，其中三处是机器逼着改齐的（`CAPABILITY_FOR_ACTION` 漏登记直接 `tsc` 报错）。判据两条：① 切线比**核验器自己中心差分求出的** `f′(x)`，不读图元自报的 `slope`（那是拿系统自证）；② 曲线与题面函数按 **9 个采样点的函数值**比，不按字符串比（`x³−3x` 与 `x^3-3*x` 是同一条曲线），**代码注释写明"采样不是符号证明"**。
+- **三处"同一个判断写两遍"的现场**（本块最值钱的部分）：
+  1. 触发条件在 `planCompiler`（编译期）与 `draftStore`（草稿层再核验）各写了一份 —— 只改前者时**编译期验了、面板上什么也看不到**，而**单元测试抓不到**（`compilePlan` 的用例只走编译期那条），是浏览器用例先红的；
+  2. 函数族两笔起初没进触发集合，端到端压根不核验 —— 之前的单测直接调 `verifyDiagramObligations` **绕过了这一层**；
+  3. `function.create_tangent` 的默认 `anchor`（`parameter 0`）**盖掉了题面写明的 `x`**：计划写 `x: 1`，切线画到 0 去。**探针揪出来的** —— 而且 `x = 1` 那一例分不出"斜率真算了"还是"用了占位 0"（`f′(1)` 恰好是 0），所以特意用 `x = 2`（`f′(2) = 9`）再试一次。
+- **一处自己引入的真错**：`function.*` 曾被我路由到 **`calculus`** —— 那个工作区**已经退役**。后果是 Agent 会把用户切进界面上不存在的工作区，而**全量 3854 条测试全绿**，因为**没有任何用例问过"这个动作该去哪个工作区"**。已改 `conics` 并新增 `planWorkspaces.test.ts`（遍历全部动作 id，任何一族都不许路由到 `calculus`）。**教训**：这个事实**早就写在仓库里**（`docs/research/2026-09-18-agent-capability-audit.md` 写着"calculus 为兼容 ID，独立 UI 已退役"），我只看了 DSL 的 `Workspace` 联合类型里有它 —— **类型里有 ≠ 界面上有**。
+- **三处连带记账**（都不抹）：`functions` 技能重签内容哈希；`agentDslMetrics` 钉死的 `auditedSlots` 55 → 54、遗漏率 0.055 → 0.056（登记表少一个默认字段 —— 改的是被测实现，代价写进断言）；lint 基线因一次误删注释短暂波动后回到 13 条。
+- 收口读数：全库非 Lean **330 文件 / 3868 通过 + 1 todo / 0 失败**；全量 e2e **205 通过 / 0 失败**；typecheck exit 0、lint 0 error / 13 warning。**V0a–V0d 测试面均已齐**，但计划的 `V0 出口` 明写"没有人看图确认时保持未勾" —— 机器证据已给全，**人看图（教师/学生走查）与 MSI 仍是 §四的独立验收**。双曲线 / 抛物线未做。
+
+## 2026-10-06 —— V0a 出口判据齐备，并按纪律同步镜像文档
+
+- 计划 V0a 点名的出口条件此前还差一条没有浏览器证据：**拒绝不占撤销历史**。两条拒绝用例（未知「在底面上方」条件、与候选不符的错坐标）现在各自断言「撤销」按钮仍 `disabled` —— 这是浏览器里**唯一**能看见撤销栈的读数；此前只断言「画布上对象数为 0」，而「没画」与「画了又被撤掉」在画布上长得一模一样，那条断言其实什么都没证明。
+- 至此 V0a 出口条件逐条有可复跑证据：真浏览器四面体 + 截图目检、条件状态一致且由**独立回代**复核、两条拒绝的撤销栈断言、自由点图不宣称唯一、文字坐标/方位不静默丢、全库 3835 与全量 e2e 202 全绿、变异命中。
+- **本批同时把镜像文档按纪律同步**：`feature-catalog.md`（顶部目标块与 V0a 快照、N2 条目从 3/3 改 6/6）、`README.md`（V0a 状态段、V0–V3 待办第 4 条、路线链接补新设计）、`current-status.md` 与 `agent-next-round-progress.md`（出口判据表与状态格）。**口径写死**：这是「出口判据齐备」，**不是**「V0a 完成」—— V0b–V0d 未做、V0 整体未验收；教师/学生走查与 MSI 是 §四 的独立验收。
+- 读数：单 spec 浏览器 **6/6**（12.2 s）、全量 e2e **202 通过 / 0 失败**、`typecheck` exit 0、`lint` 0 error / 13 既有 warning、文档一致性守卫 17/17。
+
+## 2026-10-06 —— 显式坐标写法与浏览器独立回代（含两次自纠）
+
+- **RED 先跑**：新增 4 条单测，其中「接受带显式坐标的窄句型」当场红（该句式此前压根不被认识），其余三条当时是**假绿** —— 它们「通过」只是因为句子不被认识，`clarification` 同样成立。于是给反例补上「先断言这句话**被认出来了**、再断言仍然拒绝」的前置断言，并把拒绝理由钉到「核验」二字上。**这是本批最有价值的一次判断**：不做这一步，那条反例就是装饰。
+- **GREEN**：受限句型新增底面顶点的显式坐标写法（坐标段只收底面环上的点、且必须被坐标吃干净，顶点仍是自由点——给它写死坐标等于换题设）；同时修掉一处**两条路看得不一样**的缺陷：`searchWitnessForPrompt` 此前固定不带 `spatialPointConditions`，于是救援路径在 V0a 开关下认得出原话坐标、离线入口认不出，同一道题两条路看到的是**不同题设**。现改为与救援路径共用 `parseObligationWithLegacy`，**缺省仍为 `false`**，所以 `bench:agent` 见证层的历史读数不受影响。
+- **变异验证**：把坐标守卫短路掉 ⇒ `does not accept coordinates for the free apex or for a vertex outside the named base` 当场变红，还原后复绿（正好那一条）。
+- **两次自纠，都如实留档**：① 浏览器独立回代用例里，我把「AD ⊥ 平面」写成了底面法向余弦 = 0，跑出来收到 `1` —— 是我错了（AD ⊥ 平面 ⟺ AD **平行于**法向 ⟺ 余弦 = 1），是用例把我自己的错抓出来的；② 提交前 `typecheck` exit 2，根因是我新写的测试里联合类型没收窄，修好后**重跑全量**，让 143.88 s 这个读数对应最终代码而不是改前的版本。
+- 读数：全库非 Lean **328 文件 / 3835 通过 + 1 todo / 0 失败**（比改动前 +4，正好是本批新增的单测数）；全量 e2e **202 通过**（+3，正好是新增的浏览器用例数）。**两处增量自洽**是本批读数可信的一个旁证。
+
+## 2026-10-06 —— 立体形状覆盖扩宽：设计先行；门禁复测暴露两处读数含义变化
+
+- **用户当日追加裁决**：「智能体只能处理三棱锥的问题也要解决，要能处理大部分形状」。四问四答定下范围：① 只做**立体几何**（棱锥任意 3–6 边底面 / 棱柱含 `A′` 带撇顶面 / 台体 / 球与多面体的内切外接关系）；② 入口**本地解析器扩宽到常见自然语言说法**，不依赖模型；③ **默认行为先沿用现有开关**，四类全做完再定；④ 落地结构选**形状数据化**（四层共用一份 `SolidShapeSpec`），不再逐个形状加构造分支。
+- 设计写入 `docs/superpowers/specs/2026-10-06-solid-shape-coverage-design.md`。自检时改掉两处自己的问题：点名模块必须落在最底层 `geometry-kernel`（内核自己也是调用方，不能反向依赖 agent-core）；S5 的「派生球要不要重算」原本被我留成二选一，翻代码后发现仓库已有 `recomputeDerivedObjects` 这条现成路径，于是直接裁决，不留活口。
+- **探针实测纠了一条错的承重结论**：设计里我原先写「`AA₁` 被压成两个 `A`、重名后被丢弃」。探针实测三种写法（`A₁` / `A1` / `A′`）**全部根本不匹配**，条件作为 `unverified` 残留如实显形——是 fail-closed，比我说的情况好。`witnessSearch.ts` 里那句代码注释说错了同一件事，留待 S3 动到该分支时改正。**教训**：把设计建在「代码注释说了什么」上是不够的，注释也会说错。
+- **另查出并实测一个真缺陷（2026-10-10 已修 + golden 有据重抓，见页头同名块）**：画布顶点标签由 `templatePointLabel(index)` 按**下标顺序**自动生成，而核验器用 `vertexNames` 的下标。探针实测声明 `["P","A","B","C","D"]` 配 `[P(0,0,4), A(0,0,0), B(2,0,0), C(2,3,0), D(0,3,0)]`，落盘标签却是 `A@(0,0,4)`、`B@(0,0,0)`…**整体错位一格** —— 也就是说「题设核验通过」指向的顶点与用户按标签读到的**不是同一个**。**当时不能顺手修**：`planCompiler.offPath.golden.test.ts` 要求关着开关时与 `4707b64` 逐字节相同，而草稿文档（含标签）就在比较范围内（**后来按裁决修了，并逐字段证明差异只有那 20 个 `label`**）。
+- **门禁全表复测，两处读数的含义变了（不是跑绿了）**：① **本机现在没有 Lean 工具链**（无 `elan`/`lean`/`lake`，`proof/lean4/.lake` 不存在），文档里「真内核闭环成立（`formally_proved`，68277 ms）」是更早某台装了 Lean 的机器上的历史读数，**本机不可复现**；该用例显式 gated，本次如实打印理由并 skip（1 passed / 3 skipped），没有静默通过。② **离线 benchmark 见证层码表与旧记录不同**：多出 `"unverified-obligation":26`，`no-candidate-constructed` 4→2、`unsupported-base-shape` 4→2；总量仍自洽（`verified=1`、`solveRate=0.048` 未变），是拉取进来的那批提交改变了构成。
+- 其余读数复现：Rust **238 通过 / 3 ignored / 0 失败**；`proof:smoke` **8 通过**；性能 **9/9**、`drag/300-frames` **625.9 ms**；生产构建 4.86 s、入口 **1,861.85 kB / gzip 548.43 kB**（比上次记的 1,803.76 kB 又长约 58 kB）；许可扫描通过且快照重写后工作树无变化；离线评测 `pass@1 4/8`、`pass@3 4/8`、工具选择 `45/45`、工具错误 `3/45`。
+- **本区块只有设计，没有产品代码**；按规矩，spec 未获用户评审前不进 `writing-plans`。
+
+## 2026-10-06 —— 进度文档全仓对齐：修过期镜像，旧报告仅作快照
+
+- 以 `docs/current-status.md` 为现时唯一落点，核对 README、能力目录、任务追踪、发布门禁/记分卡、开关依赖审查、原高中交互进度与早期验收/研究报告；修正记分卡 N3 “缺恢复路径”和 N4 “未付费、无人标注”等过时镜像。旧全课程目标只作候选来源，现行仍只做需作图题；V0a WIP 7 文件/171 定向与新浏览器 spec 3/3，不外推为全量或阶段已完成。历史记录只加时间范围与当前入口，不删除当次失败/数字；链接、BOM、LF 和文档一致性单独核对。**本轮只改文档，没有追加功能、付费模型请求或 Lean 真运行。**
+
+## 2026-10-06 —— V0a 中途暂停：将实验性三棱锥工作树如实保存（未验收）
+
+- 原话 parser 曾丢掉点坐标/“上方”，普通三角底面曾强制要求题设明说直角；本地规划器还会把“自由点 D，画示意图”当作创建一个平面点。本批针对性 RED 复现后，在显式见证搜索实验开关后加原话坐标及残项追溯、三角底面一组普通自由见证、本地窄句型规划器和草稿/Worker 同判据。坐标负例失败不写草稿，“上方”暂无可靠判据只报 `unverified`；不把一只候选立体图等同通用作图或原题形式证明。
+- **2026-10-06 本次独立复验**：7 个定向 Vitest 文件/171 通过；全部工作区 typecheck exit 0；lint 0 error/13 既有 warning；新 e2e spec **3/3**（开旗建图确认一步撤销、关旗无草稿、未知上方条件拒绝）。此前浏览器导航错误导致 2 项超时是测试夹具从设置页直接找工作区按钮，回传统工作区后才得到上述绿读数。**仍未运行**全库非 Lean 单测、全量 e2e、独立真 Lean、Rust/MSI；**仍缺**提交后 3D 点坐标的浏览器独立回代、截图和教师目视验收。没有发付费 provider 请求。此次代码 WIP 保存点为 `4ee71e8`，不是 V0a 已完成。
+
+## 2026-10-06 —— V0a 题设边界复核：一条线面垂直不足以代表整个题面（计划补丁）
+
+- `diagramObligations.ts` 可匹配 `AD⊥平面ABC`，但顶点坐标/“D 在底面上方”无同等可证的残差判据；带等号的坐标可能被 leftover 标未核验，不带等号与上方短句有静默遗漏风险。`witnessSearch` 的正高度只是系统选择的展示见证，不会自动证明上方是原题已核验条件。V0a 计划补上错坐标、下方顶点的 RED 反例与 `unverified` 门禁。**本批只更正计划与现状，没运行真图/浏览器或 Lean，不能说缺口已修。**
+
+## 2026-10-06 —— V0a–V0d 产品调用点审计：动作存在 ≠ 题设已验证（文档块）
+
+- 逐文件检查 `packages/agent-core/src/planCompiler.ts` / `apps/web/src/agent/draftStore.ts`：原文题设→`verifyDiagramObligations` 条件是含 `solid.create_polyhedron`。现有 `planar.create_conic`、平面点/线与 `solid.create_tetrahedron` 不自动进入这同一入口，不能推断“动作执行成功=图符合原题”。`packages/dsl/src/types.ts` 有 `function` 图元，但 Agent 动作名只有 `function.analyze` 与 `function.create_tangent`，且 `agentRunner.ts` 自动工作区判据只识别平面/立体/截面/动态动作族。分 V0a 立体自由顶点、V0b 平面三角、V0c 圆锥曲线、V0d 函数图/切线，分别列真实 RED 测试路径和浏览器验收。
+- 此块**仅改设计/进度文档，不改产品代码**；不得记录 V0 产品通过、e2e/Lean 运行或真实 provider 请求。文档一致性/链接/BOM/换行与远端 SHA 核对完成后推送。
+
+## 2026-10-06 —— 用户改定只做作图题（V0–V3）：全课程范围停止执行
+
+- 用户明确只要需要画图的高中内容，例如三角、圆锥曲线、导数函数图、立体几何；此前“所有高中课程题型+Lean”路线被 [作图范围修订](superpowers/specs/2026-10-06-diagram-scope-addendum.md) 覆盖。43 个上层/141 个一级来源仍可追踪，但**不再作为本轮产品支持率分母**；2025 上海和 2026 全国卷的官方评析仅作来源线索，完整题面/答案未核验。
+- 在**尚未推送**的本地区块 `89b57f8` 曾存有纯集合交集、等差数列、纯三角恒等式内部九例；收到新范围后新提交将其从工作目录与 `goldCaseIds` 中替换为三角形、椭圆、导数曲线、四面体四类各正/反/欠定一条（12 条）。四条欠定题有自由点/参数候选：条件不唯一不等于不能给示意图。旧提交不抹去，但不能拿来当现时题集证据。
+- RED：4 条范围判据/旧案例数量 3 条/自由见证缺口 2 条先因业务失败，GREEN：当前作图范围 5/5、原创案例 7/7、目录 15/15、官方评析 5/5、文档 2/2，共 **5 文件 35 条**；自由点示意候选清空变异实测 1 红/6 绿、恢复后 7/7；typecheck exit 0，lint 0 error/13 既有 warning。纯数学坐标/导数/焦距另用独立算术核对，但**实际 UI 图元/内核条件核验/教师目检/Lean 原题证明均尚未做**，不能把候选文字写成图正确。全库/e2e/Rust/独立真 Lean 未在本块重跑、未发付费 provider 请求。
+
+## 2026-10-06 —— H0b3a 官方高考评析来源线索 ≠ 逐题金标
+
+- 核对上海教育考试院 2025 秋季数学评析与教育部官网刊载 2026 全国卷专家评析，记录原网页 URL/日期/HTML SHA；上海一卷与全国Ⅰ/Ⅱ分卷各自独立（2 篇文章、3 卷别来源），关联 8 个去重的**候选**课程单元。机构评析不是完整卷面、也没有标准答案；未知 2025 标准与当年高考题的逐题对应，故 `exam.status=not_measured`、verified exam tags 0、gold 0，绝不把它写成真实成功率。未复制原试题正文。
+- RED：先 4 条来源分级测试因未实现红；未知域名负例 1 红，拆全国Ⅰ/Ⅱ卷别负例 1 红。GREEN：高考来源 5/5，连目录/文档守卫 3 文件 22/22；typecheck exit 0，lint 0 error / 13 既有 warning。全库/e2e/Rust/真 Lean 本块未重跑，未发付费 provider 请求。真正逐题金标归 H0b3b，H0 未完成。
+
+## 2026-10-06 —— H0b2 选修 A–E 条目与开放范围诚实分流
+
+- 对照 2025 标准 PDF 页 53–74，选修 A–D 索引 **64 条规定性一级内容要求**，E 类索引 **10 个“例如”举例**（标 `exampleOnly`，不当规定性要求）；E 大学先修三专题只存在上层目录，不编详细正文。课程源索引累计 43 上层项、131 条规定性一级要求和 10 个举例；4 类 E 校本/地方开放课程加入 `openEndedUnits`，有限样本永不被说成“所有 E 课程穷尽”。仍 0 金标/0 高考标签，所有可编辑子型 `unclassified`，审计 `ready=false`。
+- RED：先两条开放范围与 64/10 统计的业务断言红（已有 12 绿），新增 E 缺举例单独反馈后 3 红/12 绿；GREEN 目录 15/15，连文档守卫 17/17。后续录入选修让旧 H0b1 的“全目录只有 67 条”断言红，已正确限定为必修/选择性必修范围；typecheck exit 0、lint 0 error/13 既有 warning。本块未复跑全库/浏览器/Rust/真 Lean，无付费 provider 请求。
+
+## 2026-10-06 —— H0b1 必修与选择性必修正文一级要求（仍不是金标/证明）
+
+- 对照 2025 标准 PDF 页 17–52，把表层 43 条来源中的必修 14、选择性必修 8 单元拆出 **67 条一级内容要求**（其中原文标星选学 5 条）；选修 A–E 21 个单元仍只在表层，E 地方/开放内容不可能由静态目录自动穷尽。工作目录新子型统一 `unclassified`、空 `goldCaseIds`，高考标签仍 0；`auditCoverage.ready=false`。
+- RED：新负例 2 红/9 绿，分别查“官方正文来源缺项”和“未分类不能报就绪”；初次来源数据未定义不算 RED，填空列表后业务断言 **0 vs 67** 才算。GREEN：定向目录 12/12，连文档守卫 14/14；typecheck exit 0，lint 0 error / 13 既有 warning。全库/浏览器/Rust/真 Lean 本块未复跑，未发付费 provider 请求。H0 下一步仍是选修、合法高考样本、正反歧义金标与任务性质分类。
+
+## 2026-10-06 —— H0a 来源索引与目录审计（新路线首块，H0 仍未完成）
+
+- 从 2025 日常修订高中数学课程标准 171 页 PDF 的表 1/2、选修 A–E 分类目视核对：单列**43 条顶层来源索引**（必修 14、选择性必修 8、选修 21；E 有父子层级，不是 43 个原子题型），记录来源 URL/页码/SHA256 `FC9258BB37ED2E052A4B1BE608865A5481F770AE7E28CE536E835D2354353F86`；可编辑目录另存一份，所有子型尚空，高考标签 0，真实 PDF 不进仓。
+- RED：最初文件缺失不作行为 RED；接口骨架后 6 个业务断言因不报缺项、未分类、缺反例、竞赛混入等失败；再加来源清册/重复与选修类别用例是 3 红/6 绿。GREEN：9/9；把来源 SHA 临时改为 0 时 1 红/8 绿，恢复 9/9；typecheck exit 0，lint 0 error / 13 既有 warning；文档守卫 2/2；非 Lean 慢集成全库 Vitest exit 0（未截得可复核总数，故不写数量）。本块**未重跑浏览器/Rust/真 Lean**，也未发付费 provider 请求。
+- 接下来 H0b 需按标准正文逐条拆原子题型和正反歧义金标，核实高考题目合法来源与跨章标签；E 类开放/地方课程需扩展注册，不得以本块 43 条目录冒充完全覆盖。
+
+## 2026-10-06 —— 下一轮重规划（只有文档，没有功能实施）
+
+- 用户明确改目标：Lean 要自动调用，覆盖 2025 年日常修订高中课程标准及高考题型；竞赛题另立题集。此前 N1–N6 的阶段勾选仍是真实历史，但 N5 仅一类条件引理、产品无调用点，不能冒充本次完整目标。
+- 本次建立跨题型设计、H0–H4 实施计划和进度追踪，同时把此前审查的状态词表、错误测试路径/运行器、flag 时序、provider 小样本与成本、拖动缺判据、proof 后端版本与翻译可信性、教师/学生和 MSI 分开验收等项全部归属新任务。**H0–H4 均未实施，没有新增 Lean 证明或付费 provider 请求。**
+- 在当前状态、功能目录、README、发布门禁、记分卡、旧设计/计划与历史进度文档加上新旧范围分界；任何旧测试数字只代表当时，不可当本次复验或发布通过。
+
+## 2026-10-06 —— N3 后续区块：拒绝没有空间判据的线重合拖动
+
+- 过去可能将 3D `coincident` 直接透传或只在其它空间约束投影后改变其定义点，造成静默失真；现在开启实验开关时拒绝这类定义点变更，包括投影连带移动。区分无判据与已知矛盾、投影耗尽、未满足；未实现线重合的空间求解。禁用约束、无关点、零位移和关闭开关不误拦。
+- 回归：`constrainedDrag3.test.ts` 18/18；非 Lean 慢集成全库 324 文件 / 3781 通过 + 1 todo；完整 e2e 196/196；类型检查、lint（0 error / 13 warning）、web 构建 exit 0。Lean 慢集成本区块未单独重跑。
+
+## 2026-10-02 —— 发版 v3.2.0（HTML 导出 + 三处修复）：打包、启动实测、发布 Release
+
+- **为什么 minor**：v3.1.0 之后新增了用户可见的新能力（HTML 导出），版本真值 `3.1.0 → 3.2.0`（只动 `tauri.conf.json` 与 `src-tauri/Cargo.toml`；`git grep "3.1.0" -- "*.json" "*.toml"` 的命中全在 `package-lock.json` 的第三方依赖上）。
+- **构建**：根 `npm run build` **exit 0** → `npm --workspace @draw/desktop run bundle` **exit 0**（Rust `Finished release profile [optimized] in 1m 16s`，WiX 出 MSI、NSIS 出 setup）。**打包前核实前端来源**（与 v3.1.0 同口径）：外壳读 `build-check/mathcanvas-current`，`assets/index-BRMKadFt.js`（1,715,839 B）距打包 **2.3 分钟**，且含「导出 HTML」「自包含的 HTML 快照」「HTML 导出不在本批范围」「这次导出漏了什么」——**不核实这一步就有发一版旧界面的风险**。
+- **产物与哈希**：exe 17,209,344 B / `94253819…783A`；MSI 6,860,800 B / `6671DACB…AB33`；NSIS 5,040,418 B / `6EFFDB27…5680`。`FileVersion` / `ProductVersion` = **3.2.0**。
+- **启动实测**：release exe 存活 T+12s / T+20s、真窗口句柄 `2886386`、标题 `MathCanvas`、`Responding=True`、工作集 43.3 MB，优雅关闭成功。
+- **门禁**：全量 e2e **184 通过 / 0 失败**；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**；`typecheck` exit 0；`lint` 0 error / 13 warning；`main` 顶端 CI **#87 四项全绿**。
+- **边界（如实）**：本机"装 → 启动 → 卸载"的验收对象仍是 **v3.1.0 那次（NSIS）**；v3.2.0 只做了打包 + 裸 exe 启动实测，**没有重复装/卸**；**MSI 那半依旧未验**（本会话 `admin=False`，MSI 按 Tauri 默认是每机器安装）。教师/学生走查未做；3D 画面进 HTML、`.ggb`、截图识图、平面/函数逐题补缺都不在本版。
+- **Release 已发布并独立复核**：注解 tag `v3.2.0`（tag 对象 `62f6d054…`）→ 提交 `5291c5c`；Release id `401859437`、3 个资产（字节数与本地逐一相同）；复核两步 —— 匿名 API `releases/latest` 现为 `v3.2.0`；三件资产**重新下载**后 SHA-256 **全部 MATCH**。
+- **发版过程的一处教训**：`curl` + 临时 config 调 API 时头两次都返 **422**。真实原因**不是网络也不是权限**，而是 PowerShell 5.1 的 `Get-Content -Raw` 给字符串挂了 ETS 属性（`PSPath`/`ReadCount`），`ConvertTo-Json` 把 `body` 序列化成了 `{"value":…}`；换 `[System.IO.File]::ReadAllText(..., UTF8)` 后一次通过。**GitHub 的错误正文里其实已经把原样值打出来了 —— 第一遍我没读它，等于把一个可诊断的错误当成了不可诊断的。**
+
+## 2026-10-02 —— 收尾验证：全量 e2e 184 通过 / 0 失败
+
+- 本轮动了共享路径上的三处（`pointerdown` 取消取景、内容同步后的悬停自愈、规划器的分析题守卫），所以做的是**全量** e2e 而不是只跑相关 spec：`npx playwright test`（默认 workers）→ **184 通过 / 0 失败**（1.1 分钟）。
+- **那条偶发红的 `geometry3d-section` 没有再出现** —— 它正是本轮"悬停自愈"修掉的机制。至此 §一里"全量 e2e 未复跑"这条缺口关闭。
+- 本批只改文档（回填读数）。
+
+## 2026-10-02 —— 悬停读数不再只跟着指针（修掉那条"不能复现"的抖动）
+
+- **修的是同日本文件追查过、当时"只记不改"的那条脆弱点**：`data-preview-hovering` **只**由 pointermove 写入，而预览几何由**内容同步**建 ⇒ "指针先到、预览后到"时属性永远停在 `false`（事件不会再来，`expect` 的轮询救不回来）。
+- **修法**：`threeScenePreviewHover` 记住最后一次指针的归一化位置，新增 `refreshPreviewHover()`；`threeSceneEffect` 的 `syncContent` 包装在内容同步之后调用它。`pointerleave` 清掉记住的位置 ⇒ 不会凭空造悬停。
+- **判据为什么这么做**（这是本块最值得留的一条）：那次竞态**不能按需复现**，所以**不去重发指针移动**（那等于把抖动藏起来），而是把同一件事做成**确定性的** —— 指针**一动都不动**、只让内容变（DOM 派发选中"立方体 A" → Delete ⇒ 预览消失），`data-preview-hovering` 必须从 `true` 变 `false`。用 DOM 派发而不是 `locator.click()`：后者会移动鼠标、触发 `pointerleave`，测的就不是这件事了。**顺带一个探针教训**：夹具 `overlapping-cubes.mgeo` 里的对象叫 **"立方体 A/B/远处的立方体"**，不是"立方体 1" —— 第一次写错名字导致 `dispatchEvent` 超时；用一次性探针把面板文本打出来才对上（探针用完即删）。
+- **证据**：`e2e/three-intersection-previews.spec.ts` 新增一条；**变异检查**（拿掉 `refreshPreviewHover()`）→ 期望 `false` 实收 `true`（陈旧读数）✓。回归：预览 / 创建 / 截面 **23/23**；typecheck exit 0、eslint exit 0；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**（282 s）。
+
+## 2026-10-02 —— D2 的 NSIS 那半：本机「安装 → 启动 → 卸载」完整验收
+
+- **范围**：用户选择**只试 NSIS**（每用户、可卸载），MSI（每机器）那半不试。
+- **安装包来源**：v3.1.0 的安装包**不在本地**（`target/release/bundle` 只有 v0.2.0 两件），从 GitHub Release 下载 `MathCanvas_3.1.0_x64-setup.exe` —— 5,030,195 B、SHA-256 `1A4B2AA1A5278E8A5B1DA92B23B6FD6B47B74D6FD151B1C02C4343CF11D5052A`，与 D1 记录的 `1a4b2aa1…5052a` **逐位一致**（顺带又独立复核一次 Release 资产）。
+- **三步实测**：① `setup.exe /S` → **exit 0**（落点 `D:\release\MathCanvas`，HKCU 卸载项 `DisplayVersion=3.1.0`、开始菜单快捷方式就位）；② 启动 → 存活 T+12s/T+18s、**真窗口句柄 `920116`**、标题 `MathCanvas`、`Responding=True`、WebView2 配置目录时间戳刷新；③ 优雅关闭后 `uninstall.exe /S` → **exit 0**，核对**目录 / HKCU 卸载项 / 快捷方式三者全消失**。
+- **两处如实说明**：① 机器在动手**之前**就有一条 MathCanvas 卸载记录（HKCU、`D:\release\MathCanvas`、主 exe 16:41、版本已 3.1.0）⇒ 这**不是"干净机器首次安装"**验收，本轮是把那份刷新一遍，**净效果 = 从"有一份 v3.1.0 每用户安装"变成"没有安装"**。② **MSI 那半未实测**（非管理员 + 用户只选 NSIS）⇒ D2 **只关闭 NSIS 那一半**。
+- 下载物在仓库外临时目录，用完已删；仓库工作区干净（本批**没有代码变更**）。
+
+## 2026-10-02 —— 分析题不再被本地规划器当成建模指令（"正方体内切球半径"）
+
+- **修的是本文件同日"如实缺口"里那条"既有隐患"**：把"这个正方体的内切球半径是多少"喂进本地规划器，命中的是既有的「正方体」条目 ⇒ 它去**新建一只正方体**，而用户要的是读数。
+- **修法（也就是那条"待定口径"）**：`matchLocalIntent` 加一道守卫 —— **没有任何建模动词**（画 / 作 / 建 / 添加 / 创建 / 放 / 来一个 / 来个）、却在**问读数**（是多少 / 多少 / 多大 / 多长 / 求 / 怎么 / 为什么 / 吗）时，**请求技能的建模意图一律不认**；认不出的结果是**既有的**"老实问路"（clarification），而不是悄悄改文档。只读意图（"有什么"）不受影响。与两条既有纪律同类：不认裸词"四面体"、不认裸词"球"。
+- **边界（如实）**：只挡"没有建模动词"的问句。"画出这个正方体的内切球"这类明确要求作图的照旧走建模。
+- **证据（先红后绿）**：4 条单测 —— 两句分析题（内切球 / 外接球半径）必须是 clarification；两条反向对照（"建一个棱长 3 的立方体"仍建、`SPHERE_PROMPT` 仍建）。**RED**：实现前是 `expected 'plan' to be 'clarification'`。回归：Agent 四个 e2e **17/17**；typecheck exit 0、eslint exit 0；全库单测 **280 文件 / 3203 通过 + 1 todo / 0 失败**（234 s）。
+
+## 2026-10-02 —— 修掉「自动取景覆盖用户拖动」的窗口 + 给它一个可观测状态
+
+- **要修的是本文件同日早些时候"只记不改"的那条发现**：`cancelFitAnimation()` 过去只在副作用清理（卸载）里被调用，用户拖动不会取消进行中的取景 ⇒ "换文档触发取景"之后在 **250 ms 窗口内开始拖**，剩下的帧会把用户刚拖出来的视角覆盖回去。
+- **修法**：画布的 `pointerdown` 处理器**先**取消取景再交给交互层；滚轮缩放同理。顺序不能反 —— 取景的帧不等任何判定，只要还在跑下一帧就会写 `cameraStateRef`。
+- **第一版用例是假绿的，这一点比修法本身更值得记**：我先用"添加立方体"触发取景，而 `shouldAutoFit` 的输入是 `enabled && !dragging && (documentChanged || outOfView)` —— **编辑不改文档 id，所以根本不取景**，于是"相机没被覆盖"自然成立、用例绿得毫无意义。**修法是先把状态变得可观测**：取景动画的三态写到 `data-fit-animation`（`running` / `done` / `cancelled`，`cancelled` 只在真有帧在跑时报告）。新用例因此分两步：**先抓到 `running`（抓不到就明确失败）**，再断言按下后变 `cancelled` —— 与"自己跑完"的 `done` 区分得开。第一版还踩了第二个时序坑：抓窗口和按下之间夹了一次 `boundingBox()`（一百多毫秒），动画已经跑完；改成**先把指针挪到画布中央、再抓窗口、随即按下**。
+- **证据**：新增 `apps/web/src/threeSceneCamera.test.ts`（该模块此前**没有测试文件**，3/3 —— 含受控 rAF 下的"取消后**不再排帧**"、空取消不报 cancelled）；`e2e/geometry3d-drag.spec.ts` 新增一条；**变异检查**（去掉按下时的取消）→ 期望 `cancelled` 实收 `running` / `done`，**红** ✓。定向：typecheck exit 0、eslint exit 0、拖动/相机记忆/自动取景三个 spec **11/11**；全库单测 **280 文件 / 3199 通过 + 1 todo / 0 失败**（258 s）。
+
+## 2026-10-02 —— E3 HTML 导出：spec 获批 + 实施计划落地（尚未写实现代码）
+
+- **用户批准 spec**（`2026-10-02-html-export-design.md` 的状态行由"待用户审阅"改为"已获批准"），按 `writing-plans` 产出 `2026-10-02-html-export-implementation-plan.md`：5 个区块 —— 纯函数产出器（转义 / 损失清单 / 内嵌存档 / 版本戳）、导出路径组装（含**立体几何明确拒绝**）、e2e 三判据**先红**、命令与界面接线（功能区两个分支 + 工具栏，同步修顺序断言）、Agent 通道钉住四个格式 + 文档收口。
+- **写计划时按实测改掉三处"凭印象"**：`AnnotationSpec` 的字段是 `target` 不是 `targetId`（`types.ts:928`）；**工程 SVG 不含"主视图"这类中文标签**，只有 `data-drawing-view="front"`（`engineeringExporters.ts:108`），照印象写的断言会假红；存档往返的判据改成"`encodeMgeo` → `decodeMgeo` 的不动点"（`encodeMgeo` 会补默认值，手搭文档直接比会假红）。
+- **两处与 spec 的偏差（明示，不悄悄做）**：① 本批不调用 `buildExportPlan` —— 实测它**没接进任何用户路径**（`agentRunner.ts:509` 仍是桩），且它要的 `layoutDocumentId` / `geometryDocumentId` 在导出路径上拿不到，编一个就是伪造；损失清单改用 `exportService` 新导出的 `isUnexportableType`（同一张表只留一份）+ 隐藏对象 + 工程视图诊断 ⇒ spec §9 第 7 处不需要动。② "零外部引用"不能照字面写成"不含 `http://`" —— 内嵌 SVG 的 `xmlns` 是 XML 命名空间、不是网络请求，判据改成"无 `<link>` / 无带 `src` 的 script / 无指向网络的 `src|href` / 无 `@import`"并配反向对照。
+- **本批只改文档**，无可执行产物；实现从计划 Task 1 起按 TDD 逐块推进（每块跑门禁 → 提交推送 → 更新本文件与 `current-status.md`）。
+- **Task 1 已交付（提交 `6d28578`）**：`apps/web/src/persistence/htmlExporter.ts` 纯函数产出器（转义 / 损失清单 / 内嵌 `.mgeo` 存档 / 格式与应用版本戳）+ `exportService.isUnexportableType`（"画不出来"那张表只留一份）。**9 条单测先红后绿**（RED = `Failed to resolve import "./htmlExporter"`）；两条判据值得一提：**零外部引用**配了反向对照（先证明文件里真有内嵌 `<svg>` 与内联 `<style>`），**注入防护**用含 `</script>` 的标签钉住。**一次变异检查**：同时去掉 `htmlExporter` 的 `escapeHtmlText` 与 `escapeJsonForScript` → 3 条红，其中注入那条正是它要防的症状（存档被提前截断、连往返也一起失败）。
+- **Task 2 已交付（提交 `fc4df43`）**：`fileExports.exportHtmlFile()` 接进导出路径 —— 按工作区选 `exportSvg` 或 `exportEngineeringSvg`，把 omissions / 工程视图诊断 / 应用版本戳交给产出器。**立体几何明确拒绝且零下载**（经 `setFileError` 报一句人话），理由写进代码注释：照平面分支走会得到"导出成功、HTML 里只有一个坐标网格"。版本戳走 `readDesktopRuntime()`，浏览器里如实写 `unknown`；类型拆成 `VectorExportFormat` / `ExportFormat`，避免 `exportSvgFile("html")` 类型合法却导出 SVG。**3 条新单测先红后绿**；**一次变异检查**：去掉 3D 拒绝分支 → 红在 `expected [ '我的-图纸.html' ] to deeply equal []`（静默半死的症状）。**一处与计划的偏差（jsdom 限制）**：计划写 `await blobs[0].text()`，但 jsdom 的 `Blob` 没有 `text()`（`App.test.tsx:1962` 记过同一件事），改用 `FileReader` 读。读数：该文件 9/9（6 旧 + 3 新）、typecheck exit 0、定向 eslint exit 0。
+- **Task 5 已交付（功能收口，5/5 块至此全部完成；Task 3+4 的完整记录紧接在本条之后）**：在 `packages/agent-core/src/tools/interactionTools.test.ts` 加**类型级**判据钉住 Agent 导出通道**恰好四个格式**（spec §9 的"有意不做"）。**变异做了两次，第二次才有效**：第一次只钉 `proposeExport`，改 **`preflight`** 的 `format` 时 `tsc` **全绿、拦不住**；把判据扩成两条（两处联合各一条）后再分别变异 —— 改 `proposeExport` 报 `(149,11): Type 'true' is not assignable to type 'false'`、改 `preflight` 报 `(155,11)`，**两次都拦得住**。教训（只钉一处等于没钉）已写进计划。变异已恢复、`interactionTools.ts` 与 HEAD 无差异。**全量门禁最后一次复跑**：typecheck exit 0、lint 0 error/13 warning、**全库单测 279 文件 / 3196 通过 + 1 todo / 0 失败**（265 s，+1 = 新增钉住用例）、`html-export.spec.ts` 3/3、既有导出回归 11/11。功能登记写进 `feature-catalog.md`；**发布边界**：只交付源码能力，不等于发布了含此功能的安装包（spec §7）。
+- **Task 3+4 已交付（提交 `59eb3be`）**：`e2e/html-export.spec.ts` 三条浏览器判据 —— 平面（导出 → 读文件 → 断言内嵌 `<svg>` 与存档 JSON、零外部引用 → `setContent` 打开后图可见）、CAD（文件名、四个 `data-drawing-view`、整份只有一个 `<svg>`）、立体几何（`role="alert"` 含"立体几何"且**零下载**）。**RED 如实记录**：接线前三条红法一致（`waiting for getByRole('button', { name: '导出 HTML' })` 30 s 超时）；计划把"提交这条红 spec"标为可选，实际与接线合并成一笔提交，**避免历史里留一个"提交即红"的状态**。接线：功能区两个分支 + `commandDispatch` 两张表 + `App` 的包装与注入 + `GeometryToolbar` 的 prop/按钮。**两条口径差异**：立体几何里 HTML **不禁用**（spec §4 要求点了明确拒绝），与既有"导出 SVG/PNG 在 3D 禁用"不同；**顺带查实 `GeometryToolbar` 没有被任何地方挂载**（真实入口是功能区），改它只为"将来挂载时不用再补"。读数：该 spec 3/3、既有导出回归 11/11、两个单测文件 19/19、全仓 lint 0 error/13 warning、typecheck exit 0、**全库单测 279 文件 / 3195 通过 + 1 todo / 0 失败**（247 s）。
+
+## 2026-10-02 —— 发布 v3.1.0 / D3 存档后删分支 / 修掉本机必红的相机平移 e2e / E3 HTML 导出 spec
+
+> 用户逐项决定的一批。四个已交付，一个停在 spec 评审。下面每个数字都只代表**写它的那一刻**。
+
+### A. 发布 v3.1.0（提交 `33facf1` → tag `v3.1.0` → GitHub Release）
+
+- **用户决定**：把球体这批作为 **v3.1.0** 发布（新能力走 minor）。**版本真值只有两处**：`apps/desktop/src-tauri/tauri.conf.json` 与 `src-tauri/Cargo.toml`（`git grep "3.0.1"` 在 `*.json`/`*.toml` 上只命中这两行；根与 `apps/desktop` 的 `0.1.0` 是私有 workspace 版本，不参与发行）。**顺带纠正我上一轮的口误**：上一次打包不是 3.0.0，产品版本真值早已是 **3.0.1**，本机也已有 3.0.1 的 MSI/NSIS。
+- **打包前专门核实的一步（有真实风险）**：外壳前端来自 `build-check/mathcanvas-current`（`tauri.conf.json` 的 `frontendDist`），**不是** `apps/web/dist`。所以先跑根 `npm run build`（exit 0），再确认那份产物 `index.html` 的时间戳距打包动作**仅 0.3 分钟**、且 `index-*.js` 里同时含「球体」与 `create_sphere`。**不核实这一步就有发一版旧界面的风险。**
+- **`npm --workspace @draw/desktop run bundle` exit 0**：`vite build` 510 modules / 3.65s；Rust release 26.28s；`candle`/`light`(MSI) 与 `makensis`(NSIS) 全部成功，日志确认 `Compiling mathcanvas-desktop v3.1.0`。产物：MSI **6,848,512 B**、NSIS **5,030,195 B**、裸 exe **17,190,400 B**（三件 SHA-256 记在 `docs/release/v3.1.0.md`）。**唯一警告**：`mathcanvas-desktop (lib) generated 1 warning` —— `linker_messages`，非代码告警。
+- **Release 走"先 draft → 传三个资产 → 复核 → 再 `draft=false`"**，避免出现"公开了但只有一半资产"。tag 是**注解 tag**（对象 `d9a92f94`，指向提交 `165e4fb`）。
+- **独立复核（不是只信自己那次写入）**：① 匿名 API `releases/latest` 由 `v3.0` 变为 **`v3.1.0`**、`draft=false`、`assets=3`；② 把三个资产**重新下载**回来算 SHA-256 —— **三件全部 MATCH** 本机哈希。即"Release 上的字节"与"本机打出的字节"是同一份。
+- **免安装裸 exe 启动实测（用户选择"只试这个"）**：`mathcanvas-desktop.exe`（与 Release 同哈希）启动成功 —— 存活 **T+10s 与 T+18s**、真窗口句柄 `3017702`、标题 **`MathCanvas`**、`Responding=True`、工作集 32.6MB。**仅按窗口句柄截图**（不截整屏，避免拍到用户其他窗口），画面是**完整应用界面而非白窗**。这一步是特意加的：Tauri 应用在前端资源没加载时会显示**空白窗口**，"进程活着 + 有窗口"证明不了界面真的渲染了。（截图存临时目录、**未入库** —— 本仓库不提交截图，现有 `*.png` 只有应用图标。）
+- **如实缺口**：**MSI/NSIS 只构建并上传，没有在本机安装过**。本会话身份**非管理员**（实测 `admin: False`）且审批提示被禁用、无法提权；按 Tauri 默认安装模式 NSIS 应为每用户（大概可做）、MSI 应为每机器（大概会因缺权失败）—— 这两条是**基于默认值的预判，未实测**。
+
+### B. D3：远端功能分支**先存档再删**（提交 `074a7db`）
+
+- **删除前查出的事实与文档旧表述相左**：GitHub compare API `compare main...feat/high-school-geometry-interaction` 实查 **`status: diverged`、`ahead_by: 1`、`behind_by: 54`** —— 它**不是**"已全部合并、只剩空壳"，而是有 **1 个提交不在 `main` 里**：`8c67346`（2026-09-30）"docs: 补齐所有进度文档"，**仅动文档**（README、`current-status.md`、`project-progress.md`、一份 spec）。它是合并/打包当天的旧快照，main 上这几份文件此后已被反复重写（**很可能已取代，但没有逐行比对过**，所以不假设内容已覆盖）。另实查**无任何开放 PR**。
+- **顺序刻意如此（删分支不可逆）**：① 建注解 tag **`archive/feat-high-school-geometry-interaction`**（对象 `bb4a5aad`）指向 `8c67346`；② 推送；③ **API 三重确认**（tag ref 存在 / 解引用得 `8c67346` 且与 tip **MATCHES: True** / 该提交可解析）；④ **才**执行 `git push origin --delete`。**删除后复核**：远端只剩 `main`，存档 tag 仍解析到 `8c67346` —— 那份旧快照在远端**依然可达、不会被 GC**。
+- **一条方法论纠正（值得记）**：本轮第一次 `git ls-remote` 被网络 reset 打断（`Recv failure: Connection was reset`），脚本据此打印过 **"MERGED: NO"** —— 那是**失败命令的产物、不是事实**；改用 API 重查才得到上面 `diverged / ahead_by=1` 的结论。**命令失败时的默认输出不能当结论。**
+
+### C. 修掉本机必红的相机平移 e2e（提交 `c01ab86`）
+
+- **症状**：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」在本机**必红**、CI 上时绿时红，使"本机全量 e2e"这条门禁不可信。
+- **根因（读代码得出，不是猜）**：自动取景 `threeSceneCamera.ts` 的 `animateToFit` 在 rAF 里把**整份相机状态（含 `target`）**从旧值插值到拟合值，历时 `FIT_ANIMATION_MS = 250`；而 `data-camera-target` 是从**每帧都在变**的那个 ref 渲染的。用例加完立方体**立刻**读基准 ⇒ 读到**动画中途**的值；拖动发生在动画结束之后 ⇒ 落点是**拟合真值**。**同一场竞态有两个面孔**：
+  - 读得早 → 第 **299** 行 `toBeCloseTo(boundsCentre[0], 1)`（容差 0.05）红，实测 `Expected -5 / Received -4.8`（另一次 `-4.87`）；
+  - 读得不等于停稳 → 第 299–301 行过了、第 **309** 行 `expect(z).toBeCloseTo(startZ, 6)` 红，实测 `Expected 1.98 / Received 2`。
+  这解释了"同一用例两次报**不同断言**、且数值逐次不同"。
+- **顺带排除两个旧怀疑（都用代码）**：① `clampCameraTarget` 是**箱式夹取**（中心 ± `PAN_RANGE_FACTOR(3)` × 半径），够不到那 0.02；② "水平平移不动 z"**确实成立** —— `cameraBasis` 的 `right = (-sin az, cos az, 0)`，第三分量**恒为 0**。⇒ **错在测试的基准值，不在产品**（那 250ms 过渡是有意的体验）。
+- **修法（一处，最小）**：取基准前**等相机停稳** —— 判据是**连续两次读数一致**，**不写死 sleep**、不看动画时长。与同文件既有的 `settledWidth`、以及 `three-orbit-tracks.spec.ts` / `three-intersection-previews.spec.ts` 的 `settleCamera` 同一套口径。
+- **验证**：修前先复现（红）；修后 `--repeat-each=5` → **5/5 通过**（单跑一次不足以证明抖动去掉）。`tsc -p e2e/tsconfig.json` exit 0。
+- **修完后全量 e2e 仍不是全绿**：读数 **178 通过 / 1 失败**，红的是**另一条**（见 D）。所以当时**没有**得出"本机 e2e 全绿"的结论。
+
+### D. `geometry3d-section` 抖动：**主动选择不修**（提交 `931fa50`）
+
+- **按需复现失败**：单独跑（`--workers=1 --repeat-each=3`）3/3 全过；全量 `--workers=6` **179/179 全过**。只在 C 之前那次 `--workers=3` 的全量里见过一次。**不复现就不猜着改。**
+- **假设一（我最初的想法）被代码证伪**：原以为是"投影时取景动画还在跑"。读 `threeSceneCamera.ts:87-97` 后不成立 —— 取景触发条件是**文档 id 变化**（`fittedDocumentRef.current !== fittedId`），**不是每次编辑**；且它调的是 `fitToContent()`（**立即** `setCameraState`），**不是** `animateToFit()`。加立方体**不会**触发取景动画；真正那次取景在更早的"跳转到立体几何"，到 `grabPoint` 时早已结束。
+- **新查出一条代码级可证的脆弱点**：`data-preview-hovering` **只在** `threeScenePreviewHover.ts:106` 的 `updatePreviewHover` 里写入，而它**只由 pointermove 事件驱动**（没有任何 effect 会在其它状态变化时重算）。于是**一次性的合成指针移动天然是竞态的** —— 若那一瞬间命中几何尚未准备好，属性就**永远停在 `"false"`**，`expect` 那 5 秒轮询**也救不回来**（事件已经发生过，不会再来一个）。这与观察到的现象吻合，但**没有复现，所以不称它是已证实的根因**。
+- **为什么不顺手改**：两条可选修法（测试侧反复重发移动 / 产品侧在预览变化时重算悬停）都**无法用"改前红、改后绿"的一次前后对比证明**它修好了那次失败。按本项目纪律，**不拿未经验证的改动冒充修复**。
+- **顺带只记不改的发现**：`cancelFitAnimation()` 只在**副作用清理（卸载）**里被调用（`threeSceneEffect.ts:528`），**用户拖动并不会取消**进行中的自动取景动画 —— 理论上"在 250ms 内开始拖"会被剩下的帧覆盖。**（2026-10-02 已修：见本文件同日「修掉自动取景覆盖用户拖动」一节。）**
+- **正面事实**：修掉 C 之后，本机全量 e2e 在 `--workers=6` 下是 **179/179 全绿** —— 所以"本机 e2e 完全不可信"这个旧结论该收窄为"还有一条**偶发**且未定位的用例"。
+
+### E. E3 HTML 导出：spec 已写并就审（提交 `8353409` / `06fb4d3` / `2b29d7a`）
+
+- **用户决定启动 E3 的 HTML 一半**（`.ggb` 未启动）。按 brainstorming 流程：分类为 **architectural**（新对外产物格式 + 仓库惯例是每个功能配 spec+plan）→ 逐项澄清 → 八段设计获批 → 写 spec。
+- **用户逐项确认的四个决定**：① **自包含静态快照**（单文件、不依赖本应用、不联网、不可交互）；② 第一批覆盖**平面几何 + 工程制图**；③ 平面几何**复用 `exportSvg` 的标准视野（含网格）**，不是"我屏幕上当前这一张"；④ **内嵌 `.mgeo`** 使之兼作可再导入的存档。四条各自的**代价**都写进了 spec（③ 平移缩放后与屏幕不一致；④ 文件变大且文档 JSON 对收件人可见）。
+- **卡在 spec 评审**：brainstorming 的硬门禁要求用户审过才可写实施计划 ⇒ **本批零实现代码**。第 23、24 轮我改用**只读探查**去验 spec 自身的假设，查出 5 处实质问题：
+  - **§9 新增（最要命的一条）**：实测"加一个导出格式要同时改 **8 处生产代码 + 5 处测试**" —— 含功能区命令定义 `ribbonCommands.ts:130`、命令分派 switch、`App.tsx` 包装类型、`GeometryToolbar.tsx` 的 prop 类型、`fileExports.ts` / `exportService.ts` 的两个 `ExportFormat`、以及 **`packages/agent-core/src/tools/interactionTools.ts` 的 Agent 导出联合**。**只改两个类型会做出"菜单里点不到"的功能。** 并**明确写下取舍**：本批**不让 Agent 提议 HTML 导出**（第 8 处保持四个不变）+ 一条测试钉住，防止后人误以为是 bug 顺手"修齐"。
+  - **§4 新增**：实测 `fileExports.ts:95-97` 的分支是 **`workspace === "cad"` 才走工程产出器，否则一律走平面 `exportSvg`** ⇒ **`geometry3d`（立体几何）也落进平面那一支**，而平面导出器**刻意不投影 3D 图元**（`exporters.test.ts:79`：*"planar SVG is not a fake 3D sphere projection"*）。照现状直接做会得到"**导出成功、HTML 里只有一个坐标网格**"——正是本仓库最讨厌的静默半死。已硬性要求立体几何下**明确拒绝**而不是吐空 HTML，并配反向对照。
+  - **§10 三条实现前必须知道的事实**：标题字段叫 **`metadata.name` 不是 `title`**（且 DSL 自带默认值，不必自造）；现成转义函数 `escapeXml` **未 export**、够不着，必须自带（而 §5 硬性要求转义一切文档派生文本）；版本戳走桌面桥 `commands/providers.rs:282` 的 `package_info().version`（**就是 `tauri.conf.json` 的产品版本**，`runtime.rs` 里的 `0.1.0` 是单测夹具），但**浏览器里是 `unknown`**，须如实写。
+- **一处我自己的文档漂移**：连推三版 spec 却忘了同步进度文档（§四 E3 仍写"未启动"），已在提交 `d5decf9` 更正。
+
+### F. 本批门禁读数（只代表当时）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run --maxWorkers=3` | 278 文件 / 3182 项通过 + 1 todo / 0 失败 |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / **13 warning**，既有基线） |
+| `npx playwright test --workers=6` | **179 通过 / 0 失败**（57.6s） |
+| `npx playwright test --workers=3`（C 修复后） | 178 通过 / 1 失败（那一失败即 D 的偶发用例） |
+| `npm run test:rust` | 16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored |
+| `npm run test:perf` | 9/9 通过（`drag/300-frames` 682.5ms ≈ 2.3ms/帧） |
+| CI | #54–#72 期间各次四项全绿（#62 被 `ci.yml` 的 `concurrency: cancel-in-progress: true` 按设计取消，内容被 #63 覆盖） |
+
+### G. 如实缺口（写这条时）
+
+- **HTML 导出只有 spec，没有实现**（等用户审）。
+- **D2 未整项关闭**：MSI/NSIS 未安装实测（非管理员、无法提权）。
+- **`geometry3d-section` 偶发用例未定位**（不复现）。
+- **"正方体内切球"那句被本地规划器当成建模指令**（既有隐患，非本批引入）：把"这个正方体的内切球半径是多少"喂进去，命中的是**既有的「正方体」条目** ⇒ 会去新建一只正方体而不是回答读数问题；与文档早记过的"裸词四面体会命中分析题"同类，**修不修需先定"什么算建模指令、什么算提问"的口径**。**（2026-10-02 已修，口径就是这条：没有建模动词 + 在问读数 ⇒ 不认建模意图，落到"老实问路"。见本文件同日「分析题不再被本地规划器当成建模指令」一节，提交 `8febd38`。）**
+
+
+## 2026-10-01 —— 球体 Task 9（下半）：spec §5 逐行审计，查出一处静默缺口
+
+> spec §5 是一张六行的"必须看到的证据"表。**逐行拿真实文件与测试输出去对**（不是相信文档），这一行的做法换来了一个真缺陷。
+
+### A. 六行结果
+
+| spec §5 的行 | 判定 | 证据 |
+| --- | --- | --- |
+| 文档契约与保存 | ✅ | Task 1 的 DSL 往返、`sphereTransactions.test.ts` 保存/重开、`sphereAction.test.ts` 事务往返、`solid-prism.spec.ts` 的"打开每一只夹具"（15 只） |
+| 解析截面 | ✅ | `sphere.test.ts`（z=6/8/9、非单位法向、尺度容差）+ `sphereSection.test.ts`（精确圆 / 切点 / 空集不留旧环 / 改半径重算） |
+| UI / 撤销 / 场景 | ✅ | `e2e/geometry3d-sphere.spec.ts` 四条：预览不落盘、确认一次提交、属性栏可改 + 一步撤销、可拾取、刷新后 C/r 不变 |
+| 工程图 / 导出与测量 | ⚠️ **查出问题** | 四视图同半径、三件套导出、`4πr²`/`4πr³/3` 都有；但"**来源在属性/画布可读**"这一半不成立 —— 见 B |
+| 不支持项 | ✅（单元层） | `sphereSection.test.ts` 三条（拒绝 + 反向对照 + 防御性重算）；**无 e2e** |
+| 门禁与上传 | ✅ | 全程先红后绿；六条门禁当次复跑并报数 |
+
+### B. 查出的静默缺口（已修）
+
+`apps/web/src/measurementVisuals.ts` 的 `pointPositions` 是一张**硬编码类型名单**（`polyhedron3` / `cube` / `pyramid` / `cylinder` / `cone`），**漏了 `sphere`**：
+
+- 后果：球的面积 / 体积测量 → `sourcePositions` 为空 → `resolveMeasurementVisual` 返回 `null` → **画布上一个字都不画**。
+- **它是静默的**：属性栏照样有数字（那是 `measurements3d` 的事，早就有用例），所以只看属性栏、只看单元用例都发现不了。
+- **这是同一张名单第二次漏配**（此前漏的是 `polyhedron3`）。与"加一种实体要同时改七八张名单"是同一个结构问题 —— 这次轮到**测量标签**那张。
+
+**RED → GREEN**：`measurementVisuals.test.ts` 加一条，修前 `expected null not to be null`、修后 **6/6 通过**。修法是加球分支，落点取**球心**（与圆柱 / 圆锥同一口径）。
+
+### C. 这一条审计本身的价值
+
+Task 9 的三条 bullet 里，前两条（跑门禁、e2e 覆盖）是**确认已经做的事**，第三条（spec 逐行审计）是**唯一能发现"我们以为做了、其实没做"的那一条**。这次它确实发现了：一个不在任何失败用例里、也不在任何 e2e 断点里的静默缺口。
+
+**结论**：以后"逐行审计"应当被当成**独立于测试的活动** —— 测试只能证明"我想到的都对"，审计才能指出"我没想到的"。
+
+### D. 仍未做
+
+- "切点 / 空集 / **刻意的不支持布尔**"在浏览器里只有**单元**判据（没有可读读数可观察）。
+- `docs/feature-catalog.md` 还没按审计结果更新。
+- 发布决策属 **D 类**（等用户决定版本与是否发布）。
+
+## 2026-10-01 —— 球体 Task 9（上半）：全量门禁复跑
+
+> 本批只做**测量**，不改产品代码。计划要求"report counts/warnings/ignored tests, not a generic all green" —— 因此下面每一条都写具体数，包括那个不好看的。
+
+### A. 当次读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run --maxWorkers=3` | **278 文件 / 3178 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0（6 个 workspace + `e2e/` + `scripts/`） |
+| `npm run lint` | exit 0，**0 error / 13 warning**（既有基线警告） |
+| `npx playwright test --workers=3`（**全量 e2e**） | **175 通过 / 1 失败** |
+| `npm run test:rust` | **16 个测试二进制 / 236 通过 / 0 失败 / 3 ignored**，exit 0 |
+| `npm run test:perf` | **9 / 9 通过** |
+
+性能细读：`roundTrip/large-mgeo` 24.8 ms、`dag/local-recompute-400` 0.9 ms（全量 0.5 ms）、`denseIntersections/200x200` 1.4 ms、`drag/300-frames` **682.5 ms（≈2.3 ms/帧**，60 fps 预算 16.7 ms/帧）、校准档 1× ≈6 ms vs 4× ≈16–22 ms（量具灵敏度自证）。
+
+Rust 细读：`proxy` 16、`proxy_server` 16、`repository_package` 31、`run_events` 10、`secrets` 9 通过 + **1 ignored**、`shell_smoke` 9，合计 **236 / 0 / 3 ignored**。
+
+### B. 那条失败：先证伪"是不是我弄坏的"
+
+失败用例：`e2e/geometry3d.spec.ts:277`「pans the 3D view along the camera axes within a bounded range」，断言 `expect(z).toBeCloseTo(startZ, 6)` —— 期望 **1.98** / 实收 **2**。
+
+排查顺序（**没有先假设**）：
+
+1. **先排除并行干扰**：单独跑（`--workers=1`）这一条 —— **照样失败**，所以不是"抢 CPU"那类偶发；
+2. **再回到球体工作之前的提交**：`git checkout 91ac837` 后单独跑同一条 —— **同样失败**（期望 **1.99** / 实收 2），随后回到 `main`；
+3. **看期望值本身稳不稳**：两次跑出来的期望是 **1.98** 和 **1.99** —— 逐次运行会变，说明初始取景在本机不是完全确定的；
+4. **看 CI**：`e2e` 作业在 Linux 上 #52 / #54 / #55 三次都是 success。
+
+**结论**：本机环境敏感的**既有**不稳定用例，**不是本批引入的**。
+
+**但它有后果**：既然它在 `.98 / .99` 之间跳，那么 **"全量 e2e"这条门禁在本机不可信** —— 本机的 e2e 读数不能当放行依据，只有 CI 的 `e2e` 作业能。这条写进了 `current-status.md` §一。
+
+### C. 明确没有做的事（Task 9 剩下的）
+
+- **e2e 覆盖清单逐项对照**：数值创建 / 精确圆 · 切点 · 空集 / 编辑后持久化 / 撤销 / 相机与选择 / CAD 视图与导出 / **刻意的不支持布尔** —— 还没逐条核。
+- **spec §5 逐行审计**：拿真实文件与测试输出对每一行，而不是相信文档。
+- **发布决策**：计划明写"新的桌面 Release 还需要一个匹配版本的安装包 + 安装证据" —— 那属于 **D 类**，等用户决定版本与是否发布。
+
+## 2026-10-01 —— 球体 Task 8：Agent 动作 `solid.create_sphere`（三层一起接）
+
+> 承接 Task 7。手工路径（Task 6）已经能造球，所以按 Task 8 的标题"只有产品路径存在时才发布动作"，这个动作该发布了。
+
+### A. RED
+
+- 新增 `packages/scene-graph/src/actions/sphereAction.test.ts`（5 条）。首次运行 **3/5 红**，诊断码是 `unknown_action` —— 动作还不存在。
+
+### B. GREEN（三层一起改，不搞"某一层先跑在前面"）
+
+| 层 | 文件 | 改动 |
+| --- | --- | --- |
+| 动作 | `scene-graph/src/actions/types.ts`、`actions/index.ts` | `SolidCreateSphereAction` + 进联合；`compileSolidSphereAction` + 分派。球**只落一个图元** |
+| 传输 | `agent-core/src/actionIds.ts`、`actionInputs.ts` | 加 id 与 `case`（只挡畸形；缺字段合法；半径非正按字段路径拒绝） |
+| 登记 | `agent-core/src/actionRegistry.ts`、`capabilities.ts`、`skills/manifest.ts` | 条目（`center`/`radius` 都 `ask_user`，不静默填默认）；球翻成 `available`；技能动作表 + `CAPABILITY_FOR_ACTION` |
+
+`SolidCreateSphereAction` 与其它立体动作最大的不同：**球没有子对象**，所以这里没有 `buildFromPoints` 那一套 —— 文档里就是那只球自己，与手工路径产出**同一种文档**。
+
+### C. 一处自查："为错误的理由通过"（本项目**第五次**）
+
+- "半径非法要拒"与"球心非有限要拒"两条在实现之前**就已经是绿的**：动作未知时同样"不产出操作 + 有诊断"，等于什么都没钉住。
+- 修法：断言诊断码是 **`invalid_sphere`**，而不是任意非空诊断。加上之后它们在实现前是红的。
+
+### D. 闸门确实存在 —— 一处旧表述要更正
+
+`current-status.md` 的"如实缺口"里一直写着：**"登记表承诺 ≠ 校验层实现"这类风险只写在文档里，没有机器挡住。** 这一批证明**动作目录这一层是有闸门的**，而且正是它把我挡下来的：
+
+1. **编译期**：`skills/manifest.ts` 的 `CAPABILITY_FOR_ACTION` 是 `Record<DraftActionIdName, string>` —— 新增动作漏登记**编译不过**（实测 `tsc` 报 `Property '"solid.create_sphere"' is missing in type …`）。
+2. **测试期**：
+   - `actionIds.test.ts` 钉动作总数（27 → 28）；
+   - `capabilities.test.ts` 钉球的状态（`temporarily_unavailable` → `available`）；
+   - `catalog.test.ts` 钉技能清单的**内容哈希** —— 改 `manifest.actionIds` 而不更新 `EXPECTED_HASHES` 就 `hash_mismatch`（实测报 `content hash is 7563c028…, expected 027d20ad…`）；
+   - `actionFieldParity.test.ts` 逐动作跑 `parseActionToolInput`。
+3. **因此那条旧表述该收窄**：它真正适用的范围不是"整张动作登记表"，而是 `section.create` 那类**逐动作的字段覆盖面**（"登记表写了可选字段，`actionInputs` 却没有对应分支"）。已在 `current-status.md` 更正。
+
+### E. 事故与教训（我自己的）
+
+用 PowerShell 改 `actionIds.ts` 时，把替换文本写进**双引号字符串**却用了 `\"` 转义 —— PowerShell 不认 `\"`（它用反引号转义），结果 `"solid.create_prism",` 整行被替换成一个孤立的 `\` 行，`create_prism` 一度从清单里消失。**当场发现并修**（改用 .NET 字面量替换，逐行核对恢复为 `create_template / create_prism / create_sphere / create_tetrahedron / …`）。
+
+**教训**：源码文本编辑不要走 PowerShell 的字符串转义。本轮它一共坑了我三次。
+
+### F. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/scene-graph/src/actions/sphereAction.test.ts` | RED 3/5 红 → 修后 **5 / 5 通过** |
+| `npx vitest run packages/agent-core` | **40 文件 / 521 项通过** |
+| `npx vitest run --maxWorkers=3` | **278 文件 / 3176 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### G. 明确没有做的事
+
+- **Agent 端到端**（真模型跑一轮"画一个半径 5 的球"）没做 —— 计划 Task 8 提到 e2e，本轮只做到三层单元与传输层。
+- Task 9（完整产品门禁、逐条核对 spec §5、发布决策）整块未做。
+- 球布尔交的"不支持"仍然只由 `schema.ts` 那道门禁保证；Agent 侧没有额外声明（spec 说"不声称支持不支持的布尔工具"，这一点目前靠能力登记表里 `intersectionSolid` 那几条）。
+
+## 2026-10-01 —— 球体 Task 7：工程投影与导出
+
+> 承接 Task 6。上一节末尾已经预告过这一处名单（`projectionVisuals.ts` 的 `templateTypes`），本批把它补上。
+
+### A. RED
+
+- 新增 `apps/web/src/sphereProjection.test.ts`（5 条）。首次运行 **4/5 红**，症状 `expected [] to have a length of 1` —— 球**压根没被投影**（名单里没有它）。
+
+### B. GREEN（改了什么，以及为什么这么改）
+
+- `projectionVisuals.ts` 加球分支。判据是球区别于所有多面体的那条性质：**正投影下球的轮廓永远是半径等于球半径的圆，与视线方向无关**。立方体在四个视图里是三个不同的矩形；球是**四个同样大的圆**。
+- **只画轮廓，不投影显示网格的三角形** —— 拿网格去投影会得到几十条多余的线，而且线数会随网格密度漂（spec 明令：网格不是数学来源）。
+- 采样结果仍是既有的 `polyline` 图元（`closed: true`），所以 `DrawingViewport` 与 `engineeringExporters` **一个字都没改**（计划里"仅在共用契约需要变更时才动 exporters"因此不成立），`sourceId` 仍是那个球。
+- 半径与段数复用既有的 `sampleProjectedEllipse`（构造长短半轴都等于球半径的椭圆），于是弦高容差、闭合处不重算 `t = 2π` 这些既有约定全部继承 —— 没有为球另写一套采样。
+
+### C. 一处自查："为错误的理由通过"（本项目**第四次**）
+
+- "隐藏的球不出现"那条在实现之前**就是绿的**：球那时压根不投影，`toHaveLength(0)` 成立得毫无意义。它什么都没钉住。
+- 改成**反向对照**：同一份文档里放一个隐藏的球 + 一个可见的空间点 —— 点必须照常投影、球必须不出现。改法之后它在实现前是红的。
+- 这条已经成了这个项目最稳定的一个模式：**凡是以"某样东西不出现 / 数量为 0"为判据的用例，都必须配一个"另一样东西照样出现"的反向对照**，否则它会在功能缺失时也变绿。
+
+### D. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/sphereProjection.test.ts` | RED 4/5 红 → 修后 **5 / 5 通过** |
+| `npx playwright test e2e/engineering-drawing.spec.ts` | **5 / 5 通过**（新增"球的四个视图各一条轮廓 + 三件套导出"） |
+| `npx vitest run --maxWorkers=3` | **277 文件 / 3168 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+新增夹具 `e2e/fixtures/cad-sphere.mgeo`（球心 (1,2,3)、半径 5），与 `cad-dimension.mgeo` 同一份格式。
+
+### E. 如实说明：新 e2e 的 RED **没有**被独立观察到
+
+- 我观察到的是**单元**用例的 RED（`expected [] to have a length of 1`）。
+- e2e 断言的是 DOM 上的 `[data-source-id="sphere-1"]`，而那个属性只可能由投影产生 —— 所以两者走同一条代码路径，**"它在修改前必红"是推理，不是实测**。这条差别写在这里，免得被读成"变异验证过"。
+
+### F. 明确没有做的事
+
+- Task 8–9 全部未做（Agent 创建球要三层一起改、完整产品门禁）。
+- 导出只验到"四个视图各有轮廓 + 文件扩展名正确"；**没有**去解析 SVG / DXF / PDF 的内容逐字核对那条圆（半径与视图间一致性由单元用例覆盖）。
+- "无密集可选中经纬线"与"相切那一刀的点标记真的画出来"仍然只有单元判据。
+
+## 2026-10-01 —— 球体 Task 6（上半）：从「常用立体」手工造一个球
+
+> 承接 Task 5。此前球能画、能选、能切，却**没有任何界面入口能造出一个球** —— 上一批的浏览器验收甚至得先建立方体、再把草稿图元偷换成球。
+
+### A. RED（成因是"球掉进了棱锥分支"）
+
+- 新增 `apps/web/src/spatialSphereWizard.test.ts`（7 条）。首次运行 **5/7 红**：
+  - `expected { kind: 'pyramid', …(2) } to deeply equal { kind: 'sphere', …(2) }` —— 球预设落到了函数末尾的棱锥分支；
+  - `radius=0: expected false to be true` —— 半径压根没被单独校验；
+  - 三条 `TypeError: Cannot read properties of undefined (reading 'length')` —— 棱锥分支读 `input.base`，而球输入没有这个字段。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `spatialSolidWizardModel.ts` | `SolidPreset` 加 `"sphere"`；草稿加 `radius`（球心沿用 `origin`）；`solidWizardInput` **球先判**并单独校验，报错点名"球" |
+| `spatialSolidCommands.ts` | `TeachingSolidInput` 加球；`buildTeachingSolid` 球分支只落**一个**图元，标签 `球体 N` |
+| `components/SpatialSolidWizard.tsx` | 预设列表六 → **七**；球只渲染**球心 + 半径** |
+
+**为什么要"球先判"**：共用那套尺寸校验会让球平白背上 `width/depth/height` 的合法性约束，报错还会与棱锥那条混成一句看不出所以然的话。
+
+### C. 一处自查："为错误的理由通过"（本项目第三次踩到同一个坑）
+
+- "半径非法要拒"与"球心非有限要拒"两条，在实现之前**就已经是绿的** —— 球那时走棱锥分支，而棱锥分支同样会拒 0 / NaN。它们什么都没钉住。
+- 修法：断言**报错文案点名"球"**（`toMatch(/球/)`）。加上之后，它们在实现前是红的。
+
+### D. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/spatialSphereWizard.test.ts` | RED 5/7 红 → 修后 **7/7 通过** |
+| `npx vitest run apps/web/src/components/SpatialSolidWizard.test.tsx` | **6/6 通过**（"六个"更新为**七个**并点名"球体"，另加"球只有球心 + 半径"一条） |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **2/2 通过**（新增"从「常用立体」造球"） |
+| `npx vitest run --maxWorkers=3` | **276 文件 / 3163 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+**顺带修掉一处自己引入的类型错误**：新测试里写了 `createEmptyDocument("geometry")`，而 `Workspace` 没有这个名字（合法值只有 `calculus` / `conics` / `cad` / `geometry3d`）—— 单测不报、`tsc` 当场报。这又一次说明"单测全绿"替不了类型检查。
+
+**浏览器验收这条守的是"预览与提交分开"**：参数改完但没点确认之前文档里**不该有球**；画面确实有东西（那句"这里什么都没有"的提示必须消失）；半径填 0 时如实报原因且文档没动；确认后恰好一个球、球心 / 半径逐值相等。
+
+### E. 下半：属性栏编辑 + 截面按钮接受球
+
+- **属性栏编辑球心 / 半径**：`inspectorLabels.ts` 的 `SolidPrimitive` 与 `inspectorModel.ts` 的 `selectedSolid` 名单加入 `"sphere"`；`PropertiesBar.tsx` 加球的分支（只有**球心 + 半径 3D**），并给"朝向"那块加 `selectedSolid.type !== "sphere"` 守卫 —— **球没有 `rotation` 字段**，不加守卫 `tsc` 直接报错。
+  - **RED**：e2e `expect(locator).toHaveValue("5")` 报 `element(s) not found`（球的属性面板里没有"半径 3D"）。
+- **工具栏「创建截面」对球可用**：`solidCommands.ts` 的 `solidTypes` 加入 `"sphere"`（它同时管着按钮的 `disabled` 与命令的守卫）。
+- **还有一张更深的名单（跑 e2e 才暴露）**：`packages/dsl/src/schema.ts` 里**另有一份** `solidTypes`，`section` 的校验写着"来源必须是实体"。只改 UI 侧的话，点击后会被**文档校验层**挡掉，症状是"按钮可点，但什么都没发生"（`data-section-count` 停在 0）——**单元测试全绿**，因为是端到端才走到那条校验。
+- **反向验证（很重要）**：`schema.ts` 这张表同时被布尔交那四处使用。放开"球可当截面来源"之后，"**球不能参与布尔交**"必须仍然成立 —— 那四处检查在查这张表**之前**先查 `hasSphereSource`。全库跑过，`sphereSection.test.ts` 里那条"拒绝创建含球的 intersectionSolid"仍绿。
+
+### F. 结构性发现：加一种实体要改七八张硬编码名单
+
+球这一路踩过的（**每一处漏掉都不报错，只是那条功能静默失效**）：
+
+| 名单 | 漏掉的后果 |
+| --- | --- |
+| `visibleSolids`（threePrimitives） | 球不进场景 —— 画布上什么都没有 |
+| `pickKind`（threePicking） | 看得见、**选不中** |
+| `hasGeometry`（threeScene） | 场景里画着球，却压着"这里什么都没有"的提示（**视觉验收才抓到**） |
+| `schema.ts` 的 `solidTypes` | 截面被**文档校验层**挡掉：按钮可点、什么都没发生 |
+| `solidCommands.ts` 的 `solidTypes` | 按钮直接 `disabled` |
+| `inspectorModel` + `inspectorLabels` | 属性栏不认识球，改不了球心 / 半径 |
+| `projectionVisuals.ts` 的 `templateTypes` | **还没改** —— Task 7 的工程投影会在这里失效 |
+
+值得记的原因：这些名单之间没有任何一致性检查，某个实体类型"是不是完整接上了"目前**只能靠人肉盘点**（或者靠某次端到端验证刚好走到那条路径）。
+
+### G. 本轮实测读数（下半）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **4 / 4 通过**（新增"属性栏编辑"与"工具栏切一刀"两条） |
+| `npx vitest run --maxWorkers=3` | **276 文件 / 3163 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### H. 明确没有做的事
+
+- Task 7–9 全部未做（工程投影与导出、Agent 创建、完整产品门禁）。
+- "切点可见"仍然只有**单元**判据（`createSectionMesh` 对只有一个点的截面画标记）＋ 端到端只验到"过球心那一刀给出精确圆"；**没有**在浏览器里把刀口挪到相切位置再确认那一点真的画出来了。
+- "无密集可选中经纬线"同样只有单元判据。
+
+## 2026-10-01 —— 球体 Task 5（上半）：画的球与"不许出现经纬网"
+
+> 承接 Task 4。
+
+### A. RED（症状逐条对上"球走了圆锥那条分支"）
+
+- 新增 `apps/web/src/threeSphere.test.ts`（5 条）。首次运行 **4/5 全红**：
+  - `expected [ LineSegments{ …(37) } ] to have a length of +0 but got 1` —— `EdgesGeometry(SphereGeometry)` 把球面拆成了一张经纬网；
+  - 打开隐藏边后变成 2 条；
+  - `expected [ 1, NaN, 3 ] to deeply equal [ 1, 2, 3 ]` —— 球没有 `height`，而圆锥分支要写 `center.y + height / 2`，`undefined / 2` 直接是 NaN。这条最直观：**位置都算错了**；
+  - `visibleSolids` 返回 `[]` —— 球的类型压根不在过滤列表里。
+- 换句话说，RED 的成因是"球根本没进渲染层"，而不是断言写得太严。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `apps/web/src/threePrimitives.ts` | `SolidPrimitive` 加入 `SpherePrimitive`；`visibleSolids` 加入 `"sphere"`；`createSolidMesh` 加球分支（`SphereGeometry(radius, 48, 32)`，位置=球心）；`createSolidGroup` 对球跳过 `solidOutline` 与 `hiddenEdgeOverlay` |
+| `apps/web/src/threePicking.ts` | `pickKind` 的实体列表加入 `"sphere"`（否则看得见选不中） |
+
+两个设计点值得留在归档里：
+
+1. **球不画线，而且理由不是"省事"**：`solidOutline` / `hiddenEdgeOverlay` 都是 `EdgesGeometry`，套在球面上会拆出一整张经纬网 —— 那些"棱"看得见、也**选得中**，用户点球面会选到一条虚构的边，而 spec 明确不要"密集的可选中经纬线"。球真正的轮廓是**视角相关**的屏幕空间剪影，不是网格边；所以这里如实不加，而不是加一圈"看着像轮廓"的假边。
+2. **网格密度只是显示缓存**：文档里只有球心与半径，改 48×32 不会动 `.mgeo` 一个字节 —— 用例里把"图元上只有 `center/id/radius/type` 四个键"也钉住了，防止以后有人把网格顶点塞进图元。
+
+### C. 一处自查："为错误的理由通过"（本项目第二次踩到同一个坑）
+
+- 第 5 条"隐藏的球不进场景"在实现之前**就是绿的**：`visibleSolids` 当时压根不认球，返回空数组，碰巧满足 `toHaveLength(0)` —— 它什么都没钉住。
+- 改成**反向对照**：一份文档里同时放一个可见球与一个隐藏球，必须只留下可见那一个。改法之后它在实现前是红的。
+
+### D. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/threeSphere.test.ts` | RED 4/5 红 → 修后 **5/5 通过** |
+| `npx vitest run --maxWorkers=3`（全库，改了核心联合类型 `SolidPrimitive`） | **275 文件 / 3152 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning** |
+
+### E. 下半：相切标记 + 浏览器实机验收（同一批的后续）
+
+- **相切的那一个点现在画得出来**（`createSectionMesh`）：此前第一行是 `points.length < 2 → return null`，于是**"相切"与"根本没切到"在画布上长得一模一样**（两个都是空的）。新增 `points.length === 1` 分支画一个切点标记（与交点图元同一套 `SphereGeometry(1,16,12)` + 手柄半径的尺寸语言），`visualRole = "section-tangent-point"`；空集仍 `null`。
+  - **RED**：`expected null not to be null`。**反向对照**两条一开始就是绿的（空集仍 `null`、圆截面路径没被这条新分支抢走）。
+- **自动取景查实无需改动**：`threeCamera.ts` 的取景从**场景对象**算包围盒（`contentRadiusExcluding`），球有了真网格就自动纳入。这是"查实后确认不需要改"，不是漏做。
+- **`selectionCommands.ts` 的实体名单刻意不加球**（已写注释）：那句引导语是"点击棱或面默认选中整个实体；按住 Alt 点击可单独选中棱或面"，而**球既没有棱也没有面** —— 弹这句是误导。
+- **新增** `e2e/geometry3d-sphere.spec.ts`（1 条）。球还没有手工入口（Task 6），所以用例借应用自己的"添加立方体"落一份**合法**草稿、再把 `primitives` 换成球（文档其余字段由应用保证，不在测试里手搓）。断言链：刷新后 C/r 逐值不变 → 对象树里出现"球体 1" → **刚刷新时 `.inspector-quick-actions` 不可见、在球心投影处点一下之后必须可见** → 轨道方位角确实变了而 C/r 没变。
+  - 中间那条是**渲染唯一的实机证据**：前面几条都只读文档，球一个像素都不画它们照样绿；拾取这条真链路一断就红。
+  - **变异检查**：从 `visibleSolids` 拿掉 `"sphere"` → 用例当场红在 `expect(locator).toBeVisible()`。证明它守着"球被画出来"。
+  - **两处自查**：① 初版里我写了拿方位角**自己和自己比**的断言（永远不可能满足、只会超时），等于把"相机真的转了"这条判据写废了 —— 已改成先记下拖动前的值再比；② 单次 `mouse.move` 没触发旋转，改用既有 spec 的 `{ steps: 8 }`。
+
+### F. 本轮实测读数（下半）
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run apps/web/src/threeSphere.test.ts` | 相切标记 RED（`expected null not to be null`）→ 修后 **8 / 8 通过** |
+| `npx playwright test e2e/geometry3d-sphere.spec.ts` | **1 / 1 通过**；变异（拿掉 `"sphere"`）→ 红 |
+| `npx vitest run --maxWorkers=3` | **275 文件 / 3155 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` / `npm run lint` | exit 0 / exit 0（0 error / 13 warning） |
+
+### G. 视觉验收抓到的一处真缺陷（已修）
+
+计划 Task 5 的验收清单里有一条 **"visually inspect an actual frame"**。照做：用一个一次性探针把种子球那一帧截下来人工看。**这一眼看出了单元用例全绿也漏掉的东西。**
+
+- **看到的**：球画得对 —— 剪影干净、表面有明暗，**一条经纬网都没有**（正是 Task 5 要的）。但画布**中间压着一句"添加点、线或面开始探索三维空间。"** —— 场景里明明有球，应用却说这里是空的。
+- **根因**：`threeScene.tsx` 的 `hasGeometry` 是一张**硬编码类型名单**（`point3` / `line3` / … / `cube` / `pyramid` / `cylinder` / `cone`），**漏了 `sphere`** —— 一份只含球的文档被判成"空图纸"，于是空图纸提示盖在球上。这与 `visibleSolids` 是同一类漏配：**同一个判断散在多张名单里**，加一种实体就要记得改好几处（本轮已经改了三处：`visibleSolids`、`pickKind`、`hasGeometry`）。
+- **为什么单元用例抓不到**：`hasGeometry` 是组件里的局部常量，不导出、也不经过任何纯函数层，只有真渲染那一帧才看得见。**这条唯一的判据就是看一眼截图** —— 也正是它让这条缺陷没被"275 文件全绿"掩盖过去。
+- **修法**：名单加入 `"sphere"`，并把这段成因写进代码注释（免得下次又只改名单不改注释）。**回归**钉在 `e2e/geometry3d-sphere.spec.ts`：断言那句空图纸提示 `toHaveCount(0)`。
+- **探针已删**（`e2e/tmp-sphere-shot.spec.ts` 与它产出的 PNG 都不留在仓库里）。
+
+> 顺带记两个探针自己的坑，免得下次重踩：① `locator.screenshot()` 会等元素"稳定"，而 WebGL 画布一直在重画 —— 等不到，超时；改用整页截图 + `clip` 才对。② 探针最初无条件 `localStorage.clear()`，而 `addInitScript` **每次导航都会重跑**，于是 `page.reload()` 把自己刚种下的球抹掉了 —— 这个坑本项目早就在 `high-school-geometry-tasks.spec.ts` 里写过，我还是踩了一次。
+
+### H. 明确没有做的事（Task 5 剩下的两条判据）
+
+- **经界面**创建球并切一刀来验"切点可见"：球的截面按钮是 Task 4 的尾巴、手工入口是 Task 6，两条路都还没通。
+- "没有密集可选中经纬线"只有**单元**判据（`threeSphere.test.ts` 断言组里一条 `LineSegments` 都没有）；浏览器里没有可读的读数能观察它。
+
+## 2026-10-01 —— 球体 Task 4（上半）：球的解析截面接进 `SectionPrimitive`
+
+> 承接 Task 3。
+
+### A. RED（起点与原因）
+
+- 新增 `packages/scene-graph/src/sphereSection.test.ts`（7 条）。首次运行 **7/7 全红**，失败原因逐条对上"球还没接进截面层"：
+  - `expected undefined to be 'circle'`（`section.exact` 不存在 —— `analyticSectionBoundary` 不认球）
+  - `expected 0 to be greater than or equal to 3`（`points` 为空，没有显示缓存）
+  - `expected 'insufficient-data' to be 'point'` / `... to be 'none'`（落进兜底分支 line 51 那句"截面来源不是可剖切的实体"）
+  - `expected null not to be null`（`sectionPlaneThroughSource` 对球返回 null，因为它按顶点算包围盒中心，而球没有顶点）
+- 换句话说，RED 的成因是**一条没接上的线**，不是断言写得太严。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `packages/scene-graph/src/sectionRecompute.ts` | `analyticSectionBoundary` 认球（走 `spherePlaneSection3`，**不**走二次曲面矩阵 —— 球没有 `bounds`，`sectionQuadric3` 对它直接回退）；`recomputeSection` 加球分支：圆 / 切点 / 空集三结局 + 显示缓存采样 |
+| `packages/scene-graph/src/solidGeometry.ts` | `sectionPlaneThroughSource` 对球返回**过球心**的水平面（`constant = -center.z`） |
+
+两个设计点值得留在归档里：
+
+1. **切点要可见**，这与多面体那条路径**刻意不同**（那边相切时 `visible: result.status !== "point"`，把截面藏起来）。理由：多边形切在一点上确实没有可画的边界；而球相切是 spec §3 点名要"画布上有可见点标记"的一种正常结局。
+2. **显示缓存与真几何分开**：`section.points/loops` 是 spec §3 说的"可再生显示缓存"，由 `conic3PointAt` 采样解析圆得到（48 段，与圆柱默认分段同一视觉密度）；真几何在 `section.exact`。文件里写明**不许**拿这 48 个点算面积 / 弦长冒充精确圆。"源 + 平面 → 解析边界"这条映射仍只在 `analyticSectionBoundary` 一处。
+
+### C. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/scene-graph/src/sphereSection.test.ts` | RED 7/7 全红 → 修后 **7/7 通过** |
+| `npx vitest run --maxWorkers=3`（全库，改的是所有截面共用的 `recomputeSection`） | **274 文件 / 3147 项通过 + 1 todo / 0 失败**（布尔门禁那 3 条加上之后的最终读数；接进截面时为 3144） |
+| 点名的那组截面 / 交测试（16 个文件） | **163 / 163 通过** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning** |
+
+**插曲（如实记）**：第一次 `npm run typecheck` 是 **exit 2** —— 新测试把 `PrimitiveSpec` 从 `@draw/geometry-kernel` 导入，而该类型属于 `@draw/dsl`。麻烦的地方在于**当时整套单测是绿的**：那是个 `import type`，运行时被擦除，而 vitest 不做类型检查 —— 也就是说"单测全绿"完全掩盖了这个错误。改对之后 typecheck exit 0，并且**按纪律重跑了整套单测**（读数同上），没有拿"改动只是类型层面的"当借口跳过验证。
+
+### D. 布尔门禁（同一批的下半）
+
+- `packages/dsl/src/schema.ts` 新增：四种布尔图元（`intersectionLine` / `intersectionSolid` / `intersectionFace` / `intersectionPoint3`）的来源里出现球时，报一条**点名球**的 `unsupported` 诊断。四处共用同一个 helper，判断只写一份。
+- **要修掉的东西是什么**：球**本来就是实体**。让它掉进下面那句 `sources must be solids`，用户看到的是"需要实体"、而他手里给的正是实体 —— 那句话对球既没错也没**用**。改前实测的确就是这句（新用例的 RED 原话）。
+- **反向对照**：另加一条"两个立方体照样放行"的用例。少了它，"一律拒绝球（乃至一律拒绝一切）"也能让拒绝那两条变绿，门禁就变成了一句空话。
+- **防御性重算**：旧文档里已经缓存下来的球交集，重算仍如实退化为 `insufficient-data` / `visible:false` / 空顶点、**不伪造多面体** —— 这条在改动之前就成立（`recomputeIntersectionSolid` 的 `!outcome.ok` 分支），本批把它**钉进用例**，免得以后被顺手改掉。
+- **自查出的测试 API 误用**：`recomputeDerivedObjects` 返回的是 `GeometryDocument` 本身，不是 `{ document }`；RED 时报的是 `Cannot read properties of undefined (reading 'primitives')`。
+
+### E. 明确没有做的事（Task 4 剩下的）
+
+- `apps/web/src/solidCommands.ts` 的截面按钮"选中球就能切"这一步没做；球截面的 e2e 也没做。
+- `deletion.ts` **未改** —— 球的删除沿用既有语义。全库（含 `deletion-cascade.test.ts`）0 失败，说明没有连带破坏，但这不等于"球的删除级联已被专门验证过"。
+
+## 2026-10-01 —— 球体 Task 3：场景事务与数值测量
+
+> 承接上一节的 Task 2。
+
+### A. RED（失败原因如实记录）
+
+- 新增 `packages/scene-graph/src/sphereTransactions.test.ts`（7 条）：创建、改半径、改球心（含"部分补丁是合并语义"）、非法半径/球心原子拒绝、平移、保存往返。首次运行 **3 通过 / 4 失败**。
+- 新增 `packages/geometry-kernel/src/sphereMeasurements.test.ts`（4 条）：面积 `4πr²`、体积 `4πr³/3`、均 `exact-input`、按 r³ 缩放、Map 与数组两种入参。首次运行即通过（测量分支是本批新写的，RED 由"球走不到任何分支 → `insufficient-data`"这一层先验证过思路）。
+- 4 条失败的**真实原因**（不是断言写错）：`apply.ts` 的 `updatePrimitive` 先过 `EDITABLE_GEOMETRY_TYPES` 白名单、`translatePrimitive3` 先过 `isFreeDraggable3`，**球两道都不在名单里**，于是 `changed=false, error:"object is not editable"` / `"object is not draggable"`。第一次只改了 `apply.ts` 里的球分支，因此仍然红 —— 这一步本身就是"改对了地方但没过门"的现场。
+
+### B. GREEN（改了什么）
+
+| 文件 | 改动 |
+| --- | --- |
+| `packages/scene-graph/src/transforms.ts` | `translatePrimitive3` 加球分支（平移球心、半径不变）；`EDITABLE_GEOMETRY_TYPES` 与 `isFreeDraggable3` 加入 `"sphere"` |
+| `packages/scene-graph/src/patches.ts` | `center3Types` / `radiusTypes` 加入 `"sphere"`，文案同步为 "only cylinders, cones, spheres and circle tracks support …"（核对过：没有测试钉旧文案） |
+| `packages/scene-graph/src/apply.ts` | `updatePrimitive` 加球分支：只有 `center3` / `radius3`，**没有** `segments` / 朝向 |
+| `packages/geometry-kernel/src/measurements3d.ts` | 球面积 `4πr²`、体积 `4πr³/3`，均 `exact-input` |
+
+### C. 本轮实测读数
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run` 三个球测试文件 | **24 / 24 通过**（13 + 4 + 7） |
+| `npx vitest run --maxWorkers=3`（全库，因动了共享白名单） | **272 文件 / 3134 项通过 + 1 todo / 0 失败** |
+| `npm run typecheck` | exit 0 |
+| `npm run lint` | exit 0，**0 error / 13 warning**（与既有基线一致） |
+
+> 读全库输出时有一处**容易误读**的地方记下来：`apps/web` 的夹具回归会打印 `section-after-solid #1 → failed: no section was created` 这类**逐题报告**，而它所在的那个测试文件本身是 ✓ 通过的（那是评测脚注，不是断言失败）。最终汇总 "272 passed / 0 failed" 才作准。
+
+### D. 一处自查并加固："为错误的理由通过"
+
+- `sphereTransactions.test.ts` 里"非法半径整笔拒绝"两条，在实现之前**就已经是绿的** —— 因为当时球压根不支持改半径，`commitPatch` 也会返回 `changed=false`。也就是说这两条**什么都没钉住**。
+- 修法：加断言 `expect(rejected.error).toMatch(/radius must be positive/)`，把**拒绝的理由**钉住（"半径本身不合法" vs "这个类型不支持半径"）。加上之后，它们在实现前是红的。
+
+### E. 明确没有做的事
+
+- Task 4–9 一条都没动：球**还没有** `SectionPrimitive` 的截圆、没有 3D 网格与拾取、没有工程投影、没有手工/预览入口，Agent 仍 `temporarily_unavailable`。
+- `sectionRecompute` / `solidGeometry` / `deletion` 未改：球现在既不能被切、也还没接进渲染，所以那些路径保持原样。
+- Task 3 的方框**等 CI 四项全绿之后再勾**。**已完成**：`44353ad` 推送后核对远端 SHA = 本地，CI run `36964580061` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**。勾选时补了两件事：① 跑齐 Task 3 点名的四个既有聚焦文件（`scene-store` / `patches` / `recomputeConsistency` / `measurements3d`）= **126/126**，用来确认**没有回归**（本 Task 的 RED 来自新增的三个聚焦文件，不是靠改既有文件制造红）；② 补上原本缺的**撤销/重做**覆盖 `apps/web/src/sphereHistory.test.ts`（3 条：改半径=一步撤销、撤销后球仍在、**被拒绝的编辑不压历史**）。加上之后球用例共 **27/27**。
+- **一处范围说明（写在计划里，免得后来人以为漏了）**：Task 3 原清单里的「source section recompute」**不在本 Task 交付** —— 球当时还不是 `SectionPrimitive` 的来源，该子项由 **Task 4** 的 "edit sphere radius and re-evaluate both cached points and exact coefficients" 覆盖。
+
+## 2026-10-01 —— 球体 Task 2：球-平面精确数学与退化（内核 `spherePlaneSection3`）
+
+> 承接 [Task 1 文档契约](#2026-10-01--球体-task-1-文档契约ca03ed5-已推送ci-全绿)。按[九块计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)的 Task 2 执行：**先 RED、再最小实现、跑聚焦测试与类型检查、记文档、提交推送并核对 SHA，CI 四项全绿之后才勾方框**。
+
+### A. RED（起点与失败原因都记下来，避免"测试环境坏了"冒充 RED）
+
+- 新建 `packages/geometry-kernel/src/sphere.test.ts` 后先跑：`Failed to resolve import "./sphere" from "packages/geometry-kernel/src/sphere.test.ts". Does the file exist?` —— **0 test collected**。
+- 这正是这一片该有的 RED：缺的是被测量的模块本身，不是夹具、不是路径、不是环境。所以后面 GREEN 的 13/13 才有意义。
+
+### B. GREEN（实现 + 判据）
+
+- 新增 `packages/geometry-kernel/src/sphere.ts`：
+  - `spherePlaneSection3(sphere, plane)`：`n̂ = n/|n|`、有符号距离 `d = (n·C + constant)/|n|`、交圆圆心 `C − d·n̂`、半径 `√(r² − d²)`。结局 `circle` / `point` / `empty`；非法输入是带 `code` 的 `invalid`（`invalid_sphere` / `invalid_plane`）。
+  - 圆分支给出 `conic`（复用 `circleConic3`）+ `loops`：球**无端面**，整条交圆就是一段完整参数域 `[0, 2π]`，不需要 `section-quadric.ts` 那套端面弦裁剪。两处的对照写在了各自文件头。
+  - 切点分支刻意**不**返回 `√(r²−d²)` 算出的极扁圆 —— 那个数在 `|d| ≈ r` 区间里是噪声，报出去等于让"看着像圆的圆"冒充精确几何。
+- 从包桶 `packages/geometry-kernel/src/index.ts` 导出（`export * from "./sphere"`，紧挨 `./section-quadric`）。
+- **两条判据是本片的实质**，都写成了断言而不是口头约定：
+  1. **交圆上的点真的落在球面上**：对 `circle` 分支按 16 等分采样 `conic3PointAt`，逐点回代 `|X − C|² − r²` 断言 `< 1e-9`。垂直截（半径 4）与斜截（法向 `(1,1,1)`、半径 3）各查一遍。"坐标看着是整数"不算证据。
+  2. **退化容差与模型尺度同源**：容差取 `r · 1e-9` 这个**相对**量。用例一对反向钉子 —— 半径 `1e-6` 的球、平面距离 `1e-6·(1+1e-6)`（绝对间隙 `1e-12`，相对间隙 `1e-6`）必须判**空集**；半径 `1e6` 的球、距离 `1e6·(1+1e-12)`（绝对间隙 `1e-6`，相对间隙 `1e-12`）必须判**相切**。绝对阈值会在这两处各错一次。
+
+### C. 本轮实测读数与变异检查
+
+| 命令 | 当次结果 |
+| --- | --- |
+| `npx vitest run packages/geometry-kernel/src/sphere.test.ts` | **13 / 13 通过** |
+| 同上 + `quadrics.test.ts` + `section-quadric.test.ts` | **3 文件 35 / 35 通过**（确认没碰坏既有圆锥曲线分类与有限实体裁剪） |
+| `npx tsc -p packages/geometry-kernel/tsconfig.json --noEmit` | exit 0 |
+| `npx eslint` 三个改动文件 | exit 0 |
+| **变异检查**：`tolerance = radius * RELATIVE_TOLERANCE` → 绝对量 | **恰好 2 条尺度用例变红**（`calls a 1e-12 absolute gap on a 1e-6 sphere a real gap` / `calls a 1e-6 absolute gap on a 1e6 sphere numerical noise`），其余 11 条不动；探针已 `git grep MUTATION-PROBE` 复核无残留 |
+
+### D. 有意偏离计划原文一处（写下来免得被当笔误）
+
+- 计划 Task 2 的接口行把"不相交"拼作 `kind:"none"`；内核实现用 **`"empty"`**。
+- 理由：`Conic3Kind`（`"circle" | "ellipse" | "parabola" | "hyperbola" | "line" | "lines" | "point" | "empty" | "insufficient-data"`）已经是内核的**既有**枚举，也是 `section.exact.kind` 的类型；`"none"` 是 DSL `Section3Classification` 的**产品层**拼法。同一个概念在内核里再起一个同义名，正是这个项目已经吃过亏的"同一个判断写了两遍"。
+- 映射放在 Task 4 的 `sectionRecompute` 一层做：`empty` → `classification: "none"` / `visible=false`（见 spec §3）。
+
+### E. 明确没有做的事
+
+- Task 3–9 一条都没动：截圆还没接进 `SectionPrimitive`、球还没有 3D 网格与拾取、没有工程投影、没有手工/预览入口、Agent 仍 `temporarily_unavailable`。
+- `sectionQuadric3` **没有**被改成走球体：球没有 `bounds`，该函数仍如实返回 `null` 让调用方回退既有路径 —— 本批不动它，免得顺带改变圆柱/圆锥的行为。
+- Task 2 的方框**等 CI 四项全绿之后再勾**（与 Task 1 同一套纪律）。**已完成**：`22bd7a2` 推送后核对远端 SHA = 本地，CI run `36963752920` 的 `checks` / `build` / `rust` / `e2e` **四项全部 success**，随后才勾上 Task 2 的四个方框，并把计划里"不相交"的拼法由 `"none"` 更正为 `"empty"`（附理由），免得计划与代码互相打架。
+
+## 2026-10-01 —— 球体 Task 1 文档契约（`ca03ed5` 已推送，CI 全绿）
+
+- RED：`schema.test.ts` 中合法球心/半径被报 `invalid primitive type: sphere`，坏半径得不到字段诊断；`codec.test.ts` 导出有效球被拒。Agent 能力表缺类型键、导出 CSV 将整个 `sphere` 原始对象塞进数据列，这两处在新断言下也抓红。
+- GREEN：`SpherePrimitive` 保存 `{center,radius}`、校验三个有限坐标与严格正半径；`decodeMgeo(encodeMgeo(...))` 保留 id/标签/样式，零半径文件导入明确报错。运行时类型列表 42→43，Agent 能力状态 **`temporarily_unavailable`**（没有 `solid.create_sphere` handler，不假装可用），检查器名字/默认色登记；平面 SVG 不虚构 3D 球，CSV 数据列只记真实球心/半径。没有放行球体截面来源。
+- 定向 schema/codec **73/73**、capability/exporter 目标回归通过；全库 `npm.cmd test -- --maxWorkers=3` **269 文件 / 3110 项通过 + 1 todo**、全量 Playwright **171/171**、typecheck exit 0、lint 0 error / 13 条既有 warning。**提交 `ca03ed5` 已推送并以 `git ls-remote` 核对 SHA；GitHub CI run `36908959733` 的 checks/build/rust/e2e 四作业全部成功，Task 1 方可勾选。README、当前状态、功能目录、Agent/高中几何专题和新/旧实施计划已同步；截交/渲染/向导/投影仍未做。**
+
+## 2026-10-01 —— 球体与球截面独立方案立档（仅设计，不冒充功能）
+
+- 用户此前决定启动球体与球截面，原实施计划明确要求独立方案。核对 `packages/dsl/src/types.ts` / `schema.ts`、圆柱/圆锥 `sectionQuadric3`、`sectionRecompute`、Three 场景、实体向导和工程投影后，编写 [解析球体设计](superpowers/specs/2026-10-01-sphere-and-sections-design.md) 与 [逐块实施计划](superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md)。
+- 选择 `sphere` 独立持久解析图元：球心/正半径是真源，Three 显示网格不进 `.mgeo`；球∩平面给精确圆 / 切点 / 空集，球-球/球-多面体布尔交集明确拒绝而不是拿显示三角网格计算。正交工程图为圆轮廓，旧文档不迁移；四点构造和点驱动半径不在原 S5 验收内，未做的入口不伪装可用。
+- 实施计划分 DSL/codec、纯内核、事务/测量、解析截面、3D 画布、向导/属性、CAD 导出、Agent 动作与产品门禁；每块仍需真实 RED→GREEN、进度更新、提交推送与 CI 核对。**此批没有球体生产代码和球体自动化通过数，也没有发行包；当前状态仍列在 E 类。**
+
+## 2026-10-01 —— 发布渠道/产物一致性核查（尚未发布新版）
+
+- GitHub Releases API 当次返回最新公开 **v3.0**（exe/MSI/NSIS 三个资产），其次 v0.2.0 / v0.1.0；`v3.0.1` 只有 tag（tag 对应 `0232b0e`）和 `docs/release/v3.0.1.md` 的当时打包记录，**不存在同名公开 Release**。截至此核查 `main` 在 v3.0.1 之后还有功能修复，不能把旧 tag 或构建时间较早的 exe 贴成最新源码。
+- 本机 `apps/desktop/src-tauri/target/release/bundle` 仅有 v0.2.0 MSI/NSIS；根目录构建留下的 `target/release/mathcanvas-desktop.exe` 也早于新增功能提交。不会上传这些与当前源码不匹配的文件。下一次发布须先冻结要交付的源码和版本，改 `tauri.conf.json`/`Cargo.toml` 与锁文件，按该提交 `bundle` 重建，实际核对三件产物哈希、安装/启动/卸载与 tag/source 一致性，再上传 GitHub Release。
+- `git ls-remote` 实查合并后的 `feat/high-school-geometry-interaction` 仍在远端（tip `8c67346`）。删除是独立的不可逆决定，未获用户明确授权前保留；项目进度中的"待你决定"不自动解释为"可删"。
+
+## 2026-10-01 —— 本机性能与 Rust 门禁补跑
+
+- `npm.cmd run test:perf -- --reporter=verbose`：**9/9、exit 0**；本机读数（ms）：`addPrimitives/1000-planar` 15.2、`recomputeDerivedObjects/100-solid` 59.5、`solidStatusReport/100-solid` 17.9、`encodeMgeo/large` 12.7、`roundTrip/large-mgeo` 40.4、`denseIntersections/200x200` 3.3、`drag/300-frames` 1680.5（约 5.6 ms/帧）、`dag/full-recompute-400` 1.0 / `dag/local-recompute-400` 2.0。护栏均绿；性能数值是当前机器趋势，不拿旧机器读数直接断言退化，局部重算仍比全量慢，可作后续优化线索。
+- `npm.cmd run test:rust`：沙箱内因 `target/debug/.cargo-build-lock` 拒绝访问而未运行；获准在沙箱外跑通并复跑统计，**16 组结果汇总 236 passed / 0 failed / 3 ignored、exit 0**。忽略的两条需真实 DeepSeek 凭据，另一条会写真实 Windows Credential Manager；没有提供凭据或主动授权时不跑，不把它们算成已验证。
+- 同日主线程响应性 `e2e/main-thread-responsiveness.spec.ts` 随全量并行 e2e 运行通过：载入 max 333.4 ms、拖动 24 步 max 83.2 ms / p95 16.8 ms；随后单独运行 **1/1**：载入 max 316.7 ms、拖动 max 150.0 ms / p95 16.8 ms。两次故意阻塞 200 ms 的仪器标定分别读到 200.0/199.9 ms；载入阶段受环境影响不设门禁，拖动最大空档均低于 250 ms 护栏。
+- 这两条本机门禁补齐**不等于** MSI/NSIS 在本机安装过，也不等于真实模型 pass@1、成本/延迟已有评测；用户侧试用和发布事项仍见 `current-status.md`。
+
+## 2026-10-01 —— 相机最后一帧：覆盖层投影时机（`a4e2f40` 已推送，CI 全绿）
+
+- 历史现场说"松手前最后一次移动不触发渲染"；复核发现 `threeSceneRender.render()` 在 `renderer.render(scene,camera)` 之前先投影点名和体积数字，`applyCameraState` 又只写相机姿态，矩阵原本要等 WebGL 绘制才更新。v3.0.1 的网格脚印计算偶然调用 `camera.updateMatrixWorld()`，所以当前带网格 e2e 去掉"抖 2px 补帧"后连续 5 次通过；**不能凭这条偶然副作用宣布渲染入口自身正确**。
+- 新隔离单测用无网格的真实 `PerspectiveCamera` + 两层覆盖 DOM：转相机后渲染入口在 WebGL 更新矩阵前投影，标签偏差实测约 **386px（RED）**；入口显式在两层投影前 `camera.updateMatrixWorld()` 后，点名和测量标签均绿。只改一处渲染顺序，不依赖额外 `pointerup` 补画。
+- 浏览器 `e2e/geometry3d-teaching-lines.spec.ts` 去掉松手后额外鼠标拖动，两条相关 e2e 通过；全量 Vitest **269 文件 / 3105 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0、`npm.cmd run lint` 0 error / 13 条既有 warning。**提交 `a4e2f40` 已推送并核对远端 SHA；GitHub CI run `36901742182` 的 checks/build/rust/e2e 四作业全部成功，随后从缺口清单移除。**
+
+## 2026-10-01 —— 实体源体积画布数字（`374daa0` 已推送，CI 全绿）
+
+- 根因：体积测量在属性栏能读 48.000u³，但 `measurementVisuals.ts` 的 `pointPositions` 不认 `polyhedron3`，故 `resolveMeasurementVisual` 返回 null；页面 `[data-measurement-labels]` 实测为 0。现复用已有测量标注叠层，只从物化顶点求标签中心，不新增视觉 token；顶点缺失或非有限时不编造落点。
+- RED→GREEN：真实斜棱柱单测先报 `visual.kind` 为 undefined，修后位置独立算得 (2.5, 2.25, 1.5)，缺顶点返回 null；浏览器原用例先报画布标签计数 0，修后 48.000u³ 标注可见且保存重开后仍可见。已截本地实景核对标签在实体中央清晰可读。
+- 本地全量 Vitest **268 文件 / 3104 项通过 + 1 todo**，全量 Playwright **171/171**；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` 0 error / 13 条既有 warning。**提交 `374daa0` 已推送并以 `git ls-remote` 核对 SHA；GitHub Actions run `36898807030` 的 checks/build/rust/e2e 四作业成功，此后才将缺口移出未完成清单。**。
+
+## 2026-10-01 —— Task 6 单顶点数值编辑（`cc9f533` 已推送，CI 全绿）
+
+- RED：模板和棱柱各一条 `commitPatch` 用例实测因 `face3 points are not coplanar` 被拒。方案按用户已定口径：仅把修改后不再共面的面拆成三角片，保留原面 id、登记新的内部棱（细分标记）、更新每个实体的面/棱及 `fromFaces.sourceIds`；不放宽校验。新面标签不能重名，实测红 6/9→绿 9/9。
+- 退化边界：移动点与同一实体另一顶点重合时，旧路径错误接受、产生零长棱；新增回归红→拒绝并原子保留旧文档。共享面被两个实体引用时一起更新；模板/棱柱改单点后仍可全量重算、序列化。
+- 交集回归：旧测试把立方体角**向外**推误称"非凸"；三角化后外凸形状能正确与另一立方体相交（重叠尺寸 2×4×4，体积 **32**），角**向内**推形成真实凹陷仍按布尔算法约束拒绝。内核判据未放宽。
+- 浏览器级 `e2e/solid-prism.spec.ts` **8/8**：新增棱柱/模板属性栏改单点；棱柱一步撤销/重做、下载 `.mgeo` 并重开、改后体积有效与截面可用；模板点改后持久化拓扑不会因重开被旧模板覆盖。
+- 本地全库 `npm.cmd test -- --maxWorkers=3`：**268 文件 / 3103 项通过 + 1 todo，exit 0**；全量 `npm.cmd run test:e2e -- --workers=3`：**171/171，exit 0**；`npm.cmd run typecheck` exit 0、`npm.cmd run lint` 0 error / 13 条既有 warning。**提交 `cc9f533` 已上传并以 `git ls-remote` 确认远端 SHA 一致；GitHub Actions run `36895877862` 的 checks/build/rust/e2e 四项全部成功，Task 6 计划项随后勾选。**
+
+## 2026-10-01 —— 连续四次 GitHub CI e2e 失败：旧测试几何输入与拾取重叠
+
+- GitHub Actions API 实查：`fffcaae`、`0232b0e`、`b570917`、`1676452` 的 CI 均为 **checks/build/rust 成功，e2e 失败**；不能把 `git push` 成功当作 CI 通过。最后一次失败 run `36886790657`；日志与失败产物下载需认证，本轮用本地完整复现定位。
+- 修复前在 v3.0.1 工作树运行 `npm.cmd run test:e2e -- --workers=3`：**169 项中 165 通过 / 4 失败**，分别是 `geometry3d-section` 2 项、`solid-derived-readings` 1 项、`three-canvas-size` 1 项。默认立方体已变为 4×4×4，旧 e2e 仍按 4×4×2 取 z=0 剖切边界和"无内切球"的预期；截面拖动的旧中心点射线实测命中 `edge:cube-1-edge-25->cube`，棱的精确拾取按设计优先于截面。
+- 只改测试输入：截面/画布用例把原点 Z 从 -1 调到 -2，使默认 4×4×4 的截面确在 z=0；派生读数用例显式把尺寸 Z 调到 2，继续验证一只 4×4×2 长方体外接球精确、内切球不存在；截面拖动选可验证不压在投影棱上的 (-0.5, 0.5, 0)。不更改产品内核或放宽拾取优先级。
+- 定向 15 项最终通过；本地全量复跑 **169 / 169、exit 0**（约 2.6 分钟）；`npm.cmd run typecheck` exit 0，`npm.cmd run lint` exit 0（0 error / 13 个既有 warning）。**提交 `465788a` 的 GitHub CI run `36890961011` 已完成，checks/build/rust/e2e 四个作业全部成功**。
+
+## 2026-10-01 —— Task 8 第 2 项：根目录完整构建门禁补跑
+
+- `main` 的 v3.0.1：`npm.cmd run build`（根脚本 `npm run build --workspaces`）获桌面构建文件写权限后 **exit 0**；桌面工作区 `tauri build --no-bundle` 完成 release exe（不是安装包），Web 前置构建和工作区构建均通过，4 个 packages 的 `tsc -p tsconfig.json` 全通过。Web 入口 1701.84 kB；>500 kB 分块与混用动态/静态 import 警告仍在，Rust linker 有消息警告。
+- 首次沙箱内运行同一命令因 Tauri 无法改写 `apps/desktop/src-tauri/Cargo.toml`（拒绝访问，os error 5）而 exit 1；获准在沙箱外重跑才是上述通过读数。此构建不是 `bundle`，不证明 MSI/NSIS 本版安装过，也不证明全量 e2e、Rust 测试或性能测试通过。
+- 同次独立运行 `npm.cmd test -- packages/scene-graph/src/scene-store.test.ts packages/scene-graph/src/recomputeConsistency.test.ts`：2 个文件 / 106 项通过；这是单顶点编辑改动前的基线，既有断言记录非共面修改会被拒绝。
+
+
+## 归档
+
+- [早期过程记录（2026-09-12 ～ 2026-10-06，含后补的 10-04～10-06 条目）](project-progress-early.md)

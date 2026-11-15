@@ -1,0 +1,884 @@
+[
+  {
+    "id": "GK-S01",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 19,
+    "hostStatus": "passed",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "awaiting_confirmation",
+    "oracle": {
+      "grade": "exact",
+      "passed": 6,
+      "total": 6,
+      "checks": [
+        {
+          "name": "PA⊥AB",
+          "ok": true
+        },
+        {
+          "name": "PA⊥AC",
+          "ok": true
+        },
+        {
+          "name": "PA=2",
+          "ok": true
+        },
+        {
+          "name": "AC=2",
+          "ok": true
+        },
+        {
+          "name": "BC=1",
+          "ok": true
+        },
+        {
+          "name": "AB=√3",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-S02",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 9,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "missing_vertices",
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-S03",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-S04",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-S05",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 36,
+    "hostStatus": "passed",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "awaiting_confirmation",
+    "oracle": {
+      "grade": "exact",
+      "passed": 9,
+      "total": 9,
+      "checks": [
+        {
+          "name": "AB=2",
+          "ok": true
+        },
+        {
+          "name": "BC=2",
+          "ok": true
+        },
+        {
+          "name": "AA1=4",
+          "ok": true
+        },
+        {
+          "name": "AB⊥AD",
+          "ok": true
+        },
+        {
+          "name": "AA1⊥AB",
+          "ok": true
+        },
+        {
+          "name": "AA2=1",
+          "ok": true
+        },
+        {
+          "name": "BB2=2",
+          "ok": true
+        },
+        {
+          "name": "CC2=3",
+          "ok": true
+        },
+        {
+          "name": "DD2=2",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-S06",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 28,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "exact",
+      "passed": 5,
+      "total": 5,
+      "checks": [
+        {
+          "name": "DA=DB=DC",
+          "ok": true
+        },
+        {
+          "name": "BD⊥CD",
+          "ok": true
+        },
+        {
+          "name": "∠ADB=60°",
+          "ok": true
+        },
+        {
+          "name": "∠ADC=60°",
+          "ok": true
+        },
+        {
+          "name": "E mid BC",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-S07",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-S08",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-S09",
+    "examType": "gaokao",
+    "category": "solid",
+    "format": "mcq",
+    "primitiveCount": 22,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "drawn",
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S01",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S02",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S03",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S04",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S05",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S06",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 19,
+    "hostStatus": "passed",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "awaiting_confirmation",
+    "oracle": {
+      "grade": "exact",
+      "passed": 7,
+      "total": 7,
+      "checks": [
+        {
+          "name": "AB=2",
+          "ok": true
+        },
+        {
+          "name": "BC=2",
+          "ok": true
+        },
+        {
+          "name": "AD=1",
+          "ok": true
+        },
+        {
+          "name": "AE=BE=2",
+          "ok": true
+        },
+        {
+          "name": "CE=2√2",
+          "ok": true
+        },
+        {
+          "name": "AD∥BC",
+          "ok": true
+        },
+        {
+          "name": "BC⊥AB",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-S07",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-S08",
+    "examType": "joint",
+    "category": "solid",
+    "format": "open_ended",
+    "primitiveCount": 23,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "exact",
+      "passed": 6,
+      "total": 6,
+      "checks": [
+        {
+          "name": "AB∥CD",
+          "ok": true
+        },
+        {
+          "name": "AD=DC=CB=1",
+          "ok": true
+        },
+        {
+          "name": "∠ABC=60°",
+          "ok": true
+        },
+        {
+          "name": "CF=1",
+          "ok": true
+        },
+        {
+          "name": "AE=1",
+          "ok": true
+        },
+        {
+          "name": "ACFE rect",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-S09",
+    "examType": "joint",
+    "category": "solid",
+    "format": "mcq",
+    "primitiveCount": 29,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "drawn",
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-P01",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 2,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 5,
+      "checks": [
+        {
+          "name": "ellipse x²/4+y²/2=1",
+          "ok": true
+        },
+        {
+          "name": "line passes (0,-2)",
+          "ok": false
+        },
+        {
+          "name": "A on ellipse",
+          "ok": false
+        },
+        {
+          "name": "B on ellipse",
+          "ok": false
+        },
+        {
+          "name": "Area(OAB)=√2",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P02",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 6,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 2,
+      "total": 3,
+      "checks": [
+        {
+          "name": "ellipse x²/3+y²/4=1",
+          "ok": false
+        },
+        {
+          "name": "A(0,-2)",
+          "ok": true
+        },
+        {
+          "name": "B(1.5,-1)",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P03",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 5,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 4,
+      "checks": [
+        {
+          "name": "parabola y²=4x",
+          "ok": false
+        },
+        {
+          "name": "F(1,0) D(2,0)",
+          "ok": true
+        },
+        {
+          "name": "M,N on C & collinear with F",
+          "ok": false
+        },
+        {
+          "name": "A,B collinear with MD,ND",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P04",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 5,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 2,
+      "total": 3,
+      "checks": [
+        {
+          "name": "cubic f(x)=x^3-x",
+          "ok": true
+        },
+        {
+          "name": "numeric g(x)=x^2+3",
+          "ok": false
+        },
+        {
+          "name": "tangent at x=-1",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P05",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 0,
+    "hostStatus": null,
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "no_drawing",
+      "passed": 0,
+      "total": 0,
+      "checks": []
+    }
+  },
+  {
+    "id": "GK-P06",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 12,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 3,
+      "checks": [
+        {
+          "name": "curve y=x²/2",
+          "ok": true
+        },
+        {
+          "name": "D on y=-1/2 with consistent tangents A,B",
+          "ok": false
+        },
+        {
+          "name": "circle E(0,2.5)",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P07",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 3,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 2,
+      "total": 3,
+      "checks": [
+        {
+          "name": "numeric parabola x²=4y (p=2)",
+          "ok": true
+        },
+        {
+          "name": "circle M(0,-4) r=1 & F(0,1)",
+          "ok": true
+        },
+        {
+          "name": "P on M, A,B tangent chord on x²=4y",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P08",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "fill_in",
+    "primitiveCount": 6,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 2,
+      "checks": [
+        {
+          "name": "circle (0,2) r=1",
+          "ok": true
+        },
+        {
+          "name": "numeric hyperbola m=1/√3",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "GK-P09",
+    "examType": "gaokao",
+    "category": "plane",
+    "format": "mcq",
+    "primitiveCount": 3,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "drawn",
+      "checks": []
+    }
+  },
+  {
+    "id": "JT-P01",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 10,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 2,
+      "total": 3,
+      "checks": [
+        {
+          "name": "ellipse x²/4+y²/3=1",
+          "ok": true
+        },
+        {
+          "name": "F1(-1,0) F2(1,0) A(2,0)",
+          "ok": true
+        },
+        {
+          "name": "(3) circle (x-1)²+y²=16",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P02",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 8,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "exact",
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "name": "hyperbola both branches x²/4-y²/16=1",
+          "ok": true
+        },
+        {
+          "name": "line x=-1",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P03",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 11,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 3,
+      "checks": [
+        {
+          "name": "parabola y²=4x (both branches)",
+          "ok": false
+        },
+        {
+          "name": "line y=x+1",
+          "ok": true
+        },
+        {
+          "name": "chord AB through (2,0)",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P04",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 13,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "exact",
+      "passed": 2,
+      "total": 2,
+      "checks": [
+        {
+          "name": "parabola x²=4y (p=2)",
+          "ok": true
+        },
+        {
+          "name": "M(4,4)",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P05",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 3,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "exact",
+      "passed": 1,
+      "total": 1,
+      "checks": [
+        {
+          "name": "hyperbola x²/4-y²/5=1",
+          "ok": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P06",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 8,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "incorrect",
+      "passed": 0,
+      "total": 3,
+      "checks": [
+        {
+          "name": "ellipse x²/5+y²/4=1",
+          "ok": false
+        },
+        {
+          "name": "M(2,2√5/5) & P on ellipse",
+          "ok": false
+        },
+        {
+          "name": "PF1⊥PF2 (infeasible on x²/5+y²/4=1)",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P07",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 7,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "incorrect",
+      "passed": 0,
+      "total": 2,
+      "checks": [
+        {
+          "name": "ellipse x²/4+y²=1",
+          "ok": false
+        },
+        {
+          "name": "P,Q on ellipse & collinear BPE, BQF",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P08",
+    "examType": "joint",
+    "category": "plane",
+    "format": "open_ended",
+    "primitiveCount": 6,
+    "hostStatus": "unverified",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "failed",
+    "oracle": {
+      "grade": "partial",
+      "passed": 1,
+      "total": 2,
+      "checks": [
+        {
+          "name": "ellipse x²/4+y²/3=1",
+          "ok": true
+        },
+        {
+          "name": "E,F points on ellipse with EC=2CF",
+          "ok": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "JT-P09",
+    "examType": "joint",
+    "category": "plane",
+    "format": "mcq",
+    "primitiveCount": 10,
+    "hostStatus": "passed",
+    "certificateStatus": "not_available_in_revision",
+    "terminal": "awaiting_confirmation",
+    "oracle": {
+      "grade": "drawn",
+      "checks": []
+    }
+  }
+]

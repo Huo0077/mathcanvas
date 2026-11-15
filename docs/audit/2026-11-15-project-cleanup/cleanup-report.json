@@ -1,0 +1,219 @@
+{
+  "date": "2026-11-15",
+  "workspace": "D:\\draw",
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "measurement": "Logical file lengths, reparse links not traversed; not allocated disk usage.",
+  "before": {
+    "bytes": 26244960446,
+    "files": 190297
+  },
+  "after": {
+    "bytes": 8240763306,
+    "files": 174139
+  },
+  "reductionBytes": 18004197140,
+  "reductionPercent": 68.60058782349593,
+  "protectedFilesChecked": 4023,
+  "protectedMismatch": [],
+  "gitStatusPreservedBeforeReport": true,
+  "removals": [
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\debug",
+      "logicalBytes": 15969365054,
+      "files": 12077,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\deps",
+      "logicalBytes": 1513115882,
+      "files": 1274,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\build",
+      "logicalBytes": 440222501,
+      "files": 796,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\.fingerprint",
+      "logicalBytes": 427156,
+      "files": 1965,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\incremental",
+      "logicalBytes": 0,
+      "files": 0,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\examples",
+      "logicalBytes": 0,
+      "files": 0,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\nsis",
+      "logicalBytes": 46743,
+      "files": 4,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\wix",
+      "logicalBytes": 434992,
+      "files": 4,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\tmp",
+      "logicalBytes": 0,
+      "files": 0,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\mathcanvas_desktop.pdb",
+      "logicalBytes": 9433088,
+      "files": 1,
+      "category": "rebuildable-compiler-output",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\MathCanvas_4.1.0_x64.exe",
+      "logicalBytes": 17721856,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\bundle\\MathCanvas_4.1.0_x64.exe",
+      "logicalBytes": 17721856,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\bundle\\msi\\MathCanvas_4.0.1_x64_en-US.msi",
+      "logicalBytes": 7176192,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\bundle\\msi\\MathCanvas_4.1.0_x64_en-US.msi",
+      "logicalBytes": 7213056,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\bundle\\nsis\\MathCanvas_4.0.1_x64-setup.exe",
+      "logicalBytes": 5331084,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\desktop\\src-tauri\\target\\release\\bundle\\nsis\\MathCanvas_4.1.0_x64-setup.exe",
+      "logicalBytes": 5357424,
+      "files": 1,
+      "category": "obsolete-installer",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\node_modules\\.vite",
+      "logicalBytes": 62774,
+      "files": 3,
+      "category": "frontend-cache",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "draw\\apps\\web\\node_modules\\.vite",
+      "logicalBytes": 10559980,
+      "files": 26,
+      "category": "frontend-cache",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "node_modules\\.vite",
+      "logicalBytes": 216,
+      "files": 1,
+      "category": "frontend-cache",
+      "status": "removed",
+      "error": null
+    },
+    {
+      "relativePath": "desktop-build.log",
+      "logicalBytes": 7286,
+      "files": 1,
+      "category": "old-log",
+      "status": "removed",
+      "error": null
+    }
+  ],
+  "emptyOuterNodeModulesRemoved": true,
+  "physicalFreeSpace": {
+    "beforeBytes": 120799858688,
+    "afterBytes": 120796921856,
+    "deltaBytes": -2936832,
+    "interpretation": "No corresponding physical free-space increase was observed. Physical reclamation is not established; cause not determined."
+  },
+  "verification": {
+    "documentation": {
+      "exitCode": 0,
+      "files": 8,
+      "passed": 22,
+      "failed": 0
+    },
+    "typecheck": {
+      "exitCode": 0,
+      "scope": "all workspaces plus e2e and scripts"
+    },
+    "gitDiffCheck": {
+      "exitCode": 0
+    },
+    "fullFunctionalTestsRun": false,
+    "desktopRebuilt": false,
+    "desktopLaunched": false,
+    "newModelRequests": 0
+  },
+  "preserved": {
+    "desktopExecutableSha256": "18cbe9c17e04515694976e7d4b79da8a5e05d7f6c7151cb520a9d471f1c95b04",
+    "leanCacheBytes": 7574201522,
+    "sourceAndGit": true,
+    "nodeDependencies": true,
+    "evalResults": true,
+    "testResults": true,
+    "buildCheck": true,
+    "allExistingDocumentation": true,
+    "uncommittedReleaseValidationCopy": true,
+    "versions43And44Installers": true
+  }
+}

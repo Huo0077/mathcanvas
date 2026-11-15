@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-15",
+  "scope": "documentation_and_saved_evidence_only",
+  "productRevision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "docsTests": {
+    "command": "npm.cmd run test:docs -- --testTimeout=30000",
+    "exitCode": 0,
+    "testFilesPassed": 8,
+    "testsPassed": 22,
+    "testsFailed": 0
+  },
+  "artifactChecks": {
+    "archive": [
+      {
+        "file": "current-status.md",
+        "bytes": 671497,
+        "sha256": "f18923a1e2f7a2f2f571500fda7ac8f185a0f05cd2c46950e8950a98e917280c",
+        "matchesRecorded": true,
+        "matchesGitHeadContentAfterEolNormalization": true
+      },
+      {
+        "file": "project-progress.md",
+        "bytes": 379798,
+        "sha256": "9f75f570f57057179f72e98417aa8f44e7b79e5671fdb3aab26bb8ad25dcfaa2",
+        "matchesRecorded": true,
+        "matchesGitHeadContentAfterEolNormalization": true
+      },
+      {
+        "file": "agent-next-round-progress.md",
+        "bytes": 69627,
+        "sha256": "d35f56b0553ea41c4dc6bd4d10dab9f10193faad489a05b7f1af5a004193a225",
+        "matchesRecorded": true,
+        "matchesGitHeadContentAfterEolNormalization": true
+      }
+    ],
+    "evidenceCopies": [
+      {
+        "file": "manifest.json",
+        "source": "manifest.json",
+        "sha256": "908c2f7a8bfdab0b108861fa562e92400910fb4d1f9829c34be2e950dc58bb6f",
+        "matchesSource": true
+      },
+      {
+        "file": "baseline-report.json",
+        "source": "final-report.json",
+        "sha256": "faa4bdc0161ef70ae4d1a72a5498e38d2c9ee9259a79946b55394548d85dcaec",
+        "matchesSource": true
+      },
+      {
+        "file": "partial-oracle-audit.json",
+        "source": "results/oracle-audit.json",
+        "sha256": "c0a0e65461be7603f6aeb8f4b3a2abd4efe31040e74201d7a92479625d2ddfc5",
+        "matchesSource": true
+      }
+    ],
+    "manifestCases": 36,
+    "triageCases": 36,
+    "partialOracleCases": 36,
+    "allCaseIdsMatch": true,
+    "allQuestionHashesMatch": true,
+    "baselineTotals": {
+      "preview": 25,
+      "host": 4,
+      "awaiting": 4,
+      "exact": 8,
+      "compiling": 11,
+      "validating": 21,
+      "emptyAcceptance": 34
+    },
+    "activeMarkdownLinks": {
+      "checked": 106,
+      "broken": 0
+    },
+    "newDocsIssues": [],
+    "stageRows": 9
+  },
+  "functionalTestsRerun": false,
+  "newModelRequests": 0
+}

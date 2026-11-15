@@ -1,0 +1,400 @@
+{
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "status": "proposed_investigation_not_implemented",
+  "cases": [
+    {
+      "id": "GK-S01",
+      "baselinePhase": "awaiting_confirmation",
+      "partialOracle": "exact",
+      "tasks": [
+        "T02",
+        "T13",
+        "T16"
+      ],
+      "direction": "旧通过样本也补全scope、数学覆盖和实际确认证据"
+    },
+    {
+      "id": "GK-S02",
+      "baselinePhase": "validating",
+      "partialOracle": "missing_vertices",
+      "tasks": [
+        "T06",
+        "T09",
+        "T13"
+      ],
+      "direction": "E/F/P物化并核验宿主、比例和原题长度"
+    },
+    {
+      "id": "GK-S03",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T09",
+        "T11"
+      ],
+      "direction": "合法顶点/面环构造；共面、自交、方向、连通与体积"
+    },
+    {
+      "id": "GK-S04",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T06",
+        "T09",
+        "T12"
+      ],
+      "direction": "从原compile轨迹定位算子/参数；不以重试代替构造"
+    },
+    {
+      "id": "GK-S05",
+      "baselinePhase": "awaiting_confirmation",
+      "partialOracle": "exact",
+      "tasks": [
+        "T09",
+        "T13",
+        "T16"
+      ],
+      "direction": "保留已通过路径，补全题设覆盖与UI生命周期"
+    },
+    {
+      "id": "GK-S06",
+      "baselinePhase": "validating",
+      "partialOracle": "exact",
+      "tasks": [
+        "T03",
+        "T09",
+        "T13"
+      ],
+      "direction": "角链完整读取；独立验全部必要关系"
+    },
+    {
+      "id": "GK-S07",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T09",
+        "T10",
+        "T12"
+      ],
+      "direction": "先复现compile阻断，再区分拓扑、折叠与求解缺口"
+    },
+    {
+      "id": "GK-S08",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T06",
+        "T09",
+        "T12"
+      ],
+      "direction": "先复现零图元的compile诊断并定位依赖/构造"
+    },
+    {
+      "id": "GK-S09",
+      "baselinePhase": "validating",
+      "partialOracle": "drawn",
+      "tasks": [
+        "T09",
+        "T10",
+        "T13"
+      ],
+      "direction": "已有图元不等于数学完成；核对scope和全部约束"
+    },
+    {
+      "id": "JT-S01",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T09",
+        "T12"
+      ],
+      "direction": "重放compile失败，修具体构造/拓扑契约"
+    },
+    {
+      "id": "JT-S02",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T02",
+        "T06",
+        "T09"
+      ],
+      "direction": "先核对别名/辅助点/构造状态，再修compile"
+    },
+    {
+      "id": "JT-S03",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T02",
+        "T06",
+        "T09"
+      ],
+      "direction": "源条件、必需实体与compile输入逐项对应"
+    },
+    {
+      "id": "JT-S04",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T09",
+        "T11",
+        "T12"
+      ],
+      "direction": "复现立体构造失败并分离退化与数值未决"
+    },
+    {
+      "id": "JT-S05",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T02",
+        "T06",
+        "T09"
+      ],
+      "direction": "具名对象、宿主与compile依赖，不凭文字补点"
+    },
+    {
+      "id": "JT-S06",
+      "baselinePhase": "awaiting_confirmation",
+      "partialOracle": "exact",
+      "tasks": [
+        "T09",
+        "T13",
+        "T16"
+      ],
+      "direction": "旧通过样本补完整覆盖和实际画布证据"
+    },
+    {
+      "id": "JT-S07",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T02",
+        "T06",
+        "T09"
+      ],
+      "direction": "原输入到构造节点回放；补缺失实体/不支持算子"
+    },
+    {
+      "id": "JT-S08",
+      "baselinePhase": "validating",
+      "partialOracle": "exact",
+      "tasks": [
+        "T02",
+        "T13"
+      ],
+      "direction": "小问专属条件隔离；局部exact不代表整题"
+    },
+    {
+      "id": "JT-S09",
+      "baselinePhase": "validating",
+      "partialOracle": "drawn",
+      "tasks": [
+        "T09",
+        "T10",
+        "T13"
+      ],
+      "direction": "逐条验证立体/变换关系，不以drawn放行"
+    },
+    {
+      "id": "GK-P01",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T06",
+        "T07"
+      ],
+      "direction": "符号椭圆、长轴/离心率求参，补第二问对象"
+    },
+    {
+      "id": "GK-P02",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "direction": "从partial的未通过断言定位参数/对象绑定"
+    },
+    {
+      "id": "GK-P03",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "direction": "校对标准式/参数域与最终图元，不猜全局曲线"
+    },
+    {
+      "id": "GK-P04",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T07",
+        "T08"
+      ],
+      "direction": "按原题对象/函数域补未覆盖条件，先回放再定根因"
+    },
+    {
+      "id": "GK-P05",
+      "baselinePhase": "compiling",
+      "partialOracle": "no_drawing",
+      "tasks": [
+        "T04",
+        "T07",
+        "T12"
+      ],
+      "direction": "平面唯一compile失败题，先定位动作/表达式阻断"
+    },
+    {
+      "id": "GK-P06",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T07",
+        "T08"
+      ],
+      "direction": "原式到参数/函数对象完整转换并独立回代"
+    },
+    {
+      "id": "GK-P07",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "direction": "源条件与曲线实体绑定、参数域和缺失对象"
+    },
+    {
+      "id": "GK-P08",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "direction": "m符号双曲线与圆的渐近线相切；修残留诊断"
+    },
+    {
+      "id": "GK-P09",
+      "baselinePhase": "validating",
+      "partialOracle": "drawn",
+      "tasks": [
+        "T03",
+        "T04",
+        "T08"
+      ],
+      "direction": "LaTeX幂式与选择项scope，函数/辅助对象"
+    },
+    {
+      "id": "JT-P01",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T02",
+        "T04",
+        "T07"
+      ],
+      "direction": "追踪推导来源；不预设归一化守卫已被绕过"
+    },
+    {
+      "id": "JT-P02",
+      "baselinePhase": "validating",
+      "partialOracle": "exact",
+      "tasks": [
+        "T04",
+        "T08",
+        "T16"
+      ],
+      "direction": "P(t)=(-1,t)宿主与拖动依赖"
+    },
+    {
+      "id": "JT-P03",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T02",
+        "T05",
+        "T07"
+      ],
+      "direction": "多个曲线实体明确引用，不选第一条"
+    },
+    {
+      "id": "JT-P04",
+      "baselinePhase": "validating",
+      "partialOracle": "exact",
+      "tasks": [
+        "T04",
+        "T07",
+        "T13"
+      ],
+      "direction": "保留局部正确关系，补全未支持/未覆盖义务"
+    },
+    {
+      "id": "JT-P05",
+      "baselinePhase": "validating",
+      "partialOracle": "exact",
+      "tasks": [
+        "T04",
+        "T07",
+        "T13"
+      ],
+      "direction": "局部exact转完整合同前补全部对象/条件"
+    },
+    {
+      "id": "JT-P06",
+      "baselinePhase": "validating",
+      "partialOracle": "incorrect",
+      "tasks": [
+        "T02",
+        "T04",
+        "T06",
+        "T07"
+      ],
+      "direction": "分问隔离、符号椭圆、焦点F₁/F₂及独立回代"
+    },
+    {
+      "id": "JT-P07",
+      "baselinePhase": "validating",
+      "partialOracle": "incorrect",
+      "tasks": [
+        "T05",
+        "T07",
+        "T13"
+      ],
+      "direction": "修多曲线绑定并拦截局部incorrect"
+    },
+    {
+      "id": "JT-P08",
+      "baselinePhase": "validating",
+      "partialOracle": "partial",
+      "tasks": [
+        "T04",
+        "T07",
+        "T13"
+      ],
+      "direction": "补原题未覆盖关系，不能用partial判整题"
+    },
+    {
+      "id": "JT-P09",
+      "baselinePhase": "awaiting_confirmation",
+      "partialOracle": "drawn",
+      "tasks": [
+        "T07",
+        "T13",
+        "T16"
+      ],
+      "direction": "旧host通过但局部仅drawn，先补独立数学断言"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "date": "2026-11-15",
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "scope": "implementation_plan_refinement_and_read_only_diagnostics",
+  "docsTests": {
+    "command": "npm.cmd run test:docs -- --testTimeout=30000",
+    "exitCode": 0,
+    "filesPassed": 8,
+    "testsPassed": 22,
+    "testsFailed": 0
+  },
+  "gitDiffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "readOnlyParserProbes": {
+    "exitCode": 0,
+    "inputCount": 8,
+    "note": "These expose current behavior, not repaired functionality or drawing success."
+  },
+  "applicationCodeModified": false,
+  "newProviderRequests": 0,
+  "newDependenciesInstalled": false,
+  "completeDrawingEvaluationRerun": false,
+  "manualArtifactChecks": {
+    "markdownFiles": 11,
+    "localLinksChecked": 136,
+    "brokenLinks": 0,
+    "encodingIssues": 0,
+    "codeAnchorsVerified": 25,
+    "caseTaskMappings": 36,
+    "workPackages": 18,
+    "officialReferences": 7,
+    "functionalStagesUnstarted": 9,
+    "illustrativeMathematics": {
+      "ratio": 2,
+      "ratioNonCollinearCross": 2,
+      "ellipseB": 1.4142135623730951,
+      "hyperbolaM": 0.5773502691896258,
+      "hyperbolaTangentDistance": 1.0000000000000002,
+      "zeroFailureUpper36": 0.07984650951989436,
+      "zeroFailureUpper120": 0.024655401055656334,
+      "minimumIndependentZeroFailureCasesFor99": 299
+    }
+  }
+}

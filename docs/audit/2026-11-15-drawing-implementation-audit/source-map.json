@@ -1,0 +1,183 @@
+{
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "notes": [
+    "Line anchors refer to the baseline; verify symbol and file hash after code edits."
+  ],
+  "anchors": [
+    {
+      "id": "A01",
+      "file": "packages/agent-core/src/obligationIR.ts",
+      "symbol": "export function buildObligationIR(set: DiagramObligationSet): ObligationIR {",
+      "line": 217,
+      "sha256": "cafde71de52da7ab1c528c1d8bfcb43ef71534c8772b27cb58905f570a812dcd"
+    },
+    {
+      "id": "A02",
+      "file": "packages/agent-core/src/obligationIR.ts",
+      "symbol": "export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {",
+      "line": 269,
+      "sha256": "cafde71de52da7ab1c528c1d8bfcb43ef71534c8772b27cb58905f570a812dcd"
+    },
+    {
+      "id": "A03",
+      "file": "packages/agent-core/src/obligationIR.ts",
+      "symbol": "export interface ObligationIR {",
+      "line": 318,
+      "sha256": "cafde71de52da7ab1c528c1d8bfcb43ef71534c8772b27cb58905f570a812dcd"
+    },
+    {
+      "id": "A04",
+      "file": "packages/agent-core/src/planCompiler.ts",
+      "symbol": "const promptText = context.prompt",
+      "line": 786,
+      "sha256": "387eb48a68fbcd85eb08d4f923df6472856ba90f1942c3140798bb5e418391f9"
+    },
+    {
+      "id": "A05",
+      "file": "packages/agent-core/src/planCompiler.ts",
+      "symbol": "const obligationParse = parserPrompt && (planHasVerifiableFigure(compiledActions) || solidDimensionGate(parserPrompt, compiledActions) || readFoldTransformations(parserPrompt).length > 0)",
+      "line": 809,
+      "sha256": "387eb48a68fbcd85eb08d4f923df6472856ba90f1942c3140798bb5e418391f9"
+    },
+    {
+      "id": "A06",
+      "file": "packages/agent-core/src/promptNormalization.ts",
+      "symbol": "export function parseNormalisationReply(reply: unknown, prompt: string, unread: readonly UnreadClause[]): NormalisationReport {",
+      "line": 277,
+      "sha256": "7e07991c2ca58b9010ad5bc5eba221feb89f252122fd18c32a6df39593e5cc04"
+    },
+    {
+      "id": "A07",
+      "file": "packages/agent-core/src/lengthEquality.ts",
+      "symbol": "drafts.push({ kind: \"segmentRatio\", targets: [...term.segment, ...next.segment], value: lengthRatio(term, next), splitPoint: value === null })",
+      "line": 136,
+      "sha256": "ac1502136a2287daec097fe88cc1136ae0760d5cd457f1821a7b69431ec5cf7c"
+    },
+    {
+      "id": "A08",
+      "file": "packages/agent-core/src/diagramObligations.ts",
+      "symbol": "export function parseDiagramObligations(prompt: string, options: DiagramParseOptions = {}): DiagramObligationSet {",
+      "line": 2150,
+      "sha256": "45cd8e681395ecfe42456380fd0baa39103efeed9ce44f6f5dd256aa54fa2204"
+    },
+    {
+      "id": "A09",
+      "file": "packages/agent-core/src/diagramObligations.ts",
+      "symbol": "const leftover = [...clause[0]].map((character, offset) => used.has(clause.index + offset) ? \" \" : character).join(\"\").trim()",
+      "line": 2309,
+      "sha256": "45cd8e681395ecfe42456380fd0baa39103efeed9ce44f6f5dd256aa54fa2204"
+    },
+    {
+      "id": "A10",
+      "file": "packages/agent-core/src/diagramObligations.ts",
+      "symbol": "function resolveFocusEccentricity(",
+      "line": 495,
+      "sha256": "45cd8e681395ecfe42456380fd0baa39103efeed9ce44f6f5dd256aa54fa2204"
+    },
+    {
+      "id": "A11",
+      "file": "packages/agent-core/src/diagramVerification.ts",
+      "symbol": "function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureConic | null {",
+      "line": 483,
+      "sha256": "d1558640538d8e47d898abd2095671dda72ec30d86750d51926f5ca614f5d1ca"
+    },
+    {
+      "id": "A12",
+      "file": "packages/agent-core/src/deterministicProblemRoute.ts",
+      "symbol": "export function routeDeterministicProblem(prompt: string): DeterministicProblemRoute | null {",
+      "line": 13,
+      "sha256": "ca9c3bda150fba6d95c5d6a7856f3ec7ab2521be15795ef26b34c44349c1987f"
+    },
+    {
+      "id": "A13",
+      "file": "apps/web/src/agent/agentRunner.ts",
+      "symbol": "const deterministic = routeDeterministicProblem(prompt)",
+      "line": 529,
+      "sha256": "73378e098ce596a7092b7253091c37aecaaa438b53a8392d6cafdb4c51351695"
+    },
+    {
+      "id": "A14",
+      "file": "apps/web/src/agent/agentRunner.ts",
+      "symbol": "candidateRenderEvidence: (input) => buildStructuredCandidateRenderEvidence(input)",
+      "line": 661,
+      "sha256": "73378e098ce596a7092b7253091c37aecaaa438b53a8392d6cafdb4c51351695"
+    },
+    {
+      "id": "A15",
+      "file": "apps/web/src/agent/agentRunner.ts",
+      "symbol": "const acceptance = deriveAcceptance(prompt)",
+      "line": 702,
+      "sha256": "73378e098ce596a7092b7253091c37aecaaa438b53a8392d6cafdb4c51351695"
+    },
+    {
+      "id": "A16",
+      "file": "packages/agent-core/src/verification/taskAcceptance.ts",
+      "symbol": "export function runAcceptance(document: AcceptanceDocument | null, acceptance: readonly AcceptanceCheck[]): VerificationReport {",
+      "line": 110,
+      "sha256": "ca5aa513146d3123f51233fcd4a27e95f52428028603a65884112e1a553fd89f"
+    },
+    {
+      "id": "A17",
+      "file": "packages/geometry-kernel/src/solid-builders.ts",
+      "symbol": "export function buildFromPoints(input: FromPointsInput, context: BuilderContext): SolidBuildResult {",
+      "line": 296,
+      "sha256": "cc2af1c4c29e47d43dbf9475e54dc61fd4c87a32264cabdff08780068d36b78e"
+    },
+    {
+      "id": "A18",
+      "file": "packages/geometry-kernel/src/conic-line.ts",
+      "symbol": "export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): LineConicIntersection {",
+      "line": 196,
+      "sha256": "c6f7af787d93b10fc479b6ecf5c9f085db52d3634929dd75cc60bc241dd6cf59"
+    },
+    {
+      "id": "A19",
+      "file": "packages/geometry-kernel/src/foldSystem.ts",
+      "symbol": "export function solveFoldSystem(residual: (degrees: readonly number[]) => readonly number[], initial: readonly number[], options: FoldSystemOptions = {}): FoldSystemOutcome {",
+      "line": 69,
+      "sha256": "d9c7c8873cd0509dcdfaf4bd41b87a3d25612beaf304875fdc2828a7d05fe2c5"
+    },
+    {
+      "id": "A20",
+      "file": "packages/agent-core/src/solver/solverContracts.ts",
+      "symbol": "export type WitnessSearchResult =",
+      "line": 105,
+      "sha256": "f9f53e664ed27ad0de59017b0bc3bd0cc8912dbedfbca2fa775103d16bc4d772"
+    },
+    {
+      "id": "A21",
+      "file": "packages/agent-core/src/coordinator.ts",
+      "symbol": "const budget = dependencies.budget ?? createBudget(dependencies.limits)",
+      "line": 262,
+      "sha256": "88f52e2ea0a1a4c77b64e57c97a22076a5e937537e123a6c6c79a9c2c62e9067"
+    },
+    {
+      "id": "A22",
+      "file": "apps/web/src/agent/modelPlanner.ts",
+      "symbol": "export const MAX_TRANSPORT_ATTEMPTS = 3",
+      "line": 749,
+      "sha256": "e5424dc82eace7b12d37d7c3a0c90de752df4a1dbb55df773acaa00bcd0cb643"
+    },
+    {
+      "id": "A23",
+      "file": "packages/agent-core/src/committerAdapter.ts",
+      "symbol": "export function createCommitterAdapter(dependencies: CommitterAdapterDependencies): CommitterAdapter {",
+      "line": 119,
+      "sha256": "075c7d6bcf9dd193438a2b61d51189ee4252cb48bed91abdcfde9b0d23b4e768"
+    },
+    {
+      "id": "A24",
+      "file": "apps/web/src/agent/draftStore.ts",
+      "symbol": "export function compileInProcess(input: CompileInput): PlanCompileResult {",
+      "line": 348,
+      "sha256": "afa7b243d849c054f34d9a68e47a10a6a4a3e9901b6336d33d270f83a8d61684"
+    },
+    {
+      "id": "A25",
+      "file": "packages/agent-core/src/numberedProblem.ts",
+      "symbol": "export function splitNumberedProblem(prompt: string): { stem: string; parts: ProblemPart[] } | null {",
+      "line": 11,
+      "sha256": "f5a198f4b2c734754245fcef84721acedadd95d3e725d9fbba527d2ac3af6d02"
+    }
+  ]
+}

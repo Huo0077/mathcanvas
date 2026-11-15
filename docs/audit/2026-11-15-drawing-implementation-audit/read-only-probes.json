@@ -1,0 +1,943 @@
+{
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "method": "Direct parser calls only; no model, no UI, no product edits",
+  "results": [
+    {
+      "id": "ratio_no_incidence",
+      "text": "DE=2EA",
+      "lengthChains": [
+        {
+          "ok": true,
+          "start": 0,
+          "end": 6,
+          "sourceText": "DE=2EA",
+          "drafts": [
+            {
+              "kind": "segmentRatio",
+              "targets": [
+                "D",
+                "E",
+                "E",
+                "A"
+              ],
+              "value": 2,
+              "splitPoint": true
+            }
+          ]
+        }
+      ],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "segmentRatio",
+            "targets": [
+              "D",
+              "E",
+              "E",
+              "A"
+            ],
+            "value": 2,
+            "splitPoint": true,
+            "sourceText": "DE=2EA",
+            "start": 0,
+            "end": 6
+          }
+        ],
+        "goals": [],
+        "freeChoices": [],
+        "unverified": []
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "segmentRatio",
+            "sourceText": "DE=2EA",
+            "start": 0,
+            "end": 6,
+            "targets": [
+              "D",
+              "E",
+              "E",
+              "A"
+            ],
+            "expected": 2,
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "relative",
+              "value": 0.000001
+            },
+            "geometry": {
+              "splitPoint": true
+            }
+          }
+        ],
+        "unverified": []
+      }
+    },
+    {
+      "id": "chain_angle",
+      "text": "∠ADB=∠ADC=60°",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "planarAngle",
+            "targets": [
+              "A",
+              "D",
+              "C"
+            ],
+            "value": 60,
+            "sourceText": "∠ADC=60°",
+            "start": 5,
+            "end": 13
+          }
+        ],
+        "goals": [],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "∠ADB=",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "planarAngle",
+            "sourceText": "∠ADC=60°",
+            "start": 5,
+            "end": 13,
+            "targets": [
+              "A",
+              "D",
+              "C"
+            ],
+            "expected": 60,
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "angular",
+              "value": 0.001
+            }
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "∠ADB=",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "scope_roundtrip",
+      "text": "四棱锥P-ABCD，PA⊥底面ABCD。（1）证明AD∥平面PBC；（2）若AD⊥DC，求AD。",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "perpendicular",
+            "targets": [
+              "P",
+              "A",
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "sourceText": "PA⊥底面ABCD",
+            "start": 10,
+            "end": 19
+          }
+        ],
+        "goals": [
+          "AD∥平面PBC；",
+          "AD。"
+        ],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "各小问的条件",
+            "reason": "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+          }
+        ],
+        "parts": [
+          {
+            "number": 1,
+            "text": "证明AD∥平面PBC；",
+            "start": 23,
+            "end": 34,
+            "obligations": {
+              "givens": [
+                {
+                  "kind": "perpendicular",
+                  "targets": [
+                    "P",
+                    "A",
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ],
+                  "sourceText": "PA⊥底面ABCD",
+                  "start": 10,
+                  "end": 19
+                }
+              ],
+              "goals": [
+                "AD∥平面PBC；"
+              ],
+              "goalSources": [
+                {
+                  "sourceText": "AD∥平面PBC；",
+                  "start": 25,
+                  "end": 34
+                }
+              ],
+              "freeChoices": [],
+              "unverified": []
+            }
+          },
+          {
+            "number": 2,
+            "text": "若AD⊥DC，求AD。",
+            "start": 37,
+            "end": 48,
+            "obligations": {
+              "givens": [
+                {
+                  "kind": "perpendicular",
+                  "targets": [
+                    "P",
+                    "A",
+                    "A",
+                    "B",
+                    "C",
+                    "D"
+                  ],
+                  "sourceText": "PA⊥底面ABCD",
+                  "start": 10,
+                  "end": 19
+                },
+                {
+                  "kind": "perpendicular",
+                  "targets": [
+                    "A",
+                    "D",
+                    "D",
+                    "C"
+                  ],
+                  "sourceText": "AD⊥DC",
+                  "start": 38,
+                  "end": 43
+                }
+              ],
+              "goals": [
+                "AD。"
+              ],
+              "goalSources": [
+                {
+                  "sourceText": "AD。",
+                  "start": 45,
+                  "end": 48
+                }
+              ],
+              "freeChoices": [],
+              "unverified": []
+            }
+          }
+        ],
+        "goalSources": [
+          {
+            "sourceText": "AD∥平面PBC；",
+            "start": 25,
+            "end": 34
+          },
+          {
+            "sourceText": "AD。",
+            "start": 45,
+            "end": 48
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "perpendicular",
+            "sourceText": "PA⊥底面ABCD",
+            "start": 10,
+            "end": 19,
+            "targets": [
+              "P",
+              "A",
+              "A",
+              "B",
+              "C",
+              "D"
+            ],
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "relative",
+              "value": 0.000001
+            }
+          },
+          {
+            "id": "obligation-goal-0",
+            "role": "goal",
+            "kind": "parallel",
+            "sourceText": "AD∥平面PBC；",
+            "start": 25,
+            "end": 34,
+            "targets": [
+              "A",
+              "D",
+              "P",
+              "B",
+              "C"
+            ],
+            "judgeability": "unsupported"
+          },
+          {
+            "id": "obligation-goal-1",
+            "role": "goal",
+            "kind": "proposition",
+            "sourceText": "AD。",
+            "start": 45,
+            "end": 48,
+            "targets": [],
+            "judgeability": "unsupported"
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "各小问的条件",
+            "reason": "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "GK-S06",
+      "text": "如图，三棱锥 A-BCD 中，DA=DB=DC，BD⊥CD，∠ADB=∠ADC=60°，E 为 BC 的中点。（1）证明：BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。",
+      "lengthChains": [
+        {
+          "ok": true,
+          "start": 15,
+          "end": 23,
+          "sourceText": "DA=DB=DC",
+          "drafts": [
+            {
+              "kind": "equalLength",
+              "targets": [
+                "D",
+                "A",
+                "D",
+                "B"
+              ]
+            },
+            {
+              "kind": "equalLength",
+              "targets": [
+                "D",
+                "B",
+                "D",
+                "C"
+              ]
+            }
+          ]
+        },
+        {
+          "ok": true,
+          "start": 79,
+          "end": 84,
+          "sourceText": "EF=DA",
+          "drafts": [
+            {
+              "kind": "equalLength",
+              "targets": [
+                "E",
+                "F",
+                "D",
+                "A"
+              ]
+            }
+          ]
+        }
+      ],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "equalLength",
+            "targets": [
+              "D",
+              "A",
+              "D",
+              "B"
+            ],
+            "sourceText": "DA=DB=DC",
+            "start": 15,
+            "end": 23
+          },
+          {
+            "kind": "equalLength",
+            "targets": [
+              "D",
+              "B",
+              "D",
+              "C"
+            ],
+            "sourceText": "DA=DB=DC",
+            "start": 15,
+            "end": 23
+          },
+          {
+            "kind": "perpendicular",
+            "targets": [
+              "B",
+              "D",
+              "C",
+              "D"
+            ],
+            "sourceText": "BD⊥CD",
+            "start": 24,
+            "end": 29
+          },
+          {
+            "kind": "planarAngle",
+            "targets": [
+              "A",
+              "D",
+              "C"
+            ],
+            "value": 60,
+            "sourceText": "∠ADC=60°",
+            "start": 35,
+            "end": 43
+          },
+          {
+            "kind": "midpoint",
+            "targets": [
+              "E",
+              "B",
+              "C"
+            ],
+            "sourceText": "E 为 BC 的中点",
+            "start": 44,
+            "end": 54
+          }
+        ],
+        "goals": [
+          "BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。"
+        ],
+        "goalSources": [
+          {
+            "sourceText": "BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。",
+            "start": 61,
+            "end": 102
+          }
+        ],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "∠ADB=",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "equalLength",
+            "sourceText": "DA=DB=DC",
+            "start": 15,
+            "end": 23,
+            "targets": [
+              "D",
+              "A",
+              "D",
+              "B"
+            ],
+            "judgeability": "supported"
+          },
+          {
+            "id": "obligation-1",
+            "role": "given",
+            "kind": "equalLength",
+            "sourceText": "DA=DB=DC",
+            "start": 15,
+            "end": 23,
+            "targets": [
+              "D",
+              "B",
+              "D",
+              "C"
+            ],
+            "judgeability": "supported"
+          },
+          {
+            "id": "obligation-2",
+            "role": "given",
+            "kind": "perpendicular",
+            "sourceText": "BD⊥CD",
+            "start": 24,
+            "end": 29,
+            "targets": [
+              "B",
+              "D",
+              "C",
+              "D"
+            ],
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "relative",
+              "value": 0.000001
+            }
+          },
+          {
+            "id": "obligation-3",
+            "role": "given",
+            "kind": "planarAngle",
+            "sourceText": "∠ADC=60°",
+            "start": 35,
+            "end": 43,
+            "targets": [
+              "A",
+              "D",
+              "C"
+            ],
+            "expected": 60,
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "angular",
+              "value": 0.001
+            }
+          },
+          {
+            "id": "obligation-4",
+            "role": "given",
+            "kind": "midpoint",
+            "sourceText": "E 为 BC 的中点",
+            "start": 44,
+            "end": 54,
+            "targets": [
+              "E",
+              "B",
+              "C"
+            ],
+            "judgeability": "supported"
+          },
+          {
+            "id": "obligation-goal-0",
+            "role": "goal",
+            "kind": "proposition",
+            "sourceText": "BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。",
+            "start": 61,
+            "end": 102,
+            "targets": [],
+            "judgeability": "unsupported"
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "∠ADB=",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "GK-P01",
+      "text": "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4。（1）求C的方程；（2）过点(0,-2)的直线l交C于A、B两点，O为坐标原点。若△OAB的面积为√2，求|AB|。",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [],
+        "goals": [],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4",
+            "reason": "题面给了焦点 / 离心率，但**没有说中心（顶点）在原点** —— 曲线摆在哪儿定不下来，不推方程，未核验。"
+          },
+          {
+            "sourceText": "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [],
+        "unverified": [
+          {
+            "sourceText": "椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4",
+            "reason": "题面给了焦点 / 离心率，但**没有说中心（顶点）在原点** —— 曲线摆在哪儿定不下来，不推方程，未核验。"
+          },
+          {
+            "sourceText": "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "GK-P08",
+      "text": "14. 若双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$ 的渐近线与圆 $x^{2}+y^{2}-4 y+3=0$ 相切, 则\n\n$m=$\n",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "conicAxes",
+            "targets": [],
+            "conic": {
+              "kind": "circle",
+              "centerX": 0,
+              "centerY": 2,
+              "radius": 1
+            },
+            "sourceText": "x²+y²-4y+3=0",
+            "start": 35,
+            "end": 47
+          }
+        ],
+        "goals": [],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "双曲线y²-\\frac{x²}{m²}=1(m>0)的渐近线与圆            相切",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "conicAxes",
+            "sourceText": "x²+y²-4y+3=0",
+            "start": 35,
+            "end": 47,
+            "targets": [],
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "absolute",
+              "value": 0.000001
+            },
+            "geometry": {
+              "conic": {
+                "kind": "circle",
+                "centerX": 0,
+                "centerY": 2,
+                "radius": 1
+              }
+            }
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "双曲线y²-\\frac{x²}{m²}=1(m>0)的渐近线与圆            相切",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "JT-P02",
+      "text": "已知双曲线 C 的中心为坐标原点，右焦点为 (2√5, 0)，离心率为 √5。（1）求 C 的方程；（2）记 C 的左、右顶点分别为 A₁，A₂，点 P 在定直线 x=-1 上运动，直线 PA₁ 与 PA₂ 与双曲线分别交于 M，N 两点，证明：直线 MN 恒过定点。",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "conicAxes",
+            "targets": [],
+            "conic": {
+              "kind": "hyperbola",
+              "radiusX": 2,
+              "radiusY": 4,
+              "axis": "x"
+            },
+            "sourceText": "双曲线 C 的中心为坐标原点，右焦点为 (2√5, 0)，离心率为 √5",
+            "start": 2,
+            "end": 38
+          }
+        ],
+        "goals": [
+          "直线 MN 恒过定点。"
+        ],
+        "goalSources": [
+          {
+            "sourceText": "直线 MN 恒过定点。",
+            "start": 123,
+            "end": 134
+          }
+        ],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "点 P 在定直线 x=-1 上运动",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "conicAxes",
+            "sourceText": "双曲线 C 的中心为坐标原点，右焦点为 (2√5, 0)，离心率为 √5",
+            "start": 2,
+            "end": 38,
+            "targets": [],
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "absolute",
+              "value": 0.000001
+            },
+            "geometry": {
+              "conic": {
+                "kind": "hyperbola",
+                "radiusX": 2,
+                "radiusY": 4,
+                "axis": "x"
+              }
+            }
+          },
+          {
+            "id": "obligation-goal-0",
+            "role": "goal",
+            "kind": "proposition",
+            "sourceText": "直线 MN 恒过定点。",
+            "start": 123,
+            "end": 134,
+            "targets": [],
+            "judgeability": "unsupported"
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "点 P 在定直线 x=-1 上运动",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "JT-P06",
+      "text": "已知 F₁，F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求椭圆 C 的标准方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。",
+      "lengthChains": [],
+      "legacy": {
+        "givens": [
+          {
+            "kind": "fixedLength",
+            "targets": [
+              "F₁",
+              "F₂"
+            ],
+            "value": 2,
+            "sourceText": "|F₁F₂|=2",
+            "start": 47,
+            "end": 55
+          }
+        ],
+        "goals": [
+          "椭圆 C 的标准方程；",
+          "△F₁PF₂ 的面积。"
+        ],
+        "freeChoices": [],
+        "unverified": [
+          {
+            "sourceText": "F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          },
+          {
+            "sourceText": "2√5/5) 为 C 上一点",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          },
+          {
+            "sourceText": "各小问的条件",
+            "reason": "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+          }
+        ],
+        "parts": [
+          {
+            "number": 1,
+            "text": "求椭圆 C 的标准方程；",
+            "start": 79,
+            "end": 91,
+            "obligations": {
+              "givens": [
+                {
+                  "kind": "fixedLength",
+                  "targets": [
+                    "F₁",
+                    "F₂"
+                  ],
+                  "value": 2,
+                  "sourceText": "|F₁F₂|=2",
+                  "start": 47,
+                  "end": 55
+                }
+              ],
+              "goals": [
+                "椭圆 C 的标准方程；"
+              ],
+              "goalSources": [
+                {
+                  "sourceText": "椭圆 C 的标准方程；",
+                  "start": 80,
+                  "end": 91
+                }
+              ],
+              "freeChoices": [],
+              "unverified": [
+                {
+                  "sourceText": "F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点",
+                  "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+                },
+                {
+                  "sourceText": "2√5/5) 为 C 上一点",
+                  "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+                }
+              ]
+            }
+          },
+          {
+            "number": 2,
+            "text": "若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。",
+            "start": 94,
+            "end": 129,
+            "obligations": {
+              "givens": [
+                {
+                  "kind": "fixedLength",
+                  "targets": [
+                    "F₁",
+                    "F₂"
+                  ],
+                  "value": 2,
+                  "sourceText": "|F₁F₂|=2",
+                  "start": 47,
+                  "end": 55
+                },
+                {
+                  "kind": "perpendicular",
+                  "targets": [
+                    "P",
+                    "F₁",
+                    "P",
+                    "F₂"
+                  ],
+                  "sourceText": "PF₁⊥PF₂",
+                  "start": 108,
+                  "end": 115
+                }
+              ],
+              "goals": [
+                "△F₁PF₂ 的面积。"
+              ],
+              "goalSources": [
+                {
+                  "sourceText": "△F₁PF₂ 的面积。",
+                  "start": 118,
+                  "end": 129
+                }
+              ],
+              "freeChoices": [],
+              "unverified": [
+                {
+                  "sourceText": "F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点",
+                  "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+                },
+                {
+                  "sourceText": "2√5/5) 为 C 上一点",
+                  "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+                },
+                {
+                  "sourceText": "若 P 为 C 上一点",
+                  "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+                }
+              ]
+            }
+          }
+        ],
+        "goalSources": [
+          {
+            "sourceText": "椭圆 C 的标准方程；",
+            "start": 80,
+            "end": 91
+          },
+          {
+            "sourceText": "△F₁PF₂ 的面积。",
+            "start": 118,
+            "end": 129
+          }
+        ]
+      },
+      "ir": {
+        "obligations": [
+          {
+            "id": "obligation-0",
+            "role": "given",
+            "kind": "fixedLength",
+            "sourceText": "|F₁F₂|=2",
+            "start": 47,
+            "end": 55,
+            "targets": [
+              "F₁",
+              "F₂"
+            ],
+            "expected": 2,
+            "judgeability": "supported",
+            "tolerance": {
+              "kind": "absolute",
+              "value": 0.000002
+            }
+          },
+          {
+            "id": "obligation-goal-0",
+            "role": "goal",
+            "kind": "proposition",
+            "sourceText": "椭圆 C 的标准方程；",
+            "start": 80,
+            "end": 91,
+            "targets": [],
+            "judgeability": "unsupported"
+          },
+          {
+            "id": "obligation-goal-1",
+            "role": "goal",
+            "kind": "proposition",
+            "sourceText": "△F₁PF₂ 的面积。",
+            "start": 118,
+            "end": 129,
+            "targets": [],
+            "judgeability": "unsupported"
+          }
+        ],
+        "unverified": [
+          {
+            "sourceText": "F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点",
+            "reason": "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+          },
+          {
+            "sourceText": "2√5/5) 为 C 上一点",
+            "reason": "原题出现了尚未被可靠解析的几何条件，未核验。"
+          },
+          {
+            "sourceText": "各小问的条件",
+            "reason": "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+          }
+        ]
+      }
+    }
+  ]
+}

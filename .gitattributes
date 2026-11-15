@@ -4,3 +4,10 @@
 #
 # 这一条是**按路径**的窄规则，不动全仓行尾约定（2026-10-12 裁决）。
 scripts/dependency-licences/rust-licences.json text eol=lf
+# 2026-11-15 evidence snapshots: preserve recorded bytes/hashes across Git checkout.
+# Narrow immutable-audit exceptions only; keep existing repository newline policy.
+# Original CRLF evidence is intentional: recognize CR as EOL, keep other whitespace checks.
+docs/audit/2026-11-15-pre-reset/*.md -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/audit/2026-11-15-project-review/README.md -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/audit/2026-11-15-drawing-baseline/*.json -text
+docs/audit/2026-11-15-drawing-implementation-audit/read-only-probes.json -text

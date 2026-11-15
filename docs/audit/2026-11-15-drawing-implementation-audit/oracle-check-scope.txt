@@ -1,0 +1,14 @@
+Source: eval-results/real-exam-drawing-59ea3613-20261115/audit-geometry.mjs
+SHA-256: c7cdc08a2e1b3f1cacb656a79698a201bc61e8053270ebdf3a5867dde3b1e535
+Lines 565-575 (read only; no predicate modified):
+565:   'JT-P08': (prims) => {
+566:     const els = get2DByType(prims, 'ellipse');
+567:     const pts = point2Map(prims);
+568:     const e = els[0];
+569:     const E = pts.get('E'), F = pts.get('F');
+570:     const onEll = (X) => !!X && near(X.x ** 2 / 4 + X.y ** 2 / 3, 1, 1e-2);
+571:     const checks = [
+572:       ['ellipse x²/4+y²/3=1', !!e && near(e.center.x, 0) && near(e.center.y, 0) && near(e.radiusX, 2) && near(e.radiusY, Math.sqrt(3))],
+573:       ['E,F points on ellipse with EC=2CF', onEll(E) && onEll(F)],
+574:     ];
+575:     return scoreChecks(checks);

@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-15",
+  "selectedCodeBaseline": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "previousRemoteMain": "d8743a32aaade8206c339acc030cc5712a11a1b7",
+  "archiveBranch": "archive/abandoned-post-59ea3613-20261115",
+  "archiveRemoteVerified": true,
+  "abandonedCommitCount": 47,
+  "abandonedRange": "59ea36133c47971f4252e71f7a0f5ba003dd1028..d8743a32aaade8206c339acc030cc5712a11a1b7",
+  "scope": "Only this enumerated old descendant range is abandoned; new descendants of the selected baseline are the restart line.",
+  "productVersion": "4.3.0",
+  "historicalReleaseTag": {
+    "name": "v4.4.0",
+    "commit": "8aa2d34d2146dd2d5f9605947d21ccbfdac18857",
+    "status": "historical_abandoned_for_restart_not_deleted"
+  },
+  "commits": [
+    {
+      "hash": "ac4614b644e492385f6ffcfb8c800ddc0a437aa5",
+      "date": "2026-11-07",
+      "subject": "docs: 记录 v4.3.0 同步与桌面端重建",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "9a4fdf1ad74272270f83bd7bfa765c520c9c7e7d",
+      "date": "2026-11-08",
+      "subject": "test(agent): add exam benchmarks, sourced corpus and evaluation report",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "6e10f5a1d34d84d14ea2231bb52aa0c8f7fc2b2d",
+      "date": "2026-11-09",
+      "subject": "docs: 记录 2026-11-08 历史错题根因复核与整改方案",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "8a30a11ef9cc395ca7fbb9aaa2bf85367d149668",
+      "date": "2026-11-09",
+      "subject": "fix(docs): 移除5个受跟踪文件的UTF-8 BOM（W0）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "72fa9afb003ee956cb8bc83aeeb82d1c51955fc5",
+      "date": "2026-11-09",
+      "subject": "fix(agent): 分支化协议纠错反馈与共享字段合同（W1/T1）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "486cfeba410dcdfc87420b919b1f410f9ab5181c",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 宿主答案合同与逐问交付状态（W2/T2）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "b55b34ce9856944f335b0045a9459b98f0652626",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 题意层逐问目标、状态与条件消费清单（W3/T3）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "27fe8df6b45d8964432304fc41f1c82efa854378",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 折叠题逐问交付、矛盾检查与辅助垂足（W4/T4）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "48b228a514f15c919e99324ceba53683242e7131",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 有限、独立的数学答案核验（W5/T5）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "fae26ff8df7ee19e6c3eaf373cd864c29e1528c1",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 题图证据引用、冲突合并与受控重读策略（W6/T6）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "e5df2ed3712207668150ad5c465536f93a27007a",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 有限三视图约束与体积双核验（W7/T7）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "5561fa9720d03bd928b1bae010acc6614cda25b4",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 题族能力清单、结构化评分与离线评测数据（W8/T8）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "8d983961640e1486aadc3979fd56fcc3f136359a",
+      "date": "2026-11-09",
+      "subject": "feat(agent): 灰度开关、版本守卫与回滚记录（W9/T9）",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "8aa2d34d2146dd2d5f9605947d21ccbfdac18857",
+      "date": "2026-11-09",
+      "subject": "chore(release): MathCanvas 4.4.0 构建并修复既有 lint error",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "1e4f97db886db22342055bcd769eaecb4f0e2753",
+      "date": "2026-11-09",
+      "subject": "feat(agent-eval): W0 versioned scoring and offline dual regrade",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "40cb3aba5f00ceceff88a919d529ee8f417395e7",
+      "date": "2026-11-09",
+      "subject": "feat(agent-core): W1 bind problem goals and host evidence",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "615fd9fd909286a4eb72afe4a107fb2e57bfd202",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W2 shared vision and planner request budget",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "085cd768e36a6de6784370a86c9073f7619b2004",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W3 shared production solve path and goal acceptance",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "b3f3d1c2516bbed15628d312afb3a89db34f40e7",
+      "date": "2026-11-09",
+      "subject": "docs: align agent progress snapshots through W3",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "66090e5f3aa5e0492a7236d6653c3442db38bcff",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W4 image evidence gaps and automatic field-directed reread",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "6661c7b1779ab02cfeb24c0923638ff67b93f2ef",
+      "date": "2026-11-09",
+      "subject": "feat(agent-core): W5 bounded schema and tool-reference recovery",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "1332b323b8daab7a6ac41d994bf4563599b27dbc",
+      "date": "2026-11-09",
+      "subject": "feat(agent-core): W6 second-family math criteria with exact counterexamples",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "664f7b8154ce2d36addac25d62a65446f0b4af7d",
+      "date": "2026-11-09",
+      "subject": "feat(orthographic): W7 candidate disambiguation and outline reprojection",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "b96b2cfc72b0e39f3ec22266fa26fca218a2e74d",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W8 risk routing for refuted and image-gap failures",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "070d5b70cffcf88537b9e9147e2fa8c8326f5629",
+      "date": "2026-11-09",
+      "subject": "feat(agent-ui): W9 host-evidence delivery badge",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "0671d571e5a75407b7c52d6a6867cdce148cb77b",
+      "date": "2026-11-09",
+      "subject": "feat(eval): W10 frozen manifest gate and offline production ladder",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "2e2390cc73a426e032f87962f4a68b737785c597",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W11 flag dependency validation, stable rollout buckets and rollback semantics",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "d4aba0f92e10c5421d82a11338d7f2d6d3ddfca5",
+      "date": "2026-11-09",
+      "subject": "test(e2e): W9 delivery e2e, W7 structured-view facts and W10 split reports",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "79960e5da1b58d92a3f337a1a12b004083162b21",
+      "date": "2026-11-09",
+      "subject": "feat(settings): W8 independent-candidate authorization stores a profile reference only",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "1509450dd3968074407b24b59b087497453175d3",
+      "date": "2026-11-09",
+      "subject": "feat(agent): W11 rollout buckets now drive per-session reliability flags",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "adda9cb672b6d5eee33c72ac405ae1c192aebbb6",
+      "date": "2026-11-09",
+      "subject": "feat(agent): retire image reading and align text-only evaluation plans",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "5e01055c85728e5cc5fa5f3e0706e74341455fd1",
+      "date": "2026-11-10",
+      "subject": "test(agent): freeze text-only drawing regression evidence W0",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "a3365efa8c7454b17515066e8e0c77d77c7be962",
+      "date": "2026-11-10",
+      "subject": "feat(agent): enforce certified text drawing before commit W1",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "fc75c13128b17baf788067d8d49c892ff32c7936",
+      "date": "2026-11-10",
+      "subject": "docs: record W1 verified commit in progress log",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "10302ee7a2ef430eb117ecad34e642c045672b82",
+      "date": "2026-11-10",
+      "subject": "feat(agent): route text answers without unauthorized drawings W2",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "c94f4311a1d60414e970ff3ab72ed6c37f78c3cf",
+      "date": "2026-11-10",
+      "subject": "fix(agent): reject historical bad geometry mechanisms W3",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "e71801f24f9fccec672d7d9185f7709a96609922",
+      "date": "2026-11-10",
+      "subject": "feat(agent): enable text reliability by default with certified drawing gate W4",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "d234673106827033ff707ea08d84a9b763d6a080",
+      "date": "2026-11-10",
+      "subject": "test(agent): add W5 certified drawing audit and browser gates",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "cd79da58ef7dbe7590026f78d3b883a5387be8d0",
+      "date": "2026-11-10",
+      "subject": "test(agent): require preregistered independent holdout provenance W5",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "a39c51ff5a46dc81cb43c4971a529b9f4b0a6604",
+      "date": "2026-11-10",
+      "subject": "test(agent): record real offline drawing run with complete attempt denominator W5",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "d2efbd5edfd4d8dcb9e4ea4aa57b84c80046906d",
+      "date": "2026-11-10",
+      "subject": "fix(agent): keep W5 release gate closed without independent review",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "f91bdbdcb163a07a513b47ba1b8359d8979d713c",
+      "date": "2026-11-10",
+      "subject": "docs(agent): screen unreviewed W5 text-only holdout candidate",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "43a8ac494b3d78c510c2e35a19a0c8225d4eb852",
+      "date": "2026-11-10",
+      "subject": "docs(agent): correct unreviewed W5 candidate to new gaokao II",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "78109d2fe4af24b993062f99c0b914a5c111a45e",
+      "date": "2026-11-10",
+      "subject": "docs(agent): exclude answer-only exam candidate from W5 drawing denominator",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "46f8db5a8f3ff457ef87662e3ec7aef746179aba",
+      "date": "2026-11-10",
+      "subject": "docs(agent): register unreviewed school drawing candidate for W5",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "eaa5f78a3b28972e4171ee17e03ee6874e07a3cc",
+      "date": "2026-11-10",
+      "subject": "chore(agent): defer W5 acceptance and keep W0-W4 scope",
+      "status": "abandoned_for_restart_line"
+    },
+    {
+      "hash": "d8743a32aaade8206c339acc030cc5712a11a1b7",
+      "date": "2026-11-10",
+      "subject": "docs(agent): close W0-W4 engineering and plan drawing recovery",
+      "status": "abandoned_for_restart_line"
+    }
+  ]
+}

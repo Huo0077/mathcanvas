@@ -1,0 +1,72 @@
+[
+  {
+    "id": "R1",
+    "publisher": "CGAL",
+    "url": "https://doc.cgal.org/latest/Kernel_23/classCGAL_1_1Exact__predicates__exact__constructions__kernel.html",
+    "finalUrl": "https://doc.cgal.org/latest/Kernel_23/classCGAL_1_1Exact__predicates__exact__constructions__kernel.html",
+    "status": 200,
+    "title": "CGAL 6.2.1 - 2D and 3D Linear Geometry Kernel: CGAL::Exact_predicates_exact_constructions_kernel Class Reference",
+    "characters": 1183,
+    "checkedAt": "2026-11-15T07:18:10.530Z"
+  },
+  {
+    "id": "R2",
+    "publisher": "Shewchuk",
+    "url": "https://www.cs.cmu.edu/~quake/robust.html",
+    "finalUrl": "https://www.cs.cmu.edu/~quake/robust.html",
+    "status": 200,
+    "title": "Fast Robust Predicates for Computational Geometry",
+    "characters": 5126,
+    "checkedAt": "2026-11-15T07:18:12.040Z"
+  },
+  {
+    "id": "R3",
+    "publisher": "SymPy",
+    "url": "https://docs.sympy.org/latest/modules/solvers/solveset.html",
+    "finalUrl": "https://docs.sympy.org/latest/modules/solvers/solveset.html",
+    "status": 200,
+    "title": "Solveset - SymPy 1.14.0 documentation",
+    "characters": 62235,
+    "checkedAt": "2026-11-15T07:18:09.613Z"
+  },
+  {
+    "id": "R4",
+    "publisher": "fast-check",
+    "url": "https://fast-check.dev/docs/introduction/",
+    "finalUrl": "https://fast-check.dev/docs/introduction/",
+    "status": 200,
+    "title": "Introduction | fast-check",
+    "characters": 2185,
+    "checkedAt": "2026-11-15T07:18:11.589Z"
+  },
+  {
+    "id": "R5",
+    "publisher": "Playwright",
+    "url": "https://playwright.dev/docs/test-snapshots",
+    "finalUrl": "https://playwright.dev/docs/test-snapshots",
+    "status": 200,
+    "title": "Visual comparisons | Playwright",
+    "characters": 7656,
+    "checkedAt": "2026-11-15T07:18:11.555Z"
+  },
+  {
+    "id": "R6",
+    "publisher": "NIST",
+    "url": "https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm",
+    "finalUrl": "https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm",
+    "status": 200,
+    "title": "7.2.4.1. Confidence intervals",
+    "characters": 7719,
+    "checkedAt": "2026-11-15T07:18:12.244Z"
+  },
+  {
+    "id": "R7",
+    "publisher": "Z3",
+    "url": "https://microsoft.github.io/z3guide/docs/theories/Arithmetic/",
+    "finalUrl": "https://microsoft.github.io/z3guide/docs/theories/Arithmetic/",
+    "status": 200,
+    "title": "Arithmetic | Online Z3 Guide",
+    "characters": 9197,
+    "checkedAt": "2026-11-15T07:18:12.155Z"
+  }
+]

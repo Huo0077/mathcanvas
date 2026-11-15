@@ -1,0 +1,836 @@
+{
+  "schemaVersion": 1,
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "createdAt": "2026-11-15",
+  "notes": [
+    "No new model calls; derived from saved baseline evidence.",
+    "Diagnostic occurrences include repeated repair attempts and are not counts of distinct failed questions.",
+    "partialOracle exact means only covered checks passed, not whole problem correctness."
+  ],
+  "cases": [
+    {
+      "id": "GK-S01",
+      "source": "2024年新高考I卷 第17题",
+      "category": "solid",
+      "route": "local",
+      "terminal": "awaiting_confirmation",
+      "failedAt": null,
+      "primitiveCount": 19,
+      "acceptanceCount": 0,
+      "hostStatus": "passed",
+      "partialOracle": "exact",
+      "observedRejection": [],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S01.json"
+    },
+    {
+      "id": "GK-S02",
+      "source": "2024年新高考II卷 第17题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 9,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "missing_vertices",
+      "observedRejection": [
+        "AE=2/5 AD：点名缺失：E —— 题面点到了它，图上没有这个对象，未核验。",
+        "AF=1/2 AB：点名缺失：F —— 题面点到了它，图上没有这个对象，未核验。",
+        "PC=4√3：点名缺失：P —— 题面点到了它，图上没有这个对象，未核验。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_failed",
+        "render_label_collision_risk"
+      ],
+      "plannedWork": "P2/P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S02.json"
+    },
+    {
+      "id": "GK-S03",
+      "source": "2024年全国甲卷理科 第19题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "degenerate_polyhedron: solid vertices must not be coplanar",
+        "degenerate_polyhedron: adjacent faces must orient shared edges in opposite directions",
+        "degenerate_polyhedron: solid topology must enclose non-zero volume",
+        "degenerate_polyhedron: face ring [0,1,5,4] is not coplanar: deviation 1.31e+0 exceeds the tolerance 4.0e-9",
+        "degenerate_polyhedron: face ring [0,1,5,4] self-intersects",
+        "degenerate_polyhedron: every vertex must belong to at least one face",
+        "degenerate_polyhedron: solid topology must be connected"
+      ],
+      "allDiagnosticCodes": [
+        "degenerate_polyhedron",
+        "action_blocked_by_dependency"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S03.json"
+    },
+    {
+      "id": "GK-S04",
+      "source": "2024年北京卷 第17题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "relation_not_satisfied: 关系 relation-2（perpendicular）不成立：残差 5.00e-1 超过容差 1.00e-6。",
+        "diagram_condition_failed: AC⊥CD：实测 0.50000，题设要求 0。",
+        "diagram_condition_failed: ∠ABC=60°：实测 120.00，题设要求 60。",
+        "degenerate_polyhedron: face ring [0,1,2,3] self-intersects",
+        "relation_not_satisfied: 关系 relation-1（perpendicular）不成立：残差 5.00e-1 超过容差 1.00e-6。",
+        "relation_not_satisfied: 关系 relation-2（perpendicular）不成立：残差 8.66e-1 超过容差 1.00e-6。"
+      ],
+      "allDiagnosticCodes": [
+        "relation_not_satisfied",
+        "diagram_condition_failed",
+        "degenerate_polyhedron"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S04.json"
+    },
+    {
+      "id": "GK-S05",
+      "source": "2023年新高考I卷 第18题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "awaiting_confirmation",
+      "failedAt": null,
+      "primitiveCount": 36,
+      "acceptanceCount": 0,
+      "hostStatus": "passed",
+      "partialOracle": "exact",
+      "observedRejection": [],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P4/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S05.json"
+    },
+    {
+      "id": "GK-S06",
+      "source": "2023年新高考II卷 第20题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 28,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "exact",
+      "observedRejection": [
+        "∠ADB =：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S06.json"
+    },
+    {
+      "id": "GK-S07",
+      "source": "2022年新高考I卷 第19题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "diagram_condition_failed: 平面 A₁BC⊥平面 ABB₁A₁：实测 0.57735，题设要求 0。",
+        "edge_not_found: no edge between A₁ and C on solid-1; known names: C, B, A, A₁, B₁, C₁",
+        "segment_reference_missing: 这些点名在这份文档里找不到对应的点：D —— 同一份计划是**按顺序**执行的，所以这一笔必须排在**建出这些点**的那几笔**之后**（带 `vertexNames` 的实体 / 面片、`dynamic.create_bound_point`、`solid.fold` 都会建点）。请把这一笔**移到后面**（这是顺序问题，不是名字问题）。",
+        "edge_not_found: no edge between A₁ and C on solid-2; known names: A, C, B, A₁, B₁, C₁",
+        "diagram_condition_failed: AA₁=AB：实测 2.0000，题设要求 2.3094010767585034。",
+        "diagram_condition_failed: 平面 A₁BC⊥平面 ABB₁A₁：实测 0.40000，题设要求 0。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_failed",
+        "diagram_condition_unverified",
+        "edge_not_found",
+        "segment_reference_missing",
+        "render_near_coincident_points"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S07.json"
+    },
+    {
+      "id": "GK-S08",
+      "source": "2022年全国甲卷理科 第18题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "diagram_condition_failed: AB=2：实测 1.0000，题设要求 2。",
+        "relation_not_satisfied: 关系 relation-1（parallel）不成立：残差 5.00e-1 超过容差 1.00e-6。",
+        "diagram_condition_failed: CD∥AB：实测 0.50000，题设要求 0。",
+        "diagram_condition_failed: AD=DC=CB=1：实测 1.7321，题设要求 1。",
+        "diagram_condition_failed: AD=DC=CB=1：实测 1.0000，题设要求 1.7320508075688772。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_failed",
+        "relation_not_satisfied"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S08.json"
+    },
+    {
+      "id": "GK-S09",
+      "source": "2010年新课标全国卷 第10题 (GAOKAO-Bench text-7)",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 22,
+      "acceptanceCount": 1,
+      "hostStatus": "unverified",
+      "partialOracle": "drawn",
+      "observedRejection": [
+        "10.(5分)设三棱柱的侧棱垂直于底面：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "则该球的表面积为（）A.πa²B.7/3πa²C.11/3πa²D.5πa²：球的半径 / 表面积今天没有判据（要按球的图元量，而不是按某个截面）。如实未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P4/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-S09.json"
+    },
+    {
+      "id": "JT-S01",
+      "source": "2025年八省联考 第17题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "fold_reference_missing: 将 △ACD 沿 AC 翻折至 △ACP：折叠尚未完成：缺少点 D，不能只凭底图条件宣布通过。",
+        "diagram_condition_failed: AB=AC=CD=1：实测 1.2856，题设要求 1。（按**折前状态**核验：D 取折片折前坐标，折后它叫 P。）",
+        "diagram_condition_failed: ∠ADC=30°：实测 50.000，题设要求 30。（按**折前状态**核验：D 取折片折前坐标，折后它叫 P。）",
+        "diagram_condition_failed: PC⊥AB：实测 0.49240，题设要求 0。",
+        "fold_reference_missing: 折痕两端与顶点都必须是这只片上的点名（这片上有 A、C、P）。",
+        "fold_reference_missing: 将 △ACD 沿 AC 翻折至 △ACP：折叠尚未完成：缺少点 D、P，不能只凭底图条件宣布通过。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_unverified",
+        "fold_reference_missing",
+        "diagram_condition_failed",
+        "action_blocked_by_dependency",
+        "render_near_coincident_points"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S01.json"
+    },
+    {
+      "id": "JT-S02",
+      "source": "2024年九省联考 第17题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "edge_not_found: no edge between A1 and B1 on solid-1; known names: A, B, C, B₁, A₁, C₁",
+        "segment_reference_missing: 这些点名在这份文档里找不到对应的点：P —— 同一份计划是**按顺序**执行的，所以这一笔必须排在**建出这些点**的那几笔**之后**（带 `vertexNames` 的实体 / 面片、`dynamic.create_bound_point`、`solid.fold` 都会建点）。请把这一笔**移到后面**（这是顺序问题，不是名字问题）。",
+        "relation_not_satisfied: 关系 relation-0（perpendicular）不成立：残差 7.07e-1 超过容差 1.00e-6。",
+        "diagram_condition_failed: C₁B⊥平面 ABC：实测 0.70711，题设要求 0。",
+        "edge_not_found: no edge between A1 and B1 on solid-2; known names: A, B, C, C₁, B₁, A₁",
+        "degenerate_polyhedron: face ring [1,2,5,4] self-intersects",
+        "degenerate_polyhedron: face ring [2,0,3,5] is not coplanar: deviation 2.31e+0 exceeds the tolerance 2.0e-9",
+        "unresolved_alias: no object has been created under the alias 'prism' before this action"
+      ],
+      "allDiagnosticCodes": [
+        "edge_not_found",
+        "segment_reference_missing",
+        "relation_not_satisfied",
+        "diagram_condition_failed",
+        "diagram_condition_unverified",
+        "relation_not_checkable",
+        "degenerate_polyhedron",
+        "unresolved_alias",
+        "action_blocked_by_dependency"
+      ],
+      "plannedWork": "P2/P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S02.json"
+    },
+    {
+      "id": "JT-S03",
+      "source": "2025届T8联考（12月） 第16题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "diagram_condition_failed: AP=AD=2AB=4BC：实测 0.76393，题设要求 0。",
+        "diagram_condition_failed: AP=AD=2AB=4BC：实测 2.0000，题设要求 1。",
+        "diagram_condition_failed: AP=AD=2AB=4BC：实测 0.38197，题设要求 0。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_failed",
+        "diagram_condition_unverified"
+      ],
+      "plannedWork": "P2/P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S03.json"
+    },
+    {
+      "id": "JT-S04",
+      "source": "2025届武汉市二月调考 第16题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "degenerate_face: 空间面的顶点必须互异。",
+        "degenerate_polyhedron: face ring [2,3,0,1] is not coplanar: deviation 4.03e-1 exceeds the tolerance 9.0e-9",
+        "relation_not_satisfied: 关系 relation-1（perpendicular）不成立：残差 5.81e-1 超过容差 1.00e-6。",
+        "relation_not_satisfied: 关系 relation-2（parallel）不成立：残差 4.54e-2 超过容差 1.00e-6。",
+        "diagram_condition_failed: AD=9：实测 6.7082，题设要求 9。",
+        "diagram_condition_failed: CF⊥BD：实测 0.39195，题设要求 0。"
+      ],
+      "allDiagnosticCodes": [
+        "degenerate_face",
+        "render_near_coincident_points",
+        "degenerate_polyhedron",
+        "relation_not_satisfied",
+        "diagram_condition_failed",
+        "diagram_condition_unverified"
+      ],
+      "plannedWork": "P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S04.json"
+    },
+    {
+      "id": "JT-S05",
+      "source": "2025年广州市一模 第16题",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "relation_not_satisfied: 关系 relation-0（parallel）不成立：顶点 AB、CD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-1（parallel）不成立：顶点 BC、AD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-2（perpendicular）不成立：顶点 AB、BC 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-3（equalLength）不成立：顶点 AB、CD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-4（equalLength）不成立：顶点 AD、BC 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-5（equalLength）不成立：顶点 PC、PD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-6（equalLength）不成立：顶点 PC、CD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-7（equalLength）不成立：顶点 PD、CD 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "relation_not_satisfied: 关系 relation-8（coplanar）不成立：顶点 A、B、C、D 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。",
+        "diagram_condition_failed: 三角形 PCD 为等边三角形：实测 0.81597，题设要求 0。",
+        "diagram_condition_failed: PC=PD=CD：实测 1.1840，题设要求 1.6929339634095002。",
+        "diagram_condition_failed: PC=PD=CD：实测 2.0000，题设要求 1.184028626482759。",
+        "relation_not_satisfied: 关系 rel-coplanar-abcd（coplanar）不成立：顶点 A、B、C、D 没能对应到这份计划里的任何坐标，所以这条关系**无法核验**（不是\"不成立\"）。请用 solid.create_polyhedron 的 vertexNames 说出每个顶点的名字（与 vertices 一一对应）。"
+      ],
+      "allDiagnosticCodes": [
+        "relation_not_satisfied",
+        "diagram_condition_failed",
+        "diagram_condition_unverified"
+      ],
+      "plannedWork": "P2/P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S05.json"
+    },
+    {
+      "id": "JT-S06",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第17题 (jyeoo)",
+      "category": "solid",
+      "route": "native",
+      "terminal": "awaiting_confirmation",
+      "failedAt": null,
+      "primitiveCount": 19,
+      "acceptanceCount": 0,
+      "hostStatus": "passed",
+      "partialOracle": "exact",
+      "observedRejection": [],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P4/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S06.json"
+    },
+    {
+      "id": "JT-S07",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第16题 (jyeoo)",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "diagram_condition_failed: AF=AB=BC=FE=1/2 AD：实测 2.0000，题设要求 1。",
+        "diagram_condition_failed: AF=AB=BC=FE=1/2 AD：实测 1.0000，题设要求 2。",
+        "diagram_condition_failed: AF=AB=BC=FE=1/2 AD：实测 0.25000，题设要求 0.5。",
+        "degenerate_polyhedron: face ring [2,3,4,5] is not coplanar: deviation 4.08e-1 exceeds the tolerance 2.0e-9",
+        "degenerate_polyhedron: face ring [2,3,4,5] self-intersects",
+        "degenerate_polyhedron: face ring [3,2,4,5] is not coplanar: deviation 7.07e-1 exceeds the tolerance 2.0e-9",
+        "relation_not_satisfied: 关系 relation-3（parallel）不成立：残差 7.07e-1 超过容差 1.00e-6。"
+      ],
+      "allDiagnosticCodes": [
+        "diagram_condition_failed",
+        "diagram_condition_unverified",
+        "degenerate_polyhedron",
+        "relation_not_satisfied"
+      ],
+      "plannedWork": "P2/P4",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S07.json"
+    },
+    {
+      "id": "JT-S08",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第15题 (jyeoo)",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 23,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "exact",
+      "observedRejection": [
+        "各小问的条件：题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S08.json"
+    },
+    {
+      "id": "JT-S09",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第4题 (jyeoo)",
+      "category": "solid",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 29,
+      "acceptanceCount": 1,
+      "hostStatus": "unverified",
+      "partialOracle": "drawn",
+      "observedRejection": [
+        "正方体的一个面在半球的底面圆内：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "则半球的表面积为（　　）：球的半径 / 表面积今天没有判据（要按球的图元量，而不是按某个截面）。如实未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P4/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-S09.json"
+    },
+    {
+      "id": "GK-P01",
+      "source": "2025年新高考II卷 第16题",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 2,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4：题面给了焦点 / 离心率，但**没有说中心（顶点）在原点** —— 曲线摆在哪儿定不下来，不推方程，未核验。",
+        "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P01.json"
+    },
+    {
+      "id": "GK-P02",
+      "source": "2022年全国乙卷理科 第20题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 6,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "MT=TH：点名缺失：M、T、H —— 题面点到了它们，图上没有这个对象，未核验。",
+        "过M且平行于x轴的直线与线段AB交于点T：这个条件没有被可靠解析或数值非法，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P02.json"
+    },
+    {
+      "id": "GK-P03",
+      "source": "2022年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 5,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "设抛物线C:y²=2px(p>0)的焦点为F：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "N两点.当直线MD垂直于x轴时：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P03.json"
+    },
+    {
+      "id": "GK-P04",
+      "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 5,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "f(x)=x^{3}-x：题面函数表达式无法解析。请检查公式的括号、运算符或分式范围。",
+        "g(x)=x²+a：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "曲线y=f(x)在点(x₁：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "f(x₁))处的切线也是曲线y=g(x)的切线.：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "(1)若x₁=-1：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P04.json"
+    },
+    {
+      "id": "GK-P05",
+      "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "compiling",
+      "primitiveCount": 0,
+      "acceptanceCount": 0,
+      "hostStatus": null,
+      "partialOracle": "no_drawing",
+      "observedRejection": [
+        "diagram_condition_failed: OP⊥OQ：实测 0.60000，题设要求 0。",
+        "invalid_expression: cannot parse the expression y^2=4*x",
+        "diagram_condition_failed: 直线x=1与抛物线C交于P、Q两点：题面说这条直线与曲线相交于两点，实测是相切（一个二重交点）。最大偏差 1.0000，容差 1.0000e-9。",
+        "invalid_expression: cannot parse the expression y^2=4x"
+      ],
+      "allDiagnosticCodes": [
+        "relation_not_checkable",
+        "diagram_condition_failed",
+        "diagram_condition_unverified",
+        "invalid_expression"
+      ],
+      "plannedWork": "P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P05.json"
+    },
+    {
+      "id": "GK-P06",
+      "source": "2019年新课标III理科 第21题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 12,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "已知曲线C:y=(x²)/2：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "D为直线y=-1/2上的动点：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "各小问的条件：题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P06.json"
+    },
+    {
+      "id": "GK-P07",
+      "source": "2021年新高考I卷 第21题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 3,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "已知抛物线C:x²=2py(p>0)的焦点为F：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "且F与圆M:x²+(y+4)²=1上点的距离的最小值为4.：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "各小问的条件：题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P07.json"
+    },
+    {
+      "id": "GK-P08",
+      "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 6,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "双曲线y²-(x²)/(m²)=1(m>0)的渐近线与圆            相切：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P08.json"
+    },
+    {
+      "id": "GK-P09",
+      "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 3,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "drawn",
+      "observedRejection": [
+        "f(x)=x^{4}-2x^{3}：题面函数表达式无法解析。请检查公式的括号、运算符或分式范围。",
+        "f(1))处的切线方程为()A.y=-2x-1B.y=-2x+1C.y=2x-3D.y=2x+1：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/GK-P09.json"
+    },
+    {
+      "id": "JT-P01",
+      "source": "2025年八省联考 第18题",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 10,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "所以 c=1：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "又离心率 e=c/a=1/2：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "故 a=2：原题出现了尚未被可靠解析的几何条件，未核验。",
+        "b²=a²-c²=3：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P1/P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P01.json"
+    },
+    {
+      "id": "JT-P02",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第18题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 8,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "exact",
+      "observedRejection": [
+        "点 P 在定直线 x=-1 上运动：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P02.json"
+    },
+    {
+      "id": "JT-P03",
+      "source": "2025年湖北省新八校协作体联考（2月） 第18题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 11,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "y²=4x：候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。",
+        "OB 分别与直线 l：y=x+1 交于点 D：这个条件没有被可靠解析或数值非法，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P1/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P03.json"
+    },
+    {
+      "id": "JT-P04",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第17题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 13,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "exact",
+      "observedRejection": [
+        "4) 在抛物线 Γ：x²=2py 上：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+      ],
+      "allDiagnosticCodes": [
+        "degenerate_line",
+        "diagram_condition_unverified"
+      ],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P04.json"
+    },
+    {
+      "id": "JT-P05",
+      "source": "2025年重庆市金太阳联考（5月） 第16题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 3,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "exact",
+      "observedRejection": [
+        "已知双曲线 x²/a² - y²/b² = 1 过点 (3：这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+        "过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P05.json"
+    },
+    {
+      "id": "JT-P06",
+      "source": "2025年湖南省一起考大联考（二） 第19题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 8,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "incorrect",
+      "observedRejection": [
+        "|F₁F₂|=2：点名缺失：F₁、F₂ —— 题面点到了它们，图上没有这个对象，未核验。",
+        "各小问的条件：题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P06.json"
+    },
+    {
+      "id": "JT-P07",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第19题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 7,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "incorrect",
+      "observedRejection": [
+        "椭圆 C 过点 A：候选图里没有唯一、可读的圆锥曲线（少了或多了一条），或那个点的坐标不是有限数，未核验。",
+        "BQ 分别交直线 x=3 于 E：原题出现了尚未被可靠解析的几何条件，未核验。"
+      ],
+      "allDiagnosticCodes": [
+        "too_few_points",
+        "diagram_condition_unverified"
+      ],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P07.json"
+    },
+    {
+      "id": "JT-P08",
+      "source": "2025年四省天一大联考（二） 第15题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "failed",
+      "failedAt": "validating",
+      "primitiveCount": 6,
+      "acceptanceCount": 0,
+      "hostStatus": "unverified",
+      "partialOracle": "partial",
+      "observedRejection": [
+        "EC=2：点名缺失：E —— 题面点到了它，图上没有这个对象，未核验。"
+      ],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P2/P3",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P08.json"
+    },
+    {
+      "id": "JT-P09",
+      "source": "2025年重庆市金太阳联考（5月） 第4题 (jyeoo)",
+      "category": "plane",
+      "route": "native",
+      "terminal": "awaiting_confirmation",
+      "failedAt": null,
+      "primitiveCount": 10,
+      "acceptanceCount": 0,
+      "hostStatus": "passed",
+      "partialOracle": "drawn",
+      "observedRejection": [],
+      "allDiagnosticCodes": [],
+      "plannedWork": "P3/P6",
+      "rootCauseStatus": "observed_symptom_not_fully_proven",
+      "rawResult": "eval-results/real-exam-drawing-59ea3613-20261115/results/JT-P09.json"
+    }
+  ]
+}

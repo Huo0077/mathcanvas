@@ -1,0 +1,83 @@
+{
+  "date": "2026-11-15",
+  "scope": "precommit_documentation_and_lineage_verification",
+  "base": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "expectedOldRemoteMain": "d8743a32aaade8206c339acc030cc5712a11a1b7",
+  "archiveBranch": "archive/abandoned-post-59ea3613-20261115",
+  "archiveRemoteVerified": true,
+  "stagedFilesBeforeThisReceipt": [
+    ".gitattributes",
+    "CHANGELOG.md",
+    "README.md",
+    "docs/agent-next-round-progress.md",
+    "docs/audit/2026-11-15-drawing-baseline/README.md",
+    "docs/audit/2026-11-15-drawing-baseline/baseline-report.json",
+    "docs/audit/2026-11-15-drawing-baseline/case-triage.json",
+    "docs/audit/2026-11-15-drawing-baseline/documentation-verification.json",
+    "docs/audit/2026-11-15-drawing-baseline/manifest.json",
+    "docs/audit/2026-11-15-drawing-baseline/partial-oracle-audit.json",
+    "docs/audit/2026-11-15-drawing-implementation-audit/README.md",
+    "docs/audit/2026-11-15-drawing-implementation-audit/case-task-map.json",
+    "docs/audit/2026-11-15-drawing-implementation-audit/oracle-check-scope.txt",
+    "docs/audit/2026-11-15-drawing-implementation-audit/read-only-probes.json",
+    "docs/audit/2026-11-15-drawing-implementation-audit/reference-checks.json",
+    "docs/audit/2026-11-15-drawing-implementation-audit/source-map.json",
+    "docs/audit/2026-11-15-drawing-implementation-audit/verification.json",
+    "docs/audit/2026-11-15-main-restart/README.md",
+    "docs/audit/2026-11-15-main-restart/abandoned-history.json",
+    "docs/audit/2026-11-15-pre-reset/README.md",
+    "docs/audit/2026-11-15-pre-reset/agent-next-round-progress.md",
+    "docs/audit/2026-11-15-pre-reset/current-status.md",
+    "docs/audit/2026-11-15-pre-reset/project-progress.md",
+    "docs/audit/2026-11-15-project-cleanup/README.md",
+    "docs/audit/2026-11-15-project-cleanup/cleanup-report.json",
+    "docs/audit/2026-11-15-project-review/README.md",
+    "docs/audit/2026-11-15-review-plan-response/README.md",
+    "docs/audit/2026-11-15-review-plan-response/finding-task-map.json",
+    "docs/audit/2026-11-15-review-plan-response/source-checks.json",
+    "docs/audit/2026-11-15-review-plan-response/verification.json",
+    "docs/current-status.md",
+    "docs/project-progress.md",
+    "docs/research/2026-11-15-drawing-repair-implementation-references.md",
+    "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md",
+    "docs/superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md",
+    "docs/superpowers/plans/2026-11-15-main-restart-master-plan.md",
+    "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md",
+    "docs/superpowers/specs/2026-11-15-drawing-reliability-design.md"
+  ],
+  "applicationCodeChanged": false,
+  "immutableSnapshotsByteIdenticalInIndex": [
+    "docs/audit/2026-11-15-pre-reset/current-status.md",
+    "docs/audit/2026-11-15-pre-reset/project-progress.md",
+    "docs/audit/2026-11-15-pre-reset/agent-next-round-progress.md",
+    "docs/audit/2026-11-15-project-review/README.md"
+  ],
+  "baselineJsonByteIdenticalInIndex": 4,
+  "localMarkdownLinks": {
+    "checked": 243,
+    "broken": 0,
+    "files": 17,
+    "excluded": "historical original snapshots and original review; preserved byte-for-byte, not live navigation",
+    "notes": "Includes the added README link to this receipt, verified after initial staged scan."
+  },
+  "abandonedCommitsVerified": 47,
+  "reviewFindingsAndWarningMapped": 25,
+  "docsTests": {
+    "command": "npm.cmd run test:docs -- --testTimeout=30000",
+    "exitCode": 0,
+    "files": 8,
+    "passed": 22,
+    "failed": 0
+  },
+  "stagedDiffCheck": {
+    "exitCode": 0,
+    "archiveCrLfPreservedWithNarrowCrAtEolAttribute": true
+  },
+  "secretPatternScan": {
+    "flaggedFiles": 0,
+    "scope": "private-key blocks and common long token patterns; not a full security audit"
+  },
+  "productTestsRerun": false,
+  "newModelRequests": 0,
+  "commitAndMainPushStatus": "must_be_verified_after_commit; no fabricated future hash"
+}

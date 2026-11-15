@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-15",
+  "reviewFile": "docs/audit/2026-11-15-project-review/README.md",
+  "reviewSha256": "bb6798f0e60ddbe3727f1b7e59522ab7451f5a7807016e5c1d693dbafa60215a",
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "notes": [
+    "C1 and I1-I3 are planning aliases for unnamed report sections; W1 is an additional lint warning item, not another MEDIUM/LOW finding.",
+    "All tasks are proposed and unimplemented; original review is unchanged."
+  ],
+  "findings": [
+    {
+      "id": "C1",
+      "severity": "CRITICAL",
+      "section": "3",
+      "title": "后续小问题设丢失及错误放行",
+      "tasks": [
+        "R01"
+      ],
+      "gates": [
+        "G0"
+      ],
+      "legacyTasks": [
+        "T02",
+        "T13",
+        "T14"
+      ],
+      "acceptance": "裸条件/设/且变式的错误候选不能passed或进入确认",
+      "status": "not_started"
+    },
+    {
+      "id": "H1",
+      "severity": "HIGH",
+      "section": "4.1",
+      "title": "凭据未绑定profile和endpoint",
+      "tasks": [
+        "R02"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T14",
+        "T18"
+      ],
+      "acceptance": "跨profile引用、端点切换与重定向不能转发旧密钥",
+      "status": "not_started"
+    },
+    {
+      "id": "H2",
+      "severity": "HIGH",
+      "section": "4.2",
+      "title": "未授权导出文件写入",
+      "tasks": [
+        "R04"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T16"
+      ],
+      "acceptance": "无原生授权不能写任意路径；目标外无新文件",
+      "status": "not_started"
+    },
+    {
+      "id": "H3",
+      "severity": "HIGH",
+      "section": "4.3",
+      "title": "归档重复数据引用和聚合放大",
+      "tasks": [
+        "R05"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T16"
+      ],
+      "acceptance": "重叠/重复offset及超聚合预算在CRC/克隆前拒绝",
+      "status": "not_started"
+    },
+    {
+      "id": "H4",
+      "severity": "HIGH",
+      "section": "4.4",
+      "title": "第三方Action可变引用",
+      "tasks": [
+        "R10"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T18"
+      ],
+      "acceptance": "上游身份与完整SHA核验，CI固定到不可变提交",
+      "status": "not_started"
+    },
+    {
+      "id": "M1",
+      "severity": "MEDIUM",
+      "section": "5.1",
+      "title": "辅助曲线阻断函数交点核验",
+      "tasks": [
+        "R07"
+      ],
+      "gates": [
+        "G2"
+      ],
+      "legacyTasks": [
+        "T05",
+        "T08",
+        "T13"
+      ],
+      "acceptance": "所有函数义务按同一实体绑定，辅助曲线不改变正确结论",
+      "status": "not_started"
+    },
+    {
+      "id": "M2",
+      "severity": "MEDIUM",
+      "section": "5.2",
+      "title": "题图关系与精确坐标绕过复核",
+      "tasks": [
+        "R07"
+      ],
+      "gates": [
+        "G2"
+      ],
+      "legacyTasks": [
+        "T02",
+        "T16"
+      ],
+      "acceptance": "未知/连接类观察默认待核对，未确认不进入prompt",
+      "status": "not_started"
+    },
+    {
+      "id": "M3",
+      "severity": "MEDIUM",
+      "section": "5.3",
+      "title": "CSV公式注入",
+      "tasks": [
+        "R06"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T16"
+      ],
+      "acceptance": "不可信文本前缀安全，可信数值负数保持数值",
+      "status": "not_started"
+    },
+    {
+      "id": "M4",
+      "severity": "MEDIUM",
+      "section": "5.4",
+      "title": "provider失败补偿丢失旧凭据",
+      "tasks": [
+        "R02"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T14"
+      ],
+      "acceptance": "新建/编辑/换端点失败及崩溃后旧凭据可恢复且不外泄",
+      "status": "not_started"
+    },
+    {
+      "id": "M5",
+      "severity": "MEDIUM",
+      "section": "5.5",
+      "title": "草稿备份失败仍覆盖原文",
+      "tasks": [
+        "R06"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T14",
+        "T16"
+      ],
+      "acceptance": "配额异常后原键不被自动保存覆盖，重载仍保护",
+      "status": "not_started"
+    },
+    {
+      "id": "M6",
+      "severity": "MEDIUM",
+      "section": "5.6",
+      "title": "IPv6及DNS SSRF校验不足",
+      "tasks": [
+        "R03"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T12",
+        "T18"
+      ],
+      "acceptance": "公共地址解析固定，私有/映射地址及重绑定被拒绝",
+      "status": "not_started"
+    },
+    {
+      "id": "M7",
+      "severity": "MEDIUM",
+      "section": "5.7",
+      "title": "非成功HTTP响应无缓冲上限",
+      "tasks": [
+        "R03"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T12"
+      ],
+      "acceptance": "限长/取消先于扩容，chunked及压缩展开同样受控",
+      "status": "not_started"
+    },
+    {
+      "id": "M8",
+      "severity": "MEDIUM",
+      "section": "5.8",
+      "title": "属性栏/网格/外接球披露契约未决",
+      "tasks": [
+        "R08"
+      ],
+      "gates": [
+        "G2"
+      ],
+      "legacyTasks": [
+        "T15",
+        "T16"
+      ],
+      "acceptance": "宽度和网格明确裁决；内核外接球披露来自生产数据",
+      "status": "not_started"
+    },
+    {
+      "id": "M9",
+      "severity": "MEDIUM",
+      "section": "5.9",
+      "title": "E2E定位器与生产UI漂移",
+      "tasks": [
+        "R08"
+      ],
+      "gates": [
+        "G2"
+      ],
+      "legacyTasks": [
+        "T15",
+        "T16"
+      ],
+      "acceptance": "当前可访问契约和Page Object复用，不靠延时重试过关",
+      "status": "not_started"
+    },
+    {
+      "id": "M10",
+      "severity": "MEDIUM",
+      "section": "5.10",
+      "title": "CI token权限未最小化",
+      "tasks": [
+        "R10"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T18"
+      ],
+      "acceptance": "contents read默认、job额外权限有依据",
+      "status": "not_started"
+    },
+    {
+      "id": "M11",
+      "severity": "MEDIUM",
+      "section": "5.11",
+      "title": "开发工具链锁定版本公告",
+      "tasks": [
+        "R11"
+      ],
+      "gates": [
+        "G2"
+      ],
+      "legacyTasks": [
+        "T18"
+      ],
+      "acceptance": "独立更新锁文件、干净安装及审计闭环",
+      "status": "not_started"
+    },
+    {
+      "id": "L1",
+      "severity": "LOW",
+      "section": "6",
+      "title": "发布schema和runtime不一致",
+      "tasks": [
+        "R09"
+      ],
+      "gates": [
+        "G0",
+        "G2"
+      ],
+      "legacyTasks": [
+        "T12"
+      ],
+      "acceptance": "空白/长度/可选字段差分测试并固定支持子集",
+      "status": "not_started"
+    },
+    {
+      "id": "L2",
+      "severity": "LOW",
+      "section": "6",
+      "title": "任意轮次旧答案可替最终错误答案过关",
+      "tasks": [
+        "R09"
+      ],
+      "gates": [
+        "G0"
+      ],
+      "legacyTasks": [
+        "T01",
+        "T17"
+      ],
+      "acceptance": "只对最终接受计划/候选判定；两轮正反例齐全",
+      "status": "not_started"
+    },
+    {
+      "id": "L3",
+      "severity": "LOW",
+      "section": "6",
+      "title": "附件base64在限额前分配",
+      "tasks": [
+        "R05"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T16"
+      ],
+      "acceptance": "编码长度预检、受限解码、前端读取前校验",
+      "status": "not_started"
+    },
+    {
+      "id": "L4",
+      "severity": "LOW",
+      "section": "6",
+      "title": "第一方Action与checkout凭据加固",
+      "tasks": [
+        "R10"
+      ],
+      "gates": [
+        "G1"
+      ],
+      "legacyTasks": [
+        "T18"
+      ],
+      "acceptance": "所有Action固定SHA，checkout不持久化不需要的token",
+      "status": "not_started"
+    },
+    {
+      "id": "L5",
+      "severity": "LOW",
+      "section": "6",
+      "title": "首屏包大和静态导入",
+      "tasks": [
+        "R12"
+      ],
+      "gates": [
+        "G4"
+      ],
+      "legacyTasks": [
+        "T15",
+        "T18"
+      ],
+      "acceptance": "冷启动/首次作图实测对比，无功能或取消链退化",
+      "status": "not_started"
+    },
+    {
+      "id": "I1",
+      "severity": "INFO",
+      "section": "7",
+      "title": "本地基线与远端差异",
+      "tasks": [
+        "R00"
+      ],
+      "gates": [
+        "G0"
+      ],
+      "legacyTasks": [
+        "T01"
+      ],
+      "acceptance": "沿用用户指定59ea3613；迁移需另批，不自动pull",
+      "status": "not_started"
+    },
+    {
+      "id": "I2",
+      "severity": "INFO",
+      "section": "7",
+      "title": "本机安装与CI环境不一致",
+      "tasks": [
+        "R00",
+        "R11"
+      ],
+      "gates": [
+        "G0",
+        "G2"
+      ],
+      "legacyTasks": [
+        "T01",
+        "T18"
+      ],
+      "acceptance": "Node22/npm锁文件隔离验证，不清洗活动工作区",
+      "status": "not_started"
+    },
+    {
+      "id": "I3",
+      "severity": "INFO",
+      "section": "2.2/7",
+      "title": "RustSec/安装/付费等验证限制",
+      "tasks": [
+        "R11",
+        "R12"
+      ],
+      "gates": [
+        "G2",
+        "G4"
+      ],
+      "legacyTasks": [
+        "T17",
+        "T18"
+      ],
+      "acceptance": "未执行项明确标记；禁止用历史结果填补",
+      "status": "not_started"
+    },
+    {
+      "id": "W1",
+      "severity": "WARNING",
+      "section": "6",
+      "title": "16项unused lint警告",
+      "tasks": [
+        "R12"
+      ],
+      "gates": [
+        "G4"
+      ],
+      "legacyTasks": [
+        "T18"
+      ],
+      "acceptance": "逐项确认无用再移除，不关闭规则或删除有用测试",
+      "status": "not_started"
+    }
+  ]
+}

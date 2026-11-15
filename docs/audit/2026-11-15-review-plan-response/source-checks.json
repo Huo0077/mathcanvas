@@ -1,0 +1,108 @@
+{
+  "revision": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "method": "read_only_source_cross_check_not_new_runtime_reproduction",
+  "files": [
+    {
+      "file": "packages/agent-core/src/diagramObligations.ts",
+      "start": 2150,
+      "end": 2176,
+      "sha256": "45cd8e681395ecfe42456380fd0baa39103efeed9ce44f6f5dd256aa54fa2204"
+    },
+    {
+      "file": "packages/agent-core/src/numberedProblem.ts",
+      "start": 11,
+      "end": 25,
+      "sha256": "f5a198f4b2c734754245fcef84721acedadd95d3e725d9fbba527d2ac3af6d02"
+    },
+    {
+      "file": "packages/agent-core/src/obligationIR.ts",
+      "start": 304,
+      "end": 321,
+      "sha256": "cafde71de52da7ab1c528c1d8bfcb43ef71534c8772b27cb58905f570a812dcd"
+    },
+    {
+      "file": "packages/agent-core/src/planCompiler.ts",
+      "start": 786,
+      "end": 816,
+      "sha256": "387eb48a68fbcd85eb08d4f923df6472856ba90f1942c3140798bb5e418391f9"
+    },
+    {
+      "file": "packages/agent-core/src/diagramVerification.ts",
+      "start": 2439,
+      "end": 2482,
+      "sha256": "d1558640538d8e47d898abd2095671dda72ec30d86750d51926f5ca614f5d1ca"
+    },
+    {
+      "file": "apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts",
+      "start": 290,
+      "end": 313,
+      "sha256": "e2e8a657e75b6719d45c630c0b2b69b0964d0aec5b5c8011bc1b2c38f4002ab4"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/commands/providers.rs",
+      "start": 214,
+      "end": 218,
+      "sha256": "a400f047c15600ede4575f590ad2b960a87a7650d178a6488074406b6cfb0bfc"
+    },
+    {
+      "file": "apps/web/src/services/providerProfileClient.ts",
+      "start": 237,
+      "end": 258,
+      "sha256": "8f0f85ae65757acff7673d9b2008a2ba8ca483a00107592a603eb9200c8a148a"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/repository/archive.rs",
+      "start": 207,
+      "end": 264,
+      "sha256": "a264261bbaa51f741ad6dd27721903e2868864fdd2037c25f462e740afde5e1d"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/repository/package.rs",
+      "start": 419,
+      "end": 447,
+      "sha256": "100cee736bb13ef1b459400337a432049b583b17a897cb1bbb53b9c312f6551f"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/commands/repository.rs",
+      "start": 207,
+      "end": 227,
+      "sha256": "c8a66e3bde40e7f7a4ac0d46a9d94fbd0869ae4f877d24ed6c511d8f749a4c00"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/providers/adapter.rs",
+      "start": 586,
+      "end": 604,
+      "sha256": "52c162f5fc18e9619dd3f6f6c299b43bf5ef28321ec05db263372ef2a5091794"
+    },
+    {
+      "file": "apps/desktop/src-tauri/src/proxy/security.rs",
+      "start": 209,
+      "end": 239,
+      "sha256": "2e862f622ce4cc48c44befe45cc9c55b54a1147eaa7dfbed191fb93972ace6f8"
+    },
+    {
+      "file": "apps/web/src/persistence/draftStorage.ts",
+      "start": 105,
+      "end": 115,
+      "sha256": "eb6b3c833ac90dbe4850911a969a9aa1d14137c674f5706d5b0964cacf15bb0e"
+    },
+    {
+      "file": "apps/web/src/useDraftPersistence.ts",
+      "start": 248,
+      "end": 257,
+      "sha256": "d8f0f05e9a42175142ceb834d825c703726262d6d30ec522722d877108305611"
+    },
+    {
+      "file": "apps/web/src/services/problemImageReview.ts",
+      "start": 3,
+      "end": 47,
+      "sha256": "b8b49274b4850b8cb1f23853cdabbbeef37a19e4fd217678d74eeb06aa814016"
+    },
+    {
+      "file": ".github/workflows/ci.yml",
+      "start": 1,
+      "end": 150,
+      "sha256": "18706c5877e372c409e5bd95c84fc01f077c31b74cd560da69600f09c6cd2661"
+    }
+  ]
+}

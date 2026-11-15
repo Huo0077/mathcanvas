@@ -1,0 +1,375 @@
+{
+  "createdAt": "2026-11-10T15:02:46.186Z",
+  "count": 36,
+  "counts": {
+    "gaokao": 18,
+    "joint": 18,
+    "plane": 18,
+    "solid": 18,
+    "open_ended": 31,
+    "fill_in": 1,
+    "mcq": 4
+  },
+  "cases": [
+    {
+      "id": "GK-S01",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年新高考I卷 第17题",
+      "question": "如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。（1）若 AD⊥PB，证明：AD∥平面 PBC；（2）若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。",
+      "questionSha256": "59a8492e114b05000b78c0fac8007cb4f6528abe0826fe71977a825e9e9824de"
+    },
+    {
+      "id": "GK-S02",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年新高考II卷 第17题",
+      "question": "如图，平面四边形 ABCD 中，AB=8，CD=3，AD=5√3，∠ADC=90°，∠BAD=30°，点 E，F 满足 AE=2/5 AD，AF=1/2 AB，将 △AEF 沿 EF 对折至 △PEF，使得 PC=4√3。（1）证明：EF⊥PD；（2）求面 PCD 与面 PBF 所成的二面角的正弦值。",
+      "questionSha256": "812ae131b6b1b3a2e75653474c6bf909d45c352386bcb86176b15fc8f438ad26"
+    },
+    {
+      "id": "GK-S03",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年全国甲卷理科 第19题",
+      "question": "如图，在以 A，B，C，D，E，F 为顶点的五面体中，四边形 ABCD 与四边形 ADEF 均为等腰梯形，EF∥AD，BC∥AD，AD=4，AB=BC=EF=2，ED=√10，FB=2√3，M 为 AD 的中点。（1）证明：BM∥平面 CDE；（2）求二面角 F-BM-E 的正弦值。",
+      "questionSha256": "bf7ec5d0e18351b5a05e7f6ca3a0d8a9b97f5cbbe6a9d4b35ece2e40c112214e"
+    },
+    {
+      "id": "GK-S04",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年北京卷 第17题",
+      "question": "如图，在四棱锥 P-ABCD 中，PA⊥平面 ABCD，AB⊥AD，AC⊥CD，∠ABC=60°，PA=AB=BC，E 是 PC 的中点。（Ⅰ）证明：CD⊥AE；（Ⅱ）证明：PD⊥平面 ABE。",
+      "questionSha256": "1b046cf5d8c3519faf280f5089d3cd59ffebc1888314be8348a9339304d52274"
+    },
+    {
+      "id": "GK-S05",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2023年新高考I卷 第18题",
+      "question": "如图，在正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2，AA₁=4。点 A₂，B₂，C₂，D₂ 分别在棱 AA₁，BB₁，CC₁，DD₁ 上，AA₂=1，BB₂=DD₂=2，CC₂=3。（1）证明：B₂C₂∥A₂D₂；（2）点 P 在棱 BB₁ 上，当二面角 P-A₂C₂-D₂ 为 120° 时，求 BP 的长。",
+      "questionSha256": "c502ea0f07ab68c3f26a4f38d4e2311f3ace9b06df8d8ccd42b0f49fb77dcd91"
+    },
+    {
+      "id": "GK-S06",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2023年新高考II卷 第20题",
+      "question": "如图，三棱锥 A-BCD 中，DA=DB=DC，BD⊥CD，∠ADB=∠ADC=60°，E 为 BC 的中点。（1）证明：BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。",
+      "questionSha256": "08b21ee2c1423eb55884ee155514f1b37c6c187883fc74f86e46a225f333e705"
+    },
+    {
+      "id": "GK-S07",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2022年新高考I卷 第19题",
+      "question": "如图，直三棱柱 ABC-A₁B₁C₁ 的体积为 4，△A₁BC 的面积为 2√2。（1）求 A 到平面 A₁BC 的距离；（2）设 D 为 A₁C 的中点，AA₁=AB，平面 A₁BC⊥平面 ABB₁A₁，求二面角 A-BD-C 的正弦值。",
+      "questionSha256": "12e31f5a3f752826818d62fedf464c2f92e2cb054a7ccb739d4f1a854c30e91f"
+    },
+    {
+      "id": "GK-S08",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2022年全国甲卷理科 第18题",
+      "question": "如图，在四棱锥 P-ABCD 中，PD⊥底面 ABCD，CD∥AB，AD=DC=CB=1，AB=2，DP=√3。（1）证明：BD⊥PA；（2）求 PD 与平面 PAB 所成的角的正弦值。",
+      "questionSha256": "7b06f69f16a8b27f083055f4cc51891ae65565c70d413b09d7fd981ab171b13a"
+    },
+    {
+      "id": "GK-S09",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "mcq",
+      "workspace": "geometry3d",
+      "source": "2010年新课标全国卷 第10题 (GAOKAO-Bench text-7)",
+      "question": "10. (5 分) 设三棱柱的侧棱垂直于底面, 所有棱长都为 $a$, 顶点都在一个球面 上, 则该球的表面积为（）\nA. $\\pi a^{2}$\nB. $\\frac{7}{3} \\pi a^{2}$\nC. $\\frac{11}{3} \\pi a^{2}$\nD. $5 \\pi a^{2}$\n",
+      "questionSha256": "ad432b0c156b5be3be77138df2bab5435b416e8859995a8a10cb98f39281d895"
+    },
+    {
+      "id": "JT-S01",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年八省联考 第17题",
+      "question": "在平面四边形 ABCD 中，AB=AC=CD=1，∠ADC=30°，∠DAB=120°。将 △ACD 沿 AC 翻折至 △ACP，其中 P 为动点。（1）设 PC⊥AB，三棱锥 P-ABC 的各个顶点都在球 O 的球面上。（i）证明：平面 PAC⊥平面 ABC；（ii）求球 O 的半径。（2）求二面角 A-CP-B 的余弦值的最小值。",
+      "questionSha256": "70afbbdbae54b0bdc1776a025312cf5f97c86e67c3a8a1797e58dc02d1218f7d"
+    },
+    {
+      "id": "JT-S02",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年九省联考 第17题",
+      "question": "如图，在三棱柱 ABC-A₁B₁C₁ 中，直线 C₁B⊥平面 ABC，平面 AA₁C₁C⊥平面 BB₁C₁C。（1）求证：AC⊥BB₁；（2）若 AC=BC=BC₁=2，在棱 A₁B₁ 上是否存在一点 P，使二面角 P-BC-C₁ 的余弦值为 √6/3？若存在，求 A₁P/A₁B₁ 的值；若不存在，请说明理由。",
+      "questionSha256": "07cee2ddc482b15d9ddbf12d4c0cfbf93177d8f4fb1dc9549076f4d3411b159c"
+    },
+    {
+      "id": "JT-S03",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025届T8联考（12月） 第16题",
+      "question": "在四棱锥 P-ABCD 中，底面 ABCD 为直角梯形，AD∥BC，AB⊥AD，PA⊥平面 ABCD，AP=AD=2AB=4BC。（1）求证：平面 PAC⊥平面 PBD；（2）若 AM⊥平面 PCD 于点 M，求二面角 M-AD-P 的余弦值。",
+      "questionSha256": "7f4f8a6ab59571f62134dff2bd20c530d3aa35a99f37be44dbbc219524c1326a"
+    },
+    {
+      "id": "JT-S04",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025届武汉市二月调考 第16题",
+      "question": "如图，在直角梯形 ABCD 中，BC∥AD，AB⊥AD，BC=8，AD=9，AB=2√3。点 E 为线段 BC（不在端点上）的一点，过 E 作 AB 的平行线交 AD 于 F。将矩形 ABEF 翻折至与梯形 ECDF 垂直，得到六面体 ABCDEF。（1）若 CF⊥BD，求 BE 的长；（2）求异面直线 BC 与 AD 所成角余弦值的最小值。",
+      "questionSha256": "2f7ad3cf2095e5d26f2675af590a9e0365ebf558e7e4080b6fb9932b53d4b1a7"
+    },
+    {
+      "id": "JT-S05",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年广州市一模 第16题",
+      "question": "如图，在四棱锥 P-ABCD 中，底面 ABCD 为矩形，AB=2BC=2，侧面 PCD 是等边三角形，三棱锥 A-PBD 的体积为 √3/3，点 E 是棱 CP 的中点。（1）求证：平面 PBC⊥平面 PCD；（2）求平面 BDE 与平面 ABCD 夹角的余弦值。",
+      "questionSha256": "ab432263d7258f9c3f6b3be9a48fba17620edddd0d8dc8155cf82663cecd5337"
+    },
+    {
+      "id": "JT-S06",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第17题 (jyeoo)",
+      "question": "如图，在多面体 ABCDE 中，△AEB 为等边三角形，AD∥BC，BC⊥AB，CE=2√2，AB=BC=2AD=2。求证：（Ⅰ）BC⊥平面 ABE；（Ⅱ）平面 EBC⊥平面 DCE。",
+      "questionSha256": "6252aa1091af673691759b34be8b2f6bd950fb3d43677b99b68006064482ab7f"
+    },
+    {
+      "id": "JT-S07",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第16题 (jyeoo)",
+      "question": "如图，在五面体 ABCDEF 中，FA⊥平面 ABCD，AD∥BC∥FE，AB⊥AD，M 为 EC 的中点，AF=AB=BC=FE=1/2 AD。（1）求异面直线 BF 与 DE 所成角的大小；（2）求二面角 A-CD-E 的余弦值。",
+      "questionSha256": "1fd52b5f1c79dfaac5cbcd46d45cd18e0d397001e08506a14c4defb00ab48836"
+    },
+    {
+      "id": "JT-S08",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第15题 (jyeoo)",
+      "question": "在梯形 ABCD 中，AB∥CD，AD=DC=CB=1，∠ABC=60°，四边形 ACFE 为矩形，平面 ACFE⊥平面 ABCD，CF=1。（1）求证：BC⊥平面 ACFE；（2）若点 M 在线段 EF 上运动，设平面 MAB 与平面 FCB 的夹角为 θ，试求 cosθ 的范围。",
+      "questionSha256": "0c4d45964b209cec25c207a9f84b82fd680f9bd5ba639814e17c25d757a4ddc9"
+    },
+    {
+      "id": "JT-S09",
+      "examType": "joint",
+      "category": "solid",
+      "format": "mcq",
+      "workspace": "geometry3d",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第4题 (jyeoo)",
+      "question": "4. 已知半球内有一个内接正方体，正方体的一个面在半球的底面圆内，若正方体的棱长为 2，则半球的表面积为（　　）\nA. 10π\nB. 12π\nC. 15π\nD. 18π",
+      "questionSha256": "00bd85ac3707247dcb46dad0a644230a9f40b01d07e16fd39fd33870a05f26ff"
+    },
+    {
+      "id": "GK-P01",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年新高考II卷 第16题",
+      "question": "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4。（1）求C的方程；（2）过点(0,-2)的直线l交C于A、B两点，O为坐标原点。若△OAB的面积为√2，求|AB|。",
+      "questionSha256": "e5b0274208489148cd04c5b89ab0616ba423ace512a260f953625b1ec2466cd4"
+    },
+    {
+      "id": "GK-P02",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国乙卷理科 第20题 (GAOKAO-Bench)",
+      "question": "20. 已知椭圆 $E$ 的中心为坐标原点, 对称轴为 $x$ 轴、 $y$ 轴, 且过 $A(0,-2), B\\left(\\frac{3}{2},-1\\right)$ 两点.\n\n(1) 求 $E$ 的方程;\n\n(2) 设过点 $P(1,-2)$ 的直线交 $E$ 于 $M, N$ 两点, 过 $M$ 且平行于 $x$ 轴的直线与线段 $A B$ 交于 点 $T$, 点 $H$ 满足 $\\overrightarrow{M T}=\\overrightarrow{T H}$. 证明: 直线 $H N$ 过定点.\n",
+      "questionSha256": "158fb91a7d802a46a9430dd8cceb4080da4ce530580a90e1b82e87fd3181be96"
+    },
+    {
+      "id": "GK-P03",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "question": "20. 设抛物线 $C: y^{2}=2 p x(p>0)$ 的焦点为 $F$, 点 $D(p, 0)$, 过 $F$ 的直线交 $C$ 于 $M, N$ 两 点. 当直线 $M D$ 垂直于 $x$ 轴时, $|M F|=3$.\n\n(1) 求 $C$ 的方程;\n\n(2) 设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$, 记直线 $M N, A B$ 的倾斜角分别为 $a, \\beta$. 当 $a-\\beta$ 取得最大值时, 求直线 $A B$ 的方程.\n",
+      "questionSha256": "c354edd536f5e8a5a93d7d2fd714141f9e54c17207911329e107424a88452d84"
+    },
+    {
+      "id": "GK-P04",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
+      "question": "20. 已知函数 $f(x)=x^{3}-x, g(x)=x^{2}+a$, 曲线 $y=f(x)$ 在点 $\\left(x_{1}, f\\left(x_{1}\\right)\\right)$ 处的切线也是曲线 $y=g(x)$ 的切线.\n\n(1) 若 $x_{1}=-1$, 求 $a$;\n\n(2) 求 $a$ 的取值范围.\n",
+      "questionSha256": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9"
+    },
+    {
+      "id": "GK-P05",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "question": "20. 抛物线 $C$ 的顶点为坐标原点 $O$. 焦点在 $x$ 轴上, 直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$. 已知 点 $M(2,0)$, 且 $\\odot M$ 与 $l$ 相切.\n\n(1) 求 $C, \\odot M$ 的方程; (2) 设 $A_{1}, A_{2}, A_{3}$ 是 $C$ 上的三个点, 直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切. 判断直线 $A_{2} A_{3}$ 与 $\\odot M$ 的位置关系, 并说明理由.\n",
+      "questionSha256": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a"
+    },
+    {
+      "id": "GK-P06",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2019年新课标III理科 第21题 (GAOKAO-Bench)",
+      "question": "21. 已知曲线 $C: y=\\frac{x^{2}}{2}, D$ 为直线 $y=-\\frac{1}{2}$ 上的动点, 过 $D$ 作 $C$ 的两条切线, 切点分别为 $A$, B.\n\n(1) 证明: 直线 $A B$ 过定点:\n\n(2) 若以 $E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆与直线 $A B$ 相切, 且切点为线段 $A B$ 的中点, 求四边形 $A D B E$ 的面积.\n",
+      "questionSha256": "765eabaebd3f7f268ab82dc4a7bbe1d5cdaf1095432c549383e1bb284c4fcf42"
+    },
+    {
+      "id": "GK-P07",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2021年新高考I卷 第21题 (GAOKAO-Bench)",
+      "question": "21.已知抛物线 $C: x^{2}=2 p y(p>0)$ 的焦点为 $F$, 且 $F$ 与圆 $M: x^{2}+(y+4)^{2}=1$ 上点的 距离的最小值为 4 .\n\n(1) 求 $p$;\n\n(2) 若点 $P$ 在 $M$ 上, $P A, P B$ 是 $C$ 的两条切线, $A, B$ 是切点, 求 $\\triangle P A B$ 面积的最 大值.\n",
+      "questionSha256": "6eaa5b742714b6adc166784b6e50313d0046fe34706f5a1e9239ba31a4131464"
+    },
+    {
+      "id": "GK-P08",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "fill_in",
+      "workspace": "conics",
+      "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
+      "question": "14. 若双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$ 的渐近线与圆 $x^{2}+y^{2}-4 y+3=0$ 相切, 则\n\n$m=$\n",
+      "questionSha256": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4"
+    },
+    {
+      "id": "GK-P09",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "mcq",
+      "workspace": "conics",
+      "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
+      "question": "6. 函数 $f(x)=x^{4}-2 x^{3}$ 的图像在点 $(1, f(1))$ 处的切线方程为 ()\nA. $y=-2 x-1$\nB. $y=-2 x+1$\nC. $y=2 x-3$\nD. $y=2 x+1$\n",
+      "questionSha256": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe"
+    },
+    {
+      "id": "JT-P01",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年八省联考 第18题",
+      "question": "已知椭圆 C 的离心率为 1/2，左、右焦点分别为 F₁(-1,0)，F₂(1,0)。（1）求椭圆 C 的方程；（2）已知点 A(2,0)，证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点；（3）设 M 是坐标平面上的动点，且线段 F₁M 的垂直平分线与椭圆 C 恰有一个公共点，证明 M 的轨迹为圆，并求该圆的方程。",
+      "questionSha256": "55a29f4baa3fbe3c4cd52f77624549b89b25ed0f462de80ae28dc271bc6594a7"
+    },
+    {
+      "id": "JT-P02",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第18题 (jyeoo)",
+      "question": "已知双曲线 C 的中心为坐标原点，右焦点为 (2√5, 0)，离心率为 √5。（1）求 C 的方程；（2）记 C 的左、右顶点分别为 A₁，A₂，点 P 在定直线 x=-1 上运动，直线 PA₁ 与 PA₂ 与双曲线分别交于 M，N 两点，证明：直线 MN 恒过定点。",
+      "questionSha256": "beca519dc97e6c217c05674a24ee7030a1fcbe6fbd1a5bb566dea3dd2be76939"
+    },
+    {
+      "id": "JT-P03",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖北省新八校协作体联考（2月） 第18题 (jyeoo)",
+      "question": "已知抛物线 C：y²=4x 的顶点为 O，过点 (2, 0) 的直线交 C 于 A，B 两点。（1）判断 向量OA·向量OB 是否为定值，并说明理由；（2）设直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E，求 |DE| 的最小值。",
+      "questionSha256": "eae195fceea94036470e20f473d88b119c1a71d1eb2ca022efcda758996301d8"
+    },
+    {
+      "id": "JT-P04",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第17题 (jyeoo)",
+      "question": "已知点 M(4, 4) 在抛物线 Γ：x²=2py 上，过动点 P 作抛物线的两条切线，切点分别为 A、B，且直线 PA 与直线 PB 的斜率之积为 -2。（1）证明：直线 AB 过定点；（2）过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D，问：是否存在一点 P 使得 A、C、P、D 四点共圆？若存在，求所有满足条件的 P 点；若不存在，请说明理由。",
+      "questionSha256": "1b8106a030ca07ba2d2453fe1e98a1ba3f29b2b0df3754ac8e50659b6424c5e8"
+    },
+    {
+      "id": "JT-P05",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年重庆市金太阳联考（5月） 第16题 (jyeoo)",
+      "question": "已知双曲线 x²/a² - y²/b² = 1 过点 (3, 5/2) 和点 (4, √15)。（1）求双曲线的离心率；（2）过 M(0, 1) 的直线与双曲线交于 P，Q 两点，过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点，试问 (|MP|·|MQ|)/|AB| 是否为定值？若是定值，求该定值；若不是定值，请说明理由。",
+      "questionSha256": "3cc387da6021fbc5b8b2a73f2705ae9e6744fffd76f3c16e1bf5bb3b7042cc8f"
+    },
+    {
+      "id": "JT-P06",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖南省一起考大联考（二） 第19题 (jyeoo)",
+      "question": "已知 F₁，F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求椭圆 C 的标准方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。",
+      "questionSha256": "e80df950984164ecc429db618fc0266cffa87e3817af99041d61c827241042f5"
+    },
+    {
+      "id": "JT-P07",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第19题 (jyeoo)",
+      "question": "已知对称轴都在坐标轴上的椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)，过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点，直线 BP，BQ 分别交直线 x=3 于 E，F 两点。（1）求椭圆 C 的标准方程；（2）向量PE·向量QF 是否存在最小值？若存在，求出最小值；若不存在，请说明理由。",
+      "questionSha256": "bd9ddc44f99363aec0b706c7ef14861a91e3affda60a4a08b175001fe2246545"
+    },
+    {
+      "id": "JT-P08",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年四省天一大联考（二） 第15题 (jyeoo)",
+      "question": "已知两点 A(0, √3)，B(0, -√3)。曲线 G 上的动点 P(x, y) 使得直线 PA、PB 的斜率之积为 -3/4。（Ⅰ）求 G 的方程；（Ⅱ）过点 C(0, -1) 的直线与 G 相交于 E、F 两点，且 向量EC=2向量CF，求直线 EF 的方程。",
+      "questionSha256": "35a32276c8f869a66c0c313333d76c4bc6a23a0af9a579852564208493926d6c"
+    },
+    {
+      "id": "JT-P09",
+      "examType": "joint",
+      "category": "plane",
+      "format": "mcq",
+      "workspace": "conics",
+      "source": "2025年重庆市金太阳联考（5月） 第4题 (jyeoo)",
+      "question": "4. 在圆 M：x²+y²-4x+2y-4=0 内，过点 O(0, 0) 的最长弦和最短弦分别是 AC 和 BD，则四边形 ABCD 的面积为（　　）\nA. 24\nB. 12\nC. 10\nD. 8",
+      "questionSha256": "dde1a3e824214f45b494f93954e953132989334e540fcaa7135c9d5ae7dca093"
+    }
+  ]
+}
