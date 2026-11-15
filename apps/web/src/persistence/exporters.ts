@@ -98,9 +98,15 @@ export function exportSvg(document: GeometryDocument): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWBOX.width} ${VIEWBOX.height}" role="img" aria-label="MathCanvas 导出"><rect width="${VIEWBOX.width}" height="${VIEWBOX.height}" fill="#ffffff" /><g stroke="#eef2f7" stroke-width="1">${grid}${horizontalGrid}</g><line x1="${VIEWBOX.left}" y1="${toY(0)}" x2="${VIEWBOX.right}" y2="${toY(0)}" stroke="#cbd5e1" stroke-width="1.5" /><line x1="${toX(0)}" y1="${VIEWBOX.top}" x2="${toX(0)}" y2="${VIEWBOX.bottom}" stroke="#cbd5e1" stroke-width="1.5" />${primitives}${annotations}</svg>`
 }
 
-function csvCell(value: string | number | boolean): string {
+/**
+ * Protect untrusted string cells against formula interpretation during standard spreadsheet CSV import
+ * (Excel/Calc) by prefixing leading formula/control characters with `'`. Numeric/boolean cells stay
+ * unprefixed; lossless raw text remains available through JSON `.mgeo` export.
+ */
+export function csvCell(value: string | number | boolean): string {
   const text = String(value)
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+  const protectedText = typeof value === "string" && (/^[\s\u00a0]*[=+\-@]/.test(text) || /^[\t\r\n]/.test(text)) ? `'${text}` : text
+  return /[",\r\n]/.test(protectedText) ? `"${protectedText.replaceAll('"', '""')}"` : protectedText
 }
 
 function primitiveData(primitive: PrimitiveSpec): string {

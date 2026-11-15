@@ -264,3 +264,49 @@ describe("document exporters", () => {
     expect(Math.hypot(centerX - pivot.x, centerY - pivot.y)).toBeCloseTo(radius, 9)
   })
 })
+
+
+describe("R06 CSV formula-injection protection", () => {
+  it("prefixes untrusted formula-shaped text while preserving numbers and booleans", async () => {
+    const { csvCell } = await import("./exporters")
+
+    expect(csvCell("=1+1")).toBe("'=1+1")
+    expect(csvCell("+SUM(1,1)")).toBe("\"'+SUM(1,1)\"")
+    expect(csvCell(" \t@command")).toBe("' \t@command")
+    expect(csvCell("\t=1+1")).toBe("'\t=1+1")
+    expect(csvCell("\n=1+1")).toBe("\"'\n=1+1\"")
+    expect(csvCell("-2")).toBe("'-2")
+    expect(csvCell(-2)).toBe("-2")
+    expect(csvCell(true)).toBe("true")
+    expect(csvCell('点, "A"')).toBe('"点, ""A"""')
+  })
+
+  it("applies text protection to every string field, including ids and labels", () => {
+    const document = createEmptyDocument("calculus")
+    document.primitives = [
+      { id: "=1+1", type: "point", x: 1, y: 2, label: "=HYPERLINK(\"https://example.invalid\",\"open\")" },
+      { id: "tab", type: "point", x: 0, y: 0, label: "\t=1+1" }
+    ]
+
+    const csv = exportCsv(document)
+
+    expect(csv).toContain("'=1+1")
+    expect(csv).toContain("'=HYPERLINK")
+    expect(csv).toContain("'\t=1+1")
+    expect(csv).not.toContain(",=1+1")
+  })
+
+  it("protects formula-shaped measurement ids while keeping numeric negative values unprefixed", () => {
+    const document = createEmptyDocument("geometry3d")
+    document.primitives = [{ id: "pt", type: "point", x: -2, y: 3, label: "P" }]
+    document.measurements = [
+      { id: "=CMD()", kind: "measurement3", sourceIds: ["pt"], metric: "distance", value: -2, unit: "cm", precision: "exact-input", status: "valid", explanation: "signed" }
+    ]
+
+    const csv = exportCsv(document)
+
+    expect(csv).toContain("'=CMD(),measurement3")
+    expect(csv).toContain('""x"":-2')
+    expect(csv).toContain('""value"":-2')
+  })
+})
