@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— R07 函数义务统一绑定与题图结构化复核
+
+- `diagramObligations.ts` 与 `diagramVerification.ts` 扩展 `[fgh](x)` 函数识别及 `functionGraph`、`functionLineIntersections`、`tangentAt`、`commonTangent` 统一曲线/图元 ID 绑定，禁止多曲线时按首条猜选或错绑辅助曲线切线。
+- `problemImageReader.ts`、`problemImageReview.ts`、`problemImagePrompt.ts`、`ProblemImageComposer.tsx` 与 `agentRunner.ts` 将题图放行由连线黑名单收口为严格 `label`/`scalar` 白名单：几何关系、连线、根式/LaTeX分式/不确定坐标与未知类别默认须人工勾选并绑定 reading revision 与内容摘要，改字失效旧确认，重复观察 ID 与伪造未确认 payload 在发送和 `splitImagePrompt` 装配层双重阻断。
+- 定向6文件/152项通过，完整Vitest 524文件/5577通过+1todo，类型、Lint与Web构建通过。证据见 [R07曲线绑定与题图复核记录](docs/audit/2026-11-15-image-review-and-curve-binding/README.md)。下一工作包为R08。
+
 ## 2026-11-16 —— R06 草稿备份失败写保护与 CSV 公式转义（G1 闭环）
 
 - 在 `exporters.ts` 导出 `csvCell`，对命中前导 `=`/`+`/`-`/`@`（含前导空格与不间断空格）及 `\t`/`\r`/`\n` 的不可信字符串单元格加 `'` 前缀；合法数字（含负数如 `-2`）与布尔值不转义。

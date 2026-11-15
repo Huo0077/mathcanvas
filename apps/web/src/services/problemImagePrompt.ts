@@ -1,8 +1,26 @@
 import { MAX_PROBLEM_IMAGES } from "./problemImageFiles"
-import { imageReadingText, parseImageReadingItems, type ImageReadingItem, type ProblemImageReading } from "./problemImageReader"
-import { isDiagramLine, isGraphChoiceProblem, isGraphChoiceReading } from "./problemImageReview"
+import { ALLOWED_OBSERVATION_KINDS, imageReadingText, parseImageReadingItems, type ImageBox, type ImageObservationKind, type ImageReadingItem, type ProblemImageReading } from "./problemImageReader"
+import {
+  classifyObservation,
+  computeReadingRevision,
+  findDuplicateObservationIds,
+  isDiagramLine,
+  isGraphChoiceProblem,
+  isGraphChoiceReading,
+  observationDigest,
+  observationId,
+  observationRequiresConfirmation
+} from "./problemImageReview"
 
 const DIAGRAM_SECTION = "\n\n【配图参考（模型读图）】\n"
+
+export interface ConfirmedObservationProof {
+  id: string
+  digest: string
+  kind: ImageObservationKind
+  image: number | null
+  box: ImageBox | null
+}
 
 interface ImageEvidence {
   version: 1
@@ -10,21 +28,91 @@ interface ImageEvidence {
   diagram: ImageReadingItem[]
   uncertainties: ImageReadingItem[]
   reviewed: number[]
+  revision?: string
+  confirmations?: ConfirmedObservationProof[]
+  unconfirmedObservations?: number
 }
 
-export function imagePrompt(problem: string, instructions: string, observations: readonly string[] | ProblemImageReading, reviewed: readonly number[] = [], confirmedLines: readonly number[] = []): string {
+function sameBox(left: ImageBox | null, right: ImageBox | null): boolean {
+  if (left === null || right === null) return left === right
+  return left.every((value, index) => value === right[index])
+}
+
+function parseConfirmationProofs(value: unknown): ConfirmedObservationProof[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 40) return undefined
+  const proofs: ConfirmedObservationProof[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") return undefined
+    const candidate = entry as Record<string, unknown>
+    if (typeof candidate.id !== "string" || !candidate.id || typeof candidate.digest !== "string" || !candidate.digest) return undefined
+    if (typeof candidate.kind !== "string" || !(ALLOWED_OBSERVATION_KINDS as readonly string[]).includes(candidate.kind)) return undefined
+    if (candidate.image !== null && (typeof candidate.image !== "number" || !Number.isInteger(candidate.image) || candidate.image < 1)) return undefined
+    const box = candidate.box === null
+      ? null
+      : Array.isArray(candidate.box) && candidate.box.length === 4 && candidate.box.every(coord => typeof coord === "number")
+        ? candidate.box as ImageBox
+        : undefined
+    if (box === undefined) return undefined
+    proofs.push({
+      id: candidate.id,
+      digest: candidate.digest,
+      kind: candidate.kind as ImageObservationKind,
+      image: candidate.image,
+      box
+    })
+  }
+  return proofs
+}
+
+export function imagePrompt(
+  problem: string,
+  instructions: string,
+  observations: readonly string[] | ProblemImageReading,
+  reviewed: readonly number[] = [],
+  confirmedLines: readonly number[] = [],
+  reviewMeta?: { revision?: string }
+): string {
   const prompt = [problem.trim(), instructions.trim()].filter(Boolean).join("\n")
   if ("diagram" in observations) {
     const graphChoice = isGraphChoiceProblem(observations.problem)
+    const revision = computeReadingRevision(observations, problem)
+    const revisionValid = reviewMeta?.revision === undefined || reviewMeta.revision === revision
+    const effectiveReviewed = revisionValid ? [...reviewed] : []
+    const effectiveConfirmed = revisionValid ? confirmedLines : []
+    const duplicateIds = findDuplicateObservationIds(observations.diagram)
+    const confirmedDiagram: ImageReadingItem[] = []
+    const confirmations: ConfirmedObservationProof[] = []
+
+    observations.diagram.forEach((item, index) => {
+      if (graphChoice && isGraphChoiceReading(item.text)) return
+      const explicitId = item.id?.trim()
+      if (explicitId && duplicateIds.has(explicitId)) return
+      const kind = classifyObservation(item)
+      const needsConfirm = observationRequiresConfirmation(item)
+      if (needsConfirm && !effectiveConfirmed.includes(index)) return
+      confirmedDiagram.push(item)
+      if (needsConfirm) {
+        confirmations.push({
+          id: observationId(item, index),
+          digest: observationDigest(item),
+          kind,
+          image: item.image,
+          box: item.box
+        })
+      }
+    })
+
     const evidence: ImageEvidence = {
       version: 1,
       transcriptEdited: problem.trim() !== observations.problem,
-      diagram: observations.diagram.filter((item, index) => (!graphChoice || !isGraphChoiceReading(item.text))
-        && (!isDiagramLine(item) || confirmedLines.includes(index))),
+      diagram: confirmedDiagram,
       uncertainties: observations.uncertainties.map(item => isDiagramLine(item)
         ? { ...item, text: "配图的连接或虚实线有疑点。线条读数以用户勾选的项目为准。" }
         : item),
-      reviewed: [...reviewed]
+      reviewed: effectiveReviewed,
+      revision,
+      ...(confirmations.length > 0 ? { confirmations } : {})
     }
     return prompt + DIAGRAM_SECTION + JSON.stringify(evidence)
   }
@@ -37,12 +125,44 @@ function readEvidence(notes: string): ImageEvidence | null {
   try {
     const value = JSON.parse(notes)
     if (value?.version !== 1 || typeof value.transcriptEdited !== "boolean" || !Array.isArray(value.reviewed)) return null
-    const diagram = parseImageReadingItems(value.diagram, MAX_PROBLEM_IMAGES)
+    const rawDiagram = parseImageReadingItems(value.diagram, MAX_PROBLEM_IMAGES)
     // The app can add two checks beyond the model's 40-item limit.
     const uncertainties = parseImageReadingItems(value.uncertainties, MAX_PROBLEM_IMAGES, 42)
-    if (!diagram || !uncertainties || value.reviewed.length > uncertainties.length
+    if (!rawDiagram || !uncertainties || value.reviewed.length > uncertainties.length
       || !value.reviewed.every((index: unknown) => typeof index === "number" && Number.isInteger(index) && index >= 0 && index < uncertainties.length)) return null
-    return { version: 1, transcriptEdited: value.transcriptEdited, diagram, uncertainties, reviewed: value.reviewed }
+
+    const confirmations = parseConfirmationProofs(value.confirmations) ?? []
+    const duplicateIds = findDuplicateObservationIds(rawDiagram)
+    let unconfirmedObservations = 0
+    const diagram = rawDiagram.filter((item) => {
+      const explicitId = item.id?.trim()
+      if (explicitId && duplicateIds.has(explicitId)) {
+        unconfirmedObservations += 1
+        return false
+      }
+      const kind = classifyObservation(item)
+      if (kind === "label" || kind === "scalar") return true
+      const digest = observationDigest(item)
+      const matched = confirmations.some((proof) =>
+        proof.digest === digest && proof.kind === kind && proof.image === item.image && sameBox(proof.box, item.box))
+      if (!matched) {
+        unconfirmedObservations += 1
+        return false
+      }
+      return true
+    })
+
+    const revision = typeof value.revision === "string" && value.revision.length > 0 ? value.revision : undefined
+    return {
+      version: 1,
+      transcriptEdited: value.transcriptEdited,
+      diagram,
+      uncertainties,
+      reviewed: value.reviewed,
+      ...(revision === undefined ? {} : { revision }),
+      ...(confirmations.length === 0 ? {} : { confirmations }),
+      ...(unconfirmedObservations === 0 ? {} : { unconfirmedObservations })
+    }
   } catch {
     return null
   }

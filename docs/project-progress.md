@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— R07 函数相关义务统一绑定与题图结构化复核
+
+- 先补全 R07-A 与 R07-B RED 用例并复现6项预期失败：存在辅助曲线时 `functionLineIntersections` 返回 `unverified`、`g(x)` 未进入 `functionGraph` 解析且切线未核验曲线归属；根式/LaTeX分式/不确定坐标被 `addCoordinateReview` 跳过，且 `AB∥CD` / `AB与CD相交于E` / `AB和CD是两条棱` / 伪造 `kind:"label"` 直接通过黑名单进入确定性事实。
+- R07-A 在 `diagramObligations.ts` 与 `diagramVerification.ts` 支持 `[fgh](x)` 函数定义与带函数名切线句子，扩展 `statedCurveNames` / `selectStatedCurve` 至 `functionGraph`、`functionLineIntersections` 与 `tangentAt`（按 `sourceId` 匹配绑定曲线，拒绝跨曲线切线与重名/多候选猜测），并在 `commonTangent` 校验配对图元 `id` 一致性。
+- R07-B 在 `problemImageReader.ts`、`problemImageReview.ts`、`problemImagePrompt.ts`、`ProblemImageComposer.tsx` 与 `agentRunner.ts` 实现基于内容分类的结构白名单、`addCoordinateReview` 形态与数值语法解耦、`computeReadingRevision` 与摘要/来源证明绑定、重复观察 ID 阻断、改字清空旧确认及 `splitImagePrompt` / `agentRunner` 装配层二次拦截。
+- 定向与组件回归 6 文件 / 152 项全部通过；完整 Vitest 524 文件 / 5577 通过 + 1 todo；类型、Lint 与 Web 构建通过。既有用例 `e2e/problem-image-reader.spec.ts` 在第 1 条确认题图 UI 复核交接正常，随后因既有 `PRISM` 未选定 `(2)` 小问被 R01-A 阻断，留交 R08 统一对齐 E2E 合同。证据见[R07曲线绑定与题图复核记录](audit/2026-11-15-image-review-and-curve-binding/README.md)。
+
 ## 2026-11-16 —— R06 草稿写保护与 CSV 文本安全（G1 闭环）
 
 - 以等号/加号/减号/@ 与前导空白/制表换行触发电子表格公式注入及 `:unreadable` 备份写入异常/静默篡改丢草稿为RED。

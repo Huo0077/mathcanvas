@@ -880,4 +880,50 @@ describe("Task 15: function-family premises", () => {
     const report = verifyDiagramObligations(parsed, plan, candidate)
     expect(checkOf(report, "functionLineIntersections")).toBeUndefined()
   })
+
+  it("R07-A：有辅助曲线且互换图元顺序时，主函数与直线交点仍正确绑定且不被第一条误导", () => {
+    const { plan, candidate } = graphFixture("sin(x)", [-5, 5])
+    const main = candidate.primitives[0]
+    if (main.type !== "function") throw new Error("Expected function")
+    main.label = "f(x)"
+    const auxiliary = { id: "aux-g", type: "function" as const, label: "g(x)", expression: "cos(x)", domain: [-5, 5] as [number, number] }
+    const prompt = "画出 f(x)=sin x 的图像，直线 y=0.5 与 f(x)=sin x 的图像有三个交点"
+    const givens = parseDiagramObligations(prompt)
+
+    const forward = { ...candidate, primitives: [main, auxiliary] }
+    const reversed = { ...candidate, primitives: [auxiliary, main] }
+    for (const doc of [forward, reversed]) {
+      const report = verifyDiagramObligations(givens, plan, doc)
+      expect(checkOf(report, "functionGraph")?.status).toBe("passed")
+      expect(checkOf(report, "functionLineIntersections")?.status).toBe("passed")
+    }
+
+    const wrongCount = parseDiagramObligations("画出 f(x)=sin x 的图像，直线 y=0.5 与 f(x)=sin x 的图像有四个交点")
+    const failedReport = verifyDiagramObligations(wrongCount, plan, reversed)
+    expect(checkOf(failedReport, "functionGraph")?.status).toBe("passed")
+    expect(checkOf(failedReport, "functionLineIntersections")?.status).toBe("failed")
+  })
+
+  it("R07-A：两个不同主函数错绑或歧义绑定时必须拒绝，不允许静默拿另一条曲线或首条凑数", () => {
+    const { plan, candidate } = graphFixture("(x-1)^2", [-2, 2])
+    const curveF = candidate.primitives[0]
+    if (curveF.type !== "function") throw new Error("Expected function")
+    curveF.id = "curve-f"
+    curveF.label = "f(x)"
+    const curveG = { id: "curve-g", type: "function" as const, label: "g(x)", expression: "x^3-3*x", domain: [-2, 2] as [number, number] }
+    candidate.primitives.push(curveG)
+    plan.actions.push({ actionId: "function.create_tangent", actionKey: "t", factIds: [], inputs: { alias: "t", sourceId: "curve-f", x: 1 } } as never)
+    candidate.primitives.push({
+      id: "t", type: "tangent", sourceId: "curve-f", x: 1,
+      point: { x: 1, y: 0 }, slope: 0, a: { x: 0, y: 0 }, b: { x: 1, y: 0 }, status: "approximate"
+    })
+    const misboundTangent = verifyDiagramObligations(parseDiagramObligations("画出 g(x)=x^3-3*x 的图像与 g(x) 在 x=1 处的切线"), plan, candidate)
+    expect(checkOf(misboundTangent, "functionGraph")?.status).toBe("passed")
+    expect(checkOf(misboundTangent, "tangentAt")?.status).not.toBe("passed")
+    expect(checkOf(misboundTangent, "tangentAt")?.status).toBe("unverified")
+
+    curveG.label = "f(x)"
+    const duplicate = verifyDiagramObligations(parseDiagramObligations("直线 y=0.5 与 f(x)=sin x 的图像有三个交点"), plan, candidate)
+    expect(checkOf(duplicate, "functionLineIntersections")).toMatchObject({ status: "unverified", code: "function_binding_ambiguous" })
+  })
 })

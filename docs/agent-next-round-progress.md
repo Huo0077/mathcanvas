@@ -7,8 +7,8 @@
 ## 从哪里开始
 
 1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：首批R00 → R01-A → R09-A → R10已完成；当前授权为G1（R02–R06）与G2（R07、R08、R09-B、R11），不把单个区块当成门禁整体完成。
-2. G1（R02凭据安全、R03网络安全、R04导出授权、R05归档资源边界、R06草稿写保护与CSV文本安全）已完成，见[凭据安全证据](audit/2026-11-15-provider-credential-safety/README.md)、[网络安全证据](audit/2026-11-15-network-security/README.md)、[导出授权证据](audit/2026-11-15-export-authorization/README.md)、[归档资源证据](audit/2026-11-15-archive-resource-limits/README.md)和[草稿与CSV证据](audit/2026-11-15-draft-and-csv-protection/README.md)；下一工作包是G2首块R07（函数曲线绑定与题图结构化复核）。
-3. 后续依次R07、R08、R09-B、R11，每块RED→GREEN、自审、文档对齐并推送；不自动推进P0–P8、R12或发布。
+2. G1（R02–R06）与G2首块R07已完成，见[草稿与CSV证据](audit/2026-11-15-draft-and-csv-protection/README.md)和[曲线绑定与题图复核证据](audit/2026-11-15-image-review-and-curve-binding/README.md)；下一工作包是R08（E2E与生产UI合同重新对齐）。
+3. 后续依次R08、R09-B、R11，每块RED→GREEN、自审、文档对齐并推送；不自动推进P0–P8、R12或发布。
 4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为技术参考，不把计划当成完成证据。
 5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。
 

@@ -6,7 +6,12 @@ import type { ProblemImage } from "./problemImageFiles"
 export type ImageBox = [number, number, number, number]
 type Point2 = [number, number]
 
+export const ALLOWED_OBSERVATION_KINDS = ["label", "scalar", "coordinate", "connection", "relation", "unknown"] as const
+export type ImageObservationKind = typeof ALLOWED_OBSERVATION_KINDS[number]
+
 export interface ImageReadingItem {
+  id?: string
+  kind?: ImageObservationKind
   text: string
   image: number | null
   /** [left, top, right, bottom] in fractions of the submitted image, when located. */
@@ -86,11 +91,23 @@ export function parseImageReadingItems(items: unknown, imageCount: number, limit
   for (const item of items) {
     if (!item || typeof item.text !== "string" || !item.text.trim() || item.text.length > 300
       || (item.image !== null && (!Number.isInteger(item.image) || item.image < 1 || item.image > imageCount))) return null
+    const id = typeof item.id === "string" && item.id.trim() && item.id.trim().length <= 64 ? item.id.trim() : undefined
+    const kind: ImageObservationKind | undefined = typeof item.kind === "string"
+      ? (ALLOWED_OBSERVATION_KINDS as readonly string[]).includes(item.kind) ? item.kind as ImageObservationKind : "unknown"
+      : undefined
     const impact = item.impact === "condition" || item.impact === "appearance" ? item.impact : undefined
     const { from, to } = item.arrow ?? {}
     const arrow = isPoint2(from) && isPoint2(to) && (from[0] !== to[0] || from[1] !== to[1]) ? { from, to } : undefined
-    parsed.push({ text: item.text.trim(), image: item.image, box: item.image === null ? null : imageBox(item.box),
-      ...(impact === undefined ? {} : { impact }), ...(arrow === undefined ? {} : { arrow }) })
+    // Strip any model-supplied confirmation/status flags; human confirmation is bound in client/prompt gate only.
+    parsed.push({
+      ...(id === undefined ? {} : { id }),
+      ...(kind === undefined ? {} : { kind }),
+      text: item.text.trim(),
+      image: item.image,
+      box: item.image === null ? null : imageBox(item.box),
+      ...(impact === undefined ? {} : { impact }),
+      ...(arrow === undefined ? {} : { arrow })
+    })
   }
   return parsed
 }

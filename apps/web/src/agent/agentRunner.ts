@@ -579,12 +579,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
       const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
-      const selection: PlannerSelection = unresolved.length === 0 ? await selectPlanner(prompt, imageNotes, eventRunId) : {
+      const unconfirmedCount = imageEvidence?.unconfirmedObservations ?? 0
+      const selection: PlannerSelection = unresolved.length === 0 && unconfirmedCount === 0 ? await selectPlanner(prompt, imageNotes, eventRunId) : {
         requestedSkillIds: [], textProfileId: "local-planner",
         planner: { plan: async () => ({
           plan: {
             schemaVersion: PLAN_SCHEMA_VERSION, kind: "clarification", goal: "核对题图疑点", factIds: [],
-            questions: unresolved.slice(0, 4).map(item => `请核对${item.image === null ? "原图的" : `图 ${item.image} 的`}疑点并重新发送题干：${item.text}`)
+            questions: [
+              ...unresolved.slice(0, 4).map(item => `请核对${item.image === null ? "原图的" : `图 ${item.image} 的`}疑点并重新发送题干：${item.text}`),
+              ...(unconfirmedCount > 0 ? ["配图中包含未经逐项确认的几何关系、连接或坐标观察，请对照原图勾选确认后再发送。"] : [])
+            ].slice(0, 4)
           },
           requestId: "image-review-request", attemptId: "image-review-attempt"
         }) }

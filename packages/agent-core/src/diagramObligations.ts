@@ -1268,7 +1268,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 而是由核验器**自己对该函数数值求导**再比。详见 `diagramVerification` 的 `tangentAt` 分支。
    */
   {
-    pattern: /x\s*=\s*(-?\d+(?:\.\d+)?)\s*处[^，,。；;\n]{0,4}的?切线/g,
+    pattern: /(?:(?<![A-Za-z0-9_])[fgh]\s*\(\s*x\s*\)\s*(?:在|的)\s*)?x\s*=\s*(-?\d+(?:\.\d+)?)\s*处[^，,。；;\n]{0,4}的?切线/g,
     read: (m) => {
       const x = Number(m[1])
       return Number.isFinite(x) ? { kind: "tangentAt", targets: [], value: x } : null
@@ -1288,7 +1288,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     // 末位要求"非空白**且非中文**"：`\S` 不够 —— 中文的"的"也不是空白，会被它吃掉。
     // 否则 `match[0]`（也就是报告里的 `sourceText`）会变成 `f(x)=x³−3x 的`，
     // 而题面引文多一个字，用户在报告里看不出来，只会让断言莫名其妙地失败。
-    pattern: /f\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]*[^，,。；;\u4e00-\u9fff\s])/g,
+    pattern: /[fgh]\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]*[^，,。；;\u4e00-\u9fff\s])/g,
     read: (m) => {
       const expression = normalizeStatedExpression(m[1])
       return expression === null ? null : { kind: "functionGraph", targets: [], expression }

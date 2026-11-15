@@ -558,27 +558,41 @@ interface FigureTangent {
  * 同时把它的**来源函数**（表达式 + 定义域）一并取出来：没有来源就求不了导，
  * 那条路必须如实走到"未核验"。
  */
-function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangent | null {
-  if (plan.kind !== "plan") return null
-  if (!plan.actions.some((action) => action.actionId === "function.create_tangent")) return null
+interface FigureTangentWithSource extends FigureTangent {
+  id: string
+  sourceId: string
+  source: { id: string; expression: string; domain: [number, number]; label?: string } | null
+}
+
+function candidateTangents(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangentWithSource[] {
+  if (plan.kind !== "plan") return []
+  if (!plan.actions.some((action) => action.actionId === "function.create_tangent")) return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
-  const tangents = candidate.primitives.filter((primitive): primitive is Extract<PrimitiveSpec, { type: "tangent" }> => primitive.type === "tangent" && !priorIds.has(primitive.id))
-  if (tangents.length !== 1) return null
-  const [tangent] = tangents
-  const source = candidate.primitives.find((primitive) => primitive.id === tangent.sourceId)
-  const domain = source?.type === "function" ? source.domain : undefined
-  return {
-    x: tangent.x,
-    slope: tangent.slope,
-    pointY: tangent.point?.y ?? Number.NaN,
-    source: source?.type === "function" && domain !== undefined && Number.isFinite(domain[0]) && Number.isFinite(domain[1]) && domain[0] < domain[1]
-      ? { expression: source.expression, domain: [domain[0], domain[1]] }
-      : null
-  }
+  return candidate.primitives.flatMap((tangent): FigureTangentWithSource[] => {
+    if (tangent.type !== "tangent" || priorIds.has(tangent.id) || tangent.anchor?.kind === "common") return []
+    const source = candidate.primitives.find((primitive) => primitive.id === tangent.sourceId)
+    const domain = source?.type === "function" ? source.domain : undefined
+    return [{
+      id: tangent.id,
+      sourceId: tangent.sourceId,
+      x: tangent.x,
+      slope: tangent.slope,
+      pointY: tangent.point?.y ?? Number.NaN,
+      source: source?.type === "function" && domain !== undefined && Number.isFinite(domain[0]) && Number.isFinite(domain[1]) && domain[0] < domain[1]
+        ? { id: source.id, expression: source.expression, domain: [domain[0], domain[1]], label: source.label }
+        : null
+    }]
+  })
+}
+
+function candidateTangent(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangent | null {
+  const tangents = candidateTangents(plan, candidate, base)
+  return tangents.length === 1 ? tangents[0] : null
 }
 
 /** 候选图里那条函数曲线。 */
 interface FigureFunction {
+  id: string
   expression: string
   domain: [number, number]
   label?: string
@@ -587,7 +601,8 @@ interface FigureFunction {
 /** **候选图里那条唯一的、新画出来的函数曲线**（V0d）。与其它几类同一条"恰好一条"纪律。 */
 interface FigureCommonTangent extends FigureTangent {
   branch: number | null
-  otherSource: { expression: string; domain: [number, number] } | null
+  source: { id: string; expression: string; domain: [number, number]; label?: string } | null
+  otherSource: { id: string; expression: string; domain: [number, number]; label?: string } | null
 }
 
 /** 候选图里所有新建的公切线；每条都保留两条来源曲线，核验器不信图元自报的结论。 */
@@ -600,10 +615,10 @@ function candidateCommonTangents(plan: PlanEnvelope, candidate: GeometryDocument
     const source = candidate.primitives.find((entry) => entry.id === primitive.sourceId)
     const other = candidate.primitives.find((entry) => entry.id === anchor.otherSourceId)
     const sourceData = source?.type === "function" && Number.isFinite(source.domain[0]) && Number.isFinite(source.domain[1]) && source.domain[0] < source.domain[1]
-      ? { expression: source.expression, domain: [source.domain[0], source.domain[1]] as [number, number] }
+      ? { id: source.id, expression: source.expression, domain: [source.domain[0], source.domain[1]] as [number, number], label: source.label }
       : null
     const otherData = other?.type === "function" && Number.isFinite(other.domain[0]) && Number.isFinite(other.domain[1]) && other.domain[0] < other.domain[1]
-      ? { expression: other.expression, domain: [other.domain[0], other.domain[1]] as [number, number] }
+      ? { id: other.id, expression: other.expression, domain: [other.domain[0], other.domain[1]] as [number, number], label: other.label }
       : null
     return [{
       x: primitive.x,
@@ -621,7 +636,7 @@ function candidateCurves(plan: PlanEnvelope, candidate: GeometryDocument, base?:
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   return candidate.primitives.flatMap((curve): FigureFunction[] =>
     curve.type === "function" && !priorIds.has(curve.id) && Number.isFinite(curve.domain[0]) && Number.isFinite(curve.domain[1]) && curve.domain[0] < curve.domain[1]
-      ? [{ expression: curve.expression, domain: curve.domain, label: curve.label }]
+      ? [{ id: curve.id, expression: curve.expression, domain: curve.domain, label: curve.label }]
       : [])
 }
 
@@ -629,8 +644,21 @@ function functionLabel(label: string): string | undefined {
   return /^([fgh])(?:\(x\)(?:=.*)?)?$/.exec(label.replace(/\s+/g, ""))?.[1]
 }
 
-function selectStatedCurve(item: DiagramObligation, curves: FigureFunction[]): { curve: FigureFunction } | { code: string; reason: string } {
-  const name = /^([fgh])\s*\(/.exec(item.sourceText.trim())?.[1]
+function statedCurveNames(sourceText: string): string[] {
+  const names: string[] = []
+  for (const match of sourceText.matchAll(/(?<![A-Za-z0-9_])([fgh])(?:\s*['′])?\s*\(/g)) {
+    const symbol = match[1]
+    if (!names.includes(symbol)) names.push(symbol)
+  }
+  return names
+}
+
+function selectStatedCurve(item: DiagramObligation, curves: readonly FigureFunction[], fallbackName?: string): { curve: FigureFunction } | { code: string; reason: string } {
+  const names = statedCurveNames(item.sourceText)
+  if (names.length > 1) {
+    return { code: "function_binding_ambiguous", reason: `题面语句同时点到了多条函数（${names.join("、")}），无法唯一绑定目标曲线。` }
+  }
+  const name = names[0] ?? fallbackName
   const named = name === undefined ? [] : curves.filter(curve => functionLabel(curve.label ?? "") === name)
   const singleton = curves.length === 1 && (name === undefined || functionLabel(curves[0].label ?? "") === undefined)
   const curve = named.length === 1 ? named[0] : singleton ? curves[0] : undefined
@@ -1531,6 +1559,14 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (candidates.some((entry) => entry.source === null || entry.otherSource === null)) return null
     const first = candidates[0]!.source!
     const second = candidates[0]!.otherSource!
+    const statedNames = statedCurveNames(item.sourceText)
+    if (statedNames.length === 2) {
+      const firstLabel = functionLabel(first.label ?? "")
+      const secondLabel = functionLabel(second.label ?? "")
+      if ((firstLabel !== undefined && firstLabel !== statedNames[0]) || (secondLabel !== undefined && secondLabel !== statedNames[1])) {
+        return null
+      }
+    }
     const firstGap = curveGapAcrossBreaks(stated[0], first)
     const secondGap = curveGapAcrossBreaks(stated[1], second)
     if (firstGap === null || secondGap === null) return null
@@ -1539,7 +1575,8 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (candidates.some((entry) => {
       const source = entry.source!
       const other = entry.otherSource!
-      return Math.abs(source.domain[0] - first.domain[0]) > 1e-9 || Math.abs(source.domain[1] - first.domain[1]) > 1e-9 || Math.abs(other.domain[0] - second.domain[0]) > 1e-9 || Math.abs(other.domain[1] - second.domain[1]) > 1e-9
+      return source.id !== first.id || other.id !== second.id
+        || Math.abs(source.domain[0] - first.domain[0]) > 1e-9 || Math.abs(source.domain[1] - first.domain[1]) > 1e-9 || Math.abs(other.domain[0] - second.domain[0]) > 1e-9 || Math.abs(other.domain[1] - second.domain[1]) > 1e-9
     })) return fail("公切线没有全部引用同一对题面函数，不能把候选支混在一起核验。")
     const solved = commonTangents(first.expression, second.expression, first.domain, second.domain)
     if (solved.status !== "solved" || !solved.complete) return null
@@ -2437,6 +2474,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   }
   const foldClauseMatch = options.prompt === undefined ? null : /(?:翻折|折叠|折起|翻起)/.exec(options.prompt)
   const curves = candidateCurves(plan, candidate, base)
+  const tangents = candidateTangents(plan, candidate, base)
+  const graphNames = [...new Set(set.givens.filter((given) => given.kind === "functionGraph").flatMap((given) => statedCurveNames(given.sourceText)))]
+  const uniqueGraphName = graphNames.length === 1 ? graphNames[0] : undefined
   const figures: FigureContext = {
     conic: candidateConic(plan, candidate, base),
     tangent: candidateTangent(plan, candidate, base),
@@ -2478,6 +2518,32 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
       const selected = selectStatedCurve(item, curves)
       if ("code" in selected) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", ...selected }
       itemFigures = { ...figures, curve: selected.curve }
+    } else if (item.kind === "functionLineIntersections") {
+      const selected = selectStatedCurve(item, curves, uniqueGraphName)
+      if ("code" in selected) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", ...selected }
+      itemFigures = { ...figures, curve: selected.curve }
+    } else if (item.kind === "tangentAt") {
+      const explicitNames = statedCurveNames(item.sourceText)
+      if (curves.length > 0 && (curves.length > 1 || explicitNames.length > 0 || uniqueGraphName !== undefined)) {
+        const selected = selectStatedCurve(item, curves, uniqueGraphName)
+        if ("code" in selected) return { kind: item.kind, sourceText: item.sourceText, status: "unverified", ...selected }
+        const boundTangents = tangents.filter((entry) => entry.source?.id === selected.curve.id)
+        if (boundTangents.length > 1) {
+          return { kind: item.kind, sourceText: item.sourceText, status: "unverified", code: "tangent_binding_ambiguous", reason: "目标函数曲线上存在多条候选切线，无法唯一绑定，未核验。" }
+        }
+        if (boundTangents.length === 0) {
+          return {
+            kind: item.kind,
+            sourceText: item.sourceText,
+            status: "unverified",
+            code: tangents.length > 0 ? "function_binding_mismatch" : "tangent_missing",
+            reason: tangents.length > 0
+              ? `候选图中的切线未绑定到题面指定的 ${selected.curve.label ?? "目标函数"}，不能错用辅助曲线求导，未核验。`
+              : "候选图里没有画在该函数曲线上的切线，未核验。"
+          }
+        }
+        itemFigures = { ...figures, curve: selected.curve, tangent: boundTangents[0] }
+      }
     }
     const result = calculate(item, statePoints, itemFigures)
     if (result === null) {

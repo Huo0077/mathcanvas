@@ -1,18 +1,86 @@
-import type { ImageReadingItem, ProblemImageReading } from "./problemImageReader"
+import type { ImageObservationKind, ImageReadingItem, ProblemImageReading } from "./problemImageReader"
 
 const number = String.raw`[+\-−]?\s*\d+(?:\.\d+)?`
 const pair = String.raw`\(\s*${number}\s*,\s*${number}\s*\)`
-const coordinates = new RegExp(String.raw`(?<![A-Za-z])([A-Z](?:_\{\d+\}|_?\d+)?[′']?\s*\(\s*${number}(?:\s*,\s*${number}){1,2}\s*\))`, "g")
+const braceGroup = String.raw`\{(?:[^{}\n]|\{[^{}\n]*\})*\}`
+const coordinateArg = String.raw`(?:[^(),;\n{}]+(?:${braceGroup}[^(),;\n{}]*)*|(?:${braceGroup}[^(),;\n{}]*)+)`
+const coordinates = new RegExp(
+  String.raw`(?<![A-Za-z0-9_])([A-Z](?:_\{\d+\}|_?\d+)?[′']?\s*\(\s*${coordinateArg}\s*,\s*${coordinateArg}(?:\s*,\s*${coordinateArg})?\s*\))`,
+  "g"
+)
+const bareCoordinate = new RegExp(
+  String.raw`^\(\s*${coordinateArg}\s*,\s*${coordinateArg}(?:\s*,\s*${coordinateArg})?\s*\)$`
+)
 const pointName = String.raw`[A-Z](?:_\{\d+\}|_?\d+)?[′']?`
 const namedSegment = new RegExp(`^${pointName}\\s*[-–—]?\\s*${pointName}$`)
+const safeLabelWhitelist = new RegExp(String.raw`^(?:(?:点|原点)\s*)?${pointName}$`)
+const safeScalarWhitelist = /^(?:(?:图中|高|高度|底面边长|半径|斜高|母线|边长|角度)\s*)?(?:[A-Za-z](?:_\{\d+\}|_?\d+)?[′']?(?:\s*[A-Za-z](?:_\{\d+\}|_?\d+)?[′']?)?\s*=\s*)?[+\-−]?\d+(?:\.\d+)?(?:\s*(?:cm|m|mm|°|度|\^\\circ))?$/
+const relationKeywords = /(?:相交|交于|共线|共面|异面|平行|垂直|⊥|∥|\/\/|相切|切于|平分|中点|全等|相似|视角|透视|两条棱|两棱|共点|二面角|intersect|parallel|perpendicular|tangent)/i
+const uncertainKeywords = /[?？]|看不清|模糊|不确定|待核对|未知|可能|似乎/
 
 function mathText(text: string): string {
   return text.normalize("NFKC").replace(/\\(?:left|right)\b|\\[()]|\$/g, "").replace(/\\(?:to|rightarrow)\b/g, "→")
 }
 
-/** A plausible but wrong coordinate needs a source check even if the model reported no doubt. */
+function fnv1a64(input: string): string {
+  let hash = 0xcbf29ce484222325n
+  const prime = 0x100000001b3n
+  const mask = 0xffffffffffffffffn
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= BigInt(input.charCodeAt(index))
+    hash = (hash * prime) & mask
+  }
+  return hash.toString(16).padStart(16, "0")
+}
+
+export function observationDigest(item: ImageReadingItem): string {
+  return fnv1a64(JSON.stringify({
+    text: item.text.trim(),
+    image: item.image,
+    box: item.box,
+    arrow: item.arrow ?? null
+  }))
+}
+
+export function observationId(item: ImageReadingItem, index: number): string {
+  const trimmed = item.id?.trim()
+  return trimmed ? trimmed : `obs-${index}-${observationDigest(item).slice(0, 8)}`
+}
+
+export function findDuplicateObservationIds(items: readonly ImageReadingItem[]): Set<string> {
+  const counts = new Map<string, number>()
+  for (const item of items) {
+    const id = item.id?.trim()
+    if (!id) continue
+    counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id))
+}
+
+export function computeReadingRevision(reading: ProblemImageReading, problemText?: string): string {
+  return fnv1a64(JSON.stringify({
+    problem: (problemText ?? reading.problem).trim(),
+    diagram: reading.diagram.map(item => ({
+      id: item.id ?? null,
+      kind: item.kind ?? null,
+      text: item.text.trim(),
+      image: item.image,
+      box: item.box,
+      arrow: item.arrow ?? null
+    })),
+    uncertainties: reading.uncertainties.map(item => ({
+      text: item.text.trim(),
+      image: item.image,
+      box: item.box,
+      impact: item.impact ?? null
+    }))
+  }))
+}
+
+/** A plausible but wrong coordinate (including radical/LaTeX fraction/unreadable tuples) needs a source check even if the model reported no doubt. */
 export function addCoordinateReview(reading: ProblemImageReading, imageCount: number): ProblemImageReading {
-  const values = [...new Set([...mathText(reading.problem).matchAll(coordinates)].map(match => match[1].replace(/\s/g, "")))]
+  const matches = [...mathText(reading.problem).matchAll(coordinates)].map(match => match[1].replace(/\s/g, ""))
+  const values = [...new Set(matches.filter(value => !/^P\([^)]*=[^)]*\)$/.test(value)))]
   if (!values.length) return reading
   const listed = values.join("、")
   const text = `请对照原图核对坐标和正负号。初读值：${listed.length > 210 ? listed.slice(0, 210) + "…" : listed}。以核对后的题干为准。`
@@ -40,11 +108,32 @@ export function reviewProblemImage(reading: ProblemImageReading, imageCount: num
   return { ...coordinateReview, uncertainties }
 }
 
+/** Classify a diagram observation strictly by content first so model kind claims cannot bypass review. */
+export function classifyObservation(item: ImageReadingItem): ImageObservationKind {
+  const text = mathText(item.text).trim()
+  if (relationKeywords.test(text)) return "relation"
+  if (bareCoordinate.test(text) || new RegExp(coordinates.source).test(text)) return "coordinate"
+  if (isDiagramLine(item)) return "connection"
+  if (uncertainKeywords.test(text)) return "unknown"
+  if (item.kind === "unknown" || item.kind === "relation" || item.kind === "connection" || item.kind === "coordinate") {
+    return item.kind
+  }
+  if (item.arrow && !isDiagramLine({ ...item, arrow: undefined })) return "scalar"
+  if (safeScalarWhitelist.test(text) && (item.kind === undefined || item.kind === "scalar")) return "scalar"
+  if (safeLabelWhitelist.test(text) && (item.kind === undefined || item.kind === "label")) return "label"
+  return "unknown"
+}
+
+export function observationRequiresConfirmation(item: ImageReadingItem): boolean {
+  const kind = classifyObservation(item)
+  return kind !== "label" && kind !== "scalar"
+}
+
 /** Geometry connections need a human check before they become drawing input. */
 export function isDiagramLine(item: ImageReadingItem): boolean {
   if (item.arrow) return false
   const text = mathText(item.text).trim()
-  return /虚线|实线|点线|线段|相连|连线|连接|[底侧]棱|dashed|solid line|segment/i.test(text) || namedSegment.test(text)
+  return /虚线|实线|点线|线段|相连|连线|连接|[底侧]?棱|dashed|solid line|segment/i.test(text) || namedSegment.test(text)
 }
 
 /** Only graph-dependent vector questions need numerical tails and heads. */

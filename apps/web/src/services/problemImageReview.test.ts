@@ -77,3 +77,16 @@ it("requires a curve description for every graph option, even when missing detai
   expect(sent.prompt).toContain("D：有两个谷")
   expect(sent.imageEvidence?.diagram).toEqual([])
 })
+
+it("R07-B: catches radical, LaTeX fraction, and unreadable coordinates without silent numeric skipping", () => {
+  const checked = addCoordinateReview({
+    problem: String.raw`椭圆焦点 $F(2\sqrt{5}, 0)$，动点 $P\left(\frac{1}{2}, -\frac{\sqrt{3}}{2}\right)$，点 $M(?, 1)$。`,
+    diagram: [],
+    uncertainties: []
+  }, 1)
+  expect(checked.uncertainties).toHaveLength(1)
+  expect(checked.uncertainties[0].impact).toBe("condition")
+  expect(checked.uncertainties[0].text).toContain(String.raw`F(2\sqrt{5},0)`)
+  expect(checked.uncertainties[0].text).toContain(String.raw`P(\frac{1}{2},-\frac{\sqrt{3}}{2})`)
+  expect(checked.uncertainties[0].text).toContain("M(?,1)")
+})

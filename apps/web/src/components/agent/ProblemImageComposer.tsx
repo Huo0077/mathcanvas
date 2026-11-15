@@ -4,7 +4,17 @@ import { cropProblemImage, MAX_PROBLEM_IMAGES, prepareProblemImage, type Problem
 import { imageReadingText, listImageReaders, readProblemImages, type ImageBox, type ProblemImageReading } from "../../services/problemImageReader"
 import { imagePrompt } from "../../services/problemImagePrompt"
 import { alignGridReadings } from "../../services/problemImageGrid"
-import { graphChoiceDraft, hasVectorSupplement, isDiagramLine, isGraphChoiceProblem, missingGraphChoices, requiredVectorReadings, reviewProblemImage } from "../../services/problemImageReview"
+import {
+  computeReadingRevision,
+  findDuplicateObservationIds,
+  graphChoiceDraft,
+  hasVectorSupplement,
+  isGraphChoiceProblem,
+  missingGraphChoices,
+  observationRequiresConfirmation,
+  requiredVectorReadings,
+  reviewProblemImage
+} from "../../services/problemImageReview"
 import { AgentComposer } from "./AgentComposer"
 
 interface ProblemImageComposerProps {
@@ -182,6 +192,8 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   const graphChoice = reading !== null && isGraphChoiceProblem(reading.problem)
   const missingChoices = graphChoice ? missingGraphChoices(graphSupplement) : []
   const graphReady = !graphChoice || (missingChoices.length === 0 && graphReviewed)
+  const duplicateObservationIds = reading ? findDuplicateObservationIds(reading.diagram) : new Set<string>()
+  const readingRevision = reading ? computeReadingRevision(reading, problem) : undefined
   const needsReview = reading?.uncertainties.some((item, index) => item.impact !== "appearance" && !reviewed.includes(index)) ?? false
   const canUse = Boolean(problem.trim() || draft.value.trim()) && !/\[看不清\]|【看不清】|［看不清］/.test(problem)
     && !needsReview && !manualCrop && graphReady && (vectorReadings === 0 || hasVectorSupplement(vectorSupplement, vectorReadings))
@@ -197,7 +209,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         graphChoice ? `图形选项（用户核对）：\n${graphSupplement.trim()}` : "",
         draft.value
       ].filter(Boolean).join("\n")
-      const accepted = await onSend(imagePrompt(problem, instructions, reading, reviewed, confirmedLines))
+      const accepted = await onSend(imagePrompt(problem, instructions, reading, reviewed, confirmedLines, { revision: readingRevision }))
       if (!accepted) throw new Error("题图识别结果未能发送，内容已保留，可以重试。")
       draft.onChange("")
       resetReading()
@@ -296,7 +308,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
       {working && <p role="status">{working === "preparing" ? "正在准备图片…" : "正在读取题干与配图…"}</p>}
       {error && <p className="agent-composer-refusal" role="alert">{error}</p>}
       {reading && <div className="problem-image-review">
-        <label>识别的题干<textarea value={problem} onChange={(event) => { setProblem(event.target.value); setReviewed([]) }} readOnly={submitting} rows={4} maxLength={8000} /></label>
+        <label>识别的题干<textarea value={problem} onChange={(event) => { setProblem(event.target.value); setReviewed([]); setConfirmedLines([]) }} readOnly={submitting} rows={4} maxLength={8000} /></label>
         {vectorReadings > 0 && <label>
           补充配图向量
           <span>缺少向量的起点或箭头方向。请对照原图逐支填写 {vectorReadings} 组坐标，例如「船速：(2,0) → (3,3)」。</span>
@@ -334,21 +346,25 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         </div>}
         {reading.diagram.length > 0 && <details className="problem-image-observations">
           <summary>配图参考 · {reading.diagram.length} 条</summary>
-          <p>点名和数值可随题发送。请对照原图勾选要发送的线条。</p>
-          {reading.diagram.map((item, index) => <div className="problem-image-observation" key={index}>
-            <span>{imageReadingText(item)}{!item.box && "（位置待核对）"}</span>
-            <div className="problem-image-observation-actions">
-              {item.box && <button type="button" aria-label={`定位配图读数 ${index + 1}`} onClick={() => showEvidence(item)}>定位</button>}
-              {isDiagramLine(item) && <label>
-                <input type="checkbox" checked={confirmedLines.includes(index)} disabled={submitting}
-                  aria-label={`确认并发送线条：${item.text}`}
-                  onChange={event => {
-                    const checked = event.target.checked
-                    setConfirmedLines(current => checked ? [...current, index] : current.filter(value => value !== index))
-                  }} /> 确认并发送
-              </label>}
+          <p>点名和数值可随题发送；连线、坐标、几何关系及未分类条目须对照原图逐项勾选确认。</p>
+          {reading.diagram.map((item, index) => {
+            const duplicateId = Boolean(item.id?.trim() && duplicateObservationIds.has(item.id.trim()))
+            return <div className="problem-image-observation" key={index}>
+              <span>{imageReadingText(item)}{!item.box && "（位置待核对）"}</span>
+              <div className="problem-image-observation-actions">
+                {item.box && <button type="button" aria-label={`定位配图读数 ${index + 1}`} onClick={() => showEvidence(item)}>定位</button>}
+                {duplicateId && <span>（观察编号重复，暂不可发送）</span>}
+                {!duplicateId && observationRequiresConfirmation(item) && <label>
+                  <input type="checkbox" checked={confirmedLines.includes(index)} disabled={submitting}
+                    aria-label={`确认并发送线条：${item.text}`}
+                    onChange={event => {
+                      const checked = event.target.checked
+                      setConfirmedLines(current => checked ? [...current, index] : current.filter(value => value !== index))
+                    }} /> 确认并发送
+                </label>}
+              </div>
             </div>
-          </div>)}
+          })}
         </details>}
         <div className="problem-image-apply">
           {/\[看不清\]|【看不清】|［看不清］/.test(problem) && <p>请先修正题干里的「[看不清]」。</p>}
