@@ -169,4 +169,10 @@ describe("T5 参数化立体计划：四题的命名分点都落成绑定点", (
     const built = tryBuildParametricSolidPlan({ prompt: "画一个圆，半径 3" })
     expect(built.status).toBe("not-applicable")
   })
+
+  it("题面请求外接球时附加 derived.create_circumsphere 并在编译期披露内核求解假设", () => {
+    const { compiled } = compilePrompt("在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥的外接球")
+    expect(compiled.draftDocument?.primitives.some((primitive) => primitive.type === "sphere" && primitive.derivedFrom?.kind === "circumsphere")).toBe(true)
+    expect(compiled.assumptions.map((entry) => entry.text).join(" ")).toContain("外接球由内核")
+  })
 })

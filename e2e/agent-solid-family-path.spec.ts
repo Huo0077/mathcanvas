@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **S6.4 浏览器正例：点名的形状族走界面路径**（设计 §3.2 的第一层落地之后的实测）。
@@ -45,7 +46,7 @@ function undoButton(page: import("@playwright/test").Page) {
 
 /** 打开实验开关（`enableFreeApex` 在界面上就是这一个）并走到 Agent 工作区。 */
 async function openAgentWithExperiment(page: import("@playwright/test").Page): Promise<void> {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

@@ -471,6 +471,40 @@ describe("plan compilation", () => {
     expect(text).toContain("下底")
   })
 
+  it("discloses derived circumsphere kernel computation when the plan omitted a manual note", () => {
+    const result = compilePlan(rawPlan([
+      {
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          label: "四棱锥 P-ABCD",
+          vertexNames: ["P", "A", "B", "C", "D"],
+          vertices: [
+            { x: 0, y: 0, z: 2 },
+            { x: -1, y: -1, z: 0 },
+            { x: 1, y: -1, z: 0 },
+            { x: 1, y: 1, z: 0 },
+            { x: -1, y: 1, z: 0 }
+          ],
+          faces: [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [1, 4, 3, 2]]
+        }
+      },
+      {
+        actionId: "derived.create_circumsphere",
+        actionKey: "circumsphere",
+        factIds: [],
+        inputs: { alias: "O", solidId: { scope: "draft", alias: "pyramid" } }
+      }
+    ]), context(createEmptyDocument("geometry3d")))
+
+    expect(result.ok, JSON.stringify(result.diagnostics)).toBe(true)
+    const text = result.assumptions.map((assumption) => assumption.text).join(" ")
+    expect(text).toContain("外接球由内核")
+    expect(text).toContain("5 个顶点")
+  })
+
   it("keeps the stated segment count in the approximation note", () => {
     const result = compilePlan(rawPlan([{
       actionId: "solid.create_round_frustum",

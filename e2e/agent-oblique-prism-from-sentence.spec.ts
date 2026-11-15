@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **S3 浏览器正例：题面驱动的斜三棱柱**（题面只说"斜"，斜向由系统取**代表值**并写进假设）。
@@ -54,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 
 test("an oblique prism from a sentence commits a translated top ring that really is oblique", async ({ page }) => {
   // 实验开关（`enableFreeApex` 在界面上就是这一个）：题面驱动的见证搜索这条路。
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

@@ -16,14 +16,14 @@ test("returns to the 3D workspace with the camera the user left", async ({ page 
   const scene = page.locator("[data-3d-scene]")
   const canvas = scene.locator("canvas")
   const box = (await canvas.boundingBox())!
-  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  const dragStart = { x: box.x + box.width * 0.15, y: box.y + box.height * 0.5 }
 
-  // 转动视角 + 滚轮缩放，得到一个明显不同于默认视角的相机（默认方位角 45°、距离 16）
-  await page.mouse.move(centre.x, centre.y)
+  // 在空白背景处转动视角 + 滚轮缩放，得到一个明显不同于默认视角的相机（避免直接命中中心立方体顶点触发点拖动）
+  await page.mouse.move(dragStart.x, dragStart.y)
   await page.mouse.down()
-  await page.mouse.move(centre.x - 140, centre.y - 60, { steps: 8 })
+  await page.mouse.move(dragStart.x + 140, dragStart.y - 60, { steps: 8 })
   await page.mouse.up()
-  await page.mouse.move(centre.x, centre.y)
+  await page.mouse.move(dragStart.x, dragStart.y)
   await page.mouse.wheel(0, -240)
 
   const turned = await readCamera(page)

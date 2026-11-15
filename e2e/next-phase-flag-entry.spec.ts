@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { CONIC_INVARIANT_PROMPT } from "../apps/web/src/agent/representativeFixtures"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **N3 的产品入口：浏览器验收**（2026-10-05）。
@@ -37,7 +38,7 @@ test.beforeEach(async ({ page }) => {
 test("顶栏「设置」能到设置模块，那里有约束拖动的实验性开关", async ({ page }) => {
   await page.goto("/")
 
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
 
   await expect(page.locator('.app-module[data-module="settings"]')).toBeVisible()
   const toggle = page.getByRole("switch", { name: "约束拖动" })
@@ -48,21 +49,21 @@ test("顶栏「设置」能到设置模块，那里有约束拖动的实验性�
 
 test("打开之后刷新仍然是开（偏好跨会话保留）", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
 
   const toggle = page.getByRole("switch", { name: "约束拖动" })
   await toggle.click()
   await expect(toggle).toBeChecked()
 
   await page.reload()
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
 
   await expect(page.getByRole("switch", { name: "约束拖动" })).toBeChecked()
 })
 
 test("仅切约束拖动时，偏好里没有见证搜索及其它未启用能力", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   await page.getByRole("switch", { name: "约束拖动" }).click()
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))
@@ -73,7 +74,7 @@ test("仅切约束拖动时，偏好里没有见证搜索及其它未启用能�
 })
 test("见证搜索**默认开**、可以关掉、刷新保留，且不会连带打开其它能力", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   const search = page.getByRole("switch", { name: "示意图见证搜索" })
   /**
    * **2026-10-15 用户裁决：这条救援默认就是开的**（「只救不抢」—— 候选已经满足题设时一步都不动，
@@ -88,7 +89,7 @@ test("见证搜索**默认开**、可以关掉、刷新保留，且不会连带�
   await expect(search).not.toBeChecked()
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))).toEqual({ witnessSearch: false })
   await page.reload()
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).not.toBeChecked()
   await expect(page.getByRole("switch", { name: "约束拖动" })).not.toBeChecked()
 })
@@ -108,7 +109,7 @@ test("见证搜索**默认开**、可以关掉、刷新保留，且不会连带�
  */
 test("形式证明导出：默认关、能打开、刷新保留，且只开它自己", async ({ page }) => {
   await page.goto("/")
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
 
   const proof = page.getByRole("switch", { name: "形式证明导出" })
   await expect(proof).not.toBeChecked()
@@ -120,7 +121,7 @@ test("形式证明导出：默认关、能打开、刷新保留，且只开它�
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("mathcanvas:next-phase-preferences") ?? "null"))).toEqual({ proofExport: true })
 
   await page.reload()
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   await expect(page.getByRole("switch", { name: "形式证明导出" })).toBeChecked()
   // 见证搜索默认就是开的（2026-10-15 用户裁决），所以这里看的是**它没被这一下写进偏好**。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
@@ -142,7 +143,7 @@ test("开关关着时确认面板上没有形式证明那一段（默认路径�
 test("打开之后，同一句话的确认面板上真的出现形式证明那一段", async ({ page }) => {
   await page.goto("/")
   // ① 用**用户点得到的那条路**打开开关（不是测试后门）。
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   await page.getByRole("switch", { name: "形式证明导出" }).click()
   await expect(page.getByRole("switch", { name: "形式证明导出" })).toBeChecked()
 

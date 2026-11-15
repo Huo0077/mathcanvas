@@ -8,6 +8,14 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— R08 E2E 与生产 UI / 合同重新对齐
+
+- 对基线 E2E 失败与全量串行重跑逐项分类，区分生产缺陷、设计契约迁移与过期定位器，不跳过用例也不开启静默重试：
+  - **生产外接球/直三棱柱路线修复**：`parametricSolidPlan.ts` 保留 `外接球` / `内切球` 派生动作，`planCompiler.ts` 在 `compilePlanOnce` 补充 `derivedCircumsphereAssumptions` 内核计算披露（`parametricSolidPlan.test.ts`、`planCompiler.test.ts` 114 passed 与 `agentRuntime.test.ts` 90 passed 验证）；新增 `rightPrismPlan.ts` `tryBuildRightPrismMidpointsPlan` 并在 `deterministicProblemRoute.ts` 接入，沿用分问剥离模式而不放宽 R01-A `diagramObligations` 守卫（`problem-image-reader.spec.ts` 2/2 通过）。
+  - **真实 UI 叠放缺陷修复**：发现存在 `AI 草稿预览` 横幅（`z-index: 50`）时，`.clean-chrome`（`z-index: 20`）内的 `工具菜单` 被拦截遮挡，提升 `.clean-chrome` 至 `z-index: 100`。
+  - **共享页面对象与契约对齐**：新建 `e2e/pages/MathCanvasPage.ts`，统一 `模型服务 → 高级 → 实验性功能`、`AppChrome` 工具栏/菜单与顶栏 `保存 .mgeo` 入口；对齐 `310px` 桌面检查器宽度契约、`LineBasicMaterial` 网格契约与空白背景拖转视角，更新 `agent-derived-sphere.spec.ts` 按真实顶点标签拖转 `P`。记录 `WorkspaceTabs.tsx` 为 legacy-compat（仅保留给 `WorkspaceTabs.test.tsx`）。
+- 验证：全量串行 `npx playwright test --workers=1 --retries=0` 达 **286 passed / 0 failed (13.4m)**；默认 16-worker 并发 `npm.cmd run test:e2e` 达 **282 passed / 4 failed (4.2m)**（4 项均为高并发下 5s/30s 超时）；完整 Vitest 524 文件 / 5580 通过 + 1 todo；类型检查、Lint（0 errors / 32 既有警告）与 Web 构建（634 modules）通过。证据见[R08 E2E 与 UI 对齐记录](audit/2026-11-15-e2e-ui-contract-alignment/README.md)。
+
 ## 2026-11-16 —— R07 函数相关义务统一绑定与题图结构化复核
 
 - 先补全 R07-A 与 R07-B RED 用例并复现6项预期失败：存在辅助曲线时 `functionLineIntersections` 返回 `unverified`、`g(x)` 未进入 `functionGraph` 解析且切线未核验曲线归属；根式/LaTeX分式/不确定坐标被 `addCoordinateReview` 跳过，且 `AB∥CD` / `AB与CD相交于E` / `AB和CD是两条棱` / 伪造 `kind:"label"` 直接通过黑名单进入确定性事实。

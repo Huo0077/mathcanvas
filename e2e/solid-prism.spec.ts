@@ -1,4 +1,5 @@
 import { commandButton } from "./command-menu"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 import { readFileSync, readdirSync } from "node:fs"
 import { basename, join } from "node:path"
 
@@ -297,9 +298,8 @@ interface SavedEnvelope {
 
 /** 走页面自己的「保存 .mgeo」下载真实产物，而不是去读 localStorage。 */
 async function readSavedDocument(page: import("@playwright/test").Page): Promise<SavedEnvelope> {
-  const download = page.waitForEvent("download")
-  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
-  const path = await (await download).path()
+  const download = await new MathCanvasPage(page).downloadMgeo()
+  const path = await download.path()
   if (!path) throw new Error("保存没有产生可读文件")
   return JSON.parse(readFileSync(path, "utf8")) as SavedEnvelope
 }

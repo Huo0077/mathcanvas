@@ -17,19 +17,19 @@ test("switches between the canvas module and the agent module from the left rail
   await expect(page.locator(".app-shell")).toHaveAttribute("data-app-module", "traditional")
   await expect(page.getByRole("button", { name: "传统工作区" })).toHaveAttribute("aria-pressed", "true")
   await expect(page.getByRole("img", { name: "几何画布" })).toBeVisible()
-  await expect(page.getByRole("region", { name: "功能区" })).toBeVisible()
+  await expect(page.getByRole("toolbar", { name: "绘图工具" })).toBeVisible()
   await expect(page.getByRole("textbox", { name: "对话输入" })).toHaveCount(0)
 
-  // 切到模块 B：Ribbon 与画布整块退场，只留 Agent 的三段式骨架。
+  // 切到模块 B：工具栏与画布整块退场，只留 Agent 的三段式骨架。
   await page.getByRole("button", { name: "Agent 工作区" }).click()
   await expect(page.locator(".app-shell")).toHaveAttribute("data-app-module", "agent")
   await expect(page.getByRole("button", { name: "Agent 工作区" })).toHaveAttribute("aria-pressed", "true")
-  await expect(page.getByRole("region", { name: "功能区" })).toHaveCount(0)
+  await expect(page.getByRole("toolbar", { name: "绘图工具" })).toHaveCount(0)
   await expect(page.getByRole("img", { name: "几何画布" })).toHaveCount(0)
 
   const composer = page.getByRole("textbox", { name: "对话输入" })
   await expect(composer).toBeVisible()
-  await expect(page.getByRole("log", { name: "对话记录" })).toContainText("发送第一条指令后")
+  await expect(page.getByRole("log", { name: "对话记录" })).toContainText("把数学想法，画出来。")
 
   // 输入框是**多行**的：Shift + Enter 应该在框里换行，而不是把半句话发出去。
   await composer.click()

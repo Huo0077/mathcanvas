@@ -12,10 +12,11 @@ import { expect, test } from "@playwright/test"
  * 2. **满实区（淡出起点以内）盖住可见地面脚印** ⇒ 化开的那一圈落在视野之外。
  *    只有贴到地平线触到覆盖上限（4096 格）时例外，那时远处会在纸面上化开 —— 那正是要的观感。
  *
- * 还有一条只有浏览器能验的事：格线换成了着色器材质，**GLSL 编译不能出错**。
- * 单测跑在 jsdom 里、根本没有 WebGL，所以"着色器能不能编译"永远只能在这里守。
+ * 还有一条只有浏览器能验的事：3D 网格底板与视角缩放的度量联动及 WebGL 着色器不报错。
+ * 当前网格材质已回退为 `LineBasicMaterial`（无径向透明渐隐着色器），但 `data-grid-extent` /
+ * `data-grid-ground-reach` 与零 WebGL 控制台错误契约仍需在这里守住。
  */
-test("fades the grid out beyond the visible ground, and its shader compiles", async ({ page }) => {
+test("keeps grid extent scaling across camera orbit with zero WebGL shader errors", async ({ page }) => {
   const problems: string[] = []
   page.on("console", (message) => { if (message.type() === "error") problems.push(message.text()) })
   page.on("pageerror", (error) => problems.push(String(error)))
@@ -39,11 +40,11 @@ test("fades the grid out beyond the visible ground, and its shader compiles", as
   // 没撞覆盖上限时，满实区必须盖住整个可见脚印。
   if (start.extent < 4096) expect(start.fade[0]).toBeGreaterThanOrEqual(start.reach)
 
-  // 拖一下相机（**不看方向**：抬高或压低都行），重新算出来的脚印与覆盖必须仍守同一条不变量。
+  // 拖一下空白画布区域以旋转相机（避开画布中心顶点直抓），重新算出来的脚印与覆盖必须仍守同一条不变量。
   const box = (await page.locator("[data-3d-scene] canvas").boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.5)
   await page.mouse.down()
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.35, { steps: 12 })
+  await page.mouse.move(box.x + box.width * 0.15, box.y + box.height * 0.35, { steps: 12 })
   await page.mouse.up()
 
   await expect.poll(async () => (await read()).reach).not.toBe(start.reach)

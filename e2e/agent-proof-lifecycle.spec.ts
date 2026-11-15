@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **Task 18：证明那一栏在浏览器里的生命周期**。
@@ -23,7 +24,7 @@ import { expect, test } from "@playwright/test"
 const PROOF_GOAL = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥，求证 PA ⊥ BD"
 
 async function openSettingsFlag(page: import("@playwright/test").Page, name: string): Promise<void> {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   await page.getByRole("switch", { name }).click()
   await expect(page.getByRole("switch", { name })).toBeChecked()
   await page.getByRole("button", { name: "传统工作区" }).click()

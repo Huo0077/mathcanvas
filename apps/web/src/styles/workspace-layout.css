@@ -21,7 +21,7 @@
 .app-rail .app-rail-button { min-height: 56px; padding: 5px 0; gap: 4px; color: var(--color-muted); border: 0; background: transparent; font-size: 11px; font-weight: 400; }
 .app-rail .rail-icon { width: 20px; height: 20px; }
 .app-rail .app-rail-button:hover, .app-rail .app-rail-button[data-active="true"] { color: var(--color-accent); background: var(--color-accent-soft); }
-.clean-chrome { position: relative; z-index: 20; flex: 0 0 auto; background: white; }
+.clean-chrome { position: relative; z-index: 100; flex: 0 0 auto; background: white; }
 .clean-header { display: flex; align-items: center; gap: 20px; min-width: 0; height: 56px; flex: 0 0 56px; padding: 0 22px; border-bottom: 1px solid var(--color-border); background: white; }
 .workspace-brand { font-size: 16px; font-weight: 650; letter-spacing: -.5px; }
 .clean-document-title { border-left: 1px solid var(--color-border); padding-left: 20px; color: var(--color-muted); font-size: 13px; }

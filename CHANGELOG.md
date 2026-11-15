@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— R08 E2E 与生产 UI / 合同对齐
+
+- `parametricSolidPlan.ts` 与 `planCompiler.ts` 修复参数化立体构图丢失 `外接球` / `内切球` 的回归，并在 `compilePlanOnce` 为 `derived.create_circumsphere` 补充源自内核求解结果的披露假设；新增 `rightPrismPlan.ts` (`tryBuildRightPrismMidpointsPlan`) 并在 `deterministicProblemRoute.ts` 接入，按分问模式构造直三棱柱第（2）问图景而不放宽 R01-A 小问守卫。
+- `apps/web/src/styles/workspace-layout.css` 将 `.clean-chrome` 的 `z-index` 从 `20` 提高至 `100`，防止 `AI 草稿预览` 横幅（`z-index: 50`）遮挡顶部展开的命令菜单。
+- 新增 `e2e/pages/MathCanvasPage.ts` 页面对象，统一 `模型服务 → 高级 → 实验性功能`、`AppChrome` 工具栏与菜单及顶栏 `保存 .mgeo` 操作；更新 25 份 E2E 用例对齐 `310px` 桌面检查器宽度、3D `LineBasicMaterial` 网格、空白处视角拖转、按顶点标签查找与新工作区 Chrome/空状态文案（不降低超时、不启用重试、不跳过用例）。
+- 全量串行 E2E（`--workers=1 --retries=0`）**286/286 passed**；默认 16-worker 并发 `npm.cmd run test:e2e` **282 passed / 4 failed**（均为高并发 5s/30s 超时）；完整 Vitest 524 文件 / 5580 通过 + 1 todo；类型、Lint 与 Web 构建通过。证据见 [R08 E2E与UI对齐记录](docs/audit/2026-11-15-e2e-ui-contract-alignment/README.md)。下一工作包为R09-B。
+
 ## 2026-11-16 —— R07 函数义务统一绑定与题图结构化复核
 
 - `diagramObligations.ts` 与 `diagramVerification.ts` 扩展 `[fgh](x)` 函数识别及 `functionGraph`、`functionLineIntersections`、`tangentAt`、`commonTangent` 统一曲线/图元 ID 绑定，禁止多曲线时按首条猜选或错绑辅助曲线切线。

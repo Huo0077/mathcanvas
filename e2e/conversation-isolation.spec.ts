@@ -72,7 +72,7 @@ test("keeps two conversations' transcripts, facts and object references apart", 
   // ---- 会话 B：新建对话，历史是空的，A 说过的话一句都不在 ----
   await page.getByRole("button", { name: "新建对话" }).click()
   const transcript = page.getByRole("log", { name: "对话记录" })
-  await expect(transcript).toContainText("发送第一条指令后")
+  await expect(transcript).toContainText("把数学想法，画出来。")
 
   /**
    * B 这里问一句**只读**的（本地规划器认"有什么"）：它不改文档，也不换工作区 ——

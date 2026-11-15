@@ -1,3 +1,4 @@
+import { commandButton } from "./command-menu"
 import { expect, test } from "@playwright/test"
 
 /**
@@ -10,8 +11,7 @@ import { expect, test } from "@playwright/test"
  */
 test("no longer shows the exact-form panel, while measuring still works", async ({ page }) => {
   await page.goto("/")
-  const ribbon = page.getByRole("region", { name: "功能区" })
-  await page.getByRole("button", { name: "固定功能区" }).click()
+  await expect(page.getByRole("toolbar", { name: "绘图工具" })).toBeVisible()
   const algebra = page.locator(".algebra-panel")
   const canvas = page.locator("svg[aria-label='几何画布']")
 
@@ -21,11 +21,11 @@ test("no longer shows the exact-form panel, while measuring still works", async 
   await expect(page.getByText("还没有测量：先在画布上量一个长度、角度或面积。")).toHaveCount(0)
   // 属性栏仍然从自己的标题开始（删掉的只是那块只读展示）。
   // 收窄到 `.properties`：左侧对象列表面板里也有一个 `.panel-title`。
-  await expect(page.locator(".properties .panel-title")).toHaveText("属性面板")
+  await expect(page.locator(".properties .panel-title")).toHaveText("属性")
 
   // 半径 2 的圆。
   const box = (await canvas.boundingBox())!
-  await ribbon.getByRole("button", { name: "添加圆", exact: true }).click()
+  await (await commandButton(page, "添加圆")).click()
   await page.mouse.click(box.x + box.width * 0.35, box.y + box.height * 0.5)
   await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.5)
   await algebra.getByText("圆 1", { exact: true }).click()

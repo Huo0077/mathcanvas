@@ -843,16 +843,28 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   }
 
   const verification = verifyPlan(compiledActions, context.prompt)
+  const derivedAssumptions = derivedCircumsphereAssumptions(compiledActions, working, aliases, [
+    ...(plan.assumptions ?? []),
+    ...assumptions.map((entry) => entry.text)
+  ])
+  const finalAssumptions = [...assumptions, ...derivedAssumptions]
+  const finalMergedAssumptions = [
+    ...new Set([...(completedPlan.assumptions ?? []), ...derivedAssumptions.map((entry) => entry.text)])
+  ]
+  const finalPlan: PlanEnvelope = {
+    ...completedPlan,
+    assumptions: finalMergedAssumptions.length === 0 ? undefined : finalMergedAssumptions
+  }
 
   return {
-    plan,
+    plan: finalPlan,
     obligations: obligationParse,
     workingDocument: working,
     result: {
       ok: true,
       actions: compiledActions,
-      plan: completedPlan,
-      assumptions,
+      plan: finalPlan,
+      assumptions: finalAssumptions,
       questions,
       completions: audit.completions,
       diagnostics,
@@ -915,6 +927,43 @@ function approximationAssumptions(actions: readonly DraftAction[]): StructuredAs
        */
       overridable: true,
       text: `圆台用正 ${segments} 边形近似（与圆柱 / 圆锥同一套分段口径）：两个底面是内接于圆的 ${segments} 边形，侧面是 ${segments} 个等腰梯形；${where}处弦高误差 ${chordError.toPrecision(3)} —— 多边形的边到理想圆弧的最大距离。它是近似，不是那个真的圆台。`
+    })
+  }
+  return out
+}
+
+function derivedCircumsphereAssumptions(
+  actions: readonly DraftAction[],
+  document: GeometryDocument,
+  aliases: Readonly<Record<string, string>>,
+  existingTexts: readonly string[]
+): StructuredAssumption[] {
+  if (existingTexts.some((text) => text.includes("外接球由内核"))) return []
+  const primitivesById = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const out: StructuredAssumption[] = []
+  for (const [index, action] of actions.entries()) {
+    if (action.actionId !== "derived.create_circumsphere") continue
+    const sphereId = aliases[action.inputs.alias]
+    const sphere = sphereId ? primitivesById.get(sphereId) : undefined
+    if (sphere?.type !== "sphere" || sphere.derivedFrom?.kind !== "circumsphere") continue
+    const host = primitivesById.get(sphere.derivedFrom.solidId)
+    const topology = host ? solidTopology3(host, primitivesById) : null
+    const vertexCount = topology?.vertices.length ?? null
+    const hostLabel = host?.label ?? sphere.derivedFrom.solidId
+    const vertexClause = vertexCount === null ? "" : `的 ${vertexCount} 个顶点`
+    out.push({
+      id: `${action.actionKey}.derived-circumsphere`,
+      kind: "symbolic",
+      value: {
+        sphereId: sphere.id,
+        solidId: sphere.derivedFrom.solidId,
+        center: sphere.center,
+        radius: sphere.radius,
+        vertexCount
+      },
+      overridable: false,
+      path: `actions.${index}.inputs.solidId`,
+      text: `外接球由内核从「${hostLabel}」${vertexClause}精确解出来（球心到各顶点等距，半径 r=${Number(sphere.radius.toFixed(4))}），不是系统挑的近似球；仅随宿主几何变更重算。`
     })
   }
   return out

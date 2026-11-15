@@ -180,7 +180,7 @@ for (const template of ["立方体", "棱锥", "圆柱", "圆锥"]) {
     await page.getByRole("button", { name: "立体几何" }).click()
 
     const scene = page.locator("[data-3d-scene]")
-    await page.getByRole("button", { name: `添加${template}` }).click()
+    await (await commandButton(page, `添加${template}`)).click()
     await (await commandButton(page, "创建截面")).click()
     await expect(scene).toHaveAttribute("data-section-count", "1")
 

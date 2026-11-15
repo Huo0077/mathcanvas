@@ -88,6 +88,25 @@ export function tryBuildParametricSolidPlan(input: ParametricSolidPlanInput): Pa
   for (const auxiliary of searched.candidate.auxiliaryPoints ?? []) points.set(auxiliary.name, auxiliary.point)
   const findings = evaluateSolidGoals(input.prompt, points)
   const answer = formatSolidGoalAnswer(findings)
+  const actions = [...solidWitnessActions(searched.candidate, alias)]
+  if (shaped.recognised.family !== "planar-figure") {
+    if (/(?:外接球|circumsphere)/i.test(input.prompt)) {
+      actions.push({
+        actionId: "derived.create_circumsphere",
+        actionKey: "circumsphere",
+        factIds: [],
+        inputs: { alias: "circumsphere", solidId: { scope: "draft", alias }, label: "外接球" }
+      } as unknown as (typeof actions)[number])
+    }
+    if (/(?:内切球|insphere)/i.test(input.prompt)) {
+      actions.push({
+        actionId: "derived.create_insphere",
+        actionKey: "insphere",
+        factIds: [],
+        inputs: { alias: "insphere", solidId: { scope: "draft", alias }, label: "内切球" }
+      } as unknown as (typeof actions)[number])
+    }
+  }
   const plan = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -95,7 +114,7 @@ export function tryBuildParametricSolidPlan(input: ParametricSolidPlanInput): Pa
     factIds: [],
     assumptions: searched.assumptions,
     ...(answer === null ? {} : { answer }),
-    actions: solidWitnessActions(searched.candidate, alias)
+    actions
   } as unknown as PlanEnvelope
   return { status: "ok", plan, candidate: searched.candidate, assumptions: searched.assumptions }
 }

@@ -1,6 +1,6 @@
 import type { PlanEnvelope } from "./contracts"
 import { deterministicPlanForPrompt } from "./parametricSolidPlan"
-import { rightPrismMidpointsPlan } from "./rightPrismPlan"
+import { tryBuildRightPrismMidpointsPlan } from "./rightPrismPlan"
 import { tryBuildScopedPyramidPlan } from "./scopedPyramidPlan"
 import { tryBuildTrigMonotonicityPlan } from "./trigMonotonicityPlan"
 
@@ -11,8 +11,8 @@ export interface DeterministicProblemRoute {
 }
 
 export function routeDeterministicProblem(prompt: string): DeterministicProblemRoute | null {
-  const prism = rightPrismMidpointsPlan(prompt)
-  if (prism) return { plan: prism, family: "spatial-modeling" }
+  const prism = tryBuildRightPrismMidpointsPlan(prompt)
+  if (prism) return { ...prism, family: "spatial-modeling" }
   const trig = tryBuildTrigMonotonicityPlan(prompt)
   if (trig) return { plan: trig, family: "functions" }
   const pyramid = tryBuildScopedPyramidPlan(prompt)

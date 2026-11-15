@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **§3-F 阶段 A 的浏览器证据：底面点名的数值角（`∠ABC=60°`）真的画得出、核得过。**
@@ -72,7 +73,7 @@ test.beforeEach(async ({ page }) => {
 
 test("a named 60° angle on a quadrilateral base is drawn, verified in the panel, and really measures 60° after commit", async ({ page }) => {
   // 实验开关（`enableFreeApex` 在界面上就是这一个）：题面驱动的见证搜索这条路。
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

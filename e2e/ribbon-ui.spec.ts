@@ -37,8 +37,8 @@ test("keeps the workbench content within the viewport at desktop, tablet and pho
     expect(metrics.shellHeight).toBe(metrics.viewportHeight)
     expect(metrics.workbenchScrollHeight).toBeLessThanOrEqual(metrics.workbenchHeight)
     expect(metrics.statusBottom).toBeLessThanOrEqual(metrics.viewportHeight)
-    if (width === 1440) expect(metrics.inspectorWidth).toBeGreaterThanOrEqual(248)
-    if (width === 1440) expect(metrics.inspectorWidth).toBeLessThanOrEqual(252)
+    if (width === 1440) expect(metrics.inspectorWidth).toBeGreaterThanOrEqual(308)
+    if (width === 1440) expect(metrics.inspectorWidth).toBeLessThanOrEqual(312)
 
     if (width === 390) {
       await page.getByRole("button", { name: "对象列表" }).click()

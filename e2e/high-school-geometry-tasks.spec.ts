@@ -105,7 +105,7 @@ function coordinates(vertices: SavedVec3[]): string[] {
 /** 走页面自己的「保存 .mgeo」下载真实产物，而不是去读 localStorage。 */
 async function readSavedDocument(page: Page): Promise<SavedEnvelope> {
   const download = page.waitForEvent("download")
-  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
   const path = await (await download).path()
   if (!path) throw new Error("保存没有产生可读文件")
   return JSON.parse(await readFile(path, "utf8")) as SavedEnvelope

@@ -42,7 +42,7 @@ test("opens and restores an mgeo document through the file input", async ({ page
 
   await expect(page.getByText("恢复点").first()).toBeVisible()
   const save = page.waitForEvent("download")
-  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
   const savedPath = await (await save).path()
   const savedDocument = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { revision: number } }
   expect(savedDocument.document.revision).toBe(7)
@@ -107,7 +107,7 @@ test("keeps constraint data in the document without a constraint panel", async (
 
   // 保存出来的文件里约束记录仍在：撤掉的是界面，不是文档数据。
   const save = page.waitForEvent("download")
-  await page.getByRole("navigation", { name: "工作模式" }).getByRole("button", { name: "保存 .mgeo" }).click()
+  await page.getByRole("banner").getByRole("button", { name: "保存 .mgeo" }).click()
   const savedPath = await (await save).path()
   const saved = JSON.parse(await readFile(savedPath!, "utf8")) as { document: { constraints: unknown[] } }
   expect(saved.document.constraints).toHaveLength(1)

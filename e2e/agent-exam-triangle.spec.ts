@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **Task 11（2026-10-12）：真题结构的三角形 —— 一边、一角、一面积 —— 在真实画布上的证据。**
@@ -54,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 
 test("solves the exam triangle from side + angle + area, verifies it, and undoes in one step", async ({ page }) => {
   // 见证搜索那条救援路径要打开（夹具的坐标是错的，靠它按题面重造）。
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **§3-F 阶段 B（B1）的浏览器证据：顶点参与的数值角（`∠PBA=60°`）在浏览器里真的画得出、核得过。**
@@ -58,7 +59,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test("an angle whose leg is the apex is solved for the height, verified in the panel, and measures 60° after commit", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

@@ -12,7 +12,7 @@
 
 **Tech Stack / 技术栈**：现有TypeScript/React/Three.js、Vitest/Playwright、Tauri/Rust。外部CAS/SMT/新provider仅经需求证据与独立spike批准后考虑；不把加依赖、加重试作为默认修复。
 
-**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A与R10已完成，R10仅有静态CI验证。当前用户明确授权G1（R02–R06）与G2（R07、R08、R09-B、R11），每块验证、对齐文档并推送，不进入P0–P8、R12或发布。G1（R02–R06）及G2首块R07均已完成（见[草稿与CSV证据](../../audit/2026-11-15-draft-and-csv-protection/README.md)和[曲线绑定与题图复核证据](../../audit/2026-11-15-image-review-and-curve-binding/README.md)），下一步进入R08（E2E与生产UI合同重新对齐）；G2尚未关闭。feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
+**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A与R10已完成，R10仅有静态CI验证。当前用户明确授权G1（R02–R06）与G2（R07、R08、R09-B、R11），每块验证、对齐文档并推送，不进入P0–P8、R12或发布。G1（R02–R06）及G2的R07、R08均已完成（见[草稿与CSV证据](../../audit/2026-11-15-draft-and-csv-protection/README.md)、[曲线绑定与题图复核证据](../../audit/2026-11-15-image-review-and-curve-binding/README.md)与[E2E与生产UI对齐证据](../../audit/2026-11-15-e2e-ui-contract-alignment/README.md)），下一步进入R09-B（Schema/运行时叶子约束统一校验）；G2尚未关闭。feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
 
 ## 0. 执行入口与唯一事实来源
 

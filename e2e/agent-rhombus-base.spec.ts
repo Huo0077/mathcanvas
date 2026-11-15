@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **S3 浏览器正例：底面是菱形的四棱柱**（设计 §19 的那句话，走**有名字表**的入口）。
@@ -56,7 +57,7 @@ test.beforeEach(async ({ page }) => {
 
 test("a rhombus base commits four equal sides that are not a square, with lateral edges perpendicular to it", async ({ page }) => {
   // 实验开关（`enableFreeApex` 在界面上就是这一个）：题面驱动的见证搜索这条路。
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

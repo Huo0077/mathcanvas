@@ -12,7 +12,7 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
   await expect(page.getByRole("button", { name: "重置3D视角" })).toBeVisible()
   await page.getByRole("button", { name: "重置3D视角" }).click()
   for (const label of ["透明面", "隐藏边", "法向量"]) {
-    const control = page.getByRole("button", { name: label })
+    const control = await commandButton(page, label)
     await expect(control).toHaveAttribute("aria-pressed", "false")
     await control.click()
     await expect(control).toHaveAttribute("aria-pressed", "true")
@@ -23,7 +23,7 @@ test("opens the 3D workspace and adds a parameterized cube", async ({ page }) =>
   await expect((await commandButton(page, "折叠"))).toHaveAttribute("aria-pressed", "true")
   await (await commandButton(page, "测量二面角")).click()
   await expect(page.getByText(/二面角：90\.0°/)).toBeVisible()
-  await expect(page.getByText("添加立方体")).toBeVisible()
+  await expect(await commandButton(page, "添加立方体")).toBeVisible()
 
   await (await commandButton(page, "添加立方体")).click()
   await expect(page.getByText("立方体 1").first()).toBeVisible()
@@ -208,8 +208,7 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await page.getByRole("button", { name: "立体几何" }).click()
 
   const scene = page.locator("[data-3d-scene]")
-  const planeCommand = (await commandButton(page, "由选中点创建空间平面"))
-  await expect(planeCommand).toHaveAttribute("title", "请先按住 Shift 点选 3 个不共线的空间点")
+  await expect(await commandButton(page, "由选中点创建空间平面")).toHaveAttribute("title", "请先按住 Shift 点选 3 个不共线的空间点")
 
   // Default placement must keep the first three points off a single line, or a plane is impossible.
   for (let index = 0; index < 3; index += 1) await (await commandButton(page, "添加空间点")).click()
@@ -218,10 +217,11 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
   await expect((await commandButton(page, "由选中点创建空间直线"))).toBeEnabled()
   await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
+  const planeCommand = await commandButton(page, "由选中点创建空间平面")
   await expect(planeCommand).toBeEnabled()
   await expect(planeCommand).toHaveAttribute("title", "按住 Shift 点选三个不共线空间点")
 
-  await (await commandButton(page, "由选中点创建空间平面")).click()
+  await planeCommand.click()
 
   await expect(page.getByRole("alert")).toHaveCount(0)
   await expect(algebra.getByText("空间平面 1")).toBeVisible()

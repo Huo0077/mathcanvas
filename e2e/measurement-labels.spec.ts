@@ -1,5 +1,5 @@
 import { commandButton } from "./command-menu"
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 
 /**
  * 测量数字**常驻画布**（slice 5）：平面几何与立体几何都不需要选中任何对象就能看到数值。
@@ -9,20 +9,10 @@ import { expect, test, type Page } from "@playwright/test"
  *
  * 两条用例都刻意在读完数字之后**清空选择**（点画布空白处），再断言数字还在——
  * 这正是"常驻"与旧行为（只在选中来源时出现）的分界。数字还必须与属性栏一致：一个测量只有一个数。
- *
- * 功能区每点一次命令就会自动收起（见 `ribbon-ui.spec.ts`），所以这里先「固定功能区」，
- * 否则第二次点「添加点」会命中收起状态下的另一份节点。
  */
-async function pinRibbon(page: Page) {
-  const ribbon = page.getByRole("region", { name: "功能区" })
-  await page.getByRole("button", { name: "固定功能区" }).click()
-  await expect(ribbon).toHaveAttribute("data-ribbon-expanded", "true")
-  return ribbon
-}
-
 test("keeps a planar measurement number on the canvas without any selection", async ({ page }) => {
   await page.goto("/")
-  const ribbon = await pinRibbon(page)
+  await expect(page.getByRole("toolbar", { name: "绘图工具" })).toBeVisible()
   const canvas = page.locator("svg[aria-label='几何画布']")
   const algebra = page.locator(".algebra-panel")
 
@@ -31,7 +21,7 @@ test("keeps a planar measurement number on the canvas without any selection", as
    *（内核如实报 degenerate），那就不会有任何数字可画——那测的是别的东西，不是"常驻"。
    */
   const placePoint = async (label: string, x: string, y: string) => {
-    await ribbon.getByRole("button", { name: "添加点", exact: true }).click()
+    await (await commandButton(page, "添加点")).click()
     await algebra.getByText(label, { exact: true }).click()
     await page.getByRole("spinbutton", { name: "点 X" }).fill(x)
     await page.getByRole("spinbutton", { name: "点 Y" }).fill(y)

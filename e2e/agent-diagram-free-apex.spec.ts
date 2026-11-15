@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 const FREE_APEX = "在三棱锥D-ABC中，AD⊥平面ABC，自由点D，画示意图"
 
@@ -31,7 +32,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test("when enabled, a free-height tetrahedral diagram has real scene objects, verified premises, confirmation and one-step undo", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
@@ -65,7 +66,7 @@ test("when disabled, the same previously unsupported prompt does not create a po
 })
 
 test("the experimental route does not silently discard an unsupported above-the-base condition", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
@@ -86,7 +87,7 @@ test("the experimental route does not silently discard an unsupported above-the-
  * 反例才谈得上证明"拒绝是因为题设不成立"。
  */
 test("accepts a bounded explicit-coordinate sentence and lists the stated coordinate as a verified premise", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
@@ -109,7 +110,7 @@ test("accepts a bounded explicit-coordinate sentence and lists the stated coordi
  * 所以必须拒绝，且**不许**留下草稿或占用撤销历史。
  */
 test("refuses the same sentence when the stated coordinate contradicts the figure", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()
@@ -181,7 +182,7 @@ async function committedSolid(page: import("@playwright/test").Page): Promise<Co
  * **门禁全绿 ≠ 图符合题意**，所以"绿"必须由一份不依赖那套判据的独立计算来复核。
  */
 test("re-verifies the committed tetrahedron from the document's own coordinates, independently of the panel", async ({ page }) => {
-  await page.getByRole("button", { name: "设置" }).click()
+  await new MathCanvasPage(page).openExperimentalSettings()
   // 「示意图见证搜索」2026-10-15 起**默认就是开的**（用户裁决）：这里不再点它 ——
   // 点一下会把这条救援**关掉**，而本用例正需要它开着。
   await expect(page.getByRole("switch", { name: "示意图见证搜索" })).toBeChecked()

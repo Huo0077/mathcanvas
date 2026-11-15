@@ -934,6 +934,49 @@ describe("representative tasks from the design", () => {
     expect(text).toContain("弦高")
   })
 
+  it("carries derived circumsphere kernel disclosure to runtime assumptions without fixture-only text", async () => {
+    const plan: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "作四棱锥及外接球",
+      factIds: [],
+      actions: [
+        {
+          actionId: "solid.create_polyhedron",
+          actionKey: "pyramid",
+          factIds: [],
+          inputs: {
+            alias: "pyramid",
+            label: "四棱锥 P-ABCD",
+            vertexNames: ["P", "A", "B", "C", "D"],
+            vertices: [
+              { x: 0, y: 0, z: 2 },
+              { x: -1, y: -1, z: 0 },
+              { x: 1, y: -1, z: 0 },
+              { x: 1, y: 1, z: 0 },
+              { x: -1, y: 1, z: 0 }
+            ],
+            faces: [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [1, 4, 3, 2]]
+          }
+        },
+        {
+          actionId: "derived.create_circumsphere",
+          actionKey: "circumsphere",
+          factIds: [],
+          inputs: { alias: "O", solidId: { scope: "draft", alias: "pyramid" } }
+        }
+      ] as never
+    }
+    const document = createEmptyDocument("geometry3d")
+    const { runtime } = makeRuntime({ envelope: plan, document })
+
+    const events = await drive(runtime.coordinator, { run: runContext(document), userMessage: "画一个四棱锥并作它的外接球" })
+
+    expect(events.at(-1)).toBe("awaiting_confirmation")
+    const text = (runtime.assumptions() ?? []).join(" ")
+    expect(text).toContain("外接球由内核")
+  })
+
   it("keeps the conic parameter symbolic and labels the invariant as numeric sampling", async () => {
     const document = createEmptyDocument("conics")
     const { runtime, written, current } = makeRuntime({ envelope: conicInvariantPlan(), document })

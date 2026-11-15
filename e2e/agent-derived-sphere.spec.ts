@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { projectWorldPoint } from "./helpers/projection"
+import { MathCanvasPage } from "./pages/MathCanvasPage"
 
 /**
  * **派生球的浏览器证据**（S5；设计 §4.1 的硬约束）。
@@ -25,20 +26,21 @@ import { projectWorldPoint } from "./helpers/projection"
 const PROMPT = "在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD，画出这个四棱锥的外接球"
 
 async function openAgent(page: import("@playwright/test").Page): Promise<void> {
-  await page.getByRole("button", { name: "传统工作区" }).click()
-  await page.getByRole("button", { name: "立体几何" }).click()
-  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  const app = new MathCanvasPage(page)
+  await app.openTraditionalWorkspace()
+  await app.switchWorkspace("立体几何")
+  await app.openAgentWorkspace()
 }
 
 async function send(page: import("@playwright/test").Page, prompt: string): Promise<void> {
-  await page.getByRole("textbox", { name: "对话输入" }).fill(prompt)
-  await page.getByRole("button", { name: "发送" }).click()
+  await new MathCanvasPage(page).sendAgentPrompt(prompt)
 }
 
 interface Vec3 { x: number; y: number; z: number }
 interface Draft {
-  /** 按拓扑下标（= `vertices` 的给出顺序 = `vertexNames` 的顺序）读出来的宿主顶点。 */
+  /** 按拓扑下标读出来的宿主顶点与对应标签。 */
   byIndex: Vec3[]
+  byIndexLabels: string[]
   /** 按点图元的 `label` 读出来的顶点 —— 用户在画布上**看到**的是这一套。 */
   byLabel: Record<string, Vec3>
   /** 外接球：球心、半径，以及它宣称的宿主 id（绑定必须在，否则以后不会跟着重算）。 */
@@ -63,16 +65,19 @@ async function readDraft(page: import("@playwright/test").Page): Promise<Draft> 
     }[]
     const solid = primitives.find((primitive) => primitive.type === "polyhedron3" && primitive.vertexIds)
     const byIndex: { x: number; y: number; z: number }[] = []
+    const byIndexLabels: string[] = []
     const byLabel: Record<string, { x: number; y: number; z: number }> = {}
     for (const id of solid?.vertexIds ?? []) {
       const point = primitives.find((candidate) => candidate.id === id)
       if (!point?.position) throw new Error(`拓扑顶点 ${id} 没有 point3 坐标`)
       byIndex.push(point.position)
+      byIndexLabels.push(typeof point.label === "string" ? point.label : "")
       if (typeof point.label === "string") byLabel[point.label] = point.position
     }
     const sphere = primitives.find((primitive) => primitive.type === "sphere" && primitive.derivedFrom)
     return {
       byIndex,
+      byIndexLabels,
       byLabel,
       sphere: sphere?.center && typeof sphere.radius === "number" && sphere.derivedFrom
         ? { center: sphere.center, radius: sphere.radius, solidId: sphere.derivedFrom.solidId }
@@ -114,9 +119,10 @@ test("a named solid's derived circumsphere is created, rendered, and follows its
    * 核验本身没错，错的是它与用户看到的名字不是同一批。
    * 现在按下标一一对上（`byLabel[names[i]] === byIndex[i]`）。
    */
-  const NAMES = ["P", "A", "B", "C", "D"]
   expect(Object.keys(before.byLabel).sort()).toEqual(["A", "B", "C", "D", "P"])
-  expect(NAMES.map((name) => before.byLabel[name])).toEqual(before.byIndex)
+  expect([...before.byIndexLabels].sort()).toEqual(["A", "B", "C", "D", "P"])
+  expect(before.byIndexLabels.map((name) => before.byLabel[name])).toEqual(before.byIndex)
+  expect(before.byLabel.P.z).toBeGreaterThan(0)
 
   expect(before.sphere).not.toBeNull()
   const first = before.sphere!
@@ -148,7 +154,9 @@ test("a named solid's derived circumsphere is created, rendered, and follows its
    */
   await page.evaluate(() => (document.querySelector('button[aria-label="自动取景"]') as HTMLButtonElement).click())
   await page.getByRole("button", { name: "自由拖动" }).click()
-  const grab = await projectWorldPoint(page, before.byIndex[0]!)
+  const apexIndex = before.byIndexLabels.indexOf("P")
+  expect(apexIndex).toBeGreaterThanOrEqual(0)
+  const grab = await projectWorldPoint(page, before.byIndex[apexIndex]!)
   await page.mouse.move(grab.x, grab.y)
   await page.mouse.down()
   await page.mouse.move(grab.x + 60, grab.y + 20, { steps: 8 })
@@ -157,13 +165,13 @@ test("a named solid's derived circumsphere is created, rendered, and follows its
   // 等落盘跟上（拖动是异步写的），然后按**最终**读数断言。
   await expect.poll(async () => {
     const current = await readDraft(page)
-    return distance(current.byIndex[0]!, before.byIndex[0]!)
+    return distance(current.byIndex[apexIndex]!, before.byIndex[apexIndex]!)
   }, { timeout: 8000, message: "拖动之后宿主顶点没有动 —— 操作路径又断了" }).toBeGreaterThan(0.2)
 
   const after = await readDraft(page)
   expect(after.sphere, JSON.stringify(after)).not.toBeNull()
   for (const [index, vertex] of after.byIndex.entries()) {
-    if (index === 0) continue
+    if (index === apexIndex) continue
     expect(distance(vertex, before.byIndex[index]!), `顶点 ${index} 不该动 —— 拖的是一个顶点`).toBeLessThan(1e-6)
   }
   const sphereMoved = distance(after.sphere!.center, first.center) > 1e-6 || Math.abs(after.sphere!.radius - first.radius) > 1e-6
