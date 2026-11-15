@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— R11 干净依赖、公告处置与 Rust 审计缺口（G2 闭环）
+
+- 在 `.worktrees/r00-node22`（Node `v22.23.5` + npm `11.16.0`）核查锁文件与公告：按直接包与传递链实施最小兼容更新（不执行 `npm audit fix --force`），将 `package.json` 与 `package-lock.json` 统一更新并对齐为 `vitest@^4.1.12`（`4.1.12`）、`vite@^7.3.8`（`7.3.8`）、`eslint@^10.15.0`（`10.15.0`）、`typescript-eslint@^8.72.2`（`8.72.2`）、`source-map-js@1.2.2` 与 `zod@4.6.7`。
+- 修复后 `npm audit --omit=dev --json` 为 `0` 漏洞；`npm audit --json` 清零全部 3 项 High 与可兼容修复的 Moderate 公告，仅余 `@typescript-eslint/typescript-estree@8.72.2 -> minimatch@10.2.6`（`GHSA-g3hv-75wg-m249`，Moderate），已记录适用性、缓解、责任人与 `2026-12-31` 到期日；宿主机未安装 `cargo-audit`，RustSec 审计按 `unknown` 显式登记缺口。
+- 修复 `apps/web/src/persistence/draftStorage.test.ts` 与 `apps/web/src/useDraftPersistence.test.tsx` 中 `R06` spy 在 Node 22 jsdom 环境下未命中 `Storage.prototype` 的跨 Node 兼容问题（Node 22 与 Node 26 均通过），并新增 `scripts/ci/dependencyLockPolicy.test.ts` 防止锁文件漂移、混合包管理器或无记录豁免高危公告。
+- 在隔离 Node `v22.23.5` 环境实际执行 `npm ci`、`npm ls --depth=0`、typecheck/lint/Web 构建（634 modules）、`eval:reliability -- --offline`、`eval:explicit-solid -- --offline`、`licences:scan`、全量 Rust 317 passed（+4 ignored）及全量串行 Playwright 286 passed（`--workers=1 --retries=0`）。证据见 [R11干净依赖与审计记录](docs/audit/2026-11-15-clean-dependencies-and-audit/README.md)。G1（R02–R06）与 G2（R07、R08、R09-B、R11）授权工作包全部收口，停在 P0–P8 与 R12 之前。
+
 ## 2026-11-16 —— R09-B Schema 与运行时叶子约束同源及降级清单
 
 - 在 `packages/agent-core/src/schemaReaders.ts` 建立统一字符串叶子定义 `LEAF_CONSTRAINTS`（`text`、`actionKey`、`normalisationText`）、`stringLeafJsonSchema`、`stringArrayJsonSchema`、`readStringLeaf` 及 Unicode/零宽字符空白辅助 `trimUnicodeBlank` / `isBlankText`；`boundedString` 与 `readStringArray` 共享同一实现。

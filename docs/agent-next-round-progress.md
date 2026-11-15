@@ -7,8 +7,8 @@
 ## 从哪里开始
 
 1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：首批R00 → R01-A → R09-A → R10已完成；当前授权为G1（R02–R06）与G2（R07、R08、R09-B、R11），不把单个区块当成门禁整体完成。
-2. G1（R02–R06）与G2的R07、R08、R09-B已完成，见[草稿与CSV证据](audit/2026-11-15-draft-and-csv-protection/README.md)、[曲线绑定与题图复核证据](audit/2026-11-15-image-review-and-curve-binding/README.md)、[E2E与生产UI对齐证据](audit/2026-11-15-e2e-ui-contract-alignment/README.md)与[Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)；下一步进入G2最后一块R11（干净依赖、npm/Rust审计与全量串行验证）。
-3. 本轮授权至R11完成即止，不自动推进P0–P8、R12或发布。
+2. G1（R02–R06）与G2（R07、R08、R09-B、R11）已全部完成，见[草稿与CSV证据](audit/2026-11-15-draft-and-csv-protection/README.md)、[曲线绑定与题图复核证据](audit/2026-11-15-image-review-and-curve-binding/README.md)、[E2E与生产UI对齐证据](audit/2026-11-15-e2e-ui-contract-alignment/README.md)、[Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)与[干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)；RustSec因未安装`cargo-audit`明确记录为`unknown`。
+3. 本轮授权已于R11收口完成；未获新授权不自动推进P0–P8、R12、付费provider或产品发布。
 4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为技术参考，不把计划当成完成证据。
 5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。
 

@@ -361,14 +361,21 @@ describe("inactive workspace restart recovery with the real scene store", () => 
 })
 
 
+function storageSetItemSpyTarget(): Storage {
+  return Object.prototype.hasOwnProperty.call(localStorage, "setItem")
+    ? localStorage
+    : (Object.getPrototypeOf(localStorage) as Storage)
+}
+
 describe("R06 backup failure write protection", () => {
   it("blocks autosave and requires explicit download or confirmed discard before unlocking", async () => {
     const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
     localStorage.setItem("mathcanvas:draft:conics", legacy)
-    const originalSetItem = localStorage.setItem.bind(localStorage)
-    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+    const target = storageSetItemSpyTarget()
+    const originalSetItem = target.setItem
+    const spy = vi.spyOn(target, "setItem").mockImplementation(function (this: Storage, key, value) {
       if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
-      originalSetItem(key, value)
+      originalSetItem.call(this, key, value)
     })
     const initial = createEmptyDocument("conics")
     const gate = deferred<RestoreOutcome>()
@@ -414,10 +421,11 @@ describe("R06 backup failure write protection", () => {
   it("remains write-protected across reload and does not block autosave on healthy workspaces", async () => {
     const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
     localStorage.setItem("mathcanvas:draft:conics", legacy)
-    const originalSetItem = localStorage.setItem.bind(localStorage)
-    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+    const target = storageSetItemSpyTarget()
+    const originalSetItem = target.setItem
+    const spy = vi.spyOn(target, "setItem").mockImplementation(function (this: Storage, key, value) {
       if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
-      originalSetItem(key, value)
+      originalSetItem.call(this, key, value)
     })
 
     const initial = createEmptyDocument("conics")

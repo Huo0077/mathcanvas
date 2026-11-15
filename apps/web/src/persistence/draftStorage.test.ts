@@ -116,15 +116,22 @@ describe("draft storage", () => {
 })
 
 
+function storageSpyTarget(method: "getItem" | "setItem"): Storage {
+  return Object.prototype.hasOwnProperty.call(localStorage, method)
+    ? localStorage
+    : (Object.getPrototypeOf(localStorage) as Storage)
+}
+
 describe("R06 draft recovery status", () => {
   it("returns backup_failed_readonly and preserves the original bytes when the bypass write fails", async () => {
     const { loadDraftRecovery } = await import("./draftStorage")
     const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
     localStorage.setItem("mathcanvas:draft:conics", legacy)
-    const originalSetItem = localStorage.setItem.bind(localStorage)
-    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+    const target = storageSpyTarget("setItem")
+    const originalSetItem = target.setItem
+    const spy = vi.spyOn(target, "setItem").mockImplementation(function (this: Storage, key, value) {
       if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
-      originalSetItem(key, value)
+      originalSetItem.call(this, key, value)
     })
 
     const recovery = loadDraftRecovery("conics")
@@ -152,10 +159,11 @@ describe("R06 draft recovery status", () => {
     const { loadDraftRecovery } = await import("./draftStorage")
     const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
     localStorage.setItem("mathcanvas:draft:conics", legacy)
-    const originalGetItem = localStorage.getItem.bind(localStorage)
-    const spy = vi.spyOn(localStorage, "getItem").mockImplementation(function (key) {
+    const target = storageSpyTarget("getItem")
+    const originalGetItem = target.getItem
+    const spy = vi.spyOn(target, "getItem").mockImplementation(function (this: Storage, key) {
       if (key.endsWith(":unreadable")) return "corrupted-or-missing"
-      return originalGetItem(key)
+      return originalGetItem.call(this, key)
     })
 
     const recovery = loadDraftRecovery("conics")

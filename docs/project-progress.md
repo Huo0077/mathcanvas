@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— R11 干净依赖、公告处置与 Rust 审计缺口（G2 闭环）
+
+- **基线公告与工具核查**：确认 `--omit=dev` 为 0 漏洞，全量存在 14 个受影响包（3 High / 11 Moderate）；宿主机 `npm.cmd ls vitest` 因混合 `.pnpm` 安装与 `package-lock.json` `vitest@4.1.11` 漂移而报错；`cargo audit --version` 返回 `no such command: audit`，显式按 `unknown` 记录 RustSec 工具缺失。
+- **最小兼容更新与例外台账**：在 `.worktrees/r00-node22`（Node `v22.23.5` + npm `11.16.0`）执行兼容升级并提高 `package.json` 下限至 `eslint@^10.15.0`、`typescript-eslint@^8.72.2`、`vite@^7.3.8`、`vitest@^4.1.12`，同步解决 `source-map-js@1.2.2` 与 `zod@4.6.7`。修复后清零全部 3 项 High 及可修 Moderate，仅余 `@typescript-eslint/typescript-estree@8.72.2 -> minimatch@10.2.6`（`GHSA-g3hv-75wg-m249`，Moderate），已建立适用性/缓解/责任人/2026-12-31 到期台账。新增 `scripts/ci/dependencyLockPolicy.test.ts` 先对旧锁文件复现 RED，同步后转 GREEN。
+- **隔离 Node 22 全量实测**：修复 `draftStorage.test.ts` 与 `useDraftPersistence.test.tsx` 在 Node 22 jsdom 下的 `Storage.prototype` spy 兼容性并在 Node 22 / Node 26 双环境通过；隔离 `npm ci`、`npm ls --depth=0`、类型检查、Lint（0 errors / 16 warnings）、Web 构建（634 modules）、`eval:reliability -- --offline`、`eval:explicit-solid -- --offline`、`licences:scan`（550 crates）、全量 Vitest、全量 Rust（317 passed / 4 ignored）与全量串行 Playwright E2E（286 passed / 14.0m）全部通过。证据见[R11干净依赖与审计记录](audit/2026-11-15-clean-dependencies-and-audit/README.md)。
+
 ## 2026-11-16 —— R09-B Schema 与运行时叶子约束同源及明确降级清单
 
 - **RED 基线实测失败 8 项**：运行 `schemas.test.ts` 与 `modelPlanner.test.ts` 确认 7 项运行时叶子漏检（ASCII/Unicode/零宽空白 `actionKey` 被接受、`normalisations` 未知字段放行）与 1 项真实 `buildPlanToolSchema` 差分对照不一致（发布的 `actionKey` / `factIds` 缺少长度与非空白约束）。
