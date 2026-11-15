@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— R06 草稿写保护与 CSV 文本安全（G1 闭环）
+
+- 以等号/加号/减号/@ 与前导空白/制表换行触发电子表格公式注入及 `:unreadable` 备份写入异常/静默篡改丢草稿为RED。
+- 在 `exporters.ts` 导出 `csvCell`，对不可信字符串命中 `/^[\s\u00a0]*[=+\-@]/` 或 `/^[\t\r\n]/` 的单元加单引号 `'` 前缀，同时保持负数数值（如 `-2`）和布尔值原样导出；无损工程仍通过 JSON `save` 通道保留。
+- 在 `draftStorage.ts` 新增 `loadDraftRecovery` 与 `discardDraft`：`:unreadable` 写入后必须经 `getItem` 回读内容一致才删除主草稿键，否则返回 `backup_failed_readonly` 并完整保留损坏主键；在 `useDraftPersistence.ts` 以 `protectedDraftsRef` 仅锁定只读受保护工作区的自动保存，不影响健康工作区，并在 `App.tsx` `.footer-note` 提供原始损坏草稿下载与需 `window.confirm` 二次确认的放弃解锁按钮。
+- 定向 `exporters.test.ts` 19项、`draftStorage.test.ts` 13项、`useDraftPersistence.test.tsx` 17项（共49项）全部通过；完整Vitest 522文件/5570通过+1todo；类型、Lint（0 errors，32既有警告）、Web构建（634 modules）通过。证据见[R06草稿与CSV记录](audit/2026-11-15-draft-and-csv-protection/README.md)。
+
 ## 2026-11-16 —— R05 归档资源边界与安全解码
 
 - 以低限额和CRC观察者证明预扫描先于分配：重复名、共享offset、重叠记录、字段不一致与聚合超限均在CRC前拒绝；本地头偏移修正未放宽判据。

@@ -359,3 +359,96 @@ describe("inactive workspace restart recovery with the real scene store", () => 
   })
 
 })
+
+
+describe("R06 backup failure write protection", () => {
+  it("blocks autosave and requires explicit download or confirmed discard before unlocking", async () => {
+    const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
+    localStorage.setItem("mathcanvas:draft:conics", legacy)
+    const originalSetItem = localStorage.setItem.bind(localStorage)
+    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+      if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
+      originalSetItem(key, value)
+    })
+    const initial = createEmptyDocument("conics")
+    const gate = deferred<RestoreOutcome>()
+    const { persistence } = fakePersistence(() => gate.promise)
+    const setFileError = vi.fn()
+    const view = mount(initial, persistence, setFileError)
+    await act(async () => {
+      gate.resolve({ document: initial, created: true })
+      await gate.promise
+    })
+    await waitFor(() => expect(setFileError).toHaveBeenCalledWith(expect.stringContaining("未能备份")))
+
+    view.rerender({ document: { ...initial, revision: 5 } })
+    await flush()
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+
+    const createObjectURL = vi.fn(() => "blob:recovery")
+    const revokeObjectURL = vi.fn()
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    act(() => { view.result.current.recovery?.download?.() })
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:recovery")
+
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    act(() => { view.result.current.recovery?.discard() })
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+
+    confirm.mockReturnValue(true)
+    act(() => { view.result.current.recovery?.discard() })
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBeNull()
+    view.rerender({ document: { ...initial, revision: 6 } })
+    await flush()
+    expect(localStorage.getItem("mathcanvas:draft:conics")).not.toBe(legacy)
+    expect(JSON.parse(localStorage.getItem("mathcanvas:draft:conics")!).document.revision).toBe(6)
+    spy.mockRestore()
+    confirm.mockRestore()
+    click.mockRestore()
+  })
+
+  it("remains write-protected across reload and does not block autosave on healthy workspaces", async () => {
+    const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
+    localStorage.setItem("mathcanvas:draft:conics", legacy)
+    const originalSetItem = localStorage.setItem.bind(localStorage)
+    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+      if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
+      originalSetItem(key, value)
+    })
+
+    const initial = createEmptyDocument("conics")
+    const gate1 = deferred<RestoreOutcome>()
+    const view1 = mount(initial, fakePersistence(() => gate1.promise).persistence, vi.fn())
+    await act(async () => {
+      gate1.resolve({ document: initial, created: true })
+      await gate1.promise
+    })
+    await waitFor(() => expect(view1.result.current.recovery?.status).toBe("backup_failed_readonly"))
+    view1.unmount()
+
+    const setFileError2 = vi.fn()
+    const gate2 = deferred<RestoreOutcome>()
+    const view2 = mount(initial, fakePersistence(() => gate2.promise).persistence, setFileError2)
+    await act(async () => {
+      gate2.resolve({ document: initial, created: true })
+      await gate2.promise
+    })
+    await waitFor(() => expect(setFileError2).toHaveBeenCalledWith(expect.stringContaining("未能备份")))
+    expect(setFileError2).not.toHaveBeenCalledWith(expect.stringContaining("已备份"))
+
+    view2.rerender({ document: { ...initial, revision: 4 } })
+    await flush()
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+
+    const healthy = createEmptyDocument("geometry3d")
+    view2.rerender({ document: { ...healthy, revision: 2 } })
+    await flush()
+    expect(JSON.parse(localStorage.getItem("mathcanvas:draft:geometry3d")!).document.revision).toBe(2)
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+    spy.mockRestore()
+  })
+})

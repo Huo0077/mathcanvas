@@ -181,7 +181,7 @@ export function App() {
    * 调用点**排在 `load` 之前**：`load` 里要用它的 `reset`，"用到"发生在用户操作时，
    * 但把调用点放在前面才不必依赖"这个函数一定不会在渲染期被调到"。
    */
-  const { reset: resetPersistence } = useDraftPersistence({ document, replace, switchWorkspace, setFileError })
+  const { reset: resetPersistence, recovery: draftRecovery } = useDraftPersistence({ document, replace, switchWorkspace, setFileError })
   /**
    * 项目包面板是否打开（Task 1.6 Step 4/5 的界面入口）。
    *
@@ -1123,7 +1123,13 @@ export function App() {
         <div className="status-bar" role="status" aria-live="polite" aria-label="操作提示"><span className="status-bar-prompt">{spatialPrompt}</span><span className="status-bar-item">{pointerCoordinate ? `坐标 (${pointerCoordinate.x.toFixed(2)}, ${pointerCoordinate.y.toFixed(2)})` : "坐标 —"}</span><span className="status-bar-item">对象 {document.primitives.length}</span><span className="status-bar-item">工作区 {document.workspace}</span><span className="status-bar-spacer" /><div className="status-bar-dock-toggles" role="group" aria-label="工作台侧栏折叠"><button type="button" className="status-bar-dock-btn" data-copilot-toggle="true" aria-expanded={copilotOpen} onClick={() => setCopilotOpen((open) => !open)} title={copilotOpen ? "收起 AI 助手抽屉" : "展开 AI 助手抽屉"}>✨ AI 助手</button><button type="button" className="status-bar-dock-btn" aria-expanded={leftDockOpen} onClick={() => setLeftDockOpen((open) => !open)} title={leftDockOpen ? "收起左侧对象列表（增大画布）" : "展开左侧对象列表"}>{leftDockOpen ? "◀ 左栏" : "▶ 左栏"}</button><button type="button" className="status-bar-dock-btn" aria-expanded={rightDockOpen} onClick={() => setRightDockOpen((open) => !open)} title={rightDockOpen ? "收起右侧属性栏（增大画布）" : "展开右侧属性栏"}>{rightDockOpen ? "右栏 ▶" : "右栏 ◀"}</button></div></div>
       </div>
       )}
-      {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
+      {(fileError || operationError) && <div role="alert" className="footer-note">
+        <span>{fileError ?? operationError}</span>
+        {draftRecovery && <span className="draft-recovery-actions">
+          <button type="button" onClick={draftRecovery.download}>下载原草稿</button>
+          <button type="button" onClick={draftRecovery.discard}>舍弃并解锁自动保存</button>
+        </span>}
+      </div>}
       {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
       {/* 项目包（`.mcanvas` 导出/导入 + 附件）：文件级动作，与"打开/保存 .mgeo"同一组入口。
           导入走的是 `load` —— 与打开文件**同一条路**（换文档 + 换一世），所以不需要第二套逻辑。 */}
@@ -1149,7 +1155,13 @@ export function App() {
         onStop={(runId) => { agentRunner.stop(runId) }}
         onRetry={retryLastPrompt}
       />
-      {(fileError || operationError) && <div role="alert" className="footer-note">{fileError ?? operationError}</div>}
+      {(fileError || operationError) && <div role="alert" className="footer-note">
+        <span>{fileError ?? operationError}</span>
+        {draftRecovery && <span className="draft-recovery-actions">
+          <button type="button" onClick={draftRecovery.download}>下载原草稿</button>
+          <button type="button" onClick={draftRecovery.discard}>舍弃并解锁自动保存</button>
+        </span>}
+      </div>}
     </div> : <div className="app-module" data-module="settings">
       <WorkspaceHeader title="应用设置" />
       <SettingsWorkspace unavailableReason={desktopRuntimeHint} onBack={() => setActiveModule("traditional")} />

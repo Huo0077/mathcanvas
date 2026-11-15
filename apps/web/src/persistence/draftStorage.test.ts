@@ -114,3 +114,54 @@ describe("draft storage", () => {
     expect(restored?.activeLayerId).toBe("layer-geometry")
   })
 })
+
+
+describe("R06 draft recovery status", () => {
+  it("returns backup_failed_readonly and preserves the original bytes when the bypass write fails", async () => {
+    const { loadDraftRecovery } = await import("./draftStorage")
+    const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
+    localStorage.setItem("mathcanvas:draft:conics", legacy)
+    const originalSetItem = localStorage.setItem.bind(localStorage)
+    const spy = vi.spyOn(localStorage, "setItem").mockImplementation(function (key, value) {
+      if (key.endsWith(":unreadable")) throw new DOMException("quota", "QuotaExceededError")
+      originalSetItem(key, value)
+    })
+
+    const recovery = loadDraftRecovery("conics")
+
+    expect(recovery.status).toBe("backup_failed_readonly")
+    if (recovery.status === "backup_failed_readonly") expect(recovery.raw).toBe(legacy)
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+    expect(localStorage.getItem("mathcanvas:draft:conics:unreadable")).toBeNull()
+    spy.mockRestore()
+  })
+
+  it("returns backup_saved only after the bypass bytes can be read back", async () => {
+    const { loadDraftRecovery } = await import("./draftStorage")
+    const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
+    localStorage.setItem("mathcanvas:draft:conics", legacy)
+
+    const recovery = loadDraftRecovery("conics")
+
+    expect(recovery.status).toBe("backup_saved")
+    expect(localStorage.getItem("mathcanvas:draft:conics:unreadable")).toBe(legacy)
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBeNull()
+  })
+
+  it("returns backup_failed_readonly when bypass readback does not match the original bytes", async () => {
+    const { loadDraftRecovery } = await import("./draftStorage")
+    const legacy = JSON.stringify({ format: "mgeo", formatVersion: "0.1", document: { ...createEmptyDocument("conics"), revision: -1 } })
+    localStorage.setItem("mathcanvas:draft:conics", legacy)
+    const originalGetItem = localStorage.getItem.bind(localStorage)
+    const spy = vi.spyOn(localStorage, "getItem").mockImplementation(function (key) {
+      if (key.endsWith(":unreadable")) return "corrupted-or-missing"
+      return originalGetItem(key)
+    })
+
+    const recovery = loadDraftRecovery("conics")
+
+    expect(recovery.status).toBe("backup_failed_readonly")
+    expect(localStorage.getItem("mathcanvas:draft:conics")).toBe(legacy)
+    spy.mockRestore()
+  })
+})

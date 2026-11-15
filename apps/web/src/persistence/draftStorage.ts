@@ -82,36 +82,76 @@ export function loadLastDocumentId(): string | null {
   return documentId !== null && documentId.length > 0 ? documentId : null
 }
 
+export type DraftRecoveryOutcome =
+  | { status: "empty" }
+  | { status: "discarded_malformed" }
+  | { status: "restored"; document: GeometryDocument }
+  | { status: "backup_saved"; message: string; backupKey: string }
+  | { status: "backup_failed_readonly"; message: string; raw: string }
+
 /**
- * 读回上次的草稿。
+ * 读回上次草稿并返回明确的恢复状态。
  *
- * 三种情况必须区分开：不是 JSON（垃圾数据，删掉）、是 JSON 但不是本文档（用户的工作，
- * **保留**在旁路键上并抛出，绝不当垃圾清理掉）、正常解出（返回文档）。
- * 旧实现把后两种一起 `removeItem` 了 —— 一个字段不合规的旧草稿会让用户的工作凭空消失。
+ * 1. 不是 JSON（垃圾数据，删掉）→ `discarded_malformed`；
+ * 2. 正常解出 → `restored`；
+ * 3. 是 JSON 但当前版本读不出：先写旁路键并回读校验一致后才移除原键（`backup_saved`）；
+ *    若旁路键写入或回读失败，则保留原键原地不动并返回 `backup_failed_readonly`，由调用方阻断自动覆盖。
  */
-export function loadDraft(workspace: Workspace): GeometryDocument | null {
-  if (typeof localStorage === "undefined") return null
-  const serialized = localStorage.getItem(draftKey(workspace))
-  if (!serialized) return null
+export function loadDraftRecovery(workspace: Workspace): DraftRecoveryOutcome {
+  if (typeof localStorage === "undefined") return { status: "empty" }
+  const key = draftKey(workspace)
+  const serialized = localStorage.getItem(key)
+  if (!serialized) return { status: "empty" }
   try {
     // 只判断"是不是 JSON"：是的话就是用户的工作（哪怕本版本读不出来），不是才算垃圾数据。
     JSON.parse(serialized)
   } catch {
-    localStorage.removeItem(draftKey(workspace))
-    return null
+    localStorage.removeItem(key)
+    return { status: "discarded_malformed" }
   }
   try {
-    return decodeMgeo(serialized)
+    return { status: "restored", document: decodeMgeo(serialized) }
   } catch (error) {
-    // 挪到旁路键：自动保存不会覆盖它，用户的工作还在，可以被后续版本或手工修复取回。
+    const detail = error instanceof Error ? error.message : String(error)
+    const backupKey = unreadableDraftKey(workspace)
     try {
-      localStorage.setItem(unreadableDraftKey(workspace), serialized)
-      localStorage.removeItem(draftKey(workspace))
+      localStorage.setItem(backupKey, serialized)
+      if (localStorage.getItem(backupKey) === serialized) {
+        localStorage.removeItem(key)
+        return {
+          status: "backup_saved",
+          message: `无法恢复上次的草稿（已备份保留）：${detail}`,
+          backupKey
+        }
+      }
     } catch {
-      // 旁路键也写不进去（配额）时就**原地保留**：宁可让自动保存覆盖，也不能主动删掉工作。
+      // 旁路键写不进去或回读不一致时原地保留原键，进入只读保护。
     }
-    throw new Error(`无法恢复上次的草稿（已备份保留）：${error instanceof Error ? error.message : String(error)}`, { cause: error })
+    return {
+      status: "backup_failed_readonly",
+      message: `无法恢复上次的草稿（未能备份到旁路键，原草稿已开启只读保护，请下载备份或确认舍弃后再自动保存）：${detail}`,
+      raw: serialized
+    }
   }
+}
+
+/** 显式舍弃当前工作区原键上的草稿（仅在用户确认后调用）。 */
+export function discardDraft(workspace: Workspace): void {
+  if (typeof localStorage === "undefined") return
+  localStorage.removeItem(draftKey(workspace))
+}
+
+/**
+ * 读回上次的草稿。
+ *
+ * 三种情况必须区分开：不是 JSON（垃圾数据，删掉）、是 JSON 但不是本文档（用户的工作，
+ * **保留**在旁路键或原地只读保护并抛出，绝不当垃圾清理掉）、正常解出（返回文档）。
+ */
+export function loadDraft(workspace: Workspace): GeometryDocument | null {
+  const outcome = loadDraftRecovery(workspace)
+  if (outcome.status === "restored") return outcome.document
+  if (outcome.status === "empty" || outcome.status === "discarded_malformed") return null
+  throw new Error(outcome.message)
 }
 
 /** 读不出来的草稿挪到这里，既不会被自动保存覆盖，也不参与启动恢复。 */

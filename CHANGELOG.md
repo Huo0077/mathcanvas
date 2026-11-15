@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— R06 草稿备份失败写保护与 CSV 公式转义（G1 闭环）
+
+- 在 `exporters.ts` 导出 `csvCell`，对命中前导 `=`/`+`/`-`/`@`（含前导空格与不间断空格）及 `\t`/`\r`/`\n` 的不可信字符串单元格加 `'` 前缀；合法数字（含负数如 `-2`）与布尔值不转义。
+- `draftStorage.ts` 新增 `loadDraftRecovery` 与 `discardDraft`：仅当 `:unreadable` 备份写入且 `getItem` 回读一致后才移除主草稿键，备份失败返回 `backup_failed_readonly` 并保留原键。
+- `useDraftPersistence.ts` 与 `App.tsx` 仅对该工作区阻断自动保存覆盖，并在页面展示损坏草稿原始 JSON 下载与二次确认放弃解锁动作。
+- 定向49项与完整Vitest 522文件/5570通过+1todo，类型、Lint与Web构建通过。证据见 [R06草稿与CSV记录](docs/audit/2026-11-15-draft-and-csv-protection/README.md)。G1（R02–R06）闭环，下一步进入G2首块R07。
+
 ## 2026-11-16 —— R05 归档预算与安全解码
 
 - 分离原包、未压缩聚合、单条、条数与附件预算，完整目录元数据在任何CRC或克隆前完成校验；重复名、共享offset、重叠数据和字段不一致均拒绝。
