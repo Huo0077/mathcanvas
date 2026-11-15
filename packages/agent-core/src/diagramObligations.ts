@@ -2151,18 +2151,23 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   const problem = splitNumberedProblem(prompt)
   // Later hypothetical conditions cannot be checked on a diagram whose
   // subquestion has not been chosen. Keep the individual scopes available.
-  if (problem?.parts.slice(1).some(part => /^\s*(?:若|如果|假设|另设)/.test(part.text))) {
+  if (problem && problem.parts.length > 1) {
     const shared = parseDiagramScope(problem.stem, options)
     const parts = problem.parts.map(part => {
       const scopedPrompt = problem.stem.padEnd(part.start) + part.text
       return { ...part, obligations: parseDiagramScope(scopedPrompt, options, true) }
     })
+    const needsScopedVerification = problem.parts.slice(1).some(part => {
+      const boundary = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/.exec(part.text)
+      return (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim().length > 0
+    })
+    if (!needsScopedVerification) return { ...parseDiagramScope(prompt, options), parts }
     return {
       ...shared,
       parts,
       goals: parts.flatMap(part => part.obligations.goals),
       goalSources: parts.flatMap(part => part.obligations.goalSources ?? []),
-      unverified: [...shared.unverified, {
+      unverified: [...shared.unverified, ...parts.flatMap(part => part.obligations.unverified), {
         sourceText: "各小问的条件",
         reason: "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
       }]
@@ -2172,7 +2177,7 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
 }
 
 function parseDiagramScope(prompt: string, options: DiagramParseOptions, numberedPart = false): DiagramObligationSet {
-  const boundary = (numberedPart ? /(?:求证|试?证明|(?<=[，,。；;\n])\s*求)/ : /(?:求证|试?证明)/).exec(prompt)
+  const boundary = (numberedPart ? /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/ : /(?:求证|试?证明)/).exec(prompt)
   const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
   const goalRawStart = boundary === null ? -1 : boundary.index + boundary[0].length
   const goalRaw = goalRawStart < 0 ? "" : prompt.slice(goalRawStart)

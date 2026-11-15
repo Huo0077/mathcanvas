@@ -12,7 +12,7 @@
 
 **Tech Stack / 技术栈**：现有TypeScript/React/Three.js、Vitest/Playwright、Tauri/Rust。外部CAS/SMT/新provider仅经需求证据与独立spike批准后考虑；不把加依赖、加重试作为默认修复。
 
-**状态**：此前main重启已提交为be033b71，父节点59ea3613。用户最新授权范围仅为 R00 → R01-A → R09-A → R10，完成后停止，不启动 G1/G2 或 P0–P8。R00 已完成（见[环境证据](../../audit/2026-11-15-review-remediation-baseline/README.md)），R01-A 正在实施；R09-A/R10 未开始，当前仍禁止产品发布、付费评测及后续阶段。实时状态只维护在[当前状态](../../current-status.md)。
+**状态**：此前main重启已提交为be033b71，父节点59ea3613。用户最新授权范围仅为 R00 → R01-A → R09-A → R10，完成后停止，不启动 G1/G2 或 P0–P8。R00 与 R01-A 已完成（见[环境证据](../../audit/2026-11-15-review-remediation-baseline/README.md)和[小问阻断证据](../../audit/2026-11-15-subquestion-guard/README.md)），R09-A 正在实施；R10 未开始，当前仍禁止产品发布、付费评测及后续阶段。实时状态只维护在[当前状态](../../current-status.md)。
 
 ## 0. 执行入口与唯一事实来源
 

@@ -1010,4 +1010,43 @@ describe("representative tasks from the design", () => {
     const candidate = draftId === null ? null : ordinary.runtime.drafts.getPreview(draftId)?.candidate
     expect(candidate?.primitives.some((primitive) => primitive.type === "polyhedron3")).toBe(true)
   })
+
+  it("blocks an unscoped subquestion from confirmation without writing the live document", async () => {
+    const candidatePlan: PlanEnvelope = {
+      schemaVersion: "mathcanvas.plan.v1",
+      kind: "plan",
+      goal: "小问覆盖回归",
+      factIds: [],
+      actions: [{
+        actionId: "solid.create_polyhedron",
+        actionKey: "pyramid",
+        factIds: [],
+        inputs: {
+          alias: "pyramid",
+          vertexNames: ["P", "A", "B", "C", "D"],
+          vertices: [
+            { x: 0, y: 0, z: 2 },
+            { x: 0, y: 0, z: 0 },
+            { x: 2, y: 0, z: 0 },
+            { x: 2, y: 1, z: 0 },
+            { x: 1, y: 1, z: 0 }
+          ],
+          faces: [[1, 2, 3, 4], [0, 2, 1], [0, 3, 2], [0, 4, 3], [0, 1, 4]]
+        }
+      }]
+    }
+    const document = createEmptyDocument("geometry3d")
+    const { runtime, written, current } = makeRuntime({ envelope: candidatePlan, document })
+
+    const events = await drive(runtime.coordinator, {
+      run: runContext(document),
+      userMessage: "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）AD⊥DC，求AD。"
+    })
+
+    expect(events.at(-1)).toBe("failed")
+    expect(events).not.toContain("awaiting_confirmation")
+    expect(runtime.confirmDraft().status).toBe("rejected")
+    expect(written).toHaveLength(0)
+    expect(current()?.primitives).toHaveLength(0)
+  })
 })
