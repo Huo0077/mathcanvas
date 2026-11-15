@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-15",
+  "codeBaseline": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "restartCommit": "be033b71ba32f1b7008d030b49359e21de076423",
+  "environmentCommit": "be3f00bf6a7cf213b44de601419c58429b09b646",
+  "worktree": ".worktrees/r00-node22",
+  "worktreeMode": "detached-clean-worktree",
+  "node": "v22.23.5",
+  "npm": "11.16.0",
+  "packageManagerInvocation": "npx --yes --package=node@22 --package=npm@11.16.0",
+  "packageLockSha256": "686665975ee19192733bfc4f9f06bf6654672bc1fe5d63097e22bbcea0507fd6",
+  "cargoLockSha256": "93706607dca93c11c0e428899c4d0c902d6089968b97bf0fdab9a4d91f2064eb",
+  "install": {
+    "command": "npm ci",
+    "scriptsPolicy": "normal-project-scripts-no-ignore-scripts",
+    "exitCode": 0,
+    "packagesAdded": 273
+  },
+  "verification": {
+    "typecheck": { "command": "npm run typecheck", "exitCode": 0 },
+    "docs": { "command": "npm run test:docs -- --testTimeout=30000", "files": 8, "tests": 22, "failed": 0 },
+    "unit": { "command": "npm test -- --testTimeout=30000", "files": 519, "passed": 5535, "todo": 1, "failed": 0, "durationMs": 417910 }
+  },
+  "dependencyAudit": { "moderate": 11, "high": 3, "status": "open_for_R11" },
+  "trackedDiffAfterVerification": [],
+  "notes": [
+    "No product source or lockfile changes were made in the isolated worktree.",
+    "The host Node 26 and mixed pnpm/npm installation were not used as the R00 acceptance environment.",
+    "No provider request, paid evaluation, destructive package, or release was performed.",
+    "Full Rust and Playwright suites are not part of this R00 completion claim."
+  ]
+}

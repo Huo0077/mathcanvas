@@ -8,6 +8,14 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-15 —— R00环境验收与R01-A启动
+
+用户重新设置目标，只完成 R00、R01-A、R09-A、R10 后停止。先在 `feature/drawing-reliability-execution` 提交并推送文档基线 `3856263f` 与隔离 worktree 忽略配置 `be3f00bf`。
+
+- R00：在 `.worktrees/r00-node22` 使用 Node 22.23.5 / npm 11.16.0 真实执行 `npm ci`，类型检查通过，文档22项通过，完整 Vitest 519文件/5535通过+1todo、0失败。证据见[环境清单](audit/2026-11-15-review-remediation-baseline/environment.json)。首次 npm 路径错误发生在安装前，已记录并纠正，未隐瞒。
+- R01-A：新增真实非法四棱锥 compile 负例，裸条件/设/且共6项RED后全部转GREEN；普通单问和若作对照。新增 runtime 集成测试，受控回退旧条件时复现 `awaiting_confirmation`，恢复修复后确认失败且不能提交，主场景零写入。
+- 进度文档与 R00 证据单独提交并推送；R01-A 的浏览器负例、R09-A 和 R10 尚未完成，不能提前记为完成。
+
 ## 2026-11-15 —— 59ea3613基线重置与全面修复设计（仅文档）
 
 ### 请求与交付
