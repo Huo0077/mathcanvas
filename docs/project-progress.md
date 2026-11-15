@@ -8,7 +8,7 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
-## 2026-11-15 —— R00环境验收与R01-A启动
+## 2026-11-15 —— R00、R01-A、R09-A与R10首批实施
 
 用户重新设置目标，只完成 R00、R01-A、R09-A、R10 后停止。先在 `feature/drawing-reliability-execution` 提交并推送文档基线 `3856263f` 与隔离 worktree 忽略配置 `be3f00bf`。
 
@@ -16,7 +16,8 @@
 - R01-A：新增真实非法四棱锥 compile 负例，裸条件/设/且共6项RED后全部转GREEN；普通单问和若作对照。新增 runtime 集成测试，受控回退旧条件时复现 `awaiting_confirmation`，恢复修复后确认失败且不能提交，主场景零写入。
 - 浏览器闭环：四种小问写法均无确认面板且主场景图元为零，普通单问确认提交成功，单 worker / retries=0 共5/5通过。证据见[小问阻断记录](audit/2026-11-15-subquestion-guard/README.md)。最终全量 Vitest 为 520文件/5544通过+1todo、0失败，类型检查通过。R01-A 已完成，下一步只做 R09-A 和 R10，不启动后续阶段。
 - R00 与 R01-A 证据分别提交并推送。
-- R09-A：新增 `finalOutcome` 按 run/stage/round/contentHash/终态选择唯一最终产物，删除 `rounds.some` 历史答案兜底。双轮正反例、取消、跨run、错误hash、重复身份均通过；离线可靠性3项通过。完整 Vitest 521文件/5548通过+1todo、0失败。证据见[最终产物记录](audit/2026-11-15-final-outcome/README.md)。R09-A 已完成，最后执行 R10 后停止。
+- R09-A：新增 `finalOutcome` 按 run/stage/round/contentHash/终态选择唯一最终产物，删除 `rounds.some` 历史答案兜底。双轮正反例、取消、跨run、错误hash、重复身份均通过；离线可靠性3项通过。完整 Vitest 521文件/5548通过+1todo、0失败。证据见[最终产物记录](audit/2026-11-15-final-outcome/README.md)。提交 `addf4c79` 已推送。
+- R10：CI顶层权限改为 `contents: read`，11处Action固定到经官方API核对的提交，4处checkout均禁用持久化凭据。静态守卫有效RED为1失败/11通过，GREEN为12/12通过；类型检查通过，完整 Vitest 522文件/5560通过+1todo、0失败。Lint为0错误/32条既有unused警告，其中16条来自隔离worktree；新增文件无警告。证据见[CI加固记录](audit/2026-11-15-ci-hardening/README.md)。本轮在此停止；feature分支未触发远端CI，不启动G1/G2或P0–P8。
 
 ## 2026-11-15 —— 59ea3613基线重置与全面修复设计（仅文档）
 

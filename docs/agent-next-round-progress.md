@@ -6,11 +6,11 @@
 
 ## 从哪里开始
 
-1. 读主计划的版本约束和第10–16节：31项任务合同、依赖/文件/测试、首批RED、接口、验收和暂停条件；[机器台账](superpowers/plans/2026-11-15-implementation-task-ledger.json)与之配套，不维护另一份实时进度。
-2. 首批固定R00 → R01-A → R09-A → R10。详细代码位置/安全反例看[R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)，它不再独立改变主计划的顺序。
-3. 再处理G1原生安全/数据保护，G2输入/UI/schema/干净验证；黄金合同可先整理，但不能等待完整大重构才阻断C1错误放行。
-4. 按[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)推进六题/36题，T11数值合同先于构造器，T18后交R12最终签收。
-5. 真实provider、费用与产品发布需另行批准；本次只对齐文档，不重复强推main。
+1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：本次首批R00 → R01-A → R09-A → R10已全部完成并停止，不把31项任务合同当成下一份完成率。
+2. 四项关闭证据分别见[环境基线](audit/2026-11-15-review-remediation-baseline/README.md)、[小问阻断](audit/2026-11-15-subquestion-guard/README.md)、[最终产物计分](audit/2026-11-15-final-outcome/README.md)和[CI加固](audit/2026-11-15-ci-hardening/README.md)；R10仅有静态验证，未宣称远端CI已运行。
+3. 本次不启动G1原生安全/数据保护、G2输入/UI/schema/干净验证或R02–R12剩余任务，也不自动推进P0–P8；后续顺序仍由主计划约束。
+4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为后续技术参考，不表示本轮继续实施。
+5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。
 
 ## 历史和证据边界
 
