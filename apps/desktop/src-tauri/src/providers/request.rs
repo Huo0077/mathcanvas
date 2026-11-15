@@ -91,6 +91,7 @@ pub struct ProviderRequest {
     pub headers: Vec<(String, String)>,
     pub body: serde_json::Value,
     pub stream: bool,
+    pub network_policy: String,
     /// 方言带来的**显式差异**：允许发工具 schema 吗、允许带图吗。
     pub plan: RequestPlan,
 }
@@ -360,7 +361,7 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
         }
     }
 
-    ProviderRequest { endpoint, model: profile.model_id.clone(), messages, headers, body, stream, plan }
+    ProviderRequest { endpoint, model: profile.model_id.clone(), messages, headers, body, stream, network_policy: profile.network_policy.clone(), plan }
 }
 
 /// OpenAI 兼容的一条消息。带图时 `content` 变成 **parts 数组**（纯文本时保持字符串 ——

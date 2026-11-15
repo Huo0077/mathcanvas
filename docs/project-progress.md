@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-15 —— R03 URL/DNS与有界响应
+
+- 以IPv6、映射私网、CGNAT、local/LAN越界和跨端口重定向为RED，使用 `reqwest::Url` 和统一IP分类替换手写host解析；local仅允许回环，重定向比较包含有效端口。
+- 非2xx响应不再 `response.text()` 完整缓冲：Content-Length预检、chunked扩展前累计字节检查、4096字节硬上限与取消感知流式读取；短UTF-8诊断保持兼容。
+- `ProviderRequest` 携带networkPolicy，resolver全部候选通过后才由 `resolve_to_addrs` 固定连接；混合候选拒绝、local公共候选拒绝，合法域名只解析一次且Host不变。未使用外部DNS或真实provider。
+- 验证：R03定向7/7，受影响Rust 155项通过+1ignored；完整Rust 307项通过+4ignored；Vitest 522文件/5560通过+1todo；类型、Lint、Web构建通过。证据见[R03网络安全记录](audit/2026-11-15-network-security/README.md)。
+
 ## 2026-11-15 —— G1/G2启动与R02凭据安全
 
 用户确认新goal：依次完成G1（R02–R06）与G2（R07、R08、R09-B、R11），不进入P0–P8、R12、付费provider或发布。

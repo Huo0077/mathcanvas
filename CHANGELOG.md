@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-15 —— R03 URL/DNS连接固定与有界错误响应
+
+- 使用标准URL解析与统一IP分类封堵IPv6、映射私网、CGNAT及local/LAN边界绕过；local仅允许回环，重定向比较包含有效端口。
+- DNS全部候选通过策略后由 `resolve_to_addrs` 固定，保留原hostname与TLS校验，禁止环境代理和重定向。
+- 非2xx响应采用Content-Length预检和取消感知分块读取，错误体最多4096字节，不再完整缓冲后截断。
+- 完整Rust 307项通过+4ignored，Vitest 522文件/5560通过+1todo。证据见 [R03网络安全记录](docs/audit/2026-11-15-network-security/README.md)。下一工作包为R04。
+
 ## 2026-11-15 —— G1/G2启动与R02原生凭据安全
 
 - 新增原生 `update_provider_credentials` 事务：密钥槽由Rust按profile和revision生成并绑定规范化endpoint，配置提交后才清理旧槽；失败与崩溃可按实际引用恢复，不再由renderer覆盖后删除旧密钥。

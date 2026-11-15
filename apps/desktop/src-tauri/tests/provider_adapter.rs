@@ -1062,3 +1062,183 @@ fn refuses_a_legacy_credential_without_a_trusted_endpoint_binding() {
     assert!(matches!(error, ProviderError::RefusedUrl { .. }), "got {error:?}");
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
+
+
+fn serve_error_stream(head: String, chunks: Vec<Vec<u8>>, chunked: bool, first_sent: Option<Arc<AtomicBool>>) -> SocketAddr {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind an error-stream server");
+    let address = listener.local_addr().expect("read the error-stream address");
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            let _ = stream.write_all(head.as_bytes());
+            let _ = stream.flush();
+            for (index, chunk) in chunks.iter().enumerate() {
+                if chunked {
+                    let _ = stream.write_all(format!("{:X}\r\n", chunk.len()).as_bytes());
+                }
+                let _ = stream.write_all(chunk);
+                let _ = stream.write_all(b"\r\n");
+                let _ = stream.flush();
+                if index == 0 {
+                    if let Some(signal) = &first_sent {
+                        signal.store(true, Ordering::SeqCst);
+                        std::thread::sleep(std::time::Duration::from_secs(5));
+                    }
+                }
+            }
+            if chunked && first_sent.is_none() {
+                let _ = stream.write_all(b"0\r\n\r\n");
+            }
+            let _ = stream.shutdown(std::net::Shutdown::Write);
+        }
+    });
+    address
+}
+
+#[test]
+fn r03_rejects_a_chunked_error_body_before_buffering_past_the_limit() {
+    let address = serve_error_stream(
+        "HTTP/1.1 500 Internal Server Error\r\ntransfer-encoding: chunked\r\nconnection: close\r\n\r\n".to_string(),
+        vec![vec![b'a'; 3000], vec![b'b'; 3000]],
+        true,
+        None,
+    );
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::new();
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://{address}")));
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a chunked error body over 4 KiB must be refused");
+
+    assert!(matches!(error, ProviderError::Transport { .. }), "got {error:?}");
+    assert!(error.message().contains("4096"), "the byte limit must be explicit: {error}");
+}
+
+#[test]
+fn r03_rejects_a_declared_oversize_error_body_before_reading_it() {
+    let address = serve_error_stream(
+        "HTTP/1.1 500 Internal Server Error\r\ncontent-length: 6000\r\nconnection: close\r\n\r\n".to_string(),
+        vec![vec![b'x'; 6000]],
+        false,
+        None,
+    );
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::new();
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://{address}")));
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a declared error body over 4 KiB must be refused");
+
+    assert!(matches!(error, ProviderError::Transport { .. }), "got {error:?}");
+    assert!(error.message().contains("4096"), "the byte limit must be explicit: {error}");
+}
+
+#[test]
+fn r03_cancel_stops_an_incomplete_error_body() {
+    let first_sent = Arc::new(AtomicBool::new(false));
+    let address = serve_error_stream(
+        "HTTP/1.1 500 Internal Server Error\r\ntransfer-encoding: chunked\r\nconnection: close\r\n\r\n".to_string(),
+        vec![b"first".to_vec(), b"second".to_vec()],
+        true,
+        Some(first_sent.clone()),
+    );
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::new();
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://{address}")));
+    let stop = AtomicStop::new();
+    let cancellation = stop.clone();
+    let waiter = std::thread::spawn(move || {
+        while !first_sent.load(Ordering::SeqCst) {
+            std::thread::yield_now();
+        }
+        cancellation.cancel();
+    });
+
+    let outcome = send(&adapter, &stop).expect("cancellation is not a transport failure");
+
+    waiter.join().expect("the cancellation thread must finish");
+    assert!(matches!(outcome, SendOutcome::Cancelled(_)));
+}
+
+#[test]
+fn r03_preserves_short_utf8_error_details() {
+    let body = "请求错误🙂".as_bytes().to_vec();
+    let address = serve_error_stream(
+        format!("HTTP/1.1 400 Bad Request\r\ncontent-type: text/plain; charset=utf-8\r\ncontent-length: {}\r\nconnection: close\r\n\r\n", body.len()),
+        vec![body],
+        false,
+        None,
+    );
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::new();
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://{address}")));
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a short UTF-8 error remains a normal HTTP failure");
+
+    assert!(matches!(error, ProviderError::Http { status: 400, .. }));
+    assert!(error.message().contains("请求错误🙂"));
+}
+
+
+#[test]
+fn r03_rejects_mixed_public_and_private_dns_answers() {
+    let resolver = |_host: &str, port: u16| {
+        Ok(vec![
+            SocketAddr::new("8.8.8.8".parse().expect("public IP"), port),
+            SocketAddr::new("127.0.0.1".parse().expect("loopback IP"), port),
+        ])
+    };
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::with_resolver(resolver);
+    let mut profile = openai_profile();
+    profile.base_url = "https://provider.test/v1".to_string();
+    profile.credential_endpoint = Some(profile.base_url.clone());
+    let adapter = ProviderAdapter::new(&source, &transport, profile);
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("one private DNS answer must reject the whole candidate set");
+
+    assert!(matches!(error, ProviderError::Transport { .. }), "got {error:?}");
+    assert!(error.message().contains("non-public"), "the refusal must identify the address policy: {error}");
+}
+
+#[test]
+fn r03_pins_the_verified_address_without_changing_the_url_hostname() {
+    let server = serve_once("200 OK", "", "data: {\"choices\":[{\"delta\":{\"content\":\"pinned\"}}]}\n\ndata: [DONE]\n\n");
+    let address = server.address;
+    let resolver_calls = Arc::new(AtomicUsize::new(0));
+    let calls = resolver_calls.clone();
+    let resolver = move |host: &str, port: u16| {
+        assert_eq!(host, "provider.test");
+        assert_eq!(port, address.port());
+        calls.fetch_add(1, Ordering::SeqCst);
+        Ok(vec![address])
+    };
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::with_resolver(resolver);
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile(&format!("http://provider.test:{}", address.port())));
+    let stop = AtomicStop::new();
+
+    let outcome = send(&adapter, &stop).expect("the validated loopback candidate must be used");
+
+    assert!(matches!(outcome, SendOutcome::Completed(_)));
+    assert_eq!(resolver_calls.load(Ordering::SeqCst), 1, "the client must not resolve the hostname again");
+    let raw = server.request.lock().expect("request record").clone();
+    assert!(raw.to_lowercase().contains(&format!("host: provider.test:{}", address.port())), "the original hostname must remain on the request: {raw}");
+}
+
+#[test]
+fn r03_local_domain_resolution_still_requires_loopback_candidates() {
+    let resolver = |_host: &str, port: u16| Ok(vec![SocketAddr::new("8.8.8.8".parse().expect("public IP"), port)]);
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let transport = HttpTransport::with_resolver(resolver);
+    let adapter = ProviderAdapter::new(&source, &transport, local_profile("http://provider.test/v1"));
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a local profile must not connect to a public candidate");
+
+    assert!(matches!(error, ProviderError::Transport { .. }), "got {error:?}");
+    assert!(error.message().contains("loopback"), "the refusal must identify the local policy: {error}");
+}

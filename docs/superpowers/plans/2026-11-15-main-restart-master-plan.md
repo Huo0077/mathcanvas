@@ -12,7 +12,7 @@
 
 **Tech Stack / 技术栈**：现有TypeScript/React/Three.js、Vitest/Playwright、Tauri/Rust。外部CAS/SMT/新provider仅经需求证据与独立spike批准后考虑；不把加依赖、加重试作为默认修复。
 
-**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A与R10已完成，R10仅有静态CI验证。当前用户明确授权G1（R02–R06）与G2（R07、R08、R09-B、R11），每块验证、对齐文档并推送，不进入P0–P8、R12或发布。R02凭据归属、endpoint绑定与可恢复更新已完成（见[凭据安全证据](../../audit/2026-11-15-provider-credential-safety/README.md)），下一步为R03；G1/G2整体尚未关闭。feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
+**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A与R10已完成，R10仅有静态CI验证。当前用户明确授权G1（R02–R06）与G2（R07、R08、R09-B、R11），每块验证、对齐文档并推送，不进入P0–P8、R12或发布。R02凭据安全与R03 URL/DNS/有界响应均已完成（见[凭据安全证据](../../audit/2026-11-15-provider-credential-safety/README.md)和[网络安全证据](../../audit/2026-11-15-network-security/README.md)），下一步为R04导出授权；G1/G2整体尚未关闭。feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
 
 ## 0. 执行入口与唯一事实来源
 

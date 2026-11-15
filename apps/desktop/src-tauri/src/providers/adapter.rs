@@ -35,6 +35,8 @@
 //!
 //! 选后者。这也顺带让"取消"能真的打断在途的流：`tokio::select!` 需要一个能被 `await` 的信号。
 
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
@@ -518,8 +520,35 @@ enum InnerOutcome {
 /// 3. **连接超时 15 秒、总超时 120 秒**：流式响应会长时间占着连接，但没有总超时的话
 ///    "对端不关连接"会让这次运行永远不结束（界面一直转圈）。
 /// 4. **响应体限长**（与入站同一个常量）：对端回一大坨东西不该把内存吃光。
+pub trait AddressResolver: Send + Sync {
+    fn resolve<'a>(&'a self, host: &'a str, port: u16) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<SocketAddr>, String>> + Send + 'a>>;
+}
+
+impl<F> AddressResolver for F
+where
+    F: Fn(&str, u16) -> Result<Vec<SocketAddr>, String> + Send + Sync,
+{
+    fn resolve<'a>(&'a self, host: &'a str, port: u16) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<SocketAddr>, String>> + Send + 'a>> {
+        let result = self(host, port);
+        Box::pin(async move { result })
+    }
+}
+
+struct SystemResolver;
+
+impl AddressResolver for SystemResolver {
+    fn resolve<'a>(&'a self, host: &'a str, port: u16) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<SocketAddr>, String>> + Send + 'a>> {
+        let host = host.to_string();
+        Box::pin(async move {
+            tokio::net::lookup_host((host.as_str(), port)).await
+                .map(|addresses| addresses.collect())
+                .map_err(|error| error.to_string())
+        })
+    }
+}
+
 pub struct HttpTransport {
-    client: reqwest::Client,
+    resolver: Arc<dyn AddressResolver>,
 }
 
 impl Default for HttpTransport {
@@ -530,19 +559,55 @@ impl Default for HttpTransport {
 
 impl HttpTransport {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
+        Self { resolver: Arc::new(SystemResolver) }
+    }
+
+    pub fn with_resolver<R: AddressResolver + 'static>(resolver: R) -> Self {
+        Self { resolver: Arc::new(resolver) }
+    }
+
+    fn client_builder() -> reqwest::ClientBuilder {
+        reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
-            // **不用系统/环境里配的代理**。两个理由：
-            // 1. 一个环境变量（`HTTPS_PROXY`）不该悄悄把我们带着凭据的请求改道到别处 ——
-            //    "代理"这个组件最经典的漏洞形状就是从这类"顺手跟随"来的；
-            // 2. 回环地址上的请求经过代理会被代理回一个 502（本仓库的测试就是这么发现的）——
-            //    那是"以为连上了 provider，其实连的是代理"。
             .no_proxy()
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(120))
-            .build()
-            .expect("the HTTP client must build with a fixed policy");
-        Self { client }
+    }
+
+    async fn client_for(&self, endpoint: &str, network_policy: &str) -> Result<reqwest::Client, ProviderError> {
+        security::allow_upstream(endpoint, network_policy).map_err(|detail| ProviderError::RefusedUrl { detail })?;
+        let url = reqwest::Url::parse(endpoint).map_err(|error| ProviderError::Transport { detail: error.to_string() })?;
+        let host = url.host_str().ok_or_else(|| ProviderError::Transport { detail: "the provider URL has no host".to_string() })?;
+        let port = url.port_or_known_default().ok_or_else(|| ProviderError::Transport { detail: "the provider URL has no effective port".to_string() })?;
+        let direct_ip = host.trim_start_matches('[').trim_end_matches(']').parse::<std::net::IpAddr>().ok();
+        let mut candidates = if let Some(ip) = direct_ip {
+            vec![SocketAddr::new(ip, port)]
+        } else {
+            let resolved = self.resolver.resolve(host, port).await.map_err(|error| ProviderError::Transport { detail: format!("DNS resolution failed: {error}") })?;
+            resolved.into_iter().map(|address| SocketAddr::new(address.ip(), port)).collect::<Vec<_>>()
+        };
+        candidates.sort();
+        candidates.dedup();
+        if candidates.is_empty() {
+            return Err(ProviderError::Transport { detail: "DNS resolution returned no candidates".to_string() });
+        }
+        match network_policy {
+            "cloud" if candidates.iter().any(|address| security::is_non_public_ip(address.ip())) => {
+                return Err(ProviderError::Transport { detail: "DNS resolution returned a non-public candidate".to_string() });
+            }
+            "local" if candidates.iter().any(|address| !security::is_loopback_host(&address.ip().to_string())) => {
+                return Err(ProviderError::Transport { detail: "a local profile requires loopback candidates".to_string() });
+            }
+            "lan" if candidates.iter().any(|address| security::is_link_local_host(&address.ip().to_string())) => {
+                return Err(ProviderError::Transport { detail: "a LAN profile must not use link-local candidates".to_string() });
+            }
+            _ => {}
+        }
+        let mut builder = Self::client_builder();
+        if direct_ip.is_none() {
+            builder = builder.resolve_to_addrs(host, &candidates);
+        }
+        builder.build().map_err(|error| ProviderError::Transport { detail: error.to_string() })
     }
 }
 
@@ -563,20 +628,21 @@ fn drive<F: std::future::Future>(future: F) -> F::Output {
 
 impl Transport for HttpTransport {
     fn send(&self, request: &ProviderRequest, authorization: &[(String, String)], stop: &dyn Stop, on_update: &mut dyn FnMut(TransportUpdate)) -> Result<(), ProviderError> {
-        let mut builder = self.client.post(&request.endpoint);
-        for (name, value) in authorization {
-            // 空值的头**不发**：`Authorization: `（空）在有些网关上会被当成"提供了凭据但无效"。
-            if !value.is_empty() {
-                builder = builder.header(name.as_str(), value.as_str());
-            }
-        }
-        // reqwest adds the JSON media type only if the header is absent.
-        // Setting the request headers first avoids a duplicate Content-Type.
-        let builder = builder.json(&request.body);
-
         let result = drive(async {
             let wait = stop.wait();
             tokio::pin!(wait);
+            let client = tokio::select! {
+                biased;
+                () = &mut wait => return Ok(()),
+                client = self.client_for(&request.endpoint, &request.network_policy) => client?,
+            };
+            let mut builder = client.post(&request.endpoint);
+            for (name, value) in authorization {
+                if !value.is_empty() {
+                    builder = builder.header(name.as_str(), value.as_str());
+                }
+            }
+            let builder = builder.json(&request.body);
             let response = tokio::select! {
                 biased;
                 () = &mut wait => return Ok(()),
@@ -591,16 +657,28 @@ impl Transport for HttpTransport {
             let peer = response.remote_addr().map_or_else(|| "unknown".to_string(), |address| address.to_string());
             let status = response.status().as_u16();
             if !response.status().is_success() {
-                // 失败体也要读（诊断要用），但要**限长**：对端可能回一大坨 HTML。
-                let body = tokio::select! {
-                    biased;
-                    () = &mut wait => return Ok(()),
-                    body = response.text() => body.unwrap_or_default(),
-                };
+                const MAX_ERROR_BODY_BYTES: usize = 4096;
+                if response.content_length().is_some_and(|length| length > MAX_ERROR_BODY_BYTES as u64) {
+                    return Err(ProviderError::Transport { detail: format!("the error response exceeded {MAX_ERROR_BODY_BYTES} bytes") });
+                }
+                let mut stream = response.bytes_stream();
+                let mut body = Vec::new();
+                loop {
+                    let next = tokio::select! {
+                        biased;
+                        () = &mut wait => return Ok(()),
+                        chunk = stream.next() => chunk,
+                    };
+                    let Some(chunk) = next else { break };
+                    let bytes = chunk.map_err(|error| ProviderError::Transport { detail: error.to_string() })?;
+                    if body.len().checked_add(bytes.len()).map_or(true, |length| length > MAX_ERROR_BODY_BYTES) {
+                        return Err(ProviderError::Transport { detail: format!("the error response exceeded {MAX_ERROR_BODY_BYTES} bytes") });
+                    }
+                    body.extend_from_slice(&bytes);
+                }
+                let body = String::from_utf8_lossy(&body);
                 let detail: String = body.chars().take(200).collect();
                 let (failure, message) = classify_http_failure(status, Some(&detail));
-                // 对端地址放在**开头**：这条详情走到界面上会被截断到 200 字符（前端那条约束），
-                // 放末尾等于没放 —— 而"谁答的"正是最该留下来的那一个事实。
                 return Err(ProviderError::Http { status, failure, message: format!("[peer {peer}] {message}") });
             }
 

@@ -208,56 +208,93 @@ pub fn admit(input: &AdmissionInput, token: &SessionToken) -> Admission {
  */
 pub fn allow_upstream(url: &str, network_policy: &str) -> Result<(), String> {
     let parsed = parse_absolute_url(url).ok_or_else(|| format!("`{url}` is not an absolute http(s) URL"))?;
-    if network_policy == "cloud" {
-        if parsed.scheme != "https" {
-            return Err("a cloud endpoint must use https".to_string());
+    let host = parsed.host_str().ok_or_else(|| "the upstream URL needs a host".to_string())?;
+    match network_policy {
+        "cloud" => {
+            if parsed.scheme() != "https" {
+                return Err("a cloud endpoint must use https".to_string());
+            }
+            if is_private_host(host) {
+                return Err(format!("`{host}` is a loopback or private address, which a cloud profile must not reach"));
+            }
         }
-        if is_private_host(&parsed.host) {
-            return Err(format!("`{}` is a loopback or private address, which a cloud profile must not reach", parsed.host));
+        "local" => {
+            let literal_ip = host.trim_start_matches('[').trim_end_matches(']').parse::<std::net::IpAddr>().ok();
+            if literal_ip.is_some() && !is_loopback_host(host) {
+                return Err(format!("`{host}` is not a loopback address, which a local profile requires"));
+            }
         }
+        "lan" => {
+            if is_link_local_host(host) {
+                return Err(format!("`{host}` is a link-local address, which a LAN profile must not reach"));
+            }
+        }
+        _ => return Err(format!("unknown network policy {network_policy}")),
     }
     Ok(())
 }
 
-struct ParsedUrl {
-    scheme: String,
-    host: String,
+fn parse_absolute_url(url: &str) -> Option<reqwest::Url> {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() || !parsed.username().is_empty() || parsed.password().is_some() {
+        return None;
+    }
+    Some(parsed)
 }
 
-/// 极简的 URL 拆分。**不用 `url` crate**：这里只需要 scheme 与 host 两项，
-/// 而每多一个依赖就多一份要跟着升级、要审的东西。
-fn parse_absolute_url(url: &str) -> Option<ParsedUrl> {
-    let (scheme, rest) = url.split_once("://")?;
-    let scheme = scheme.to_ascii_lowercase();
-    if scheme != "http" && scheme != "https" {
-        return None;
+pub fn is_non_public_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(ip) => {
+            let octets = ip.octets();
+            ip.is_private() || ip.is_loopback() || ip.is_link_local() || ip.is_unspecified() || ip.is_broadcast() || ip.is_multicast()
+                || octets[0] == 0 || octets[0] >= 224
+                || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+                || (octets[0] == 192 && octets[1] == 0 && (octets[2] == 0 || octets[2] == 2))
+                || (octets[0] == 192 && octets[1] == 88 && octets[2] == 99)
+                || (octets[0] == 198 && (octets[1] == 18 || octets[1] == 19))
+                || (octets[0] == 198 && octets[1] == 51 && octets[2] == 100)
+                || (octets[0] == 203 && octets[1] == 0 && octets[2] == 113)
+        }
+        std::net::IpAddr::V6(ip) => {
+            if let Some(mapped) = ip.to_ipv4_mapped() {
+                return is_non_public_ip(std::net::IpAddr::V4(mapped));
+            }
+            let segments = ip.segments();
+            ip.is_loopback() || ip.is_unspecified() || ip.is_multicast()
+                || (segments[0] & 0xfe00) == 0xfc00
+                || (segments[0] & 0xffc0) == 0xfe80
+                || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        }
     }
-    let authority = rest.split(['/', '?', '#']).next()?;
-    // 丢掉 user:pass@（内嵌凭据是另一条拒绝理由，见 `providerContracts`）。
-    let host_port = authority.rsplit('@').next()?;
-    let host = host_port.split(':').next()?.to_ascii_lowercase();
-    if host.is_empty() {
-        return None;
-    }
-    Some(ParsedUrl { scheme, host })
 }
 
 pub fn is_private_host(host: &str) -> bool {
+    let normalized = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    if normalized == "localhost" || normalized.ends_with(".localhost") {
+        return true;
+    }
+    normalized.parse::<std::net::IpAddr>().ok().is_some_and(is_non_public_ip)
+}
+
+pub fn is_loopback_host(host: &str) -> bool {
+    let normalized = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    if normalized == "localhost" {
+        return true;
+    }
+    normalized.parse::<std::net::IpAddr>().ok().is_some_and(|ip| match ip {
+        std::net::IpAddr::V4(ip) => ip.is_loopback(),
+        std::net::IpAddr::V6(ip) => ip.is_loopback() || ip.to_ipv4_mapped().is_some_and(|mapped| mapped.is_loopback()),
+    })
+}
+
+pub fn is_link_local_host(host: &str) -> bool {
     let normalized = host.trim_start_matches('[').trim_end_matches(']');
-    if normalized == "localhost" || normalized.ends_with(".localhost") || normalized == "::1" {
-        return true;
-    }
-    if normalized.starts_with("127.") || normalized.starts_with("10.") || normalized.starts_with("192.168.") || normalized.starts_with("169.254.") {
-        return true;
-    }
-    if let Some(rest) = normalized.strip_prefix("172.") {
-        if let Some(second) = rest.split('.').next().and_then(|value| value.parse::<u8>().ok()) {
-            if (16..=31).contains(&second) {
-                return true;
-            }
+    normalized.parse::<std::net::IpAddr>().ok().is_some_and(|ip| match ip {
+        std::net::IpAddr::V4(ip) => ip.is_link_local(),
+        std::net::IpAddr::V6(ip) => {
+            (ip.segments()[0] & 0xffc0) == 0xfe80 || ip.to_ipv4_mapped().is_some_and(|mapped| mapped.is_link_local())
         }
-    }
-    false
+    })
 }
 
 /**
@@ -269,7 +306,7 @@ pub fn is_private_host(host: &str) -> bool {
  */
 pub fn may_forward_credentials(from: &str, to: &str) -> bool {
     match (parse_absolute_url(from), parse_absolute_url(to)) {
-        (Some(left), Some(right)) => left.scheme == right.scheme && left.host == right.host,
+        (Some(left), Some(right)) => left.origin() == right.origin(),
         _ => false,
     }
 }

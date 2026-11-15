@@ -217,3 +217,35 @@ fn the_session_token_is_random_and_compared_in_constant_time() {
     assert!(!first.matches("ab"));
     assert!(!first.matches(""));
 }
+
+
+#[test]
+fn r03_rejects_ipv6_and_non_public_addresses_for_cloud_profiles() {
+    for url in [
+        "https://[::1]/v1",
+        "https://[::]/v1",
+        "https://[fd00::1]/v1",
+        "https://[::ffff:192.168.1.1]/v1",
+        "https://100.64.0.1/v1",
+        "https://192.0.2.1/v1",
+    ] {
+        assert!(allow_upstream(url, "cloud").is_err(), "{url} must be refused");
+    }
+    assert!(allow_upstream("https://[2001:4860:4860::8888]/v1", "cloud").is_ok());
+    assert!(allow_upstream("https://8.8.8.8/v1", "cloud").is_ok());
+}
+
+#[test]
+fn r03_separates_local_loopback_from_lan_private_access() {
+    assert!(allow_upstream("http://127.0.0.1:11434/v1", "local").is_ok());
+    assert!(allow_upstream("http://[::1]:11434/v1", "local").is_ok());
+    assert!(allow_upstream("http://192.168.1.10:8000/v1", "local").is_err());
+    assert!(allow_upstream("http://169.254.169.254/latest", "lan").is_err());
+    assert!(allow_upstream("http://192.168.1.10:8000/v1", "lan").is_ok());
+}
+
+#[test]
+fn r03_redirect_comparison_includes_the_effective_port() {
+    assert!(!may_forward_credentials("https://api.example.com/v1", "https://api.example.com:444/v1"));
+    assert!(may_forward_credentials("https://api.example.com/v1", "https://api.example.com:443/other"));
+}
