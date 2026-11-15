@@ -204,7 +204,7 @@ pub fn collect_attachments(app: tauri::AppHandle) -> Result<Vec<String>, String>
 /// 文档由调用方给（`documentId` / `epoch` / `content`），附件按哈希列出。
 /// **导出是只读的**：它不改仓库里的任何东西 —— 于是"导出失败"永远不会损坏文档。
 #[tauri::command]
-pub fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<serde_json::Value>, attachments: Vec<String>, destination: String) -> Result<serde_json::Value, String> {
+pub fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<serde_json::Value>, attachments: Vec<String>, file_name: String) -> Result<serde_json::Value, String> {
     let exported: Vec<repository::package::ExportDocument> = documents
         .iter()
         .map(|document| {
@@ -221,10 +221,11 @@ pub fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<
     let blobs = app.try_state::<BlobState>().ok_or("the attachment store is not initialised")?;
     let (bytes, report) = repository::package::export(&project_id, &exported, &media, &[], &blobs.blobs, repository::provider_profiles::timestamp_ms(), None)
         .map_err(|error| error.to_string())?;
-    repository::package::write_to_file(&destination, &bytes).map_err(|error| error.to_string())?;
+    let export_root = app.path().app_data_dir().map_err(|error| format!("cannot resolve the app data directory: {error}"))?.join("exports");
+    let destination = repository::package::write_export_file(&export_root, &file_name, &bytes).map_err(|error| error.to_string())?;
 
     Ok(serde_json::json!({
-        "destination": destination,
+        "destination": destination.to_string_lossy(),
         "byteSize": bytes.len(),
         "documentCount": report.document_count,
         "attachmentCount": report.attachment_count

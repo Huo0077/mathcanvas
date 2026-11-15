@@ -129,7 +129,7 @@ describe("导出与导入", () => {
       projectId: "local",
       documents: [{ documentId: "doc-1", epoch: "epoch:doc-1", generation: 7, content: "{\"metadata\":{}}" }],
       attachments: ["hash-a", "hash-b"],
-      destination: "D:\\out\\demo"
+      destination: "demo"
     })
 
     expect(calls[0].command).toBe("export_package")
@@ -137,8 +137,8 @@ describe("导出与导入", () => {
       projectId: "local",
       documents: [{ documentId: "doc-1", epoch: "epoch:doc-1", generation: 7, content: "{\"metadata\":{}}" }],
       attachments: ["hash-a", "hash-b"],
-      // 补扩展名在这里做，而不是让用户自己去想（Rust 侧写的**就是**这个路径）。
-      destination: "D:\\out\\demo.mcanvas"
+      // 前端只提交单个文件名；完整保存位置由原生端返回。
+      fileName: "demo.mcanvas"
     })
     expect(result.ok && result.value.attachmentCount).toBe(2)
   })

@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-15 —— R04 原生导出授权与原子写入
+
+- 删除任意路径 `write_to_file`，导出IPC只接受 `fileName`，原生固定应用数据 `exports` 根目录。严格文件名拒绝穿越、UNC、设备名、ADS、点段和错误后缀。
+- 随机 `create_new` 临时文件、`sync_all` 与同目录 `hard_link` 不覆盖提交保证旧目标字节不变；失败仅清理本次临时文件。Windows `mklink /J` 实测拒绝junction导出根，目标外无文件。
+- 前端只记文件名，完整路径仅用于结果展示；服务与面板共18项通过，项目包33项及junction精确用例通过。
+- 完整Rust 310项通过+4ignored；Vitest 522文件/5560通过+1todo；类型、Lint、Web构建通过。证据见[R04导出授权记录](audit/2026-11-15-export-authorization/README.md)。
+
 ## 2026-11-15 —— R03 URL/DNS与有界响应
 
 - 以IPv6、映射私网、CGNAT、local/LAN越界和跨端口重定向为RED，使用 `reqwest::Url` 和统一IP分类替换手写host解析；local仅允许回环，重定向比较包含有效端口。

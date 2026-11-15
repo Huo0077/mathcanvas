@@ -40,7 +40,7 @@ function makeClient(options: FakeOptions = {}) {
       case "put_attachment":
         return { contentHash: (args as { contentHash: string }).contentHash, byteSize: 3 }
       case "export_package":
-        return options.exportResult ?? { destination: (args as { destination: string }).destination, byteSize: 4096, documentCount: 1, attachmentCount: ((args as { attachments: string[] }).attachments ?? []).length }
+        return options.exportResult ?? { destination: `D:\\out\\${(args as { fileName: string }).fileName}`, byteSize: 4096, documentCount: 1, attachmentCount: ((args as { attachments: string[] }).attachments ?? []).length }
       case "import_package":
         return options.importResult ?? { projectId: "local", schemaVersion: "0.1", documents: ["doc-1"], attachmentCount: 1, missingSources: [] }
       case "collect_attachments":
@@ -76,28 +76,27 @@ function panel(overrides: Partial<Parameters<typeof ProjectPackagePanel>[0]> = {
 const document = createEmptyDocument("conics")
 
 describe("导出 .mcanvas", () => {
-  it("把文档正文与目的地一起发出去，并把目的地补上扩展名", async () => {
+  it("把文档正文与单个文件名一起发出去，并显示原生返回的完整位置", async () => {
     const calls = makeClient({ head: { generation: 7, epoch: "epoch:doc-1", content: "{}" } })
     panel()
 
-    fireEvent.change(screen.getByLabelText("导出到"), { target: { value: "D:\\out\\demo" } })
+    fireEvent.change(screen.getByLabelText("导出到"), { target: { value: "demo" } })
     fireEvent.click(screen.getByRole("button", { name: "导出 .mcanvas" }))
 
     await waitFor(() => expect(calls.some((call) => call.command === "export_package")).toBe(true))
     const exported = calls.find((call) => call.command === "export_package")!
-    expect(exported.args!.destination).toBe("D:\\out\\demo.mcanvas")
+    expect(exported.args!.fileName).toBe("demo.mcanvas")
     expect((exported.args!.documents as { documentId: string; content: string }[])[0].documentId).toBe(document.metadata.id)
-    // 导出之后**如实报出结果**：写到哪、多大、几份文档几个附件。
     await screen.findByText(/已导出到 D:\\out\\demo\.mcanvas/)
   })
 
-  it("把目的地记下来，下次打开就是它", async () => {
+  it("本地只记住文件名，不把完整保存位置当成下次输入", async () => {
     makeClient({ head: { generation: 7, epoch: "epoch:doc-1", content: "{}" } })
     panel()
 
-    fireEvent.change(screen.getByLabelText("导出到"), { target: { value: "D:\\out\\demo" } })
+    fireEvent.change(screen.getByLabelText("导出到"), { target: { value: "demo" } })
     fireEvent.click(screen.getByRole("button", { name: "导出 .mcanvas" }))
-    await waitFor(() => expect(localStorage.getItem("mathcanvas:package-destination")).toBe("D:\\out\\demo.mcanvas"))
+    await waitFor(() => expect(localStorage.getItem("mathcanvas:package-destination")).toBe("demo"))
   })
 })
 

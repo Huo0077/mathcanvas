@@ -35,7 +35,7 @@
 //! 这一条由用例守着 —— 一个"顺手把配置也打进去"的改动会让包变成一份凭据泄漏。
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -415,20 +415,50 @@ pub fn import(bytes: &[u8], blobs: &BlobStore) -> Result<ImportOutcome, PackageE
     Ok(ImportOutcome { manifest, documents, missing_sources, stored_attachments })
 }
 
-/// **把一个包写成文件**（`.mcanvas`）。写盘是原子的：先 `*.tmp` 再改名。
-pub fn write_to_file(path: impl AsRef<Path>, bytes: &[u8]) -> Result<(), PackageError> {
-    let path = path.as_ref();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| PackageError::Blob { detail: format!("cannot create {}: {error}", parent.display()) })?;
+fn validate_export_file_name(file_name: &str) -> Result<(), PackageError> {
+    let valid_length = (9..=96).contains(&file_name.len());
+    let valid_characters = file_name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    let first_is_alphanumeric = file_name.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric);
+    let has_extension = file_name.to_ascii_lowercase().ends_with(".mcanvas");
+    let stem = file_name.split('.').next().unwrap_or_default().to_ascii_uppercase();
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9");
+    if !valid_length || !valid_characters || !first_is_alphanumeric || !has_extension || file_name.contains("..") || reserved {
+        return Err(PackageError::Blob { detail: "the export name must be one safe .mcanvas file name without paths, reserved devices, ADS, or dot segments".to_string() });
     }
-    let temp = path.with_extension("mcanvas.tmp");
-    {
+    Ok(())
+}
+
+pub fn write_export_file(export_root: impl AsRef<Path>, file_name: &str, bytes: &[u8]) -> Result<PathBuf, PackageError> {
+    validate_export_file_name(file_name)?;
+    let export_root = export_root.as_ref();
+    if !export_root.is_absolute() {
+        return Err(PackageError::Blob { detail: "the export root must be an absolute native path".to_string() });
+    }
+    std::fs::create_dir_all(export_root).map_err(|error| PackageError::Blob { detail: format!("cannot create {}: {error}", export_root.display()) })?;
+    let metadata = std::fs::symlink_metadata(export_root).map_err(|error| PackageError::Blob { detail: format!("cannot inspect {}: {error}", export_root.display()) })?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(PackageError::Blob { detail: "the export root must be a real directory, not a link".to_string() });
+    }
+    let export_root = export_root.canonicalize().map_err(|error| PackageError::Blob { detail: format!("cannot resolve {}: {error}", export_root.display()) })?;
+    let target = export_root.join(file_name);
+    let temp = export_root.join(format!(".export-{:016x}.tmp", rand::random::<u64>()));
+    let write_result = || {
         use std::io::Write;
-        let mut handle = std::fs::File::create(&temp).map_err(|error| PackageError::Blob { detail: format!("cannot write {}: {error}", temp.display()) })?;
+        let mut handle = std::fs::OpenOptions::new().write(true).create_new(true).open(&temp)
+            .map_err(|error| PackageError::Blob { detail: format!("cannot create {}: {error}", temp.display()) })?;
         handle.write_all(bytes).map_err(|error| PackageError::Blob { detail: format!("cannot write {}: {error}", temp.display()) })?;
-        handle.sync_all().map_err(|error| PackageError::Blob { detail: format!("cannot flush {}: {error}", temp.display()) })?;
+        handle.sync_all().map_err(|error| PackageError::Blob { detail: format!("cannot flush {}: {error}", temp.display()) })
+    };
+    if let Err(error) = write_result() {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error);
     }
-    std::fs::rename(&temp, path).map_err(|error| PackageError::Blob { detail: format!("cannot replace {}: {error}", path.display()) })
+    if let Err(error) = std::fs::hard_link(&temp, &target) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(PackageError::Blob { detail: format!("cannot create {} without replacing an existing file: {error}", target.display()) });
+    }
+    std::fs::remove_file(&temp).map_err(|error| PackageError::Blob { detail: format!("cannot remove the export temporary file {}: {error}", temp.display()) })?;
+    Ok(target)
 }
 
 /// 读一个包文件。**大小也要先看**：一个几百兆的包不该被整个读进内存再判。

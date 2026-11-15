@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-15 —— R04 原生导出授权与原子不覆盖写入
+
+- 删除任意路径写入接口，导出仅接受单个安全 `.mcanvas` 文件名，由原生端固定应用 `exports` 目录；路径穿越、UNC、设备名、ADS和错误后缀均拒绝。
+- 随机 `create_new` 临时文件与 `hard_link` 不覆盖提交保证已有目标不被替换；Windows junction导出根实测拒绝。
+- 前端只记文件名并展示原生返回的完整位置。完整Rust 310项通过+4ignored，Vitest 522文件/5560通过+1todo。证据见 [R04导出授权记录](docs/audit/2026-11-15-export-authorization/README.md)。下一工作包为R05。
+
 ## 2026-11-15 —— R03 URL/DNS连接固定与有界错误响应
 
 - 使用标准URL解析与统一IP分类封堵IPv6、映射私网、CGNAT及local/LAN边界绕过；local仅允许回环，重定向比较包含有效端口。

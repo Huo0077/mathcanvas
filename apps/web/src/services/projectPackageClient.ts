@@ -212,7 +212,7 @@ export async function exportPackage(input: { projectId: string; documents: Packa
       projectId: input.projectId,
       documents: input.documents,
       attachments: input.attachments,
-      destination
+      fileName: destination
     })) as Partial<PackageExportReport> | null
     return {
       ok: true,

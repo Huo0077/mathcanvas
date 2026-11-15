@@ -512,12 +512,11 @@ fn a_package_file_is_written_atomically_and_read_back_with_a_size_guard() {
     let (bytes, _) = package::export("p", &[document("d", "{}")], &[], &[], &blobs, 1, None).expect("export");
     let path = blobs.root().join("out.mcanvas");
 
-    package::write_to_file(&path, &bytes).expect("write the package");
+    package::write_export_file(blobs.root(), "out.mcanvas", &bytes).expect("write the package");
     let read = package::read_from_file(&path).expect("read the package");
 
     assert_eq!(read, bytes, "the file must be byte-identical to what export produced");
-    // 临时文件不能在原地留下。
-    assert!(!path.with_extension("mcanvas.tmp").exists());
+    assert!(std::fs::read_dir(blobs.root()).expect("list export root").all(|entry| !entry.expect("entry").file_name().to_string_lossy().ends_with(".tmp")));
     // 读一个不存在的包要给出一句有内容的错误（而不是 `None` 或者空串）。
     assert!(!package::read_from_file(blobs.root().join("missing.mcanvas")).unwrap_err().to_string().is_empty());
 }
@@ -575,4 +574,60 @@ fn add_entry(bytes: &[u8], name: &str, data: &[u8]) -> Vec<u8> {
     let mut rebuilt: Vec<Entry> = entries.into_iter().map(|(name, bytes)| Entry { name, bytes }).collect();
     rebuilt.push(Entry { name: name.to_string(), bytes: data.to_vec() });
     archive::write(&rebuilt).expect("rewrite")
+}
+
+
+#[test]
+fn r04_export_rejects_paths_devices_ads_and_wrong_extensions() {
+    let blobs = store("r04-invalid-names");
+    let entries_before = std::fs::read_dir(blobs.root()).expect("list export root").count();
+    for name in [
+        "../outside.mcanvas",
+        "C:\\outside.mcanvas",
+        "\\\\server\\share\\outside.mcanvas",
+        "CON.mcanvas",
+        "demo.mcanvas:ads",
+        "demo..mcanvas",
+        "demo.txt",
+        ".mcanvas",
+        "demo.mcanvas ",
+    ] {
+        let result = package::write_export_file(blobs.root(), name, b"not an export");
+        assert!(result.is_err(), "{name:?} must be refused");
+    }
+    assert_eq!(std::fs::read_dir(blobs.root()).expect("list export root").count(), entries_before, "a rejected name must not create a file");
+}
+
+#[test]
+fn r04_export_never_overwrites_an_existing_target() {
+    let blobs = store("r04-no-overwrite");
+    let target = package::write_export_file(blobs.root(), "demo.mcanvas", b"ORIGINAL").expect("first export");
+
+    let second = package::write_export_file(blobs.root(), "demo.mcanvas", b"REPLACEMENT");
+
+    assert!(second.is_err(), "an existing target must not be replaced");
+    assert_eq!(std::fs::read(target).expect("original target"), b"ORIGINAL");
+    assert!(std::fs::read_dir(blobs.root()).expect("list export root").all(|entry| !entry.expect("entry").file_name().to_string_lossy().ends_with(".tmp")));
+}
+
+
+#[cfg(windows)]
+#[test]
+fn r04_export_root_rejects_a_junction() {
+    let blobs = store("r04-junction-root");
+    let outside = blobs.root().join("outside");
+    std::fs::create_dir_all(&outside).expect("create junction target");
+    let linked = blobs.root().join("linked");
+    let status = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(&linked)
+        .arg(&outside)
+        .status()
+        .expect("run mklink for the local junction fixture");
+    assert!(status.success(), "the local junction fixture must be created without elevated privileges");
+
+    let result = package::write_export_file(&linked, "demo.mcanvas", b"REFUSED");
+
+    assert!(result.is_err(), "a junction must not become an export root");
+    assert!(!outside.join("demo.mcanvas").exists(), "no file may be written through the junction");
 }

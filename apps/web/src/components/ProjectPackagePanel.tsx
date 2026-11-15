@@ -24,9 +24,8 @@ import {
  *
  * ## 三个如实说明（都摆在界面上，不藏在文档里）
  *
- * 1. **没有原生文件选择框**：能力清单里刻意只有 `core:default`，没有 dialog 插件，
- *    所以导出目的地是**填出来的**（填过一次就记住），导入路径也是。
- *    与其让一个不存在的选择框假装存在，不如把这一格交出去。
+ * 1. **导出只填文件名**：实际目录由原生端管理，已有文件不覆盖，成功后显示完整位置；
+ *    导入仍由用户输入项目包路径。
  * 2. **附件列表只覆盖本次会话**：Rust 侧没有"某份快照引用了哪些附件"这条列举命令
  *    （`read_document_head` 只回文档本体），所以重开应用之后界面数不出历史附件。
  *    导出时带上的是**这次附加过的那几个**。
@@ -84,7 +83,10 @@ function readFileBytes(file: File): Promise<Uint8Array> {
 }
 
 export function ProjectPackagePanel({ document, projectId, onImported, onNotice, onClose, unavailableReason }: ProjectPackagePanelProps) {
-  const [destination, setDestination] = useState(() => localStorage.getItem(DESTINATION_KEY) ?? suggestedPackageName(document.metadata.name))
+  const [destination, setDestination] = useState(() => {
+    const saved = localStorage.getItem(DESTINATION_KEY)
+    return saved !== null && !saved.includes("/") && !saved.includes("\\") ? saved : suggestedPackageName(document.metadata.name)
+  })
   const [importPath, setImportPath] = useState("")
   /**
    * **本次会话附加过的**文件（带名字与大小 —— 名字是本地文件的事，库里只记哈希与大小）。
@@ -153,8 +155,7 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
         destination
       })
       if (!result.ok) { report(describeFailure(result, "导出项目包")); return }
-      localStorage.setItem(DESTINATION_KEY, result.value.destination)
-      setDestination(result.value.destination)
+      localStorage.setItem(DESTINATION_KEY, destination)
       report({ kind: "info", text: `已导出到 ${result.value.destination}（${result.value.byteSize} 字节，${result.value.documentCount} 份文档，${result.value.attachmentCount} 个附件）` })
     } finally {
       setBusy(null)
@@ -239,10 +240,10 @@ export function ProjectPackagePanel({ document, projectId, onImported, onNotice,
 
     <div className="project-package-section">
       <h3>导出 .mcanvas</h3>
-      <label htmlFor="package-destination">导出目的地</label>
-      <input id="package-destination" aria-label="导出到" value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="D:\\图纸\\demo.mcanvas" />
+      <label htmlFor="package-destination">导出文件名</label>
+      <input id="package-destination" aria-label="导出到" value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="demo.mcanvas" />
       <button type="button" onClick={() => void exportCurrent()} disabled={busy !== null}>导出 .mcanvas</button>
-      <p className="project-package-hint">没有原生文件选择框（能力清单里只有 core:default），所以这一格要自己填；填过一次会记住。包里装的是 .mgeo 原文与附件，永远没有密钥。</p>
+      <p className="project-package-hint">只接受单个 .mcanvas 文件名，保存到应用管理的 exports 目录；已有文件不会被覆盖，成功后显示完整保存位置。包里装的是 .mgeo 原文与附件，永远没有密钥。</p>
     </div>
 
     <div className="project-package-section">
