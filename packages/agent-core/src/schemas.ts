@@ -2,7 +2,22 @@ import { MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, type DraftAction, type Par
 // 可改字段白名单只有动作层那一份（Fix round 1 / I14）：传输层不再手抄一份更窄的。
 
 import { ACTIONS, type ActionSpec } from "./actionRegistry"
-import { MAX_ACTIONS, MAX_ARRAY, MAX_STRING, isPlainObject, boundedArray, boundedString, fail, optionalFiniteNumber, readStringArray, quotedName, rejectUnknownFields } from "./schemaReaders"
+import {
+  LEAF_CONSTRAINTS,
+  MAX_ACTIONS,
+  MAX_ARRAY,
+  isPlainObject,
+  boundedArray,
+  boundedString,
+  fail,
+  optionalFiniteNumber,
+  quotedName,
+  readStringArray,
+  readStringLeaf,
+  rejectUnknownFields,
+  stringArrayJsonSchema,
+  stringLeafJsonSchema
+} from "./schemaReaders"
 import type { JsonSchema } from "./actionSchemas"
 
 // 这两个模块的东西**继续从这里出去**：`index.ts` 是 `export * from "./schemas"`，
@@ -75,7 +90,7 @@ export function parseDraftAction(input: unknown, path = "action"): ParseResult<D
     }
   }
   const spec: ActionSpec = ACTIONS[actionId as ActionId]
-  const actionKey = boundedString(input.actionKey, `${path}.actionKey`, errors)
+  const actionKey = readStringLeaf(input.actionKey, `${path}.actionKey`, errors, LEAF_CONSTRAINTS.actionKey)
   const factIds = readStringArray(input.factIds, `${path}.factIds`, errors)
   const inputs = parseActionInputs(actionId as ActionId, input.inputs, `${path}.inputs`, errors)
 
@@ -133,8 +148,9 @@ const ALL_ENVELOPE_FIELDS = new Set([
 ])
 
 export function planEnvelopeToolParameters(actionItems: readonly JsonSchema[]): JsonSchema {
-  const text: JsonSchema = { type: "string", minLength: 1, maxLength: MAX_STRING }
-  const strings: JsonSchema = { type: "array", items: text, maxItems: MAX_ARRAY }
+  const text: JsonSchema = stringLeafJsonSchema(LEAF_CONSTRAINTS.text)
+  const strings: JsonSchema = stringArrayJsonSchema(LEAF_CONSTRAINTS.text)
+  const normalisationText: JsonSchema = stringLeafJsonSchema(LEAF_CONSTRAINTS.normalisationText)
   return {
     type: "object",
     required: ["kind"],
@@ -173,7 +189,7 @@ export function planEnvelopeToolParameters(actionItems: readonly JsonSchema[]): 
         type: "array", maxItems: MAX_ARRAY,
         items: {
           type: "object", additionalProperties: false, required: ["original", "normalized"],
-          properties: { original: { type: "string", minLength: 1 }, normalized: { type: "string", minLength: 1 } }
+          properties: { original: normalisationText, normalized: normalisationText }
         }
       }
     },
@@ -207,13 +223,15 @@ function readNormalisations(value: unknown, path: string, errors: ParseError[]):
   if (!items) return null
   const out: PromptNormalisations = []
   for (const [index, entry] of items.entries()) {
-    if (!isPlainObject(entry)) { errors.push(fail("invalid_type", `${path}[${index}]`, "a normalisation must be an object")); continue }
-    const original = entry.original
-    const normalized = entry.normalized
-    if (typeof original !== "string" || typeof normalized !== "string" || original.trim().length === 0 || normalized.trim().length === 0) {
-      errors.push(fail("invalid_type", `${path}[${index}]`, "a normalisation needs non-empty original and normalized strings"))
+    const entryPath = `${path}[${index}]`
+    if (!isPlainObject(entry)) {
+      errors.push(fail("invalid_type", entryPath, "a normalisation must be an object"))
       continue
     }
+    rejectUnknownFields(entry, ["original", "normalized"], entryPath, errors)
+    const original = readStringLeaf(entry.original, `${entryPath}.original`, errors, LEAF_CONSTRAINTS.normalisationText)
+    const normalized = readStringLeaf(entry.normalized, `${entryPath}.normalized`, errors, LEAF_CONSTRAINTS.normalisationText)
+    if (original === null || normalized === null) continue
     out.push({ original, normalized })
   }
   return out

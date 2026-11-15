@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— R09-B Schema 与运行时叶子约束同源及降级清单
+
+- 在 `packages/agent-core/src/schemaReaders.ts` 建立统一字符串叶子定义 `LEAF_CONSTRAINTS`（`text`、`actionKey`、`normalisationText`）、`stringLeafJsonSchema`、`stringArrayJsonSchema`、`readStringLeaf` 及 Unicode/零宽字符空白辅助 `trimUnicodeBlank` / `isBlankText`；`boundedString` 与 `readStringArray` 共享同一实现。
+- 在 `packages/agent-core/src/actionSchemas.ts` 将动作输入和引用字段字符串叶子统一收敛至 `textLeafSchema`，新增单源 `planActionToolItemSchema` 消除 `apps/web/src/agent/modelPlanner.ts` 内 `buildPlanToolSchema` 手写 `actionKey` / `factIds` 导致的发布/校验漂移，并新增明确降级清单 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 与 `degradeJsonSchemaForProvider`。
+- 在 `packages/agent-core/src/schemas.ts` 同步更新 `parseDraftAction`（`actionKey` 非空且非空白）、`planEnvelopeToolParameters`（`normalisations` 与动作分支同源）及 `readNormalisations`（补齐 `rejectUnknownFields`、长度限制与边缘 Unicode/零宽空白清理）。
+- RED（8 项预期失败）→ GREEN 定向 4 文件 / 169 项通过、`eval:reliability -- --offline` 通过、`typecheck` / `lint` / Web 构建（634 modules）通过、全量 Vitest **524 文件 / 5590 passed | 1 todo**。证据见 [R09-B Schema与运行时同源记录](docs/audit/2026-11-15-schema-runtime-leaf-consistency/README.md)。下一步进入 G2 最终区块 R11。
+
 ## 2026-11-16 —— R08 E2E 与生产 UI / 合同对齐
 
 - `parametricSolidPlan.ts` 与 `planCompiler.ts` 修复参数化立体构图丢失 `外接球` / `内切球` 的回归，并在 `compilePlanOnce` 为 `derived.create_circumsphere` 补充源自内核求解结果的披露假设；新增 `rightPrismPlan.ts` (`tryBuildRightPrismMidpointsPlan`) 并在 `deterministicProblemRoute.ts` 接入，按分问模式构造直三棱柱第（2）问图景而不放宽 R01-A 小问守卫。

@@ -45,20 +45,87 @@ export function finiteNumber(value: unknown, path: string, errors: ParseError[])
   return value
 }
 
-export function boundedString(value: unknown, path: string, errors: ParseError[], { allowEmpty = false, maxLength = MAX_STRING } = {}): string | null {
+/**
+ * Unicode 空白与零宽/不可见占位字符（`\u200B`–`\u200D` / `\u2060` / `\u180E` / `\uFEFF` 等）。
+ *
+ * 原生 JS `String.prototype.trim()` 与正则 `\s` 不覆盖零宽连接/不可见格式符，会导致
+ * 仅含零宽空白的 `actionKey` 或 `normalisations` 溜过运行期校验。
+ */
+const EDGE_BLANK_RE = /^[\s\u00A0\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u3000\uFEFF]+|[\s\u00A0\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u206F\u3000\uFEFF]+$/g
+
+export function trimUnicodeBlank(value: string): string {
+  return value.replace(EDGE_BLANK_RE, "")
+}
+
+export function isBlankText(value: string): boolean {
+  return trimUnicodeBlank(value).length === 0
+}
+
+/** 字符串叶子约束的单源定义：同时驱动 provider 发布的 JSON Schema 与运行期 parser。 */
+export interface StringLeafConstraint {
+  readonly minLength: number
+  readonly maxLength: number
+  readonly pattern?: string
+  readonly rejectBlank: boolean
+  readonly trimEdges: boolean
+}
+
+export const LEAF_CONSTRAINTS = {
+  text: { minLength: 1, maxLength: MAX_STRING, rejectBlank: false, trimEdges: false },
+  actionKey: { minLength: 1, maxLength: MAX_STRING, pattern: "\\S", rejectBlank: true, trimEdges: false },
+  normalisationText: { minLength: 1, maxLength: MAX_STRING, pattern: "\\S", rejectBlank: true, trimEdges: true }
+} as const satisfies Record<string, StringLeafConstraint>
+
+export function stringLeafJsonSchema(constraint: StringLeafConstraint) {
+  return {
+    type: "string" as const,
+    minLength: constraint.minLength,
+    maxLength: constraint.maxLength,
+    ...(constraint.pattern !== undefined ? { pattern: constraint.pattern } : {})
+  }
+}
+
+export function stringArrayJsonSchema(constraint: StringLeafConstraint = LEAF_CONSTRAINTS.text, maxItems = MAX_ARRAY) {
+  return {
+    type: "array" as const,
+    items: stringLeafJsonSchema(constraint),
+    maxItems
+  }
+}
+
+export function readStringLeaf(
+  value: unknown,
+  path: string,
+  errors: ParseError[],
+  constraint: StringLeafConstraint = LEAF_CONSTRAINTS.text
+): string | null {
   if (typeof value !== "string") {
     errors.push(fail("invalid_type", path, "expected a string"))
     return null
   }
-  if (!allowEmpty && value.length === 0) {
+  if (constraint.minLength > 0 && value.length < constraint.minLength) {
     errors.push(fail("empty_string", path, "expected a non-empty string"))
     return null
   }
-  if (value.length > maxLength) {
-    errors.push(fail("string_too_long", path, `max ${maxLength} characters`))
+  if (value.length > constraint.maxLength) {
+    errors.push(fail("string_too_long", path, `max ${constraint.maxLength} characters`))
     return null
   }
-  return value
+  const normalized = constraint.trimEdges ? trimUnicodeBlank(value) : value
+  if (constraint.rejectBlank && isBlankText(normalized)) {
+    errors.push(fail("empty_string", path, "expected a non-blank string"))
+    return null
+  }
+  return normalized
+}
+
+export function boundedString(value: unknown, path: string, errors: ParseError[], { allowEmpty = false, maxLength = MAX_STRING } = {}): string | null {
+  return readStringLeaf(value, path, errors, {
+    minLength: allowEmpty ? 0 : 1,
+    maxLength,
+    rejectBlank: false,
+    trimEdges: false
+  })
 }
 
 export function boundedArray(value: unknown, path: string, errors: ParseError[]): unknown[] | null {
@@ -73,12 +140,17 @@ export function boundedArray(value: unknown, path: string, errors: ParseError[])
   return value
 }
 
-export function readStringArray(value: unknown, path: string, errors: ParseError[]): string[] | null {
+export function readStringArray(
+  value: unknown,
+  path: string,
+  errors: ParseError[],
+  constraint: StringLeafConstraint = LEAF_CONSTRAINTS.text
+): string[] | null {
   const items = boundedArray(value, path, errors)
   if (!items) return null
   const out: string[] = []
   for (const [index, item] of items.entries()) {
-    const text = boundedString(item, `${path}[${index}]`, errors)
+    const text = readStringLeaf(item, `${path}[${index}]`, errors, constraint)
     if (text !== null) out.push(text)
   }
   return out

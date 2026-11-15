@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from "vitest"
-import { DRAFT_ACTION_IDS, PLAN_SCHEMA_VERSION, createBudget, parsePlanEnvelope, type ModelContext, type PlanRequest, type ToolDescriptor } from "@draw/agent-core"
+import {
+  DRAFT_ACTION_IDS,
+  LEAF_CONSTRAINTS,
+  PLAN_SCHEMA_VERSION,
+  PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS,
+  createBudget,
+  degradeJsonSchemaForProvider,
+  parsePlanEnvelope,
+  type JsonSchema,
+  type ModelContext,
+  type PlanRequest,
+  type ToolDescriptor
+} from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
 import { createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
@@ -1186,5 +1198,163 @@ describe("矩形沿对角线折起：缺折角 / 目标不成立", () => {
     const planner = createModelPlanner({ resolveProvider: async () => ({ ok: true, provider }), runModel })
     await planner.plan(request())
     expect(runModel).toHaveBeenCalledTimes(1)
+  })
+})
+
+function validateJsonSchemaSubset(schema: Record<string, unknown>, value: unknown, path = "$"): string[] {
+  const errors: string[] = []
+  const expectedType = schema.type as string | undefined
+  if (expectedType !== undefined) {
+    const actualType = Array.isArray(value)
+      ? "array"
+      : value === null
+        ? "null"
+        : typeof value
+    const matches =
+      expectedType === "integer"
+        ? typeof value === "number" && Number.isInteger(value)
+        : actualType === expectedType
+    if (!matches) {
+      errors.push(`${path}: expected ${expectedType}, got ${actualType}`)
+      return errors
+    }
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.includes(value)) {
+    errors.push(`${path}: expected enum ${JSON.stringify(schema.enum)}`)
+  }
+  if (typeof value === "string") {
+    if (typeof schema.minLength === "number" && value.length < schema.minLength) {
+      errors.push(`${path}: length ${value.length} < minLength ${schema.minLength}`)
+    }
+    if (typeof schema.maxLength === "number" && value.length > schema.maxLength) {
+      errors.push(`${path}: length ${value.length} > maxLength ${schema.maxLength}`)
+    }
+    if (typeof schema.pattern === "string" && !new RegExp(schema.pattern, "u").test(value)) {
+      errors.push(`${path}: failed pattern ${schema.pattern}`)
+    }
+  }
+  if (typeof value === "number") {
+    if (typeof schema.minimum === "number" && value < schema.minimum) errors.push(`${path}: < minimum`)
+    if (typeof schema.maximum === "number" && value > schema.maximum) errors.push(`${path}: > maximum`)
+  }
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) errors.push(`${path}: < minItems ${schema.minItems}`)
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) errors.push(`${path}: > maxItems ${schema.maxItems}`)
+    if (schema.uniqueItems === true && new Set(value.map((item) => JSON.stringify(item))).size !== value.length) {
+      errors.push(`${path}: duplicate items`)
+    }
+    if (schema.items && typeof schema.items === "object") {
+      value.forEach((item, index) => {
+        errors.push(...validateJsonSchemaSubset(schema.items as Record<string, unknown>, item, `${path}[${index}]`))
+      })
+    }
+  }
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>
+    if (Array.isArray(schema.required)) {
+      for (const req of schema.required as string[]) {
+        if (!(req in record) || record[req] === undefined) errors.push(`${path}: missing required ${req}`)
+      }
+    }
+    const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>
+    for (const [key, propSchema] of Object.entries(properties)) {
+      if (record[key] !== undefined) {
+        errors.push(...validateJsonSchemaSubset(propSchema, record[key], `${path}.${key}`))
+      }
+    }
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(record)) {
+        if (!(key in properties)) errors.push(`${path}: additionalProperty ${key}`)
+      }
+    }
+  }
+  if (Array.isArray(schema.oneOf)) {
+    const branchErrors = (schema.oneOf as Record<string, unknown>[]).map((sub) => validateJsonSchemaSubset(sub, value, path))
+    const passCount = branchErrors.filter((errs) => errs.length === 0).length
+    if (passCount !== 1) errors.push(`${path}: oneOf matched ${passCount} branches`)
+  }
+  if (Array.isArray(schema.anyOf)) {
+    const anyPass = (schema.anyOf as Record<string, unknown>[]).some((sub) => validateJsonSchemaSubset(sub, value, path).length === 0)
+    if (!anyPass) errors.push(`${path}: anyOf failed`)
+  }
+  if (schema.not && typeof schema.not === "object") {
+    if (validateJsonSchemaSubset(schema.not as Record<string, unknown>, value, path).length === 0) {
+      errors.push(`${path}: matched forbidden 'not' schema`)
+    }
+  }
+  return errors
+}
+
+describe("R09-B real buildPlanToolSchema vs runtime differential leaf validation", () => {
+  const realParameters = buildPlanToolSchema([...DRAFT_ACTION_IDS]).function.parameters as unknown as Record<string, unknown>
+  const validBase = () => ({
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "建一个点 A",
+    factIds: ["f1"],
+    actions: [{ actionId: "planar.create_point", actionKey: "pt-a", factIds: ["f1"], inputs: { alias: "A", points: [{ x: 0, y: 0 }] } }]
+  })
+
+  it("aligns published actionKey and action factIds leaf constraints with runtime bounds", () => {
+    const diffCases: { name: string; payload: unknown; expectedValid: boolean }[] = [
+      { name: "valid minimal plan", payload: validBase(), expectedValid: true },
+      { name: "omitted optional arrays", payload: { ...validBase(), assumptions: undefined, relations: undefined, normalisations: undefined }, expectedValid: true },
+      { name: "null assumptions rejected by both", payload: { ...validBase(), assumptions: null }, expectedValid: false },
+      { name: "null normalisations rejected by both", payload: { ...validBase(), normalisations: null }, expectedValid: false },
+      { name: "unknown top field rejected by both", payload: { ...validBase(), extraField: 1 }, expectedValid: false },
+      { name: "unknown action field rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], extra: true }] }, expectedValid: false },
+      { name: "empty actionKey rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], actionKey: "" }] }, expectedValid: false },
+      { name: "ASCII blank actionKey rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], actionKey: "   " }] }, expectedValid: false },
+      { name: "Unicode blank actionKey rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], actionKey: "\u3000\u00A0" }] }, expectedValid: false },
+      { name: "oversized actionKey rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], actionKey: "k".repeat(513) }] }, expectedValid: false },
+      { name: "action factIds oversized array rejected by both", payload: { ...validBase(), actions: [{ ...validBase().actions[0], factIds: Array.from({ length: 33 }, (_, i) => `f-${i}`) }] }, expectedValid: false },
+      { name: "normalisation unknown field rejected by both", payload: { ...validBase(), normalisations: [{ original: "AB=2", normalized: "AB = 2", extra: 1 }] }, expectedValid: false },
+      { name: "normalisation oversized string rejected by both", payload: { ...validBase(), normalisations: [{ original: "a".repeat(513), normalized: "b" }] }, expectedValid: false },
+      { name: "normalisation Unicode blank rejected by both", payload: { ...validBase(), normalisations: [{ original: "\u3000", normalized: "AB = 2" }] }, expectedValid: false },
+      { name: "normalisation valid trimmed pair accepted by both", payload: { ...validBase(), normalisations: [{ original: " AB=2 ", normalized: " AB = 2 " }] }, expectedValid: true }
+    ]
+
+    for (const testCase of diffCases) {
+      const schemaErrors = validateJsonSchemaSubset(realParameters, testCase.payload)
+      const runtimeResult = parsePlanEnvelope(testCase.payload)
+      expect(schemaErrors.length === 0, `schema mismatch on ${testCase.name}: ${schemaErrors.join("; ")}`).toBe(testCase.expectedValid)
+      expect(runtimeResult.ok, `runtime mismatch on ${testCase.name}: ${runtimeResult.ok ? "ok" : JSON.stringify(runtimeResult.errors)}`).toBe(testCase.expectedValid)
+    }
+  })
+
+  it("declares provider-unsupported keyword degradations while runtime enforces stripped constraints", () => {
+    expect(PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS.openai_strict.unsupportedKeywords).toEqual(
+      expect.arrayContaining(["pattern", "minLength", "maxLength", "maxItems", "oneOf", "not"])
+    )
+    expect(PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS.gemini.unsupportedKeywords).toEqual(
+      expect.arrayContaining(["pattern", "minLength", "maxLength", "uniqueItems"])
+    )
+    expect(PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS.anthropic.unsupportedKeywords).toEqual(
+      expect.arrayContaining(["pattern", "minLength", "maxLength", "uniqueItems", "not"])
+    )
+
+    const degradedAnthropic = degradeJsonSchemaForProvider(realParameters as JsonSchema, "anthropic")
+    const degradedJson = JSON.stringify(degradedAnthropic)
+    expect(degradedJson).not.toContain('"pattern"')
+    expect(degradedJson).not.toContain('"minLength"')
+    expect(degradedJson).not.toContain('"maxLength"')
+    expect(degradedJson).not.toContain('"uniqueItems"')
+    expect(degradedJson).not.toContain('"not"')
+
+    // Degraded provider schema cannot catch regex/length/blank violations on its own,
+    // so runtime must remain the authoritative enforcement boundary.
+    const blankActionKeyPayload = {
+      ...validBase(),
+      actions: [{ ...validBase().actions[0], actionKey: "\u200B  \u3000" }]
+    }
+    const oversizedNormalisationPayload = {
+      ...validBase(),
+      normalisations: [{ original: "x".repeat(LEAF_CONSTRAINTS.normalisationText.maxLength + 1), normalized: "AB = 2" }]
+    }
+    expect(validateJsonSchemaSubset(degradedAnthropic as unknown as Record<string, unknown>, blankActionKeyPayload)).toEqual([])
+    expect(validateJsonSchemaSubset(degradedAnthropic as unknown as Record<string, unknown>, oversizedNormalisationPayload)).toEqual([])
+
+    expect(parsePlanEnvelope(blankActionKeyPayload).ok).toBe(false)
+    expect(parsePlanEnvelope(oversizedNormalisationPayload).ok).toBe(false)
   })
 })

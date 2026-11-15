@@ -1,5 +1,5 @@
 import {
-  actionToolSchema,
+  planActionToolItemSchema,
   planEnvelopeToolParameters,
   PLAN_SCHEMA_VERSION,
   createPlanFailure,
@@ -225,17 +225,9 @@ type ChatMessage = ModelChatMessage
 export const PLAN_TOOL_NAME = "plan_set_plan"
 
 export function buildPlanToolSchema(actionIds: readonly string[]) {
-  const actions: JsonSchema[] = actionIds.filter((actionId): actionId is ActionId => isRegisteredActionId(actionId)).map((actionId) => ({
-    type: "object",
-    properties: {
-      actionId: { type: "string", enum: [actionId] },
-      actionKey: { type: "string" },
-      factIds: { type: "array", items: { type: "string" } },
-      inputs: actionToolSchema(actionId).inputSchema
-    },
-    required: ["actionId", "actionKey", "factIds", "inputs"],
-    additionalProperties: false
-  }))
+  const actions: JsonSchema[] = actionIds
+    .filter((actionId): actionId is ActionId => isRegisteredActionId(actionId))
+    .map((actionId) => planActionToolItemSchema(actionId))
   return {
     type: "function",
     function: {

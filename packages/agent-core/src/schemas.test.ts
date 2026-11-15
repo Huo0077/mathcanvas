@@ -1091,3 +1091,68 @@ describe("repair envelopes", () => {
     }
   })
 })
+
+describe("R09-B shared leaf constraints for actionKey and normalisations", () => {
+  it.each(["", "   ", "\t\n", "\u00A0", "\u2003", "\u3000", "\u200B\u2060"])(
+    "rejects empty, ASCII-blank, Unicode-blank, or zero-width actionKey: %j",
+    (actionKey) => {
+      const action = {
+        actionId: "planar.create_point",
+        actionKey,
+        factIds: [],
+        inputs: { alias: "A", points: [{ x: 0, y: 0 }] }
+      }
+      const parsedAction = parseDraftAction(action)
+      expect(parsedAction.ok).toBe(false)
+
+      const parsedEnvelope = parsePlanEnvelope({
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        kind: "plan",
+        goal: "创建点 A",
+        factIds: [],
+        actions: [action]
+      })
+      expect(parsedEnvelope.ok).toBe(false)
+    }
+  )
+
+  it("rejects unknown fields, oversized text, and Unicode/zero-width blanks in normalisations while trimming valid entries", () => {
+    const base = validPlan() as Record<string, unknown>
+
+    expectRejected(
+      parsePlanEnvelope({
+        ...base,
+        normalisations: [{ original: "AB=2", normalized: "AB = 2", extra: "bad" }]
+      }),
+      "unknown_field"
+    )
+
+    expectRejected(
+      parsePlanEnvelope({
+        ...base,
+        normalisations: [{ original: "x".repeat(513), normalized: "AB = 2" }]
+      }),
+      "string_too_long"
+    )
+
+    for (const blank of ["", "   ", "\u00A0", "\u3000", "\u200B"]) {
+      const res = parsePlanEnvelope({
+        ...base,
+        normalisations: [{ original: blank, normalized: "AB = 2" }]
+      })
+      expect(res.ok, `expected rejection for blank normalisation ${JSON.stringify(blank)}`).toBe(false)
+    }
+
+    const nullNormalisations = parsePlanEnvelope({ ...base, normalisations: null })
+    expectRejected(nullNormalisations, "invalid_type")
+
+    const trimmed = parsePlanEnvelope({
+      ...base,
+      normalisations: [{ original: " \u3000AB=2\u00A0 ", normalized: "\tAB = 2\u200B " }]
+    })
+    expect(trimmed.ok).toBe(true)
+    if (trimmed.ok && trimmed.value.kind === "plan") {
+      expect(trimmed.value.normalisations).toEqual([{ original: "AB=2", normalized: "AB = 2" }])
+    }
+  })
+})

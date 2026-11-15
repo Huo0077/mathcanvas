@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— R09-B Schema 与运行时叶子约束同源及明确降级清单
+
+- **RED 基线实测失败 8 项**：运行 `schemas.test.ts` 与 `modelPlanner.test.ts` 确认 7 项运行时叶子漏检（ASCII/Unicode/零宽空白 `actionKey` 被接受、`normalisations` 未知字段放行）与 1 项真实 `buildPlanToolSchema` 差分对照不一致（发布的 `actionKey` / `factIds` 缺少长度与非空白约束）。
+- **单源叶子契约与差分验证**：在 `schemaReaders.ts` 新增 `LEAF_CONSTRAINTS`、`stringLeafJsonSchema`、`stringArrayJsonSchema`、`readStringLeaf` 及覆盖零宽占位符的 `trimUnicodeBlank` / `isBlankText`；在 `actionSchemas.ts` 收敛动作字符串叶子并新增 `planActionToolItemSchema`，消除 `modelPlanner.ts` 内 `buildPlanToolSchema` 手写分支；在 `schemas.ts` 将 `actionKey` 与 `normalisations`（含 `rejectUnknownFields`、边缘去白与全空白拒收）接回同一叶子约束；新增 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 与 `degradeJsonSchemaForProvider` 明确宣布远端关键字退化边界及运行时兜底责任。不额外安装 `ajv`，直接使用 `validateJsonSchemaSubset` 覆盖真实 `buildPlanToolSchema` 输出。
+- **验证**：定向 `schemas.test.ts`、`actionSchemas.test.ts`、`actionFieldParity.test.ts`、`modelPlanner.test.ts` 4 文件 / 169 passed；`eval:reliability -- --offline` 3 passed；`typecheck`、`lint`（0 errors / 32 既有警告）、Web 构建（634 modules）与全量 Vitest **524 文件 / 5590 passed | 1 todo** 全部通过。证据见[R09-B Schema与运行时同源记录](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)。
+
 ## 2026-11-16 —— R08 E2E 与生产 UI / 合同重新对齐
 
 - 对基线 E2E 失败与全量串行重跑逐项分类，区分生产缺陷、设计契约迁移与过期定位器，不跳过用例也不开启静默重试：

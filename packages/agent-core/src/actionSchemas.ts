@@ -2,6 +2,7 @@ import { updatableInputFields } from "@draw/scene-graph"
 import type { DraftAction, ParseResult } from "./contracts"
 import { parseDraftAction } from "./schemas"
 import { ACTIONS, declaredFieldKind, type ActionId, type ActionSpec } from "./actionRegistry"
+import { LEAF_CONSTRAINTS, stringArrayJsonSchema, stringLeafJsonSchema } from "./schemaReaders"
 
 /** Minimal JSON Schema subset used to publish model-facing tool contracts. */
 export interface JsonSchema {
@@ -15,6 +16,7 @@ export interface JsonSchema {
   oneOf?: readonly JsonSchema[]
   anyOf?: readonly JsonSchema[]
   not?: JsonSchema
+  pattern?: string
   minLength?: number
   maxLength?: number
   minimum?: number
@@ -27,6 +29,8 @@ export interface JsonSchema {
    */
   uniqueItems?: boolean
 }
+
+const textLeafSchema: JsonSchema = stringLeafJsonSchema(LEAF_CONSTRAINTS.text)
 
 export interface ActionToolSchema {
   actionId: ActionId
@@ -67,7 +71,7 @@ const scopedReferenceSchema: JsonSchema = {
   oneOf: [
     {
       type: "object",
-      properties: { scope: { type: "string", enum: ["draft"] }, alias: { type: "string" } },
+      properties: { scope: { type: "string", enum: ["draft"] }, alias: textLeafSchema },
       required: ["scope", "alias"],
       additionalProperties: false
     },
@@ -77,7 +81,7 @@ const scopedReferenceSchema: JsonSchema = {
         scope: { type: "string", enum: ["scene"] },
         ref: {
           type: "object",
-          properties: { documentId: { type: "string" }, entityId: { type: "string" } },
+          properties: { documentId: textLeafSchema, entityId: textLeafSchema },
           required: ["documentId", "entityId"],
           additionalProperties: false
         }
@@ -99,13 +103,13 @@ const scopedReferenceSchema: JsonSchema = {
  */
 const draftAliasReferenceSchema: JsonSchema = {
   type: "object",
-  properties: { scope: { type: "string", enum: ["draft"] }, alias: { type: "string" } },
+  properties: { scope: { type: "string", enum: ["draft"] }, alias: textLeafSchema },
   required: ["scope", "alias"],
   additionalProperties: false
 }
 
 /** 单个 `id` 引用字段的发布形状：裸字符串，或草稿别名对象。与 `readIdReference` 一一对应。 */
-const idReferenceSchema: JsonSchema = { oneOf: [{ type: "string" }, draftAliasReferenceSchema] }
+const idReferenceSchema: JsonSchema = { oneOf: [textLeafSchema, draftAliasReferenceSchema] }
 
 const planeSchema: JsonSchema = {
   oneOf: [
@@ -119,15 +123,15 @@ const planeSchema: JsonSchema = {
 
 const tangentAnchorSchema: JsonSchema = {
   oneOf: [
-    { type: "object", properties: { kind: { type: "string", enum: ["point"] }, pointId: { type: "string" } }, required: ["kind", "pointId"], additionalProperties: false },
+    { type: "object", properties: { kind: { type: "string", enum: ["point"] }, pointId: textLeafSchema }, required: ["kind", "pointId"], additionalProperties: false },
     { type: "object", properties: { kind: { type: "string", enum: ["parameter"] }, parameter: { type: "number" }, branch: { type: "integer" } }, required: ["kind", "parameter"], additionalProperties: false },
     /**
      * **过曲线外一点**（2026-10-16）：`branch` 选第几条切线（一个点最多两条）。
      * 发布出去的 schema 与真正接受的载荷必须是同一种东西 —— 这条与 `patches.ts` 的校验、
      * `scene-graph` 的锚点类型是同一份契约的三处落点，缺一处模型就会"看得到却写不进去"。
      */
-    { type: "object", properties: { kind: { type: "string", enum: ["through"] }, pointId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "pointId"], additionalProperties: false },
-    { type: "object", properties: { kind: { type: "string", enum: ["common"] }, otherSourceId: { type: "string" }, branch: { type: "integer" } }, required: ["kind", "otherSourceId"], additionalProperties: false }
+    { type: "object", properties: { kind: { type: "string", enum: ["through"] }, pointId: textLeafSchema, branch: { type: "integer" } }, required: ["kind", "pointId"], additionalProperties: false },
+    { type: "object", properties: { kind: { type: "string", enum: ["common"] }, otherSourceId: textLeafSchema, branch: { type: "integer" } }, required: ["kind", "otherSourceId"], additionalProperties: false }
   ]
 }
 
@@ -181,7 +185,7 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
    * 与解析器摊平后的形状一致 —— 发布出去的 schema 与真正接受的载荷必须是同一种东西。
    */
   const reference = spec.references?.find((entry) => entry.field === field && entry.nested === undefined)
-  if (reference?.list) return { type: "array", items: reference.kind === "scoped" ? scopedReferenceSchema : { type: "string" } }
+  if (reference?.list) return { type: "array", items: reference.kind === "scoped" ? scopedReferenceSchema : textLeafSchema }
   /**
    * **单个 `id` 引用：两种写法都发布**（2026-10-10 真实 provider 现场）。
    *
@@ -199,7 +203,7 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
   if (reference !== undefined && reference.kind === "id") return idReferenceSchema
   const kind = declaredFieldKind(spec, field)
   switch (kind) {
-    case "string": return { type: "string" }
+    case "string": return textLeafSchema
     case "number": return { type: "number" }
     case "integer": return { type: "integer" }
     case "boolean": return { type: "boolean" }
@@ -216,13 +220,13 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
      * "这是一个字符串数组" —— 模型于是写出 `F` 出现两次的那份计划，整轮停在信封上。
      * 发布 `uniqueItems` 之后，"同一个名字只用一次"就是**它看得见**的规矩。
      */
-    case "stringList": return { type: "array", items: { type: "string" }, uniqueItems: true }
+    case "stringList": return { type: "array", items: textLeafSchema, uniqueItems: true }
     case "faceRings": return { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 3 }, minItems: 4 }
     case "plane": return planeSchema
     case "tangentAnchor": return tangentAnchorSchema
     case "updatablePatch": return { type: "object", properties: Object.fromEntries(updatableInputFields().map((key) => [key, schemaForPatchField(key)])), additionalProperties: false }
     case "scopedRef": return scopedReferenceSchema
-    case "idList": return { type: "array", items: { type: "string" } }
+    case "idList": return { type: "array", items: textLeafSchema }
     /**
      * **有界区间** `[lo, hi]`（函数图像的定义域）：长度恰好 2、两个数。
      *
@@ -233,8 +237,8 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
     case "interval": return { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }
     /** 两个点名 `{from,to}`（按端点名指定棱）：形状与校验那侧的 `normalizeHostEdge` 一致。 */
     case "uv": return { type: "array", items: { type: "number" }, minItems: 2, maxItems: 2 }
-    case "stringPair": return { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 }
-    case "namePair": return { type: "object", properties: { from: { type: "string" }, to: { type: "string" } }, required: ["from", "to"], additionalProperties: false }
+    case "stringPair": return { type: "array", items: textLeafSchema, minItems: 2, maxItems: 2 }
+    case "namePair": return { type: "object", properties: { from: textLeafSchema, to: textLeafSchema }, required: ["from", "to"], additionalProperties: false }
     default:
       /**
        * **这里必须抛，不能兜底成 `{}`**：登记表加了新字段而种类表没跟上时，静默发布一个
@@ -252,7 +256,8 @@ function baseSchemaForField(field: string, spec: ActionSpec, actionId: ActionId)
  * 要么漏字段、要么把字符串字段标成数字。
  */
 function schemaForPatchField(key: string): JsonSchema {
-  return { type: PATCH_FIELD_TYPES[key] ?? "number" }
+  const type = PATCH_FIELD_TYPES[key] ?? "number"
+  return type === "string" ? textLeafSchema : { type }
 }
 
 function requiredFieldsOf(spec: ActionSpec): string[] {
@@ -285,4 +290,126 @@ export function allActionToolSchemas(): readonly ActionToolSchema[] {
 /** Reuse the plan parser for untrusted tool arguments; schema publication is not validation. */
 export function parseActionToolInput(actionId: ActionId, input: unknown, actionKey: string): ParseResult<DraftAction> {
   return parseDraftAction({ actionId, actionKey, factIds: [], inputs: input }, "tool")
+}
+
+/**
+ * 计划信封 `actions[*]` 的单个动作 item schema（与 `parseDraftAction` 同源，R09-B）。
+ *
+ * `actionKey` 复用 `LEAF_CONSTRAINTS.actionKey`（非空、不超过 512、非全空白），
+ * `factIds` 复用 `stringArrayJsonSchema(LEAF_CONSTRAINTS.text)`（上限 32 条、每条 1..512），
+ * 避免调用方手抄 `{ type: "string" }` 造成发布与运行时漂移。
+ */
+export function planActionToolItemSchema(actionId: ActionId): JsonSchema {
+  return {
+    type: "object",
+    properties: {
+      actionId: { type: "string", enum: [actionId] },
+      actionKey: stringLeafJsonSchema(LEAF_CONSTRAINTS.actionKey),
+      factIds: stringArrayJsonSchema(LEAF_CONSTRAINTS.text),
+      inputs: actionToolSchema(actionId).inputSchema
+    },
+    required: ["actionId", "actionKey", "factIds", "inputs"],
+    additionalProperties: false
+  }
+}
+
+export type ProviderSchemaTarget =
+  | "openai_strict"
+  | "gemini"
+  | "anthropic"
+  | "openai_compatible_loose"
+
+export type DegradableSchemaKeyword =
+  | "pattern"
+  | "minLength"
+  | "maxLength"
+  | "minimum"
+  | "maximum"
+  | "minItems"
+  | "maxItems"
+  | "uniqueItems"
+  | "not"
+  | "anyOf"
+  | "oneOf"
+
+export interface ProviderSchemaDegradationSpec {
+  readonly target: ProviderSchemaTarget
+  readonly unsupportedKeywords: readonly DegradableSchemaKeyword[]
+  readonly fallbackPolicy: string
+}
+
+/**
+ * Provider 对 JSON Schema 关键字的明确降级清单（R09-B）。
+ *
+ * 远端/兼容 provider 对 structured outputs 与 tool parameters 仅提供部分关键字支持；
+ * 当通道按本表剥离不受支持的关键字时，运行时 `parsePlanEnvelope` / `parseDraftAction`
+ * 仍强制校验所有更严格约束（含长度、数目、去重、Unicode 空白与分支互斥）。
+ */
+export const PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS: Record<ProviderSchemaTarget, ProviderSchemaDegradationSpec> = {
+  openai_strict: {
+    target: "openai_strict",
+    unsupportedKeywords: ["pattern", "minLength", "maxLength", "minimum", "maximum", "minItems", "maxItems", "uniqueItems", "not", "oneOf"],
+    fallbackPolicy: "strip unsupported keywords or disable strict flag; runtime enforces all bounds and oneOf branches"
+  },
+  gemini: {
+    target: "gemini",
+    unsupportedKeywords: ["pattern", "minLength", "maxLength", "uniqueItems", "not", "oneOf"],
+    fallbackPolicy: "strip unsupported keywords; runtime enforces pattern, length bounds, uniqueness, and branch exclusions"
+  },
+  anthropic: {
+    target: "anthropic",
+    unsupportedKeywords: ["pattern", "minLength", "maxLength", "uniqueItems", "not"],
+    fallbackPolicy: "strip regex/length/uniqueItems/not keywords; runtime enforces full leaf and envelope constraints"
+  },
+  openai_compatible_loose: {
+    target: "openai_compatible_loose",
+    unsupportedKeywords: ["pattern", "minLength", "maxLength", "uniqueItems", "not"],
+    fallbackPolicy: "strip optional schema validators on wire; runtime validates every leaf and branch rule"
+  }
+}
+
+/** 按指定 provider 目标或关键字清单递归降级 JSON Schema，返回新对象且不修改原 schema。 */
+export function degradeJsonSchemaForProvider(
+  schema: JsonSchema,
+  targetOrKeywords: ProviderSchemaTarget | readonly DegradableSchemaKeyword[]
+): JsonSchema {
+  const unsupported = new Set<DegradableSchemaKeyword>(
+    typeof targetOrKeywords === "string"
+      ? PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS[targetOrKeywords].unsupportedKeywords
+      : targetOrKeywords
+  )
+  return stripKeywordsRecursively(schema, unsupported)
+}
+
+function stripKeywordsRecursively(schema: JsonSchema, unsupported: ReadonlySet<DegradableSchemaKeyword>): JsonSchema {
+  const out: JsonSchema = {}
+  if (schema.type !== undefined) out.type = schema.type
+  if (schema.description !== undefined) out.description = schema.description
+  if (schema.enum !== undefined) out.enum = [...schema.enum]
+  if (schema.required !== undefined) out.required = [...schema.required]
+  if (schema.additionalProperties !== undefined) out.additionalProperties = schema.additionalProperties
+  if (schema.properties !== undefined) {
+    out.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([key, prop]) => [key, stripKeywordsRecursively(prop, unsupported)])
+    )
+  }
+  if (schema.items !== undefined) out.items = stripKeywordsRecursively(schema.items, unsupported)
+  if (!unsupported.has("oneOf") && schema.oneOf !== undefined) {
+    out.oneOf = schema.oneOf.map((branch) => stripKeywordsRecursively(branch, unsupported))
+  }
+  if (!unsupported.has("anyOf") && schema.anyOf !== undefined) {
+    out.anyOf = schema.anyOf.map((branch) => stripKeywordsRecursively(branch, unsupported))
+  }
+  if (!unsupported.has("not") && schema.not !== undefined) {
+    out.not = stripKeywordsRecursively(schema.not, unsupported)
+  }
+  if (!unsupported.has("pattern") && schema.pattern !== undefined) out.pattern = schema.pattern
+  if (!unsupported.has("minLength") && schema.minLength !== undefined) out.minLength = schema.minLength
+  if (!unsupported.has("maxLength") && schema.maxLength !== undefined) out.maxLength = schema.maxLength
+  if (!unsupported.has("minimum") && schema.minimum !== undefined) out.minimum = schema.minimum
+  if (!unsupported.has("maximum") && schema.maximum !== undefined) out.maximum = schema.maximum
+  if (!unsupported.has("minItems") && schema.minItems !== undefined) out.minItems = schema.minItems
+  if (!unsupported.has("maxItems") && schema.maxItems !== undefined) out.maxItems = schema.maxItems
+  if (!unsupported.has("uniqueItems") && schema.uniqueItems !== undefined) out.uniqueItems = schema.uniqueItems
+  return out
 }

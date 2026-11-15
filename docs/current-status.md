@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2的R07、R08已完成；当前继续执行G2（下一步R09-B），其余R/T与P0–P8未开始；G2及后续G3–G4不得据单个切片宣称整体关闭 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2的R07、R08、R09-B已完成；当前继续执行G2最后一块R11，其余R/T与P0–P8未开始；G2尚未整体关闭 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -43,9 +43,10 @@
 | G1 / R06 草稿与CSV保护 | **已完成（G1闭环）** | [草稿与CSV证据](audit/2026-11-15-draft-and-csv-protection/README.md)：CSV公式字符加单引号防注入且保留数值负数/布尔语义；`:unreadable` 备份写入并回读失败时保留原草稿、阻断该工作区自动保存并提供下载/二次确认放弃恢复；定向49项通过，Vitest 522文件/5570通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R07 函数绑定与题图复核 | **已完成** | [曲线绑定与题图复核证据](audit/2026-11-15-image-review-and-curve-binding/README.md)：函数图像/交点/切线/公切线统一entity绑定与错绑拒收；题图关系/连线/根式与分式坐标/未知类别默认须人工确认且绑定revision防改字失效与伪造绕过；定向6文件/152项通过，Vitest 524文件/5577通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R08 E2E与生产UI/合同对齐 | **已完成** | [E2E与生产UI对齐证据](audit/2026-11-15-e2e-ui-contract-alignment/README.md)：修复参数化外接球动作/内核披露、`tryBuildRightPrismMidpointsPlan` 分问路由与 `.clean-chrome` `z-index: 100` 遮挡缺陷；新增 `MathCanvasPage` 并对齐 `310px`/网格/工作区Chrome/空状态契约；全量串行E2E 286 passed/0 failed（retries=0），16-worker并发282/286（4项为高并发5s/30s超时），Vitest 524文件/5580通过+1todo，类型/Lint/Web构建通过 |
-| G2其余 | 未开始 | 下一步依次R09-B、R11，不宣称G2已关闭 |
+| G2 / R09-B Schema与运行时叶子约束同源 | **已完成** | [Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)：建立 `LEAF_CONSTRAINTS` / `readStringLeaf` / `planActionToolItemSchema` 单源约束并导出 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 降级清单；修复 `actionKey` 全空白/零宽放行、`normalisations` 未知字段/超长/trim 漏检及 `buildPlanToolSchema` 漂移；RED 8 fail → 定向 4 文件/169 项通过，`eval:reliability -- --offline` 通过，Vitest 524 文件/5590 通过+1todo，类型/Lint/Web构建通过 |
+| G2其余 | 未开始 | 下一步仅余R11（依赖、公告与Rust审计关闭），完成前不宣称G2已关闭 |
 
-R00 仍有依赖公告留给 R11，不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f`、worktree 忽略提交 `be3f00bf`、R00/R01-A/R09-A提交 `9ca9ff12`/`d8cac823`/`addf4c79`、R10提交 `ce1895e5`、R02提交 `ef13937b`、R03提交 `216fd3a9`、R04提交 `1fe0e9a8`、R05提交 `6f736bbf`、R06提交 `ab91233e`/`4355eeee`、R07提交 `d7b970e6` 均已推送；R08随本变更提交并核对远端后进入R09-B。
+R00 仍有依赖公告留给 R11，不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f`、worktree 忽略提交 `be3f00bf`、R00/R01-A/R09-A提交 `9ca9ff12`/`d8cac823`/`addf4c79`、R10提交 `ce1895e5`、R02提交 `ef13937b`、R03提交 `216fd3a9`、R04提交 `1fe0e9a8`、R05提交 `6f736bbf`、R06提交 `ab91233e`/`4355eeee`、R07提交 `d7b970e6`、R08提交 `957fbc2c` 均已推送；R09-B随本变更提交并核对远端后进入R11。
 
 ### 1. 证据分层与发布阻断
 

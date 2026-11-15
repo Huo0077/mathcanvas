@@ -132,7 +132,7 @@ describe("published schemas match the existing action parser", () => {
     // ② 单个 id 引用字段：裸 id 字符串 + 草稿别名对象。**不发布 scene**（摊平成裸 id 会丢掉跨文档判据）。
     const idRef = actionToolSchema("section.create").inputSchema.properties?.sourceId
     expect(idRef?.oneOf).toHaveLength(2)
-    expect(idRef?.oneOf?.[0]).toEqual({ type: "string" })
+    expect(idRef?.oneOf?.[0]).toMatchObject({ type: "string", minLength: 1, maxLength: 512 })
     expect(idRef?.oneOf?.[1]).toMatchObject({ properties: { scope: { enum: ["draft"] } }, required: ["scope", "alias"], additionalProperties: false })
     // ③ `parameter` 引用不是草稿别名：仍旧只发布字符串。
     const parameterRef = actionToolSchema("parameter.set").inputSchema.properties?.id

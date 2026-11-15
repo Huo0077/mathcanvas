@@ -1,4 +1,13 @@
 export * from "./actionSchemas"
+export {
+  LEAF_CONSTRAINTS,
+  isBlankText,
+  readStringLeaf,
+  stringArrayJsonSchema,
+  stringLeafJsonSchema,
+  trimUnicodeBlank,
+  type StringLeafConstraint
+} from "./schemaReaders"
 export * from "./actionIds"
 /**
  * **benchmark 的题集与报告契约**（子任务 N4a 从 `scripts/agent-benchmark/` 搬进来）。
