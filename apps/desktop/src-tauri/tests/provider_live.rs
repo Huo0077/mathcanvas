@@ -53,6 +53,7 @@ fn profile() -> ProviderProfile {
         "protocol": "openai_compatible",
         "dialect": "deepseek",
         "baseUrl": "https://api.deepseek.com/v1",
+        "credentialEndpoint": "https://api.deepseek.com/v1",
         "modelId": "deepseek-chat",
         "secretRef": "deepseek-live",
         "networkPolicy": "cloud",

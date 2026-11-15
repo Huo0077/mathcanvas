@@ -99,7 +99,11 @@ pub fn run() {
                 .app_data_dir()
                 .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
                 .join("providers.json");
-            let store = ProviderProfileStore::open(&path).map_err(|error| format!("cannot open the provider configuration at {}: {error}", path.display()))?;
+            let mut store = ProviderProfileStore::open(&path).map_err(|error| format!("cannot open the provider configuration at {}: {error}", path.display()))?;
+            {
+                let secrets = app.state::<commands::secrets::SecretStoreState>();
+                store.recover_provider_credentials(&secrets.0);
+            }
             app.manage(ProfileStoreState { store: Mutex::new(store) });
             // 项目仓储放在应用数据根下的 `projects.db`（Task 1.6）。
             // **打不开就如实失败**：前端会退回到"只在会话内保存"，并在界面上说明原因 ——
@@ -142,6 +146,7 @@ pub fn run() {
             commands::secrets::has_secret,
             commands::providers::list_provider_profiles,
             commands::providers::upsert_provider_profile,
+            commands::providers::update_provider_credentials,
             commands::providers::remove_provider_profile,
             commands::providers::provider_health,
             commands::providers::provider_check,

@@ -6,10 +6,10 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：本次首批R00 → R01-A → R09-A → R10已全部完成并停止，不把31项任务合同当成下一份完成率。
-2. 四项关闭证据分别见[环境基线](audit/2026-11-15-review-remediation-baseline/README.md)、[小问阻断](audit/2026-11-15-subquestion-guard/README.md)、[最终产物计分](audit/2026-11-15-final-outcome/README.md)和[CI加固](audit/2026-11-15-ci-hardening/README.md)；R10仅有静态验证，未宣称远端CI已运行。
-3. 本次不启动G1原生安全/数据保护、G2输入/UI/schema/干净验证或R02–R12剩余任务，也不自动推进P0–P8；后续顺序仍由主计划约束。
-4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为后续技术参考，不表示本轮继续实施。
+1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：首批R00 → R01-A → R09-A → R10已完成；当前授权为G1（R02–R06）与G2（R07、R08、R09-B、R11），不把单个区块当成门禁整体完成。
+2. R02已完成，见[凭据安全证据](audit/2026-11-15-provider-credential-safety/README.md)；旧凭据无可信endpoint绑定时须重新输入，不能恢复无绑定发送。下一工作包是R03网络地址、连接一致性与有界响应。
+3. 后续依次R03–R06、R07、R08、R09-B、R11，每块RED→GREEN、自审、文档对齐并推送；不自动推进P0–P8、R12或发布。
+4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为技术参考，不把计划当成完成证据。
 5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。
 
 ## 历史和证据边界

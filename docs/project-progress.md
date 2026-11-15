@@ -8,6 +8,14 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-15 —— G1/G2启动与R02凭据安全
+
+用户确认新goal：依次完成G1（R02–R06）与G2（R07、R08、R09-B、R11），不进入P0–P8、R12、付费provider或发布。
+
+- R02先以跨profile、跨endpoint和旧三段补偿为RED，确认原生存储与发送均存在旁路。实现profile归属校验、规范化endpoint绑定、Rust版本化密钥槽及无明文恢复记录；无可信绑定的旧凭据必须重新输入，不能自动跟随手改host。
+- 原生事务以fake store和临时目录覆盖成功轮换、CAS、secret写失败、profile写失败、提交前/后崩溃及清理重试；旧upsert走同一事务，legacy写删不能绕过。前端改为单命令，启动时自动恢复。
+- 验证：受影响TS 3文件56项通过；定向Rust 104项通过+1ignored；完整Rust 297项通过+4ignored；类型检查通过；完整Vitest 522文件/5560通过+1todo、0失败；Lint 0错误/32条既有警告。未读取真实凭据、未调用外部provider。证据见[R02凭据安全记录](audit/2026-11-15-provider-credential-safety/README.md)。
+
 ## 2026-11-15 —— R00、R01-A、R09-A与R10首批实施
 
 用户重新设置目标，只完成 R00、R01-A、R09-A、R10 后停止。先在 `feature/drawing-reliability-execution` 提交并推送文档基线 `3856263f` 与隔离 worktree 忽略配置 `be3f00bf`。

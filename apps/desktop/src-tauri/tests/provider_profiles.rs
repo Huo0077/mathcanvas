@@ -20,6 +20,7 @@ fn profile(id: &str, name: &str, model: &str) -> ProviderProfile {
         base_url: "https://api.openai.com/v1".to_string(),
         model_id: model.to_string(),
         secret_ref: Some(id.to_string()),
+        credential_endpoint: None,
         capabilities: Vec::new(),
         network_policy: "cloud".to_string(),
         revision: 0,
@@ -425,4 +426,302 @@ fn an_older_configuration_without_a_selection_still_opens() {
 
     assert_eq!(store.list().len(), 1);
     assert_eq!(store.active_profile_id(), None, "a file without a selection means nothing is selected");
+}
+
+
+#[test]
+fn rejects_a_credential_reference_owned_by_another_profile() {
+    let dir = TempDir::new("foreign-credential");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    let mut foreign = profile("openai", "OpenAI", "gpt-5");
+    foreign.secret_ref = Some("victim".to_string());
+
+    let result = store.upsert(foreign, None);
+
+    assert!(matches!(result, Err(StoreError::Invalid { .. })), "a profile must not reference another profile's credential");
+    assert!(store.get("openai").is_none(), "a rejected profile must not be persisted");
+}
+
+
+#[test]
+fn accepts_a_native_versioned_slot_only_for_its_owning_profile() {
+    let dir = TempDir::new("native-slot-owner");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    let mut owned = profile("openai", "OpenAI", "gpt-5");
+    owned.secret_ref = Some("native-v1:6:openai:2".to_string());
+    owned.credential_endpoint = Some(owned.base_url.clone());
+
+    store.upsert(owned, None).expect("the native slot belongs to openai and carries an endpoint binding");
+
+    let mut foreign = profile("victim", "Victim", "gpt-5");
+    foreign.secret_ref = Some("native-v1:6:openai:2".to_string());
+    foreign.credential_endpoint = Some(foreign.base_url.clone());
+    assert!(matches!(store.upsert(foreign, None), Err(StoreError::Invalid { .. })));
+}
+
+#[test]
+fn normalizes_endpoint_identity_without_confusing_tenants() {
+    use mathcanvas_desktop_lib::repository::provider_profiles::normalized_endpoint;
+
+    let canonical = normalized_endpoint("https://API.EXAMPLE.COM:443/v1/").expect("canonical endpoint");
+    assert_eq!(canonical, "https://api.example.com/v1");
+    assert_eq!(normalized_endpoint("https://api.example.com/v1").expect("same endpoint"), canonical);
+    for different in [
+        "http://api.example.com/v1",
+        "https://other.example.com/v1",
+        "https://api.example.com:444/v1",
+        "https://api.example.com/tenant-b",
+    ] {
+        assert_ne!(normalized_endpoint(different).expect("valid but different endpoint"), canonical);
+    }
+    assert!(normalized_endpoint("https://user:pass@api.example.com/v1").is_err());
+    assert!(normalized_endpoint("https://api.example.com/v1?tenant=other").is_err());
+}
+
+
+use mathcanvas_desktop_lib::repository::provider_profiles::{
+    update_provider_credentials, CredentialState, CredentialTransaction, CredentialTransactionStage,
+};
+use mathcanvas_desktop_lib::secrets::{memory::MemorySecretStore, SecretError, SecretState, SecretStore};
+
+#[derive(Default)]
+struct FakeSecrets {
+    inner: MemorySecretStore,
+    fail_put: bool,
+    fail_remove: bool,
+    sabotage_on_put: Option<std::path::PathBuf>,
+    calls: std::sync::Mutex<Vec<String>>,
+}
+
+impl FakeSecrets {
+    fn read(&self, slot: &str) -> Option<String> {
+        self.inner.with_secret(slot, str::to_string).expect("fake secret read")
+    }
+}
+
+impl SecretStore for FakeSecrets {
+    fn put(&self, profile_id: &str, secret: &str) -> Result<SecretState, SecretError> {
+        self.calls.lock().expect("call log").push(profile_id.to_string());
+        if self.fail_put {
+            return Err(SecretError::Backend { detail: "injected put failure".to_string() });
+        }
+        let result = self.inner.put(profile_id, secret);
+        if let Some(path) = &self.sabotage_on_put {
+            let _ = std::fs::remove_file(path);
+            std::fs::create_dir(path).expect("sabotage the profile target after staging");
+        }
+        result
+    }
+
+    fn remove(&self, profile_id: &str) -> Result<(), SecretError> {
+        if self.fail_remove {
+            return Err(SecretError::Backend { detail: "injected remove failure".to_string() });
+        }
+        self.inner.remove(profile_id)
+    }
+
+    fn has(&self, profile_id: &str) -> Result<bool, SecretError> {
+        self.inner.has(profile_id)
+    }
+
+    fn with_secret<T>(&self, profile_id: &str, f: impl FnOnce(&str) -> T) -> Result<Option<T>, SecretError> {
+        self.inner.with_secret(profile_id, f)
+    }
+
+    fn backend(&self) -> &'static str {
+        "fake-memory"
+    }
+}
+
+#[test]
+fn native_update_commits_a_new_slot_and_removes_the_previous_one() {
+    let dir = TempDir::new("native-update-success");
+    let file = dir.file("providers.json");
+    let mut store = ProviderProfileStore::open(&file).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    let mut changed = profile("openai", "OpenAI", "new-model");
+    changed.base_url = "https://api.openai.com/tenant-b".to_string();
+
+    let update = update_provider_credentials(&mut store, &secrets, changed, Some(1), Some("NEW")).expect("commit update");
+
+    assert_eq!(update.credential_state, CredentialState::Committed);
+    assert!(!update.recovery_required);
+    assert_eq!(update.profile.revision, 2);
+    assert_eq!(update.profile.secret_ref.as_deref(), Some("native-v1:6:openai:2"));
+    assert_eq!(secrets.read("openai"), None, "the old slot is cleaned only after commit");
+    assert_eq!(secrets.read("native-v1:6:openai:2").as_deref(), Some("NEW"));
+    assert_eq!(store.pending_credentials().len(), 0);
+}
+
+#[test]
+fn native_update_preserves_the_old_profile_and_secret_when_profile_persistence_fails() {
+    let dir = TempDir::new("native-update-write-failure");
+    let file = dir.file("providers.json");
+    let mut store = ProviderProfileStore::open(&file).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let mut secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    secrets.sabotage_on_put = Some(file);
+    let changed = profile("openai", "OpenAI", "new-model");
+
+    let error = update_provider_credentials(&mut store, &secrets, changed, Some(1), Some("NEW")).expect_err("profile persistence must fail");
+
+    assert!(error.profile_unchanged);
+    assert!(error.previous_credential_retained);
+    assert!(error.recovery_required, "the failed cleanup remains registered for recovery");
+    assert_eq!(store.get("openai").expect("old profile").model_id, "old-model");
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"));
+    assert_eq!(secrets.read("native-v1:6:openai:2"), None, "the staged slot was removed");
+    assert_eq!(store.pending_credentials().len(), 1);
+}
+
+#[test]
+fn native_update_checks_the_revision_before_writing_a_secret() {
+    let dir = TempDir::new("native-update-cas");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    secrets.calls.lock().expect("call log").clear();
+
+    let result = update_provider_credentials(&mut store, &secrets, profile("openai", "OpenAI", "new-model"), Some(99), Some("NEW"));
+
+    assert!(result.is_err());
+    assert!(secrets.calls.lock().expect("call log").is_empty(), "a stale update must not stage a secret");
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"));
+}
+
+#[test]
+fn native_update_recovers_staged_orphans_and_committed_previous_slots() {
+    let staged_dir = TempDir::new("native-recovery-staged");
+    let staged_file = staged_dir.file("providers.json");
+    let transaction = CredentialTransaction {
+        profile_id: "openai".to_string(),
+        new_slot: "native-v1:6:openai:2".to_string(),
+        previous_slot: Some("openai".to_string()),
+        stage: CredentialTransactionStage::Staged,
+    };
+    let secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    secrets.put("native-v1:6:openai:2", "NEW").expect("staged secret");
+    {
+        let mut store = ProviderProfileStore::open(&staged_file).expect("open");
+        store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+        store.register_credential_transaction(transaction.clone()).expect("register staged transaction");
+    }
+    let mut reopened = ProviderProfileStore::open(&staged_file).expect("reopen staged transaction");
+    let staged = reopened.recover_provider_credentials(&secrets);
+    assert_eq!(staged.pending, 0);
+    assert_eq!(secrets.read("native-v1:6:openai:2"), None, "an unreferenced staged slot is an orphan");
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"), "the referenced old slot must survive");
+
+    let committed_dir = TempDir::new("native-recovery-committed");
+    let committed_file = committed_dir.file("providers.json");
+    secrets.put("native-v1:6:openai:2", "NEW").expect("staged secret again");
+    {
+        let mut store = ProviderProfileStore::open(&committed_file).expect("open");
+        store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+        store.register_credential_transaction(transaction).expect("register committed transaction");
+        let mut changed = profile("openai", "OpenAI", "new-model");
+        changed.secret_ref = Some("native-v1:6:openai:2".to_string());
+        changed.credential_endpoint = Some(changed.base_url.clone());
+        store.upsert(changed, Some(1)).expect("commit profile before the simulated crash");
+    }
+    let mut reopened = ProviderProfileStore::open(&committed_file).expect("reopen committed transaction");
+    let committed = reopened.recover_provider_credentials(&secrets);
+    assert_eq!(committed.pending, 0);
+    assert_eq!(secrets.read("native-v1:6:openai:2").as_deref(), Some("NEW"));
+    assert_eq!(secrets.read("openai"), None, "the previous slot is cleaned after the committed reference is observed");
+}
+
+#[test]
+fn native_update_keeps_cleanup_failures_registered_and_retryable() {
+    let dir = TempDir::new("native-cleanup-retry");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let mut secrets = FakeSecrets { fail_remove: true, ..FakeSecrets::default() };
+    secrets.put("openai", "OLD").expect("old secret");
+
+    let update = update_provider_credentials(&mut store, &secrets, profile("openai", "OpenAI", "new-model"), Some(1), Some("NEW")).expect("profile commit is independent of old-slot cleanup");
+
+    assert!(update.recovery_required);
+    assert_eq!(store.pending_credentials().len(), 1);
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"));
+    secrets.fail_remove = false;
+    let recovery = store.recover_provider_credentials(&secrets);
+    assert_eq!(recovery.pending, 0);
+    assert_eq!(secrets.read("openai"), None);
+    assert_eq!(secrets.read("native-v1:6:openai:2").as_deref(), Some("NEW"));
+}
+
+
+#[test]
+fn native_update_requires_reauthorization_for_endpoint_changes() {
+    let dir = TempDir::new("native-endpoint-reauth");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    let mut changed = profile("openai", "OpenAI", "new-model");
+    changed.base_url = "https://attacker.example.com/v1".to_string();
+
+    let error = update_provider_credentials(&mut store, &secrets, changed, Some(1), None).expect_err("endpoint change needs a new credential");
+
+    assert_eq!(error.code, "needs_reauthorization");
+    let current = store.get("openai").expect("old profile");
+    assert_eq!(current.base_url, "https://api.openai.com/v1");
+    assert_eq!(current.model_id, "old-model");
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"));
+}
+
+#[test]
+fn native_update_secret_store_failure_preserves_the_previous_credential() {
+    let dir = TempDir::new("native-secret-failure");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    store.upsert(profile("openai", "OpenAI", "old-model"), None).expect("old profile");
+    let mut secrets = FakeSecrets::default();
+    secrets.put("openai", "OLD").expect("old secret");
+    secrets.fail_put = true;
+
+    let error = update_provider_credentials(&mut store, &secrets, profile("openai", "OpenAI", "new-model"), Some(1), Some("NEW")).expect_err("injected secret failure");
+
+    assert!(error.profile_unchanged);
+    assert!(error.previous_credential_retained);
+    assert!(!error.recovery_required);
+    assert_eq!(secrets.read("openai").as_deref(), Some("OLD"));
+    assert!(store.pending_credentials().is_empty());
+}
+
+#[test]
+fn native_update_creates_a_profile_with_an_owned_binding() {
+    let dir = TempDir::new("native-create");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    let secrets = FakeSecrets::default();
+
+    let update = update_provider_credentials(&mut store, &secrets, profile("openai", "OpenAI", "model"), None, Some("NEW")).expect("create profile");
+
+    assert_eq!(update.profile.revision, 1);
+    assert_eq!(update.profile.secret_ref.as_deref(), Some("native-v1:6:openai:1"));
+    assert_eq!(update.profile.credential_endpoint.as_deref(), Some("https://api.openai.com/v1"));
+    assert_eq!(secrets.read("native-v1:6:openai:1").as_deref(), Some("NEW"));
+}
+
+#[test]
+fn native_update_without_a_new_secret_preserves_the_versioned_binding() {
+    let dir = TempDir::new("native-preserve-binding");
+    let mut store = ProviderProfileStore::open(dir.file("providers.json")).expect("open");
+    let secrets = FakeSecrets::default();
+    let committed = update_provider_credentials(&mut store, &secrets, profile("openai", "OpenAI", "old-model"), None, Some("NEW")).expect("create profile");
+    let mut changed = committed.profile.clone();
+    changed.model_id = "new-model".to_string();
+    changed.base_url = "https://API.OPENAI.COM:443/v1/".to_string();
+
+    let update = update_provider_credentials(&mut store, &secrets, changed, Some(1), None).expect("ordinary profile edit");
+
+    assert_eq!(update.credential_state, CredentialState::Unchanged);
+    assert_eq!(update.profile.secret_ref, committed.profile.secret_ref);
+    assert_eq!(update.profile.credential_endpoint, committed.profile.credential_endpoint);
+    assert_eq!(secrets.read("native-v1:6:openai:1").as_deref(), Some("NEW"));
 }

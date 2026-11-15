@@ -65,7 +65,11 @@ impl Stop for AtomicStop {
 
 /// 拿到一个 profile，**不碰文件系统、不校验** —— 校验是存储层的事，这里只造数据。
 fn profile(json: serde_json::Value) -> ProviderProfile {
-    serde_json::from_value(json).expect("the test profile must deserialise")
+    let mut profile = serde_json::from_value::<ProviderProfile>(json).expect("the test profile must deserialise");
+    if profile.credential_endpoint.is_none() {
+        profile.credential_endpoint = Some(profile.base_url.clone());
+    }
+    profile
 }
 
 fn openai_profile() -> ProviderProfile {
@@ -321,6 +325,7 @@ fn anthropic_frames_carry_their_event_name_across_the_decode() {
     anthropic.protocol = "anthropic".to_string();
     anthropic.dialect = "anthropic_messages".to_string();
     anthropic.base_url = "https://api.anthropic.com/v1".to_string();
+    anthropic.credential_endpoint = Some(anthropic.base_url.clone());
     let transport = FakeTransport::streaming(vec![
         b"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-3\"}}\n\n".to_vec(),
         b"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"circle\"}}\n\n".to_vec(),
@@ -361,6 +366,7 @@ fn ollama_lines_are_decoded_without_a_data_prefix() {
     ollama.protocol = "ollama".to_string();
     ollama.dialect = "ollama_native".to_string();
     ollama.base_url = "http://127.0.0.1:11434/api".to_string();
+    ollama.credential_endpoint = Some(ollama.base_url.clone());
     ollama.network_policy = "local".to_string();
     let transport = FakeTransport::streaming(vec![
         br#"{"model":"llama3","message":{"role":"assistant","content":"one"}}"#.to_vec(),
@@ -851,6 +857,7 @@ fn anthropic_tool_arguments_are_accumulated_from_input_json_deltas() {
     anthropic.protocol = "anthropic".to_string();
     anthropic.dialect = "anthropic_messages".to_string();
     anthropic.base_url = "https://api.anthropic.com/v1".to_string();
+    anthropic.credential_endpoint = Some(anthropic.base_url.clone());
     let transport = FakeTransport::streaming(vec![
         sse("content_block_start", serde_json::json!({
             "type": "content_block_start",
@@ -893,6 +900,7 @@ fn a_non_streaming_anthropic_body_still_yields_its_tool_call() {
     anthropic.protocol = "anthropic".to_string();
     anthropic.dialect = "anthropic_messages".to_string();
     anthropic.base_url = "https://api.anthropic.com/v1".to_string();
+    anthropic.credential_endpoint = Some(anthropic.base_url.clone());
     let body = serde_json::json!({
         "type": "message",
         "content": [{ "type": "tool_use", "id": "toolu_2", "name": "plan_set_plan", "input": { "kind": "clarification" } }]
@@ -992,4 +1000,65 @@ fn a_stream_that_reaches_done_is_not_reported_as_broken() {
 
     assert_eq!(text_of(&events), "ok");
     assert!(!events.iter().any(|event| matches!(event, ModelEvent::Failed { .. })), "a completed stream must not carry a failure event");
+}
+
+
+#[test]
+fn refuses_to_borrow_a_credential_owned_by_another_profile() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let transport = NeverCalled { calls: calls.clone() };
+    let mut foreign = openai_profile();
+    foreign.secret_ref = Some("victim".to_string());
+    let adapter = ProviderAdapter::new(&source, &transport, foreign);
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a foreign credential must be refused before it is borrowed or sent");
+
+    assert!(matches!(error, ProviderError::RefusedUrl { .. }), "got {error:?}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+
+#[test]
+fn refuses_to_send_a_bound_credential_to_a_different_endpoint() {
+    let bound = profile(serde_json::json!({
+        "id": "openai",
+        "name": "OpenAI",
+        "protocol": "openai_compatible",
+        "dialect": "generic_compatible",
+        "baseUrl": "https://attacker.example.com/v1",
+        "credentialEndpoint": "https://api.example.com/v1",
+        "modelId": "gpt-4o-mini",
+        "secretRef": "openai",
+        "networkPolicy": "cloud",
+        "revision": 1
+    }));
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let transport = NeverCalled { calls: calls.clone() };
+    let adapter = ProviderAdapter::new(&source, &transport, bound);
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("a credential must not follow an endpoint change without reauthorization");
+
+    assert!(matches!(error, ProviderError::RefusedUrl { .. }), "got {error:?}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+
+#[test]
+fn refuses_a_legacy_credential_without_a_trusted_endpoint_binding() {
+    let source = FakeSource { secret: Some("sk-live-secret".to_string()) };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let transport = NeverCalled { calls: calls.clone() };
+    let mut legacy = openai_profile();
+    legacy.credential_endpoint = None;
+    let adapter = ProviderAdapter::new(&source, &transport, legacy);
+    let stop = AtomicStop::new();
+
+    let error = send(&adapter, &stop).expect_err("an unbound legacy credential requires native reauthorization");
+
+    assert!(matches!(error, ProviderError::RefusedUrl { .. }), "got {error:?}");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
 }

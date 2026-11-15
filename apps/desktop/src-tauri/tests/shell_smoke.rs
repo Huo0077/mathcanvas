@@ -156,6 +156,7 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "has_secret",
         "list_provider_profiles",
         "upsert_provider_profile",
+        "update_provider_credentials",
         "remove_provider_profile",
         "provider_health",
         "provider_check",

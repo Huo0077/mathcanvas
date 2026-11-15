@@ -56,6 +56,7 @@ fn profile() -> ProviderProfile {
         "protocol": "openai_compatible",
         "dialect": "openai_native",
         "baseUrl": "http://127.0.0.1:9/v1",
+        "credentialEndpoint": "http://127.0.0.1:9/v1",
         "modelId": "probe-model",
         "secretRef": "openai",
         "networkPolicy": "local",

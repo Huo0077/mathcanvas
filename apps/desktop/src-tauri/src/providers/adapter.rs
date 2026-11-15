@@ -436,6 +436,13 @@ impl<'a, S: SecretSource + ?Sized, T: Transport + ?Sized> ProviderAdapter<'a, S,
         }
 
         let profile_id = self.secret_ref();
+        if !crate::repository::provider_profiles::credential_reference_belongs(&self.profile.id, &profile_id) {
+            return Err(ProviderError::RefusedUrl { detail: "the credential does not belong to this profile".to_string() });
+        }
+        if self.profile.credential_endpoint.is_none() {
+            return Err(ProviderError::RefusedUrl { detail: "the legacy credential has no trusted endpoint binding; enter it again to authorize this endpoint".to_string() });
+        }
+        crate::repository::provider_profiles::validate_credential_binding(&self.profile).map_err(|detail| ProviderError::RefusedUrl { detail })?;
         let protocol = self.profile.protocol.clone();
         let transport = self.transport;
 

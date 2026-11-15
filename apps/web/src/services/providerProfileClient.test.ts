@@ -120,19 +120,20 @@ describe("provider profile client", () => {
   })
 })
 
-describe("capture the secret first, then the profile — with a rollback", () => {
-  it("saves the secret first and points the profile at it", async () => {
-    const commands: string[] = []
-    installInvoke(async (command) => {
-      commands.push(command)
-      if (command === "save_secret") return "saved"
-      return { ...profile, revision: 2 }
+describe("native provider credential transaction", () => {
+  it("uses one native command instead of separate legacy secret and profile writes", async () => {
+    const calls: { command: string; args?: Record<string, unknown> }[] = []
+    installInvoke(async (command, args) => {
+      calls.push({ command, args })
+      return { profile: { ...profile, revision: 2 }, credentialState: "committed", recoveryRequired: false }
     })
 
-    const result = await saveProfileWithSecret({ ...profile }, { secret: "sk-live-1234" })
+    const result = await saveProfileWithSecret({ ...profile }, { secret: "sk-live-1234", expectedRevision: 1 })
 
-    // 顺序有意义：密钥先落地，配置才敢指向它。
-    expect(commands).toEqual(["save_secret", "upsert_provider_profile"])
+    expect(calls).toEqual([{
+      command: "update_provider_credentials",
+      args: { profileId: "openai", expectedRevision: 1, profileDraft: { ...profile }, newSecret: "sk-live-1234" }
+    }])
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.secretSaved).toBe(true)
@@ -140,45 +141,44 @@ describe("capture the secret first, then the profile — with a rollback", () =>
     }
   })
 
-  it("does not write the profile when the secret cannot be stored", async () => {
+  it("does not issue a legacy profile write when the native transaction cannot store the secret", async () => {
     const commands: string[] = []
     installInvoke(async (command) => {
       commands.push(command)
-      if (command === "save_secret") throw new Error("the credential store refused the operation")
-      return profile
+      throw new Error("the credential store refused the operation")
     })
 
     const result = await saveProfileWithSecret({ ...profile }, { secret: "sk-live-1234" })
 
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.code).toBe("secret_failed")
-    // 关键：配置**一次都没写** —— 否则会出现"配置指向一个不存在的密钥"。
-    expect(commands).toEqual(["save_secret"])
+    if (!result.ok) expect(result.code).toBe("ipc_failed")
+    expect(commands).toEqual(["update_provider_credentials"])
   })
 
-  it("rolls the secret back when the profile cannot be written", async () => {
+  it("never removes the previous credential when profile persistence fails", async () => {
     const commands: string[] = []
     installInvoke(async (command) => {
       commands.push(command)
-      if (command === "save_secret") return "saved"
-      if (command === "remove_secret") return null
       throw new Error("the provider configuration is not valid JSON")
     })
 
     const result = await saveProfileWithSecret({ ...profile }, { secret: "sk-live-1234" })
 
     expect(result.ok).toBe(false)
-    // 回滚：不留孤儿条目在凭据库里。
-    expect(commands).toEqual(["save_secret", "upsert_provider_profile", "remove_secret"])
+    expect(commands).toEqual(["update_provider_credentials"])
+    expect(commands).not.toContain("remove_secret")
   })
 
-  it("skips the credential store entirely when no secret was typed", async () => {
-    const commands: string[] = []
-    installInvoke(async (command) => { commands.push(command); return profile })
+  it("keeps credential ownership in the native command when no secret was typed", async () => {
+    const calls: { command: string; args?: Record<string, unknown> }[] = []
+    installInvoke(async (command, args) => {
+      calls.push({ command, args })
+      return { profile, credentialState: "unchanged", recoveryRequired: false }
+    })
 
     const result = await saveProfileWithSecret({ ...profile })
 
-    expect(commands).toEqual(["upsert_provider_profile"])
+    expect(calls).toEqual([{ command: "update_provider_credentials", args: { profileId: "openai", expectedRevision: undefined, profileDraft: { ...profile }, newSecret: undefined } }])
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.secretSaved).toBe(false)
   })

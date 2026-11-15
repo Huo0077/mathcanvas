@@ -236,6 +236,7 @@ fn profile(protocol: &str, dialect: &str, base_url: &str) -> ProviderProfile {
         base_url: base_url.to_string(),
         model_id: "m".to_string(),
         secret_ref: None,
+        credential_endpoint: None,
         capabilities: Vec::new(),
         network_policy: "cloud".to_string(),
         revision: 1,

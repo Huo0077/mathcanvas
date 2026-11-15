@@ -57,6 +57,8 @@ pub struct ProviderProfile {
     /// **只有引用**：真正的密钥在系统凭据库里（Task 1.2）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secret_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_endpoint: Option<String>,
     #[serde(default)]
     pub capabilities: Vec<CapabilityEvidence>,
     pub network_policy: String,
@@ -120,6 +122,8 @@ struct ProfilesFile {
     /// 等于让一次升级变成数据丢失，所以缺字段一律当"还没选"。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     active_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pending_credentials: Vec<CredentialTransaction>,
 }
 
 pub const PROFILES_SCHEMA_VERSION: u32 = 1;
@@ -178,7 +182,7 @@ impl ProviderProfileStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let path = path.as_ref().to_path_buf();
         if !path.exists() {
-            return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new(), active_profile_id: None } });
+            return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new(), active_profile_id: None, pending_credentials: Vec::new() } });
         }
         let text = fs::read_to_string(&path).map_err(|error| StoreError::Io { detail: format!("cannot read {}: {error}", path.display()) })?;
         let file: ProfilesFile = serde_json::from_str(&text).map_err(|error| StoreError::Io { detail: format!("the provider configuration is not valid JSON ({error}); fix or move {}", path.display()) })?;
@@ -234,7 +238,6 @@ impl ProviderProfileStore {
     /// `expected_revision` 是**乐观并发检查**：传 `Some(n)` 时，只有当前 revision 等于 `n`
     /// 才允许写。两个设置窗口同时开着时，后写的那个会拿到 `Invalid` 而不是把前一个覆盖掉。
     pub fn upsert(&mut self, profile: ProviderProfile, expected_revision: Option<u32>) -> Result<ProviderProfile, StoreError> {
-        // 先做结构检查（在任何写盘动作之前）。
         let value = serde_json::to_value(&profile).map_err(|error| StoreError::Io { detail: format!("cannot serialize the profile: {error}") })?;
         if let Some(field) = contains_secret_field(&value, 0) {
             return Err(StoreError::SecretInProfile { field });
@@ -242,7 +245,8 @@ impl ProviderProfileStore {
         self.validate(&profile)?;
 
         let existing = self.file.profiles.iter().position(|candidate| candidate.id == profile.id);
-        match existing {
+        let before = self.file.clone();
+        let updated = match existing {
             Some(index) => {
                 let current = &self.file.profiles[index];
                 if let Some(expected) = expected_revision {
@@ -250,41 +254,44 @@ impl ProviderProfileStore {
                         return Err(StoreError::Invalid { detail: format!("profile {} is at revision {}, not {expected}; reload before saving", profile.id, current.revision) });
                     }
                 }
-                // 修订号由**存储方**递增：调用方给的值一律忽略。
                 let mut updated = profile;
-                updated.revision = current.revision + 1;
+                updated.revision = current.revision.checked_add(1).ok_or_else(|| StoreError::Invalid { detail: "the provider profile revision is exhausted".to_string() })?;
                 self.file.profiles[index] = updated.clone();
-                self.save()?;
-                Ok(updated)
+                updated
             }
             None => {
-                // 新建时名字也不能重复（否则列表里两条一样的名字，用户分不清）。
                 if self.file.profiles.iter().any(|candidate| candidate.name == profile.name) {
                     return Err(StoreError::Invalid { detail: format!("another profile is already called {}", profile.name) });
                 }
                 let mut created = profile;
                 created.revision = 1;
                 self.file.profiles.push(created.clone());
-                self.save()?;
-                Ok(created)
+                created
             }
+        };
+        if let Err(error) = self.save() {
+            self.file = before;
+            return Err(error);
         }
+        Ok(updated)
     }
 
     pub fn remove(&mut self, id: &str) -> Result<(), StoreError> {
-        let before = self.file.profiles.len();
+        let before_count = self.file.profiles.len();
+        let before = self.file.clone();
         self.file.profiles.retain(|profile| profile.id != id);
-        if self.file.profiles.len() == before {
+        if self.file.profiles.len() == before_count {
             return Err(StoreError::NotFound { id: id.to_string() });
         }
-        // 健康记录跟着删：留着它会让"重新建一个同 id 的 profile"继承旧证据。
         self.file.health.remove(id);
-        // **选中被删掉时清空选中**：不清的话界面会一直显示"正在使用 X"，
-        // 而那一份配置已经不存在了 —— 那是最容易让人以为"还能用"的一种谎。
         if self.file.active_profile_id.as_deref() == Some(id) {
             self.file.active_profile_id = None;
         }
-        self.save()
+        if let Err(error) = self.save() {
+            self.file = before;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// 记一次健康检查。**证据必须带上它对应的 revision**。
@@ -297,6 +304,10 @@ impl ProviderProfileStore {
     }
 
     fn validate(&self, profile: &ProviderProfile) -> Result<(), StoreError> {
+        if profile.secret_ref.as_deref().is_some_and(|reference| !credential_reference_belongs(&profile.id, reference)) {
+            return Err(StoreError::Invalid { detail: "a profile may reference only its own credential".to_string() });
+        }
+        validate_credential_binding(profile).map_err(|detail| StoreError::Invalid { detail })?;
         if profile.id.trim().is_empty() {
             return Err(StoreError::Invalid { detail: "a provider profile needs an id".to_string() });
         }
@@ -352,6 +363,57 @@ pub fn timestamp_ms() -> i64 {
 
 // ---------------------------------------------------------------- 纯逻辑（IPC 命令的薄壳）
 
+const NATIVE_CREDENTIAL_PREFIX: &str = "native-v1:";
+
+pub fn native_credential_slot(profile_id: &str, revision: u32) -> String {
+    format!("{NATIVE_CREDENTIAL_PREFIX}{}:{profile_id}:{revision}", profile_id.len())
+}
+
+fn native_slot_owner(reference: &str) -> Option<&str> {
+    let rest = reference.strip_prefix(NATIVE_CREDENTIAL_PREFIX)?;
+    let (length, rest) = rest.split_once(':')?;
+    let length = length.parse::<usize>().ok()?;
+    let owner = rest.get(..length)?;
+    let revision = rest.get(length..)?.strip_prefix(':')?;
+    if owner.is_empty() || revision.parse::<u32>().ok().map_or(true, |revision| revision == 0) {
+        return None;
+    }
+    Some(owner)
+}
+
+pub fn credential_reference_belongs(profile_id: &str, reference: &str) -> bool {
+    if native_slot_owner(profile_id).is_some() {
+        return false;
+    }
+    reference == profile_id || native_slot_owner(reference) == Some(profile_id)
+}
+
+pub fn normalized_endpoint(input: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(input).map_err(|_| "the provider endpoint is not a valid absolute URL".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return Err("the provider endpoint must be an HTTP(S) URL without user info, query, or fragment".to_string());
+    }
+    if url.host_str().is_none() || url.port_or_known_default().is_none() {
+        return Err("the provider endpoint needs a host and effective port".to_string());
+    }
+    Ok(format!("{}{}", url.origin().ascii_serialization(), url.path().trim_end_matches('/')))
+}
+
+pub fn validate_credential_binding(profile: &ProviderProfile) -> Result<(), String> {
+    let Some(bound) = profile.credential_endpoint.as_deref() else {
+        if profile.secret_ref.as_deref().is_some_and(|reference| reference != profile.id) {
+            return Err("a versioned credential needs an endpoint binding".to_string());
+        }
+        return Ok(());
+    };
+    let bound = normalized_endpoint(bound).map_err(|error| format!("the credential endpoint binding is invalid: {error}"))?;
+    let requested = normalized_endpoint(&profile.base_url).map_err(|error| format!("the provider endpoint is invalid: {error}"))?;
+    if bound != requested {
+        return Err("the credential is bound to a different scheme, host, port, or base path".to_string());
+    }
+    Ok(())
+}
+
 /**
  * **校验并整理一份要被写入的 profile**（不碰磁盘）。
  *
@@ -371,4 +433,215 @@ pub fn prepare_profile(input: &serde_json::Value) -> Result<ProviderProfile, Sto
 /** 记健康记录之前先确认 profile 存在（拼出一个"孤立的证据"是没意义的）。 */
 pub fn prepare_health(profile_revision: u32) -> ProviderHealth {
     ProviderHealth { status: "unknown".to_string(), latency_ms: None, capability_evidence: Vec::new(), checked_at: now_ms(), profile_revision }
+}
+
+
+use crate::secrets::SecretStore;
+use std::collections::HashSet;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialState {
+    Unchanged,
+    Committed,
+    NeedsReauthorization,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CredentialTransactionStage {
+    Staged,
+    Committed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialTransaction {
+    pub profile_id: String,
+    pub new_slot: String,
+    pub previous_slot: Option<String>,
+    pub stage: CredentialTransactionStage,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialUpdate {
+    pub profile: ProviderProfile,
+    pub credential_state: CredentialState,
+    pub recovery_required: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CredentialUpdateError {
+    pub code: String,
+    pub message: String,
+    pub profile_unchanged: bool,
+    pub previous_credential_retained: bool,
+    pub recovery_required: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CredentialRecoveryReport {
+    pub recovered: usize,
+    pub pending: usize,
+}
+
+fn update_error(code: &str, message: impl Into<String>, recovery_required: bool) -> CredentialUpdateError {
+    CredentialUpdateError {
+        code: code.to_string(),
+        message: message.into(),
+        profile_unchanged: true,
+        previous_credential_retained: true,
+        recovery_required,
+    }
+}
+
+fn store_update_error(code: &str, error: StoreError) -> CredentialUpdateError {
+    update_error(code, error.to_string(), false)
+}
+
+fn slot_is_referenced(store: &ProviderProfileStore, slot: &str) -> bool {
+    store.file.profiles.iter().any(|profile| profile.secret_ref.as_deref().unwrap_or(&profile.id) == slot)
+}
+
+impl ProviderProfileStore {
+    pub fn pending_credentials(&self) -> Vec<CredentialTransaction> {
+        self.file.pending_credentials.clone()
+    }
+
+    pub fn register_credential_transaction(&mut self, transaction: CredentialTransaction) -> Result<(), StoreError> {
+        if self.file.pending_credentials.iter().any(|pending| pending.profile_id == transaction.profile_id) {
+            return Err(StoreError::Invalid { detail: format!("profile {} already has a credential recovery pending", transaction.profile_id) });
+        }
+        let before = self.file.clone();
+        self.file.pending_credentials.push(transaction);
+        if let Err(error) = self.save() {
+            self.file = before;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub fn mark_credential_committed(&mut self, profile_id: &str, new_slot: &str) -> Result<(), StoreError> {
+        let before = self.file.clone();
+        let pending = self.file.pending_credentials.iter_mut().find(|pending| pending.profile_id == profile_id && pending.new_slot == new_slot)
+            .ok_or_else(|| StoreError::Invalid { detail: "the credential transaction is not registered".to_string() })?;
+        pending.stage = CredentialTransactionStage::Committed;
+        if let Err(error) = self.save() {
+            self.file = before;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub fn clear_credential_transaction(&mut self, profile_id: &str, new_slot: &str) -> Result<(), StoreError> {
+        let before = self.file.clone();
+        self.file.pending_credentials.retain(|pending| pending.profile_id != profile_id || pending.new_slot != new_slot);
+        if let Err(error) = self.save() {
+            self.file = before;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    pub fn recover_provider_credentials<S: SecretStore + ?Sized>(&mut self, secrets: &S) -> CredentialRecoveryReport {
+        let transactions = self.file.pending_credentials.clone();
+        let mut recovered = 0;
+        for transaction in transactions {
+            let references: HashSet<String> = self.file.profiles.iter().map(|profile| profile.secret_ref.clone().unwrap_or_else(|| profile.id.clone())).collect();
+            let mut complete = true;
+            let slots = [Some(transaction.new_slot.clone()), transaction.previous_slot.clone()].into_iter().flatten().collect::<HashSet<_>>();
+            for slot in slots {
+                if !references.contains(&slot) && secrets.remove(&slot).is_err() {
+                    complete = false;
+                }
+            }
+            if complete && self.clear_credential_transaction(&transaction.profile_id, &transaction.new_slot).is_ok() {
+                recovered += 1;
+            }
+        }
+        CredentialRecoveryReport { recovered, pending: self.file.pending_credentials.len() }
+    }
+}
+
+pub fn update_provider_credentials<S: SecretStore + ?Sized>(
+    store: &mut ProviderProfileStore,
+    secrets: &S,
+    mut prepared: ProviderProfile,
+    expected_revision: Option<u32>,
+    new_secret: Option<&str>,
+) -> Result<CredentialUpdate, CredentialUpdateError> {
+    if store.recover_provider_credentials(secrets).pending > 0 {
+        return Err(update_error("recovery_required", "a previous credential cleanup must be recovered before editing providers", true));
+    }
+    if new_secret.is_some_and(str::is_empty) {
+        return Err(update_error("invalid_secret", "an empty secret must not be stored", false));
+    }
+
+    let existing = store.get(&prepared.id);
+    if let Some(expected) = expected_revision {
+        let actual = existing.as_ref().map(|profile| profile.revision);
+        if actual != Some(expected) {
+            return Err(update_error("revision_conflict", format!("profile {} is at revision {:?}, not {expected}; reload before saving", prepared.id, actual), false));
+        }
+    }
+
+    let Some(secret) = new_secret else {
+        if let Some(previous) = existing {
+            let reference = previous.secret_ref.clone().unwrap_or_else(|| previous.id.clone());
+            let has_secret = secrets.has(&reference).map_err(|error| update_error("secret_store_failed", error.to_string(), false))?;
+            if has_secret && normalized_endpoint(&previous.base_url).ok() != normalized_endpoint(&prepared.base_url).ok() {
+                return Err(update_error("needs_reauthorization", "changing the endpoint requires entering the credential again", false));
+            }
+            prepared.secret_ref = previous.secret_ref;
+            prepared.credential_endpoint = previous.credential_endpoint;
+        } else {
+            prepared.credential_endpoint = None;
+        }
+        let profile = store.upsert(prepared, expected_revision).map_err(|error| store_update_error("store_failed", error))?;
+        return Ok(CredentialUpdate { profile, credential_state: CredentialState::Unchanged, recovery_required: false });
+    };
+
+    let next_revision = existing.as_ref().map_or(Ok(1), |profile| profile.revision.checked_add(1).ok_or(()))
+        .map_err(|_| update_error("revision_conflict", "the provider profile revision is exhausted", false))?;
+    let new_slot = native_credential_slot(&prepared.id, next_revision);
+    let endpoint = normalized_endpoint(&prepared.base_url).map_err(|error| update_error("invalid_endpoint", error, false))?;
+    let previous_slot = existing.as_ref().map(|profile| profile.secret_ref.clone().unwrap_or_else(|| profile.id.clone()));
+    let transaction = CredentialTransaction {
+        profile_id: prepared.id.clone(),
+        new_slot: new_slot.clone(),
+        previous_slot,
+        stage: CredentialTransactionStage::Staged,
+    };
+    store.register_credential_transaction(transaction.clone()).map_err(|error| store_update_error("store_failed", error))?;
+    if let Err(error) = secrets.put(&new_slot, secret) {
+        let _ = store.clear_credential_transaction(&prepared.id, &new_slot);
+        let recovery = store.pending_credentials().iter().any(|pending| pending.profile_id == prepared.id && pending.new_slot == new_slot);
+        return Err(update_error("secret_store_failed", error.to_string(), recovery));
+    }
+
+    prepared.secret_ref = Some(new_slot.clone());
+    prepared.credential_endpoint = Some(endpoint);
+    if let Err(error) = store.upsert(prepared.clone(), expected_revision) {
+        let removed = secrets.remove(&new_slot).is_ok();
+        if removed {
+            let _ = store.clear_credential_transaction(&prepared.id, &new_slot);
+        }
+        let recovery = store.pending_credentials().iter().any(|pending| pending.profile_id == prepared.id && pending.new_slot == new_slot);
+        return Err(update_error("store_failed", error.to_string(), recovery));
+    }
+
+    let profile = store.get(&prepared.id).ok_or_else(|| update_error("store_failed", "the committed profile cannot be read", true))?;
+    let _ = store.mark_credential_committed(&prepared.id, &new_slot);
+    let mut cleanup_failed = false;
+    if let Some(previous) = transaction.previous_slot {
+        if previous != new_slot && !slot_is_referenced(store, &previous) && secrets.remove(&previous).is_err() {
+            cleanup_failed = true;
+        }
+    }
+    if cleanup_failed || store.clear_credential_transaction(&prepared.id, &new_slot).is_err() {
+        return Ok(CredentialUpdate { profile, credential_state: CredentialState::Committed, recovery_required: true });
+    }
+    Ok(CredentialUpdate { profile, credential_state: CredentialState::Committed, recovery_required: false })
 }

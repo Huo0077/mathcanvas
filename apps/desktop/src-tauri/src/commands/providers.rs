@@ -213,9 +213,49 @@ pub fn list_provider_profiles(app: tauri::AppHandle) -> Result<Vec<ProviderProfi
 #[tauri::command]
 pub fn upsert_provider_profile(app: tauri::AppHandle, profile: serde_json::Value, expected_revision: Option<u32>) -> Result<ProviderProfile, String> {
     let prepared = repository::provider_profiles::prepare_profile(&profile).map_err(store_error)?;
+    let secrets = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
     let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
     let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
-    store.upsert(prepared, expected_revision).map_err(store_error)
+    repository::provider_profiles::update_provider_credentials(&mut store, &secrets.0, prepared, expected_revision, None)
+        .map(|update| update.profile)
+        .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| "the provider update failed".to_string()))
+}
+
+#[tauri::command]
+pub fn update_provider_credentials(
+    app: tauri::AppHandle,
+    profile_id: String,
+    expected_revision: Option<u32>,
+    profile_draft: serde_json::Value,
+    new_secret: Option<String>,
+) -> Result<repository::provider_profiles::CredentialUpdate, serde_json::Value> {
+    let prepared = repository::provider_profiles::prepare_profile(&profile_draft).map_err(|error| serde_json::json!({
+        "code": "invalid_profile", "message": error.to_string(), "profileUnchanged": true,
+        "previousCredentialRetained": true, "recoveryRequired": false
+    }))?;
+    if prepared.id != profile_id {
+        return Err(serde_json::json!({
+            "code": "invalid_profile", "message": "profileId must match profileDraft.id", "profileUnchanged": true,
+            "previousCredentialRetained": true, "recoveryRequired": false
+        }));
+    }
+    let secrets = app.try_state::<SecretStoreState>().ok_or_else(|| serde_json::json!({
+        "code": "missing_state", "message": "the secret store is not initialised", "profileUnchanged": true,
+        "previousCredentialRetained": true, "recoveryRequired": false
+    }))?;
+    let state = app.try_state::<ProfileStoreState>().ok_or_else(|| serde_json::json!({
+        "code": "missing_state", "message": "the provider store is not initialised", "profileUnchanged": true,
+        "previousCredentialRetained": true, "recoveryRequired": false
+    }))?;
+    let mut store = state.store.lock().map_err(|_| serde_json::json!({
+        "code": "missing_state", "message": "the provider store is poisoned", "profileUnchanged": true,
+        "previousCredentialRetained": true, "recoveryRequired": false
+    }))?;
+    repository::provider_profiles::update_provider_credentials(&mut store, &secrets.0, prepared, expected_revision, new_secret.as_deref())
+        .map_err(|error| serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({
+            "code": "unknown", "message": "the provider update failed", "profileUnchanged": true,
+            "previousCredentialRetained": true, "recoveryRequired": true
+        })))
 }
 
 /// **删除一份 provider 配置**（健康记录一并删除）。

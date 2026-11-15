@@ -34,6 +34,7 @@ export interface ProviderProfile {
   modelId: string
   /** **只有引用**：真正的密钥在系统凭据库里。 */
   secretRef?: string
+  credentialEndpoint?: string
   capabilities: CapabilityEvidence[]
   networkPolicy: NetworkPolicy
   revision: number
@@ -219,44 +220,25 @@ export function isVerified(profile: ProviderProfile, feature: string, health: Pr
   return isCapabilityVerified(profile.capabilities, feature, profile.revision, health ?? undefined)
 }
 
-/**
- * **保存一份配置，并（可选）把密钥写进凭据库**。
- *
- * ## 为什么这一步要单独有一个函数，而不是让界面自己调两次
- *
- * 因为**顺序**是有意义的，而且错一次就会留下不一致：
- * 1. 先把密钥写进凭据库 —— 失败就**不动配置**（否则会出现"配置指向一个不存在的密钥"，
- *    界面显示已配置、请求却拿不到密钥）；
- * 2. 再写配置，`secretRef` 指向刚存进去的条目；
- * 3. **配置写失败要回滚密钥** —— 否则凭据库里留下一个没人引用的孤儿条目
- *    （用户看不到它，但它确实占着一格）。
- *
- * 把这三步放在一个函数里，"顺序"与"回滚"就只有一处实现；放在界面里，
- * 每个调用点都要自己想一遍，而漏掉回滚的那一次没人会发现。
- */
+/** 原生端以一次事务决定密钥槽、endpoint绑定和失败恢复，renderer不得自行补偿旧密钥。 */
 export async function saveProfileWithSecret(
   profile: Record<string, unknown>,
   options: { secret?: string; expectedRevision?: number } = {}
 ): Promise<{ ok: true; profile: ProviderProfile; secretSaved: boolean } | { ok: false; code: string; detail: string }> {
-  // 动态导入：`secretClient` 会用到同一个 IPC 入口，静态导入在这里没有额外好处，
-  // 而动态导入让本模块的**纯函数部分**（例如 `findSecretField`）可以在不加载它的情况下被测试。
-  const { saveSecret, removeSecret } = await import("./secretClient")
-  const profileId = typeof profile.id === "string" ? profile.id : ""
-  const secret = options.secret ?? ""
-  let secretSaved = false
-
-  if (secret.length > 0) {
-    const saved = await saveSecret(profileId, secret)
-    if (!saved.ok) return { ok: false, code: saved.code === "no_desktop_shell" ? "no_desktop_shell" : "secret_failed", detail: saved.detail }
-    secretSaved = true
+  const secretField = findSecretField(profile)
+  if (secretField) {
+    return { ok: false, code: "secret_not_allowed", detail: `a provider profile must not carry \`${secretField}\`; use the native credential transaction` }
   }
-
-  const written = await upsertProviderProfile(profile, options.expectedRevision)
-  if (!written.ok) {
-    // 回滚：配置没写成功，刚存进去的密钥就是孤儿。
-    if (secretSaved) await removeSecret(profileId)
-    return { ok: false, code: written.code, detail: written.detail }
+  try {
+    const raw = await invokeDesktop<{ profile: ProviderProfile }>("update_provider_credentials", {
+      profileId: typeof profile.id === "string" ? profile.id : "",
+      expectedRevision: options.expectedRevision,
+      profileDraft: profile,
+      newSecret: options.secret
+    })
+    return { ok: true, profile: raw.profile, secretSaved: options.secret !== undefined && options.secret.length > 0 }
+  } catch (error) {
+    if (error instanceof NoDesktopShellError) return { ok: false, code: "no_desktop_shell", detail: error.message }
+    return { ok: false, code: "ipc_failed", detail: error instanceof Error ? error.message : String(error) }
   }
-
-  return { ok: true, profile: written.value, secretSaved }
 }

@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-15 —— G1/G2启动与R02原生凭据安全
+
+- 新增原生 `update_provider_credentials` 事务：密钥槽由Rust按profile和revision生成并绑定规范化endpoint，配置提交后才清理旧槽；失败与崩溃可按实际引用恢复，不再由renderer覆盖后删除旧密钥。
+- 存储与发送均拒绝跨profile引用；无可信endpoint绑定的旧凭据须重新输入授权。旧upsert走同一事务，legacy写删不能覆盖已有凭据或删除当前引用，前端改为单命令，启动时自动恢复。
+- 完整Rust 297项通过+4ignored，Vitest 522文件/5560通过+1todo，类型检查通过。证据见 [R02凭据安全记录](docs/audit/2026-11-15-provider-credential-safety/README.md)。R02完成不表示G1/G2整体关闭，下一工作包为R03。
+
 ## 2026-11-15 —— R00–R10首批安全与可信度整改
 
 - 建立 `feature/drawing-reliability-execution` 执行分支，文档基线 `3856263f` 与隔离 worktree 配置 `be3f00bf` 已推送。

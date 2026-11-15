@@ -21,7 +21,7 @@
 use std::collections::HashMap;
 
 use mathcanvas_desktop_lib::secrets::{
-    SecretError, SecretState, SecretStore, Store, ACTIVE_BACKEND, MEMORY_BACKED_MESSAGE,
+    SecretError, SecretState, SecretStore, ACTIVE_BACKEND, MEMORY_BACKED_MESSAGE,
 };
 
 /// **内存后端**（测试与无凭据管理器的环境）。
@@ -41,19 +41,7 @@ fn exposes_the_vocabulary_the_callers_need() {
     assert!(store.is_empty());
 }
 
-/// 本文件里会**真的落到凭据管理器**的用例，各自使用的 profile 名。
-///
-/// 两条纪律，缺一条就会伤到用户的真实凭据库：
-///
-/// 1. **不能等于任何真实 profile id**。`stores_checks_and_removes_a_secret` 会对它调 `remove` ——
-///    那一步在 Windows 后端上就是**删掉用户在界面上配好的那一格密钥**。
-/// 2. **两两不同**。两条用例并排跑时，一条的 `put` 会把另一条的 `has` 翻成 `true`。
-///    这条不是假想：本文件曾在 `cargo test --test secrets` 下报
-///    `assertion failed: !store.has("openai").expect("has after remove")`，
-///    而同一进程里 `never_puts_the_secret_into_an_error_message` 正在写同一格 `openai`。
-///
-/// 名字都必须进 `SCRATCH_PROFILES` 那份清单 —— 那张表是用例之间的唯一约定。
-/// `__test__` 前缀还兼一个作用：跑崩的进程留下的条目，一眼能认出是测试垃圾而不是用户的密钥。
+/// 常规用例只操作内存后端；测试槽仍不得等于真实 profile id，且两两不同，避免共享状态掩盖回归。
 const SCRATCH_ROUNDTRIP: &str = "__test__put-has-remove";
 const SCRATCH_MISSING: &str = "__test__never-saved";
 const SCRATCH_LENDING: &str = "__test__with-secret";
@@ -75,52 +63,26 @@ const SCRATCH_PROFILES: &[&str] = &[
 /// `ds.MathCanvas` 三条的服务实例名就是它们）。
 const REAL_PROFILE_IDS: &[&str] = &["openai", "anthropic", "ds"];
 
-/// **借一格测试用凭据**：进来先清干净，出去（含 panic）一定删掉。
-///
-/// 为什么必须有这个东西：`create_store()` 在 Windows 上给的是**真实**凭据管理器后端，
-/// 这几条常规用例是真的往用户凭据库里写。没有守卫时它们会（a）删掉用户的真实密钥、
-/// （b）把 `sk-test-1234`、`sk-ant-test` 这类夹具留在用户库里 —— 两件都在本机实测到了。
-struct ScratchCredential<'a> {
-    store: &'a Store,
+/// 常规用例只在内存后端借测试槽，进入和退出（含 panic）都清理，不触碰真实系统凭据库。
+struct ScratchCredential<'a, S: SecretStore> {
+    store: &'a S,
     profile: &'static str,
 }
 
-impl<'a> ScratchCredential<'a> {
-    fn new(store: &'a Store, profile: &'static str) -> Self {
-        // 起点必须干净：上一次跑崩留下的条目不能影响这一次的结论。
+impl<'a, S: SecretStore> ScratchCredential<'a, S> {
+    fn new(store: &'a S, profile: &'static str) -> Self {
         let _ = store.remove(profile);
         Self { store, profile }
     }
 }
 
-impl Drop for ScratchCredential<'_> {
+impl<S: SecretStore> Drop for ScratchCredential<'_, S> {
     fn drop(&mut self) {
         let _ = self.store.remove(self.profile);
     }
 }
 
-/// **真的落到同一个 Windows 凭据服务的用例必须串行**（2026-10-05）。
-///
-/// ## 为什么要有这把锁（有实测，不是防御性编程）
-///
-/// 本文件曾以约 1/15 的概率红在 `lends_the_secret_to_a_closure_and_nothing_else`：
-/// `put` 成功之后，紧接着的 `with_secret` 读回 `None`（`keyring::Error::NoEntry`）。
-/// 判别实验把范围缩到"并行"这一件事上：
-///
-/// - **默认并行**跑 `--test secrets`：15 次里红 1 次；
-/// - **`-- --test-threads=1`**：20 次全绿。
-///
-/// 而"别的用例把它删了"这条**已经被排除**：每个用例用各自的 profile 名
-///（见 `SCRATCH_PROFILES` 与那条等集断言），`__probe__` 那条是 `#[ignore]`。
-/// 剩下的是**同一个凭据服务**（`SERVICE = "MathCanvas"`）上的并发操作：
-/// 各用例 target 不同，但共享同一个服务名，而 `keyring` 的 Windows 后端存在
-/// `Error::Ambiguous`（"matched more than one entry"）这种枚举语义 ——
-/// 并发写/删会让另一次查找**瞬时**看不到条目。
-///
-/// ## 这把锁**不**掩盖任何东西
-///
-/// 它只让**测试 harness** 不再制造一个产品里不存在的场景（产品里凭据的存/删是用户逐次触发的）。
-/// 它**不**主张"产品对并发凭据访问是安全的" —— 那件事本文件没有测，也没有因为这把锁变成已测。
+/// 保留串行测试锁，避免共享后端的并发操作掩盖定位；当前常规用例只使用内存后端。
 static STORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// 取那把锁。**中毒也继续**（`into_inner`）：一条用例炸了不该让后面每一条都跟着报错 ——
@@ -149,7 +111,7 @@ fn scratch_profiles_are_distinct_and_never_a_real_profile_id() {
 #[test]
 fn stores_checks_and_removes_a_secret() {
     let _guard = store_lock();
-    let store = mathcanvas_desktop_lib::secrets::create_store();
+    let store = mathcanvas_desktop_lib::secrets::memory::create();
     let slot = ScratchCredential::new(&store, SCRATCH_ROUNDTRIP);
 
     assert_eq!(store.put(slot.profile, "sk-test-1234").expect("put"), SecretState::Saved);
@@ -162,7 +124,7 @@ fn stores_checks_and_removes_a_secret() {
 #[test]
 fn reports_a_missing_key_as_missing_rather_than_as_a_failure() {
     let _guard = store_lock();
-    let store = mathcanvas_desktop_lib::secrets::create_store();
+    let store = mathcanvas_desktop_lib::secrets::memory::create();
     let slot = ScratchCredential::new(&store, SCRATCH_MISSING);
 
     assert!(!store.has(slot.profile).expect("has must not fail for a missing key"));
@@ -173,7 +135,7 @@ fn reports_a_missing_key_as_missing_rather_than_as_a_failure() {
 #[test]
 fn lends_the_secret_to_a_closure_and_nothing_else() {
     let _guard = store_lock();
-    let store = mathcanvas_desktop_lib::secrets::create_store();
+    let store = mathcanvas_desktop_lib::secrets::memory::create();
     let slot = ScratchCredential::new(&store, SCRATCH_LENDING);
     store.put(slot.profile, "sk-ant-test").expect("put");
 
@@ -192,7 +154,7 @@ fn lends_the_secret_to_a_closure_and_nothing_else() {
 #[test]
 fn never_puts_the_secret_into_an_error_message() {
     let _guard = store_lock();
-    let store = mathcanvas_desktop_lib::secrets::create_store();
+    let store = mathcanvas_desktop_lib::secrets::memory::create();
     let slot = ScratchCredential::new(&store, SCRATCH_LEAK_CHECK);
     let secret = "sk-super-secret-value-9f3a2b";
 
@@ -209,7 +171,7 @@ fn never_puts_the_secret_into_an_error_message() {
 #[test]
 fn refuses_an_empty_profile_id_or_an_empty_secret() {
     let _guard = store_lock();
-    let store = mathcanvas_desktop_lib::secrets::create_store();
+    let store = mathcanvas_desktop_lib::secrets::memory::create();
 
     // 这条用例**什么都不会写**（三次调用都在校验处就被拒），但名字仍按规矩来：
     // 哪天校验被挪到写入之后，它不会突然开始动用户的真实格子。
@@ -293,4 +255,59 @@ fn the_windows_backend_really_stores_and_deletes_a_credential() {
     assert!(!store.has(profile).expect("has after remove"));
     // 删两次不是错误（界面按钮可能被点两次）。
     store.remove(profile).expect("remove must be idempotent");
+}
+
+
+#[test]
+fn legacy_secret_writes_cannot_replace_existing_or_versioned_credentials() {
+    use mathcanvas_desktop_lib::commands::secrets::legacy_secret_write_allowed;
+    use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
+
+    let legacy = |secret_ref: &str, credential_endpoint: Option<&str>| {
+        serde_json::from_value::<ProviderProfile>(serde_json::json!({
+            "id": "openai",
+            "name": "OpenAI",
+            "protocol": "openai_compatible",
+            "dialect": "openai_native",
+            "baseUrl": "https://api.openai.com/v1",
+            "modelId": "gpt-5",
+            "secretRef": secret_ref,
+            "credentialEndpoint": credential_endpoint,
+            "networkPolicy": "cloud",
+            "revision": 1
+        })).expect("profile")
+    };
+
+    assert!(legacy_secret_write_allowed(None, false).is_err());
+    assert!(legacy_secret_write_allowed(Some(&legacy("native-v1:6:openai:2", Some("https://api.openai.com/v1"))), false).is_err());
+    assert!(legacy_secret_write_allowed(Some(&legacy("openai", None)), true).is_err());
+    assert!(legacy_secret_write_allowed(Some(&legacy("openai", None)), false).is_ok());
+}
+
+
+#[test]
+fn legacy_secret_removal_cannot_orphan_a_current_profile() {
+    use mathcanvas_desktop_lib::commands::secrets::secret_removal_allowed;
+    use mathcanvas_desktop_lib::repository::provider_profiles::ProviderProfile;
+
+    let profile = |id: &str, secret_ref: &str| {
+        serde_json::from_value::<ProviderProfile>(serde_json::json!({
+            "id": id,
+            "name": id,
+            "protocol": "openai_compatible",
+            "dialect": "openai_native",
+            "baseUrl": "https://api.openai.com/v1",
+            "modelId": "gpt-5",
+            "secretRef": secret_ref,
+            "credentialEndpoint": if secret_ref == id { None } else { Some("https://api.openai.com/v1") },
+            "networkPolicy": "cloud",
+            "revision": 1
+        })).expect("profile")
+    };
+    let profiles = vec![profile("openai", "native-v1:6:openai:2"), profile("legacy", "legacy")];
+
+    assert!(!secret_removal_allowed(&profiles, "native-v1:6:openai:2"));
+    assert!(!secret_removal_allowed(&profiles, "legacy"));
+    assert!(secret_removal_allowed(&profiles, "openai"), "an unrelated legacy orphan may be cleaned");
+    assert!(secret_removal_allowed(&profiles, "native-v1:6:openai:1"), "an unreferenced old slot may be cleaned");
 }
