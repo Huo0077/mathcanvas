@@ -1,5 +1,10 @@
 # Engineering Workbench Hierarchy Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划的 **Task 1–7 全部完成**——图层 / 图纸 / 视图文档模型、可撤销的图层与布局操作、工作台壳（CommandBar / StatusBar / EngineeringWorkbench）、模型树 · 图层树 · 图纸树、图纸视口与 2D 直接绘图、上下文 Inspector、迁移与 E2E 都在产品里；随后针对三条用户反馈补做的「Follow-up: CAD usability fixes」（2D 绘图命令组出图纸、投影来源切换、截面 / 截线虚线预览与点击创建）也已完成。**之后又追加**：工程标注（线性 / 角度 / 公差）、SVG / DXF / PDF 导出（现在导出全部视图）、夹点编辑与键盘操作。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

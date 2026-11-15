@@ -1,5 +1,10 @@
 # 3D Measurement Visualization and Quality Baseline Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——ESLint 基线与确定性的 Vite/预览命令、撤销历史上限、纯函数化的测量可视化描述、3D 画布测量标注与上下文引导、以及全量验证与文档都已落地（见 `docs/feature-catalog.md` 的「测量二面角 / 3D 标注」条目与 `docs/project-progress.md` 的 P6 v3 各节）。下面的复选框保留历史原貌（未逐条勾选）；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** Implement task-by-task with a test-first cycle. Do not commit unless the user explicitly requests it.

@@ -1,5 +1,10 @@
 # 多模态数理与工程交互绘图引擎 MVP Foundation Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划范围内的功能**已交付**——工作台 + 双直线与交点、参数滑块驱动重算、`.mgeo` 保存/恢复、补丁校验与撤销/重做都已进入产品。下面的复选框保留历史原貌（未逐条勾选）；本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)，交付证据与门禁数字以它为准（对应「P0 技术验证」「P1 数学内核」两节）。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use TDD for each behavior and verification-before-completion before claiming a milestone is complete.

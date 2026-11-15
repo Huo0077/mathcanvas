@@ -1,5 +1,10 @@
 # 下一阶段 Agent 完整升级设计：约束求解、动态保持、形式证明与开放题理解
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **范围提示（2026-10-06）**：这是旧 N1–N6 范围的阶段记录，旧复选框状态保持原义。用户新确定的“2025 修订高中课程/高考全题型 + 安全自动调用 Lean”尚未实施；新范围见 [设计](../specs/2026-10-06-high-school-auto-lean-design.md)、[计划](../plans/2026-10-06-agent-next-round-implementation-plan.md) 和 [进度](../../agent-next-round-progress.md)。不要把旧 N5 的一类条件引理当作新目标完成。
 
 > 日期：2026-10-04

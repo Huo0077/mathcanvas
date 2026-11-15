@@ -1,5 +1,10 @@
 # P7 工程制图 MVP Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划的 **P7-1 〜 P7-6 全部完成**——投影内核（`projections3d.ts`）、renderer-neutral 的 `ProjectedDrawing`、四视图工作台、投影线与来源切换、工程标注（线性 / 角度 / 公差）、SVG / DXF / PDF 导出都已进入产品；工程工作台的层次化改造见 `2026-09-15-engineering-workbench-hierarchy.md`。两处后续变化：导出**不再截断到 4 个视图**，PDF 对 WinAnsi 之外的字符做替换而不是整体失败。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

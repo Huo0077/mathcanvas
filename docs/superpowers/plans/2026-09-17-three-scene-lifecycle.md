@@ -1,5 +1,10 @@
 # 3D 渲染管道去重建化 实施计划（切片 1A-1）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：**已完成**（含紧随其后的 1A-1b）——渲染器在一次挂载内只建一次、内容同步签名抽成纯函数、`data-scene-builds` / `data-scene-syncs` 读数都在产品里；本片计划末尾列出的"D 组仍未做"三项（按图元增量同步、相机跨工作区保留、`threeScene.tsx` 按职责拆分）随后也逐项做完（见 `docs/project-progress-early.md` 的「场景增量同步与相机记忆」与「threeScene 按职责拆成独立模块」两节）。同方向最新进展：预览内容签名会带 `label` / `focused`，`cameraDragMode` 让 Shift 中途按下也能平移。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

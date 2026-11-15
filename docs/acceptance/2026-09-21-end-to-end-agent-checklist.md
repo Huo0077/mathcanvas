@@ -1,5 +1,10 @@
 # 端到端验收清单：桌面版 Agent 走一轮真实模型
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../current-status.md)；执行顺序统一按[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > 这份清单存在的理由：**最后一段路只能由人在本机点**——设置表单在 WebView2 窗口里，
 > 从外部驱动不了。前面所有环节都已经被自动化验证过（Rust 193 例、单测 2192 例、e2e 122 条、
 > 以及对 DeepSeek 的 `provider_live` 两条真实往返），所以这一遍要确认的是**它们连起来还成不成**。

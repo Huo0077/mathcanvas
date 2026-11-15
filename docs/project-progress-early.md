@@ -1,5 +1,10 @@
 # MathCanvas 项目进度（早期归档：2026-09-12 ～ 2026-10-06）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](current-status.md)；执行顺序统一按[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > 本文件从 [`docs/project-progress.md`](project-progress.md) 拆出（2026-10-24）。这里保留 2026-09 的过程记录，以及历史上后补在文件末尾的 2026-10-04～10-06 条目。
 > **当前状态**见 [`docs/current-status.md`](current-status.md)；2026-10-01 之后的记录留在主文件。
 

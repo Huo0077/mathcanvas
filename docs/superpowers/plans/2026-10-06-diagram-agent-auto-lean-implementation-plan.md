@@ -1,5 +1,10 @@
 # 高中作图题 Agent 与自动 Lean 实施计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Each task uses `- [ ]` checkboxes, RED→GREEN and an independently reviewable commit; do not spawn agents unless the user separately asks.
 > **状态（2026-10-06）**：按用户最新裁决只覆盖确实需要作图的题；V0 已有作图候选目录与四家族 12 条**内部文字/坐标候选**，还不是图元运行证据；V1–V3 未实施。原 [全课程路线](2026-10-06-agent-next-round-implementation-plan.md) 除已核实的来源与之前审查记录外均为历史范围。
 

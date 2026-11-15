@@ -1,5 +1,10 @@
 # 欠定图形的见证生成与关系核验 实施计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态：** **已合并进 `main`（未打包、未发布）；但"能画出来"≠"画对了"** —— 详见下方「发版之后的翻转」与 [`current-status.md`](../../current-status.md) §四「当前最严重的问题」。设计见 [`../specs/2026-10-03-underdetermined-witness-relations-design.md`](../specs/2026-10-03-underdetermined-witness-relations-design.md)。
 >
 > **执行过程中的两处偏离（都已留档）**：① **Task 4 的 `polyhedron` 见证族在本批没有产品调用点** —— 预检扫描时查实 `selectWitness` 只被 `parameterAudit` 以 triangle/prism 调用，所以它照旧实现但**不算本批收益**，真正解掉报障的是 Task 5 的关系核验（见下方「执行前的范围裁定」）；② **Task 7 由端到端用例抓出一个真缺陷并修好** —— `relations` 在 `coordinator → committer → draftStore` 链路上被两处"按 actions 重造信封"丢掉，于是关系核验在真实运行时恒失败，而 7 条编译器用例全绿也发现不了。修复提交 `99ba741`。

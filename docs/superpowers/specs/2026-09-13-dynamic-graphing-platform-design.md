@@ -1,5 +1,10 @@
 # 动态数学绘图平台设计规格
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 **日期：** 2026-09-13  
 **状态：** 已实现（2026-09-17 复核）——表达式语言扩充、函数预设、点标签与引用联动都已进入产品；**唯一没有落地的是本文里的「参数播放 / 暂停 / 停止 / 循环 / 往返」界面控制**：逐帧播放只剩首尾两帧可见，用户要求删除，2026-09-17 已把该面板与入口移除（内核算术模块保留并有单测），动点改由画布拖动与「路径参数」输入框驱动。对应计划 [`2026-09-13-dynamic-graphing-platform.md`](../plans/2026-09-13-dynamic-graphing-platform.md)。当前门禁见 [`docs/project-progress.md`](../../project-progress.md)。  
 **关联调研：** [`docs/research/graphing-tools.md`](../../research/graphing-tools.md)  

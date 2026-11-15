@@ -1,5 +1,10 @@
 # 点驱动三维几何设计规格
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 **日期：** 2026-09-14  
 **状态：** 已全部实现（2026-09-17 复核）——9 个切片完成，另外追加了绑定宿主 / 实体内体积宿主、交面·交线·交点图元、自动取景与相机记忆、固定 1 单位网格。当前门禁见 [`docs/project-progress.md`](../../project-progress.md)。  
 **关联计划：** [`2026-09-14-point-driven-3d-geometry.md`](../plans/2026-09-14-point-driven-3d-geometry.md)  

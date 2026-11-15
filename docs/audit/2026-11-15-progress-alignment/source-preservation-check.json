@@ -1,0 +1,1149 @@
+{
+  "method": "Remove exactly the added byte range and compare every remaining byte to pre-turn content; hash immutable files directly.",
+  "historicalFiles": 95,
+  "historicalBodiesPreserved": 95,
+  "historyMarkerIssues": [],
+  "history": [
+    {
+      "file": "docs/acceptance/2026-09-12-week-one.md",
+      "insertOffset": 24,
+      "insertBytes": 757,
+      "beforeSha256": "94f92d72a1a937a9b0ab28394e750b588b2c0c2581f6fb78b6f662053c92326d",
+      "afterSha256": "2da541a60b512ce757ab44f7fe448326d68a584c4a16a8da0cdafecb9f3123bc",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "94f92d72a1a937a9b0ab28394e750b588b2c0c2581f6fb78b6f662053c92326d"
+    },
+    {
+      "file": "docs/acceptance/2026-09-21-end-to-end-agent-checklist.md",
+      "insertOffset": 64,
+      "insertBytes": 757,
+      "beforeSha256": "b5719c41dae44879d747eb8205bb8c2f859a562adeff6a7cfefe0ab2c1d0e215",
+      "afterSha256": "a54bf28ac6d675c21f72f6e2d5d99c97e2cf466878d937f1c3d6c2d1cb0fb21c",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "b5719c41dae44879d747eb8205bb8c2f859a562adeff6a7cfefe0ab2c1d0e215"
+    },
+    {
+      "file": "docs/acceptance/next-phase-flag-and-dependency-review.md",
+      "insertOffset": 65,
+      "insertBytes": 762,
+      "beforeSha256": "8940de1f315e310048728e16d027e5af58d70c920ebeaea3b4e1ea413d23163e",
+      "afterSha256": "19c2d1dcd6ba932a7be909ead04c2fe6bb65be4f65cb5892547923bb2ce9542a",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "8940de1f315e310048728e16d027e5af58d70c920ebeaea3b4e1ea413d23163e"
+    },
+    {
+      "file": "docs/agent-generalization-task-list-20261019.md",
+      "insertOffset": 54,
+      "insertBytes": 753,
+      "beforeSha256": "21483a21e109abf871f9aeb9e4e69a6725761010e3e1846abcf7e752732a8071",
+      "afterSha256": "094f6034c97da601dd2ac89deebe1afcf181847017e35bc2bd65c137cfa405e0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "21483a21e109abf871f9aeb9e4e69a6725761010e3e1846abcf7e752732a8071"
+    },
+    {
+      "file": "docs/decisions/2026-09-28-agent-worker-strategy.md",
+      "insertOffset": 44,
+      "insertBytes": 762,
+      "beforeSha256": "4bb5a795c54154f28aefb2d76d1c214aa16e078a5807fb4030ce929b5286c709",
+      "afterSha256": "e80b7e5973eaf034af00736943e3182e1d08a36af3039c3a86e84b0c6c1f692b",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "4bb5a795c54154f28aefb2d76d1c214aa16e078a5807fb4030ce929b5286c709"
+    },
+    {
+      "file": "docs/decisions/2026-09-29-agent-phase2-draft-tools.md",
+      "insertOffset": 81,
+      "insertBytes": 762,
+      "beforeSha256": "fdb170753eef3edfaf4ceb32875c6d2ceb1da644cad769f215fc0aef59214083",
+      "afterSha256": "762847043aed455b48f0ec94a565d7eecb1a807626a991749c5902cb14f91210",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "fdb170753eef3edfaf4ceb32875c6d2ceb1da644cad769f215fc0aef59214083"
+    },
+    {
+      "file": "docs/multimodal-math-engine-implementation-plan.md",
+      "insertOffset": 45,
+      "insertBytes": 748,
+      "beforeSha256": "6c0297338cdfe070174d7638ffb842260f8c722416795bc1b1687fdd97c4ca82",
+      "afterSha256": "327e3ef8aba0233691816e80a2ad5cc6342e29e1633f6d3abc4339372e24fc70",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "6c0297338cdfe070174d7638ffb842260f8c722416795bc1b1687fdd97c4ca82"
+    },
+    {
+      "file": "docs/project-progress-early.md",
+      "insertOffset": 73,
+      "insertBytes": 753,
+      "beforeSha256": "408780039faef9971e2eb1b646f646b372091d51fb4155a55d90c930a5e27db1",
+      "afterSha256": "af06f1c1f29ee2a5554c6cbd500f17bcbb8a79c4992861643c09933fa5a4c3e6",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "408780039faef9971e2eb1b646f646b372091d51fb4155a55d90c930a5e27db1"
+    },
+    {
+      "file": "docs/research/2026-09-18-agent-capability-audit.md",
+      "insertOffset": 46,
+      "insertBytes": 757,
+      "beforeSha256": "84429f5f763fe0c38be65338bade369b95163cf5aa044954a571b14c64851326",
+      "afterSha256": "2dada17f47813969021e34296e46f1056633340cd2b4e1a6bddc8faaf6f554f6",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "84429f5f763fe0c38be65338bade369b95163cf5aa044954a571b14c64851326"
+    },
+    {
+      "file": "docs/research/2026-09-28-agent-tool-loop-progress.md",
+      "insertOffset": 236,
+      "insertBytes": 762,
+      "beforeSha256": "907aa330b249ec466d47e04d63fd51ea16d2da1f00111c3767c6fa76d97dcdf4",
+      "afterSha256": "927d749384ceb85ba02b119706c10dcb7a9519e02ced6e011db96e5f147ccbb4",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "907aa330b249ec466d47e04d63fd51ea16d2da1f00111c3767c6fa76d97dcdf4"
+    },
+    {
+      "file": "docs/research/2026-09-29-high-school-geometry-interaction-progress.md",
+      "insertOffset": 236,
+      "insertBytes": 762,
+      "beforeSha256": "3a5c8a5501811e610485a781f977c6c1e8f201048d53ea7308d5a394d8d51efd",
+      "afterSha256": "c7a3e7fe0d97d8e0a872ee16e1c0fed869b374d2792b33cccfa3968dd7b88695",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "3a5c8a5501811e610485a781f977c6c1e8f201048d53ea7308d5a394d8d51efd"
+    },
+    {
+      "file": "docs/research/2026-10-04-github-project-survey.md",
+      "insertOffset": 59,
+      "insertBytes": 757,
+      "beforeSha256": "a453ed48dd129ed11846095d213d00c5ae1eee633c24eb97c20d65af2d250c52",
+      "afterSha256": "d67d82f6fd9f55ae5e976298ec88318c7c7b5dd8cfcddd6fc3beaf7dea2d8833",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "a453ed48dd129ed11846095d213d00c5ae1eee633c24eb97c20d65af2d250c52"
+    },
+    {
+      "file": "docs/research/2026-10-11-four-family-exam-diagram-survey.md",
+      "insertOffset": 67,
+      "insertBytes": 757,
+      "beforeSha256": "ce7e3769d1a679d881837f25ca2e79615aa75bdcb8e441a657166d0f29c62ab0",
+      "afterSha256": "85c132e183072b68f5769792f66ede44b3defbe265536f8067d40822cf9496c5",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "ce7e3769d1a679d881837f25ca2e79615aa75bdcb8e441a657166d0f29c62ab0"
+    },
+    {
+      "file": "docs/research/2026-10-11-github-agent-implementation-survey.md",
+      "insertOffset": 78,
+      "insertBytes": 757,
+      "beforeSha256": "97bfd1bfb6d5c495b95598c047a02fdebb7cd1a7063509848dc1c9efb7e536a8",
+      "afterSha256": "d6c65420b4bbc8dec6f792bb6bd5218af759a70d6ede75dbcdb7f80d03a803e9",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "97bfd1bfb6d5c495b95598c047a02fdebb7cd1a7063509848dc1c9efb7e536a8"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-12-mvp-foundation.md",
+      "insertOffset": 80,
+      "insertBytes": 718,
+      "beforeSha256": "5a3ac55fa67bf7c9e3d295da9f60fa4dd9f3da41cfff9945c651fbcae70fe314",
+      "afterSha256": "2e42bb29f61613a748d003d611c6b626b68da9c9cd465e42eb7c138fc74cce8f",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "5a3ac55fa67bf7c9e3d295da9f60fa4dd9f3da41cfff9945c651fbcae70fe314"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-13-dynamic-graphing-platform.md",
+      "insertOffset": 48,
+      "insertBytes": 718,
+      "beforeSha256": "18ab751db1f6481a348714d70811cb36b1301dfbfe189c416f092c5f8f06750e",
+      "afterSha256": "c0e800ec3505274090c8c2fc87482db2e4fbe822a5e82fc8a412000324c854cb",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "18ab751db1f6481a348714d70811cb36b1301dfbfe189c416f092c5f8f06750e"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-13-interactive-formula-canvas.md",
+      "insertOffset": 49,
+      "insertBytes": 718,
+      "beforeSha256": "321cc714211916e32dca487ff6dc3f3940d584b9861536e3a6014aa37c33cd70",
+      "afterSha256": "e8aa6fd2b129775258d7d5b2693542308d0558e8d6ffde4442da3ae35fbba448",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "321cc714211916e32dca487ff6dc3f3940d584b9861536e3a6014aa37c33cd70"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-13-next-math-platform.md",
+      "insertOffset": 41,
+      "insertBytes": 718,
+      "beforeSha256": "224ac93f447c0851eabc82256e3ad723cec4bace7311a28db66de169dc2056b8",
+      "afterSha256": "1f175c38fed5baa3e22a33d6a5601f674d358ad2a0f685afc5a629e30d4d2395",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "224ac93f447c0851eabc82256e3ad723cec4bace7311a28db66de169dc2056b8"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-13-numeric-robustness.md",
+      "insertOffset": 53,
+      "insertBytes": 718,
+      "beforeSha256": "814c51bdd473aab902be30423d9dd3f4e8fcbfacfb1d7da889476ffd6700f377",
+      "afterSha256": "603fa4ff34a367df86ff8110c73a7a022afc1a428e22665725813f10d8f717d3",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "814c51bdd473aab902be30423d9dd3f4e8fcbfacfb1d7da889476ffd6700f377"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-14-p3-p6-platform.md",
+      "insertOffset": 26,
+      "insertBytes": 723,
+      "beforeSha256": "22f3ba2706f4fbaa844c4e28781074a228781a136fcbb7814dfc72d64ff22728",
+      "afterSha256": "7bec2b16f69245b7ffb552d6e9c45d1c9d26259df518d28ec85042a49503c015",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "22f3ba2706f4fbaa844c4e28781074a228781a136fcbb7814dfc72d64ff22728"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-14-point-driven-3d-geometry.md",
+      "insertOffset": 48,
+      "insertBytes": 723,
+      "beforeSha256": "60cf2df7f43de3bc9002909ebc4c18bc7e8783be9506b2364fb008d54e262212",
+      "afterSha256": "91930ed8ee485ea8eec8dcc95b6dabb808e444f0a7ddd5223a7a3ecdca94748a",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "60cf2df7f43de3bc9002909ebc4c18bc7e8783be9506b2364fb008d54e262212"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-15-3d-measurement-quality.md",
+      "insertOffset": 72,
+      "insertBytes": 718,
+      "beforeSha256": "e0a0848195a672f394556e36ba6ea70e5ca573ffbe7ada620e526af14e4ce481",
+      "afterSha256": "2896f02555ed25f71d1a15cd553e27c2e0f281061aafaac0c07aa336de477518",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "e0a0848195a672f394556e36ba6ea70e5ca573ffbe7ada620e526af14e4ce481"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-15-engineering-workbench-hierarchy.md",
+      "insertOffset": 55,
+      "insertBytes": 723,
+      "beforeSha256": "0fb6db49ea887b686e9d9ca826fd10d5cb18f1ac96341adb387e58376267a1e5",
+      "afterSha256": "aa783072c71ac004a425e64cb4c8b0b40f39f2d4c3c637a1ffc699970eb8a67f",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "0fb6db49ea887b686e9d9ca826fd10d5cb18f1ac96341adb387e58376267a1e5"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-15-p7-engineering-drawing.md",
+      "insertOffset": 42,
+      "insertBytes": 718,
+      "beforeSha256": "afbf1b57f7d5ed4297384ed1776972811019fe827cb78e4b67014a389d4c6c66",
+      "afterSha256": "b86e774a855b9bbefbaf4107d5b3cbbddafc1f28ab9ee6e8c9a57c14bdff8362",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "afbf1b57f7d5ed4297384ed1776972811019fe827cb78e4b67014a389d4c6c66"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-15-ribbon-ui-redesign.md",
+      "insertOffset": 52,
+      "insertBytes": 718,
+      "beforeSha256": "0e4b18fa962679b6590541abebcd56cea84482f4abff2f6b00edcc6231a3f012",
+      "afterSha256": "71e3dbc5074ed673b664fc223cf13d44b3851bf77f8e1e79a86361cebb2fd2be",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "0e4b18fa962679b6590541abebcd56cea84482f4abff2f6b00edcc6231a3f012"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-3d-autofit.md",
+      "insertOffset": 49,
+      "insertBytes": 718,
+      "beforeSha256": "ba25ae9a967e6866a4f48a4943dd6ab474697880aebd90c490440fcc5f368c89",
+      "afterSha256": "5f8bb13df60c6e9d432e47f4e32a615f84dc11a7e7c6e36d94794cc78fe4317d",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "ba25ae9a967e6866a4f48a4943dd6ab474697880aebd90c490440fcc5f368c89"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-3d-tracks-rotation-and-measurement-labels.md",
+      "insertOffset": 102,
+      "insertBytes": 718,
+      "beforeSha256": "8b46ba1703b02a627593d4b5afa01e260dffabf15a062731bdabd7e6c77f8bef",
+      "afterSha256": "be73122c5a5018c411a4beb85ab73b6da511e16a6591315c8aad852061bdd923",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "8b46ba1703b02a627593d4b5afa01e260dffabf15a062731bdabd7e6c77f8bef"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-analytic-quadrics-a1.md",
+      "insertOffset": 50,
+      "insertBytes": 718,
+      "beforeSha256": "9c37f8cc46fe3eafa17969aedf3c749f6c22a8d60bfc8716266731064f18bf7b",
+      "afterSha256": "42e8187b4c8133c6a402be244d99190b5db38f72ab2c0b4044d88a9e3fddee2e",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "9c37f8cc46fe3eafa17969aedf3c749f6c22a8d60bfc8716266731064f18bf7b"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-dynamic-point-hosts.md",
+      "insertOffset": 54,
+      "insertBytes": 718,
+      "beforeSha256": "36890adf19d38d2cb3229954ce361c356ce991b456732d9d6d7c24a6bc2afefe",
+      "afterSha256": "937519d22080ecf1e4c0ef10248694b55ac8e2867b09381af520d46301e6dcad",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "36890adf19d38d2cb3229954ce361c356ce991b456732d9d6d7c24a6bc2afefe"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-orbit-track-independent-circle.md",
+      "insertOffset": 63,
+      "insertBytes": 718,
+      "beforeSha256": "2fdecb04711edc66b2038834ff9a0f0ec1cc2b151f338e1ba5c1635392c3c249",
+      "afterSha256": "a2b1a76bd0557dc6b1785d525aaeac1a2087068e5ff570957687f25ba1ecfb91",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "2fdecb04711edc66b2038834ff9a0f0ec1cc2b151f338e1ba5c1635392c3c249"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-17-three-scene-lifecycle.md",
+      "insertOffset": 60,
+      "insertBytes": 718,
+      "beforeSha256": "f728e5af7f3f925ea73eef6454bb3413bcf4fbf8ada47ed0043eaa0132bd0b70",
+      "afterSha256": "a10d38597be27170afb9f08b17d74ffa26d135ab499f7f1f192a127b0bfae2c4",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f728e5af7f3f925ea73eef6454bb3413bcf4fbf8ada47ed0043eaa0132bd0b70"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-18-derived-primitive-intersections.md",
+      "insertOffset": 48,
+      "insertBytes": 718,
+      "beforeSha256": "82e9a8080594e18530d929a6dc5eaa0f6752de3dc27bdae1f3774fa2ae138ae9",
+      "afterSha256": "8f98bf7e563c954ea16f8b08f4e220c19feeab7c1eebc0553296f90ca2ce17d7",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "82e9a8080594e18530d929a6dc5eaa0f6752de3dc27bdae1f3774fa2ae138ae9"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-18-desktop-agent-implementation-plan.md",
+      "insertOffset": 48,
+      "insertBytes": 723,
+      "beforeSha256": "bb297ec6a8e4b3963115ab5a9d0deb9da9bf66b8ceca06fa4be0375133e0a174",
+      "afterSha256": "ca9fa369f0600a33ebdbb65d6f171027006ab76f2004f52657f285aa4669e370",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "bb297ec6a8e4b3963115ab5a9d0deb9da9bf66b8ceca06fa4be0375133e0a174"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-18-exact-number-conversion.md",
+      "insertOffset": 60,
+      "insertBytes": 718,
+      "beforeSha256": "0e6796d69706324cead86efd55b8bddaf8ce5f9055066a65fefff369eebf2b8f",
+      "afterSha256": "19c505d9803f61b106d5cecdcdbf22890cd746cdd8ed8479b36ea682e3776bc6",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "0e6796d69706324cead86efd55b8bddaf8ce5f9055066a65fefff369eebf2b8f"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-21-agent-dsl-implementation-plan.md",
+      "insertOffset": 52,
+      "insertBytes": 718,
+      "beforeSha256": "1898be7206a220c5aeb4c234af15935731d271a8f8f8938bd2e705a2b2ac7bd9",
+      "afterSha256": "26590123d01e8f2fa98af8ff450c3e2f6cf0c60350eab7711e607d020a68a2bb",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "1898be7206a220c5aeb4c234af15935731d271a8f8f8938bd2e705a2b2ac7bd9"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-21-conversation-context-implementation-plan.md",
+      "insertOffset": 43,
+      "insertBytes": 718,
+      "beforeSha256": "b1869427514896832e274bb7ccc2354a4b974d7be0e4fa528622feaba6cb02ce",
+      "afterSha256": "a459b1754416d8565116bcea53b001e295638c334b21b09737d44f8a8b507b24",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "b1869427514896832e274bb7ccc2354a4b974d7be0e4fa528622feaba6cb02ce"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-21-reactive-dag-implementation-plan.md",
+      "insertOffset": 35,
+      "insertBytes": 718,
+      "beforeSha256": "5f07c135fd2b4706a1cb2ce3df1b34ec89cb89ee185a1c4fe55036cf0538ee9d",
+      "afterSha256": "5438ab148c7bcde24d61c3f9ffb00a2597248b80b989ea1c83565394e8aafdf8",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "5f07c135fd2b4706a1cb2ce3df1b34ec89cb89ee185a1c4fe55036cf0538ee9d"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-21-solid-prism-implementation-plan.md",
+      "insertOffset": 34,
+      "insertBytes": 718,
+      "beforeSha256": "23171013b7c5dfcf9dd2eff530661536efbe00f3e8010ed0e7ec2226fec0c2e0",
+      "afterSha256": "175e2ca7ea9ff2791f92a4c8cb5fab3698ccb3f193bf18cf7007865333304af0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "23171013b7c5dfcf9dd2eff530661536efbe00f3e8010ed0e7ec2226fec0c2e0"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-28-agent-tool-loop-implementation-plan.md",
+      "insertOffset": 51,
+      "insertBytes": 723,
+      "beforeSha256": "6aa19fb17c332c1f92f227c40d6d31c48a0d2f53bb1190703f806952c124a685",
+      "afterSha256": "7619604fb1048347e8f54f424a8323be3823cbb906d67889c0c7014dc91047d0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "6aa19fb17c332c1f92f227c40d6d31c48a0d2f53bb1190703f806952c124a685"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md",
+      "insertOffset": 69,
+      "insertBytes": 723,
+      "beforeSha256": "240be17b980810ad7ba6dbc38f7a8536f6d326a6d94a84088d6a7ccf075c30c5",
+      "afterSha256": "e80cffce2a242f22a30670dbc0947095abea11286fc003fba81534a6854f9b55",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "240be17b980810ad7ba6dbc38f7a8536f6d326a6d94a84088d6a7ccf075c30c5"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-01-sphere-and-sections-implementation-plan.md",
+      "insertOffset": 42,
+      "insertBytes": 723,
+      "beforeSha256": "96b266fd421abcfe75ced101c60499835954fd8eeee1bdc02e8197afba4ffeda",
+      "afterSha256": "420a410ecccdb282b058ef768cd3f07106345843bb270e9566b38175ea7d41dd",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "96b266fd421abcfe75ced101c60499835954fd8eeee1bdc02e8197afba4ffeda"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-02-html-export-implementation-plan.md",
+      "insertOffset": 68,
+      "insertBytes": 718,
+      "beforeSha256": "3e764038c180798601cd928840e5f490b3a1b1fa14125be1f5b18afe1f8dfae2",
+      "afterSha256": "56c2da729b722442aca96e3af1e8540adce12c8cad51ada8386f1836cd891633",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "3e764038c180798601cd928840e5f490b3a1b1fa14125be1f5b18afe1f8dfae2"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-03-underdetermined-witness-relations-implementation-plan.md",
+      "insertOffset": 59,
+      "insertBytes": 723,
+      "beforeSha256": "a5cc9c41eaeffdcb27e54eaafffb61477b7b4c5b0a1bee13d1befd93d5b072a3",
+      "afterSha256": "485ca96457169541b68d5febf86d8124b689d1bd6408701edf62dfe1ad312cdd",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "a5cc9c41eaeffdcb27e54eaafffb61477b7b4c5b0a1bee13d1befd93d5b072a3"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-04-agent-full-next-phase-implementation-plan.md",
+      "insertOffset": 46,
+      "insertBytes": 718,
+      "beforeSha256": "600c6036b1c2d53ea6efc902b0ed3766d7cfdd7d78b5155451b9b2fb9f6f23b9",
+      "afterSha256": "93f9ed713c735dab311fdfe95b0904de3c1701b16ec245960f121708cb27f0f0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "600c6036b1c2d53ea6efc902b0ed3766d7cfdd7d78b5155451b9b2fb9f6f23b9"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-04-agent-next-round-witness-search-implementation-plan.md",
+      "insertOffset": 259,
+      "insertBytes": 723,
+      "beforeSha256": "e646f656410081c6a120ae5983e48cef6076c188a2bf1b031a51a2fafe4ddaa9",
+      "afterSha256": "671b1b9768ea909bf5a084475dd6e2a8e26ab30c2ff5b4a9031673c64a8f3521",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "e646f656410081c6a120ae5983e48cef6076c188a2bf1b031a51a2fafe4ddaa9"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-04-underdetermined-diagram-agent-implementation-plan.md",
+      "insertOffset": 63,
+      "insertBytes": 718,
+      "beforeSha256": "4e63fb4330d262b150ca338bcffb7712e6e3666d1514e53cc0e7304c3001a0bc",
+      "afterSha256": "f5e69efd928446cf66c56b7e5abfc32de0f68f35d37da356dbdc34cd7ff481f4",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "4e63fb4330d262b150ca338bcffb7712e6e3666d1514e53cc0e7304c3001a0bc"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-06-agent-next-round-implementation-plan.md",
+      "insertOffset": 109,
+      "insertBytes": 718,
+      "beforeSha256": "46e1c62ce8db285b29848c6d9cf341e53bfd224d7cc7c4ed33141cce443bd498",
+      "afterSha256": "a95b6a457657b7c5508891b2110e3c2ca523c704f44e5e99de4934ba6b46e323",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "46e1c62ce8db285b29848c6d9cf341e53bfd224d7cc7c4ed33141cce443bd498"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md",
+      "insertOffset": 52,
+      "insertBytes": 718,
+      "beforeSha256": "22011f6b9c703ba4d4446c0b7ecf4f74b1f38bc39ec03d335a2097cfeac08f67",
+      "afterSha256": "5b392ac548d1a251383446ead46409c7139f41e28e5a4f1c142606cd6e7e1534",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "22011f6b9c703ba4d4446c0b7ecf4f74b1f38bc39ec03d335a2097cfeac08f67"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-07-solid-shape-coverage-implementation-plan.md",
+      "insertOffset": 61,
+      "insertBytes": 723,
+      "beforeSha256": "fa054dc78b4266997e948ac6cf43592e0d1694f229fa14eed479889b06ed036c",
+      "afterSha256": "5c6bf1144f7b1e14de3b29204bc074039d14833a694dc577abe1d2a16e44cb33",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "fa054dc78b4266997e948ac6cf43592e0d1694f229fa14eed479889b06ed036c"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-10-named-point-materialisation-plan.md",
+      "insertOffset": 63,
+      "insertBytes": 723,
+      "beforeSha256": "13796cae22d428144561699f310cf11d32c73709a9206c65633bc1a9d030b756",
+      "afterSha256": "6e4229db72ca1116332aa2e28e857eba145e3e15d070419aa8bfca3ea6bb2f23",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "13796cae22d428144561699f310cf11d32c73709a9206c65633bc1a9d030b756"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-10-selftest-followups-and-release-plan.md",
+      "insertOffset": 69,
+      "insertBytes": 718,
+      "beforeSha256": "46bf5a00680003507c9ddcf2659297b068e65e9f41401dd7bcd27f33cf3e8760",
+      "afterSha256": "f3055872dbe9f75c0842ca7f0d68801e30dc0e6f7122a06e959e69f0dbcf4045",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "46bf5a00680003507c9ddcf2659297b068e65e9f41401dd7bcd27f33cf3e8760"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-11-declarative-figure-construction-implementation-plan.md",
+      "insertOffset": 49,
+      "insertBytes": 723,
+      "beforeSha256": "5cbf1cae2c1c417ef6fd0de8f15088e5e73946b0fcbfd6c93b82ce165da4d18c",
+      "afterSha256": "658292d380f5749962170e054ac814c559273894646f546f17d89ef6207f32b6",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "5cbf1cae2c1c417ef6fd0de8f15088e5e73946b0fcbfd6c93b82ce165da4d18c"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md",
+      "insertOffset": 97,
+      "insertBytes": 723,
+      "beforeSha256": "f99b245ca3120cae9ad82dcf029eb29434dd43d0fdcd46ae5f74705a789ee1ba",
+      "afterSha256": "a23cb5ac75d646526f936eaf5ed34fbe9a7a625dd9e8041087cb6cfaeccc6521",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f99b245ca3120cae9ad82dcf029eb29434dd43d0fdcd46ae5f74705a789ee1ba"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-10-16-functional-completion.md",
+      "insertOffset": 58,
+      "insertBytes": 718,
+      "beforeSha256": "1b9f836547208ce796ecc7b088817018baf7b85292f75b0e41f552eea0764f19",
+      "afterSha256": "4dfba260be3a66d8c9be0c4797705faf8c07c3382f0365db391aa7cb0809c6c3",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "1b9f836547208ce796ecc7b088817018baf7b85292f75b0e41f552eea0764f19"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-11-05-solid-geometry-four-cases.md",
+      "insertOffset": 62,
+      "insertBytes": 718,
+      "beforeSha256": "305706bfc09b338ab4864adf08dc2a37cbff7ecb879660c4f3a6afa40a3fbf80",
+      "afterSha256": "c5de9775a7b6fd06a0fa9b1a5e2d6fd85babcec4b37cb7b0d9d3ee90b23f9bab",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "305706bfc09b338ab4864adf08dc2a37cbff7ecb879660c4f3a6afa40a3fbf80"
+    },
+    {
+      "file": "docs/superpowers/plans/2026-11-05-three-drag-live-dependencies.md",
+      "insertOffset": 64,
+      "insertBytes": 723,
+      "beforeSha256": "8eeeabd673892d5fdc9bde3aad77385466fcb717989da3d6ae14893b861631d4",
+      "afterSha256": "8155a39b1e7670e7faea2ca574e81475ff6c75bb18b328432b9cc796ffc42766",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "8eeeabd673892d5fdc9bde3aad77385466fcb717989da3d6ae14893b861631d4"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-13-dynamic-graphing-platform-design.md",
+      "insertOffset": 39,
+      "insertBytes": 736,
+      "beforeSha256": "754482afae21b1783f97e18583de6ce499fa04ad4c247096fa6a924ebcd41e40",
+      "afterSha256": "7550c1a6da326b004d6aa331580f16c631590b63bbfd303dd7842f9a7a4e1970",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "754482afae21b1783f97e18583de6ce499fa04ad4c247096fa6a924ebcd41e40"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-13-numeric-robustness-design.md",
+      "insertOffset": 40,
+      "insertBytes": 736,
+      "beforeSha256": "2364c768b0b90529ea12b4fb8fa407330dabe0ef9e994f295550df39eeeba8e7",
+      "afterSha256": "6181f5c1d716a0b6d45c4ee59b2a145d0ff25a8a3b61fdf75d90f4914f792b22",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "2364c768b0b90529ea12b4fb8fa407330dabe0ef9e994f295550df39eeeba8e7"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-14-point-driven-3d-geometry-design.md",
+      "insertOffset": 36,
+      "insertBytes": 736,
+      "beforeSha256": "39f0a21a3e09d2a3af87959b8fd8d3c56ec6cb174bcab76bbec74cad13cddca8",
+      "afterSha256": "bb39c0a999b4e7bb917a458184f80c4e17739476c1a2d5146cdfdd11e109d46f",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "39f0a21a3e09d2a3af87959b8fd8d3c56ec6cb174bcab76bbec74cad13cddca8"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-15-3d-measurement-quality-design.md",
+      "insertOffset": 59,
+      "insertBytes": 736,
+      "beforeSha256": "8e04effafedb94f6be6c59acfdd83ddf965febd5efcfdfa784471d653bd5cfdd",
+      "afterSha256": "5905c08a92ebb2f3c2986498e8a69870ff912e72040bb7b2d48643b5c6ef2770",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "8e04effafedb94f6be6c59acfdd83ddf965febd5efcfdfa784471d653bd5cfdd"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-15-engineering-workbench-design.md",
+      "insertOffset": 41,
+      "insertBytes": 736,
+      "beforeSha256": "9d3f361a794d890281cb98ff2b9eb7c9d63c8358c3f86e2491b4b6b809c04214",
+      "afterSha256": "68104183b804ca6a2fdd324374048467d0cd1c6188038a4409ec8fe8adf409d7",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "9d3f361a794d890281cb98ff2b9eb7c9d63c8358c3f86e2491b4b6b809c04214"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-15-p7-engineering-drawing-design.md",
+      "insertOffset": 35,
+      "insertBytes": 736,
+      "beforeSha256": "5756f44cb6f4861be0509f89a30d894204b8af7ce1d5a45567a1059c244473ba",
+      "afterSha256": "44b72555120d8507f884c2b69ed07e2154d2868a350c215c7a482cd39d735747",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "5756f44cb6f4861be0509f89a30d894204b8af7ce1d5a45567a1059c244473ba"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-15-ribbon-ui-redesign.md",
+      "insertOffset": 32,
+      "insertBytes": 736,
+      "beforeSha256": "3a5767e6167b9084b7db3d90e2a0e0805d00fa718c6fd9eeffd2427462344f30",
+      "afterSha256": "56180b0f4e6c84192c5abd6991f83a53d068b95e1a49ac7539743861d13f05a7",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "3a5767e6167b9084b7db3d90e2a0e0805d00fa718c6fd9eeffd2427462344f30"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-16-section-intersection-primitives-design.md",
+      "insertOffset": 49,
+      "insertBytes": 736,
+      "beforeSha256": "97b846f39ee813bf0ebd5ca5f88e220b10f3070aaaf39bacabad0770b48c10f7",
+      "afterSha256": "cb261f2ea61c8863e6c8f45f42903ffd1d6b95b5ad0262718f9ead451047a8dd",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "97b846f39ee813bf0ebd5ca5f88e220b10f3070aaaf39bacabad0770b48c10f7"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-3d-tracks-rotation-and-measurement-labels-design.md",
+      "insertOffset": 97,
+      "insertBytes": 736,
+      "beforeSha256": "d778cfc3b09dee36a00b1ddefce33fdd4233b3d3b2c4f6200cea4ec7bfe803c5",
+      "afterSha256": "c45bf6bf325ddf0917d89103b919b54ec80e24ac2383bc0975066c5b1104743c",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "d778cfc3b09dee36a00b1ddefce33fdd4233b3d3b2c4f6200cea4ec7bfe803c5"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-3d-viewport-kernel-refactor-design.md",
+      "insertOffset": 55,
+      "insertBytes": 736,
+      "beforeSha256": "1a1a41a5e8c4f5402e0d9aed104cd337ad8fc05f92a9b25b5ce42175af4314f9",
+      "afterSha256": "87d5253ee96f2334b49c69bc6771795f511ca3d8b0942a3b5d986c0e80082587",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "1a1a41a5e8c4f5402e0d9aed104cd337ad8fc05f92a9b25b5ce42175af4314f9"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-analytic-quadrics-design.md",
+      "insertOffset": 46,
+      "insertBytes": 736,
+      "beforeSha256": "c7b592c7629e0bd30e1f7b09746bbdacdec3e0177f40e6743602e645c265fdc5",
+      "afterSha256": "68c106d6325401c1b25742123c53b9fb67e83defe80a11c6ff626c1ce6e4b794",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "c7b592c7629e0bd30e1f7b09746bbdacdec3e0177f40e6743602e645c265fdc5"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-dynamic-point-engine-design.md",
+      "insertOffset": 60,
+      "insertBytes": 741,
+      "beforeSha256": "26eb04b138e0fb391270033a0705082a6c0b8bf61a7418de0898f27f09b91401",
+      "afterSha256": "89500385aacd8e8496556d9db14d633a6ff7073e7fa2e02d07585416d22cc5f0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "26eb04b138e0fb391270033a0705082a6c0b8bf61a7418de0898f27f09b91401"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-intersection-face-grouping-design.md",
+      "insertOffset": 45,
+      "insertBytes": 741,
+      "beforeSha256": "b32c684848665f2839aeac8c6b941af52f153817c42a4fa33e0aaae77fa56642",
+      "afterSha256": "ce1f2be55c078d8773cc8d2779c1a46b20b23d1c9d9518da773fb18dda550982",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "b32c684848665f2839aeac8c6b941af52f153817c42a4fa33e0aaae77fa56642"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-17-orbit-track-independent-circle-design.md",
+      "insertOffset": 60,
+      "insertBytes": 736,
+      "beforeSha256": "f20eeeabb79fd3e2ede6c3312b8657e23ecf029b0df342133f6c5bfeb95efc7b",
+      "afterSha256": "10f4f9eef801cdfea195817256e377ad94b5296eb18deda9847297cd2dc811d1",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f20eeeabb79fd3e2ede6c3312b8657e23ecf029b0df342133f6c5bfeb95efc7b"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-18-derived-primitive-intersections-design.md",
+      "insertOffset": 70,
+      "insertBytes": 736,
+      "beforeSha256": "2ec1978d574819b2658b6870a23cd7c727030f985c091da1754207a9c45347e6",
+      "afterSha256": "c1684cdc5e733f8bf42906a2028c0ef0151b641faa985a7f7ba788c88f09d6b2",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "2ec1978d574819b2658b6870a23cd7c727030f985c091da1754207a9c45347e6"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-18-desktop-geometry-agent-design.md",
+      "insertOffset": 51,
+      "insertBytes": 736,
+      "beforeSha256": "ae51a259edd07a7d65905519dccb97117b34c1cfabc33bd32555a859a2325d3b",
+      "afterSha256": "9ac1ab0854b4466d6c8bc54335f6ccb3dfdea25977f4e30a0f268d8fcbf88b1e",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "ae51a259edd07a7d65905519dccb97117b34c1cfabc33bd32555a859a2325d3b"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-18-exact-number-conversion-design.md",
+      "insertOffset": 61,
+      "insertBytes": 736,
+      "beforeSha256": "f662fd8864eb427adcf65d764ed323af2fca835949b6908878b38d0f16c29f2a",
+      "afterSha256": "226146017f4340708fb7b7d9738774f83f8aaaf5ad5295eb9e2b8223c21bf7b0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f662fd8864eb427adcf65d764ed323af2fca835949b6908878b38d0f16c29f2a"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-18-planar-curve-tangents-design.md",
+      "insertOffset": 62,
+      "insertBytes": 741,
+      "beforeSha256": "022e65c25ce2be70053776efb2191853025b7ae136354f3e56e603580501d234",
+      "afterSha256": "71e8c4e7fd09304c8df58850b21a248d994e5167df5a41e03d15bce3ee0c8a1d",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "022e65c25ce2be70053776efb2191853025b7ae136354f3e56e603580501d234"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md",
+      "insertOffset": 57,
+      "insertBytes": 736,
+      "beforeSha256": "bbc65733597219c3148d5e9310e1627853fc6b12adc91fc4757dff7dd3203130",
+      "afterSha256": "1620f27ce82052cd2fb1e48f4e842b1b20f982e4311ffbece549f86da70f5e5b",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "bbc65733597219c3148d5e9310e1627853fc6b12adc91fc4757dff7dd3203130"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md",
+      "insertOffset": 45,
+      "insertBytes": 741,
+      "beforeSha256": "387e6f3010293292c55fc7c7f37fb11e44e57d7764f0e2b0808db5c2d2f4ef71",
+      "afterSha256": "e4dfa6b4384fcafd27a38497950b0c9dc90ff280a7e12c7c067af652d97230e8",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "387e6f3010293292c55fc7c7f37fb11e44e57d7764f0e2b0808db5c2d2f4ef71"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-09-29-high-school-geometry-interaction-design.md",
+      "insertOffset": 140,
+      "insertBytes": 741,
+      "beforeSha256": "c704e3adf22dbed16f31ad09db16e3611c2ae5399805aa4ac61adddb0927e5cc",
+      "afterSha256": "91159b4fbe2fad5b088ef6676de3ede9b2782eb329d35ca6558cf00acd482e59",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "c704e3adf22dbed16f31ad09db16e3611c2ae5399805aa4ac61adddb0927e5cc"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-01-sphere-and-sections-design.md",
+      "insertOffset": 43,
+      "insertBytes": 741,
+      "beforeSha256": "edd1b4bab6c1a9d4826e89814203318922b2c67e99567e8a32616e84b77077ce",
+      "afterSha256": "38e020fcca1a4eb2a85972996f0607461daaef5a8547d880a0995b400fe892e0",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "edd1b4bab6c1a9d4826e89814203318922b2c67e99567e8a32616e84b77077ce"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-02-html-export-design.md",
+      "insertOffset": 63,
+      "insertBytes": 741,
+      "beforeSha256": "409d12d38c73a5339b1c4cd68ac2ea423db9d277f88886153cee867f4ba852ad",
+      "afterSha256": "b7d7a9fc29a2b9d4686c38cc14026ff710751b8c18fd0aee7005dfe95606962b",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "409d12d38c73a5339b1c4cd68ac2ea423db9d277f88886153cee867f4ba852ad"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-03-underdetermined-witness-relations-design.md",
+      "insertOffset": 53,
+      "insertBytes": 741,
+      "beforeSha256": "7fb3142c225d77b1cb0d9f2e82d32ac57ea7b69927ef0579e35a11ed49c817e1",
+      "afterSha256": "b58583c4e2131c62f51b3121590f7b727cd25ecb691e6c96fdc0c329c6cd55bf",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "7fb3142c225d77b1cb0d9f2e82d32ac57ea7b69927ef0579e35a11ed49c817e1"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-04-agent-full-next-phase-design.md",
+      "insertOffset": 103,
+      "insertBytes": 736,
+      "beforeSha256": "ffbb6d8a76e6c5dd63478eefc158aa1341c862fdf328718a1efc353aaaa2bae7",
+      "afterSha256": "56840ace5c5c369ecd33e2b8ba991d19a987e37b14e7a76164b2639ca9996c35",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "ffbb6d8a76e6c5dd63478eefc158aa1341c862fdf328718a1efc353aaaa2bae7"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-04-agent-next-round-witness-search-design.md",
+      "insertOffset": 259,
+      "insertBytes": 741,
+      "beforeSha256": "cb145a1b06fa086818bafb6aa143c359fe12712dfd674a3fa74530cd7c2acae9",
+      "afterSha256": "d824331b4dd056d99b92218a8877333e933b0c058d45c82b0abedd2808e802d4",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "cb145a1b06fa086818bafb6aa143c359fe12712dfd674a3fa74530cd7c2acae9"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-04-underdetermined-diagram-agent-design.md",
+      "insertOffset": 69,
+      "insertBytes": 741,
+      "beforeSha256": "bd48448f9ddaadc04209c3d090c31753722ab0f3a42eabe40f8ffae6fd5c6c78",
+      "afterSha256": "4f04dff8d5204bab2b6ec506fc41723de7b1dae074cf205ffafb2b379860c2ec",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "bd48448f9ddaadc04209c3d090c31753722ab0f3a42eabe40f8ffae6fd5c6c78"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-06-diagram-scope-addendum.md",
+      "insertOffset": 65,
+      "insertBytes": 736,
+      "beforeSha256": "cad566e260e7fda87a18179cb3a8e4bd02071f5683f356575923816d0a677808",
+      "afterSha256": "3b8006aabc1bc96eb894bd1ee0c39f77c816110d3339638e0e19963e67a2300d",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "cad566e260e7fda87a18179cb3a8e4bd02071f5683f356575923816d0a677808"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-06-high-school-auto-lean-design.md",
+      "insertOffset": 94,
+      "insertBytes": 736,
+      "beforeSha256": "a5c2e3fb378501c4c17d1fbc36d8b7a68696116c6ab0768477230fe93f1d4ee1",
+      "afterSha256": "b83363c3aed5b652c8e3512d63a668af477fb60241e316ec2cec96a3745bf16f",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "a5c2e3fb378501c4c17d1fbc36d8b7a68696116c6ab0768477230fe93f1d4ee1"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-06-solid-shape-coverage-design.md",
+      "insertOffset": 55,
+      "insertBytes": 741,
+      "beforeSha256": "821c67a9979799975f9872a5f42178daf292e257a6fc60267e02f8a4858ad003",
+      "afterSha256": "9782983072d0806da17c996998a131053f5ee287f73b05ec1083df9c15c79ef3",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "821c67a9979799975f9872a5f42178daf292e257a6fc60267e02f8a4858ad003"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-10-named-point-materialisation-design.md",
+      "insertOffset": 84,
+      "insertBytes": 741,
+      "beforeSha256": "3aae3f464ff313ead8f1afbab8ae784ec18807ffd932dc8d4c72bb9ad8389e44",
+      "afterSha256": "4c26c691cbc3e029ba748c0af5865e00d29685e4a7afa244dc6e8ef080385f8b",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "3aae3f464ff313ead8f1afbab8ae784ec18807ffd932dc8d4c72bb9ad8389e44"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-10-out-of-ring-angle-conditions-design.md",
+      "insertOffset": 86,
+      "insertBytes": 736,
+      "beforeSha256": "15f9a44d6b48e384219bdf2883c2f288bd441365158e9d54075e8627fbef5964",
+      "afterSha256": "2f7b065734204eff3955453d09fcbd4e7d5d564aeb0cf920513c26ea60a39000",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "15f9a44d6b48e384219bdf2883c2f288bd441365158e9d54075e8627fbef5964"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-10-planar-angle-conditions-design.md",
+      "insertOffset": 56,
+      "insertBytes": 736,
+      "beforeSha256": "f632a4f2190e42f07477a406d823731e5d9d489f20d11d7da609d5b26668b61e",
+      "afterSha256": "8825042a7e58477d457d3b3fb3bd4f907fd8994eec2c3f00f1c31b12249ea9b7",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f632a4f2190e42f07477a406d823731e5d9d489f20d11d7da609d5b26668b61e"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-10-prompt-normalisation-design.md",
+      "insertOffset": 82,
+      "insertBytes": 741,
+      "beforeSha256": "623320505edd6fcf7365d6512dc318fc81ac5c29d9d934cd38a53bba17c6e907",
+      "afterSha256": "27ffeb31db6818d18dd5e8769681f481fde2e11bbbc540d14fae3f34a8e1b131",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "623320505edd6fcf7365d6512dc318fc81ac5c29d9d934cd38a53bba17c6e907"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-10-spatial-line-coincidence-design.md",
+      "insertOffset": 69,
+      "insertBytes": 736,
+      "beforeSha256": "f8bb342cc71cb7f0f96f97ebd42f041179b9d44e1c5dad5903b4727a4567697f",
+      "afterSha256": "7dd9297e2b7f25ec971a5acc7048381e447c6748f8c4ed9247c2f16800df094c",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "f8bb342cc71cb7f0f96f97ebd42f041179b9d44e1c5dad5903b4727a4567697f"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-11-declarative-figure-construction-design.md",
+      "insertOffset": 101,
+      "insertBytes": 741,
+      "beforeSha256": "147515a06fd60c0658d2e30f9326369de19ba6e468cceb3f7e147ec9c0fdf242",
+      "afterSha256": "ac7d421213a9e0154dd4b2414a2d9bf182906f50911d25abd3eeece84c93b879",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "147515a06fd60c0658d2e30f9326369de19ba6e468cceb3f7e147ec9c0fdf242"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-10-11-fold-flap-design.md",
+      "insertOffset": 56,
+      "insertBytes": 741,
+      "beforeSha256": "914b39cd7e0639e8fe52ed76f8190c531e663ea0710926793b4af4910b8300e3",
+      "afterSha256": "3b7c8b388aad2ea005a86af97a70f89c44cd8f0c68d65cf681cfa904dbc0f88f",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "914b39cd7e0639e8fe52ed76f8190c531e663ea0710926793b4af4910b8300e3"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-11-02-ui-ux-interaction-optimization-design.md",
+      "insertOffset": 79,
+      "insertBytes": 736,
+      "beforeSha256": "0e37bbaf09afd5605dcfe7921c3dd850966f35e3a2dea516b2b6bc25b51af9fe",
+      "afterSha256": "e8bf740d7bd09c55ac9828b2c83c3af2ea56a2652598f6ee8b460f78796e6772",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "0e37bbaf09afd5605dcfe7921c3dd850966f35e3a2dea516b2b6bc25b51af9fe"
+    },
+    {
+      "file": "docs/superpowers/specs/2026-11-05-solid-geometry-four-cases-design.md",
+      "insertOffset": 66,
+      "insertBytes": 741,
+      "beforeSha256": "149ddc69359654a30a4a4680148b2f018e2183b1b0a385d4224cb6f96b507aa6",
+      "afterSha256": "710683f7a72400989975dcac88c95addfbb6dee03fe93c5bb9094e6e5786b3ad",
+      "originalBodyPreserved": true,
+      "bodyRecoveredSha256": "149ddc69359654a30a4a4680148b2f018e2183b1b0a385d4224cb6f96b507aa6"
+    }
+  ],
+  "immutableFiles": 47,
+  "immutableChanged": [],
+  "immutable": [
+    {
+      "file": "docs/audit/2026-10-20-doc-review.md",
+      "sha256": "ae1a6c5879b5e9bad420fbf292b167ef8bf6e5a43ba29f7923300d6f1fa4f19b",
+      "bytes": 19953,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-20-install-offline-evidence.md",
+      "sha256": "45f5a80852cc77a63e838492ac7c2e2fdad64bf19012918f2ca2ba1773da8c5c",
+      "bytes": 6530,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-20-unverified-audit.md",
+      "sha256": "52621c13b54be149c0555bb191cfe9c0637410da20ecd6bcecc70d6ea1edd2d8",
+      "bytes": 15158,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-24-agent-output-and-fold-repair.md",
+      "sha256": "9e6b8b14186ac65a3b8d80fa1ac3172cdc06a672b589d5609d21b505de438857",
+      "bytes": 18813,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-24-progress-doc-review.md",
+      "sha256": "3f0e101f7cb9588bc0a522b5f82f4b1110c32632251b6bd69d334c38a55c68c3",
+      "bytes": 20397,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-25-coupled-fold-solver.md",
+      "sha256": "2f9cf091e844a34056da5d3b2895b85353be6f1acfa69e1fb654534fbb7a183b",
+      "bytes": 6875,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-25-fold-completeness-and-output-limits.md",
+      "sha256": "966d545004f27a5a97b5b9d168fc06af112cc032a4ab761ddcd7c7911eb16294",
+      "bytes": 4733,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-25-solid-eval-reliability.md",
+      "sha256": "2f673aff91b567304c479b02cf9e39bf46be3bf2d9ff1d5cd1e544e6ac66d740",
+      "bytes": 6894,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-25-solid30-model-eval.md",
+      "sha256": "aeb3ca516931bd79642aab0374b157ff5989a1ca67457f033f25277a6b038d48",
+      "bytes": 6059,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-25-thirty-problem-offline-sweep.md",
+      "sha256": "25b06724a9305a2d23a48b206bc8ca8d0d80dcc97e043290e879be64f9645f69",
+      "bytes": 5141,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-26-chain-equality-parse-and-consistency.md",
+      "sha256": "d53c0216a17eb742917459e456d0e3007b9cb5e2a97b3acb8ef46c87d43b1880",
+      "bytes": 7137,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-10-26-reliability-phase1.md",
+      "sha256": "a856327cc0e0980cae8f79267c2cd729f274bfcb94265b3cca57cb81bf24eda6",
+      "bytes": 77306,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-01-explicit-solid-acceptance.md",
+      "sha256": "3a5c15cdc0d02349eeba1a507690415b782d15c4f2916f01577c57fe2cbb4a71",
+      "bytes": 12394,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-01-prism-shape-and-lexer.md",
+      "sha256": "f0bf4cc41887701bf394965ee343f9a0b13a21213e7aa2378b671b69c4b44b91",
+      "bytes": 7629,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-02-agent-answer-and-fold-correctness.md",
+      "sha256": "88c5048c2162d78184861ea2ca4070ce18bdfb31471a1b57045876ac9d84ec73",
+      "bytes": 4755,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-03-agent-example-validation.md",
+      "sha256": "9ce101f8a5f0616f26d26d45ac1921f3da9c90641c71eee3dea18ee4dd5d1a03",
+      "bytes": 15823,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-05-agent-reliability-gap-plan.md",
+      "sha256": "ba807f45fb0ed6bd6af5cfd4a9724b26a790e10506c672de1b553e5ca278538e",
+      "bytes": 18822,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-05-solid-four-cases-implementation-evidence.md",
+      "sha256": "aaa7abd855fd0158abedea6dc3e6e6f2e846e05a2b7fc3386794912623916131",
+      "bytes": 35165,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-05-solid-geometry-four-case-report.md",
+      "sha256": "e5d40e48b95ac857b70a5d96af34fd368bd6e78189ef76dd6368b4d223b84dfa",
+      "bytes": 16064,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-06-problem-image-validation.md",
+      "sha256": "aeadbca11f2d5e740b2c059cbc6072adb3bd36b83aca97ca239cefbb1efedb88",
+      "bytes": 4604,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-drawing-baseline/README.md",
+      "sha256": "c6807cf30315c7a49f013e2bdf2fca81a32d42f3fee6dd3450a2ea52821d37a8",
+      "bytes": 8540,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-drawing-implementation-audit/README.md",
+      "sha256": "b379357e26c83f18eb1b604870991a4d24e5096e6e11a67daabedb16d8b09abe",
+      "bytes": 4195,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-implementation-plan-verification/README.md",
+      "sha256": "83d0212ea54b7f6f5ef98c03df1f03ff2203d58f612de864f53d5e114c764522",
+      "bytes": 2295,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-main-restart/README.md",
+      "sha256": "039a97c7b65ef29c26a54de381225f4199bd648afdf9a51a730a63fe13d4627e",
+      "bytes": 3586,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-pre-reset/agent-next-round-progress.md",
+      "sha256": "d35f56b0553ea41c4dc6bd4d10dab9f10193faad489a05b7f1af5a004193a225",
+      "bytes": 69627,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-pre-reset/current-status.md",
+      "sha256": "f18923a1e2f7a2f2f571500fda7ac8f185a0f05cd2c46950e8950a98e917280c",
+      "bytes": 671497,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-pre-reset/project-progress.md",
+      "sha256": "9f75f570f57057179f72e98417aa8f44e7b79e5671fdb3aab26bb8ad25dcfaa2",
+      "bytes": 379798,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-pre-reset/README.md",
+      "sha256": "1b8d7bb2e3f0f947d097348c1eca7d36a2b83f3e70dd68697cc21c11c3ba4614",
+      "bytes": 1491,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-project-cleanup/README.md",
+      "sha256": "694a3e414f2c39fc43a9252fdd15b4519920369f40c45dc386ca731703411abb",
+      "bytes": 5013,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-project-review/README.md",
+      "sha256": "bb6798f0e60ddbe3727f1b7e59522ab7451f5a7807016e5c1d693dbafa60215a",
+      "bytes": 29846,
+      "unchanged": true
+    },
+    {
+      "file": "docs/audit/2026-11-15-review-plan-response/README.md",
+      "sha256": "87cf7b25b58a7157177b4b29f90249088994a9844f9b7ccd4f56dc31356c3b79",
+      "bytes": 2714,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v3.0.1.md",
+      "sha256": "d11c3e81fe001656bb7b58afc0fd5bcf25595defac2c4e167b6170b3b58f8bac",
+      "bytes": 4424,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v3.0.md",
+      "sha256": "c1e5158b8cec22c194d8186ba7dd900dfd1bd1f76f2eba9aa934b73664f9e1d6",
+      "bytes": 5438,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v3.1.0.md",
+      "sha256": "251649ec7db31cf41388db9134f5d36f9116f49d1574308b03a19b7175e1ea61",
+      "bytes": 7383,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v3.2.0.md",
+      "sha256": "f5e2e317b3acb60821627c926563b572db7f659728c2be4acb716b8fd083e6ab",
+      "bytes": 7572,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v4.0.1.md",
+      "sha256": "1a3a75637781960fbd4c5057ed59d2b0e0efb6117d256257f206383ddc6b8cd2",
+      "bytes": 8936,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v4.0.md",
+      "sha256": "c57cc0f132b454dd0c4372a5b86554f91cf9b2f4ed58f56819396c90b500bb97",
+      "bytes": 9471,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v4.1.0.md",
+      "sha256": "caf4764010c61068026f3fbcffca540e38c98908d4b754f6e3b411e28f78a336",
+      "bytes": 9397,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v4.2.0.md",
+      "sha256": "58331f7f99834753d70d7e59ac4a0d03cd62a505334678405d2ef517c789d011",
+      "bytes": 1429,
+      "unchanged": true
+    },
+    {
+      "file": "docs/release/v4.3.0.md",
+      "sha256": "66040d4434ca8822c8844f9a8d5f8322e3baeca2146c9214a73a382850be4292",
+      "bytes": 2635,
+      "unchanged": true
+    },
+    {
+      "file": "docs/research/external-audit-2026-09-22/agent-pipeline-audit.md",
+      "sha256": "44da567fede3c2255ac65abb9fa167a339832ea9ad334c970a245279ec4e8d20",
+      "bytes": 25135,
+      "unchanged": true
+    },
+    {
+      "file": "docs/research/external-audit-2026-09-22/desktop-conversation-audit.md",
+      "sha256": "7b9947426a031cd914eb7c86d80978c28b9cbe2175ab3c28e5287b0a45fe3d2a",
+      "bytes": 22831,
+      "unchanged": true
+    },
+    {
+      "file": "docs/research/external-audit-2026-09-22/geometry-dsl-audit.md",
+      "sha256": "191ec67dbc26dd35b64e04c6bfff6342b39097319e34dafbf7383773c9b1fd26",
+      "bytes": 23401,
+      "unchanged": true
+    },
+    {
+      "file": "docs/research/external-audit-2026-09-22/scene-graph-persistence-audit.md",
+      "sha256": "9b1336a055c3d2b087ecd4a41f57c0ed9154e71f3210c54c8dce76cd1d36ea48",
+      "bytes": 23995,
+      "unchanged": true
+    },
+    {
+      "file": "docs/agent-drawing-eval-20261017.md",
+      "sha256": "11ced8dfb407c884b30af0d11985105be2bdab83e4daa8a9515ce0177faf952d",
+      "bytes": 8606,
+      "unchanged": true
+    },
+    {
+      "file": "docs/agent-drawing-eval-20261019.md",
+      "sha256": "ba86cd6bcf1a5b4719f241eace84862b770f05edce904ce0cc0eff629c84d010",
+      "bytes": 21515,
+      "unchanged": true
+    },
+    {
+      "file": "docs/research/2026-09-28-agent-tool-loop-baseline.md",
+      "sha256": "6d730b5933d73777f4a6e8d969a249abe250eb78387408151ad24673c6dc1106",
+      "bytes": 6894,
+      "unchanged": true
+    }
+  ]
+}

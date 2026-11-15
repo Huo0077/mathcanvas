@@ -1,5 +1,10 @@
 # Engineering Workbench Hierarchy Design
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > Status: Implemented (Task 1-7 delivered and verified; the 2026-09-16 usability amendments are recorded in "Amendments" at the end of this document). Reviewed 2026-09-17: the doc-set audit added engineering annotations (linear / angular / tolerance), full-view SVG / DXF / PDF export (no 4-view truncation) and keyboard-operable grips; see `docs/project-progress.md` for the current gate.
 >
 > This design follows the approved direction: 2D drafting and 3D-to-engineering-drawing workflows have equal priority, while the existing geometry and projection kernels remain reusable.

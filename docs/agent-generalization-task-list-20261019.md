@@ -1,5 +1,10 @@
 # 几何 Agent 泛化问题任务表（2026-10-19）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](current-status.md)；执行顺序统一按[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 **日期：** 2026-10-19
 
 **来源：** 对 Gemini 泛化分析的仓库级核对 + 2026-10-17 的 12 道真实 provider 评测（[评测记录](agent-drawing-eval-20261017.md)）。这不是发布验收表，而是按“问题 → 验收”拆出的工作清单。

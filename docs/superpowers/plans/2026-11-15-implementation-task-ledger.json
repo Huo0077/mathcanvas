@@ -1,0 +1,1479 @@
+{
+  "schemaVersion": 2,
+  "date": "2026-11-15",
+  "codeBaseline": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "restartCommit": "be033b71ba32f1b7008d030b49359e21de076423",
+  "purpose": "execution_contract_not_a_second_live_progress_table",
+  "externalMilestones": {
+    "GOVERNANCE": "restart_commit_and_old_history_archive_confirmed"
+  },
+  "notes": [
+    "All product implementation remains unstarted; live status is only docs/current-status.md.",
+    "R01 is the immediate safety guard; full scope semantics close under T02.",
+    "R09-A is first-batch final-output scoring; R09-B finishes schema alignment in B3.",
+    "T11 numerical contract precedes dependent constructors to avoid circular dependencies.",
+    "T18 prepares release evidence; R12 performs final signoff, never mutual dependency.",
+    "Test commands are planned, not executed; missing test files in createPlanned must be implemented before invocation. Runtime progress is not stored in this contract."
+  ],
+  "topologicalOrder": [
+    "R00",
+    "R01",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08",
+    "R09",
+    "R10",
+    "R11",
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "T11",
+    "T07",
+    "T08",
+    "T09",
+    "T10",
+    "T12",
+    "T13",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T18",
+    "R12"
+  ],
+  "tasks": [
+    {
+      "id": "R00",
+      "batch": "B1",
+      "ownerRole": "维护者/验证",
+      "size": "小",
+      "dependsOn": [
+        "GOVERNANCE"
+      ],
+      "inputContract": "be033b71重启线、锁文件和现有工作区",
+      "deliverable": "同源环境与基线快照",
+      "modifyExisting": [],
+      "createPlanned": [],
+      "testFiles": [
+        "scripts/docs-consistency/version-consistency.test.ts"
+      ],
+      "redCases": [
+        "源码revision、锁文件hash、模型/构建身份不一致必须拒绝"
+      ],
+      "acceptance": "Node22隔离环境可复算；保留活动工作区和全部证据",
+      "rollback": "仅删除独立临时产物，不重置主工作区",
+      "commitSubject": "test(baseline): freeze restart environment and verification identity",
+      "testCommands": [
+        "npm.cmd exec -- vitest run scripts/docs-consistency/version-consistency.test.ts --testTimeout=30000",
+        "npm.cmd run typecheck"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R01",
+      "batch": "B1",
+      "ownerRole": "Agent核心/集成",
+      "size": "中",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "原题、小问编号与既有编译/确认接口",
+      "deliverable": "未选问/漏条件候选不再完整通过；完整scope由T02收口",
+      "modifyExisting": [
+        "packages/agent-core/src/numberedProblem.ts",
+        "packages/agent-core/src/diagramObligations.ts",
+        "packages/agent-core/src/planCompiler.ts",
+        "apps/web/src/agent/draftStore.ts",
+        "apps/web/src/agent/agentRuntime.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/planCompiler.subquestionCoverage.test.ts",
+        "e2e/agent-subquestion-guard.spec.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/diagramObligations.test.ts",
+        "apps/web/src/agent/agentRuntime.test.ts",
+        "apps/web/src/agent/diagramDraftStage.test.ts"
+      ],
+      "redCases": [
+        "裸条件/设/且/若变式；PA=2且AD·DC=1的合法实体",
+        "diagramWitnessSearch开关均不能绕过",
+        "runtime确认入口阻断、sceneWrites=0"
+      ],
+      "acceptance": "错误候选不能passed或awaiting_confirmation；单问正例不回归；B完整scope归T02",
+      "rollback": "保持多问拒绝，不恢复漏条件放行",
+      "commitSubject": "fix(agent): block unscoped subquestion false acceptance",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/diagramObligations.test.ts apps/web/src/agent/agentRuntime.test.ts apps/web/src/agent/diagramDraftStage.test.ts packages/agent-core/src/planCompiler.subquestionCoverage.test.ts --testTimeout=30000",
+        "npm.cmd exec -- playwright test e2e/agent-subquestion-guard.spec.ts --workers=1 --retries=0"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R02",
+      "batch": "B2",
+      "ownerRole": "原生凭据/设置",
+      "size": "大",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "profile revision、规范endpoint、native secret store",
+      "deliverable": "凭据归属及可恢复rekey事务",
+      "modifyExisting": [
+        "apps/desktop/src-tauri/src/commands/providers.rs",
+        "apps/desktop/src-tauri/src/providers/adapter.rs",
+        "apps/desktop/src-tauri/src/providers/request.rs",
+        "apps/desktop/src-tauri/src/repository/provider_profiles.rs",
+        "apps/desktop/src-tauri/src/secrets/windows.rs",
+        "apps/web/src/services/providerProfileClient.ts",
+        "apps/web/src/components/settings/ProviderSettings.tsx"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "apps/desktop/src-tauri/tests/provider_profiles.rs",
+        "apps/desktop/src-tauri/tests/secrets.rs",
+        "apps/desktop/src-tauri/tests/provider_adapter.rs",
+        "apps/web/src/services/providerProfileClient.test.ts"
+      ],
+      "redCases": [
+        "跨profile secretRef与换端点",
+        "profile写失败、CAS冲突和提交前/后崩溃",
+        "直接调用旧IPC绕过"
+      ],
+      "acceptance": "失败后旧凭据保留，新凭据只到授权endpoint；旧入口同样受控",
+      "rollback": "停止编辑/发送危险配置，不恢复未绑定认证头",
+      "commitSubject": "fix(provider): bind native credentials and preserve prior secrets",
+      "testCommands": [
+        "npm.cmd exec -- vitest run apps/web/src/services/providerProfileClient.test.ts --testTimeout=30000",
+        "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test provider_profiles --test secrets --test provider_adapter"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R03",
+      "batch": "B2",
+      "ownerRole": "原生网络",
+      "size": "大",
+      "dependsOn": [
+        "R02"
+      ],
+      "inputContract": "R02规范endpoint/授权origin与受控网络策略",
+      "deliverable": "解析-连接一致和限长取消读取",
+      "modifyExisting": [
+        "apps/desktop/src-tauri/src/proxy/security.rs",
+        "apps/desktop/src-tauri/src/providers/adapter.rs"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "apps/desktop/src-tauri/tests/proxy.rs",
+        "apps/desktop/src-tauri/tests/proxy_server.rs",
+        "apps/desktop/src-tauri/tests/provider_adapter.rs"
+      ],
+      "redCases": [
+        "IPv6/映射私网/混合DNS/重绑定/redirect/proxy",
+        "非2xx chunked与解压超限、取消"
+      ],
+      "acceptance": "真实连接只用已校验地址，TLS主机校验不关闭，扩容前限额",
+      "rollback": "不支持策略时拒绝发送，不用手写host fallback",
+      "commitSubject": "fix(network): enforce resolved endpoint policy and bounded error bodies",
+      "testCommands": [
+        "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test proxy --test proxy_server --test provider_adapter"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R04",
+      "batch": "B2",
+      "ownerRole": "原生仓库/导出UI",
+      "size": "中",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "受控导出根或native一次性授权，不信任renderer路径",
+      "deliverable": "有授权且原子不覆盖的导出",
+      "modifyExisting": [
+        "apps/desktop/src-tauri/src/commands/repository.rs",
+        "apps/desktop/src-tauri/src/repository/package.rs",
+        "apps/web/src/components/ProjectPackagePanel.tsx"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "apps/desktop/src-tauri/tests/repository_package.rs",
+        "apps/desktop/src-tauri/tests/project_repository.rs"
+      ],
+      "redCases": [
+        "../ UNC ADS保留名、联接竞态、预建tmp",
+        "重复token、已有目标、取消导出"
+      ],
+      "acceptance": "根外零写入，失败不截断旧文件，正常包可往返",
+      "rollback": "禁用原生导出，不恢复任意路径",
+      "commitSubject": "fix(repository): require native export destination authority",
+      "testCommands": [
+        "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test repository_package --test project_repository"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R05",
+      "batch": "B2",
+      "ownerRole": "原生归档/附件",
+      "size": "中",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "独立raw/entry/aggregate/count/attachment限额",
+      "deliverable": "两阶段预扫与有界解码",
+      "modifyExisting": [
+        "apps/desktop/src-tauri/src/repository/archive.rs",
+        "apps/desktop/src-tauri/src/repository/package.rs",
+        "apps/desktop/src-tauri/src/commands/repository.rs",
+        "apps/web/src/components/ProjectPackagePanel.tsx"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "apps/desktop/src-tauri/tests/repository_package.rs",
+        "apps/desktop/src-tauri/tests/project_repository.rs"
+      ],
+      "redCases": [
+        "小限额聚合超限、共享offset、重复名、重叠、溢出",
+        "base64长度/padding谎报、FileReader前限额"
+      ],
+      "acceptance": "CRC/clone前拒绝全部非法元数据，实际读取/分配有界",
+      "rollback": "保持拒绝危险输入，不取消限额",
+      "commitSubject": "fix(package): reject overlapping entries before aggregate allocation",
+      "testCommands": [
+        "node scripts/toolchain.mjs cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test repository_package --test project_repository"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R06",
+      "batch": "B2",
+      "ownerRole": "持久化/数据保护",
+      "size": "中",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "字符串与数值字段合同、草稿恢复状态",
+      "deliverable": "CSV文本保护和备份失败写保护",
+      "modifyExisting": [
+        "apps/web/src/persistence/exporters.ts",
+        "apps/web/src/persistence/draftStorage.ts",
+        "apps/web/src/useDraftPersistence.ts"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "apps/web/src/persistence/exporters.test.ts",
+        "apps/web/src/persistence/draftStorage.test.ts",
+        "apps/web/src/useDraftPersistence.test.tsx"
+      ],
+      "redCases": [
+        "公式前缀/空白/制表符与可信负数",
+        "旁路备份失败后编辑/重载仍不得覆盖原key"
+      ],
+      "acceptance": "原文唯一副本保留且提示真实；CSV约定消费者验证",
+      "rollback": "关闭不安全导出或自动覆盖，不删除原稿",
+      "commitSubject": "fix(storage): preserve unreadable drafts and escape CSV formula text",
+      "testCommands": [
+        "npm.cmd exec -- vitest run apps/web/src/persistence/exporters.test.ts apps/web/src/persistence/draftStorage.test.ts apps/web/src/useDraftPersistence.test.tsx --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R07",
+      "batch": "B3",
+      "ownerRole": "语义/题图UI",
+      "size": "中",
+      "dependsOn": [
+        "R01"
+      ],
+      "inputContract": "原文scope、图像revision/observation、实体引用",
+      "deliverable": "未确认观察不入事实，函数相关义务同一绑定",
+      "modifyExisting": [
+        "packages/agent-core/src/diagramVerification.ts",
+        "apps/web/src/services/problemImageReview.ts",
+        "apps/web/src/services/problemImagePrompt.ts",
+        "apps/web/src/components/agent/ProblemImageComposer.tsx"
+      ],
+      "createPlanned": [
+        "apps/web/src/services/problemImagePrompt.reviewGate.test.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/diagramVerification.test.ts",
+        "apps/web/src/services/problemImageReview.test.ts"
+      ],
+      "redCases": [
+        "根式/分式坐标、相交/平行/棱及unknown observation",
+        "伪造确认和确认后改内容",
+        "主函数加辅助曲线后的交点核验"
+      ],
+      "acceptance": "prompt装配层也阻断未确认事实；正确主曲线不被辅助曲线误伤",
+      "rollback": "保持人工复核和绑定unknown，不猜第一条",
+      "commitSubject": "fix(image): enforce reviewed observations and consistent curve binding",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/diagramVerification.test.ts apps/web/src/services/problemImageReview.test.ts apps/web/src/services/problemImagePrompt.reviewGate.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R08",
+      "batch": "B3",
+      "ownerRole": "UI/E2E",
+      "size": "大",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "现有生产AppChrome入口与宽度/网格裁决",
+      "deliverable": "当前UI Page Object、真实披露与可信E2E",
+      "modifyExisting": [
+        "apps/web/src/components/AppChrome.tsx",
+        "apps/web/src/App.tsx",
+        "apps/web/src/persistence/inspectorWidth.ts",
+        "apps/web/src/threeSceneGrid.ts",
+        "e2e/ribbon-ui.spec.ts",
+        "e2e/three-grid-fade.spec.ts",
+        "e2e/agent-derived-sphere.spec.ts",
+        "e2e/next-phase-flag-entry.spec.ts",
+        "e2e/solid-prism.spec.ts"
+      ],
+      "createPlanned": [
+        "e2e/pages/MathCanvasPage.ts"
+      ],
+      "testFiles": [
+        "e2e/ribbon-ui.spec.ts",
+        "e2e/three-grid-fade.spec.ts",
+        "e2e/agent-derived-sphere.spec.ts"
+      ],
+      "redCases": [
+        "旧设置/工作模式定位器",
+        "属性栏/网格规格冲突",
+        "外接球信息只存在fixture"
+      ],
+      "acceptance": "失败testId逐项归因；生产披露真实；单worker和固定并发完整回归均有记录",
+      "rollback": "保留可用生产入口，不删失败用例或无限重试",
+      "commitSubject": "fix(e2e): align production accessibility and sphere disclosure contracts",
+      "testCommands": [
+        "npm.cmd exec -- playwright test e2e/ribbon-ui.spec.ts e2e/three-grid-fade.spec.ts e2e/agent-derived-sphere.spec.ts --workers=1 --retries=0"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R09",
+      "batch": "B1+B3",
+      "ownerRole": "评测/协议",
+      "size": "中",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "runtime最终接受计划/候选、provider支持schema子集",
+      "deliverable": "最终输出评分及schema/runtime一致性",
+      "modifyExisting": [
+        "apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts",
+        "apps/web/src/agent/modelPlanner.ts",
+        "packages/agent-core/src/schemas.ts"
+      ],
+      "createPlanned": [
+        "scripts/reliability-eval/finalOutcome.test.ts",
+        "scripts/reliability-eval/finalOutcome.ts"
+      ],
+      "testFiles": [
+        "apps/web/src/agent/modelPlanner.test.ts",
+        "packages/agent-core/src/schemas.test.ts"
+      ],
+      "redCases": [
+        "先对后错/先错后对/正确后取消/旧候选错hash",
+        "空actionKey/空白normalisation/非法null"
+      ],
+      "acceptance": "A先满足G0：历史round不能救最终错；B子集差分通过后整包关闭",
+      "rollback": "暂停成绩声明，不回到rounds.some",
+      "commitSubject": "fix(eval): score only accepted final output and align schema leaves",
+      "testCommands": [
+        "npm.cmd exec -- vitest run apps/web/src/agent/modelPlanner.test.ts packages/agent-core/src/schemas.test.ts scripts/reliability-eval/finalOutcome.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R10",
+      "batch": "B1",
+      "ownerRole": "CI/安全",
+      "size": "小",
+      "dependsOn": [
+        "R00"
+      ],
+      "inputContract": "工作流权限、真实官方Action提交身份",
+      "deliverable": "最小权限及不可变Action引用",
+      "modifyExisting": [
+        ".github/workflows/ci.yml"
+      ],
+      "createPlanned": [
+        "scripts/ci/workflowPolicy.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "可变引用/未知fork/过宽token/checkout持久凭据"
+      ],
+      "acceptance": "全部Action以实施时核对的SHA固定；无push任务不留token",
+      "rollback": "保持最小权限或暂停CI，不恢复浮动Action",
+      "commitSubject": "chore(ci): pin action identities and minimize token permissions",
+      "testCommands": [
+        "npm.cmd exec -- vitest run scripts/ci/workflowPolicy.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R11",
+      "batch": "B3",
+      "ownerRole": "依赖/验证",
+      "size": "中",
+      "dependsOn": [
+        "R10"
+      ],
+      "inputContract": "当前锁文件、审查时公告作为线索、隔离环境",
+      "deliverable": "兼容依赖修复与干净CI/审计",
+      "modifyExisting": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "createPlanned": [],
+      "testFiles": [],
+      "redCases": [
+        "实际安装不同于锁",
+        "把dry-run当干净安装",
+        "RustSec未验证却写无公告"
+      ],
+      "acceptance": "npm全量/生产及Rust审计结果明示；Node22隔离实际安装全套通过",
+      "rollback": "依赖包可回滚但相关公告重新开放并阻断发布",
+      "commitSubject": "chore(deps): update audited toolchain with clean-lock verification",
+      "testCommands": [
+        "npm.cmd audit --json",
+        "npm.cmd audit --omit=dev --json",
+        "npm.cmd ls --depth=0"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "R12",
+      "batch": "B6",
+      "ownerRole": "维护者/性能/发布",
+      "size": "大",
+      "dependsOn": [
+        "R11",
+        "T18"
+      ],
+      "inputContract": "所有G门禁证据、真实冷启动和安装回滚",
+      "deliverable": "性能/lint/安装及人工发布签收",
+      "modifyExisting": [
+        "apps/web/src/App.tsx",
+        "apps/web/src/agent/featureFlags.ts",
+        "docs/acceptance/agent-release-gate.md"
+      ],
+      "createPlanned": [],
+      "testFiles": [],
+      "redCases": [
+        "主包变小却首次作图卡死",
+        "旧存档/取消链回归",
+        "闭环未齐却放行"
+      ],
+      "acceptance": "审查25项映射闭环，未做项不伪造；无未经批准的版本/费用发布",
+      "rollback": "禁用风险入口、安全回滚，不退回已知漏洞线",
+      "commitSubject": "chore(release): close restart gates with verified rollout evidence",
+      "testCommands": [
+        "npm.cmd run typecheck",
+        "npm.cmd run lint",
+        "npm.cmd test -- --testTimeout=30000",
+        "npm.cmd run test:rust",
+        "npm.cmd run test:e2e"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md"
+    },
+    {
+      "id": "T01",
+      "batch": "B4",
+      "ownerRole": "题库/独立审题",
+      "size": "大",
+      "dependsOn": [
+        "R09",
+        "R00"
+      ],
+      "inputContract": "冻结manifest与原题、声明输入模式",
+      "deliverable": "36份黄金合同与可回放逐题验收",
+      "modifyExisting": [
+        "scripts/reliability-eval/runner.mjs",
+        "apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts"
+      ],
+      "createPlanned": [
+        "test-fixtures/reliability/drawing-contracts-36.json",
+        "scripts/reliability-eval/drawingContracts.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "删必要点/条件、少一道失败题、旧题hash改变",
+        "局部exact误当完整通过、未选scope丢分母"
+      ],
+      "acceptance": "36题均有独立审核；先六题可作小切片但不算P0全完成",
+      "rollback": "冻结旧报告；新contract/metric版本另存",
+      "commitSubject": "test(eval): define reviewed drawing contracts for the frozen cases",
+      "testCommands": [
+        "npm.cmd exec -- vitest run scripts/reliability-eval/drawingContracts.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T02",
+      "batch": "B4",
+      "ownerRole": "Agent语义/合同",
+      "size": "大",
+      "dependsOn": [
+        "T01",
+        "R01"
+      ],
+      "inputContract": "原文、legacy parts和已审核scope",
+      "deliverable": "单一ProblemContract/source map/scope与兼容IR",
+      "modifyExisting": [
+        "packages/agent-core/src/obligationIR.ts",
+        "packages/agent-core/src/numberedProblem.ts",
+        "packages/agent-core/src/diagramObligations.ts",
+        "packages/agent-core/src/promptNormalization.ts",
+        "packages/agent-core/src/planCompiler.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/problemContract.ts",
+        "packages/agent-core/src/problemContract.test.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/obligationIR.test.ts",
+        "packages/agent-core/src/promptNormalization.test.ts"
+      ],
+      "redCases": [
+        "跨问污染、goal当前提、free choice当前提",
+        "重复片段/Unicode原文offset、别名跨state",
+        "toLegacy丢parts"
+      ],
+      "acceptance": "IR往返无损；必要条件不可判定仍可见；R01-B完整选问从这里收口",
+      "rollback": "旧合同通过显式适配，缺来源不伪造完整证书",
+      "commitSubject": "feat(contract): preserve source scopes and entity states in obligation IR",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/obligationIR.test.ts packages/agent-core/src/promptNormalization.test.ts packages/agent-core/src/problemContract.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T03",
+      "batch": "B4",
+      "ownerRole": "关系解析",
+      "size": "中",
+      "dependsOn": [
+        "T02"
+      ],
+      "inputContract": "原题有类型关系及source span",
+      "deliverable": "比例/位置分离和完整角链",
+      "modifyExisting": [
+        "packages/agent-core/src/lengthEquality.ts",
+        "packages/agent-core/src/diagramObligations.ts",
+        "packages/agent-core/src/diagramVerification.ts"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "packages/agent-core/src/lengthEquality.test.ts",
+        "packages/agent-core/src/diagramObligations.test.ts",
+        "packages/agent-core/src/diagramVerification.test.ts"
+      ],
+      "redCases": [
+        "A=(0,0),E=(1,0),D=(1,2)满足DE=2EA但不共线",
+        "角链只读一端、度/弧度混用"
+      ],
+      "acceptance": "裸比不推位置；明示线段内仍核验；链式角逐条完整",
+      "rollback": "不恢复已证明错误的比例语义",
+      "commitSubject": "fix(parser): separate incidence from ratios and preserve angle chains",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/lengthEquality.test.ts packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/diagramVerification.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T04",
+      "batch": "B4",
+      "ownerRole": "表达式/参数",
+      "size": "大",
+      "dependsOn": [
+        "T02",
+        "T03"
+      ],
+      "inputContract": "合法数学语法与域、标准曲线的符号参数",
+      "deliverable": "带域AST和同实体参数约束",
+      "modifyExisting": [
+        "packages/agent-core/src/latexNormalisation.ts",
+        "packages/agent-core/src/diagramObligations.ts",
+        "packages/agent-core/src/obligationIR.ts",
+        "packages/geometry-kernel/src/expression.ts",
+        "packages/geometry-kernel/src/conic-parameters.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/symbolicConicContract.test.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/latexNormalisation.chain.test.ts",
+        "packages/agent-core/src/obligationIR.test.ts"
+      ],
+      "redCases": [
+        "分母0/根域丢失、x/x擅约分",
+        "GK-P01符号椭圆、GK-P08双曲线相切",
+        "未知函数和表达式长度/深度预算"
+      ],
+      "acceptance": "域与实体参数可独立代回；参数欠定不凭模型补值；不eval",
+      "rollback": "按受支持语法降级，不丢未知源片段",
+      "commitSubject": "feat(parser): retain domains in symbolic conic contracts",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/latexNormalisation.chain.test.ts packages/agent-core/src/obligationIR.test.ts packages/agent-core/src/symbolicConicContract.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T05",
+      "batch": "B4",
+      "ownerRole": "实体绑定/诊断",
+      "size": "中",
+      "dependsOn": [
+        "T02",
+        "T04",
+        "R07"
+      ],
+      "inputContract": "稳定entity/scope/state与生产函数绑定接口",
+      "deliverable": "全部曲线/辅助点绑定和原文诊断",
+      "modifyExisting": [
+        "packages/agent-core/src/diagramVerification.ts",
+        "packages/agent-core/src/diagramObligations.ts",
+        "packages/agent-core/src/planCompiler.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/diagramEntityBinding.test.ts",
+        "packages/agent-core/src/diagramSourceDiagnostics.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "两曲线调序/新增辅助圆/同名跨scope",
+        "GK-P08内部残留空白误报原文缺式",
+        "JT-P08断言名称有比例但未检查比例"
+      ],
+      "acceptance": "不猜第一条；不支持具体到源义务；名称与谓词匹配",
+      "rollback": "单实体适配保留，多实体歧义维持unknown",
+      "commitSubject": "fix(binding): bind obligations to stable entities and original source spans",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/diagramEntityBinding.test.ts packages/agent-core/src/diagramSourceDiagnostics.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T06",
+      "batch": "B4",
+      "ownerRole": "构造编排",
+      "size": "大",
+      "dependsOn": [
+        "T02",
+        "T05"
+      ],
+      "inputContract": "黄金required entities、scope和实体绑定",
+      "deliverable": "经过类型/无环检查的构造意图DAG",
+      "modifyExisting": [
+        "packages/agent-core/src/deterministicProblemRoute.ts",
+        "packages/agent-core/src/planCompiler.ts",
+        "packages/agent-core/src/solver/solverContracts.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/drawingIntent.ts",
+        "packages/agent-core/src/drawingIntent.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "GK-S02缺E/F/P、JT-P06缺焦点",
+        "循环依赖、缺宿主、重复ID、错折前状态"
+      ],
+      "acceptance": "所有必需对象有真实图元或精确失败节点；不靠孤立label假物化",
+      "rollback": "不支持算子明确拒绝，不让模型坐标绕过合同",
+      "commitSubject": "feat(geometry): compile required objects into a typed construction DAG",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/drawingIntent.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T07",
+      "batch": "B4",
+      "ownerRole": "平面构造",
+      "size": "大",
+      "dependsOn": [
+        "T04",
+        "T06",
+        "T11"
+      ],
+      "inputContract": "曲线参数/域和构造DAG",
+      "deliverable": "平面交点/焦点/切线/弦及全部合法根",
+      "modifyExisting": [
+        "packages/geometry-kernel/src/conics.ts",
+        "packages/geometry-kernel/src/conic-parameters.ts",
+        "packages/geometry-kernel/src/conic-line.ts",
+        "packages/geometry-kernel/src/curve-intersections.ts",
+        "packages/agent-core/src/deterministicProblemRoute.ts",
+        "packages/agent-core/src/planCompiler.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/solver/planarDrawing.ts",
+        "packages/agent-core/src/solver/planarDrawing.test.ts"
+      ],
+      "testFiles": [
+        "packages/geometry-kernel/src/conic-line.test.ts"
+      ],
+      "redCases": [
+        "竖直线、相切、无根、抛物线轴向单交非切",
+        "多曲线实体/多问缺辅助对象、域外根"
+      ],
+      "acceptance": "18道平面题中本算子适用合同逐条回代；函数剩余项交T08不虚称18全过",
+      "rollback": "关闭新算子，不关闭独立核验",
+      "commitSubject": "feat(geometry): construct planar entities with domain-checked intersections",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/geometry-kernel/src/conic-line.test.ts packages/agent-core/src/solver/planarDrawing.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T08",
+      "batch": "B4",
+      "ownerRole": "函数/动态几何",
+      "size": "大",
+      "dependsOn": [
+        "T07",
+        "T11",
+        "R07"
+      ],
+      "inputContract": "函数AST、题设域、宿主参数和DAG",
+      "deliverable": "函数/切线/轨迹依赖",
+      "modifyExisting": [
+        "packages/geometry-kernel/src/expression.ts",
+        "packages/geometry-kernel/src/calculus.ts",
+        "packages/geometry-kernel/src/function-evidence.ts",
+        "packages/geometry-kernel/src/dynamic-points.ts",
+        "packages/geometry-kernel/src/dependency-graph.ts",
+        "packages/agent-core/src/diagramVerification.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/solver/functionDrawing.test.ts"
+      ],
+      "testFiles": [
+        "packages/geometry-kernel/src/function-evidence.test.ts"
+      ],
+      "redCases": [
+        "1/x跨间断连线、sqrt域外、导数未定义",
+        "P(t)=(-1,t)多次拖动失宿主",
+        "外点切线多根/区间边界"
+      ],
+      "acceptance": "显示采样不冒充全域证明；宿主/分支在更新后依然核验",
+      "rollback": "未支持导数/全根能力明确unknown",
+      "commitSubject": "feat(function): preserve domains and host dependencies in drawing",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/geometry-kernel/src/function-evidence.test.ts packages/agent-core/src/solver/functionDrawing.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T09",
+      "batch": "B4",
+      "ownerRole": "立体构造",
+      "size": "大",
+      "dependsOn": [
+        "T06",
+        "T11"
+      ],
+      "inputContract": "合法底面/尺寸/垂足/形状合同",
+      "deliverable": "参数化实体、辅助点和拓扑证据",
+      "modifyExisting": [
+        "packages/agent-core/src/solver/prism.ts",
+        "packages/agent-core/src/solver/pyramid.ts",
+        "packages/agent-core/src/solver/tetrahedron.ts",
+        "packages/agent-core/src/solver/witnessSearch.ts",
+        "packages/agent-core/src/solver/solverContracts.ts",
+        "packages/geometry-kernel/src/solid-builders.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/solver/solidDrawingContracts.test.ts"
+      ],
+      "testFiles": [
+        "packages/geometry-kernel/src/solid-builders.test.ts",
+        "packages/agent-core/src/solver/prism.test.ts",
+        "packages/agent-core/src/solver/pyramid.test.ts"
+      ],
+      "redCases": [
+        "GK-S03非共面/自交/方向/断连",
+        "直/斜棱柱混用、顶点退化、缺宿主",
+        "开放纸面误作闭合体"
+      ],
+      "acceptance": "有尺寸/拓扑/辅助点独立证据，失败不出已验草稿",
+      "rollback": "按形状关闭，错误拓扑检查保留",
+      "commitSubject": "feat(solid): build constrained solids without guessed topology",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/geometry-kernel/src/solid-builders.test.ts packages/agent-core/src/solver/prism.test.ts packages/agent-core/src/solver/pyramid.test.ts packages/agent-core/src/solver/solidDrawingContracts.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T10",
+      "batch": "B4",
+      "ownerRole": "折叠求解",
+      "size": "大",
+      "dependsOn": [
+        "T09",
+        "T11"
+      ],
+      "inputContract": "铰链、parentState、映射、转向和目标角合同",
+      "deliverable": "合法折叠变换谱系与分支实例",
+      "modifyExisting": [
+        "packages/agent-core/src/solver/foldHinges.ts",
+        "packages/agent-core/src/solver/coupledFolds.ts",
+        "packages/geometry-kernel/src/foldSystem.ts",
+        "packages/geometry-kernel/src/rotation3d.ts",
+        "packages/geometry-kernel/src/solidGoalMeasurements.ts"
+      ],
+      "createPlanned": [],
+      "testFiles": [
+        "packages/agent-core/src/solver/foldHinges.test.ts",
+        "packages/agent-core/src/planCompiler.foldBranches.test.ts",
+        "packages/agent-core/src/planCompiler.coupledFolds.test.ts"
+      ],
+      "redCases": [
+        "铰链漂移、D/P混绑、双折顺序/镜像",
+        "零长铰链、目标角定义错、数值not-found冒充unsat"
+      ],
+      "acceptance": "保距/域/目标角独立回代；分支完备性不假称",
+      "rollback": "双折不支持则显式拒绝，不折成错误示意",
+      "commitSubject": "feat(fold): track state lineage and verified branch witnesses",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/solver/foldHinges.test.ts packages/agent-core/src/planCompiler.foldBranches.test.ts packages/agent-core/src/planCompiler.coupledFolds.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T11",
+      "batch": "B4基础",
+      "ownerRole": "数值核验",
+      "size": "大",
+      "dependsOn": [
+        "T02",
+        "T03"
+      ],
+      "inputContract": "量纲/尺度/域合同及现有内核",
+      "deliverable": "统一可版本化数值策略与退化分类",
+      "modifyExisting": [
+        "packages/geometry-kernel/src/numeric.ts",
+        "packages/geometry-kernel/src/exact-forms.ts",
+        "packages/geometry-kernel/src/conic-line.ts",
+        "packages/geometry-kernel/src/solid-builders.ts",
+        "packages/agent-core/src/diagramVerification.ts"
+      ],
+      "createPlanned": [
+        "packages/geometry-kernel/src/numericRobustness.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "尺度10^-3/1/10^3、平移/旋转",
+        "近共线/近切线正负边界、NaN/Infinity/零法向",
+        "有限残差却病态或错域"
+      ],
+      "acceptance": "符号/度量/求解残差分层，误差跨零时unknown；构造器后续采用此接口",
+      "rollback": "旧策略不得放宽阈值绕过负例",
+      "commitSubject": "fix(numeric): version scale-aware residual and degeneracy policies",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/geometry-kernel/src/numericRobustness.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T12",
+      "batch": "B4",
+      "ownerRole": "Agent调度/worker",
+      "size": "大",
+      "dependsOn": [
+        "T06",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+        "R03",
+        "R09"
+      ],
+      "inputContract": "结构化构造诊断与现有共享预算",
+      "deliverable": "有界局部修复、停滞和取消终态",
+      "modifyExisting": [
+        "packages/agent-core/src/coordinator.ts",
+        "packages/agent-core/src/budget.ts",
+        "packages/agent-core/src/planCompiler.ts",
+        "apps/web/src/agent/modelPlanner.ts",
+        "apps/web/src/agent/agentRuntime.ts",
+        "apps/web/src/agent/geometryWorkerClient.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/reliabilityDiagnostics.ts",
+        "packages/agent-core/src/reliabilityDiagnostics.test.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/coordinator.test.ts",
+        "packages/agent-core/src/budget.test.ts",
+        "apps/web/src/agent/geometryWorkerClient.test.ts"
+      ],
+      "redCases": [
+        "同candidate/故障循环、传输与schema/compile叠加越预算",
+        "worker无响应/取消/迟到消息",
+        "缺能力仍反复问模型"
+      ],
+      "acceptance": "请求/求解资源账本完整，not-found/timeout不映射unsat，修后仍全验",
+      "rollback": "停修复保持诊断，不恢复无限重试",
+      "commitSubject": "feat(repair): bound local graph repair and cancel stale work",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/coordinator.test.ts packages/agent-core/src/budget.test.ts apps/web/src/agent/geometryWorkerClient.test.ts packages/agent-core/src/reliabilityDiagnostics.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T13",
+      "batch": "B4",
+      "ownerRole": "独立验收",
+      "size": "大",
+      "dependsOn": [
+        "T01",
+        "T02",
+        "T05",
+        "T07",
+        "T08",
+        "T09",
+        "T10",
+        "T12"
+      ],
+      "inputContract": "审核合同、最终场景、完整覆盖和数值策略",
+      "deliverable": "完整数学证书与变异拒绝",
+      "modifyExisting": [
+        "packages/agent-core/src/diagramVerification.ts",
+        "packages/agent-core/src/verification/taskAcceptance.ts",
+        "packages/agent-core/src/verification/completionGate.ts",
+        "packages/agent-core/src/verification/taskVerification.ts",
+        "apps/web/src/agent/acceptance.ts",
+        "apps/web/src/agent/agentRunner.ts"
+      ],
+      "createPlanned": [
+        "packages/agent-core/src/verification/drawingCertificate.ts",
+        "packages/agent-core/src/verification/drawingCertificate.test.ts",
+        "packages/agent-core/src/verification/drawingMutation.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "空required/缺条件/重复ID/未支持",
+        "删点/交换曲线/错角/错分支/NaN/伪造passed",
+        "构造器自报几何而最终坐标不满足"
+      ],
+      "acceptance": "36题完整数学合同/必要反例通过；证书读最终图元，不信模型自评",
+      "rollback": "停完整证书展示为未验，不改成旧host pass",
+      "commitSubject": "feat(verification): certify complete contracts against final geometry",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/verification/drawingCertificate.test.ts packages/agent-core/src/verification/drawingMutation.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T14",
+      "batch": "B4",
+      "ownerRole": "提交/生命周期",
+      "size": "大",
+      "dependsOn": [
+        "T13",
+        "R01",
+        "R06"
+      ],
+      "inputContract": "source/contract/candidate/scope/baseRevision/run/session绑定",
+      "deliverable": "过期检测与原子一次确认",
+      "modifyExisting": [
+        "apps/web/src/agent/draftStore.ts",
+        "apps/web/src/agent/agentRuntime.ts",
+        "apps/web/src/agent/agentRunner.ts",
+        "packages/agent-core/src/committerAdapter.ts",
+        "packages/agent-core/src/verification/renderEvidence.ts"
+      ],
+      "createPlanned": [
+        "apps/web/src/agent/drawingCertificateStaleness.test.ts"
+      ],
+      "testFiles": [
+        "packages/agent-core/src/committerAdapter.test.ts",
+        "apps/web/src/agent/draftStore.test.ts"
+      ],
+      "redCases": [
+        "确认前改场景/题文/scope、双击确认",
+        "取消后晚到、跨会话、旧文件证书",
+        "相机只变视觉不重复问模型"
+      ],
+      "acceptance": "确认前零写入，确认一次可撤销，旧证据不提交",
+      "rollback": "保持CAS/一次确认安全，不复活stale结果",
+      "commitSubject": "fix(commit): bind certification to current drafts and scene revisions",
+      "testCommands": [
+        "npm.cmd exec -- vitest run packages/agent-core/src/committerAdapter.test.ts apps/web/src/agent/draftStore.test.ts apps/web/src/agent/drawingCertificateStaleness.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T15",
+      "batch": "B5",
+      "ownerRole": "渲染/可读性",
+      "size": "大",
+      "dependsOn": [
+        "T14",
+        "R08"
+      ],
+      "inputContract": "固定环境和最终数学候选",
+      "deliverable": "真实可见性证据/布局",
+      "modifyExisting": [
+        "apps/web/src/agent/agentRunner.ts",
+        "apps/web/src/agent/renderLayoutInput.ts",
+        "packages/agent-core/src/verification/renderEvidence.ts",
+        "packages/agent-core/src/verification/layoutModel.ts"
+      ],
+      "createPlanned": [
+        "e2e/drawing-reliability-render.spec.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "场景存在而画布外/标签缺失/遮挡",
+        "虚实线和相机错误、hash不同",
+        "snapshot阈值放大掩盖问题"
+      ],
+      "acceptance": "36题rendered+截图+人工读图与数学同候选；structuredOnly不升级",
+      "rollback": "关新布局回未验视觉，不改数学坐标凑好看",
+      "commitSubject": "feat(render): verify actual diagram visibility and labels",
+      "testCommands": [
+        "npm.cmd exec -- playwright test e2e/drawing-reliability-render.spec.ts --workers=1 --retries=0"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T16",
+      "batch": "B5",
+      "ownerRole": "桌面/浏览器交互",
+      "size": "大",
+      "dependsOn": [
+        "T15",
+        "R02",
+        "R04",
+        "R05",
+        "R06",
+        "R07"
+      ],
+      "inputContract": "真实输入、草稿、原生存储和动态依赖",
+      "deliverable": "确认撤销/重载/拖动/配图闭环",
+      "modifyExisting": [
+        "apps/web/src/agent/agentRuntime.ts",
+        "apps/web/src/agent/draftStore.ts",
+        "packages/agent-core/src/committerAdapter.ts"
+      ],
+      "createPlanned": [
+        "e2e/drawing-reliability-lifecycle.spec.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "保存丢依赖/重载重复ID",
+        "拖动脱宿主/错误证书不失效",
+        "OCR错标、重叠确认、取消写入"
+      ],
+      "acceptance": "36题最小生命周期，四族复杂交互；浏览器/桌面/图像各自记录",
+      "rollback": "旧文件可读，证据可丢而原稿不可丢",
+      "commitSubject": "test(delivery): verify diagram lifecycle in real UI and desktop",
+      "testCommands": [
+        "npm.cmd exec -- playwright test e2e/drawing-reliability-lifecycle.spec.ts --workers=1 --retries=0"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T17",
+      "batch": "B6",
+      "ownerRole": "独立评测/费用审核",
+      "size": "大",
+      "dependsOn": [
+        "T16",
+        "R09",
+        "R11"
+      ],
+      "inputContract": "冻结能力合同、独立未见题和预算批准",
+      "deliverable": "分族分轮首轮/修复后成绩与不确定性",
+      "modifyExisting": [
+        "scripts/reliability-eval/runner.mjs",
+        "apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts"
+      ],
+      "createPlanned": [
+        "scripts/reliability-eval/drawingEvaluationContract.test.ts"
+      ],
+      "testFiles": [],
+      "redCases": [
+        "盲测泄漏、删失败分母、最佳轮冒首轮",
+        "同题重复当独立样本、无预算启动",
+        "只报新版本有利成绩"
+      ],
+      "acceptance": "36题全链路和至少120独立题/每族30/3轮原始计数；费用unknown如实",
+      "rollback": "预算停止立即停止，旧证据不覆盖",
+      "commitSubject": "test(eval): freeze holdout sampling and bounded live evaluation",
+      "testCommands": [
+        "npm.cmd exec -- vitest run scripts/reliability-eval/drawingEvaluationContract.test.ts --testTimeout=30000"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    },
+    {
+      "id": "T18",
+      "batch": "B6",
+      "ownerRole": "发布准备/兼容",
+      "size": "大",
+      "dependsOn": [
+        "T17",
+        "R10",
+        "R11"
+      ],
+      "inputContract": "全部数学/安全/交互证据及版本身份",
+      "deliverable": "发布包核对、灰度与安全回滚准备",
+      "modifyExisting": [
+        "apps/web/src/agent/featureFlags.ts",
+        "docs/acceptance/agent-release-gate.md",
+        "docs/acceptance/agent-tool-loop-scorecard.md",
+        "docs/feature-catalog.md"
+      ],
+      "createPlanned": [],
+      "testFiles": [],
+      "redCases": [
+        "关新路径错误恢复漏洞/证书",
+        "包与报告不同revision",
+        "旧存档损坏、未执行项填通过"
+      ],
+      "acceptance": "安装/冷启动/旧档/回滚证据齐，移交R12最终人工签收；不自行发版",
+      "rollback": "恢复安全子集/关闭入口，不回到已知漏洞旧main",
+      "commitSubject": "chore(release): prepare gated packages and safe rollback evidence",
+      "testCommands": [
+        "npm.cmd run typecheck",
+        "npm.cmd run lint",
+        "npm.cmd test -- --testTimeout=30000",
+        "npm.cmd run test:rust",
+        "npm.cmd run test:e2e"
+      ],
+      "testExecutionNote": "Future implementation commands: create planned test files first and confirm nonzero test count; no command listed here is claimed as executed this turn.",
+      "completionEvidence": [
+        "actual RED failure reason and exit code",
+        "GREEN and negative/compatibility tests with test count",
+        "production integration and side-effect/resource checks",
+        "independent review or explicit pending-review status",
+        "safe rollback/disabled entrypoint and remaining risks",
+        "code/lock/input/contract/candidate revision identity"
+      ],
+      "technicalReference": "docs/superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md"
+    }
+  ],
+  "executionPriority": [
+    "R00",
+    "R01:A",
+    "R09:A",
+    "R10",
+    "R02",
+    "R03",
+    "R04",
+    "R05",
+    "R06",
+    "R07",
+    "R08",
+    "R09:B",
+    "R11",
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "T11",
+    "T07",
+    "T08",
+    "T09",
+    "T10",
+    "T12",
+    "T13",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T18",
+    "R12"
+  ]
+}

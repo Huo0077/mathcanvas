@@ -1,5 +1,10 @@
 # MathCanvas 交互体验与界面设计（UI/UX）完整规范及重构方案
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **文档状态**：第一阶段（核心微观手感 + 宏观布局与命令面板）已落地实现并全量单测验证通过（501 文件 / 5344 项全绿）  
 > **基准版本**：基于 2026-11-02 状态与代码基准对齐  
 > **关联文档**：[`docs/current-status.md`](../../current-status.md) · [`CHANGELOG.md`](../../../CHANGELOG.md) · [`docs/project-progress.md`](../../project-progress.md) · [`docs/feature-catalog.md`](../../feature-catalog.md)

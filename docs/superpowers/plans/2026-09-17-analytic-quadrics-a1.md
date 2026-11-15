@@ -1,5 +1,10 @@
 # A1「解析二次曲面与真圆」实现计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：**8 片全部落地并已交付**（用户随后选定"就此收尾 A1"，见 `docs/project-progress-early.md` 的「解析二次曲面 A1」与「收尾决定」两节；逐片 RED→GREEN 证据、门禁数字与两处如实偏差都记在那里）。**两处与本文写法的差异**：①描边用 `THREE.Line` 而不是计划里写的 `Line2` + `LineMaterial`（理由见 spec §5.6：本片要解决的是**曲线形状**，不是描边宽度，`Line2` 也不替你重采样）；②Task 5 的"解析展开"**延后**（spec §4 与 §5.5 第 8 项：多边形版与解析版宽度只差 0.07%，价值低于投影这一项）。下面的复选框保留为**计划原文**，不逐条回勾。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

@@ -1,5 +1,9 @@
 > **当前状态**：见 [当前状态](../../docs/current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
 
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：桌面技术/使用说明；发布、安全与真实provider状态只从统一入口读取。实时状态仅维护在[当前状态](../../docs/current-status.md)；执行总顺序以[完整实施主计划](../../docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../../docs/superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
+
 /**
  * MathCanvas 桌面外壳（Tauri 2）—— **前端仍是 `apps/web` 那一份，不重复实现**。
  *

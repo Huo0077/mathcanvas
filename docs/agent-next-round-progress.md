@@ -1,24 +1,21 @@
-# 下一轮工作导航：先处理审查阻断，再提升画图能力
+# 下一轮工作导航
 
-最后更新：2026-11-15。
+最后更新：2026-11-15（仅导航对齐）。
 
-本页只作导航，功能阶段与发布状态以[当前状态](current-status.md)为准。原P0–P8不重新编号；报告里的P0–P3是另一套审查建议，本轮统一用R00–R12/G0–G4衔接。
+**实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 
-## 先确认版本与总方案
+## 从哪里开始
 
-阅读[统一全面实施总方案](superpowers/plans/2026-11-15-main-restart-master-plan.md)及[main重启决定](audit/2026-11-15-main-restart/README.md)：旧线59ea3613..d8743a32共47个提交已备份并标记本轮舍弃。新main从59ea3613重新提交，不继承旧线实现/评测/阶段完成。当前文档提交不等于产品发布。
+1. 读主计划的版本约束和第10–16节：31项任务合同、依赖/文件/测试、首批RED、接口、验收和暂停条件；[机器台账](superpowers/plans/2026-11-15-implementation-task-ledger.json)与之配套，不维护另一份实时进度。
+2. 首批固定R00 → R01-A → R09-A → R10。详细代码位置/安全反例看[R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)，它不再独立改变主计划的顺序。
+3. 再处理G1原生安全/数据保护，G2输入/UI/schema/干净验证；黄金合同可先整理，但不能等待完整大重构才阻断C1错误放行。
+4. 按[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)推进六题/36题，T11数值合同先于构造器，T18后交R12最终签收。
+5. 真实provider、费用与产品发布需另行批准；本次只对齐文档，不重复强推main。
 
-## 下一步功能实施从这里开始
+## 历史和证据边界
 
-1. 阅读[项目审查报告](audit/2026-11-15-project-review/README.md)，先理解C1错误数学放行、原生安全、数据保护和完整E2E失败。
-2. 按[审查驱动下一步方案](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)执行：R00基线→R01-A漏小问阻断→R09-A最终轮次计分→R10 CI信任边界。所有任务仍待实施。
-3. 完成R02–R06/G1原生安全和数据保护，R07–R09/R11的题图、UI合同、schema与干净验证。C1安全护栏不能等36题全审或大IR升级才落地。
-4. 回到[18个画图工作包手册](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)的六题切片与36题路线，沿用[总体设计](superpowers/specs/2026-11-15-drawing-reliability-design.md)和[P0–P8计划](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)。
-5. 最后按新方案G4和原T18验收安装、性能、盲测、成本与安全回滚。真实模型预算与产品发布另批；本次main重启提交/同步已获用户授权，后续功能提交按各任务授权执行。
+[版本决定](audit/2026-11-15-main-restart/README.md)固定59ea3613代码基线，be033b71为已完成的重启提交；旧线47提交已舍弃且有备份。正文带历史标记的N/V/W/Task计划只用于追溯，不计本轮已完成。
 
-## 必须记住的边界
+[项目审查报告](audit/2026-11-15-project-review/README.md)、[36题原始证据](audit/2026-11-15-drawing-baseline/README.md)和[原件归档](audit/2026-11-15-pre-reset/README.md)保持原样。报告的E2E/基线读数、只读探针和本次文档测试不是同一类证据；以当前状态中的分层说明为准。
 
-- 用户指定59ea3613继续有效，本次已核对旧远端47提交并备份；不merge回旧线，不能把后续旧版本当本轮实现。
-- 完整E2E已经运行但未通过，不再以“未跑”概括项目现状；审查结果与本轮仅文档验证分开。
-- 先正确拒绝漏条件的图，再提高成功率；澄清、只画公共底图和历史轮次的正确答案不能算最终画图成功。
-- [审查问题映射](audit/2026-11-15-review-plan-response/finding-task-map.json)覆盖每个问题；[旧进度原件](audit/2026-11-15-pre-reset/README.md)只供历史追溯。
+[本次对齐清单](audit/2026-11-15-progress-alignment/README.md)列出活动文件与历史导航处理范围。

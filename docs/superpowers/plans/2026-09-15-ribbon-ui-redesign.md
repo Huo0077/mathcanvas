@@ -1,5 +1,10 @@
 # MathCanvas Ribbon UI Redesign Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划 **Task 1–14 全部完成**（统一 Ribbon、工作区 Tab Bar、可折叠 / 可固定、上下文 Inspector、动态状态栏、命名与 3D 引导优化），文件末尾记录的 **Task 15–18**（2D 绘图命令条出图纸、读数按视图单位定尺、投影来源、截面 / 截线创建）也已完成。**之后的变化**：右侧的约束面板与智能体面板按用户要求移除（数据保留），工程制图与 CAD 2D 绘图做了视觉与交互重做。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** Execute this plan task-by-task in the current session. Do not use subagent agents. Steps use checkbox (`- [ ]`) syntax for tracking.

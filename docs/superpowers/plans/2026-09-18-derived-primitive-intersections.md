@@ -1,5 +1,10 @@
 # 派生图元成为一等图元：实施计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-18）**：**9 个任务全部完成并推送**（8 个实现/测试任务 + 文档收口）。逐任务的实测数字与两处如实偏差（e2e 最初没有真正验证切线、顺手修掉一个非法 UTF-8 字节）见 `docs/project-progress.md` 的对应小节；最终门禁：单测 125 文件 / 1500 用例、lint 0 error / 14 warning、生产构建通过、Playwright 112/112。
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

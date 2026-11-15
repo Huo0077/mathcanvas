@@ -1,5 +1,10 @@
 # Point-Driven 3D Geometry Implementation Plan
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：本计划的 **9 个切片全部完成**（每个切片下都有一行 `**Status:** [x] …` 完成标注）。后续同一方向又落地了：绑定宿主（`hosts3.ts`：线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面 / **实体内**体积）、交面 · 交线 · 交点三个独立图元、自动取景与相机跨工作区记忆、按签名增量同步、以及**背景与平面网格一格恒为 1 个世界单位**。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** Follow the repository testing and review workflow. Complete one slice at a time; do not mark a slice complete without its focused tests and recorded verification evidence.

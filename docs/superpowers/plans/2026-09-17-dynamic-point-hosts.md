@@ -1,5 +1,10 @@
 # 3D 动点宿主约束 实施计划（切片 1A-2）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-17 复核）**：**已完成**——`hosts3.ts` 里的线 / 线段 / 射线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面宿主、DSL 的可选绑定变体、`resolveBoundPoint3` 与依赖登记都已落地；本片刻意不做的 UI 与拖动随后由 **1A-3** 补齐（属性栏「宿主绑定」下拉 + 拖动状态机），之后又新增了**实体内**体积宿主（`inSolid` + 包围盒比例 `uvw`，越界夹回表面）与固定 1 单位网格。本仓库的**单一进度记录**是 [`docs/project-progress.md`](../../project-progress.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

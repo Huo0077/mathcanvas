@@ -1,5 +1,9 @@
 # 人工验收走查手册（一步一步）
 
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：人工验收操作参考；执行批次和发布门槛从主计划取得。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
+
 > **这份手册是给你（人）用的，不是给机器用的。** 机器能做的验收已经全在自动门禁里了
 >（`npm test` / `npm run test:e2e` / `npm run test:rust` / 四条文档门禁）；**这里剩下的三件事机器做不了**：
 > ① 人看图判断"像不像、对不对"；② 管理员权限装 MSI；③ 付费调用真实 provider。

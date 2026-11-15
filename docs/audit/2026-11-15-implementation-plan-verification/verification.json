@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-15",
+  "scope": "implementation_plan_and_read_only_probe",
+  "head": "be033b71ba32f1b7008d030b49359e21de076423",
+  "codeBaseline": "59ea36133c47971f4252e71f7a0f5ba003dd1028",
+  "documentationTests": {
+    "command": "npm.cmd run test:docs -- --testTimeout=30000",
+    "exitCode": 0,
+    "filesPassed": 8,
+    "passed": 22,
+    "failed": 0
+  },
+  "diffWhitespaceCheck": {
+    "exitCode": 0
+  },
+  "ledger": {
+    "tasks": 31,
+    "acyclic": true,
+    "existingPathReferences": 170,
+    "plannedPathReferences": 30,
+    "reviewFindingsAndWarningCovered": 25,
+    "allHaveTestCommands": true,
+    "allHaveCompletionEvidence": true
+  },
+  "markdown": {
+    "files": 6,
+    "localLinksChecked": 135,
+    "broken": 0,
+    "encodingIssues": 0
+  },
+  "productStages": {
+    "total": 9,
+    "started": 0
+  },
+  "probe": {
+    "kind": "direct_compilePlan_read_only",
+    "inputs": 4,
+    "existingIncorrectPassed": 3,
+    "unverifiedWarnings": 1,
+    "allBaseDocumentsUnchanged": true,
+    "productFixApplied": false
+  },
+  "duplicatePlanLeftBehind": false,
+  "productCodeChanged": false,
+  "dependenciesChanged": false,
+  "modelCalls": 0,
+  "commitCreated": false,
+  "pushExecuted": false,
+  "planExampleChecks": {
+    "typescriptBlocksParsed": 3,
+    "finalArtifactProjectionCasesPassed": 6,
+    "scope": "Documentation code only, no production fix or integration claim"
+  }
+}

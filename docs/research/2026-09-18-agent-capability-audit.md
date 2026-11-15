@@ -1,5 +1,10 @@
 # MathCanvas：Agent 设计前全功能审阅
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../current-status.md)；执行顺序统一按[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 日期：2026-09-18。实际仓库：`D:\draw\draw`。
 
 > **2026-10-06 历史边界**：下文“Agent 仍是本地演示回复”等结论仅对应 2026-09-18 审阅基线，已被后续真实 Agent 管线超越；当前 V0a 作图进度以 [当前状态](../current-status.md) 与 [新任务进度](../agent-next-round-progress.md) 为准。

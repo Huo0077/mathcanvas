@@ -1,5 +1,10 @@
 # 无限长切线 + 数值精确形式转换：实施计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态（2026-09-18）**：**8 个任务全部完成并推送**（A 两片 + B 六片）。两处实施过程中的偏离都已在进度文档写明：①二次无理数那一层原本按 spec 的"有界枚举"实现，**实测最坏 114.9 ms/值**，改为反解 n 后 0.561 ms；②浏览器用例抓到 patch 层第五份度量名副本（漏周长/半径，按钮点了没反应），已修并补了防漂移的用例。最终门禁：单测 126 文件 / 1511 用例、lint 0 error / 14 warning、生产构建通过、Playwright 113/113。
 >
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

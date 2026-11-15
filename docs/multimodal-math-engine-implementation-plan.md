@@ -1,5 +1,10 @@
 # 多模态数理与工程交互绘图引擎
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](current-status.md)；执行顺序统一按[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **历史总规划，非当前进度台账（2026-09-29 索引）**：下文的“当前状态（2026-09-21）”、测试数量与阶段判断是当时快照，不能当成今天的读数。请看 [MathCanvas 当前状态](current-status.md)；本期高中立体交互的范围和逐模块进度分别见 [专题实施计划](superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md) 与 [专题进度记录](research/2026-09-29-high-school-geometry-interaction-progress.md)。原 P5 题图解析计划**不等于**本期已实现截图生成数学图，相关方案仍单独评审。
 > **现行作图题方向（2026-10-06）**：本篇只保留旧总规划；V0a 实验性自由三棱锥仍在中途验收，旧 P 阶段不等于新作图题已完成。现况看 [当前状态](current-status.md)、[V0–V3 计划](superpowers/plans/2026-10-06-diagram-agent-auto-lean-implementation-plan.md)。
 

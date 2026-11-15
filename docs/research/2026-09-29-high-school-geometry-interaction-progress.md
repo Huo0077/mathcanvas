@@ -1,5 +1,10 @@
 > **当前状态**：见 [当前状态](../current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../current-status.md)；执行顺序统一按[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 # 高中数学绘图与立体交互进度记录
 
 > **2026-10-11 四家族真题驱动升级：本页只保留此前传统几何交互/发行过程。** 现已完成的[真题作图需求调研](2026-10-11-four-family-exam-diagram-survey.md)与[GitHub 源码/测试取舍](2026-10-11-github-agent-implementation-survey.md)与[严格按 Task 1–21 执行的新任务卡](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)另列；这里“六类代表题通过”不能当新真题四族 Agent 覆盖，现时看[当前状态](../current-status.md)。

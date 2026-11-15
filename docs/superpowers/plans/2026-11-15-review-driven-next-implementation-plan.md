@@ -1,6 +1,10 @@
-# 审查驱动的下一步实施方案（59ea3613修订版）
+# 审查修复技术附录（R00–R12，59ea3613基线）
 
-**版本与总方案更新（2026-11-15）**：本次用户明确要求从59ea3613重新提交main。旧后续线47提交已备份并标记舍弃，不自动继承；统一顺序见[全面总方案](2026-11-15-main-restart-master-plan.md)，精确范围见[重启记录](../../audit/2026-11-15-main-restart/README.md)。本文关于此前“未提交/不推送/未fetch”的记录仅属于原方案编写时点；本次已获main重启提交/同步授权，未授权产品发布/付费评测。
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：R00–R12审查修复技术附录；不另定总顺序或完成状态。实时状态仅维护在[当前状态](../../current-status.md)；执行总顺序以[完整实施主计划](2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
+
+**版本事实（2026-11-15对齐）**：代码基线59ea3613、重启提交be033b71；旧范围59ea3613..d8743a32的47提交此前已备份并舍弃。重启提交/同步是已发生的操作，不再作为未来任务反复执行；本文实现细节待实际验收。本次对齐不提交/推送，不包含新功能或付费授权。
 
 > **执行要求**：先读取[原项目审查报告](../../audit/2026-11-15-project-review/README.md)，再按本方案R00–R12逐包RED→GREEN→集成验收。使用writing-plans、systematic-debugging、test-driven-development和verification-before-completion工作方式；未经用户明确要求不派生代理。本文件是待实施方案，不是已应用补丁。
 
@@ -10,7 +14,7 @@
 
 **Tech Stack**：既有TypeScript/Vitest/Playwright/Tauri-Rust；依赖或Action更新独立评审、在实施时核对，不照抄报告中的版本/SHA作为永久最新值。
 
-**Spec**：[画图总体设计](../specs/2026-11-15-drawing-reliability-design.md)；[原P0–P8阶段计划](2026-11-15-drawing-reliability-repair-plan.md)；[T01–T18实施手册](2026-11-15-drawing-reliability-execution-handbook.md)。本文件优先规定下一步顺序和新增发布前提，原两份实施文档保留画图任务细节。
+**Spec**：[画图总体设计](../specs/2026-11-15-drawing-reliability-design.md)；[原P0–P8阶段计划](2026-11-15-drawing-reliability-repair-plan.md)；[T01–T18实施手册](2026-11-15-drawing-reliability-execution-handbook.md)。本文件提供R任务的修改方向和安全负例；总顺序、跨任务依赖及发布前提服从完整实施主计划，原画图手册提供T任务细节。
 
 日期：2026-11-15。目标基线：59ea36133c47971f4252e71f7a0f5ba003dd1028，v4.3.0。
 

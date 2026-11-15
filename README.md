@@ -1,8 +1,12 @@
 # MathCanvas
 
-> **2026-11-15 主线重启声明**：本轮从 `59ea3613` 重新开发；旧后续线 `59ea3613..d8743a32` 的47个提交（含历史v4.4.0）已备份并标记为本轮舍弃，不继承其实现、成绩或发布结论。见[版本决定](docs/audit/2026-11-15-main-restart/README.md)、[全面实施总方案](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)与[当前状态](docs/current-status.md)。当前基线存在审查阻断，文档提交不代表产品发布。
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：项目首页与导航；不保存第二份实时进度。实时状态仅维护在[当前状态](docs/current-status.md)；执行总顺序以[完整实施主计划](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](docs/superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
 
-> **当前状态**：见 [当前状态](docs/current-status.md) —— 它是"现在时"的唯一来源。此处原有的 2026-10-16 快照已移除：同一段文本曾被复制进 13 个文件并开始漂移，状态只维护一份。
+> **2026-11-15 主线重启声明**：本轮从 `59ea3613` 重新开发；旧后续线 `59ea3613..d8743a32` 的47个提交（含历史v4.4.0）已备份并标记为本轮舍弃，不继承其实现、成绩或发布结论。见[版本决定](docs/audit/2026-11-15-main-restart/README.md)、[完整实施主计划](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)与[当前状态](docs/current-status.md)。当前基线存在审查阻断，文档提交不代表产品发布。
+
+> 旧阶段测试和发行数字保留为历史；最新读数、功能是否开始与发布阻断只看上面的当前状态入口，不由本页的使用说明推定。
 
 
 MathCanvas 是面向数学学习与工程绘图的交互式工作台。你可以在平面画布上绘制函数和几何图形，在立体画布中构造、观察和测量三维对象，也可以制作工程图纸。项目仍在持续开发；浏览器版本可以本地运行，部分 Agent 和桌面功能仍处于验证阶段。

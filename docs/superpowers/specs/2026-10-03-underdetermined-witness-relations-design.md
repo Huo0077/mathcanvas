@@ -1,5 +1,10 @@
 # 欠定图形的见证生成与关系核验 设计
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 **日期：** 2026-10-03 ｜ **状态：** **已按本设计实现并合并进 `main`（未打包、未发布）**，但**"能画出来"不等于"画对了"**：用户在真图上确认过一张错图**静默通过了全部门禁** —— 完整清单见 [`current-status.md`](../../current-status.md) §四「当前最严重的问题」；其中**"要求模型声明 `relations`"那一条设计已被真实运行推翻**，改为系统自己从原话抽（实施计划 [`../plans/2026-10-03-underdetermined-witness-relations-implementation-plan.md`](../plans/2026-10-03-underdetermined-witness-relations-implementation-plan.md)）｜ **来源：** 用户现场报障——「在四棱锥 P-ABCD 中，PA ⊥ 平面 ABCD，BC ∥ AD，AB ⊥ AD」这类**只有关系、没有数值**的描述画不出来
 
 ## 1. 用户工作与验收

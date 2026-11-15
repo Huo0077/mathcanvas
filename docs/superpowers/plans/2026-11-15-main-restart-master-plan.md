@@ -1,4 +1,8 @@
-# MathCanvas 从59ea3613重启的全面实施总方案
+# MathCanvas 从59ea3613重启的完整实施主计划
+
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：唯一实施主入口和执行合同；实时进度仍以current-status.md为准。实时状态仅维护在[当前状态](../../current-status.md)；执行总顺序以[完整实施主计划](2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
 
 日期：2026-11-15；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028；版号v4.3.0。
 
@@ -8,11 +12,11 @@
 
 **Tech Stack / 技术栈**：现有TypeScript/React/Three.js、Vitest/Playwright、Tauri/Rust。外部CAS/SMT/新provider仅经需求证据与独立spike批准后考虑；不把加依赖、加重试作为默认修复。
 
-**状态**：本轮完成全面计划、证据归档及main重启提交，不代表任何功能修复已实施。所有R/P功能工作仍未开始；当前版本禁止产品发布。本次用户授权重启main提交/同步，不等于授权付费评测或发布安装包。
+**状态**：此前main重启已提交为be033b71，父节点59ea3613。本次仅对齐进度文档、实施主计划与任务合同，不再次提交/推送、不改产品实现。所有R/P功能工作仍未开始，当前禁止产品发布；此前Git重启授权不等于本轮功能、付费评测或产品发布授权。
 
 ## 0. 执行入口与唯一事实来源
 
-本文件是总体范围、依赖、交付批次、版本治理和验收策略的**总索引**，不再复制各任务完整实现细节。
+本文件是**唯一实施主入口**：包含总体范围、执行顺序、31项任务合同、首批可直接落地的测试、跨模块接口、验收/停止/回滚与提交规则。R00–R12审查方案和T01–T18手册只作实现细节附录，不再建立另一套“下一步”。任务台账是本计划的机器可读合同，不另维护实时状态。
 
 | 层级 | 文档 | 负责什么 |
 | --- | --- | --- |
@@ -93,15 +97,15 @@ AND 证据与当前题文/候选/版本一致
 
 ## 5. 实际推进批次和退出条件
 
-### B0：新main治理与可信起点（本次文档提交）
+### B0：新main治理（此前已完成，不是本轮功能进度）
 
-- [ ] 完整保护当前方案/审查/证据，列出新main提交清单。
-- [ ] 列出47个被舍弃旧提交，核对本地/远端备份指针。
-- [ ] 暂存后运行文档测试，检查新加入受跟踪文档不会破坏编码/唯一状态守卫。
-- [ ] 提交后核对唯一父节点=59ea3613、产品源码相对基线无改动。
-- [ ] 精确lease同步main并实际核对远端；保护规则或lease冲突时停止。
+- [x] 完整保护当前方案/审查/证据，列出新main提交清单。
+- [x] 列出47个被舍弃旧提交，核对本地/远端备份指针。
+- [x] 暂存后运行文档测试，检查新加入受跟踪文档不会破坏编码/唯一状态守卫。
+- [x] 提交后核对唯一父节点=59ea3613、产品源码相对基线无改动。
+- [x] 精确lease同步main并实际核对远端；保护规则或lease冲突时停止。
 
-本段是提交操作检查表，不是画图功能完成进度。实际执行回执由Git和本任务结果记录。
+上述版本治理操作已于重启提交be033b71中执行并验证，清单仅保留当时操作合同，不要求再强推一次。以后功能修复均在该重启线正常追加提交；本段不计入R/P功能完成进度。
 
 ### B1：先不再错误认证或错误计分（G0 + CI边界）
 
@@ -131,7 +135,7 @@ R07题图观察确认和所有函数义务绑定 → R08生产UI/披露与E2E合
 
 ### B4：题意与构造能力恢复（原P0–P6，G3数学部分）
 
-T01审核36题/先六题切片 → T02完整scope/来源 → T03比例与角链 → T04符号AST → T05实体绑定 → T06必需对象DAG → T07/T08平面函数 → T09/T10立体折叠，T11数值策略贯穿；T12有限修复、T13独立验收、T14生命周期在设计时同步定义。
+T01审核36题/先六题切片 → T02完整scope/来源 → T03比例与角链；T11先在既有内核上建立数值合同。T04符号AST → T05实体绑定 → T06必需对象DAG → 采用T11接口的T07/T08平面函数、T09/T10立体折叠。T12有限修复、T13独立验收、T14生命周期在设计时同步定义，按台账DAG收口。
 
 **六题切片**：GK-S06、GK-S03、GK-P01、GK-P08、JT-P02、JT-P06；不删其余30题或先宣称P0完成。T02不能只修IR漏parts而忽略R01源解析漏条件。
 
@@ -199,7 +203,9 @@ T17独立未见题与R12/T18性能/发布/安全回滚。计划至少120独立�
 
 ## 9. 下一步最小可交付单元
 
-**本次**：全面总方案、47提交舍弃标记、历史备份、新main启动提交与远端指针核对。不开始产品实现。
+**已完成的版本治理**：重启提交be033b71的唯一父节点为59ea3613；旧47提交已存入备份分支并从新main祖先链排除。此事实不是R00环境验收或任何功能任务完成。
+
+**本次计划完善**：直接升级本主计划，补31项执行合同、无环依赖、起手RED代码、验收矩阵和证据格式；不新增另一套同类总方案，不修改产品源码，不自动再提交/推送。
 
 **下一次功能实施建议**：
 
@@ -211,3 +217,282 @@ T17独立未见题与R12/T18性能/发布/安全回滚。计划至少120独立�
 6. 每项独立review和提交，随后按B2–B6推进。
 
 该顺序旨在先保证“不会把错图当对图”，再争取“更多题能画对”。不设无依据工期，也不以任务勾选百分比代替可运行证据。
+
+## 10. 单一任务台账：31项工作包，不另造阶段编号
+
+[implementation-task-ledger.json](2026-11-15-implementation-task-ledger.json)给出每项**现有修改文件、拟新增文件、测试文件、输入合同、输出、RED清单、退出条件、回滚和建议提交主题**。31项=13项R+18项T，沿用已有编号，不是新增31项重复工作。
+
+台账不记录滚动完成百分比；实际进度仍只更新current-status.md。R01即时护栏与T02完整scope共用实现，R07函数绑定与T05泛化绑定共用接口，T18准备发布证据、R12最终签收，不能把同一补丁算成两次能力提升。
+
+| 任务 | 批次 | 责任角色（非已指派人员） | 规模 | 技术依赖 | 可独立审查的产物 |
+| --- | --- | --- | --- | --- | --- |
+| R00 | B1 | 维护者/验证 | 小 | GOVERNANCE | 同源环境与基线快照 |
+| R01 | B1 | Agent核心/集成 | 中 | R00 | 未选问/漏条件候选不再完整通过；完整scope由T02收口 |
+| R02 | B2 | 原生凭据/设置 | 大 | R00 | 凭据归属及可恢复rekey事务 |
+| R03 | B2 | 原生网络 | 大 | R02 | 解析-连接一致和限长取消读取 |
+| R04 | B2 | 原生仓库/导出UI | 中 | R00 | 有授权且原子不覆盖的导出 |
+| R05 | B2 | 原生归档/附件 | 中 | R00 | 两阶段预扫与有界解码 |
+| R06 | B2 | 持久化/数据保护 | 中 | R00 | CSV文本保护和备份失败写保护 |
+| R07 | B3 | 语义/题图UI | 中 | R01 | 未确认观察不入事实，函数相关义务同一绑定 |
+| R08 | B3 | UI/E2E | 大 | R00 | 当前UI Page Object、真实披露与可信E2E |
+| R09 | B1+B3 | 评测/协议 | 中 | R00 | 最终输出评分及schema/runtime一致性 |
+| R10 | B1 | CI/安全 | 小 | R00 | 最小权限及不可变Action引用 |
+| R11 | B3 | 依赖/验证 | 中 | R10 | 兼容依赖修复与干净CI/审计 |
+| R12 | B6 | 维护者/性能/发布 | 大 | R11、T18 | 性能/lint/安装及人工发布签收 |
+| T01 | B4 | 题库/独立审题 | 大 | R09、R00 | 36份黄金合同与可回放逐题验收 |
+| T02 | B4 | Agent语义/合同 | 大 | T01、R01 | 单一ProblemContract/source map/scope与兼容IR |
+| T03 | B4 | 关系解析 | 中 | T02 | 比例/位置分离和完整角链 |
+| T04 | B4 | 表达式/参数 | 大 | T02、T03 | 带域AST和同实体参数约束 |
+| T05 | B4 | 实体绑定/诊断 | 中 | T02、T04、R07 | 全部曲线/辅助点绑定和原文诊断 |
+| T06 | B4 | 构造编排 | 大 | T02、T05 | 经过类型/无环检查的构造意图DAG |
+| T07 | B4 | 平面构造 | 大 | T04、T06、T11 | 平面交点/焦点/切线/弦及全部合法根 |
+| T08 | B4 | 函数/动态几何 | 大 | T07、T11、R07 | 函数/切线/轨迹依赖 |
+| T09 | B4 | 立体构造 | 大 | T06、T11 | 参数化实体、辅助点和拓扑证据 |
+| T10 | B4 | 折叠求解 | 大 | T09、T11 | 合法折叠变换谱系与分支实例 |
+| T11 | B4基础 | 数值核验 | 大 | T02、T03 | 统一可版本化数值策略与退化分类 |
+| T12 | B4 | Agent调度/worker | 大 | T06、T07、T08、T09、T10、R03、R09 | 有界局部修复、停滞和取消终态 |
+| T13 | B4 | 独立验收 | 大 | T01、T02、T05、T07、T08、T09、T10、T12 | 完整数学证书与变异拒绝 |
+| T14 | B4 | 提交/生命周期 | 大 | T13、R01、R06 | 过期检测与原子一次确认 |
+| T15 | B5 | 渲染/可读性 | 大 | T14、R08 | 真实可见性证据/布局 |
+| T16 | B5 | 桌面/浏览器交互 | 大 | T15、R02、R04、R05、R06、R07 | 确认撤销/重载/拖动/配图闭环 |
+| T17 | B6 | 独立评测/费用审核 | 大 | T16、R09、R11 | 分族分轮首轮/修复后成绩与不确定性 |
+| T18 | B6 | 发布准备/兼容 | 大 | T17、R10、R11 | 发布包核对、灰度与安全回滚准备 |
+
+**规模不是工期承诺**：小=单一责任/有限配置或测试；中=少量模块加兼容/故障路径；大=跨层或需要独立数学/安全/用户复核。每项先以一个最小可验收切片启动，首批实测后才估工期，不能按任务数量推算完成日期。
+
+### 10.1 两种依赖必须分开
+
+- **技术依赖**：台账dependsOn组成有向无环图，决定接口先后。GOVERNANCE是已完成的版本重启前提，不是产品验收。
+- **发布/运行前提**：G0/G1/G2等是出口门禁，不强迫每项离线研究等待所有安全补丁完成，但未关闭风险时不允许开放相关入口、付费冲刺或发布。
+- **T11数值合同先于新构造器**：T11依赖T02/T03和既有内核，不依赖T09/T10收口；新T07–T10采用它，避免“先造再定义精度”和循环依赖。
+- **T18与R12不是互相等待**：T18提供候选包/兼容/灰度/回滚准备，R12在此后做性能、审查残余项和最终人工签收。
+- **R09分两次小交付**：A最终计分在B1；B schema一致性在B3；整包不能因为A完成就全勾。R01先最低安全护栏，完整scope交T02，不永久把所有多问题拒绝当最终目标。
+- 优先序是R00 → R01-A → R09-A → R10 → G1责任 → G2责任 → 六题/36题数学 → 真实交互 → 泛化/发布。台账topologicalOrder仅证明无环，不代替这个风险优先序。
+
+### 10.2 文件写边界和共享接口责任
+
+| 共享区 | 先定义的合同 | 整合责任 | 不允许的重叠修改 |
+| --- | --- | --- | --- |
+| numberedProblem/obligationIR/planCompiler | 源区间、scope、必要条件覆盖与blocked语义 | R01/T02统一核心负责人 | 多条路线各自拆小问、重复解析不同题设 |
+| diagramVerification | entity/state绑定、数值策略、独立判据 | R07/T05/T11/T13按接口顺序 | 某一题族取第一曲线，另一族用ID，证书仍混用 |
+| provider profile/secret/http client | profile owner、endpoint identity、rekey状态、解析后连接策略 | R02先定身份，R03接网络 | renderer绕开native、旧IPC直接写secret、校验URL与实际连接不同 |
+| repository package/archive/附件 | 独立原包/聚合/单项/数量/附件预算和授权路径 | R04/R05小提交顺序合入 | 文件授权与限额只在UI，导出/导入复用错误常量 |
+| runtime/draft/committer | accepted final artifact、候选hash、CAS/取消 | R09/T14单一装配 | evaluator从历史round找答案，UI却提交另一候选 |
+| render/UI/E2E | 生产可访问入口和三级render证据 | R08先稳定契约，T15/T16再扩覆盖 | 只改fixture、直接写store冒充用户流程 |
+
+共享文件出现冲突时先停实现对齐合同，再做小范围整合；不凭最新写入覆盖别人更改。本计划的模块分工不授权自动派生代理。
+
+## 11. 每个任务都必须有的执行卡
+
+该模板是执行时必填，不用模糊“适当处理边界”替代真实数据：
+
+~~~text
+ID与审查问题：
+直接依赖与已验证commit：
+负责人角色 / 独立审阅角色 / 用户需要裁决的事项：
+修改现有文件 / 拟新增文件（不得把未创建文件写成已有）：
+输入字段、来源与不变量 / 输出结构及调用方：
+最小RED输入、预期状态、错误原因、原题来源：
+RED命令、退出码、测试数量（0 tests不算通过）：
+最小实现步骤与生产入口装配：
+GREEN命令、正例/负例/兼容/故障注入：
+类型/模块集成/UI/Rust范围与未跑项：
+副作用：sceneWrites、文件变化、secret访问、请求/内存/耗时：
+合同/候选/代码/锁文件/环境hash与原始日志：
+独立审阅结论、剩余风险、入口关闭和安全回滚：
+建议提交主题与实际commit（获得授权后填写）：
+是否满足该任务出口 / 对应P阶段仍缺什么：
+~~~
+
+**每任务固定操作**：
+
+- [ ] 阅读原审查对应节和台账文件范围，验证源码版本与测试接口没有漂移。
+- [ ] 写最小RED，不引入修复；确认失败来自目标问题而非拼错API/fixture不合法。
+- [ ] 只实现一个责任的修正；同步真正运行入口，不保留能绕过的新旧双入口。
+- [ ] GREEN、负例、合法兼容和故障恢复都运行；完整套件只在相应集成阶段串行运行。
+- [ ] 人工核对证据等级、影响范围、回滚是否重新开放漏洞。
+- [ ] 符合出口才更新current-status并准备小提交；文档/代码写好但没跑不算完成。
+
+所有建议命令和文件都属于未来实施步骤。本轮只有计划完善及只读探针，不将示例测试写入产品测试目录或开始修复。
+
+## 12. 首批可直接落地的RED：真实接口和合法反例
+
+### 12.1 R01：不要让非法fixture掩盖漏小问缺陷
+
+拟新增文件：packages/agent-core/src/planCompiler.subquestionCoverage.test.ts。下列使用当前真实createEmptyDocument、PLAN_SCHEMA_VERSION和compilePlan接口；顶点/面环已经以只读编译确认合法。
+
+~~~ts
+import { createEmptyDocument } from "@draw/dsl";
+import { describe, expect, it } from "vitest";
+import { PLAN_SCHEMA_VERSION } from "./contracts";
+import { compilePlan } from "./planCompiler";
+
+const candidatePlan = {
+  schemaVersion: PLAN_SCHEMA_VERSION,
+  kind: "plan", goal: "小问覆盖回归", factIds: [],
+  actions: [{
+    actionId: "solid.create_polyhedron", actionKey: "pyramid", factIds: [],
+    inputs: {
+      alias: "pyramid", vertexNames: ["P", "A", "B", "C", "D"],
+      vertices: [
+        { x: 0, y: 0, z: 2 }, { x: 0, y: 0, z: 0 },
+        { x: 2, y: 0, z: 0 }, { x: 2, y: 1, z: 0 }, { x: 1, y: 1, z: 0 }
+      ],
+      faces: [[1,2,3,4], [0,2,1], [0,3,2], [0,4,3], [0,1,4]]
+    }
+  }]
+};
+
+describe("subquestion condition coverage", () => {
+  it.each(["", "设", "且", "若"])("does not certify prefix %s", prefix => {
+    const document = createEmptyDocument("geometry3d");
+    const before = JSON.stringify(document);
+    const prompt = "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）"
+      + prefix + "AD⊥DC，求AD。";
+    const result = compilePlan(candidatePlan, {
+      document, prompt, conversationId: "scope-regression",
+      documentGeneration: document.revision
+    });
+    // AD=(1,1,0), DC=(1,0,0), dot=1；这个图不满足第二问。
+    expect(result.diagramVerification?.status).not.toBe("passed");
+    expect(JSON.stringify(document)).toBe(before);
+  });
+});
+~~~
+
+**已校对的基线观察**：空前缀、设、且均ok=true/status=passed；若为ok=true/status=unverified并带warning。前三条RED应失败；若是防回归控制。不能为让测试绿而把所有输入都变null，需补普通PA=2单问题通过正例和明确选问后的合法候选正例。
+
+**这还不是完整G0**：compile状态改为unverified不保证UI不能确认。必须把同一反例通过现有agentRuntime/diagramDraftStage测试装配，分别断言最终状态不为awaiting_confirmation、没有可提交草稿、主场景未写入；再用e2e确认实际按钮不出现/不可用。不能只断言result.ok=false，因为旧API可能合法返回编译成功但验收blocked，应检查实际认证和提交语义。
+
+~~~powershell
+npm.cmd exec -- vitest run packages/agent-core/src/planCompiler.subquestionCoverage.test.ts --testTimeout=30000
+npm.cmd exec -- vitest run packages/agent-core/src/diagramObligations.test.ts packages/agent-core/src/obligationIR.test.ts apps/web/src/agent/diagramDraftStage.test.ts apps/web/src/agent/agentRuntime.test.ts --testTimeout=30000
+npm.cmd exec -- playwright test e2e/agent-subquestion-guard.spec.ts --workers=1 --retries=0
+~~~
+
+新的E2E文件须先按R08当前生产入口创建；命令匹配到0用例不计成功。不要把本次只读探针说成上述未来测试已经GREEN。
+
+### 12.2 R09：最终产物选择的最小合同
+
+拟新增scripts/reliability-eval/finalOutcome.ts及finalOutcome.test.ts。下面是对runtime最终接受结果的**测试投影**，不直接替换现有Runtime类型；由真实coordinator/stage事实生成，不能由模型传入“我被接受了”。
+
+~~~ts
+export type Artifact = {
+  runId: string; id: string; kind: "plan" | "answer";
+  contentHash: string; text?: string;
+};
+export type AcceptedFinal = {
+  runId: string;
+  terminal: "completed" | "awaiting_confirmation" | "failed" | "cancelled" | "waiting";
+  artifactId: string | null; contentHash: string | null;
+};
+export function selectFinalArtifact(
+  artifacts: readonly Artifact[], final: AcceptedFinal
+): Artifact | null {
+  if (final.terminal !== "completed" && final.terminal !== "awaiting_confirmation") return null;
+  if (final.artifactId === null || final.contentHash === null) return null;
+  const expectedKind = final.terminal === "completed" ? "answer" : "plan";
+  const hits = artifacts.filter(a => a.runId === final.runId
+    && a.id === final.artifactId && a.contentHash === final.contentHash
+    && a.kind === expectedKind);
+  return hits.length === 1 ? hits[0]! : null;
+}
+~~~
+
+此函数只做身份选择，**不证明内容正确**。后续答案匹配、独立oracle、数学覆盖必须全部作用于这一个最终对象；真实contentHash由规范内容计算，不能信任模型自报。明确唯一accepted id但已取消/跨run/重复记录也拒绝。
+
+~~~ts
+import { expect, it } from "vitest";
+import { selectFinalArtifact } from "./finalOutcome";
+it("a correct earlier answer cannot rescue an accepted wrong answer", () => {
+  const artifacts = [
+    { runId: "r", id: "a1", kind: "answer" as const, contentHash: "h1", text: "2" },
+    { runId: "r", id: "a2", kind: "answer" as const, contentHash: "h2", text: "3" }
+  ];
+  const selected = selectFinalArtifact(artifacts, {
+    runId: "r", terminal: "completed", artifactId: "a2", contentHash: "h2"
+  });
+  expect(selected?.text === "2").toBe(false);
+  expect(selectFinalArtifact(artifacts, {
+    runId: "r", terminal: "cancelled", artifactId: "a1", contentHash: "h1"
+  })).toBeNull();
+});
+~~~
+
+h1/h2只是选择测试的哑哈希；生产还要真实hash校验、accepted-stage装配及图元oracle一致性测试。实现不完整时选择null，旧round不兜底。
+
+### 12.3 R02/R06：数据保护不只看返回错误
+
+- profile更新失败：fake store初始有OLD secret；暂存NEW后注入profile写失败；断言旧profile版本/endpoint/OLD仍可借出、NEW孤儿被安全清理或登记；不只断言ok=false。
+- 凭据提交后崩溃：重启恢复必须根据profile引用判定，不能以“临时文件存在”就删除当前有效secret；同时mock旧IPC直调用验证没有旁路。
+- 草稿旁路备份失败：原key放非法但属于用户的JSON，模拟setItem失败，触发load→用户编辑→autosave→重载；原key的原始字节始终一致，提示不得包含“已备份”。
+- 恢复备份写成功：断言副本可读后才允许删除/覆盖原key；下载取消、配额满、用户拒绝舍弃都保持写保护。
+
+这些测试不使用真实凭据或私有用户文档；测试fake state和浏览器Storage注入采用现有测试工具，不额外建立不受控存储副本。
+
+## 13. 跨模块输入输出的冻结要求
+
+| 合同 | 必需字段/不变量 | 生产者 → 消费者 | 版本/失效 |
+| --- | --- | --- | --- |
+| Source/ProblemContract | sourceHash、原文UTF-16区间、scope/parent/selected、entity/state、角色、域、未解析片段 | 解析/核对 → 构造/验收 | 改题/改scope使下游失效，不把规范化offset冒充原文 |
+| ConstructionIntent | outputEntityId、operator、依赖ID、宿主类型、state、来源；无环/唯一输出 | 合同 → 确定性route/compiler | 上游参数变化重算受影响图，全部义务重验 |
+| SolverOutcome | verified_instance/unknown/not_supported/underdetermined/proven_unsat/cancelled；域/残差/分支完备性 | kernel/solver → coordinator/validator | not-found默认不是unsat；容差版本入证据 |
+| NativeCredential | profile owner、expectedRevision、endpoint identity、事务阶段/slot引用 | native设置事务 → native HTTP transport | endpoint更换重新授权；无明文renderer/日志 |
+| ResourceLimits | raw/aggregate/entry/count/attachment/error-body、时间/取消 | 原生策略 → 各实际读取/分配点 | 不是只检查header；测试用低限额覆盖拒绝前副作用 |
+| AcceptedFinal | run/attempt/stage、artifact ID/hash、终态、实际接受状态 | runtime → evaluator/UI/committer | 取消/改题/换候选不使用旧artifact |
+| Certificate | source/contract/candidate/scope/baseRevision/validator、coverage/residual、未检查项 | 独立validator → draft/confirm/UI | 数学/视觉分层失效；不允许模型签名代替 |
+| RenderEvidence | structured/rendered/human级别、环境、候选hash、可见对象/标签、限制 | renderer/人工 → UI验收 | 相机/字号/DPI只撤相关视觉证据；几何变动撤数学 |
+
+接口变更顺序：先契约测试与schema → 生产者 → 兼容适配 → 所有消费者 → 去除旧旁路。旧存档缺证据默认未完整核验，不自动生成绿色证书；兼容性不能成为恢复漏洞的理由。
+
+## 14. 每阶段必须达到的可测量读数
+
+| 指标 | 基线或定义 | 任务门槛 |
+| --- | --- | --- |
+| 错误完整放行 | C1已确认错误passed | R01及T13负例集中为0；不能通过全部拒绝获得可用性完成 |
+| 条件覆盖率 | 人工审核必要义务作分母 | T01/T02/T13必需义务100%有来源和检查，unknown显式阻断 |
+| 对象覆盖率 | 必需实体与状态作分母 | T06无缺点/缺焦点/缺折后对象假通过 |
+| 旧草稿率/旧host | 25/36与4/36仅旧基线 | 不设伪造提升承诺；新结果用新metric/contract版本 |
+| 完整数学/端到端 | 完整数学+真实显示+交互分别报告 | 目标36/36；如果题文不足保留原分母并另设完整输入版本 |
+| 数据保护 | 唯一草稿/旧凭据/目标文件的字节或引用 | 故障注入后不丢失；未授权凭据转发/根外写入0 |
+| 资源安全 | 实际读入/分配/请求，不只声明量 | 所有入口有界，超预算停止；用测试计数证明CRC/clone前拒绝 |
+| E2E可信度 | testId首轮、retry、worker、环境和trace | 单worker及固定并发都报告；全量0未处置失败，不能只报重试后绿 |
+| 泛化/稳定性 | ≥120独立未见题、每族≥30、≥3轮 | 待批准首轮≥95%、有限修复后≥99%；逐族整数门槛，相关重复不扩大n |
+| 性能/时延 | 冷启动、首次画图、拖动、worker、内存 | 先测同版基线再冻结预算；不以构建包体小单项代表体验 |
+| 成本 | 实际请求/token/金额或unknown | 运行前批准全批/单题上限，旧101次不是新授权 |
+
+成功率、置信区间和样本独立性按原手册的统计边界执行。合法拒绝/澄清单列；额外记录有解题被错误拒绝的假阴性，不允许“全部拒绝=100%安全=任务完成”。
+
+## 15. 检查清单、裁决和暂停条件
+
+### 15.1 第一批开工清单
+
+- [ ] 确认当前HEAD在be033b71之后且舍弃47提交未混入；未提交修改只属于本轮授权范围。
+- [ ] 记录Node/npm/锁/TypeScript/Vitest/浏览器/Rust实际版本；环境隔离而非清空活动依赖。
+- [ ] 将第12节真实compile反例落为RED，确认不是模型/拓扑/测试语法失败。
+- [ ] 修R01-A至runtime/确认闭环，跑普通单问正例；再修R09-A身份选择及计分。
+- [ ] R10实际核对官方Action身份和权限，运行最小权限CI；不把历史SHA当当前推荐版本。
+- [ ] 整理每项代码/测试/副作用与审阅证据，再决定提交；本次计划完善不自动提交这些未来补丁。
+
+### 15.2 需要产品裁决但不必阻塞全部修复
+
+| 决策 | 建议默认 | 未裁决时允许推进 |
+| --- | --- | --- |
+| 多问未选择 | partial底图可预览，完整确认关闭 | 解析/compile安全负例、单问回归 |
+| 新导出路径 | 受控exports目录优先 | 原生路径/预算负例，不开放任意路径 |
+| 属性栏/网格 | 默认310、旧淡出暂不承诺，明确规格 | 旧locator清理、实际披露、可读性正反例 |
+| 欠定自由参数 | 明确free_choice并核验，非唯一答案 | 已确定参数的构造与域校验 |
+| 依赖/CAS/SMT | 首批不新增，现有内核优先 | 失败机制/小型离线spike，未经批准不接生产 |
+| 发布/付费 | 本轮不执行 | 离线、mock安全、契约和回放 |
+
+### 15.3 必须暂停并回到诊断的情况
+
+RED连续不能按预期复现、三个补丁仍依赖加特判、同一语义在新旧两条路径分叉、测试“过了”但生产没接线、需要删源条件/扩大容差才能过、真实请求可能越预算或数据不可逆覆盖。此时回到最小复现/合同裁决，不继续堆重试或绕过门禁。
+
+审查关闭需实现证据而非计划覆盖。没有可用独立审阅者就标“待复核”，不能编造reviewer或把本助手的计划自查当成独立产品签收。
+
+## 16. 本轮计划完善的交付边界
+
+本地重启线HEAD为be033b71，本轮不自动再提交/推送或改写历史。31项任务已给出文件/测试/接口/依赖/验收/回滚合同；旧R/T文档为技术附录。产品实施状态仍全部未开始。
+
+此前计划完善执行过文档/任务/路径/依赖校验和第12节只读compile探针；本次文档对齐不重新运行探针或产品测试。探针在eval-results/implementation-plan-check-20261115保留原始输出，另有最小审计副本；没有调用模型、写主场景、改产品代码或修复C1。前轮检查见[实施计划核验](../../audit/2026-11-15-implementation-plan-verification/README.md)。

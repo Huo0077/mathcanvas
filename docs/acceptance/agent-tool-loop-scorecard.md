@@ -1,6 +1,29 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-Updated: 2026-10-11 (**四家族真题驱动升级仅调研与文档设计**；默认 Agent/自动 Lean 仍未放行)。**2026-10-20 勘误：下面"Task 1→21 的现行计分镜像"那张表的"现在"列已按[发布门禁](agent-release-gate.md)更新（Task 1–19 已完成、20 免授权部分完成、21 未放行）；本行日期只表示当时那份快照，不代表表里还是 10-11 的判定。**[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)本轮已完成；[下一步 Agent 实施/进度](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列合同/预算、图形意图、四族构造、旧能力兼容、Lean 证明边界及现存 bug 的独立验收，不把旧 8×3/3 条 provider 小样本当四族真题 pass@k。最新 22:36 用户原题仍因开放面/未知动作修复失败；逐项现状和证据看[当前状态](../current-status.md)。
+<!-- progress-scope: active-reference -->
+> **文档角色（2026-11-15 对齐）**：计分定义与历史读数索引；不复制最新成绩。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
+<!-- /progress-scope -->
+
+Updated: 2026-11-15（计分定义/导航对齐，不是新增provider或产品测试）。
+
+## 本轮指标合同（不镜像实时读数）
+
+| 指标 | 分子/分母或判定 | 不可混算 |
+| --- | --- | --- |
+| 草稿率 | 非空候选题数 / 冻结题数 | 不是几何正确率 |
+| 完整数学通过 | 全部必要义务、对象、域与分支核验通过 / 冻结题数 | 旧host passed、局部exact、空义务、unknown均不可替代 |
+| 端到端通过 | 数学+真实显示+交互均通过 / 冻结题数 | 只画公共图、澄清/拒绝不算整题出图 |
+| 首轮/有限修复后 | 同一冻结模型/预算下分别报告 | 只取最好一轮、历史正确round救最终错误禁止 |
+| 安全处理/误拒 | 审核负例正确阻断；有解题误拒另报 | 全部拒绝不能叫能力100% |
+| 延迟/成本 | 分开成功与失败的实耗；未知金额为unknown | 预留上界不是账单；重复同题不当独立样本 |
+
+最终接受的run/stage/artifact/hash是唯一计分对象，R09-A与T17负责新metricVersion；旧评测保持只读。指标定义见[实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)，实际读数见[当前状态](../current-status.md)，发布要求见[发布门禁](agent-release-gate.md)。
+
+## 历史指标与计分记录
+
+下文旧数字、模式、Task 1–21、N/V阶段和“现在”措辞只表示原时点；不可据旧表宣布本轮完成或已放行。
+
+Historical snapshot: 2026-10-11 (**四家族真题驱动升级仅调研与文档设计**；默认 Agent/自动 Lean 仍未放行)。**2026-10-20 勘误：下面"Task 1→21 的现行计分镜像"那张表的"现在"列已按[发布门禁](agent-release-gate.md)更新（Task 1–19 已完成、20 免授权部分完成、21 未放行）；本行日期只表示当时那份快照，不代表表里还是 10-11 的判定。**[真题需求调研](../research/2026-10-11-four-family-exam-diagram-survey.md)本轮已完成；[下一步 Agent 实施/进度](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)列合同/预算、图形意图、四族构造、旧能力兼容、Lean 证明边界及现存 bug 的独立验收，不把旧 8×3/3 条 provider 小样本当四族真题 pass@k。最新 22:36 用户原题仍因开放面/未知动作修复失败；逐项现状和证据看[当前状态](../current-status.md)。
 
 > **这张表只列"门槛与能力对照"。** 具体读数与各阶段做到哪一步，**以
 > [`docs/current-status.md`](../current-status.md) 为准** —— 它是"现在时"的唯一一处。
@@ -10,7 +33,7 @@ Previous capability snapshot (2026-10-10): S1–S6 all closed; §3-F numeric ang
 
 > **2026-10-06 V0a 中途记录**：受限三棱锥草稿与开关正反例已有针对性证据（7 文件/171 定向、单 spec 3/3）；浏览器坐标回代、图形目视与全量回归**已于同日补齐**（见 [当前状态](../current-status.md)），**V0a/V0 仍不计完成**。Lean 未自动调用；provider 成本及大样本读数不变。现时唯一读数/放行状态见 [当前状态](../current-status.md) 与 [发布门禁](agent-release-gate.md)。
 
-## Task 1→21 的现行计分镜像（方案，非新运行）
+## 历史Task 1→21计分镜像（非本轮编号）
 
 | 唯一编号 | 以后必须测什么 | 现在 |
 | --- | --- | --- |
@@ -20,7 +43,7 @@ Previous capability snapshot (2026-10-10): S1–S6 all closed; §3-F numeric ang
 | **17–19（Lean）** | 限定引理/整题命题分级、改图证明 stale、真桌面/固定工具链与无网发行；失败不挡正确作图。 | 四类历史受限目标存在；旧路径定向 Vitest **7 文件/88 项通过**，非新完整原题证明/真 Lean。 |
 | **20–21** | 每族 pass@1/pass@3、成本/延迟/人评，先定阈值再授权付费；最后作图/自动 Lean 分别放行。 | **未测、未放行**；旧 8×3 工具环不是四族真题结果。 |
 
-[主计划](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)是唯一任务状态与顺序来源。本表只镜像指标，不能把旧 N1–N6/旧 V0–V3 当新 Task 编号。GitHub [实施取舍](../research/2026-10-11-github-agent-implementation-survey.md)仅为设计证据。
+[历史主计划](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)仅保留旧Task上下文；它不再决定本轮状态或顺序。旧N/V/Task数字不折算为新的R/T/P完成项。GitHub [实施取舍](../research/2026-10-11-github-agent-implementation-survey.md)仅为设计证据。
 
 ## Metrics
 
@@ -51,7 +74,7 @@ Previous capability snapshot (2026-10-10): S1–S6 all closed; §3-F numeric ang
 > - **Drag layer** (kernel `constraints3dProjection`): a **real first-order number** — movable axes minus the rank of the constraint Jacobian, computed at the final configuration. First-order only: at a non-smooth point (residuals that take an absolute value) or a degenerate configuration the rank can overstate local stiffness. The two layers share one rank implementation (`linear-algebra.ts`) but deliberately use different "movable" sets (bindings vs. `anchoredPointIds`).
 >
 > **Do not read "partial (N3)" as "the drag gate is passed", nor "harness + real-provider readings (N4)" as "open-ended understanding works".** N3's missing half is now a **success rate on real tasks** — its product entry and its browser positive/negative cases both exist; N4's missing half is still a **real provider**. See the per-capability notes above.
-## Current evidence
+## Historical evidence（旧运行，非本轮成绩）
 
 ### 2026-10-04 geometry-diagram supplement
 
@@ -84,7 +107,7 @@ The repository includes a deterministic local evaluator. Its result mode is `det
 
 **These 3/7 numbers are a floor for the local deterministic planner, not a model score.** They are the baseline later phases must move; a change here means the planner, the geometry kernel, or the judge changed.
 
-## Release gate
+## Historical release gate（本轮合同见页首）
 
 1. Every model-visible tool has strict input validation, a real handler, and a result-return path.
 2. A task passes only with semantic evidence; visual tasks also need same-draft visual evidence.

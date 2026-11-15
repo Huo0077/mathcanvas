@@ -1,0 +1,116 @@
+{
+  "scope": "read_only_compile_probe_not_fix",
+  "vertices": [
+    {
+      "x": 0,
+      "y": 0,
+      "z": 2
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    {
+      "x": 2,
+      "y": 0,
+      "z": 0
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "z": 0
+    },
+    {
+      "x": 1,
+      "y": 1,
+      "z": 0
+    }
+  ],
+  "dotAD_DC": 1,
+  "outputs": [
+    {
+      "prefix": "",
+      "prompt": "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）AD⊥DC，求AD。",
+      "ok": true,
+      "status": "passed",
+      "checks": [
+        {
+          "kind": "fixedLength",
+          "sourceText": "PA=2",
+          "status": "passed",
+          "reason": "已按候选图坐标核验。",
+          "expected": 2,
+          "actual": 2
+        }
+      ],
+      "diagnostics": [],
+      "baseUnchanged": true
+    },
+    {
+      "prefix": "设",
+      "prompt": "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）设AD⊥DC，求AD。",
+      "ok": true,
+      "status": "passed",
+      "checks": [
+        {
+          "kind": "fixedLength",
+          "sourceText": "PA=2",
+          "status": "passed",
+          "reason": "已按候选图坐标核验。",
+          "expected": 2,
+          "actual": 2
+        }
+      ],
+      "diagnostics": [],
+      "baseUnchanged": true
+    },
+    {
+      "prefix": "且",
+      "prompt": "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）且AD⊥DC，求AD。",
+      "ok": true,
+      "status": "passed",
+      "checks": [
+        {
+          "kind": "fixedLength",
+          "sourceText": "PA=2",
+          "status": "passed",
+          "reason": "已按候选图坐标核验。",
+          "expected": 2,
+          "actual": 2
+        }
+      ],
+      "diagnostics": [],
+      "baseUnchanged": true
+    },
+    {
+      "prefix": "若",
+      "prompt": "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）若AD⊥DC，求AD。",
+      "ok": true,
+      "status": "unverified",
+      "checks": [
+        {
+          "kind": "fixedLength",
+          "sourceText": "PA=2",
+          "status": "passed",
+          "reason": "已按候选图坐标核验。",
+          "expected": 2,
+          "actual": 2
+        },
+        {
+          "kind": "unparsed",
+          "sourceText": "各小问的条件",
+          "status": "unverified",
+          "reason": "题目包含小问专用条件。请指定按哪一问的条件作图，再核验该问与公共题设。"
+        }
+      ],
+      "diagnostics": [
+        {
+          "code": "diagram_condition_unverified",
+          "severity": "warning"
+        }
+      ],
+      "baseUnchanged": true
+    }
+  ]
+}

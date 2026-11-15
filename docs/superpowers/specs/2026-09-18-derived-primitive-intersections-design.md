@@ -1,5 +1,10 @@
 # 由动点引申出来的图元：成为一等图元（2026-09-18）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **状态**：**已交付**（2026-09-18，8 个 TDD 切片逐片提交）。设计经用户确认（三处选择：范围 **B**、测量 **A**、"可以"）；逐片 RED→GREEN 证据、一处我自己写错的测试与门禁数字见 `docs/project-progress-early.md` 的「由动点引申出来的图元：成为一等图元」一节。实施计划：`docs/superpowers/plans/2026-09-18-derived-primitive-intersections.md`。
 
 用户口径（原文，三句）：

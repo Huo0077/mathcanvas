@@ -1,0 +1,52 @@
+{
+  "date": "2026-11-15",
+  "scope": "documentation_alignment_only",
+  "checks": {
+    "activeDocuments": 17,
+    "historicalNavigationDocuments": 95,
+    "totalAlignedDocuments": 112,
+    "historicalOriginalBodiesPreserved": 95,
+    "immutableEvidenceFilesUnchanged": 47,
+    "localLinks": {
+      "active": 415,
+      "historicalNewNavigationOnly": 285,
+      "audit": 6,
+      "total": 706,
+      "broken": 0
+    },
+    "encodingIssues": 0,
+    "taskContracts": {
+      "total": 31,
+      "reviewPackages": 13,
+      "drawingPackages": 18,
+      "acyclic": true
+    },
+    "reviewFindingsAndWarningMapped": 25,
+    "unstartedStages": 9,
+    "conflictingActiveSourceClaims": 0
+  },
+  "docsTest": {
+    "command": "npm.cmd run test:docs -- --testTimeout=30000",
+    "exitCode": 0,
+    "filesPassed": 8,
+    "testsPassed": 22,
+    "testsFailed": 0
+  },
+  "noProductCodeChanges": true,
+  "newModelRequests": 0,
+  "newProductProbes": 0,
+  "commitCreated": false,
+  "pushExecuted": false,
+  "gitDiffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0
+  },
+  "gitScope": {
+    "head": "be033b71ba32f1b7008d030b49359e21de076423",
+    "trackedMarkdownFilesChanged": 112,
+    "stagedFiles": 0,
+    "productSourceFilesChanged": 0,
+    "commitCreated": false,
+    "pushExecuted": false
+  }
+}

@@ -1,5 +1,10 @@
 # 四家族高中数学真题的作图需求调研（2026-10-11）
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../current-status.md)；执行顺序统一按[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **本轮调研结论，不是产品覆盖率或已审答案金标。** 这份报告已经把本次确定的四家族真题作图需求归纳完毕；它不承诺枚举历史上每一道高考题。下一步只剩 [Agent 能力实施与进度计划](../superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)，不再把“去调研真题”写成其待办。当前可用能力仍以 [当前状态](../current-status.md) 为准。
 
 ## 1. 范围和证据规则

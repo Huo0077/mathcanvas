@@ -1,5 +1,10 @@
 # MathCanvas Agent 工具闭环优化实施计划
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)和[任务合同](2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 > **For agentic workers:** Read the design spec before implementing. Execute tasks in order, use TDD for behavior changes, and run each task's focused tests before moving to the next task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 MathCanvas Agent 从一次性 Plan JSON 生成器升级为可观察、可调用、可验证、可局部修复的 typed tool loop，同时保持草稿隔离和用户确认安全边界。

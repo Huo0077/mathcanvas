@@ -1,5 +1,10 @@
 > **路线更新：** 本文是较窄的第一版见证搜索路线，已被 `2026-10-04-agent-full-next-phase-design.md` 与 `2026-10-04-agent-full-next-phase-implementation-plan.md` 扩展为完整阶段路线；保留本文作为 N2/N4 的早期拆解。
 
+<!-- progress-scope: historical-before-main-restart -->
+> **历史计划/过程记录（2026-11-15 主线重启后已被替代为历史参考）**：下文的“当前”“下一步”“已完成/未完成”、任务编号、勾选、工期和测试读数均属于原记录时点，不是本轮执行授权或验收进度；已有基线代码不因文档标记而删除，也不把旧完成项折算成本轮完成。
+> 实时进度只看[当前状态](../../current-status.md)；执行顺序统一按[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)和[任务合同](../plans/2026-11-15-implementation-task-ledger.json)。旧正文原样保留，历史链接按当时语境阅读。
+<!-- /progress-scope -->
+
 # 下一轮 Agent 升级设计：约束驱动的示意图见证生成与真实模型评测
 
 > 日期：2026-10-04
