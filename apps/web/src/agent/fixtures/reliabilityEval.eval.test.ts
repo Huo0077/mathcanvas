@@ -1,12 +1,13 @@
 import { createEmptyDocument, type GeometryDocument, type Workspace } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 import type { PlanEnvelope, PlannerPort, RunPhase } from "@draw/agent-core"
-import { createBudget, routeDeterministicProblem } from "@draw/agent-core"
+import { canonicalContentHash, createBudget, routeDeterministicProblem } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
 import { createAgentRuntime } from "../agentRuntime"
 import { createLocalPlanner } from "../localPlanner"
 import { createModelPlanner } from "../modelPlanner"
+import { selectFinalArtifact, type AcceptedFinal, type Artifact } from "../../../../../scripts/reliability-eval/finalOutcome"
 import { writeSolidReport, readSolidReport } from "../../../../../scripts/solid-eval/report-files.mjs"
 
 /**
@@ -304,7 +305,24 @@ describe("完整的协调器链路评测（T01）", () => {
               : output === "answer" ? terminal === "completed"
                 : false
       )
-      const answerMatches = entry.contains === undefined || rounds.some(round => "answer" in round && round.answer?.includes(entry.contains!))
+      const acceptedIndex = terminal === "awaiting_confirmation"
+        ? stages.map(stage => stage.ok).lastIndexOf(true)
+        : terminal === "completed" && rounds.length > 0 ? rounds.length - 1 : -1
+      const acceptedPlan = acceptedIndex >= 0 ? rounds[acceptedIndex] : undefined
+      const artifacts: Artifact[] = rounds.flatMap((round, index) => round.kind === "plan" || round.kind === "answer" ? [{
+        runId: entry.id,
+        id: `round-${index + 1}`,
+        kind: round.kind,
+        contentHash: canonicalContentHash(round),
+        ...("answer" in round && typeof round.answer === "string" ? { text: round.answer } : {})
+      }] : [])
+      const finalArtifact = selectFinalArtifact(artifacts, {
+        runId: entry.id,
+        terminal: terminal as AcceptedFinal["terminal"],
+        artifactId: acceptedIndex >= 0 ? `round-${acceptedIndex + 1}` : null,
+        contentHash: acceptedPlan === undefined ? null : canonicalContentHash(acceptedPlan)
+      })
+      const answerMatches = entry.contains === undefined || finalArtifact?.text?.includes(entry.contains) === true
       const passed = entry.expected === "plan"
         ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
           && answerMatches && (independent.status === "passed" || independent.status === "not_applicable")

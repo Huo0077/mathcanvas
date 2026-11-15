@@ -12,7 +12,8 @@
 
 - 建立 `feature/drawing-reliability-execution` 执行分支，文档基线 `3856263f` 与隔离 worktree 配置 `be3f00bf` 已推送。
 - R00 使用 Node 22.23.5 / npm 11.16.0 在独立 worktree 真实安装锁定依赖；类型检查、文档22项、完整 Vitest 5535项通过+1todo。证据见 [R00环境清单](docs/audit/2026-11-15-review-remediation-baseline/environment.json)。
-- R01-A 已将已识别多问统一保留 scope 和未核验状态，裸条件/设/且的 compile 与 runtime 负例转GREEN；普通单问不回归。浏览器四种小问写法均阻断且主场景零图元，普通单问确认成功，5/5通过。证据见 [小问阻断记录](docs/audit/2026-11-15-subquestion-guard/README.md)。R09-A 和 R10 尚待完成，本条不表示后续任务已完成。
+- R01-A 已将已识别多问统一保留 scope 和未核验状态，裸条件/设/且的 compile 与 runtime 负例转GREEN；普通单问不回归。浏览器四种小问写法均阻断且主场景零图元，普通单问确认成功，5/5通过。证据见 [小问阻断记录](docs/audit/2026-11-15-subquestion-guard/README.md)。
+- R09-A 改为只按最终接受产物计分，早期正确答案不能拯救最终错误答案；类型、取消、跨run、错误hash和重复身份均拒绝。完整 Vitest 521文件/5548通过+1todo、0失败。证据见 [最终产物记录](docs/audit/2026-11-15-final-outcome/README.md)。R10 尚待完成，本条不表示后续任务已完成。
 
 ## 2026-11-15 —— 画图可靠性进度重置与整改方案（仅文档）
 

@@ -34,8 +34,8 @@
 | --- | --- | --- |
 | R00 同源环境 | **已完成** | [Node22环境证据](audit/2026-11-15-review-remediation-baseline/README.md)：真实 `npm ci`、类型检查、文档22项、Vitest 5535项通过+1todo；隔离 worktree 无源码/锁差异 |
 | R01-A 小问止损 | **已完成** | [小问阻断证据](audit/2026-11-15-subquestion-guard/README.md)：compile/runtime负例转GREEN，浏览器4种写法均阻断且零图元，普通单问确认成功；完整Vitest 520文件/5544通过+1todo |
-| R09-A 最终产物计分 | 进行中 | 完成R01-A后执行 |
-| R10 CI边界 | 未开始 | 完成R09-A后执行并停止 |
+| R09-A 最终产物计分 | **已完成** | [最终产物证据](audit/2026-11-15-final-outcome/README.md)：旧答案不再兜底，双轮正反例与离线评测通过；完整Vitest 521文件/5548通过+1todo |
+| R10 CI边界 | 进行中 | 完成R09-A后执行并停止 |
 
 R00 仍有依赖公告留给 R11，不包含完整 Rust、Playwright、付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 与 worktree 忽略提交 `be3f00bf` 已推送；R00 证据提交以本次提交为准。
 
