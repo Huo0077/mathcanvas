@@ -284,7 +284,9 @@
             "end": 15
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["P", "A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["P", "A", "B"], ["P", "B", "C"], ["P", "C", "D"], ["P", "D", "A"]]
           }
         }
       ],
@@ -897,7 +899,9 @@
             "end": 26
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "D", "E", "F"],
+            "expectedFaceRings": [["A", "B", "C", "D"], ["A", "D", "E", "F"], ["B", "F", "E", "C"], ["A", "F", "B"], ["C", "E", "D"]]
           }
         }
       ],
@@ -1164,7 +1168,9 @@
             "end": 14
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["P", "A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["P", "A", "B"], ["P", "B", "C"], ["P", "C", "D"], ["P", "D", "A"]]
           }
         }
       ],
@@ -1462,7 +1468,9 @@
             "end": 29
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["A₁", "B₁", "C₁", "D₁"], ["A", "B", "B₁", "A₁"], ["B", "C", "C₁", "B₁"], ["C", "D", "D₁", "C₁"], ["D", "A", "A₁", "D₁"]]
           }
         }
       ],
@@ -1698,7 +1706,9 @@
             "end": 12
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "C", "B"], ["A", "B", "D"], ["A", "D", "C"], ["B", "C", "D"]]
           }
         }
       ],
@@ -1998,7 +2008,9 @@
             "end": 18
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "A₁", "B₁", "C₁"],
+            "expectedFaceRings": [["A", "C", "B"], ["A₁", "B₁", "C₁"], ["A", "B", "B₁", "A₁"], ["B", "C", "C₁", "B₁"], ["C", "A", "A₁", "C₁"]]
           }
         }
       ],
@@ -2254,7 +2266,9 @@
             "end": 14
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["P", "A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["P", "A", "B"], ["P", "B", "C"], ["P", "C", "D"], ["P", "D", "A"]]
           }
         }
       ],
@@ -2286,9 +2300,9 @@
       ],
       "inputMode": "text_only",
       "independentReviewStatus": "pending_second_reviewer",
-      "requiredEntityIds": [],
+      "requiredEntityIds": ["A", "B", "C", "A₁", "B₁", "C₁"],
       "sharedScope": {
-        "entities": [],
+        "entities": ["A", "B", "C", "A₁", "B₁", "C₁"],
         "stemConditions": [
           "三棱柱侧棱垂直于底面",
           "所有棱长都为 a",
@@ -2354,7 +2368,9 @@
             "end": 34
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "A₁", "B₁", "C₁"],
+            "expectedFaceRings": [["A", "C", "B"], ["A₁", "B₁", "C₁"], ["A", "B", "B₁", "A₁"], ["B", "C", "C₁", "B₁"], ["C", "A", "A₁", "C₁"]]
           }
         }
       ],
@@ -2366,7 +2382,7 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [
-        "edge length parameter a > 0 (canonical a = 1 or a = 2)"
+        "edge length parameter a > 0 (canonical positive scale); auxiliary prism labels A,B,C,A₁,B₁,C₁"
       ],
       "unsupportedReasons": []
     },
@@ -2623,7 +2639,9 @@
             "end": 94
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "P"],
+            "expectedFaceRings": [["A", "C", "B"], ["A", "B", "P"], ["A", "P", "C"], ["B", "C", "P"]]
           }
         }
       ],
@@ -2877,7 +2895,9 @@
             "end": 18
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "A₁", "B₁", "C₁"],
+            "expectedFaceRings": [["A", "C", "B"], ["A₁", "B₁", "C₁"], ["A", "B", "B₁", "A₁"], ["B", "C", "C₁", "B₁"], ["C", "A", "A₁", "C₁"]]
           }
         }
       ],
@@ -3162,7 +3182,9 @@
             "end": 11
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["P", "A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["P", "A", "B"], ["P", "B", "C"], ["P", "C", "D"], ["P", "D", "A"]]
           }
         }
       ],
@@ -3502,7 +3524,9 @@
           },
           "check": {
             "kind": "topology-3d",
-            "open": true
+            "open": true,
+            "expectedVertexIds": ["A", "B", "E", "F", "C", "D"],
+            "expectedFaceRings": [["A", "B", "E", "F"], ["E", "C", "D", "F"]]
           }
         },
         {
@@ -3802,7 +3826,9 @@
             "end": 14
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["P", "A", "B", "C", "D"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["P", "A", "B"], ["P", "B", "C"], ["P", "C", "D"], ["P", "D", "A"]]
           }
         }
       ],
@@ -4659,9 +4685,9 @@
       ],
       "inputMode": "text_only",
       "independentReviewStatus": "pending_second_reviewer",
-      "requiredEntityIds": [],
+      "requiredEntityIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
       "sharedScope": {
-        "entities": [],
+        "entities": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
         "stemConditions": [
           "正方体棱长2",
           "正方体一个面在半球底面圆内",
@@ -4713,7 +4739,9 @@
             "end": 16
           },
           "check": {
-            "kind": "topology-3d"
+            "kind": "topology-3d",
+            "expectedVertexIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
+            "expectedFaceRings": [["A", "D", "C", "B"], ["A₁", "B₁", "C₁", "D₁"], ["A", "B", "B₁", "A₁"], ["B", "C", "C₁", "B₁"], ["C", "D", "D₁", "C₁"], ["D", "A", "A₁", "D₁"]]
           }
         },
         {
@@ -4739,7 +4767,9 @@
         "multiBranchHandling": "single_consistent_figure",
         "labelReadabilityRequired": true
       },
-      "freeChoices": [],
+      "freeChoices": [
+        "Auxiliary cube labels A,B,C,D on the base and A₁,B₁,C₁,D₁ on the cap"
+      ],
       "unsupportedReasons": []
     },
     {

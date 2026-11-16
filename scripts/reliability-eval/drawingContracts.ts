@@ -28,7 +28,7 @@ export type ContractCheckSpec =
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
-  | { kind: "topology-3d"; solidId?: string; open?: boolean }
+  | { kind: "topology-3d"; solidId?: string; open?: boolean; expectedVertexIds?: readonly string[]; expectedFaceRings?: readonly (readonly string[])[] }
   | { kind: "coplanar-3d"; points: readonly string[] }
   | { kind: "circumsphere-3d" }
   | { kind: "cube-3d"; edgeLength: number }
@@ -349,39 +349,71 @@ function polyhedronVertexSets(prims: readonly Record<string, unknown>[]): Vec3[]
 
 function evaluatePolyhedronTopology(
   prims: readonly Record<string, unknown>[],
-  solidId: string | undefined,
-  open: boolean
+  check: Extract<ContractCheckSpec, { kind: "topology-3d" }>
 ): { passed: boolean; detail: string } {
-  const solids = prims.filter((primitive) => primitive.type === "polyhedron3" && (solidId === undefined || primitive.id === solidId))
-  if (solids.length === 0) return { passed: false, detail: `missing polyhedron ${solidId ?? "candidate"}` }
-  for (const solid of solids) {
+  const nameFor = (id: unknown) => {
+    if (typeof id !== "string") return null
+    const point = prims.find((primitive) => primitive.type === "point3" && primitive.id === id)
+    return normalizeLabel(String(point?.label ?? id))
+  }
+  const positions = new Map<string, Vec3>()
+  for (const primitive of prims) {
+    if (primitive.type !== "point3" || typeof primitive.id !== "string") continue
+    const position = primitive.position as Vec3 | undefined
+    if (position && [position.x, position.y, position.z].every((value) => typeof value === "number" && Number.isFinite(value))) positions.set(primitive.id, position)
+  }
+  const expectedVertices = check.expectedVertexIds?.map(normalizeLabel) ?? (check.expectedFaceRings
+    ? [...new Set(check.expectedFaceRings.flat().map(normalizeLabel))]
+    : undefined)
+  const matchingSolids = prims.filter((primitive) => {
+    if (primitive.type !== "polyhedron3" || (check.solidId !== undefined && primitive.id !== check.solidId) || !Array.isArray(primitive.vertexIds)) return false
+    if (expectedVertices === undefined) return true
+    const actual = primitive.vertexIds.map(nameFor)
+    return actual.every((name) => name !== null) && new Set(actual).size === actual.length && actual.length === expectedVertices.length && expectedVertices.every((name) => actual.includes(name))
+  })
+  if (matchingSolids.length === 0) return { passed: false, detail: `missing named polyhedron ${check.solidId ?? "candidate"}` }
+  if (expectedVertices !== undefined && matchingSolids.length !== 1) return { passed: false, detail: "ambiguous named polyhedron" }
+  for (const solid of matchingSolids) {
     if (!Array.isArray(solid.vertexIds) || !Array.isArray(solid.faceIds)) return { passed: false, detail: "polyhedron is missing vertexIds or faceIds" }
-    const positions = new Map<string, Vec3>()
-    for (const primitive of prims) {
-      if (primitive.type !== "point3" || typeof primitive.id !== "string") continue
-      const position = primitive.position as Vec3 | undefined
-      if (position && [position.x, position.y, position.z].every((value) => typeof value === "number" && Number.isFinite(value))) positions.set(primitive.id, position)
-    }
     const vertices = solid.vertexIds.map((id) => positions.get(id as string))
     if (vertices.some((point) => point === undefined)) return { passed: false, detail: "polyhedron references a missing or non-finite vertex" }
     const indices = new Map((solid.vertexIds as string[]).map((id, index) => [id, index]))
     const faces: number[][] = []
+    const faceNames: string[][] = []
     for (const faceId of solid.faceIds) {
       const face = prims.find((primitive) => primitive.type === "face3" && primitive.id === faceId)
       if (!face || !Array.isArray(face.pointIds)) return { passed: false, detail: `missing face ring ${String(faceId)}` }
       const ring = face.pointIds.map((id) => typeof id === "string" ? indices.get(id) : undefined)
       if (ring.some((index) => index === undefined)) return { passed: false, detail: `face ring ${String(faceId)} references a vertex outside the polyhedron` }
       faces.push(ring as number[])
+      faceNames.push(face.pointIds.map(nameFor).filter((name): name is string => name !== null))
+    }
+    if (check.expectedFaceRings) {
+      const equivalentRing = (actual: readonly string[], expected: readonly string[]) => {
+        if (actual.length !== expected.length || actual.length < 3) return false
+        return actual.some((_, offset) => {
+          const rotated = actual.map((__, index) => actual[(index + offset) % actual.length]!)
+          return expected.every((name, index) => rotated[index] === name) || expected.every((name, index) => rotated[rotated.length - 1 - index] === name)
+        })
+      }
+      const used = new Set<number>()
+      const matched = check.expectedFaceRings.every((expected) => {
+        const index = faceNames.findIndex((actual, faceIndex) => !used.has(faceIndex) && equivalentRing(actual, expected.map(normalizeLabel)))
+        if (index < 0) return false
+        used.add(index)
+        return true
+      })
+      if (!matched || used.size !== faceNames.length) return { passed: false, detail: "polyhedron face rings do not match the named topology" }
     }
     let sequence = 0
-    const result = open
+    const result = check.open === true
       ? buildOpenSurface({ vertices: vertices as Vec3[], faces }, { allocateId: (namespace) => `${namespace}-${sequence++}` })
       : buildFromPoints({ vertices: vertices as Vec3[], faces }, { allocateId: (namespace) => `${namespace}-${sequence++}` })
     if (result.diagnostics.length > 0) {
       return { passed: false, detail: result.diagnostics.map((diagnostic) => `${diagnostic.code}:${diagnostic.message}`).join("; ") }
     }
   }
-  return { passed: true, detail: open ? "open surface topology passed" : "closed polyhedron topology passed" }
+  return { passed: true, detail: check.open === true ? "named open surface topology passed" : "named closed polyhedron topology passed" }
 }
 
 function sortedPairDistances(points: readonly Vec3[]): number[] {
@@ -676,7 +708,7 @@ function evaluateCheck(
       return { passed: ok, detail: `plane deviation=${deviation}, tolerance=${span * 1e-9}` }
     }
     case "topology-3d":
-      return evaluatePolyhedronTopology(prims, check.solidId, check.open === true)
+      return evaluatePolyhedronTopology(prims, check)
     case "prism-3d": {
       const ok = check.hasEqualEdges === true
         ? equalEdgeTriangularPrismPoints(prims) !== null

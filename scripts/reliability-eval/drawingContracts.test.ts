@@ -628,30 +628,37 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(evaluateDrawingContract(contract, { primitives: invalid }, { verificationStatus: "passed" }).passed).toBe(false)
   })
 
-  it("validates closed solid face topology and rejects inconsistent face winding", () => {
+  it("validates the named GK-S03 pentahedron and rejects inconsistent face winding", () => {
     const suite = loadContracts()
     const source = suite.cases.find((c) => c.id === "GK-S03")!
+    const names = ["A", "B", "C", "D", "E", "F"]
     const topology = {
       id: "ob-topology",
       kind: "topology",
-      description: "Closed, consistently wound, connected, non-degenerate polyhedron",
+      description: "The named six-vertex, five-face solid with exact face rings",
       scope: "stem",
       sourceSpan: source.requiredObligations[0]!.sourceSpan,
-      check: { kind: "topology-3d" }
+      check: {
+        kind: "topology-3d",
+        expectedVertexIds: names,
+        expectedFaceRings: [["A", "B", "C", "D"], ["A", "D", "E", "F"], ["B", "F", "E", "C"], ["A", "F", "B"], ["C", "E", "D"]]
+      }
     } as unknown as ContractObligation
     const contract = { ...source, requiredEntityIds: [], requiredObligations: [topology] }
     const points = [
-      { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 },
-      { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }
+      { x: -2, y: 0, z: 0 }, { x: -1, y: Math.sqrt(3), z: 0 }, { x: 1, y: Math.sqrt(3), z: 0 },
+      { x: 2, y: 0, z: 0 }, { x: 1, y: 0, z: 3 }, { x: -1, y: 0, z: 3 }
     ]
-    const faceRings = [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]]
+    const faceRings = [[0, 1, 2, 3], [0, 3, 4, 5], [1, 5, 4, 2], [0, 5, 1], [2, 4, 3]]
     const primitives = [
-      ...points.map((position, index) => ({ type: "point3", id: `v${index}`, label: `V${index}`, position })),
+      ...points.map((position, index) => ({ type: "point3", id: `v${index}`, label: names[index], position })),
       ...faceRings.map((pointIds, index) => ({ type: "face3", id: `f${index}`, pointIds: pointIds.map((point) => `v${point}`) })),
       { type: "polyhedron3", id: "solid", vertexIds: points.map((_, index) => `v${index}`), edgeIds: [], faceIds: faceRings.map((_, index) => `f${index}`) }
     ]
-    expect(evaluateDrawingContract(contract, { primitives }, { verificationStatus: "passed" }).passed).toBe(true)
-
+    const valid = evaluateDrawingContract(contract, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    const rotated = primitives.map((primitive) => primitive.id === "f0" ? { ...primitive, pointIds: ["v2", "v3", "v0", "v1"] } : primitive)
+    expect(evaluateDrawingContract(contract, { primitives: rotated }, { verificationStatus: "passed" }).passed).toBe(true)
     const invalid = primitives.map((primitive) => primitive.id === "f3" ? { ...primitive, pointIds: ["v1", "v3", "v2"] } : primitive)
     const rejected = evaluateDrawingContract(contract, { primitives: invalid }, { verificationStatus: "passed" })
     expect(rejected.passed).toBe(false)
@@ -894,8 +901,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
   it("verifies JT-S09 cube edge length and hemisphere radius rather than ignoring both parameters", () => {
     const suite = loadContracts()
     const jts09 = suite.cases.find((c) => c.id === "JT-S09")!
+    const labels: Record<string, string> = {
+      "-1,-1,-1": "A", "-1,1,-1": "B", "-1,1,1": "C", "-1,-1,1": "D",
+      "1,-1,-1": "A₁", "1,1,-1": "B₁", "1,1,1": "C₁", "1,-1,1": "D₁"
+    }
     const validPoints = [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => ({
-      type: "point3", id: `v-${x}-${y}-${z}`, label: `V${x}${y}${z}`, position: { x, y, z }
+      type: "point3", id: `v-${x}-${y}-${z}`, label: labels[`${x},${y},${z}`]!, position: { x, y, z }
     }))))
     const vertexId = (x: number, y: number, z: number) => `v-${x}-${y}-${z}`
     const topology = squarePrismTopology([
