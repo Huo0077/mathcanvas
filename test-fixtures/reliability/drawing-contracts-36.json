@@ -272,6 +272,20 @@
             "secondPoint": "D",
             "value": 0.9258200997725514
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed quadrilateral-pyramid topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD 中",
+            "start": 3,
+            "end": 15
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -1123,6 +1137,35 @@
             "b": "C",
             "t": 0.5
           }
+        },
+        {
+          "id": "ob-base-coplanar",
+          "kind": "coplanar",
+          "description": "Base ABCD is coplanar",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "coplanar-3d",
+            "points": ["A", "B", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed quadrilateral-pyramid topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -1407,6 +1450,20 @@
             "subquestion": "(2)",
             "forbiddenEntityIds": ["P"]
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed right square-prism topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2",
+            "start": 3,
+            "end": 29
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -1628,6 +1685,20 @@
             "b": "F",
             "c": "D",
             "d": "A"
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed tetrahedron topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "三棱锥 A-BCD",
+            "start": 3,
+            "end": 12
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         }
       ],
@@ -2156,6 +2227,35 @@
             "b": "P",
             "value": 1.7320508075688772
           }
+        },
+        {
+          "id": "ob-base-coplanar",
+          "kind": "coplanar",
+          "description": "Base ABCD is coplanar",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "coplanar-3d",
+            "points": ["A", "B", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed quadrilateral-pyramid topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -2242,6 +2342,20 @@
           "check": {
             "kind": "circumsphere-3d"
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed right triangular-prism topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "设三棱柱的侧棱垂直于底面, 所有棱长都为 $a$",
+            "start": 10,
+            "end": 34
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -2278,14 +2392,16 @@
         "A",
         "B",
         "C",
-        "P"
+        "P",
+        "O"
       ],
       "sharedScope": {
         "entities": [
           "A",
           "B",
           "C",
-          "P"
+          "P",
+          "O"
         ],
         "stemConditions": [
           "AB=AC=CD=1",
@@ -2434,6 +2550,52 @@
             "a": "P",
             "b": "A",
             "value": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-pc-ab",
+          "kind": "perpendicular",
+          "description": "PC⊥AB in subquestion (1)(i)",
+          "scope": "(1)(i)",
+          "sourceSpan": {
+            "text": "设 PC⊥AB",
+            "start": 77,
+            "end": 84
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "C",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-circumsphere",
+          "kind": "circumsphere",
+          "description": "P,A,B,C lie on sphere O with radius √5/2 in subquestion (1)(ii)",
+          "scope": "(1)(ii)",
+          "sourceSpan": {
+            "text": "三棱锥 P-ABC 的各个顶点都在球 O 的球面上",
+            "start": 85,
+            "end": 110
+          },
+          "check": {
+            "kind": "circumsphere-3d"
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed tetrahedron P-ABC topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "三棱锥 P-ABC",
+            "start": 85,
+            "end": 94
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         }
       ],
@@ -2674,6 +2836,20 @@
             "firstPoint": "P",
             "secondPoint": "C₁",
             "value": 0.816496580927726
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed triangular-prism topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "三棱柱 ABC-A₁B₁C₁",
+            "start": 4,
+            "end": 18
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         }
       ],
@@ -2946,6 +3122,20 @@
             "c": "P",
             "d": "C"
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed quadrilateral-pyramid topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 1,
+            "end": 11
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -3046,6 +3236,7 @@
           "kind": "length",
           "description": "AB=2√3",
           "scope": "stem",
+          "stateId": "before_fold",
           "sourceSpan": {
             "text": "AB=2√3",
             "start": 38,
@@ -3064,6 +3255,7 @@
           "kind": "length",
           "description": "EF=AB=2√3",
           "scope": "stem",
+          "stateId": "before_fold",
           "sourceSpan": {
             "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
             "start": 88,
@@ -3082,6 +3274,7 @@
           "kind": "sum",
           "description": "BE + EC = 8",
           "scope": "stem",
+          "stateId": "before_fold",
           "sourceSpan": {
             "text": "BC=8",
             "start": 28,
@@ -3101,6 +3294,7 @@
           "kind": "sum",
           "description": "AF + FD = 9",
           "scope": "stem",
+          "stateId": "before_fold",
           "sourceSpan": {
             "text": "AD=9",
             "start": 33,
@@ -3116,21 +3310,171 @@
           }
         },
         {
-          "id": "ob-be-ec-perp",
-          "kind": "perpendicular",
-          "description": "BE⊥EC",
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=8 in the pre-fold trapezoid",
           "scope": "stem",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "BC=8",
+            "start": 28,
+            "end": 32
+          },
+          "expectedValue": 8,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 8
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=9 in the pre-fold trapezoid",
+          "scope": "stem",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "AD=9",
+            "start": 33,
+            "end": 37
+          },
+          "expectedValue": 9,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 9
+          }
+        },
+        {
+          "id": "ob-bc-ad",
+          "kind": "parallel",
+          "description": "BC∥AD in the pre-fold trapezoid",
+          "scope": "stem",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "BC∥AD",
+            "start": 16,
+            "end": 21
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "B",
+            "b": "C",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ab-ad",
+          "kind": "perpendicular",
+          "description": "AB⊥AD in the pre-fold trapezoid",
+          "scope": "stem",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "AB⊥AD",
+            "start": 22,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-e-ratio",
+          "kind": "ratio",
+          "description": "BE/BC=5/8",
+          "scope": "(1)",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "点 E 为线段 BC（不在端点上）的一点",
+            "start": 45,
+            "end": 65
+          },
+          "expectedValue": 0.625,
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "E",
+            "a": "B",
+            "b": "C",
+            "t": 0.625
+          }
+        },
+        {
+          "id": "ob-f-ratio",
+          "kind": "ratio",
+          "description": "AF/AD=5/9",
+          "scope": "(1)",
+          "stateId": "before_fold",
+          "sourceSpan": {
+            "text": "过 E 作 AB 的平行线交 AD 于 F",
+            "start": 66,
+            "end": 87
+          },
+          "expectedValue": 0.5555555555555556,
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "F",
+            "a": "A",
+            "b": "D",
+            "t": 0.5555555555555556
+          }
+        },
+        {
+          "id": "ob-cf-bd",
+          "kind": "perpendicular",
+          "description": "CF⊥BD in subquestion (1)",
+          "scope": "(1)",
+          "stateId": "after_fold",
+          "sourceSpan": {
+            "text": "若 CF⊥BD",
+            "start": 128,
+            "end": 135
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "C",
+            "b": "F",
+            "c": "B",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-planes-perpendicular",
+          "kind": "planes_perpendicular",
+          "description": "Plane ABEF is perpendicular to plane ECDF after folding",
+          "scope": "stem",
+          "stateId": "after_fold",
           "sourceSpan": {
             "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
             "start": 88,
             "end": 111
           },
           "check": {
-            "kind": "perp-3d",
-            "a": "B",
-            "b": "E",
-            "c": "E",
-            "d": "C"
+            "kind": "planes-perpendicular-3d",
+            "first": ["A", "B", "E"],
+            "second": ["E", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-open-topology",
+          "kind": "topology",
+          "description": "Two folded rectangles share EF as a valid open surface",
+          "scope": "stem",
+          "stateId": "after_fold",
+          "sourceSpan": {
+            "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
+            "start": 88,
+            "end": 111
+          },
+          "check": {
+            "kind": "topology-3d",
+            "open": true
           }
         },
         {
@@ -3138,6 +3482,7 @@
           "kind": "perpendicular",
           "description": "EF⊥EC",
           "scope": "stem",
+          "stateId": "before_fold",
           "sourceSpan": {
             "text": "过 E 作 AB 的平行线交 AD 于 F",
             "start": 66,
@@ -3157,6 +3502,7 @@
         "requiresVisualChecks": true,
         "allowOmittedSubquestion": false,
         "multiBranchHandling": "show_base_plus_branch_note",
+        "multiStateHandling": "enumerate:before_fold,after_fold",
         "labelReadabilityRequired": true
       },
       "freeChoices": [
@@ -3364,6 +3710,71 @@
             "a": "C",
             "b": "P",
             "t": 0.5
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=BC=1 (rectangle)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "底面 ABCD 为矩形",
+            "start": 17,
+            "end": 28
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-cd",
+          "kind": "length",
+          "description": "CD=AB=2 (rectangle and equilateral PCD)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "底面 ABCD 为矩形，AB=2BC=2，侧面 PCD 是等边三角形",
+            "start": 17,
+            "end": 51
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "D",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-base-coplanar",
+          "kind": "coplanar",
+          "description": "Rectangle ABCD is coplanar",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "底面 ABCD 为矩形",
+            "start": 17,
+            "end": 28
+          },
+          "check": {
+            "kind": "coplanar-3d",
+            "points": ["A", "B", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed quadrilateral-pyramid topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四棱锥 P-ABCD",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         }
       ],
@@ -3592,6 +4003,20 @@
             "c": "A",
             "d": "B"
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed polyhedron ABCDE topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "多面体 ABCDE",
+            "start": 4,
+            "end": 13
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -3602,7 +4027,9 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "The prompt says 如图 but no reviewed figure hash/regions are frozen; candidate topology is validated but its equivalence to the unavailable source figure remains unverified."
+      ]
     },
     {
       "id": "JT-S07",
@@ -3863,6 +4290,20 @@
             "b": "C",
             "t": 0.5
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed five-face polyhedron ABCDEF topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "五面体 ABCDEF",
+            "start": 4,
+            "end": 14
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -3875,7 +4316,9 @@
       "freeChoices": [
         "scale parameter AB = s > 0 (canonical positive scale)"
       ],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "The prompt says 如图 but no reviewed figure hash/regions are frozen; candidate topology is validated but its equivalence to the unavailable source figure remains unverified."
+      ]
     },
     {
       "id": "JT-S08",
@@ -4138,6 +4581,22 @@
             "a": "E",
             "b": "F"
           }
+        },
+        {
+          "id": "ob-planes-perpendicular",
+          "kind": "planes_perpendicular",
+          "description": "Plane ACFE is perpendicular to plane ABCD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ACFE 为矩形，平面 ACFE⊥平面 ABCD",
+            "start": 37,
+            "end": 65
+          },
+          "check": {
+            "kind": "planes-perpendicular-3d",
+            "first": ["A", "C", "F"],
+            "second": ["A", "B", "C"]
+          }
         }
       ],
       "displayPolicy": {
@@ -4150,7 +4609,9 @@
       "freeChoices": [
         "In (2), M moves on segment EF (any interior point M on EF satisfies representation)"
       ],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "The shared AC diagonal/crease must not be represented as three coplanar-sharing faces; that would be a non-manifold edge. A dedicated crease graph is required before claiming open-surface topology acceptance."
+      ]
     },
     {
       "id": "JT-S09",
@@ -4211,6 +4672,20 @@
           "check": {
             "kind": "cube-3d",
             "edgeLength": 2
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "The inscribed cube has six closed square faces",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "已知半球内有一个内接正方体",
+            "start": 3,
+            "end": 16
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         },
         {
@@ -4770,7 +5245,8 @@
         "M",
         "N",
         "A",
-        "B"
+        "B",
+        "AB"
       ],
       "sharedScope": {
         "entities": [
@@ -4780,7 +5256,8 @@
           "M",
           "N",
           "A",
-          "B"
+          "B",
+          "AB"
         ],
         "stemConditions": [
           "C: y²=2px(p>0)",
@@ -4819,7 +5296,8 @@
           "text": "当 α-β 取得最大值时，求直线 AB 的方程",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "x - √2 y - 4 = 0"
         }
       ],
       "requiredObligations": [
@@ -4827,7 +5305,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Parabola y² = 4x (p=2)",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "当直线 $M D$ 垂直于 $x$ 轴时, $|M F|=3$",
             "start": 83,
@@ -4925,6 +5403,168 @@
             "a": "N",
             "b": "D",
             "c": "B"
+          }
+        },
+        {
+          "id": "ob-m-on-c",
+          "kind": "incidence",
+          "description": "M lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $F$ 的直线交 $C$ 于 $M, N$ 两 点",
+            "start": 54,
+            "end": 81
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "M",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-n-on-c",
+          "kind": "incidence",
+          "description": "N lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $F$ 的直线交 $C$ 于 $M, N$ 两 点",
+            "start": 54,
+            "end": 81
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "N",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-mn-distinct",
+          "kind": "distinct",
+          "description": "M and N are two distinct intersections",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $F$ 的直线交 $C$ 于 $M, N$ 两 点",
+            "start": 54,
+            "end": 81
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "M",
+            "b": "N"
+          }
+        },
+        {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A is the other intersection of MD with C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B is the other intersection of ND with C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "B",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-a-distinct",
+          "kind": "distinct",
+          "description": "A is distinct from M (the other intersection)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "A",
+            "b": "M"
+          }
+        },
+        {
+          "id": "ob-b-distinct",
+          "kind": "distinct",
+          "description": "B is distinct from N (the other intersection)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "B",
+            "b": "N"
+          }
+        },
+        {
+          "id": "ob-a-on-ab",
+          "kind": "incidence",
+          "description": "A lies on the named line AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": " 记直线 $M N, A B$ 的倾斜角分别为 $a, \\beta$.",
+            "start": 175,
+            "end": 210
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "A",
+            "lineId": "AB"
+          }
+        },
+        {
+          "id": "ob-b-on-ab",
+          "kind": "incidence",
+          "description": "B lies on the named line AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": " 记直线 $M N, A B$ 的倾斜角分别为 $a, \\beta$.",
+            "start": 175,
+            "end": 210
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "B",
+            "lineId": "AB"
+          }
+        },
+        {
+          "id": "ob-ab-equation",
+          "kind": "line_equation",
+          "description": "Optimal-angle branch AB: x-√2y-4=0",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "当 $a-\\beta$ 取得最大值时, 求直线 $A B$ 的方程",
+            "start": 211,
+            "end": 244
+          },
+          "check": {
+            "kind": "line-equation-2d",
+            "entityId": "AB",
+            "a": 1,
+            "b": -1.4142135623730951,
+            "c": -4
           }
         }
       ],
@@ -5061,6 +5701,40 @@
             "entityId": "tangent",
             "x": -1,
             "y": 0
+          }
+        },
+        {
+          "id": "ob-f-tangent",
+          "kind": "tangent",
+          "description": "The common line is tangent to f at x=-1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "在点 $\\left(x_{1}, f\\left(x_{1}\\right)\\right)$ 处的切线也是曲线 $y=g(x)$ 的切线",
+            "start": 51,
+            "end": 117
+          },
+          "check": {
+            "kind": "tangent-to-function-2d",
+            "lineId": "tangent",
+            "functionId": "f",
+            "x": -1
+          }
+        },
+        {
+          "id": "ob-g-tangent",
+          "kind": "tangent",
+          "description": "The common line is tangent to g at x=1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "在点 $\\left(x_{1}, f\\left(x_{1}\\right)\\right)$ 处的切线也是曲线 $y=g(x)$ 的切线",
+            "start": 51,
+            "end": 117
+          },
+          "check": {
+            "kind": "tangent-to-function-2d",
+            "lineId": "tangent",
+            "functionId": "g",
+            "x": 1
           }
         }
       ],
@@ -5211,6 +5885,152 @@
             "entityId": "l",
             "x": 1
           }
+        },
+        {
+          "id": "ob-p-on-c",
+          "kind": "incidence",
+          "description": "P lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$",
+            "start": 38,
+            "end": 86
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "P",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
+          }
+        },
+        {
+          "id": "ob-q-on-c",
+          "kind": "incidence",
+          "description": "Q lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$",
+            "start": 38,
+            "end": 86
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "Q",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
+          }
+        },
+        {
+          "id": "ob-op-oq",
+          "kind": "perpendicular",
+          "description": "OP⊥OQ",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "且 $O P \\perp O Q$",
+            "start": 69,
+            "end": 86
+          },
+          "check": {
+            "kind": "perp-2d",
+            "a": "O",
+            "b": "P",
+            "c": "O",
+            "d": "Q"
+          }
+        },
+        {
+          "id": "ob-a1-on-c",
+          "kind": "incidence",
+          "description": "A₁ lies on parabola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设 $A_{1}, A_{2}, A_{3}$ 是 $C$ 上的三个点",
+            "start": 154,
+            "end": 189
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A₁",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
+          }
+        },
+        {
+          "id": "ob-a2-on-c",
+          "kind": "incidence",
+          "description": "A₂ lies on parabola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设 $A_{1}, A_{2}, A_{3}$ 是 $C$ 上的三个点",
+            "start": 154,
+            "end": 189
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A₂",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
+          }
+        },
+        {
+          "id": "ob-a3-on-c",
+          "kind": "incidence",
+          "description": "A₃ lies on parabola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设 $A_{1}, A_{2}, A_{3}$ 是 $C$ 上的三个点",
+            "start": 154,
+            "end": 189
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A₃",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
+          }
+        },
+        {
+          "id": "ob-a1a2-tangent",
+          "kind": "tangent",
+          "description": "A1A2 is tangent to circle M",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "A1A2",
+            "conicId": "M"
+          }
+        },
+        {
+          "id": "ob-a1a3-tangent",
+          "kind": "tangent",
+          "description": "A1A3 is tangent to circle M",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "A1A3",
+            "conicId": "M"
+          }
+        },
+        {
+          "id": "ob-a2a3-tangent",
+          "kind": "tangent",
+          "description": "A2A3 is tangent to circle M",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "判断直线 $A_{2} A_{3}$ 与 $\\odot M$ 的位置关系",
+            "start": 238,
+            "end": 274
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "A2A3",
+            "conicId": "M"
+          }
         }
       ],
       "displayPolicy": {
@@ -5274,9 +6094,9 @@
           {
             "subquestion": "(2)",
             "localConditions": [
-              "circle E(0,5/2) tangent to AB at midpoint of AB"
+              "circle E(0,5/2) tangent to AB at midpoint of AB; D=0,1,-1"
             ],
-            "branchPolicy": "merge_into_main"
+            "branchPolicy": "enumerate:zero,positive,negative"
           }
         ]
       },
@@ -5297,7 +6117,8 @@
             "E(0,5/2)圆与AB切于中点"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "3 或 4√2"
         }
       ],
       "requiredObligations": [
@@ -5386,6 +6207,125 @@
           }
         },
         {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A is a tangent point on C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 1 }
+          }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B is a tangent point on C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "B",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 1 }
+          }
+        },
+        {
+          "id": "ob-d-on-da",
+          "kind": "incidence",
+          "description": "D lies on DA",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $D$ 作 $C$ 的两条切线",
+            "start": 62,
+            "end": 79
+          },
+          "check": { "kind": "point-on-line-2d", "point": "D", "lineId": "DA" }
+        },
+        {
+          "id": "ob-a-on-da",
+          "kind": "incidence",
+          "description": "A lies on DA",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A", "lineId": "DA" }
+        },
+        {
+          "id": "ob-d-on-db",
+          "kind": "incidence",
+          "description": "D lies on DB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $D$ 作 $C$ 的两条切线",
+            "start": 62,
+            "end": 79
+          },
+          "check": { "kind": "point-on-line-2d", "point": "D", "lineId": "DB" }
+        },
+        {
+          "id": "ob-b-on-db",
+          "kind": "incidence",
+          "description": "B lies on DB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": { "kind": "point-on-line-2d", "point": "B", "lineId": "DB" }
+        },
+        {
+          "id": "ob-e-circle",
+          "kind": "conic_equation",
+          "description": "Circle E is centered at (0,2.5) with radius 2 in the zero branch",
+          "scope": "(2)",
+          "branchId": "zero",
+          "sourceSpan": {
+            "text": "$E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆",
+            "start": 126,
+            "end": 162
+          },
+          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 2 }
+        },
+        {
+          "id": "ob-e-circle",
+          "kind": "conic_equation",
+          "description": "Circle E is centered at (0,2.5) with radius √2 in nonzero branches",
+          "scope": "(2)",
+          "branchId": "positive",
+          "sourceSpan": {
+            "text": "$E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆",
+            "start": 126,
+            "end": 162
+          },
+          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
+        },
+        {
+          "id": "ob-e-circle",
+          "kind": "conic_equation",
+          "description": "Circle E is centered at (0,2.5) with radius √2 in nonzero branches",
+          "scope": "(2)",
+          "branchId": "negative",
+          "sourceSpan": {
+            "text": "$E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆",
+            "start": 126,
+            "end": 162
+          },
+          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
+        },
+        {
           "id": "ob-ab-midpoint",
           "kind": "midpoint",
           "description": "M is the midpoint of AB",
@@ -5407,47 +6347,94 @@
         {
           "id": "ob-e-tangent",
           "kind": "tangent",
-          "description": "Circle E touches AB at its midpoint M",
+          "description": "Circle E touches AB at M=(0,1/2)",
           "scope": "(2)",
+          "branchId": "zero",
           "sourceSpan": {
             "text": "且切点为线段 $A B$ 的中点",
             "start": 176,
             "end": 192
           },
-          "check": {
-            "kind": "tangent-to-conic-2d",
-            "lineId": "AB",
-            "conicId": "E",
-            "touchPoint": { "x": 0, "y": 0.5 }
-          }
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 0, "y": 0.5 } }
+        },
+        {
+          "id": "ob-e-tangent",
+          "kind": "tangent",
+          "description": "Circle E touches AB at M=(1,3/2)",
+          "scope": "(2)",
+          "branchId": "positive",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 1, "y": 1.5 } }
+        },
+        {
+          "id": "ob-e-tangent",
+          "kind": "tangent",
+          "description": "Circle E touches AB at M=(-1,3/2)",
+          "scope": "(2)",
+          "branchId": "negative",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": -1, "y": 1.5 } }
         },
         {
           "id": "ob-area",
           "kind": "area",
-          "description": "Quadrilateral ADBE area is 3",
+          "description": "Quadrilateral ADBE area is 3 when D=0",
           "scope": "(2)",
+          "branchId": "zero",
           "sourceSpan": {
             "text": "求四边形 $A D B E$ 的面积",
             "start": 194,
             "end": 212
           },
           "expectedValue": 3,
-          "check": {
-            "kind": "quadrilateral-area-2d",
-            "points": ["A", "D", "B", "E"],
-            "value": 3
-          }
+          "check": { "kind": "quadrilateral-area-2d", "points": ["A", "D", "B", "E"], "value": 3 }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Quadrilateral ADBE area is 4√2 when D=1",
+          "scope": "(2)",
+          "branchId": "positive",
+          "sourceSpan": {
+            "text": "求四边形 $A D B E$ 的面积",
+            "start": 194,
+            "end": 212
+          },
+          "expectedValue": 5.656854249492381,
+          "check": { "kind": "quadrilateral-area-2d", "points": ["A", "D", "B", "E"], "value": 5.656854249492381 }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Quadrilateral ADBE area is 4√2 when D=-1",
+          "scope": "(2)",
+          "branchId": "negative",
+          "sourceSpan": {
+            "text": "求四边形 $A D B E$ 的面积",
+            "start": 194,
+            "end": 212
+          },
+          "expectedValue": 5.656854249492381,
+          "check": { "kind": "quadrilateral-area-2d", "points": ["A", "D", "B", "E"], "value": 5.656854249492381 }
         }
       ],
       "displayPolicy": {
         "requiresDiagram": true,
         "requiresVisualChecks": true,
         "allowOmittedSubquestion": false,
-        "multiBranchHandling": "merge_into_main",
+        "multiBranchHandling": "enumerate:zero,positive,negative",
         "labelReadabilityRequired": true
       },
       "freeChoices": [
-        "In (1), D varies on y=-1/2; in (2), tangent circle at E(0,5/2) fixes D"
+        "In (1), D varies on y=-1/2; in (2), D=0 gives area 3, while D=±1 gives area 4√2"
       ],
       "unsupportedReasons": []
     },
@@ -5900,7 +6887,7 @@
             "localConditions": [
               "A(2,0)"
             ],
-            "branchPolicy": "merge_into_main"
+            "branchPolicy": "diagnosis_if_infeasible"
           },
           {
             "subquestion": "(3)",
@@ -5924,12 +6911,13 @@
         {
           "id": "(2)",
           "kind": "proof",
-          "text": "证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点",
+          "text": "第(2)问不成立：线段 AF₁ 的垂直平分线与椭圆 C 有两个公共点",
           "localAssumptions": [
             "A(2,0)"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": false,
+          "expectedResult": "x=1/2 与椭圆交于 (1/2,±3√5/4)，不是恰有一个公共点"
         },
         {
           "id": "(3)",
@@ -6029,6 +7017,22 @@
             "cy": 0,
             "radius": 4
           }
+        },
+        {
+          "id": "ob-2-infeasible",
+          "kind": "infeasible_branch",
+          "description": "Disclose that the alleged single intersection is false: x=1/2 meets the ellipse at two points",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点",
+            "start": 70,
+            "end": 99
+          },
+          "check": {
+            "kind": "infeasible-branch",
+            "subquestion": "(2)",
+            "forbiddenEntityIds": []
+          }
         }
       ],
       "displayPolicy": {
@@ -6041,7 +7045,9 @@
       "freeChoices": [
         "In (3), M chosen on locus circle (x-1)²+y²=16"
       ],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "Subquestion (2) is false under the frozen prompt: x=1/2 intersects x²/4+y²/3=1 at (1/2,±3√5/4), so no tangent proof may be fabricated."
+      ]
     },
     {
       "id": "JT-P02",
@@ -6324,6 +7330,7 @@
         "O",
         "A",
         "B",
+        "AB",
         "l",
         "D",
         "E"
@@ -6334,6 +7341,7 @@
           "O",
           "A",
           "B",
+          "AB",
           "l",
           "D",
           "E"
@@ -6453,6 +7461,139 @@
             "c": "O",
             "d": "B",
             "value": -4
+          }
+        },
+        {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (2, 0) 的直线交 C 于 A，B 两点",
+            "start": 21,
+            "end": 46
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B lies on parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (2, 0) 的直线交 C 于 A，B 两点",
+            "start": 21,
+            "end": 46
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "B",
+            "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 2 }
+          }
+        },
+        {
+          "id": "ob-ab-through",
+          "kind": "line_constraint",
+          "description": "Secant AB passes through (2,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (2, 0) 的直线交 C 于 A，B 两点",
+            "start": 21,
+            "end": 46
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "entityId": "AB",
+            "x": 2,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-l-equation",
+          "kind": "line_equation",
+          "description": "Line l: y=x+1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 l：y=x+1",
+            "start": 91,
+            "end": 101
+          },
+          "check": {
+            "kind": "line-equation-2d",
+            "entityId": "l",
+            "a": 1,
+            "b": -1,
+            "c": 1
+          }
+        },
+        {
+          "id": "ob-d-on-l",
+          "kind": "incidence",
+          "description": "D lies on l",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E",
+            "start": 79,
+            "end": 109
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "D",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-e-on-l",
+          "kind": "incidence",
+          "description": "E lies on l",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E",
+            "start": 79,
+            "end": 109
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "E",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-oad",
+          "kind": "collinearity",
+          "description": "O, A and D are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E",
+            "start": 79,
+            "end": 109
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "O",
+            "b": "A",
+            "c": "D"
+          }
+        },
+        {
+          "id": "ob-obe",
+          "kind": "collinearity",
+          "description": "O, B and E are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E",
+            "start": 79,
+            "end": 109
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "O",
+            "b": "B",
+            "c": "E"
           }
         }
       ],
@@ -6599,6 +7740,118 @@
             "label": "P",
             "y": -2
           }
+        },
+        {
+          "id": "ob-pa-tangent",
+          "kind": "tangent",
+          "description": "PA is tangent to Γ",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B",
+            "start": 28,
+            "end": 53
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "PA",
+            "conicId": "Γ"
+          }
+        },
+        {
+          "id": "ob-pb-tangent",
+          "kind": "tangent",
+          "description": "PB is tangent to Γ",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B",
+            "start": 28,
+            "end": 53
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "PB",
+            "conicId": "Γ"
+          }
+        },
+        {
+          "id": "ob-c-directrix",
+          "kind": "incidence",
+          "description": "C is the directrix foot of A on y=-1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D",
+            "start": 97,
+            "end": 124
+          },
+          "check": {
+            "kind": "point-y-2d",
+            "label": "C",
+            "y": -1
+          }
+        },
+        {
+          "id": "ob-d-directrix",
+          "kind": "incidence",
+          "description": "D is the directrix foot of B on y=-1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D",
+            "start": 97,
+            "end": 124
+          },
+          "check": {
+            "kind": "point-y-2d",
+            "label": "D",
+            "y": -1
+          }
+        },
+        {
+          "id": "ob-ac-vertical",
+          "kind": "line_constraint",
+          "description": "AC is perpendicular to the directrix",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D",
+            "start": 97,
+            "end": 124
+          },
+          "check": {
+            "kind": "vertical-2d",
+            "a": "A",
+            "b": "C"
+          }
+        },
+        {
+          "id": "ob-bd-vertical",
+          "kind": "line_constraint",
+          "description": "BD is perpendicular to the directrix",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D",
+            "start": 97,
+            "end": 124
+          },
+          "check": {
+            "kind": "vertical-2d",
+            "a": "B",
+            "b": "D"
+          }
+        },
+        {
+          "id": "ob-2-infeasible",
+          "kind": "infeasible_branch",
+          "description": "Disclose that no real P makes A,C,P,D concyclic",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "问：是否存在一点 P 使得 A、C、P、D 四点共圆",
+            "start": 125,
+            "end": 151
+          },
+          "check": {
+            "kind": "infeasible-branch",
+            "subquestion": "(2)",
+            "forbiddenEntityIds": []
+          }
         }
       ],
       "displayPolicy": {
@@ -6634,6 +7887,7 @@
       "inputMode": "text_only",
       "independentReviewStatus": "pending_second_reviewer",
       "requiredEntityIds": [
+        "C",
         "M",
         "P",
         "Q",
@@ -6643,6 +7897,7 @@
       ],
       "sharedScope": {
         "entities": [
+          "C",
           "M",
           "P",
           "Q",
@@ -6742,6 +7997,143 @@
             "label": "F",
             "x": 3,
             "y": 0
+          }
+        },
+        {
+          "id": "ob-p-on-c",
+          "kind": "incidence",
+          "description": "P lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 M(0, 1) 的直线与双曲线交于 P，Q 两点",
+            "start": 63,
+            "end": 89
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "P",
+            "conic": { "kind": "hyperbola", "cx": 0, "cy": 0, "axis": "x", "rx": 2, "ry": 2.23606797749979 }
+          }
+        },
+        {
+          "id": "ob-q-on-c",
+          "kind": "incidence",
+          "description": "Q lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 M(0, 1) 的直线与双曲线交于 P，Q 两点",
+            "start": 63,
+            "end": 89
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "Q",
+            "conic": { "kind": "hyperbola", "cx": 0, "cy": 0, "axis": "x", "rx": 2, "ry": 2.23606797749979 }
+          }
+        },
+        {
+          "id": "ob-mpq",
+          "kind": "collinearity",
+          "description": "M, P and Q are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 M(0, 1) 的直线与双曲线交于 P，Q 两点",
+            "start": 63,
+            "end": 89
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "M",
+            "b": "P",
+            "c": "Q"
+          }
+        },
+        {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点",
+            "start": 90,
+            "end": 124
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A",
+            "conic": { "kind": "hyperbola", "cx": 0, "cy": 0, "axis": "x", "rx": 2, "ry": 2.23606797749979 }
+          }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点",
+            "start": 90,
+            "end": 124
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "B",
+            "conic": { "kind": "hyperbola", "cx": 0, "cy": 0, "axis": "x", "rx": 2, "ry": 2.23606797749979 }
+          }
+        },
+        {
+          "id": "ob-fab",
+          "kind": "collinearity",
+          "description": "F, A and B are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点",
+            "start": 90,
+            "end": 124
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "F",
+            "b": "A",
+            "c": "B"
+          }
+        },
+        {
+          "id": "ob-ab-pq-parallel",
+          "kind": "parallel",
+          "description": "AB is parallel to PQ",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点",
+            "start": 90,
+            "end": 124
+          },
+          "check": {
+            "kind": "parallel-2d",
+            "a": "A",
+            "b": "B",
+            "c": "P",
+            "d": "Q"
+          }
+        },
+        {
+          "id": "ob-ratio",
+          "kind": "ratio",
+          "description": "(|MP|·|MQ|)/|AB|=6/5",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "试问 (|MP|·|MQ|)/|AB| 是否为定值",
+            "start": 125,
+            "end": 150
+          },
+          "expectedValue": 1.2,
+          "check": {
+            "kind": "secant-ratio-2d",
+            "m": "M",
+            "p": "P",
+            "q": "Q",
+            "a": "A",
+            "b": "B",
+            "value": 1.2
           }
         }
       ],

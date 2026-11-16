@@ -46,6 +46,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 - 第二批拓扑与宿主整改已完成并验证：闭合/开放拓扑、共面、线段域、垂足第二方向、棱柱对应向量及GK-P01/P02、JT-P02/P07关联义务；定向25项、全量540文件/5721通过+1todo。T01仍未批准，下一步处理JT-P08定义域/分支及其余合同。证据：`docs/audit/2026-11-16-g3-host-topology/README.md`。
 - 第三批定义域与切线整改已完成并验证：JT-P08排除点与双分支、JT-P09圆上/弦/面积、函数符号导数与圆锥代数切线；定向29项、全量540文件/5725通过+1todo。最新36题为0 passed/11 partial/25 failed，旧JT-P08因漏排除点不再通过。T01仍未批准，继续其余合同及生产支持。证据：`docs/audit/2026-11-16-g3-domain-tangent/README.md`。
 
+- 第二轮独立 reviewer 逐题复核36/36，结论为4题可批准、32题需整改；T01仍未关闭。已针对 GK-P03 最优直线、GK-P06 三分支、JT-S04 真实旋转夹具和 JT-S09 闭合拓扑实施修正，仍须复审。最新离线结果为0 passed/12 partial/24 failed，生产未路由失败不能由合同GREEN抵销。证据：`docs/audit/2026-11-16-g3-contract-review-r2/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

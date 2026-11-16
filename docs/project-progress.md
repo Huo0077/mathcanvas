@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 第二轮独立复核与数学分支整改
+
+- **独立复核**：agent-0 逐题复核36/36，4题作图数学合同可批准、32题需整改；T01/P0仍未退出，未由作者自签 approved。审计完整保存逐题理由、Critical/Important/Minor 与边界。
+- **实质整改**：GK-P03 最优直线改为 `x−√2y−4=0` 并拒绝 `s=2`；GK-P06 枚举 `D=0,±1` 和面积 `3或4√2`；JT-S04 用真实90°铰链旋转确认 BE=5，反例20/3被拒绝；JT-S09 增加真实六面闭合拓扑。补 M/N互异、AB点名、切线端点、圆半径/切点义务。
+- **验证与边界**：定向39项、全量540文件/5735通过+1todo、类型、Lint（0 errors/33既有warnings）、Web构建（640 modules）通过；最新离线结果为 **0 passed / 12 partial / 24 failed / 0 incomplete**，义务覆盖约22.38%。未路由和生产未接线仍导致24题失败，不能用合同GREEN冒充生产提升。scope继承、指定拓扑、跨状态折叠、切线绑定及参数域/最值仍未关闭。
+- **证据**：[第二轮独立复核与整改](audit/2026-11-16-g3-contract-review-r2/README.md)。
+
 ## 2026-11-16 —— G3 / T01 第三批定义域、分支与切线整改
 
 - **定义域/分支**：新增 `conic-domain-2d`、`evaluateDrawingContractBranches`、`line-equation-2d`；JT-P08排除 `(0,±√3)`，positive/negative双EF分别验证，缺支或漏排除点不通过。

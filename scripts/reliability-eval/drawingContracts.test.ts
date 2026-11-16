@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 
 import { describe, expect, it } from "vitest"
+import { intersectPlanarLineAndConicExact, rotatePointAboutHinge } from "@draw/geometry-kernel"
 
 import {
   evaluateDrawingContract,
@@ -36,6 +37,42 @@ function loadManifest() {
       questionSha256: string
     }[]
   }
+}
+
+function pyramidTopology(ids: readonly string[]) {
+  const [p, a, b, c, d] = ids
+  const rings = [[a, d, c, b], [p, a, b], [p, b, c], [p, c, d], [p, d, a]]
+  return [
+    ...rings.map((pointIds, index) => ({ type: "face3", id: `pyramid-face-${index}`, pointIds })),
+    { type: "polyhedron3", id: "pyramid", vertexIds: ids, edgeIds: [], faceIds: rings.map((_, index) => `pyramid-face-${index}`) }
+  ]
+}
+
+function squarePrismTopology(ids: readonly string[]) {
+  const [a, b, c, d, a1, b1, c1, d1] = ids
+  const rings = [[a, d, c, b], [a1, b1, c1, d1], [a, b, b1, a1], [b, c, c1, b1], [c, d, d1, c1], [d, a, a1, d1]]
+  return [
+    ...rings.map((pointIds, index) => ({ type: "face3", id: `prism-face-${index}`, pointIds })),
+    { type: "polyhedron3", id: "prism", vertexIds: ids, edgeIds: [], faceIds: rings.map((_, index) => `prism-face-${index}`) }
+  ]
+}
+
+function triangularPrismTopology(ids: readonly string[]) {
+  const [a, b, c, a1, b1, c1] = ids
+  const rings = [[a, c, b], [a1, b1, c1], [a, b, b1, a1], [b, c, c1, b1], [c, a, a1, c1]]
+  return [
+    ...rings.map((pointIds, index) => ({ type: "face3", id: `tri-prism-face-${index}`, pointIds })),
+    { type: "polyhedron3", id: "tri-prism", vertexIds: ids, edgeIds: [], faceIds: rings.map((_, index) => `tri-prism-face-${index}`) }
+  ]
+}
+
+function tetrahedronTopology(ids: readonly string[]) {
+  const [a, b, c, p] = ids
+  const rings = [[a, c, b], [a, b, p], [a, p, c], [b, c, p]]
+  return [
+    ...rings.map((pointIds, index) => ({ type: "face3", id: `tetra-face-${index}`, pointIds })),
+    { type: "polyhedron3", id: "tetra", vertexIds: ids, edgeIds: [], faceIds: rings.map((_, index) => `tetra-face-${index}`) }
+  ]
 }
 
 describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
@@ -87,22 +124,194 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(shrunkCheck.errors.join("\n")).toMatch(/denominator|36|missing/i)
   })
 
-  it("verifies GK-P06 both tangents, midpoint circle contact and quadrilateral area", () => {
+  it("verifies GK-P03 second intersections and the actual optimal-angle branch", () => {
+    const suite = loadContracts()
+    const gkp03 = suite.cases.find((c) => c.id === "GK-P03")!
+    const point = (t: number) => ({ x: t * t, y: 2 * t })
+    const candidateAtSum = (sum: number) => {
+      const m = (sum + Math.sqrt(sum * sum + 4)) / 2, n = (sum - Math.sqrt(sum * sum + 4)) / 2
+      const M = point(m), N = point(n), A = point(-2 / m), B = point(-2 / n)
+      return [
+        { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 },
+        { type: "point", id: "f", label: "F", x: 1, y: 0 }, { type: "point", id: "d", label: "D", x: 2, y: 0 },
+        { type: "point", id: "m", label: "M", ...M }, { type: "point", id: "n", label: "N", ...N },
+        { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+        { type: "line", id: "ab", label: "AB", a: A, b: B }
+      ]
+    }
+    const primitives = candidateAtSum(Math.SQRT2)
+    const valid = evaluateDrawingContract(gkp03, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-m-on-c", "ob-n-on-c", "ob-a-on-c", "ob-b-on-c", "ob-mn-distinct", "ob-a-distinct", "ob-b-distinct", "ob-a-on-ab", "ob-b-on-ab", "ob-ab-equation"]))
+    expect(gkp03.subquestions.find((subquestion) => subquestion.id === "(2)")?.expectedResult).toBe("x - √2 y - 4 = 0")
+    const angleAtSum = (sum: number) => Math.atan(2 / sum) - Math.atan(1 / sum)
+    expect(angleAtSum(Math.SQRT2)).toBeCloseTo(19.47122063449069 * Math.PI / 180, 12)
+    expect(angleAtSum(Math.SQRT2)).toBeGreaterThan(angleAtSum(2))
+
+    const nonOptimal = evaluateDrawingContract(gkp03, { primitives: candidateAtSum(2) }, { verificationStatus: "passed" })
+    expect(nonOptimal.failedObligationIds).toContain("ob-ab-equation")
+    const mPoint = primitives.find((primitive) => primitive.id === "m")!
+    const invalid = evaluateDrawingContract(gkp03, {
+      primitives: primitives.map((primitive) => primitive.id === "n" ? { ...primitive, x: mPoint.x, y: mPoint.y } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(invalid.failedObligationIds).toContain("ob-mn-distinct")
+    const detachedLine = evaluateDrawingContract(gkp03, {
+      primitives: primitives.map((primitive) => primitive.id === "ab" ? { ...primitive, a: { x: 0, y: 0 }, b: { x: 4, y: 2 * Math.SQRT2 } } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(detachedLine.failedObligationIds).toEqual(expect.arrayContaining(["ob-a-on-ab", "ob-b-on-ab"]))
+  })
+
+  it("verifies GK-P05 parabola points, perpendicular radii and all three circle tangencies", () => {
+    const suite = loadContracts()
+    const gkp05 = suite.cases.find((c) => c.id === "GK-P05")!
+    const A1 = { x: 0, y: 0 }, A2 = { x: 3, y: Math.sqrt(3) }, A3 = { x: 3, y: -Math.sqrt(3) }
+    const primitives = [
+      { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 0.5 },
+      { type: "circle", id: "m", label: "M", center: { x: 2, y: 0 }, radius: 1 },
+      { type: "point", id: "o", label: "O", x: 0, y: 0 }, { type: "point", id: "m-point", label: "M", x: 2, y: 0 },
+      { type: "point", id: "p", label: "P", x: 1, y: 1 }, { type: "point", id: "q", label: "Q", x: 1, y: -1 },
+      { type: "line", id: "l", label: "l", a: { x: 1, y: -2 }, b: { x: 1, y: 2 } },
+      { type: "point", id: "a1", label: "A₁", ...A1 }, { type: "point", id: "a2", label: "A₂", ...A2 }, { type: "point", id: "a3", label: "A₃", ...A3 },
+      { type: "line", id: "a1a2", label: "A1A2", a: A1, b: A2 },
+      { type: "line", id: "a1a3", label: "A1A3", a: A1, b: A3 },
+      { type: "line", id: "a2a3", label: "A2A3", a: A2, b: A3 }
+    ]
+    const valid = evaluateDrawingContract(gkp05, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-c", "ob-q-on-c", "ob-op-oq", "ob-a1-on-c", "ob-a2-on-c", "ob-a3-on-c", "ob-a1a2-tangent", "ob-a1a3-tangent", "ob-a2a3-tangent"]))
+
+    const invalid = evaluateDrawingContract(gkp05, {
+      primitives: primitives.map((primitive) => primitive.id === "a2a3" ? { ...primitive, b: { x: 4, y: -2 } } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(invalid.failedObligationIds).toContain("ob-a2a3-tangent")
+  })
+
+  it("verifies JT-P05 hyperbola incidences, parallel chords and the constant ratio", () => {
+    const suite = loadContracts()
+    const jtp05 = suite.cases.find((c) => c.id === "JT-P05")!
+    const x = Math.sqrt(24 / 5)
+    const primitives = [
+      { type: "hyperbola", id: "c", label: "C", center: { x: 0, y: 0 }, axis: "x", radiusX: 2, radiusY: Math.sqrt(5) },
+      { type: "point", id: "m", label: "M", x: 0, y: 1 },
+      { type: "point", id: "p", label: "P", x, y: 1 }, { type: "point", id: "q", label: "Q", x: -x, y: 1 },
+      { type: "point", id: "f", label: "F", x: 3, y: 0 },
+      { type: "point", id: "a", label: "A", x: 2, y: 0 }, { type: "point", id: "b", label: "B", x: -2, y: 0 }
+    ]
+    const valid = evaluateDrawingContract(jtp05, { primitives }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(valid.passed).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-c", "ob-q-on-c", "ob-mpq", "ob-a-on-c", "ob-b-on-c", "ob-fab", "ob-ab-pq-parallel", "ob-ratio"]))
+
+    const invalid = evaluateDrawingContract(jtp05, {
+      primitives: primitives.map((primitive) => primitive.id === "a" ? { ...primitive, y: 1 } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(invalid.failedObligationIds).toContain("ob-a-on-c")
+  })
+
+  it("verifies JT-P04 tangent/directrix dependencies and honest infeasibility", () => {
+    const suite = loadContracts()
+    const jtp04 = suite.cases.find((c) => c.id === "JT-P04")!
+    const A = { x: 2, y: 1 }, B = { x: -4, y: 4 }, P = { x: -1, y: -2 }
+    const primitives = [
+      { type: "parabola", id: "gamma", label: "Γ", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 2 },
+      { type: "point", id: "m", label: "M", x: 4, y: 4 }, { type: "point", id: "p", label: "P", ...P },
+      { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+      { type: "point", id: "c", label: "C", x: 2, y: -1 }, { type: "point", id: "d", label: "D", x: -4, y: -1 },
+      { type: "line", id: "pa", label: "PA", a: P, b: A }, { type: "line", id: "pb", label: "PB", a: P, b: B }
+    ]
+    const result = evaluateDrawingContractScopes(jtp04, {
+      "(1)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives }, options: { verificationStatus: "passed", answerText: "不存在实数点 P 使 A,C,P,D 共圆。", infeasibleDiagnosedSubquestions: ["(2)"] } }
+    })
+    expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
+    expect(result.scopeResults["(1)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pa-tangent", "ob-pb-tangent"]))
+    expect(result.scopeResults["(2)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-c-directrix", "ob-d-directrix", "ob-ac-vertical", "ob-bd-vertical", "ob-2-infeasible"]))
+  })
+
+  it("verifies JT-P03 parabola secant and D/E intersections with OA/OB and l", () => {
+    const suite = loadContracts()
+    const jtp03 = suite.cases.find((c) => c.id === "JT-P03")!
+    const A = { x: 2, y: 2 * Math.SQRT2 }, B = { x: 2, y: -2 * Math.SQRT2 }
+    const primitives = [
+      { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 },
+      { type: "point", id: "o", label: "O", x: 0, y: 0 },
+      { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+      { type: "line", id: "ab", label: "AB", a: A, b: B },
+      { type: "line", id: "l", label: "l", a: { x: 0, y: 1 }, b: { x: 1, y: 2 } },
+      { type: "point", id: "d", label: "D", x: 1 + Math.SQRT2, y: 2 + Math.SQRT2 },
+      { type: "point", id: "e", label: "E", x: 1 - Math.SQRT2, y: 2 - Math.SQRT2 }
+    ]
+    const valid = evaluateDrawingContract(jtp03, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-a-on-c", "ob-b-on-c", "ob-ab-through", "ob-l-equation", "ob-d-on-l", "ob-e-on-l", "ob-oad", "ob-obe"]))
+
+    const invalid = evaluateDrawingContract(jtp03, {
+      primitives: primitives.map((primitive) => primitive.id === "d" ? { ...primitive, x: 0, y: 0.5 } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(invalid.failedObligationIds).toContain("ob-d-on-l")
+    expect(invalid.failedObligationIds).toContain("ob-oad")
+  })
+
+  it("diagnoses JT-P01(2) as two intersections rather than fabricating a tangent proof", () => {
+    const suite = loadContracts()
+    const jtp01 = suite.cases.find((c) => c.id === "JT-P01")!
+    const intersection = intersectPlanarLineAndConicExact(
+      { type: "line", a: { x: 0.5, y: -1 }, b: { x: 0.5, y: 1 } },
+      { type: "ellipse", id: "c", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3) }
+    )
+    expect(intersection.kind).toBe("secant")
+    expect(intersection.points).toHaveLength(2)
+    for (const point of intersection.points) expect(Math.abs(point.y)).toBeCloseTo(3 * Math.sqrt(5) / 4, 12)
+
+    expect(jtp01.subquestions.find((subquestion) => subquestion.id === "(2)")?.feasible).toBe(false)
+    expect(jtp01.requiredObligations.map((obligation) => obligation.id)).toContain("ob-2-infeasible")
+    const base = {
+      primitives: [
+        { type: "ellipse", id: "c", label: "C", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3) },
+        { type: "point", id: "f1", label: "F₁", x: -1, y: 0 },
+        { type: "point", id: "f2", label: "F₂", x: 1, y: 0 },
+        { type: "point", id: "a", label: "A", x: 2, y: 0 },
+        { type: "circle", id: "locus", label: "M", center: { x: 1, y: 0 }, radius: 4 }
+      ]
+    }
+    const honest = evaluateDrawingContractScopes(jtp01, {
+      "(1)": { candidate: base, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: base, options: { verificationStatus: "passed", answerText: "第(2)问不成立：垂直平分线与椭圆有两个公共点。", infeasibleDiagnosedSubquestions: ["(2)"] } },
+      "(3)": { candidate: base, options: { verificationStatus: "passed" } }
+    })
+    expect(honest.passed).toBe(true)
+  })
+
+  it("verifies all three GK-P06 tangent-circle branches and binds the named endpoints", () => {
     const suite = loadContracts()
     const gkp06 = suite.cases.find((c) => c.id === "GK-P06")!
-    const D = { x: 0, y: -0.5 }, A = { x: 1, y: 0.5 }, B = { x: -1, y: 0.5 }, M = { x: 0, y: 0.5 }
-    const primitives = [
-      { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 1 },
-      { type: "point", id: "d", label: "D", ...D }, { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
-      { type: "point", id: "m", label: "M", ...M },
-      { type: "point", id: "e-point", label: "E", x: 0, y: 2.5 },
-      { type: "circle", id: "e", label: "E", center: { x: 0, y: 2.5 }, radius: 2 },
-      { type: "line", id: "da", label: "DA", a: D, b: A }, { type: "line", id: "db", label: "DB", a: D, b: B },
-      { type: "line", id: "ab", label: "AB", a: A, b: B }
-    ]
-    const valid = evaluateDrawingContract(gkp06, { primitives }, { verificationStatus: "passed" })
-    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
-    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-da-tangent", "ob-db-tangent", "ob-ab-midpoint", "ob-e-tangent", "ob-area"]))
+    const candidateAtD = (d: number) => {
+      const aX = d + Math.sqrt(d * d + 1), bX = d - Math.sqrt(d * d + 1)
+      const D = { x: d, y: -0.5 }, A = { x: aX, y: aX * aX / 2 }, B = { x: bX, y: bX * bX / 2 }, M = { x: d, y: d * d + 0.5 }
+      return [
+        { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 1 },
+        { type: "point", id: "d", label: "D", ...D }, { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+        { type: "point", id: "m", label: "M", ...M }, { type: "point", id: "e-point", label: "E", x: 0, y: 2.5 },
+        { type: "circle", id: "e", label: "E", center: { x: 0, y: 2.5 }, radius: Math.hypot(d, 2 - d * d) },
+        { type: "line", id: "da", label: "DA", a: D, b: A }, { type: "line", id: "db", label: "DB", a: D, b: B },
+        { type: "line", id: "ab", label: "AB", a: A, b: B }
+      ]
+    }
+    const inputs = Object.fromEntries([[-1, "negative"], [0, "zero"], [1, "positive"]].map(([d, branchId]) => [branchId, {
+      candidate: { primitives: candidateAtD(Number(d)) }, options: { verificationStatus: "passed" }
+    }]))
+    const branches = evaluateDrawingContractBranches(gkp06, "(2)", inputs)
+    expect(branches.passed, JSON.stringify(branches.scopeResults)).toBe(true)
+    expect(Object.keys(branches.scopeResults)).toEqual(["zero", "positive", "negative"])
+    expect(gkp06.subquestions.find((subquestion) => subquestion.id === "(2)")?.expectedResult).toBe("3 或 4√2")
+    expect(branches.scopeResults.zero?.passedObligationIds).toEqual(expect.arrayContaining(["ob-da-tangent", "ob-db-tangent", "ob-ab-midpoint", "ob-e-tangent", "ob-area", "ob-a-on-c", "ob-b-on-c", "ob-d-on-da", "ob-a-on-da", "ob-d-on-db", "ob-b-on-db"]))
+    expect(branches.missingScopeIds).toEqual([])
+
+    const detached = evaluateDrawingContractBranches(gkp06, "(2)", {
+      ...inputs,
+      positive: { candidate: { primitives: candidateAtD(1).map((primitive) => primitive.id === "a" ? { ...primitive, y: 0 } : primitive) }, options: { verificationStatus: "passed" } }
+    })
+    expect(detached.passed).toBe(false)
+    expect(detached.scopeResults.positive?.failedObligationIds).toEqual(expect.arrayContaining(["ob-a-on-c", "ob-a-on-da"]))
   })
 
   it("verifies GK-P09 tangent by symbolic derivative and GK-P07 circle tangencies by exact intersection", () => {
@@ -322,13 +531,14 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       point("C", { x: 1, y: 2, z: 0 }), point("D", { x: 4, y: 0, z: 0 }),
       point("P", { x: 0, y: 0, z: 4 })
     ]
+    const topology = pyramidTopology(["pt-P", "pt-A", "pt-B", "pt-C", "pt-D"])
     const validM = point("M", { x: 16 / 17, y: 24 / 17, z: 16 / 17 })
-    const valid = evaluateDrawingContract(jts03, { primitives: [...base, validM] }, { verificationStatus: "passed", scopeId: "(2)" })
+    const valid = evaluateDrawingContract(jts03, { primitives: [...base, validM, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(valid.passed).toBe(true)
     expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-m-in-pcd", "ob-am-pc"]))
 
     const wrongM = point("M", { x: 2, y: 3, z: 0 })
-    const invalid = evaluateDrawingContract(jts03, { primitives: [...base, wrongM] }, { verificationStatus: "passed", scopeId: "(2)" })
+    const invalid = evaluateDrawingContract(jts03, { primitives: [...base, wrongM, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(invalid.passed).toBe(false)
     expect(invalid.failedObligationIds).toEqual(expect.arrayContaining(["ob-m-in-pcd", "ob-am-pc"]))
   })
@@ -444,14 +654,15 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     const A = point("A", { x: 2, y: 2, z: 0 }), B = point("B", { x: 0, y: 0, z: 0 }), C = point("C", { x: 2, y: 0, z: 0 })
     const A1 = point("A₁", { x: 0, y: 2, z: 2 }), B1 = point("B₁", { x: -2, y: 0, z: 2 }), C1 = point("C₁", { x: 0, y: 0, z: 2 })
     const ratio = 1 - Math.SQRT1_2
+    const topology = triangularPrismTopology(["pt-A", "pt-B", "pt-C", "pt-A₁", "pt-B₁", "pt-C₁"])
     const validP = point("P", { x: -2 * ratio, y: 2 - 2 * ratio, z: 2 })
-    const valid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, validP] }, { verificationStatus: "passed", scopeId: "(2)" })
+    const valid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, validP, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(valid.passed).toBe(true)
     expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-plane-perp", "ob-2-p-host", "ob-2-dihedral-cos"]))
     expect(jts02.requiredObligations.map((obligation) => obligation.id)).not.toContain("ob-ac-bb1")
 
     const midpoint = point("P", { x: -1, y: 1, z: 2 })
-    const invalid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, midpoint] }, { verificationStatus: "passed", scopeId: "(2)" })
+    const invalid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, midpoint, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(invalid.passed).toBe(false)
     expect(invalid.failedObligationIds).toEqual(expect.arrayContaining(["ob-2-p-host", "ob-2-dihedral-cos"]))
   })
@@ -466,8 +677,9 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       point("B", { x: 1.5, y: -Math.sqrt(3) / 2, z: 0 }),
       point("C", { x: 2, y: 0, z: 0 })
     ]
-    const proofCandidate = { primitives: [...base, point("D", { x: 0.5, y: Math.sqrt(3) / 2, z: 0 })] }
-    const measurementCandidate = { primitives: [...base, point("D", { x: 1.5, y: Math.sqrt(3) / 2, z: 0 })] }
+    const topology = pyramidTopology(["pt-P", "pt-A", "pt-B", "pt-C", "pt-D"])
+    const proofCandidate = { primitives: [...base, point("D", { x: 0.5, y: Math.sqrt(3) / 2, z: 0 }), ...topology] }
+    const measurementCandidate = { primitives: [...base, point("D", { x: 1.5, y: Math.sqrt(3) / 2, z: 0 }), ...topology] }
     const result = evaluateDrawingContractScopes(gks01, {
       "(1)": { candidate: proofCandidate, options: { verificationStatus: "passed" } },
       "(2)": { candidate: measurementCandidate, options: { verificationStatus: "passed" } }
@@ -483,6 +695,108 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     })
     expect(missingProof.passed).toBe(false)
     expect(missingProof.missingScopeIds).toEqual(["(1)"])
+  })
+
+  it("verifies JT-S04 as a rigid EF fold with the unique interior solution BE=5", () => {
+    const suite = loadContracts()
+    const jts04 = suite.cases.find((c) => c.id === "JT-S04")!
+    const h = 2 * Math.sqrt(3), e = 5
+    const beforePoints = {
+      A: { x: 0, y: 0, z: 0 }, B: { x: 0, y: h, z: 0 },
+      E: { x: e, y: h, z: 0 }, F: { x: e, y: 0, z: 0 },
+      C: { x: 8, y: h, z: 0 }, D: { x: 9, y: 0, z: 0 }
+    }
+    const foldedA = rotatePointAboutHinge(beforePoints.A, beforePoints.F, beforePoints.E, 90)
+    const foldedB = rotatePointAboutHinge(beforePoints.B, beforePoints.F, beforePoints.E, 90)
+    if (foldedA.status !== "ok" || foldedB.status !== "ok") throw new Error("valid fold hinge")
+    expect(foldedA.point).toEqual({ x: e, y: 0, z: e })
+    expect(foldedB.point).toEqual({ x: e, y: h, z: e })
+    type FoldPrimitive = { type: string; id: string; label?: string; position?: { x: number; y: number; z: number }; pointIds?: string[]; vertexIds?: string[]; edgeIds?: string[]; faceIds?: string[] }
+    const beforePrimitives: FoldPrimitive[] = Object.entries(beforePoints).map(([label, position]) => ({ type: "point3", id: label.toLowerCase(), label, position }))
+    const primitives: FoldPrimitive[] = beforePrimitives.map((primitive) => primitive.id === "a" || primitive.id === "b"
+      ? { ...primitive, position: primitive.id === "a" ? foldedA.point : foldedB.point }
+      : primitive)
+    primitives.push(
+      { type: "face3", id: "abef", pointIds: ["a", "b", "e", "f"] },
+      { type: "face3", id: "ecdf", pointIds: ["e", "c", "d", "f"] },
+      { type: "polyhedron3", id: "folded", vertexIds: ["a", "b", "e", "f", "c", "d"], edgeIds: [], faceIds: ["abef", "ecdf"] }
+    )
+    const before = evaluateDrawingContract(jts04, { primitives: beforePrimitives }, { verificationStatus: "passed", scopeId: "(1)", stateId: "before_fold" })
+    expect(before.passed, JSON.stringify(before.obligationResults)).toBe(true)
+    expect(before.passedObligationIds).toEqual(expect.arrayContaining(["ob-e-ratio", "ob-f-ratio"]))
+    const valid = evaluateDrawingContract(jts04, { primitives }, { verificationStatus: "passed", scopeId: "(1)", stateId: "after_fold" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-cf-bd", "ob-planes-perpendicular", "ob-open-topology"]))
+    expect(jts04.subquestions.find((subquestion) => subquestion.id === "(1)")?.expectedResult).toBe("5")
+    expect(jts04.requiredObligations.map((obligation) => obligation.id)).not.toContain("ob-be-ec-perp")
+
+    const wrongLength = primitives.map((primitive) => primitive.type === "point3" && ["a", "b", "e", "f"].includes(primitive.id)
+      ? { ...primitive, position: { ...primitive.position, x: 20 / 3 } }
+      : primitive)
+    expect(evaluateDrawingContract(jts04, { primitives: wrongLength }, { verificationStatus: "passed", scopeId: "(1)", stateId: "before_fold" }).failedObligationIds).toEqual(expect.arrayContaining(["ob-e-ratio", "ob-f-ratio"]))
+    expect(evaluateDrawingContract(jts04, { primitives: wrongLength }, { verificationStatus: "passed", scopeId: "(1)", stateId: "after_fold" }).failedObligationIds).toContain("ob-cf-bd")
+  })
+
+  it("verifies JT-S08 perpendicular folded planes without inventing manifold topology", () => {
+    const suite = loadContracts()
+    const jts08 = suite.cases.find((c) => c.id === "JT-S08")!
+    const h = Math.sqrt(3) / 2
+    const primitives = [
+      { type: "point3", id: "a", label: "A", position: { x: 0, y: 0, z: 0 } },
+      { type: "point3", id: "b", label: "B", position: { x: 1, y: 0, z: 0 } },
+      { type: "point3", id: "c", label: "C", position: { x: 0.5, y: h, z: 0 } },
+      { type: "point3", id: "d", label: "D", position: { x: -0.5, y: h, z: 0 } },
+      { type: "point3", id: "e", label: "E", position: { x: 0, y: 0, z: 1 } },
+      { type: "point3", id: "f", label: "F", position: { x: 0.5, y: h, z: 1 } },
+      { type: "point3", id: "m", label: "M", position: { x: 0.25, y: h / 2, z: 1 } }
+    ]
+    const valid = evaluateDrawingContract(jts08, { primitives }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toContain("ob-planes-perpendicular")
+  })
+
+  it("verifies JT-S05 rectangle, equilateral PCD, volume and closed topology", () => {
+    const suite = loadContracts()
+    const jts05 = suite.cases.find((c) => c.id === "JT-S05")!
+    const primitives = [
+      { type: "point3", id: "a", label: "A", position: { x: 0, y: 0, z: 0 } },
+      { type: "point3", id: "b", label: "B", position: { x: 2, y: 0, z: 0 } },
+      { type: "point3", id: "c", label: "C", position: { x: 2, y: 1, z: 0 } },
+      { type: "point3", id: "d", label: "D", position: { x: 0, y: 1, z: 0 } },
+      { type: "point3", id: "p", label: "P", position: { x: 1, y: 1, z: Math.sqrt(3) } },
+      { type: "point3", id: "e", label: "E", position: { x: 1.5, y: 1, z: Math.sqrt(3) / 2 } },
+      ...pyramidTopology(["p", "a", "b", "c", "d"])
+    ]
+    const valid = evaluateDrawingContract(jts05, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-ad", "ob-cd", "ob-base-coplanar", "ob-topology"]))
+
+    const invalid = evaluateDrawingContract(jts05, {
+      primitives: primitives.map((primitive) => primitive.id === "d" ? { ...primitive, position: { x: 0, y: 2, z: 0 } } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(invalid.failedObligationIds).toContain("ob-ad")
+    expect(invalid.failedObligationIds).toContain("ob-cd")
+  })
+
+  it("verifies JT-S01 perpendicular folding, circumsphere and scoped subparts", () => {
+    const suite = loadContracts()
+    const jts01 = suite.cases.find((c) => c.id === "JT-S01")!
+    const primitives = [
+      { type: "point3", id: "a", label: "A", position: { x: 0, y: 0, z: 0 } },
+      { type: "point3", id: "b", label: "B", position: { x: 0, y: 1, z: 0 } },
+      { type: "point3", id: "c", label: "C", position: { x: 1, y: 0, z: 0 } },
+      { type: "point3", id: "p", label: "P", position: { x: 1.5, y: 0, z: Math.sqrt(3) / 2 } },
+      ...tetrahedronTopology(["a", "b", "c", "p"]),
+      { type: "sphere", id: "o", label: "O", center: { x: 0.5, y: 0.5, z: Math.sqrt(3) / 2 }, radius: Math.sqrt(5) / 2 }
+    ]
+    const result = evaluateDrawingContractScopes(jts01, {
+      "(1)(i)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(1)(ii)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives }, options: { verificationStatus: "passed" } }
+    })
+    expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
+    expect(result.scopeResults["(1)(i)"]?.passedObligationIds).toContain("ob-pc-ab")
+    expect(result.scopeResults["(1)(ii)"]?.passedObligationIds).toContain("ob-circumsphere")
   })
 
   it("freezes the independently recomputed GK-P04 range and JT-P04 infeasibility instead of known wrong values", () => {
@@ -514,9 +828,11 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       { id: "b1", label: "B₁", x: 1, y: 0, z: 1 },
       { id: "c1", label: "C₁", x: 0.5, y: Math.sqrt(3) / 2, z: 1 }
     ]
+    const rings = [[0, 2, 1], [3, 4, 5], [0, 1, 4, 3], [1, 2, 5, 4], [2, 0, 3, 5]]
     const primitives = [
-      ...validPoints.map((point) => ({ type: "point3", id: point.id, label: point.label, position: { x: point.x, y: point.y, z: point.z } })),
-      { type: "polyhedron3", id: "prism", vertexIds: validPoints.map((point) => point.id), edgeIds: [], faceIds: [] },
+      ...validPoints.map((point, index) => ({ type: "point3", id: `v${index}`, label: point.label, position: { x: point.x, y: point.y, z: point.z } })),
+      ...rings.map((pointIds, index) => ({ type: "face3", id: `f${index}`, pointIds: pointIds.map((point) => `v${point}`) })),
+      { type: "polyhedron3", id: "prism", vertexIds: validPoints.map((_, index) => `v${index}`), edgeIds: [], faceIds: rings.map((_, index) => `f${index}`) },
       { type: "sphere", id: "sphere", center: { x: 0.5, y: Math.sqrt(3) / 6, z: 0.5 }, radius: Math.sqrt(7 / 12) }
     ]
     expect(evaluateDrawingContract(gks09, { primitives }, { verificationStatus: "passed" }).passed).toBe(true)
@@ -537,17 +853,23 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     const validPoints = [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => ({
       type: "point3", id: `v-${x}-${y}-${z}`, label: `V${x}${y}${z}`, position: { x, y, z }
     }))))
+    const vertexId = (x: number, y: number, z: number) => `v-${x}-${y}-${z}`
+    const topology = squarePrismTopology([
+      vertexId(-1, -1, -1), vertexId(-1, 1, -1), vertexId(-1, 1, 1), vertexId(-1, -1, 1),
+      vertexId(1, -1, -1), vertexId(1, 1, -1), vertexId(1, 1, 1), vertexId(1, -1, 1)
+    ])
     const validPrims = [
       ...validPoints,
-      { type: "polyhedron3", id: "cube", vertexIds: validPoints.map((point) => point.id), edgeIds: [], faceIds: [] },
+      ...topology,
       { type: "sphere", id: "hemisphere", center: { x: 0, y: 0, z: -1 }, radius: Math.sqrt(6) }
     ]
-    expect(evaluateDrawingContract(jts09, { primitives: validPrims }, { verificationStatus: "passed" }).passed).toBe(true)
+    const valid = evaluateDrawingContract(jts09, { primitives: validPrims }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
 
     const invalid = evaluateDrawingContract(jts09, {
       primitives: [
         ...validPoints.map((point) => point.position.z === 1 ? { ...point, position: { ...point.position, z: 3 } } : point),
-        { type: "polyhedron3", id: "cube", vertexIds: validPoints.map((point) => point.id), edgeIds: [], faceIds: [] },
+        ...topology,
         { type: "sphere3", id: "fake-hemisphere", radius: 1 }
       ]
     }, { verificationStatus: "passed" })
@@ -569,7 +891,8 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       { type: "point3", id: "a2", label: "A₂", position: { x: 0, y: 0, z: 1 } },
       { type: "point3", id: "b2", label: "B₂", position: { x: 2, y: 0, z: 2 } },
       { type: "point3", id: "c2", label: "C₂", position: { x: 2, y: 2, z: 3 } },
-      { type: "point3", id: "d2", label: "D₂", position: { x: 0, y: 2, z: 2 } }
+      { type: "point3", id: "d2", label: "D₂", position: { x: 0, y: 2, z: 2 } },
+      ...squarePrismTopology(["a", "b", "c", "d", "a1", "b1", "c1", "d1"])
     ]
     const honest = evaluateDrawingContract(gks05, { primitives: basePrims }, {
       verificationStatus: "passed",

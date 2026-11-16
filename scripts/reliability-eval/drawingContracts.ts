@@ -46,15 +46,19 @@ export type ContractCheckSpec =
   | { kind: "point-on-line-2d"; point: string; lineId: string }
   | { kind: "point-on-segment-2d"; p: string; a: string; b: string }
   | { kind: "horizontal-2d"; a: string; b: string }
+  | { kind: "vertical-2d"; a: string; b: string }
   | { kind: "line-through-2d"; entityId: string; x: number; y: number }
   | { kind: "line-equation-2d"; entityId: string; a: number; b: number; c: number }
   | { kind: "tangent-to-function-2d"; lineId: string; functionId: string; x: number }
   | { kind: "tangent-to-conic-2d"; lineId: string; conicId: string; touchPoint?: { x: number; y: number } }
   | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
+  | { kind: "distinct-2d"; a: string; b: string }
   | { kind: "vector-ratio-2d"; a: string; b: string; c: string; d: string; k: number }
   | { kind: "distance-2d"; a: string; b: string; value: number }
+  | { kind: "secant-ratio-2d"; m: string; p: string; q: string; a: string; b: string; value: number }
   | { kind: "perp-2d"; a: string; b: string; c: string; d: string }
+  | { kind: "parallel-2d"; a: string; b: string; c: string; d: string }
   | { kind: "triangle-area-2d"; a: string; b: string; c: string; value: number }
   | { kind: "quadrilateral-area-2d"; points: [string, string, string, string]; value: number }
   | { kind: "dot-2d"; a: string; b: string; c: string; d: string; value: number }
@@ -67,6 +71,7 @@ export interface ContractObligation {
   description: string
   scope: string
   branchId?: string
+  stateId?: string
   sourceSpan: ContractSourceSpan
   expectedValue?: number | string
   check: ContractCheckSpec
@@ -97,6 +102,7 @@ export interface ContractDisplayPolicy {
   requiresVisualChecks: boolean
   allowOmittedSubquestion: boolean
   multiBranchHandling: string
+  multiStateHandling?: string
   labelReadabilityRequired: boolean
 }
 
@@ -170,6 +176,7 @@ export interface ContractEvaluationOptions {
   error?: string | null
   scopeId?: string
   branchId?: string
+  stateId?: string
 }
 
 export interface ContractEvaluationResult {
@@ -770,6 +777,12 @@ function evaluateCheck(
       const ok = Math.abs(a.y - b.y) <= 1e-2 && Math.abs(a.x - b.x) > 1e-9
       return { passed: ok, detail: `horizontal dy=${Math.abs(a.y - b.y)}, dx=${Math.abs(a.x - b.x)}` }
     }
+    case "vertical-2d": {
+      const a = p2(check.a), b = p2(check.b)
+      if (!a || !b) return { passed: false, detail: `missing points for vertical line ${check.a}${check.b}` }
+      const ok = Math.abs(a.x - b.x) <= 1e-2 && Math.abs(a.y - b.y) > 1e-9
+      return { passed: ok, detail: `vertical dx=${Math.abs(a.x - b.x)}, dy=${Math.abs(a.y - b.y)}` }
+    }
     case "point-on-segment-2d": {
       const p = p2(check.p), a = p2(check.a), b = p2(check.b)
       if (!p || !a || !b) return { passed: false, detail: `missing 2d points for segment ${check.a}${check.b}` }
@@ -855,6 +868,12 @@ function evaluateCheck(
       const dist = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / len
       return { passed: dist <= 1e-2, detail: `collinear distance=${dist}` }
     }
+    case "distinct-2d": {
+      const a = p2(check.a), b = p2(check.b)
+      if (!a || !b) return { passed: false, detail: `missing points for distinctness ${check.a}/${check.b}` }
+      const distance = Math.hypot(a.x - b.x, a.y - b.y)
+      return { passed: distance > 1e-6, detail: `point distance=${distance}` }
+    }
     case "vector-ratio-2d": {
       const a = p2(check.a), b = p2(check.b), c = p2(check.c), d = p2(check.d)
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 2d points for vector ratio ${check.a}${check.b}=${check.k}${check.c}${check.d}` }
@@ -871,6 +890,14 @@ function evaluateCheck(
       const d = Math.hypot(b.x - a.x, b.y - a.y)
       return { passed: near(d, check.value, 1e-2), detail: `|${check.a}${check.b}|=${d} vs ${check.value}` }
     }
+    case "secant-ratio-2d": {
+      const m = p2(check.m), p = p2(check.p), q = p2(check.q), a = p2(check.a), b = p2(check.b)
+      if (!m || !p || !q || !a || !b) return { passed: false, detail: "missing 2d points for secant ratio" }
+      const denominator = Math.hypot(b.x - a.x, b.y - a.y)
+      if (denominator <= 1e-9) return { passed: false, detail: "degenerate secant denominator" }
+      const value = Math.hypot(p.x - m.x, p.y - m.y) * Math.hypot(q.x - m.x, q.y - m.y) / denominator
+      return { passed: near(value, check.value, 1e-2), detail: `secant ratio=${value} vs ${check.value}` }
+    }
     case "perp-2d": {
       const a = p2(check.a), b = p2(check.b), c = p2(check.c), d = p2(check.d)
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 2d points for perpendicularity` }
@@ -878,6 +905,14 @@ function evaluateCheck(
       const scale = Math.hypot(ux, uy) * Math.hypot(vx, vy)
       const err = scale > 1e-9 ? Math.abs(ux * vx + uy * vy) / scale : Number.POSITIVE_INFINITY
       return { passed: err <= 1e-2, detail: `2d perp err=${err}` }
+    }
+    case "parallel-2d": {
+      const a = p2(check.a), b = p2(check.b), c = p2(check.c), d = p2(check.d)
+      if (!a || !b || !c || !d) return { passed: false, detail: `missing 2d points for parallel lines` }
+      const ux = b.x - a.x, uy = b.y - a.y, vx = d.x - c.x, vy = d.y - c.y
+      const scale = Math.hypot(ux, uy) * Math.hypot(vx, vy)
+      const err = scale > 1e-9 ? Math.abs(ux * vy - uy * vx) / scale : Number.POSITIVE_INFINITY
+      return { passed: err <= 1e-2, detail: `2d parallel sine error=${err}` }
     }
     case "triangle-area-2d": {
       const a = p2(check.a), b = p2(check.b), c = p2(check.c)
@@ -971,7 +1006,8 @@ export function evaluateDrawingContract(
 
   const scopedObligations = contract.requiredObligations.filter((ob) =>
     (options.scopeId === undefined || ob.scope === "stem" || ob.scope === options.scopeId) &&
-    (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId)
+    (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId) &&
+    (options.stateId === undefined || ob.stateId === undefined || ob.stateId === options.stateId)
   )
   const obligationResults: ObligationEvaluation[] = scopedObligations.map((ob) => {
     const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
