@@ -817,8 +817,27 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
       })
     : null
   const obligations = obligationParse?.legacy ?? null
+  const baseEntityIds = new Set(context.document?.primitives.map((primitive) => primitive.id) ?? [])
+  const labelCounts = new Map<string, string[]>()
+  for (const primitive of working.primitives) {
+    if (baseEntityIds.has(primitive.id)) continue
+    const label = (primitive as { label?: unknown }).label
+    if (typeof label === "string" && label.length > 0) {
+      labelCounts.set(label, [...(labelCounts.get(label) ?? []), primitive.id])
+    }
+  }
+  const entityBindings: Record<string, string> = {}
+  for (const [label, ids] of labelCounts) {
+    if (ids.length === 1) entityBindings[label] = ids[0]!
+  }
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0)
-    ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true, prompt: parserPrompt }) : undefined
+    ? verifyDiagramObligations(obligations, plan, working, context.document, {
+        obligationIR: context.diagramObligationIR === true,
+        prompt: parserPrompt,
+        ...(Object.keys(entityBindings).length > 0 ? { entityBindings } : {}),
+        ...(context.selectedScopeId === undefined ? {} : { activeScopeId: context.selectedScopeId })
+      })
+    : undefined
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))

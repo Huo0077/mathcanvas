@@ -5,6 +5,7 @@ import {
   type DiagramObligationKind,
   type DiagramObligationSet,
   type DiagramParseOptions,
+  type DiagramSourceDiagnostic,
   type DiagramSourceSpan
 } from "./diagramObligations"
 import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance } from "./claimEvidence"
@@ -174,7 +175,8 @@ function claimOf(
         ...(item.symbolicConic.asymptotes ? { asymptotes: [...item.symbolicConic.asymptotes] } : {}),
         ...(item.symbolicConic.tangencyPoints ? { tangencyPoints: item.symbolicConic.tangencyPoints.map((pt) => ({ ...pt })) } : {})
       }
-    })
+    }),
+    ...(item.entityLabel === undefined ? {} : { entityLabel: item.entityLabel })
   }
   return {
     id,
@@ -282,12 +284,23 @@ function buildFlatClaims(set: DiagramObligationSet, idPrefix: string, scopeId?: 
  * 顺序与 `parseDiagramObligations().givens` 一致，`id` 按序号分配 —— 于是
  * "同一个题面 → 同一份 IR"是可重复的，UI 与 trace 才能拿 `id` 对齐。
  */
+function copyUnverifiedDiagnostic(entry: DiagramSourceDiagnostic, scopeId?: string): ObligationUnverified {
+  return {
+    sourceText: entry.sourceText,
+    reason: entry.reason,
+    ...(entry.reasonCode === undefined ? {} : { reasonCode: entry.reasonCode }),
+    ...(entry.unrecognizedSpans === undefined ? {} : { unrecognizedSpans: entry.unrecognizedSpans.map((span) => ({ ...span })) }),
+    ...(entry.recognizedEntities === undefined ? {} : { recognizedEntities: [...entry.recognizedEntities] }),
+    ...(scopeId === undefined ? {} : { scopeId })
+  }
+}
+
 export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
   const parts = set.parts
   if (parts === undefined || parts.length === 0) {
     return {
       obligations: buildFlatClaims(set, "obligation-"),
-      unverified: set.unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
+      unverified: set.unverified.map((entry) => copyUnverifiedDiagnostic(entry))
     }
   }
 
@@ -469,7 +482,8 @@ function toLegacyObligation(item: GeometryObligation): DiagramObligation {
         ...(item.geometry.symbolicConic.asymptotes ? { asymptotes: [...item.geometry.symbolicConic.asymptotes] } : {}),
         ...(item.geometry.symbolicConic.tangencyPoints ? { tangencyPoints: item.geometry.symbolicConic.tangencyPoints.map((pt) => ({ ...pt })) } : {})
       }
-    })
+    }),
+    ...(item.geometry?.entityLabel === undefined ? {} : { entityLabel: item.geometry.entityLabel })
   }
 }
 
@@ -490,7 +504,13 @@ function toLegacyScopeSlice(
     ...(freeItems.some((item) => item.end > item.start)
       ? { freeChoiceSources: freeItems.map(({ targets, sourceText, start, end }) => ({ name: targets[0]!, sourceText, start, end })) }
       : {}),
-    unverified: unverified.map(({ sourceText, reason }) => ({ sourceText, reason }))
+    unverified: unverified.map(({ sourceText, reason, reasonCode, unrecognizedSpans, recognizedEntities }) => ({
+      sourceText,
+      reason,
+      ...(reasonCode === undefined ? {} : { reasonCode }),
+      ...(unrecognizedSpans === undefined ? {} : { unrecognizedSpans: unrecognizedSpans.map((span) => ({ ...span })) }),
+      ...(recognizedEntities === undefined ? {} : { recognizedEntities: [...recognizedEntities] })
+    }))
   }
 }
 
@@ -581,11 +601,29 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     goals: parts.flatMap((part) => part.obligations.goals),
     goalSources: parts.flatMap((part) => part.obligations.goalSources ?? []),
     unverified: [
-      ...sharedUnverified.map(({ sourceText, reason }) => ({ sourceText, reason })),
+      ...sharedUnverified.map(({ sourceText, reason, reasonCode, unrecognizedSpans, recognizedEntities }) => ({
+        sourceText,
+        reason,
+        ...(reasonCode === undefined ? {} : { reasonCode }),
+        ...(unrecognizedSpans === undefined ? {} : { unrecognizedSpans: unrecognizedSpans.map((span) => ({ ...span })) }),
+        ...(recognizedEntities === undefined ? {} : { recognizedEntities: [...recognizedEntities] })
+      })),
       ...subScopes.flatMap((scope) =>
-        ir.unverified.filter((entry) => entry.scopeId === scope.id).map(({ sourceText, reason }) => ({ sourceText, reason }))
+        ir.unverified.filter((entry) => entry.scopeId === scope.id).map(({ sourceText, reason, reasonCode, unrecognizedSpans, recognizedEntities }) => ({
+          sourceText,
+          reason,
+          ...(reasonCode === undefined ? {} : { reasonCode }),
+          ...(unrecognizedSpans === undefined ? {} : { unrecognizedSpans: unrecognizedSpans.map((span) => ({ ...span })) }),
+          ...(recognizedEntities === undefined ? {} : { recognizedEntities: [...recognizedEntities] })
+        }))
       ),
-      ...blockerUnverified.map(({ sourceText, reason }) => ({ sourceText, reason }))
+      ...blockerUnverified.map(({ sourceText, reason, reasonCode, unrecognizedSpans, recognizedEntities }) => ({
+        sourceText,
+        reason,
+        ...(reasonCode === undefined ? {} : { reasonCode }),
+        ...(unrecognizedSpans === undefined ? {} : { unrecognizedSpans: unrecognizedSpans.map((span) => ({ ...span })) }),
+        ...(recognizedEntities === undefined ? {} : { recognizedEntities: [...recognizedEntities] })
+      }))
     ]
   }
 }
@@ -620,6 +658,9 @@ export interface ObligationScope {
 export interface ObligationUnverified {
   sourceText: string
   reason: string
+  reasonCode?: string
+  unrecognizedSpans?: { text: string; start: number; end: number }[]
+  recognizedEntities?: string[]
   scopeId?: string
 }
 

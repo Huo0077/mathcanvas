@@ -71,6 +71,10 @@ export interface DiagramVerificationReport {
 export interface DiagramVerificationOptions {
   obligationIR?: boolean
   prompt?: string
+  entityBindings?: Record<string, string>
+  entityScopes?: Record<string, { scopeId?: string; stateId?: string }>
+  activeScopeId?: string
+  activeStateId?: string
 }
 
 /** Verify the motion from final geometry, including when the plan omitted it. */
@@ -480,37 +484,167 @@ type FigureSolid =
  * 下面三个分支与 `calculate` 里的 `conicAxes`（本文件 `:389`、`:400`）也都按类判。
  * 留着它会让下一个人以为"双曲线只是没做"，而实际上它**判得比注释说的多**（2026-10-12 更正）。
  */
-function candidateConic(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureConic | null {
-  if (plan.kind !== "plan") return null
+interface CandidateConicEntry {
+  id: string
+  label?: string
+  conic: FigureConic
+}
+
+function candidateConics(
+  plan: PlanEnvelope,
+  candidate: GeometryDocument,
+  base: GeometryDocument | undefined,
+  options: DiagramVerificationOptions
+): CandidateConicEntry[] {
+  if (plan.kind !== "plan") return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
-  /**
-   * **圆单独一支**（2026-10-20，联考 `joint-27`）：它走 `planar.create_circle`、图元类型是
-   * `circle`，而且带着**圆心** —— 那三档标准圆锥曲线都以原点为中心，不能互相冒充。
-   * 只有"没有新画的圆锥曲线、且有恰好一个新圆"时才认它：同一次里既画椭圆又画辅助圆时，
-   * 不能悄悄把辅助圆当成题面说的那条曲线。
-   */
-  if (plan.actions.some((action) => action.actionId === "planar.create_conic")) {
-    const conics = candidate.primitives.filter((primitive) => (primitive.type === "ellipse" || primitive.type === "hyperbola" || primitive.type === "parabola") && !priorIds.has(primitive.id))
-    if (conics.length === 1) {
-      const [conic] = conics
-      // 逐种显式分支，而不是靠"剩下的一定是抛物线" —— 上面那个 `filter` 没有做类型守卫，
-      // 兜底分支拿不到窄化，`focalParameter` / `axis` 会报"不存在于联合类型上"。
-      if (conic.type === "ellipse") return { kind: "ellipse", radiusX: conic.radiusX, radiusY: conic.radiusY, primitive: conic }
-      if (conic.type === "hyperbola") return { kind: "hyperbola", radiusX: conic.radiusX, radiusY: conic.radiusY, axis: conic.axis, primitive: conic }
-      if (conic.type === "parabola") return { kind: "parabola", focalParameter: conic.focalParameter, axis: conic.axis, primitive: conic }
+  const explicitlyBoundIds = new Set(Object.values(options.entityBindings ?? {}))
+  const hasConicAction = plan.actions.some((action) => action.actionId === "planar.create_conic")
+  const hasCircleAction = plan.actions.some((action) => action.actionId === "planar.create_circle")
+  const entries: CandidateConicEntry[] = []
+
+  for (const primitive of candidate.primitives) {
+    if (priorIds.has(primitive.id)) continue
+    const label = typeof (primitive as { label?: unknown }).label === "string" ? (primitive as { label?: string }).label : undefined
+    const bound = explicitlyBoundIds.has(primitive.id)
+
+    if (primitive.type === "ellipse" && (hasConicAction || bound)) {
+      entries.push({ id: primitive.id, label, conic: { kind: "ellipse", radiusX: primitive.radiusX, radiusY: primitive.radiusY, primitive } })
+    } else if (primitive.type === "hyperbola" && (hasConicAction || bound)) {
+      entries.push({ id: primitive.id, label, conic: { kind: "hyperbola", radiusX: primitive.radiusX, radiusY: primitive.radiusY, axis: primitive.axis, primitive } })
+    } else if (primitive.type === "parabola" && (hasConicAction || bound)) {
+      entries.push({ id: primitive.id, label, conic: { kind: "parabola", focalParameter: primitive.focalParameter, axis: primitive.axis, primitive } })
+    } else if (primitive.type === "circle" && (hasCircleAction || hasConicAction || bound)) {
+      entries.push({
+        id: primitive.id,
+        label,
+        conic: { kind: "circle", centerX: primitive.center.x, centerY: primitive.center.y, radius: primitive.radius, primitive }
+      })
     }
   }
-  if (plan.actions.some((action) => action.actionId === "planar.create_circle")) {
-    // 图元是 `PrimitiveSpec` 的联合，`filter` 不会自己窄化 —— 这里显式断言成圆那一支。
-    const circles = candidate.primitives.filter(
-      (primitive) => primitive.type === "circle" && !priorIds.has(primitive.id)
-    ) as Extract<PlanarConic, { type: "circle" }>[]
-    if (circles.length === 1) {
-      const [circle] = circles
-      return { kind: "circle", centerX: circle.center.x, centerY: circle.center.y, radius: circle.radius, primitive: circle }
+  return entries
+}
+
+function normalizeConicLabel(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined
+  const stripped = raw.trim().replace(/^(?:椭圆|双曲线|抛物线|圆|曲线)\s*/, "")
+  return stripped.length > 0 ? stripped : undefined
+}
+
+function statedConicLabel(sourceText: string): string | undefined {
+  const labeled = /(?:椭圆|双曲线|抛物线|圆|曲线)\s*([A-Z])(?![a-zA-Z0-9])/.exec(sourceText)
+  return labeled?.[1]
+}
+
+function selectConicForObligation(
+  item: DiagramObligation,
+  plan: PlanEnvelope,
+  conics: readonly CandidateConicEntry[],
+  options: DiagramVerificationOptions
+): { conic: FigureConic } | { code: string; reason: string } {
+  const ref = item.entityLabel ?? item.domain?.entityLabel ?? item.symbolicConic?.entityLabel ?? statedConicLabel(item.sourceText)
+  const expectedKind = item.kind === "conicAxes"
+    ? item.conic?.kind
+    : item.kind === "pointOnConic"
+      ? item.conicKind
+      : item.symbolicConic?.kind
+  const hasCircleAction = plan.kind === "plan" && plan.actions.some((action) => action.actionId === "planar.create_circle")
+  const hasExplicitBinding = ref !== undefined && options.entityBindings?.[ref] !== undefined
+
+  const checkScope = (entry: CandidateConicEntry): { code: string; reason: string } | null => {
+    const scopeInfo = options.entityScopes?.[entry.id]
+    if (!scopeInfo) return null
+    if (options.activeScopeId !== undefined && scopeInfo.scopeId !== undefined && scopeInfo.scopeId !== options.activeScopeId) {
+      return {
+        code: "binding_scope_mismatch",
+        reason: `候选图元 ${entry.id}（${entry.label ?? ref ?? "曲线"}）属于作用域 ${scopeInfo.scopeId}，不能用于当前作用域 ${options.activeScopeId}，未核验。`
+      }
+    }
+    if (options.activeStateId !== undefined && scopeInfo.stateId !== undefined && scopeInfo.stateId !== options.activeStateId) {
+      return {
+        code: "binding_scope_mismatch",
+        reason: `候选图元 ${entry.id}（${entry.label ?? ref ?? "曲线"}）属于状态 ${scopeInfo.stateId}，不能跨状态绑到 ${options.activeStateId}，未核验。`
+      }
+    }
+    return null
+  }
+
+  if (hasExplicitBinding && ref !== undefined) {
+    const boundId = options.entityBindings![ref]!
+    const entry = conics.find((candidateEntry) => candidateEntry.id === boundId)
+    if (!entry) {
+      return {
+        code: "entity_missing",
+        reason: `题面实体 ${ref} 指定的候选图元 ${boundId} 不存在，无法核验。`
+      }
+    }
+    const scopeError = checkScope(entry)
+    if (scopeError) return scopeError
+    return { conic: entry.conic }
+  }
+
+  const matchesKind = (entry: CandidateConicEntry): boolean => {
+    if (expectedKind === undefined) return true
+    if (entry.conic.kind !== expectedKind) return false
+    // Preserve legacy boundary: unlabeled singleton circle without explicit binding requires planar.create_circle
+    if (expectedKind === "circle" && entry.label === undefined && !hasCircleAction) return false
+    return true
+  }
+
+  if (ref !== undefined) {
+    const byLabel = conics.filter((entry) => normalizeConicLabel(entry.label) === ref && matchesKind(entry))
+    if (byLabel.length === 1) {
+      const scopeError = checkScope(byLabel[0]!)
+      if (scopeError) return scopeError
+      return { conic: byLabel[0]!.conic }
+    }
+    if (byLabel.length > 1) {
+      return {
+        code: "binding_ambiguous",
+        reason: `候选图中存在 ${byLabel.length} 条名为 ${ref} 的图元，无法唯一绑定（不猜第一条），未核验。`
+      }
     }
   }
-  return null
+
+  let eligible = conics.filter(matchesKind)
+  if (eligible.length === 0 && item.kind === "pointOnConic" && expectedKind !== "circle") {
+    // Allow pointOnConic's calculate() branch to fail loudly when the single non-circle conic has the wrong curve family.
+    const nonCircle = conics.filter((entry) => entry.conic.kind !== "circle")
+    if (nonCircle.length === 1) eligible = nonCircle
+  }
+  const inScope = eligible.filter((entry) => checkScope(entry) === null)
+  if (inScope.length === 0 && eligible.length > 0) {
+    return checkScope(eligible[0]!)!
+  }
+
+  // Never steal a curve explicitly labeled for a different entity (e.g. "D" when prompt requires "C").
+  const anyLabeled = conics.some((entry) => normalizeConicLabel(entry.label) !== undefined)
+  if (ref !== undefined && anyLabeled) {
+    const unlabeled = inScope.filter((entry) => normalizeConicLabel(entry.label) === undefined)
+    if (unlabeled.length === 1) return { conic: unlabeled[0]!.conic }
+    if (unlabeled.length > 1) {
+      return {
+        code: "binding_ambiguous",
+        reason: `候选图中存在多条未标名曲线（${unlabeled.map((u) => u.id).join("、")}），无法唯一绑定到 ${ref}，未核验。`
+      }
+    }
+    return {
+      code: "entity_missing",
+      reason: `候选图里找不到题面指定的曲线 ${ref}，不能改绑其它已命名曲线，未核验。`
+    }
+  }
+
+  if (inScope.length === 1) return { conic: inScope[0]!.conic }
+  if (inScope.length > 1) {
+    return {
+      code: "binding_ambiguous",
+      reason: `候选图中存在 ${inScope.length} 条同类型曲线（${inScope.map((entry) => entry.id).join("、")}），未提供唯一 entityId（不按顺序或大小猜测），未核验。`
+    }
+  }
+  return {
+    code: "conic_missing",
+    reason: "候选图里没有唯一、可读的圆锥曲线（少了或多了一条），未核验。"
+  }
 }
 
 /**
@@ -2502,8 +2636,9 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   const tangents = candidateTangents(plan, candidate, base)
   const graphNames = [...new Set(set.givens.filter((given) => given.kind === "functionGraph").flatMap((given) => statedCurveNames(given.sourceText)))]
   const uniqueGraphName = graphNames.length === 1 ? graphNames[0] : undefined
+  const allConics = candidateConics(plan, candidate, base, options)
   const figures: FigureContext = {
-    conic: candidateConic(plan, candidate, base),
+    conic: allConics.length === 1 ? allConics[0]!.conic : null,
     tangent: candidateTangent(plan, candidate, base),
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: curves.length === 1 ? curves[0] : null,
@@ -2534,7 +2669,25 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
       && item.targets.every((name) => preFold.points.has(name))
     const statePoints = usePre ? preFold.points : (points ?? new Map())
     let itemFigures = figures
-    if (item.kind === "functionGraph") {
+    if (
+      item.kind === "conicAxes"
+      || item.kind === "conicChord"
+      || item.kind === "pointOnConic"
+      || item.kind === "parameterDomain"
+      || item.kind === "symbolicConic"
+    ) {
+      const selectedConic = selectConicForObligation(item, plan, allConics, options)
+      if ("code" in selectedConic) {
+        return {
+          kind: item.kind,
+          sourceText: item.sourceText,
+          status: "unverified",
+          ...(selectedConic.code !== "conic_missing" ? { code: selectedConic.code } : {}),
+          reason: selectedConic.reason
+        }
+      }
+      itemFigures = { ...figures, conic: selectedConic.conic }
+    } else if (item.kind === "functionGraph") {
       try {
         compileExpression(item.expression ?? "")
       } catch {

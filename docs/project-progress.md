@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P3 / T05 稳定多实体绑定、同向向量比与忠实原文诊断
+
+- **RED 复现与实测漏洞**：在 `diagramEntityBinding.test.ts` 与 `diagramSourceDiagnostics.test.ts` 构造 9 项契约并复现 7 项失败，实测暴露：`leftover` 把已识别圆方程替换为空格产出 `"若双曲线…与圆            相切"`、`JT-P08` 的 `"向量EC=2向量CF"` 被误读成固定长度 `EC=2`、`JT-P07` 省略 `/1` 与带标签 `"椭圆 C 上一点"` 漏匹配，以及多曲线并发/跨 scope 时缺少明确绑定拒绝码。
+- **稳定绑定与同向向量解析**：`diagramVerification.ts`（`candidateConics`、`selectConicForObligation`）与 `planCompiler.ts` 实现按 `entityId` / 标签 / 作用域状态的稳定绑定，拒收重复候选（`binding_ambiguous`）、缺失实体（`entity_missing`）及跨问/跨状态混绑（`binding_scope_mismatch`），并兼容 `"双曲线C"` 标签归并与 `pointOnConic` 单条异族失败；`diagramObligations.ts` 新增 `resolveDirectedVectorRatios`（`splitPoint: true`）、放宽省略 `/1` 的标准圆锥方程并修补 `leftover` 原文诊断与 `reasonCode`。
+- **验证**：`conicFromFocusEccentricity` / `pointOnConic` / `diagramEntityBinding` / `diagramSourceDiagnostics` / `diagramVerification` 5 文件 94 项通过，全量 Vitest **531 文件 / 5643 passed | 1 todo**、`typecheck`、`lint`（0 errors / 33 既有 warnings）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P3 / T05实体绑定与诊断证据](audit/2026-11-16-p3-entity-binding-diagnostics/README.md)。
+
 ## 2026-11-16 —— P2 / T04 表达式 AST、定义域保留与符号圆锥曲线契约
 
 - **RED 复现与根因确认**：在 `latexNormalisation.chain.test.ts`、`symbolicConicContract.test.ts` 与 `obligationIR.test.ts` 构造 12 项失败契约，实测 RED `3 files failed | 12 failed | 28 passed (40)`，确认 `x^{4}-2x^{3}` 与 `\frac{x^{2}}{m^{2}}` 降级缺失、`expression.ts` 缺少预算与未化简定义域提取、`conic-parameters.ts` 缺少符号圆锥轴向/欠定/渐近线相切求解，以及 `GK-P01` / `GK-P08` 在 `ObligationIR` 中缺失域与符号信息。

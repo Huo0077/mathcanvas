@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— P3 / T05 稳定多实体绑定、同向向量比与忠实原文诊断
+
+- **多实体绑定与作用域/状态隔离**：`diagramVerification.ts` 与 `planCompiler.ts` 用 `candidateConics` 和统一 `selectConicForObligation` 取代单曲线 `candidateConic` 猜测；支持 `entityBindings`、`entityScopes`、`activeScopeId`/`activeStateId` 及曲线标签归并（兼容 `"双曲线C"`/`"C"`，保留单条异族曲线在 `pointOnConic` 判 `failed`），对多候选返回 `binding_ambiguous`、缺实体返回 `entity_missing`、跨作用域/状态返回 `binding_scope_mismatch`；放宽 `x²/4+y²=1` 省略 `/1` 分母与 `P 是椭圆 C 上一点` 识别，打通 `JT-P03`/`JT-P07` 与双曲线/辅助圆共存场景。
+- **`JT-P08` 同向向量比解析与防误读**：`diagramObligations.ts` 新增 `resolveDirectedVectorRatios`，先于 `lengthEquality` 与常规读取器消费 `向量EC=2向量CF`，生成带 `splitPoint: true` 的 `segmentRatio` 并阻止误读为 `EC=2`。
+- **忠实原文诊断与零空白遮蔽**：`diagramObligations.ts` 与 `obligationIR.ts` 修复残留扫描将已用方程替换为空格并当作 `sourceText` 展示的问题，保留原句 `sourceText` 并输出 `unrecognizedSpans`、`recognizedEntities` 与结构化 `reasonCode`（含 `GK-P08` 部分识别 `"圆已识别；符号双曲线/渐近线相切尚未核验。"`）。
+- **验证**：RED 7 fail → 定向 5 文件 94 项与全量 Vitest **531 文件 / 5643 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P3 / T05实体绑定与诊断证据](docs/audit/2026-11-16-p3-entity-binding-diagnostics/README.md)。
+
 ## 2026-11-16 —— P2 / T04 表达式 AST、定义域保留与符号圆锥曲线契约
 
 - **LaTeX 高次幂与嵌套分式降级**：`packages/agent-core/src/latexNormalisation.ts` 将带括号指数降级并入 `lowerMathGroupsTracked` 迭代环（支持 `$x^{4}-2x^{3}$`、`\frac{x^{2}}{m^{2}}` 与 nested `\frac{1}{1+\frac{1}{x}}`），在 `groupOperandTracked` 保留单项幂原子（`x²/m²`、`x²/a²`）并保证 `sourceMap` 闭合花括号区间准确。

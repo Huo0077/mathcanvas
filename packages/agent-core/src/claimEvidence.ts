@@ -132,6 +132,7 @@ export interface ObligationGeometry {
   prismShape?: DiagramObligation["prismShape"]
   domain?: DiagramObligation["domain"]
   symbolicConic?: DiagramObligation["symbolicConic"]
+  entityLabel?: string
 }
 
 /**

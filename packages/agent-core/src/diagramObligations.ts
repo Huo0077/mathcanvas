@@ -283,12 +283,21 @@ export interface DiagramObligation {
     asymptotes?: string[]
     tangencyPoints?: { x: number; y: number }[]
   }
+  entityLabel?: string
 }
 
 export interface DiagramSourceSpan {
   sourceText: string
   start: number
   end: number
+}
+
+export interface DiagramSourceDiagnostic {
+  sourceText: string
+  reason: string
+  reasonCode?: string
+  unrecognizedSpans?: { text: string; start: number; end: number }[]
+  recognizedEntities?: string[]
 }
 
 export interface DiagramObligationSet {
@@ -298,13 +307,13 @@ export interface DiagramObligationSet {
   goalSources?: DiagramSourceSpan[]
   freeChoices: string[]
   freeChoiceSources?: (DiagramSourceSpan & { name: string })[]
-  unverified: { sourceText: string; reason: string }[]
+  unverified: DiagramSourceDiagnostic[]
   parts?: (ProblemPart & { obligations: DiagramObligationSet })[]
   selectedScopeId?: string
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint" | "chainIndex">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint" | "chainIndex" | "entityLabel" | "domain" | "symbolicConic">
 
 interface Matcher {
   pattern: RegExp
@@ -592,7 +601,11 @@ function resolveSymbolicConics(
         // Equation syntax was valid symbolic conic, but domain constraint was invalid (e.g. a<=0).
         markUsed(eqStart, domainSpan ? Math.max(eqEnd, domainSpan.end) : eqEnd)
         consumedRanges.push([eqStart, eqEnd])
-        unverified.push({ sourceText: givenText.slice(eqStart, domainSpan?.end ?? eqEnd), reason: spec.error })
+        unverified.push({
+          sourceText: givenText.slice(eqStart, domainSpan?.end ?? eqEnd),
+          reason: spec.error,
+          reasonCode: "invalid_symbolic_domain"
+        })
       }
       continue
     }
@@ -665,7 +678,11 @@ function resolveSymbolicConics(
     consumedRanges.push([eqStart, eqEnd])
 
     if (resolution.status === "invalid") {
-      unverified.push({ sourceText: eqText, reason: resolution.reason })
+      unverified.push({
+        sourceText: eqText,
+        reason: resolution.reason,
+        reasonCode: "symbolic_conic_invalid"
+      })
       continue
     }
 
@@ -1197,14 +1214,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 但半轴分别落在哪个轴上不同。合成一条会让"读哪一组"变成第二个判断。
    */
   {
-    pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    pattern: /x\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*\+\s*y\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*=\s*1/g,
     allowAfterLabelColon: true,
-    read: (m) => ellipseAxes(Number(m[1]), Number(m[2]))
+    read: (m) => {
+      if (m[1] === undefined && m[2] === undefined) return null
+      return ellipseAxes(m[1] === undefined ? 1 : Number(m[1]), m[2] === undefined ? 1 : Number(m[2]))
+    }
   },
   {
-    pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*\+\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    pattern: /y\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*\+\s*x\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*=\s*1/g,
     allowAfterLabelColon: true,
-    read: (m) => ellipseAxes(Number(m[2]), Number(m[1]))
+    read: (m) => {
+      if (m[1] === undefined && m[2] === undefined) return null
+      return ellipseAxes(m[2] === undefined ? 1 : Number(m[2]), m[1] === undefined ? 1 : Number(m[1]))
+    }
   },
   /**
    * **双曲线**：`x²/9 − y²/4 = 1`（减号与 y 在前的写法都收）。
@@ -1213,14 +1236,14 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 会变成登记之外的第二个判断，而这两条曲线的判据**本来就不一样**（双曲线要额外比轴）。
    */
   {
-    pattern: /x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    pattern: /x\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*[-−–]\s*y\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*=\s*1/g,
     allowAfterLabelColon: true,
-    read: (m) => hyperbolaAxes(Number(m[1]), Number(m[2]), "x")
+    read: (m) => hyperbolaAxes(m[1] === undefined ? 1 : Number(m[1]), m[2] === undefined ? 1 : Number(m[2]), "x")
   },
   {
-    pattern: /y\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*[-−–]\s*x\s*(?:\^2|²)\s*\/\s*(\d+(?:\.\d+)?)\s*=\s*1/g,
+    pattern: /y\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*[-−–]\s*x\s*(?:\^2|²)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*=\s*1/g,
     allowAfterLabelColon: true,
-    read: (m) => hyperbolaAxes(Number(m[2]), Number(m[1]), "y")
+    read: (m) => hyperbolaAxes(m[2] === undefined ? 1 : Number(m[2]), m[1] === undefined ? 1 : Number(m[1]), "y")
   },
   /**
    * **抛物线**：`y² = 4x`（对称轴 x）与 `x² = 4y`（对称轴 y）。
@@ -1293,53 +1316,36 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * **不收**"过点 A 作直线"：那句的主语是直线，不是曲线。正则要求**曲线名在前**，
      * 所以没有主语的祈使句不会被误读成"曲线过点"。
      */
-    pattern: new RegExp(`(椭圆|双曲线|抛物线|圆)\\s*(?:[A-Z]\\s*)?(?:[^，。；,;]{0,40}?[=＝][^，。；,;]{0,12}?)?(?:经过|过)\\s*(?:点\\s*)?(${POINT_NAME})(?:\\s*[、,，和与]\\s*(?:点\\s*)?(${POINT_NAME}))?`, "g"),
+    pattern: new RegExp(`(椭圆|双曲线|抛物线|圆)\\s*(?:([A-Z])\\s*)?(?:[^，。；,;]{0,40}?[=＝][^，。；,;]{0,12}?)?(?:经过|过)\\s*(?:点\\s*)?(${POINT_NAME})(?:\\s*[、,，和与]\\s*(?:点\\s*)?(${POINT_NAME}))?`, "g"),
     allowOverlap: true,
     read: (m) => {
-      const first = names(m[2] ?? "")
-      const second = m[3] === undefined ? [] : names(m[3])
+      const first = names(m[3] ?? "")
+      const second = m[4] === undefined ? [] : names(m[4])
       if (first.length !== 1 || second.length > 1) return null
       const kind: "ellipse" | "hyperbola" | "parabola" | "circle" =
         m[1] === "椭圆" ? "ellipse" : m[1] === "双曲线" ? "hyperbola" : m[1] === "抛物线" ? "parabola" : "circle"
-      return [...first, ...second].map((name) => ({ kind: "pointOnConic" as const, targets: [name], conicKind: kind }))
+      const entityLabel = m[2]
+      return [...first, ...second].map((name) => ({
+        kind: "pointOnConic" as const,
+        targets: [name],
+        conicKind: kind,
+        ...(entityLabel === undefined ? {} : { entityLabel })
+      }))
     }
   },
   {
-    /**
-     * **点在圆锥曲线上**（施工单①，2026-10-15）：`P 是椭圆上任意一点` / `P 在双曲线上` / `M 为椭圆上一点`。
-     *
-     * ## 为什么它必须是一条**读取器**，而不是"再往触发词表里加个词"
-     *
-     * 加词只能让这句落进"未核验"（用户看得见，但没人判）；而它是一条**读得懂、也量得动**的
-     * 条件：点在不在曲线上，内核有现成的残差判据（`conicResidualAt`，复用 `conic-line.ts`
-     * 那套局部隐式形式，**不另写一份方程**）。读成真义务之后，"图上那个 P 到底在不在椭圆上"
-     * 才第一次有人问 —— 此前把 P 画在椭圆里面，报告照样全绿。
-     *
-     * ## 三种说法、三类曲线
-     *
-     * `是 / 为 / 在` 三种系词都收（卷面上都常见，与"弦 AB 的长为 n"那条同一族的连接词），
-     * 曲线只收**点名的三种**：`椭圆 / 双曲线 / 抛物线` —— 写"圆锥曲线"时**读不出来**
-     *（"是哪一条"没有答案，而判据要拿它问"图上那条曲线是不是题面说的那一种"，猜不得）。
-     *
-     * ## 刻意**不**收的：`P 是椭圆外一点`
-     *
-     * "在外面"与"在曲线上"是**相反**的两件事，读成这条就是替题面改题。它由残留扫描器接住
-     *（触发词表里有 `椭圆外` 这一类）⇒ 落"未核验"，不静默消失。
-     *
-     * ## 尾部只收**封闭的几种说法**
-     *
-     * `任意一点 / 任意点 / 一点 / 的点 / 动点` 五种尾巴里的一种，**不做"往后吃几个字"**：
-     * 那样会把后面紧挨着的真条件（`P 是椭圆上一点且AB=2`）一起吞进 `sourceText`，
-     * 而按字符占位的去重会让被吞掉的那条**再也不被扫描**——那正是"静默丢掉一条题设"。
-     * 尾巴必须收进来的理由只有一个：`sourceText` 是面板上给用户看的那句话，
-     * 而"任意"两个字正是"这只是一次实例核验"的**唯一线索**（判据文案会指着它披露）。
-     */
-    pattern: new RegExp(`(${POINT_NAME})\\s*(?:是|为|在)\\s*(椭圆|双曲线|抛物线)\\s*上(?:\\s*(?:任意|任取)\\s*一点|\\s*任意点|\\s*一点|\\s*的点|\\s*动点)?`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:是|为|在)\\s*(椭圆|双曲线|抛物线)(?:\\s*([A-Z]))?\\s*上(?:\\s*(?:任意|任取)\\s*一点|\\s*任意点|\\s*一点|\\s*的点|\\s*动点)?`, "g"),
     read: (m) => {
       const targets = names(m[1])
       // 恰好一个点名：`PA 是椭圆上…` 那种连写读不出（读一半比读不出更坏）。
       if (targets.length !== 1) return null
-      return { kind: "pointOnConic", targets, conicKind: m[2] === "椭圆" ? "ellipse" : m[2] === "双曲线" ? "hyperbola" : "parabola" }
+      const entityLabel = m[3]
+      return {
+        kind: "pointOnConic",
+        targets,
+        conicKind: m[2] === "椭圆" ? "ellipse" : m[2] === "双曲线" ? "hyperbola" : "parabola",
+        ...(entityLabel === undefined ? {} : { entityLabel })
+      }
     }
   },
   {
@@ -2274,20 +2280,42 @@ const ON_SEGMENT_TERM = /[A-Z]{2}\s*上\s*(?:一点|的点|任意一点|的一�
  * 两处残留路径（逐句那条与整句 leftover 那条）**共用这一个函数**：理由只有一处文案，
  * 否则同一句话会随它落在哪条路径而给出两种说法。
  */
-function unverifiedReasonFor(leftover: string): string {
+function unverifiedReasonFor(leftover: string, recognizedEntities: readonly string[] = []): string {
+  return classifyUnverifiedResidual(leftover, recognizedEntities).reason
+}
+
+function classifyUnverifiedResidual(
+  leftover: string,
+  recognizedEntities: readonly string[] = []
+): { reason: string; reasonCode: string } {
+  if (recognizedEntities.some((entry) => entry.includes("圆")) && /(?:渐近线|相切|双曲线)/.test(leftover)) {
+    return {
+      reason: "圆已识别；符号双曲线/渐近线相切尚未核验。",
+      reasonCode: "symbolic_conic_tangency_unverified"
+    }
+  }
   if (CURVE_EQUATION_TERM.test(leftover)) {
-    return "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。"
+    return {
+      reason: "这条曲线方程没有被归入本仓支持的三类标准圆锥曲线（椭圆 / 双曲线 / 抛物线的标准方程）或 `f(x)=…` 那一类函数式 —— 记为**明确不归类**：不伪装成椭圆 / 双曲线 / 抛物线，也不硬塞成函数图像。它是**范围外**，不是「没写清楚」。",
+      reasonCode: "nonstandard_curve_out_of_scope"
+    }
   }
   if (OUTSIDE_CURVE_TERM.test(leftover)) {
-    return "「点在曲线**外**」与「点在曲线上」是两件相反的事，而今天的判据只有后一条（`pointOnConic`）—— 这一句不会被读成「在曲线上」，也没有「在外面」的判据，如实未核验。"
+    return {
+      reason: "「点在曲线**外**」与「点在曲线上」是两件相反的事，而今天的判据只有后一条（`pointOnConic`）—— 这一句不会被读成「在曲线上」，也没有「在外面」的判据，如实未核验。",
+      reasonCode: "point_outside_curve"
+    }
   }
   if (ON_SEGMENT_TERM.test(leftover)) {
-    return "「某点在一条线段上」**已经有判据了**（与该线段共线、且落在线段内），但这一句的**点名没排成能读的顺序** —— 判据读的是`点 + 是/为/在 + 线段 + 上一点`（例如 `D 为 AC 上一点`）与`线段 + 上一点 + 点`（例如 `AC 上一点 D`）这两种语序；这一句两种都不是（例如 `D 在 AC 上` —— 少了「一点」那截尾巴，既可能是线段也可能是直线，猜不得）。如实未核验，**不静默丢掉**。"
+    return {
+      reason: "「某点在一条线段上」**已经有判据了**（与该线段共线、且落在线段内），但这一句的**点名没排成能读的顺序** —— 判据读的是`点 + 是/为/在 + 线段 + 上一点`（例如 `D 为 AC 上一点`）与`线段 + 上一点 + 点`（例如 `AC 上一点 D`）这两种语序；这一句两种都不是（例如 `D 在 AC 上` —— 少了「一点」那截尾巴，既可能是线段也可能是直线，猜不得）。如实未核验，**不静默丢掉**。",
+      reasonCode: "segment_incidence_unparsed_order"
+    }
   }
   for (const [pattern, reason] of UNSUPPORTED_FAMILIES) {
-    if (pattern.test(leftover)) return reason
+    if (pattern.test(leftover)) return { reason, reasonCode: "unsupported_geometry_family" }
   }
-  return "原题出现了尚未被可靠解析的几何条件，未核验。"
+  return { reason: "原题出现了尚未被可靠解析的几何条件，未核验。", reasonCode: "unrecognized_condition" }
 }
 
 /**
@@ -2492,6 +2520,52 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   return parseDiagramScope(prompt, options)
 }
 
+const DIRECTED_VECTOR_RATIO = new RegExp(`(?:向量|→)\\s*(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)\\s*(?:\\*|·)?\\s*(?:向量|→)\\s*(${SEGMENT_NAME})`, "g")
+
+function parsePositiveRationalScalar(raw: string): number | null {
+  const frac = /^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/.exec(raw.trim())
+  if (frac) {
+    const num = Number(frac[1])
+    const den = Number(frac[2])
+    return Number.isFinite(num) && Number.isFinite(den) && num > 0 && den > 0 ? num / den : null
+  }
+  const value = Number(raw.trim())
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+/**
+ * **同向向量数乘**（T05 / JT-P08：`向量EC=2向量CF`）：
+ * 有别于无向线段比例 `DE=2EA`，同向共起点向量 `EC = k·CF`（k>0）同时强约束
+ * ① `|EC|/|CF| = k`，且 ② `C` 严格落在线段 `EF` 之间（`splitPoint: true`）。
+ * 必须在长度链与普通 `EC=2` 读取器之前整条消费，避免误读成固定长度 `EC=2`。
+ */
+function resolveDirectedVectorRatios(
+  givens: DiagramObligation[],
+  givenText: string,
+  used: Set<number>
+): void {
+  for (const match of givenText.matchAll(DIRECTED_VECTOR_RATIO)) {
+    const start = match.index
+    const end = start + match[0].length
+    if (Array.from({ length: end - start }, (_, offset) => start + offset).some((at) => used.has(at))) continue
+    const scalar = parsePositiveRationalScalar(match[2]!)
+    const left = names(match[1]!)
+    const right = names(match[3]!)
+    if (scalar === null || left.length !== 2 || right.length !== 2) continue
+    const [a, b] = left as [string, string]
+    const [c, d] = right as [string, string]
+    if (a === b || c === d) continue
+    for (let at = start; at < end; at += 1) used.add(at)
+    if (b === c) {
+      givens.push({ kind: "segmentRatio", targets: [a, b, c, d], value: scalar, splitPoint: true, sourceText: match[0], start, end })
+    } else if (a === d) {
+      givens.push({ kind: "segmentRatio", targets: [c, d, a, b], value: 1 / scalar, splitPoint: true, sourceText: match[0], start, end })
+    } else {
+      givens.push({ kind: "segmentRatio", targets: [a, b, c, d], value: scalar, splitPoint: false, sourceText: match[0], start, end })
+    }
+  }
+}
+
 function parseDiagramScope(prompt: string, options: DiagramParseOptions, partStart?: number): DiagramObligationSet {
   const partPattern = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/
   const boundaryMatch = partStart !== undefined
@@ -2518,12 +2592,15 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
   const unverified: DiagramObligationSet["unverified"] = []
   const used = new Set<number>()
 
+  resolveDirectedVectorRatios(givens, givenText, used)
+
   /**
    * **长度连等整条解析**（2026-10-26）：`AD=AB=2CD=2` 这类混合连等必须在句型循环**之前**
    * 整条消费，否则普通连等与倍数句型会各读一半（`AD=` 落进未核验、AB 拿到错误长度）。
    * 这里只处理"线段的 `=` 链"；单段长度与冒号比例仍走既有读取器。
    */
   for (const chain of parseLengthChains(givenText)) {
+    if (Array.from({ length: chain.end - chain.start }, (_, offset) => chain.start + offset).some((at) => used.has(at))) continue
     for (let at = chain.start; at < chain.end; at += 1) used.add(at)
     if (chain.ok) {
       for (const draft of chain.drafts) givens.push({ ...draft, sourceText: chain.sourceText, start: chain.start, end: chain.end })
@@ -2574,7 +2651,19 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
       const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || new Set(result.targets).size >= 2)
-      for (const draft of accepted) givens.push({ ...draft, sourceText: match[0], start, end })
+      const labelPrefix = allowAfterLabelColon === true
+        ? /(?:椭圆|双曲线|抛物线|圆)\s*([A-Z])\s*[：:]$/.exec(givenText.slice(Math.max(0, start - 16), start))
+        : null
+      const entityLabel = labelPrefix?.[1]
+      for (const draft of accepted) {
+        givens.push({
+          ...draft,
+          ...(entityLabel !== undefined && draft.entityLabel === undefined ? { entityLabel } : {}),
+          sourceText: match[0],
+          start,
+          end
+        })
+      }
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)
     }
@@ -2645,30 +2734,59 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
 
   // Scan the portions no reliable matcher consumed. A new textbook notation must
   // become visible as unverified, not silently turn a non-empty problem into an empty pass.
+  const recognizedEntities = givens
+    .map((given) => {
+      if (given.conic?.kind === "circle") return `圆${given.entityLabel ?? ""}(center:(${given.conic.centerX},${given.conic.centerY}), r:${given.conic.radius})`
+      if (given.conic?.kind === "ellipse") return `椭圆${given.entityLabel ?? ""}`
+      if (given.conic?.kind === "hyperbola") return `双曲线${given.entityLabel ?? ""}`
+      if (given.conic?.kind === "parabola") return `抛物线${given.entityLabel ?? ""}`
+      return given.entityLabel ?? null
+    })
+    .filter((entry): entry is string => entry !== null)
+
   for (const clause of givenText.matchAll(/[^，,。；;\n]+/g)) {
     if (unverified.some((entry) => clause[0].includes(entry.sourceText))) continue
-    const leftover = [...clause[0]].map((character, offset) => used.has(clause.index + offset) ? " " : character).join("").trim()
+    const maskedLeftover = [...clause[0]].map((character, offset) => used.has(clause.index + offset) ? " " : character).join("").trim()
+    if (maskedLeftover.length === 0) continue
+
+    const unrecognizedSpans: { text: string; start: number; end: number }[] = []
+    let runStart: number | null = null
+    for (let offset = 0; offset <= clause[0].length; offset += 1) {
+      const absIndex = clause.index + offset
+      const active = offset < clause[0].length && !used.has(absIndex)
+      if (active && runStart === null) {
+        runStart = offset
+      } else if (!active && runStart !== null) {
+        const rawSlice = clause[0].slice(runStart, offset)
+        const leading = rawSlice.length - rawSlice.trimStart().length
+        const trailing = rawSlice.length - rawSlice.trimEnd().length
+        const spanText = rawSlice.trim()
+        if (spanText.length > 0 && !/^[的与和且及()（）\s]+$/.test(spanText)) {
+          unrecognizedSpans.push({
+            text: spanText,
+            start: clause.index + runStart + leading,
+            end: clause.index + offset - trailing
+          })
+        }
+        runStart = null
+      }
+    }
+    if (unrecognizedSpans.length === 0) continue
+
     const unknownPointCondition = options.spatialPointConditions === true
-      && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(leftover)
-        || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(leftover))
-    /**
-     * **触发词表**（残留扫描器：这些词出现了，说明"这里有一条题设没被读出来"）。
-     *
-     * `(?<!椭)圆上` 那个负向后顾是**实测逼出来的**（2026-10-15）：直接写 `圆上` 会命中
-     * 「椭**圆上**」—— 于是设计夹具里那句 `P 是椭圆上任意一点` 从"被忽略"变成
-     * "落进未核验"，进而把那条设计用例从 `awaiting_confirmation` 打成 `failed`。
-     * 也就是说：**这个误伤顺带暴露了另一处真缺口**（`椭圆上` 这类今天同样读不出来，
-     * 见 `curvePointClauses.test.ts` 里钉住的那一条），但两件事要分开处理 ——
-     * 这一行只负责"真正的圆"。
-     *
-     * **`上一点 / 上的点 / 上任意一点`（2026-10-15 用户现场，Rt△ABC 折起那道题）**：
-     * `D 为 AC 上一点` 此前**既不在给定里、也不在未核验里 —— 静默消失**（与当年
-     * `弦 AB 的长为 3`、`P 是椭圆上任意一点` 同一种病）。这一条今天还**没有读取器**
-     *（"点在线段上"要一条新义务 + 一条判据：共线且落在线段内），但**至少不许消失**。
-     */
-    const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(leftover.trim())
-    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)/.test(leftover) || unknownPointCondition)) {
-      unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
+      && (/[A-Z]\s*\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/.test(maskedLeftover)
+        || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(maskedLeftover))
+    const originalClause = clause[0].trim()
+    const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(maskedLeftover)
+    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)|渐近线|相切/.test(maskedLeftover) || unknownPointCondition)) {
+      const classified = classifyUnverifiedResidual(maskedLeftover, recognizedEntities)
+      unverified.push({
+        sourceText: originalClause,
+        reason: classified.reason,
+        reasonCode: classified.reasonCode,
+        unrecognizedSpans,
+        ...(recognizedEntities.length > 0 ? { recognizedEntities: [...new Set(recognizedEntities)] } : {})
+      })
     }
   }
   givens.sort((left, right) => left.start - right.start)
