@@ -6,11 +6,11 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)、[第二轮独立复核与整改](audit/2026-11-16-g3-contract-review-r2/README.md)、[公共曲线整改](audit/2026-11-16-g3-shared-curves/README.md)、[指定拓扑整改](audit/2026-11-16-g3-named-topology/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。G3-Math **尚未退出**；最新36题为0 passed/11 partial/25 failed。
-2. 公共曲线已绑定，14个立体合同具有指定顶点/面环，GK-S09/JT-S09辅助点命名已补齐。未提供题图的面环不得猜。下一步处理 **fold-transform跨状态谱系、切线端点及参数域/最值**，不得把 suite/case 自签为 `approved`。
+1. 先读[当前状态](current-status.md)、[指定拓扑整改](audit/2026-11-16-g3-named-topology/README.md)、[DeepSeek端点重新授权阻断](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。G3-Math **尚未退出**；最新离线36题为0 passed/11 partial/25 failed，不能替代 provider 结果。
+2. DeepSeek 已重新授权，最小题集 planning 为 **1 planned / 2 clarification / 0 error**，真实调用与澄清链已连通；这只是最小验证，不是36题通过。下一步处理 **fold-transform跨状态谱系、切线端点及参数域/最值**，不得把 suite/case 自签为 `approved`。
 3. 合同复核关闭后依次执行：生产完整证书与统一评测入口 → 平面18题 → 立体/折叠18题及 G3-Math → `B5`（`T15 → T16`）真实渲染与交互生命周期 → G3 总验收。
 4. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
-5. 真实 provider 付费评测、P8、安装包/冷机与正式发布不在本 goal 内；实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。
+5. 仅用户本次明确授权的保存 DeepSeek 可进行真实评测；其他付费 provider、P8、安装包/冷机与正式发布不在本 goal 内。实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。
 
 ## 历史和证据边界
 

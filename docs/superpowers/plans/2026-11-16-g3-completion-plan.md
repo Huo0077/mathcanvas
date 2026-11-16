@@ -16,7 +16,7 @@
 - 不按题号硬编码，不删除失败样本，不放宽数学判据或截图阈值，不用 mock/结构化估计冒充真实桌面或渲染。
 - 每块遵循 RED → 最小实现 → 定向 GREEN → 回归 → 独立复核 → 证据/活动文档对齐 → commit → push → 核对远端。
 - 活动状态只维护 `docs/current-status.md`；`docs/project-progress.md` 只追加过程，`docs/agent-next-round-progress.md` 只维护下一步导航；同步主计划、P0–P8 附录、release gate 中受影响的“当前状态”文字，历史证据不改写。
-- 不进入 P8，不进行付费 provider 请求，不合并 main，不发布产品；RustSec 既有 `unknown` 不得写成无风险。
+- 不进入 P8，不合并 main，不发布产品；RustSec 既有 `unknown` 不得写成无风险。用户于2026-11-16明确授权使用保存的 DeepSeek 做真实评测，取代先前 provider 限制；只走正常应用凭据链，先小规模验证并记录真实错误/usage，不编成本，不读取或输出密钥，其他付费 provider 未开启。用户重新授权后，最小真实题集 planning 为1 planned/2 clarification/0 error，证明调用链连通；不等于固定36题或G3通过，详见 `docs/audit/2026-11-16-g3-deepseek-provider/README.md`。
 - AI 的截图审查只能记为 `agent_visual_review`，不能冒充用户/教师人工签收。没有必需的人工或桌面证据时不得宣布 G3 完成。
 
 ## Review Focus

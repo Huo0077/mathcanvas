@@ -8,6 +8,18 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— DeepSeek 真实评测：端点重新授权阻断
+
+- **用户新授权**：改用保存的 DeepSeek 做真实 provider 评测，不再以离线结果代替；P8与正式发布仍不开启。未读取、输出或保存密钥到 shell/文档。
+- **真实执行**：通过 Tauri 正常设置界面选择最小题集 planning（至少3次请求），未运行至少24次请求的另一通道。实际为 **0 planned / 3 error**，32ms为本地失败回合，成本 not measured。
+- **阻断**：旧凭据没有可信端点绑定，必须用户在编辑表单重新输入 API key 并保存才能建立授权。已打开该表单，不能用脚本读取旧密钥绕过。尚无成功模型输出或36题 provider 验收。证据：[DeepSeek端点重新授权阻断](audit/2026-11-16-g3-deepseek-provider/README.md)。
+
+## 2026-11-16 —— DeepSeek 重新授权后最小真实评测通过
+
+- **恢复**：用户重新输入并保存 API key，界面显示工具调用、严格 JSON、图像、流式验证通过，未读取或记录密钥。
+- **真实结果**：最小题集 planning 为 **1 planned / 2 clarification / 0 error**，平均延迟1832ms，成本 not measured。一条产出可执行动作和草稿，两条合理要求澄清；没有以离线数据替代，未自动扩大为24/36次请求。
+- **边界**：最小调用链连通不等于固定36题、G3-Math或G3-UX完成。证据：[DeepSeek重新授权与最小真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)。
+
 ## 2026-11-16 —— G3 / T01 指定顶点与面环拓扑
 
 - **RED→GREEN**：GK-S03 六顶点五面体合同曾被四面体满足，实测旧检查错误放行；新增 `expectedVertexIds/expectedFaceRings` 后真实五面体通过、错误绕向拒绝，循环面环起点保持兼容。
