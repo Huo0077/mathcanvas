@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P3 / T06 必需对象清单与类型化构造意图 DAG
+
+- **RED 复现与契约设计**：编写 `drawingIntent.test.ts`，覆盖 DAG 六类异常拦截、拓扑序与 `T12` 脏传播、`GK-S02` 缺 `E/F/P` 与孤立 `label`/隐藏辅助对象拦截、`JT-P06` 缺焦点 `F₁`/`F₂` 与 `compilePlan` `drawingIntentCheck` 端到端阻断（初始因模块未创建 RED 失败）。
+- **无环构造 DAG 与物化审计**：新增 `packages/agent-core/src/drawingIntent.ts`，直接绑定 `ACTIONS` 能力表实现 `compileConstructionDag`、`deriveRequiredDrawingIntent`（复用 `parseObligationWithLegacy`/`parseShapeClause`/`readFoldTransformations`）、`auditMaterializedIntent` 与 `collectDependentSubgraph`，在 `deterministicProblemRoute.ts`、`solver/solverContracts.ts` 与 `planCompiler.ts`（显式 `drawingIntentCheck` 开关）接通，off-path 黄金基线保持零字节变化。
+- **验证**：`drawingIntent.test.ts` + `planCompiler.offPath.golden.test.ts` 2 文件 18 项通过，全量 Vitest **532 文件 / 5648 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P3 / T06构造DAG证据](audit/2026-11-16-p3-drawing-intent-dag/README.md)。
+
 ## 2026-11-16 —— P3 / T05 稳定多实体绑定、同向向量比与忠实原文诊断
 
 - **RED 复现与实测漏洞**：在 `diagramEntityBinding.test.ts` 与 `diagramSourceDiagnostics.test.ts` 构造 9 项契约并复现 7 项失败，实测暴露：`leftover` 把已识别圆方程替换为空格产出 `"若双曲线…与圆            相切"`、`JT-P08` 的 `"向量EC=2向量CF"` 被误读成固定长度 `EC=2`、`JT-P07` 省略 `/1` 与带标签 `"椭圆 C 上一点"` 漏匹配，以及多曲线并发/跨 scope 时缺少明确绑定拒绝码。

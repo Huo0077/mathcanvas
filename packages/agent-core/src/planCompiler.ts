@@ -31,6 +31,7 @@ import { constructRightTrapezoidPrism } from "./solver/trapezoidPrism"
 import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
 import { constructDihedralTriangle } from "./solver/dihedral"
 import { missingNamedPoints, verifyDiagramObligations, type DiagramVerificationReport, type MissingNamedPoint } from "./diagramVerification"
+import { auditMaterializedIntent, compileConstructionDag, deriveRequiredDrawingIntent } from "./drawingIntent"
 import { parseDiagramObligations } from "./diagramObligations"
 import { directlyRequestsPrism, directlyRequestsSphere, readExplicitSolidConditions } from "./explicitSolidConditions"
 import { buildFigureIntent, readFoldTransformations } from "./figureIntent"
@@ -236,6 +237,8 @@ export interface PlanCompileContext {
   /** Explicit subquestion selection for scoped verification (`R01-B` / `T02`). */
   selectedSubquestion?: number
   selectedScopeId?: string
+  /** Typed construction DAG & materialized object audit (`T06`). */
+  drawingIntentCheck?: boolean
 }
 
 export interface PlanCompileResult {
@@ -841,6 +844,26 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))
+  }
+  if (context.drawingIntentCheck === true && parserPrompt !== undefined && obligationParse !== null) {
+    const derivedIntent = deriveRequiredDrawingIntent({
+      prompt: parserPrompt,
+      obligations: obligationParse.ir,
+      selectedPart: context.selectedSubquestion
+    })
+    const compiledDag = compileConstructionDag(derivedIntent.nodes)
+    if (!compiledDag.ok) {
+      for (const diag of compiledDag.diagnostics) {
+        diagnostics.push(planDiagnostic("geometry_validation", `drawing_intent_${diag.code}`, "envelope.actions", diag.reason))
+      }
+    } else {
+      const intentAudit = auditMaterializedIntent(compiledDag.executionOrder, working, entityBindings)
+      if (!intentAudit.ok) {
+        for (const diag of intentAudit.diagnostics) {
+          diagnostics.push(planDiagnostic("geometry_validation", `drawing_intent_${diag.code}`, "envelope.actions", diag.reason))
+        }
+      }
+    }
   }
   diagnostics.push(...renderDegeneracyWarnings(working))
   const failed = diagnostics.some((entry) => entry.severity === "error")

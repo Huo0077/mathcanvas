@@ -1,4 +1,5 @@
 import type { PlanEnvelope } from "./contracts"
+import { compileConstructionDag, deriveRequiredDrawingIntent, type CompiledDrawingDagResult } from "./drawingIntent"
 import { deterministicPlanForPrompt } from "./parametricSolidPlan"
 import { tryBuildRightPrismMidpointsPlan } from "./rightPrismPlan"
 import { tryBuildScopedPyramidPlan } from "./scopedPyramidPlan"
@@ -8,6 +9,13 @@ export interface DeterministicProblemRoute {
   plan: PlanEnvelope
   family: "functions" | "spatial-modeling"
   diagramPrompt?: string
+}
+
+export function routeDeterministicProblemWithIntent(prompt: string): (DeterministicProblemRoute & { intentDag: CompiledDrawingDagResult }) | null {
+  const routed = routeDeterministicProblem(prompt)
+  if (routed === null) return null
+  const intent = deriveRequiredDrawingIntent({ prompt: routed.diagramPrompt ?? prompt })
+  return { ...routed, intentDag: compileConstructionDag(intent.nodes) }
 }
 
 export function routeDeterministicProblem(prompt: string): DeterministicProblemRoute | null {

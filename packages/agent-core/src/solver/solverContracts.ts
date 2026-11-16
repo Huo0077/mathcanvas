@@ -168,3 +168,10 @@ export interface PolyhedronWitnessSelectionInput {
 export type PolyhedronWitnessSelection =
   | { status: "selected"; candidate: PolyhedronWitness; index: number; considered: string[] }
   | { status: "none"; considered: string[] }
+
+/** Typed construction DAG summary handed between planner, intent compiler, and solver layers (T06). */
+export interface DrawingIntentContractSummary {
+  requiredEntityIds: string[]
+  executionOrderIds: string[]
+  dagValid: boolean
+}

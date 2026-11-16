@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P3 / T06 必需对象清单与类型化构造意图 DAG
+
+- **类型化构造 DAG 与拓扑/增量传播**：新增 `packages/agent-core/src/drawingIntent.ts`，以 `ACTIONS` 为单源能力表实现 `compileConstructionDag`，拦截未注册算子、重复节点/实体 ID、缺宿主、错宿主类型、跨问引用、折前对象违规引用与循环依赖，并提供确定性拓扑排序与供 `T12` 复用的脏传播接口 `collectDependentSubgraph`。
+- **必需对象合成与假物化/隐藏拦截**：实现 `deriveRequiredDrawingIntent` 与 `auditMaterializedIntent`，覆盖 `GK-S02` 比例分点 `E`/`F` 及折后 `P`、`JT-P06` 焦点 `F₁`/`F₂` 与曲线上点 `M`/`P`，拒收缺失实体（`missing_entity`）、孤立文本假物化（`isolated_label_without_primitive`）及隐藏辅助对象（`auxiliary_object_hidden`）。
+- **接入与验证**：接入 `deterministicProblemRoute.ts`（`routeDeterministicProblemWithIntent`）、`solver/solverContracts.ts` 与 `planCompiler.ts`（显式 `drawingIntentCheck` 门禁，off-path 黄金基线零变化）。RED 失败 → `drawingIntent.test.ts` + `planCompiler.offPath.golden.test.ts` 18 项与全量 Vitest **532 文件 / 5648 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P3 / T06构造DAG证据](docs/audit/2026-11-16-p3-drawing-intent-dag/README.md)。
+
 ## 2026-11-16 —— P3 / T05 稳定多实体绑定、同向向量比与忠实原文诊断
 
 - **多实体绑定与作用域/状态隔离**：`diagramVerification.ts` 与 `planCompiler.ts` 用 `candidateConics` 和统一 `selectConicForObligation` 取代单曲线 `candidateConic` 猜测；支持 `entityBindings`、`entityScopes`、`activeScopeId`/`activeStateId` 及曲线标签归并（兼容 `"双曲线C"`/`"C"`，保留单条异族曲线在 `pointOnConic` 判 `failed`），对多候选返回 `binding_ambiguous`、缺实体返回 `entity_missing`、跨作用域/状态返回 `binding_scope_mismatch`；放宽 `x²/4+y²=1` 省略 `/1` 分母与 `P 是椭圆 C 上一点` 识别，打通 `JT-P03`/`JT-P07` 与双曲线/辅助圆共存场景。
