@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T09 参数化立体构造、拓扑拒收与开放曲面隔离
+
+- **RED 复现与拓扑缺口验证**：扩充 `solid-builders.test.ts`、`prism.test.ts`、`pyramid.test.ts` 并新建 `solidDrawingContracts.test.ts`，实现前 RED `4 files failed | 9 failed | 46 passed (55)`。
+- **内核开放曲面隔离与参数化求解落盘**：`solid-builders.ts` 导出 `signedPolyhedronVolume` 与 `buildOpenSurface`；`prism.ts`、`pyramid.ts`、`tetrahedron.ts` 分别补齐直/斜棱柱参数构造、已知垂足正交构造与未知垂足不默认中心、四面体镜像正负分支；`witnessSearch.ts` 接入 `validateAuxiliaryHosts` 拦截缺失顶点宿主；`compilePlan` 实测确认损坏拓扑不生成已通过草稿。
+- **验证**：定向 4 文件 55 项与全量 Vitest **536 文件 / 5684 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T09立体作图证据](audit/2026-11-16-p4-solid-drawing/README.md)。
+
 ## 2026-11-16 —— P4 / T08 函数符号导数、定义域保留与竖直宿主动态依赖
 
 - **RED 复现与漏洞拦截**：在 `function-evidence.test.ts` 扩展 5 项并新建 `functionDrawing.test.ts`（4 项），实现前 RED `2 failed | 8 failed | 20 passed (28)`，覆盖 `1/(x-0.37)` 奇数步长极点、`x/x`/`sqrt(-1)` 域保留、`abs(x)` 不可导尖点、域变更失效与 `JT-P02` 10 次拖动重算。

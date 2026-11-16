@@ -928,12 +928,57 @@ type CandidateJudgement =
  *
  * 与 `envelopeFor` 共用同一份判断，`localPlanner` 也从这里取 —— 两处各写一遍必然分叉。
  */
+export interface AuxiliaryHostValidationDiagnostic {
+  code: "missing_host" | "duplicate_entity_id" | "invalid_parameter"
+  pointName: string
+  reason: string
+}
+
+export function validateAuxiliaryHosts(
+  vertexNames: readonly string[],
+  auxiliaryPoints: readonly WitnessAuxiliaryPoint[]
+): { ok: true } | { ok: false; diagnostics: AuxiliaryHostValidationDiagnostic[] } {
+  const vertexSet = new Set(vertexNames)
+  const diagnostics: AuxiliaryHostValidationDiagnostic[] = []
+  const seenAux = new Set<string>()
+  for (const point of auxiliaryPoints) {
+    if (vertexSet.has(point.name) || seenAux.has(point.name)) {
+      diagnostics.push({
+        code: "duplicate_entity_id",
+        pointName: point.name,
+        reason: `辅助点 "${point.name}" 与已有顶点或辅助点重名。`
+      })
+    }
+    seenAux.add(point.name)
+    const [from, to] = point.hostEdge
+    if (!vertexSet.has(from) || !vertexSet.has(to)) {
+      diagnostics.push({
+        code: "missing_host",
+        pointName: point.name,
+        reason: `辅助点 "${point.name}" 引用的宿主棱 (${from}, ${to}) 存在缺失顶点。`
+      })
+    }
+    if (!Number.isFinite(point.parameter) || point.parameter <= 0 || point.parameter >= 1) {
+      diagnostics.push({
+        code: "invalid_parameter",
+        pointName: point.name,
+        reason: `辅助点 "${point.name}" 的棱比例参数 ${String(point.parameter)} 必须位于 (0, 1) 内。`
+      })
+    }
+  }
+  return diagnostics.length === 0 ? { ok: true } : { ok: false, diagnostics }
+}
+
 export function auxiliaryPointActions(
   hostAlias: string,
   names: readonly string[],
   faces: readonly (readonly number[])[],
   auxiliaryPoints: readonly WitnessAuxiliaryPoint[]
 ): DraftAction[] {
+  const hostCheck = validateAuxiliaryHosts(names, auxiliaryPoints)
+  if (!hostCheck.ok) {
+    throw new Error(hostCheck.diagnostics.map((d) => `${d.code}: ${d.reason}`).join("; "))
+  }
   const edges = new Set<string>()
   for (const ring of faces) {
     for (const [index, vertexIndex] of ring.entries()) {

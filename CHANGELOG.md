@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P4 / T09 参数化立体构造、拓扑拒收与开放曲面隔离
+
+- **闭合拓扑与开放曲面隔离**：`packages/geometry-kernel/src/solid-builders.ts` 导出 `signedPolyhedronVolume` 并新增 `buildOpenSurface`（逐环检验共面、面积、自交、连通与反向绕向，不以闭合流形边条件误杀开放折纸片，也不放松 `buildFromPoints` 闭合检查）；覆盖 `GK-S03` 正有符号体积五面体与 7 类损坏（非共面/自交/反绕向/重复面/孤立顶点/断连/共面零体积）拒收。
+- **参数化棱柱/棱锥/四面体镜像与宿主校验**：`packages/agent-core/src/solver/prism.ts` 新增 `constructParameterizedPrism`（严分直棱柱法向拉伸与斜棱柱倾斜方向）；`pyramid.ts` 新增 `constructPyramidFromFoot` 与 `describePyramidApexDomain`（未知垂足显式返回自由域而不默认底面中心）；`tetrahedron.ts` 新增 `constructTetrahedronBranches`（正/负镜像分支枚举与拓扑核验）；`witnessSearch.ts` 与 `solverContracts.ts` 新增 `validateAuxiliaryHosts`（拦截缺失宿主顶点与重名）与 `SolidConstructionEvidence`。
+- **验证**：RED 9 fail → 定向 4 文件 55 项与全量 Vitest **536 文件 / 5684 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T09立体作图证据](docs/audit/2026-11-16-p4-solid-drawing/README.md)。
+
 ## 2026-11-16 —— P4 / T08 函数符号导数、定义域保留与竖直宿主动态依赖
 
 - **符号导数 AST 与定义域保留**：`packages/geometry-kernel/src/expression.ts` 新增 `differentiateExpressionAst`、`evaluateFunctionWithDomain` 与 `evaluateSymbolicDerivative`，覆盖四则/幂/三角/指数对数/根式求导并保持 `x/x`、`sqrt(x)`（含导数 `x > 0`）原始定义域；对 `abs(x)` 等非光滑/未支持算子显式返回 `unsupported_derivative`，绝不静默以有限差分伪装精确导数。

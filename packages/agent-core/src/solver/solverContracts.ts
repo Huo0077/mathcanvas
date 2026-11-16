@@ -175,3 +175,11 @@ export interface DrawingIntentContractSummary {
   executionOrderIds: string[]
   dagValid: boolean
 }
+
+/** Parameterized solid construction & topology metadata (T09). */
+export interface SolidConstructionEvidence {
+  kind: "right_prism" | "oblique_prism" | "foot_pyramid" | "tetrahedron_branch" | "polyhedron" | "open_surface"
+  topologyVerified: boolean
+  branchTag?: "positive" | "negative" | string
+  auxiliaryPointIds?: readonly string[]
+}

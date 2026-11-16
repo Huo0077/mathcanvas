@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildFromPoints, buildFrustum, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder, regularPyramidShape, regularTetrahedronShape } from "./solid-builders"
+import { buildFromPoints, buildFrustum, buildOpenSurface, buildPrism, buildSolid, buildSolidTemplate, createBuilderContext, listSolidBuilders, registerSolidBuilder, regularPyramidShape, regularTetrahedronShape, signedPolyhedronVolume } from "./solid-builders"
 import { buildPrismTopology, validatePrismInput } from "./prism"
 
 const triangle = [
@@ -712,5 +712,99 @@ describe("solid builders", () => {
     }, createBuilderContext("large-coordinate"))
 
     expect(result.diagnostics).toEqual([])
+  })
+})
+
+describe("P4 / T09 GK-S03 topology rejection, signed volume & open surface separation", () => {
+  const gkS03Vertices = [
+    { x: -2, y: 0, z: 0 }, // A = 0
+    { x: -1, y: Math.sqrt(3), z: 0 }, // B = 1
+    { x: 1, y: Math.sqrt(3), z: 0 }, // C = 2
+    { x: 2, y: 0, z: 0 }, // D = 3
+    { x: 1, y: 0, z: 3 }, // E = 4
+    { x: -1, y: 0, z: 3 } // F = 5
+  ]
+  const gkS03Faces = [
+    [0, 1, 2, 3],
+    [0, 3, 4, 5],
+    [1, 5, 4, 2],
+    [0, 5, 1],
+    [2, 4, 3]
+  ]
+
+  it("validates exact GK-S03 closed pentahedron with positive outward volume", () => {
+    const built = buildFromPoints({ vertices: gkS03Vertices, faces: gkS03Faces }, createBuilderContext("gk-s03"))
+    expect(built.diagnostics).toEqual([])
+    expect(built.vertexIds).toHaveLength(6)
+    expect(built.faceIds).toHaveLength(5)
+    expect(signedPolyhedronVolume(gkS03Vertices, gkS03Faces)).toBeGreaterThan(0)
+  })
+
+  it("rejects GK-S03 non-coplanar face, self-intersection, inconsistent winding, duplicate face, unused vertex and disconnected shells", () => {
+    const nonCoplanar = gkS03Vertices.map((v, i) => (i === 4 ? { ...v, y: 0.4 } : v))
+    const rNonCoplanar = buildFromPoints({ vertices: nonCoplanar, faces: gkS03Faces }, createBuilderContext("s03-nc"))
+    expect(rNonCoplanar.primitives).toEqual([])
+    expect(rNonCoplanar.diagnostics.some((d) => d.code === "non-planar-base")).toBe(true)
+
+    const selfIntersectFaces = [[0, 2, 3, 1], ...gkS03Faces.slice(1)]
+    const rBowtie = buildFromPoints({ vertices: gkS03Vertices, faces: selfIntersectFaces }, createBuilderContext("s03-bowtie"))
+    expect(rBowtie.primitives).toEqual([])
+    expect(rBowtie.diagnostics.some((d) => d.code === "self-intersection")).toBe(true)
+
+    const flippedFace = [[0, 3, 2, 1], ...gkS03Faces.slice(1)]
+    const rWinding = buildFromPoints({ vertices: gkS03Vertices, faces: flippedFace }, createBuilderContext("s03-winding"))
+    expect(rWinding.primitives).toEqual([])
+    expect(rWinding.diagnostics.some((d) => d.code === "inconsistent-winding")).toBe(true)
+
+    const rDuplicate = buildFromPoints({ vertices: gkS03Vertices, faces: [...gkS03Faces, gkS03Faces[3]!] }, createBuilderContext("s03-dup"))
+    expect(rDuplicate.primitives).toEqual([])
+    expect(rDuplicate.diagnostics.some((d) => d.code === "duplicate-face")).toBe(true)
+
+    const extraUnused = [...gkS03Vertices, { x: 10, y: 10, z: 10 }]
+    const rUnused = buildFromPoints({ vertices: extraUnused, faces: gkS03Faces }, createBuilderContext("s03-unused"))
+    expect(rUnused.primitives).toEqual([])
+    expect(rUnused.diagnostics.some((d) => d.code === "unused-vertex")).toBe(true)
+
+    const disconnectedVerts = [
+      { x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 },
+      { x: 5, y: 0, z: 0 }, { x: 6, y: 0, z: 0 }, { x: 5, y: 1, z: 0 }, { x: 5, y: 0, z: 1 }
+    ]
+    const disconnectedFaces = [
+      [0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3],
+      [4, 6, 5], [4, 5, 7], [5, 6, 7], [6, 4, 7]
+    ]
+    const rDisconn = buildFromPoints({ vertices: disconnectedVerts, faces: disconnectedFaces }, createBuilderContext("s03-disconn"))
+    expect(rDisconn.primitives).toEqual([])
+    expect(rDisconn.diagnostics.some((d) => d.code === "disconnected-topology")).toBe(true)
+
+    const flatVerts = gkS03Vertices.map((v, i) => (i >= 4 ? { ...v, y: -2, z: 0 } : { ...v, z: 0 }))
+    const rCoplanarAll = buildFromPoints({ vertices: flatVerts, faces: gkS03Faces }, createBuilderContext("s03-flat"))
+    expect(rCoplanarAll.primitives).toEqual([])
+    expect(rCoplanarAll.diagnostics.some((d) => d.code === "degenerate-volume")).toBe(true)
+  })
+
+  it("keeps open folded sheets separate from closed manifold rejection via buildOpenSurface", () => {
+    const openSheetVerts = [
+      { x: 0, y: 0, z: 0 },
+      { x: 4, y: 0, z: 0 },
+      { x: 2, y: 2, z: 0 },
+      { x: 2, y: 0, z: 3 }
+    ]
+    const openFaces = [[0, 1, 2], [0, 1, 3]]
+    // Closed builder rejects open shell (never relaxes closed checks)
+    const closedAttempt = buildFromPoints({ vertices: openSheetVerts, faces: openFaces }, createBuilderContext("closed-open"))
+    expect(closedAttempt.primitives).toEqual([])
+    expect(closedAttempt.diagnostics.length).toBeGreaterThan(0)
+
+    // Dedicated open surface builder accepts valid connected origami fold with consistent opposite shared edge winding!
+    const validOpen = buildOpenSurface({ vertices: openSheetVerts, faces: [[0, 2, 1], [0, 1, 3]] }, createBuilderContext("open-ok"))
+    expect(validOpen.diagnostics).toEqual([])
+    expect(validOpen.faceIds).toHaveLength(2)
+
+    // And still rejects non-coplanar face ring on open surface
+    const badRingVerts = [...openSheetVerts, { x: 2, y: 1, z: 1.5 }]
+    const badOpen = buildOpenSurface({ vertices: badRingVerts, faces: [[0, 2, 1, 4]] }, createBuilderContext("open-bad"))
+    expect(badOpen.primitives).toEqual([])
+    expect(badOpen.diagnostics.some((d) => d.code === "non-planar-base")).toBe(true)
   })
 })

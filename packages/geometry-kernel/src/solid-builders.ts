@@ -219,17 +219,34 @@ export function hasSelfIntersectingPolygon(points: readonly Vector3[]): boolean 
   return false
 }
 
+export function signedPolyhedronVolume(vertices: readonly Vector3[], faces: readonly number[][]): number {
+  if (vertices.length === 0 || faces.length === 0) return 0
+  const origin = vertices[0]!
+  let volume = 0
+  const localVertices = vertices.map((vertex) => ({ x: vertex.x - origin.x, y: vertex.y - origin.y, z: vertex.z - origin.z }))
+  for (const face of faces) {
+    const first = localVertices[face[0]!]
+    if (!first) continue
+    for (let index = 1; index < face.length - 1; index += 1) {
+      const second = localVertices[face[index]!]!
+      const third = localVertices[face[index + 1]!]!
+      volume += (
+        first.x * (second.y * third.z - second.z * third.y) -
+        first.y * (second.x * third.z - second.z * third.x) +
+        first.z * (second.x * third.y - second.y * third.x)
+      ) / 6
+    }
+  }
+  return volume
+}
+
 function hasNonZeroVolume(vertices: Vector3[], faces: number[][]): boolean {
   const origin = vertices[0]
-  let volume = 0
   let scale = 0
-  const localVertices = vertices.map((vertex) => ({ x: vertex.x - origin.x, y: vertex.y - origin.y, z: vertex.z - origin.z }))
-  for (const vertex of localVertices) scale = Math.max(scale, Math.abs(vertex.x), Math.abs(vertex.y), Math.abs(vertex.z))
-  for (const face of faces) {
-    const first = localVertices[face[0]]
-    for (let index = 1; index < face.length - 1; index += 1) volume += (first.x * (localVertices[face[index]].y * localVertices[face[index + 1]].z - localVertices[face[index]].z * localVertices[face[index + 1]].y) - first.y * (localVertices[face[index]].x * localVertices[face[index + 1]].z - localVertices[face[index]].z * localVertices[face[index + 1]].x) + first.z * (localVertices[face[index]].x * localVertices[face[index + 1]].y - localVertices[face[index]].y * localVertices[face[index + 1]].x)) / 6
+  for (const vertex of vertices) {
+    scale = Math.max(scale, Math.abs(vertex.x - origin.x), Math.abs(vertex.y - origin.y), Math.abs(vertex.z - origin.z))
   }
-  return scale > 0 && Math.abs(volume) > scale ** 3 * 1e-12
+  return scale > 0 && Math.abs(signedPolyhedronVolume(vertices, faces)) > scale ** 3 * 1e-12
 }
 
 function createSolidFromIndexedFaces(vertices: Vector3[], faces: number[][], context: BuilderContext): SolidBuildResult {
@@ -364,6 +381,79 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
   }
   if (visited.size !== input.vertices.length) diagnostics.push(diagnostic("disconnected-topology", "solid topology must be connected"))
   if (!hasNonZeroVolume(input.vertices, input.faces)) diagnostics.push(diagnostic("degenerate-volume", "solid topology must enclose non-zero volume"))
+  if (diagnostics.length > 0) return emptyResult(diagnostics)
+  return createSolidFromIndexedFaces(input.vertices, input.faces, context)
+}
+
+/**
+ * Open surface topology validator/builder (for origami/unfolded polygonal sheets).
+ * Validates coplanar, non-degenerate, non-self-intersecting, consistently wound connected sheets
+ * without requiring closed 2-manifold boundary edges or non-zero enclosed volume.
+ */
+export function buildOpenSurface(input: FromPointsInput, context: BuilderContext): SolidBuildResult {
+  const diagnostics: GeometryDiagnostic[] = []
+  const vertices = Array.isArray(input?.vertices) ? input.vertices : []
+  const scale = extentOf(vertices)
+  const span = modelSpan(vertices)
+  if (!Array.isArray(input?.vertices) || vertices.length < 3 || vertices.some((vertex) => !isFiniteVector(vertex)) || !hasDistinctPoints(vertices, scale)) {
+    diagnostics.push(diagnostic("invalid-input", "open surface vertices must be at least 3 distinct finite points"))
+  }
+  if (!Array.isArray(input?.faces) || input.faces.length < 1) {
+    diagnostics.push(diagnostic("missing-face-rings", "an open surface requires at least one face ring"))
+  }
+  if (diagnostics.length > 0) return emptyResult(diagnostics)
+
+  for (const face of input.faces) {
+    if (!Array.isArray(face) || face.length < 3 || new Set(face).size !== face.length || face.some((index) => !Number.isInteger(index) || index < 0 || index >= input.vertices.length)) {
+      diagnostics.push(diagnostic("invalid-input", "face rings must contain distinct vertex indexes"))
+      continue
+    }
+    const points = face.map((index) => input.vertices[index]!)
+    const deviation = maxPlaneDeviation(points)
+    if (!hasNonZeroArea(points, span)) diagnostics.push(diagnostic("degenerate-base", `face ring [${face.join(",")}] has zero area`))
+    if (points.length >= 4 && deviation > span * 1e-9) diagnostics.push(diagnostic("non-planar-base", `face ring [${face.join(",")}] is not coplanar: deviation ${deviation.toExponential(2)}`))
+    if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", `face ring [${face.join(",")}] self-intersects`))
+  }
+  if (diagnostics.length > 0) return emptyResult(diagnostics)
+
+  const usedVertices = new Set<number>()
+  const edgeOwners = new Map<string, number>()
+  const edgeDirections = new Map<string, Array<[number, number]>>()
+  const faceKeys = new Set<string>()
+  const adjacency = input.vertices.map(() => new Set<number>())
+  for (const face of input.faces) {
+    const faceKey = [...face].sort((first, second) => first - second).join(":")
+    if (faceKeys.has(faceKey)) diagnostics.push(diagnostic("duplicate-face", "face rings must be unique"))
+    faceKeys.add(faceKey)
+    for (const vertexIndex of face) usedVertices.add(vertexIndex)
+    for (let index = 0; index < face.length; index += 1) {
+      const first = face[index]!
+      const second = face[(index + 1) % face.length]!
+      const key = edgeKey(first, second)
+      edgeOwners.set(key, (edgeOwners.get(key) ?? 0) + 1)
+      const directions = edgeDirections.get(key) ?? []
+      directions.push([first, second])
+      edgeDirections.set(key, directions)
+      adjacency[first]!.add(second)
+      adjacency[second]!.add(first)
+    }
+  }
+  if (usedVertices.size !== input.vertices.length) diagnostics.push(diagnostic("unused-vertex", "every vertex must belong to at least one face"))
+  if ([...edgeOwners.values()].some((ownerCount) => ownerCount > 2)) diagnostics.push(diagnostic("open-boundary", "non-manifold edge shared by more than two faces"))
+  for (const directions of edgeDirections.values()) {
+    if (directions.length === 2 && directions[0]![0] === directions[1]![0] && directions[0]![1] === directions[1]![1]) {
+      diagnostics.push(diagnostic("inconsistent-winding", "adjacent faces must orient shared edges in opposite directions"))
+    }
+  }
+  const visited = new Set<number>()
+  const pending = input.vertices.length > 0 ? [0] : []
+  while (pending.length > 0) {
+    const vertexIndex = pending.pop()
+    if (vertexIndex === undefined || visited.has(vertexIndex)) continue
+    visited.add(vertexIndex)
+    for (const neighbor of adjacency[vertexIndex]!) if (!visited.has(neighbor)) pending.push(neighbor)
+  }
+  if (visited.size !== input.vertices.length) diagnostics.push(diagnostic("disconnected-topology", "open surface topology must be connected"))
   if (diagnostics.length > 0) return emptyResult(diagnostics)
   return createSolidFromIndexedFaces(input.vertices, input.faces, context)
 }

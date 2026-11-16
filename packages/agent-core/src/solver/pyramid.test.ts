@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { constructSquarePyramid } from "./pyramid"
+import { constructPyramidFromFoot, constructSquarePyramid, describePyramidApexDomain } from "./pyramid"
 
 /**
  * **正方形底 + 顶点到 C/D 等距 + ∠PCA**（2026-10-19，P1-1）。
@@ -28,5 +28,30 @@ describe("constructSquarePyramid", () => {
   it("refuses an impossible distance/angle instead of returning NaN", () => {
     expect(constructSquarePyramid({ side: 4, apexToC: 1, apexToD: 1, anglePcaDegrees: 89 })).toBeNull()
     expect(constructSquarePyramid({ side: 0, apexToC: 3, apexToD: 3, anglePcaDegrees: 45 })).toBeNull()
+  })
+})
+
+describe("P4 / T09 constructPyramidFromFoot & unknown-foot domain disclosure", () => {
+  const base = [
+    { x: 0, y: 0, z: 0 },
+    { x: 4, y: 0, z: 0 },
+    { x: 2, y: 3, z: 0 }
+  ]
+
+  it("places apex = foot + h * unitNormal when foot is known and verifies perpendicularity + closed topology", () => {
+    const foot = { x: 1, y: 1, z: 0 }
+    const built = constructPyramidFromFoot({ base, foot, height: 5 })
+    expect(built.ok).toBe(true)
+    if (!built.ok) return
+    expect(built.apex.x).toBeCloseTo(1, 9)
+    expect(built.apex.y).toBeCloseTo(1, 9)
+    expect(built.apex.z).toBeCloseTo(5, 9)
+    expect(built.orthogonalResidual).toBeLessThan(1e-12)
+  })
+
+  it("refuses to default an unknown apex foot to base centroid", () => {
+    const domain = describePyramidApexDomain({ base, apexFootKnown: false })
+    expect(domain.status).toBe("free_domain")
+    expect(domain.reason).toContain("垂足未定")
   })
 })

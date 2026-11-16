@@ -9,6 +9,8 @@
  * 的坐标交给编译层。
  */
 
+import { buildFromPoints, createBuilderContext } from "@draw/geometry-kernel"
+
 export interface Point3 {
   x: number
   y: number
@@ -77,4 +79,61 @@ export function constructTetrahedron(measures: TetrahedronMeasures): Tetrahedron
     Math.abs(distance(points.p, points.c) - pc)
   )
   return residual <= scale * 1e-9 ? points : null
+}
+
+export interface TetrahedronBranch {
+  branch: "positive" | "negative"
+  points: TetrahedronPoints
+  maxResidual: number
+  topologyValid: boolean
+}
+
+export function constructTetrahedronBranches(
+  measures: TetrahedronMeasures,
+  options: {
+    sideFilter?: "positive" | "negative" | "both"
+    expectedSide?: (points: TetrahedronPoints) => boolean
+  } = {}
+): TetrahedronBranch[] {
+  const positive = constructTetrahedron(measures)
+  if (!positive) return []
+  const candidates: TetrahedronBranch[] = []
+  const specs: { branch: "positive" | "negative"; points: TetrahedronPoints; faces: number[][] }[] = [
+    {
+      branch: "positive",
+      points: positive,
+      faces: [[0, 2, 1], [0, 1, 3], [1, 2, 3], [2, 0, 3]]
+    },
+    {
+      branch: "negative",
+      points: { ...positive, p: { ...positive.p, z: -positive.p.z } },
+      faces: [[0, 1, 2], [0, 3, 1], [1, 3, 2], [2, 3, 0]]
+    }
+  ]
+
+  const sideFilter = options.sideFilter ?? "positive"
+  for (const item of specs) {
+    if (sideFilter !== "both" && item.branch !== sideFilter) continue
+    if (options.expectedSide && !options.expectedSide(item.points)) continue
+    const pts = item.points
+    const maxResidual = Math.max(
+      Math.abs(distance(pts.a, pts.b) - measures.ab),
+      Math.abs(distance(pts.a, pts.c) - measures.ac),
+      Math.abs(distance(pts.b, pts.c) - measures.bc),
+      Math.abs(distance(pts.p, pts.a) - measures.pa),
+      Math.abs(distance(pts.p, pts.b) - measures.pb),
+      Math.abs(distance(pts.p, pts.c) - measures.pc)
+    )
+    const built = buildFromPoints(
+      { vertices: [pts.a, pts.b, pts.c, pts.p], faces: item.faces },
+      createBuilderContext(`tet-${item.branch}`)
+    )
+    candidates.push({
+      branch: item.branch,
+      points: pts,
+      maxResidual,
+      topologyValid: built.diagnostics.length === 0
+    })
+  }
+  return candidates
 }
