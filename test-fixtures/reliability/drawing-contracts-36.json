@@ -550,6 +550,36 @@
             "b": "C",
             "value": 6.928203230275509
           }
+        },
+        {
+          "id": "ob-base-coplanar",
+          "kind": "coplanar",
+          "description": "Base ABCD is coplanar",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "平面四边形 ABCD",
+            "start": 3,
+            "end": 13
+          },
+          "check": {
+            "kind": "coplanar-3d",
+            "points": ["A", "B", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-open-topology",
+          "kind": "topology",
+          "description": "Original and folded faces form a valid connected open surface",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将 △AEF 沿 EF 对折至 △PEF",
+            "start": 80,
+            "end": 100
+          },
+          "check": {
+            "kind": "topology-3d",
+            "open": true
+          }
         }
       ],
       "displayPolicy": {
@@ -560,7 +590,9 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "The frozen text says 如图 but supplies no reviewed figure hash/regions; E∈AD and F∈AB host semantics need figure confirmation and cannot be inferred from lengths alone."
+      ]
     },
     {
       "id": "GK-S03",
@@ -839,6 +871,20 @@
             "b": "D",
             "t": 0.5
           }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Five-face solid has closed, consistently wound, connected, non-degenerate topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在以 A，B，C，D，E，F 为顶点的五面体中",
+            "start": 3,
+            "end": 26
+          },
+          "check": {
+            "kind": "topology-3d"
+          }
         }
       ],
       "displayPolicy": {
@@ -849,7 +895,9 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "The text says 如图 but no reviewed figure image hash/region is frozen; topology checks validate the candidate's rings but do not yet prove they match the unavailable source figure."
+      ]
     },
     {
       "id": "GK-S04",
@@ -1812,6 +1860,74 @@
               "B",
               "A₁"
             ]
+          }
+        },
+        {
+          "id": "ob-prism-aa1-bb1",
+          "kind": "prism_correspondence",
+          "description": "AA₁ and BB₁ are the same prism translation",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "vector-equal-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "B",
+            "d": "B₁"
+          }
+        },
+        {
+          "id": "ob-prism-aa1-cc1",
+          "kind": "prism_correspondence",
+          "description": "AA₁ and CC₁ are the same prism translation",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "vector-equal-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "C",
+            "d": "C₁"
+          }
+        },
+        {
+          "id": "ob-prism-ab-a1b1",
+          "kind": "prism_correspondence",
+          "description": "AB and A₁B₁ are corresponding equal parallel edges",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "vector-equal-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A₁",
+            "d": "B₁"
+          }
+        },
+        {
+          "id": "ob-topology",
+          "kind": "topology",
+          "description": "Closed triangular prism topology",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "topology-3d"
           }
         }
       ],
@@ -2796,6 +2912,39 @@
             "b": "M",
             "c": "C",
             "d": "D"
+          }
+        },
+        {
+          "id": "ob-m-in-pcd",
+          "kind": "incidence",
+          "description": "M lies in plane PCD",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "AM⊥平面 PCD 于点 M",
+            "start": 90,
+            "end": 104
+          },
+          "check": {
+            "kind": "coplanar-3d",
+            "points": ["M", "P", "C", "D"]
+          }
+        },
+        {
+          "id": "ob-am-pc",
+          "kind": "perpendicular",
+          "description": "AM⊥PC (second independent direction in plane PCD)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "AM⊥平面 PCD 于点 M",
+            "start": 90,
+            "end": 104
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "M",
+            "c": "P",
+            "d": "C"
           }
         }
       ],
@@ -3974,9 +4123,9 @@
           }
         },
         {
-          "id": "ob-m",
-          "kind": "entity_present",
-          "description": "Point M present",
+          "id": "ob-m-host",
+          "kind": "incidence",
+          "description": "M lies on segment EF",
           "scope": "(2)",
           "sourceSpan": {
             "text": "点 M 在线段 EF 上运动",
@@ -3984,9 +4133,10 @@
             "end": 106
           },
           "check": {
-            "kind": "entity-present",
-            "entityId": "M",
-            "space": "3d"
+            "kind": "point-on-segment-3d",
+            "p": "M",
+            "a": "E",
+            "b": "F"
           }
         }
       ],
@@ -4259,6 +4409,55 @@
             "c": "B",
             "value": 1.4142135623730951
           }
+        },
+        {
+          "id": "ob-a-on-l",
+          "kind": "incidence",
+          "description": "A lies on the declared line l",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交C于A、B两点",
+            "start": 67,
+            "end": 75
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "A",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-b-on-l",
+          "kind": "incidence",
+          "description": "B lies on the declared line l",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交C于A、B两点",
+            "start": 67,
+            "end": 75
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "B",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-o-origin",
+          "kind": "point_value",
+          "description": "O is the origin (0,0)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "O为坐标原点",
+            "start": 76,
+            "end": 82
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "O",
+            "x": 0,
+            "y": 0
+          }
         }
       ],
       "displayPolicy": {
@@ -4481,6 +4680,56 @@
             "c": "T",
             "d": "H",
             "k": 1
+          }
+        },
+        {
+          "id": "ob-pmn-collinear",
+          "kind": "collinearity",
+          "description": "P, M and N are collinear on the secant through P",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交 $E$ 于 $M, N$ 两点",
+            "start": 127,
+            "end": 144
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "P",
+            "b": "M",
+            "c": "N"
+          }
+        },
+        {
+          "id": "ob-mt-horizontal",
+          "kind": "line_constraint",
+          "description": "MT is parallel to the x-axis",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 $M$ 且平行于 $x$ 轴的直线",
+            "start": 146,
+            "end": 165
+          },
+          "check": {
+            "kind": "horizontal-2d",
+            "a": "M",
+            "b": "T"
+          }
+        },
+        {
+          "id": "ob-t-on-ab",
+          "kind": "incidence",
+          "description": "T lies on segment AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与线段 $A B$ 交于 点 $T$",
+            "start": 165,
+            "end": 183
+          },
+          "check": {
+            "kind": "point-on-segment-2d",
+            "p": "T",
+            "a": "A",
+            "b": "B"
           }
         }
       ],
@@ -5807,6 +6056,102 @@
             "x": 2,
             "y": 0
           }
+        },
+        {
+          "id": "ob-p-on-host",
+          "kind": "incidence",
+          "description": "P lies on host line x=-1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 P 在定直线 x=-1 上运动",
+            "start": 73,
+            "end": 90
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "P",
+            "lineId": "host"
+          }
+        },
+        {
+          "id": "ob-m-on-c",
+          "kind": "incidence",
+          "description": "M lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与双曲线分别交于 M，N 两点",
+            "start": 104,
+            "end": 119
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "M",
+            "conic": {
+              "kind": "hyperbola",
+              "cx": 0,
+              "cy": 0,
+              "axis": "x",
+              "rx": 2,
+              "ry": 4
+            }
+          }
+        },
+        {
+          "id": "ob-n-on-c",
+          "kind": "incidence",
+          "description": "N lies on hyperbola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与双曲线分别交于 M，N 两点",
+            "start": 104,
+            "end": 119
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "N",
+            "conic": {
+              "kind": "hyperbola",
+              "cx": 0,
+              "cy": 0,
+              "axis": "x",
+              "rx": 2,
+              "ry": 4
+            }
+          }
+        },
+        {
+          "id": "ob-p-a1-m",
+          "kind": "collinearity",
+          "description": "P, A₁ and M are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 PA₁",
+            "start": 91,
+            "end": 97
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "P",
+            "b": "A₁",
+            "c": "M"
+          }
+        },
+        {
+          "id": "ob-p-a2-n",
+          "kind": "collinearity",
+          "description": "P, A₂ and N are collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "PA₂",
+            "start": 100,
+            "end": 103
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "P",
+            "b": "A₂",
+            "c": "N"
+          }
         }
       ],
       "displayPolicy": {
@@ -6617,6 +6962,121 @@
             "a": "B",
             "b": "Q",
             "c": "F"
+          }
+        },
+        {
+          "id": "ob-a",
+          "kind": "point_value",
+          "description": "A(1/2,√15/4)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)",
+            "start": 12,
+            "end": 44
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A",
+            "x": 0.5,
+            "y": 0.9682458365518543
+          }
+        },
+        {
+          "id": "ob-b",
+          "kind": "point_value",
+          "description": "B(2,0)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)",
+            "start": 12,
+            "end": 44
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "B",
+            "x": 2,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-l-through",
+          "kind": "line_constraint",
+          "description": "Line l passes through (1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点",
+            "start": 45,
+            "end": 76
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "entityId": "l",
+            "x": 1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-p-on-l",
+          "kind": "incidence",
+          "description": "P lies on line l",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点",
+            "start": 45,
+            "end": 76
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "P",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-q-on-l",
+          "kind": "incidence",
+          "description": "Q lies on line l",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点",
+            "start": 45,
+            "end": 76
+          },
+          "check": {
+            "kind": "point-on-line-2d",
+            "point": "Q",
+            "lineId": "l"
+          }
+        },
+        {
+          "id": "ob-e-x3",
+          "kind": "incidence",
+          "description": "E lies on x=3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 BP，BQ 分别交直线 x=3 于 E，F 两点",
+            "start": 77,
+            "end": 104
+          },
+          "check": {
+            "kind": "point-x-2d",
+            "label": "E",
+            "x": 3
+          }
+        },
+        {
+          "id": "ob-f-x3",
+          "kind": "incidence",
+          "description": "F lies on x=3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 BP，BQ 分别交直线 x=3 于 E，F 两点",
+            "start": 77,
+            "end": 104
+          },
+          "check": {
+            "kind": "point-x-2d",
+            "label": "F",
+            "x": 3
           }
         }
       ],

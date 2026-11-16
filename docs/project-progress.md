@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 第二批拓扑、宿主与平面关联整改
+
+- **立体**：新增 `topology-3d`（闭合/开放分开）、`coplanar-3d`、`point-on-segment-3d`；GK-S03/S02补拓扑与题图边界，JT-S03补垂足平面与第二方向，JT-S08补M线段域，GK-S07补棱柱对应向量与闭合拓扑。
+- **平面**：新增点在线/线段/曲线、水平和x坐标判据；GK-P01补A/B在l与O，GK-P02补P/M/N共线、MT水平、T在线段AB，JT-P02补双曲线交点与共线，JT-P07补点值、l、P/Q及x=3交点。
+- **验证**：定向25项通过；全量540文件/5721通过+1todo，typecheck、lint（0 errors/33既有warnings）、Web构建（640 modules）通过。两处测试坐标经独立复算纠正，未放宽实现判据。
+- **边界**：最新36题仍为1 passed/10 partial/25 failed，义务覆盖约22.5%，不是通过率提升；T01/P0未退出。证据见[第二批拓扑与宿主整改](audit/2026-11-16-g3-host-topology/README.md)。
+
 ## 2026-11-16 —— G3 / T01 第一批合同安全整改
 
 - **不可行与scope**：`infeasible-branch` 改为禁止实体绑定，修复JT-P06伪造P+披露、GK-S05全局强制P；新增 `evaluateDrawingContractScopes` 与二面角正弦/余弦判据，GK-S01补两问义务，JT-S02恢复真正面面垂直并补P宿主/二面角。

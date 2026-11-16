@@ -1,4 +1,4 @@
-import { compileExpression, evaluateExpression } from "@draw/geometry-kernel"
+import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression } from "@draw/geometry-kernel"
 
 export interface ContractSourceSpan {
   text: string
@@ -21,22 +21,30 @@ export type ContractCheckSpec =
   | { kind: "dihedral-sine-3d" | "dihedral-cosine-3d"; edgeStart: string; edgeEnd: string; firstPoint: string; secondPoint: string; value: number }
   | { kind: "ratio-3d"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "point-on-segment-ratio-3d"; p: string; a: string; b: string; t: number }
+  | { kind: "point-on-segment-3d"; p: string; a: string; b: string }
   | { kind: "vector-equal-3d"; a: string; b: string; c: string; d: string }
   | { kind: "sum-distance-3d"; p: string; a: string; b: string; total: number }
   | { kind: "planes-perpendicular-3d"; first: [string, string, string]; second: [string, string, string] }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
+  | { kind: "topology-3d"; solidId?: string; open?: boolean }
+  | { kind: "coplanar-3d"; points: readonly string[] }
   | { kind: "circumsphere-3d" }
   | { kind: "cube-3d"; edgeLength: number }
   | { kind: "hemisphere-3d"; radius: number }
   | { kind: "point-2d"; label: string; x: number; y: number }
   | { kind: "point-y-2d"; label: string; y: number }
+  | { kind: "point-x-2d"; label: string; x: number }
   | { kind: "point-on-ellipse-2d"; label: string; cx: number; cy: number; rx: number; ry: number }
+  | { kind: "point-on-conic-2d"; label: string; conic: ConicSpec2D }
   | { kind: "conic-2d"; curveType: "ellipse"; cx: number; cy: number; rx: number; ry: number }
   | { kind: "conic-2d"; curveType: "hyperbola"; cx: number; cy: number; axis: "x" | "y"; rx: number; ry: number }
   | { kind: "conic-2d"; curveType: "parabola"; vx: number; vy: number; axis: "x" | "y"; focalParameter: number }
   | { kind: "conic-2d"; curveType: "circle"; cx: number; cy: number; radius: number }
+  | { kind: "point-on-line-2d"; point: string; lineId: string }
+  | { kind: "point-on-segment-2d"; p: string; a: string; b: string }
+  | { kind: "horizontal-2d"; a: string; b: string }
   | { kind: "line-through-2d"; entityId: string; x: number; y: number }
   | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
@@ -324,6 +332,43 @@ function polyhedronVertexSets(prims: readonly Record<string, unknown>[]): Vec3[]
   return sets
 }
 
+function evaluatePolyhedronTopology(
+  prims: readonly Record<string, unknown>[],
+  solidId: string | undefined,
+  open: boolean
+): { passed: boolean; detail: string } {
+  const solids = prims.filter((primitive) => primitive.type === "polyhedron3" && (solidId === undefined || primitive.id === solidId))
+  if (solids.length === 0) return { passed: false, detail: `missing polyhedron ${solidId ?? "candidate"}` }
+  for (const solid of solids) {
+    if (!Array.isArray(solid.vertexIds) || !Array.isArray(solid.faceIds)) return { passed: false, detail: "polyhedron is missing vertexIds or faceIds" }
+    const positions = new Map<string, Vec3>()
+    for (const primitive of prims) {
+      if (primitive.type !== "point3" || typeof primitive.id !== "string") continue
+      const position = primitive.position as Vec3 | undefined
+      if (position && [position.x, position.y, position.z].every((value) => typeof value === "number" && Number.isFinite(value))) positions.set(primitive.id, position)
+    }
+    const vertices = solid.vertexIds.map((id) => positions.get(id as string))
+    if (vertices.some((point) => point === undefined)) return { passed: false, detail: "polyhedron references a missing or non-finite vertex" }
+    const indices = new Map((solid.vertexIds as string[]).map((id, index) => [id, index]))
+    const faces: number[][] = []
+    for (const faceId of solid.faceIds) {
+      const face = prims.find((primitive) => primitive.type === "face3" && primitive.id === faceId)
+      if (!face || !Array.isArray(face.pointIds)) return { passed: false, detail: `missing face ring ${String(faceId)}` }
+      const ring = face.pointIds.map((id) => typeof id === "string" ? indices.get(id) : undefined)
+      if (ring.some((index) => index === undefined)) return { passed: false, detail: `face ring ${String(faceId)} references a vertex outside the polyhedron` }
+      faces.push(ring as number[])
+    }
+    let sequence = 0
+    const result = open
+      ? buildOpenSurface({ vertices: vertices as Vec3[], faces }, { allocateId: (namespace) => `${namespace}-${sequence++}` })
+      : buildFromPoints({ vertices: vertices as Vec3[], faces }, { allocateId: (namespace) => `${namespace}-${sequence++}` })
+    if (result.diagnostics.length > 0) {
+      return { passed: false, detail: result.diagnostics.map((diagnostic) => `${diagnostic.code}:${diagnostic.message}`).join("; ") }
+    }
+  }
+  return { passed: true, detail: open ? "open surface topology passed" : "closed polyhedron topology passed" }
+}
+
 function sortedPairDistances(points: readonly Vec3[]): number[] {
   const distances: number[] = []
   for (let first = 0; first < points.length; first += 1) {
@@ -385,6 +430,26 @@ function spheres(prims: readonly Record<string, unknown>[]): { center: Vec3; rad
 function uniqueEntity(prims: readonly Record<string, unknown>[], entityId: string, type: string): Record<string, unknown> | null {
   const matches = prims.filter((primitive) => primitive.type === type && (primitive.id === entityId || primitive.label === entityId))
   return matches.length === 1 ? matches[0]! : null
+}
+
+function conicResidual2d(spec: ConicSpec2D, point: Vec2): number | null {
+  if (spec.kind === "circle") {
+    return Math.abs(Math.hypot(point.x - spec.cx, point.y - spec.cy) / spec.radius - 1)
+  }
+  if (spec.kind === "ellipse") {
+    return Math.abs(((point.x - spec.cx) / spec.rx) ** 2 + ((point.y - spec.cy) / spec.ry) ** 2 - 1)
+  }
+  if (spec.kind === "hyperbola") {
+    const first = spec.axis === "x"
+      ? ((point.x - spec.cx) / spec.rx) ** 2 - ((point.y - spec.cy) / spec.ry) ** 2
+      : ((point.y - spec.cy) / spec.ry) ** 2 - ((point.x - spec.cx) / spec.rx) ** 2
+    return Math.abs(first - 1)
+  }
+  const expected = spec.axis === "y"
+    ? (point.x - spec.vx) ** 2 - 2 * spec.focalParameter * (point.y - spec.vy)
+    : (point.y - spec.vy) ** 2 - 2 * spec.focalParameter * (point.x - spec.vx)
+  const scale = Math.max(1, Math.abs(spec.axis === "y" ? 2 * spec.focalParameter * (point.y - spec.vy) : 2 * spec.focalParameter * (point.x - spec.vx)))
+  return Math.abs(expected) / scale
 }
 
 function collectPrimitives(candidate: unknown): readonly Record<string, unknown>[] {
@@ -508,6 +573,18 @@ function evaluateCheck(
       const err = dist3(p, expected)
       return { passed: err <= TOL, detail: `segment ratio error=${err}` }
     }
+    case "point-on-segment-3d": {
+      const p = p3(check.p), a = p3(check.a), b = p3(check.b)
+      if (!p || !a || !b) return { passed: false, detail: `missing 3d vertices for point-on-segment ${check.p}` }
+      const ab = sub3(b, a), ap = sub3(p, a)
+      const lengthSquared = dot3(ab, ab)
+      if (lengthSquared <= 1e-18) return { passed: false, detail: `degenerate segment ${check.a}${check.b}` }
+      const length = Math.sqrt(lengthSquared)
+      const distance = len3(cross3(ab, ap)) / length
+      const t = dot3(ap, ab) / lengthSquared
+      const ok = distance <= TOL * Math.max(1, length) && t >= -TOL && t <= 1 + TOL
+      return { passed: ok, detail: `segment distance=${distance}, parameter=${t}` }
+    }
     case "vector-equal-3d": {
       const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d)
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 3d vertices for vector equality` }
@@ -542,6 +619,25 @@ function evaluateCheck(
       const area = len3(cross3(sub3(b, a), sub3(c, a))) / 2
       return { passed: near(area, check.value, 1e-2), detail: `area=${area} vs ${check.value}` }
     }
+    case "coplanar-3d": {
+      const points = check.points.map(p3)
+      if (points.some((point) => point === undefined)) return { passed: false, detail: `missing 3d vertices for coplanarity: ${check.points.join(",")}` }
+      const origin = points[0]!
+      let normal: Vec3 = { x: 0, y: 0, z: 0 }
+      for (let first = 1; first < points.length - 1 && len3(normal) <= 1e-12; first += 1) {
+        for (let second = first + 1; second < points.length && len3(normal) <= 1e-12; second += 1) {
+          normal = cross3(sub3(points[first]!, origin), sub3(points[second]!, origin))
+        }
+      }
+      const normalLength = len3(normal)
+      if (normalLength <= 1e-12) return { passed: false, detail: "degenerate point set cannot establish a plane" }
+      const span = Math.max(...points.flatMap((point, index) => points.slice(index + 1).map((other) => dist3(point!, other!))), 0)
+      const deviation = Math.max(...points.map((point) => Math.abs(dot3(normal, sub3(point!, origin))) / normalLength))
+      const ok = deviation <= span * 1e-9
+      return { passed: ok, detail: `plane deviation=${deviation}, tolerance=${span * 1e-9}` }
+    }
+    case "topology-3d":
+      return evaluatePolyhedronTopology(prims, check.solidId, check.open === true)
     case "prism-3d": {
       const ok = check.hasEqualEdges === true
         ? equalEdgeTriangularPrismPoints(prims) !== null
@@ -587,11 +683,23 @@ function evaluateCheck(
       if (!pt) return { passed: false, detail: `missing 2d point ${check.label}` }
       return { passed: near(pt.y, check.y, 1e-2), detail: `${check.label}.y=${pt.y} vs ${check.y}` }
     }
+    case "point-x-2d": {
+      const pt = p2(check.label)
+      if (!pt) return { passed: false, detail: `missing 2d point ${check.label}` }
+      return { passed: near(pt.x, check.x, 1e-2), detail: `${check.label}.x=${pt.x} vs ${check.x}` }
+    }
     case "point-on-ellipse-2d": {
       const pt = p2(check.label)
       if (!pt) return { passed: false, detail: `missing 2d point ${check.label}` }
       const lhs = ((pt.x - check.cx) / check.rx) ** 2 + ((pt.y - check.cy) / check.ry) ** 2
       return { passed: near(lhs, 1, 1e-2), detail: `ellipse eval(${check.label})=${lhs} vs 1` }
+    }
+    case "point-on-conic-2d": {
+      const pt = p2(check.label)
+      if (!pt) return { passed: false, detail: `missing 2d point ${check.label}` }
+      const residual = conicResidual2d(check.conic, pt)
+      const ok = residual !== null && Number.isFinite(residual) && residual <= 1e-2
+      return { passed: ok, detail: `${check.label} conic residual=${residual}` }
     }
     case "conic-2d": {
       if (check.curveType === "ellipse") {
@@ -624,6 +732,33 @@ function evaluateCheck(
         return !!v && near(v.x, check.vx) && near(v.y, check.vy) && p.axis === check.axis && near(Number(p.focalParameter), check.focalParameter, 1e-2)
       })
       return { passed: ok, detail: ok ? "parabola matches" : "missing/mismatched parabola" }
+    }
+    case "horizontal-2d": {
+      const a = p2(check.a), b = p2(check.b)
+      if (!a || !b) return { passed: false, detail: `missing points for horizontal line ${check.a}${check.b}` }
+      const ok = Math.abs(a.y - b.y) <= 1e-2 && Math.abs(a.x - b.x) > 1e-9
+      return { passed: ok, detail: `horizontal dy=${Math.abs(a.y - b.y)}, dx=${Math.abs(a.x - b.x)}` }
+    }
+    case "point-on-segment-2d": {
+      const p = p2(check.p), a = p2(check.a), b = p2(check.b)
+      if (!p || !a || !b) return { passed: false, detail: `missing 2d points for segment ${check.a}${check.b}` }
+      const dx = b.x - a.x, dy = b.y - a.y, lengthSquared = dx * dx + dy * dy
+      if (lengthSquared <= 1e-18) return { passed: false, detail: `degenerate segment ${check.a}${check.b}` }
+      const length = Math.sqrt(lengthSquared)
+      const distance = Math.abs(dx * (p.y - a.y) - dy * (p.x - a.x)) / length
+      const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared
+      const ok = distance <= 1e-2 * Math.max(1, length) && t >= -1e-3 && t <= 1 + 1e-3
+      return { passed: ok, detail: `segment distance=${distance}, parameter=${t}` }
+    }
+    case "point-on-line-2d": {
+      const point = p2(check.point), line = uniqueEntity(prims, check.lineId, "line")
+      if (!point || !line) return { passed: false, detail: `missing point ${check.point} or line ${check.lineId}` }
+      const a = line.a as Vec2 | undefined, b = line.b as Vec2 | undefined
+      if (!a || !b) return { passed: false, detail: `line ${check.lineId} has invalid endpoints` }
+      const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy)
+      if (length <= 1e-9) return { passed: false, detail: `degenerate line ${check.lineId}` }
+      const distance = Math.abs(dx * (point.y - a.y) - dy * (point.x - a.x)) / length
+      return { passed: distance <= 1e-2, detail: `${check.point} to ${check.lineId} distance=${distance}` }
     }
     case "line-through-2d": {
       const line = uniqueEntity(prims, check.entityId, "line")
@@ -712,6 +847,8 @@ function evaluateCheck(
             : `infeasible branch ${check.subquestion} contains forbidden entity ${fabricatedEntity}`
       }
     }
+    default:
+      return { passed: false, detail: "unsupported contract check" }
   }
 }
 
