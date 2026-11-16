@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 第一批合同安全整改
+
+- **不可行与scope**：`infeasible-branch` 改为禁止实体绑定，修复JT-P06伪造P+披露、GK-S05全局强制P；新增 `evaluateDrawingContractScopes` 与二面角正弦/余弦判据，GK-S01补两问义务，JT-S02恢复真正面面垂直并补P宿主/二面角。
+- **结构与数学**：真实 `sphere` 的外接球、等棱三棱柱、正方体棱长与半球内接检查取代名实不符谓词；GK-P04范围改为 `[-1,+∞)`，JT-P04(2)改为无实数解；函数/直线判据绑定唯一实体，f/g交换与替身直线均拒绝。
+- **验证**：定向16项通过；全量540文件/5712通过+1todo，typecheck、lint（0 errors/33既有warnings）、Web构建（640 modules）通过。最新冻结36题为 **1 passed / 10 partial / 25 failed**，GK-S01旧passed降为partial是补验小问后的正确结果，不回退。
+- **边界**：T01/P0未退出，独立reviewer尚未复审本切片；继续剩余关联义务、拓扑、显示策略和统一scope入口。证据见[第一批合同安全整改](audit/2026-11-16-g3-contract-safety/README.md)。
+
 ## 2026-11-16 —— G3 实核、T01 第二独立审题与整改重启
 
 - **用户 goal**：按最新主计划完成 G3，每个区块验证、对齐活动文档并推送 GitHub；续作计划见[G3完成计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。

@@ -18,6 +18,7 @@ export type ContractCheckSpec =
   | { kind: "perp-3d"; a: string; b: string; c: string; d: string }
   | { kind: "parallel-3d"; a: string; b: string; c: string; d: string }
   | { kind: "angle-3d"; a: string; b: string; c: string; d: string; degrees: number }
+  | { kind: "dihedral-sine-3d" | "dihedral-cosine-3d"; edgeStart: string; edgeEnd: string; firstPoint: string; secondPoint: string; value: number }
   | { kind: "ratio-3d"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "point-on-segment-ratio-3d"; p: string; a: string; b: string; t: number }
   | { kind: "vector-equal-3d"; a: string; b: string; c: string; d: string }
@@ -36,16 +37,16 @@ export type ContractCheckSpec =
   | { kind: "conic-2d"; curveType: "hyperbola"; cx: number; cy: number; axis: "x" | "y"; rx: number; ry: number }
   | { kind: "conic-2d"; curveType: "parabola"; vx: number; vy: number; axis: "x" | "y"; focalParameter: number }
   | { kind: "conic-2d"; curveType: "circle"; cx: number; cy: number; radius: number }
-  | { kind: "line-through-2d"; x: number; y: number }
-  | { kind: "line-vertical-2d"; x: number }
+  | { kind: "line-through-2d"; entityId: string; x: number; y: number }
+  | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
   | { kind: "vector-ratio-2d"; a: string; b: string; c: string; d: string; k: number }
   | { kind: "distance-2d"; a: string; b: string; value: number }
   | { kind: "perp-2d"; a: string; b: string; c: string; d: string }
   | { kind: "triangle-area-2d"; a: string; b: string; c: string; value: number }
   | { kind: "dot-2d"; a: string; b: string; c: string; d: string; value: number }
-  | { kind: "function-sample-2d"; x: number; value: number }
-  | { kind: "infeasible-branch"; subquestion: string }
+  | { kind: "function-sample-2d"; entityId: string; x: number; value: number }
+  | { kind: "infeasible-branch"; subquestion: string; forbiddenEntityIds: readonly string[] }
 
 export interface ContractObligation {
   id: string
@@ -153,6 +154,7 @@ export interface ContractEvaluationOptions {
   incomplete?: boolean
   terminal?: string
   error?: string | null
+  scopeId?: string
 }
 
 export interface ContractEvaluationResult {
@@ -168,6 +170,13 @@ export interface ContractEvaluationResult {
   passedObligationIds: string[]
   failedObligationIds: string[]
   obligationResults: ObligationEvaluation[]
+}
+
+export interface ContractScopeEvaluationResult {
+  passed: boolean
+  status: ContractEvaluationResult["status"]
+  missingScopeIds: string[]
+  scopeResults: Record<string, ContractEvaluationResult>
 }
 
 export interface UnifiedCaseMetrics {
@@ -297,6 +306,87 @@ const cross3 = (a: Vec3, b: Vec3): Vec3 => ({
 
 const near = (a: number, b: number, tol = TOL): boolean => Number.isFinite(a) && Math.abs(a - b) <= tol * Math.max(1, Math.abs(b))
 
+function polyhedronVertexSets(prims: readonly Record<string, unknown>[]): Vec3[][] {
+  const pointsById = new Map<string, Vec3>()
+  for (const primitive of prims) {
+    if (primitive.type !== "point3" || typeof primitive.id !== "string") continue
+    const position = primitive.position as Vec3 | undefined
+    if (position && [position.x, position.y, position.z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+      pointsById.set(primitive.id, position)
+    }
+  }
+  const sets: Vec3[][] = []
+  for (const primitive of prims) {
+    if (primitive.type !== "polyhedron3" || !Array.isArray(primitive.vertexIds)) continue
+    const points = primitive.vertexIds.map((id) => typeof id === "string" ? pointsById.get(id) : undefined)
+    if (points.length > 0 && points.every((point): point is Vec3 => point !== undefined)) sets.push(points)
+  }
+  return sets
+}
+
+function sortedPairDistances(points: readonly Vec3[]): number[] {
+  const distances: number[] = []
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) distances.push(dist3(points[first]!, points[second]!))
+  }
+  return distances.sort((a, b) => a - b)
+}
+
+function distanceMultiplicityMatches(distances: readonly number[], edge: number, expected: readonly { ratio: number; count: number }[]): boolean {
+  if (!(edge > 1e-9) || !Number.isFinite(edge)) return false
+  let offset = 0
+  for (const group of expected) {
+    for (let index = 0; index < group.count; index += 1) {
+      if (!near(distances[offset]! / edge, group.ratio)) return false
+      offset += 1
+    }
+  }
+  return offset === distances.length
+}
+
+function equalEdgeTriangularPrismPoints(prims: readonly Record<string, unknown>[]): Vec3[] | null {
+  for (const points of polyhedronVertexSets(prims)) {
+    if (points.length !== 6) continue
+    const distances = sortedPairDistances(points)
+    if (distanceMultiplicityMatches(distances, distances[0]!, [
+      { ratio: 1, count: 9 },
+      { ratio: Math.SQRT2, count: 6 }
+    ])) return points
+  }
+  return null
+}
+
+function cubePoints(prims: readonly Record<string, unknown>[], edgeLength?: number): Vec3[] | null {
+  for (const points of polyhedronVertexSets(prims)) {
+    if (points.length !== 8) continue
+    const distances = sortedPairDistances(points)
+    const edge = distances[0]!
+    if ((edgeLength === undefined || near(edge, edgeLength)) && distanceMultiplicityMatches(distances, edge, [
+      { ratio: 1, count: 12 },
+      { ratio: Math.SQRT2, count: 12 },
+      { ratio: Math.sqrt(3), count: 4 }
+    ])) return points
+  }
+  return null
+}
+
+function spheres(prims: readonly Record<string, unknown>[]): { center: Vec3; radius: number }[] {
+  return prims.flatMap((primitive) => {
+    if (primitive.type !== "sphere") return []
+    const center = primitive.center as Vec3 | undefined
+    const radius = primitive.radius
+    return center && [center.x, center.y, center.z].every((value) => typeof value === "number" && Number.isFinite(value)) &&
+      typeof radius === "number" && Number.isFinite(radius) && radius > 0
+      ? [{ center, radius }]
+      : []
+  })
+}
+
+function uniqueEntity(prims: readonly Record<string, unknown>[], entityId: string, type: string): Record<string, unknown> | null {
+  const matches = prims.filter((primitive) => primitive.type === type && (primitive.id === entityId || primitive.label === entityId))
+  return matches.length === 1 ? matches[0]! : null
+}
+
 function collectPrimitives(candidate: unknown): readonly Record<string, unknown>[] {
   const prims = (candidate as { primitives?: readonly unknown[] } | null | undefined)?.primitives
   return Array.isArray(prims) ? (prims as Record<string, unknown>[]) : []
@@ -384,6 +474,24 @@ function evaluateCheck(
       const deg = (Math.acos(cos) * 180) / Math.PI
       return { passed: near(deg, check.degrees, 0.1), detail: `angle=${deg.toFixed(4)}° vs ${check.degrees}°` }
     }
+    case "dihedral-sine-3d":
+    case "dihedral-cosine-3d": {
+      const edgeStart = p3(check.edgeStart), edgeEnd = p3(check.edgeEnd), first = p3(check.firstPoint), second = p3(check.secondPoint)
+      if (!edgeStart || !edgeEnd || !first || !second) return { passed: false, detail: "missing 3d vertices for dihedral measurement" }
+      const edge = sub3(edgeEnd, edgeStart)
+      const firstVector = sub3(first, edgeStart), secondVector = sub3(second, edgeStart)
+      const edgeLengthSquared = dot3(edge, edge)
+      if (edgeLengthSquared <= 1e-18) return { passed: false, detail: "degenerate dihedral edge" }
+      const project = (vector: Vec3): Vec3 => {
+        const scale = dot3(vector, edge) / edgeLengthSquared
+        return { x: vector.x - scale * edge.x, y: vector.y - scale * edge.y, z: vector.z - scale * edge.z }
+      }
+      const u = project(firstVector), v = project(secondVector)
+      const scale = len3(u) * len3(v)
+      if (scale <= 1e-12) return { passed: false, detail: "degenerate dihedral face projection" }
+      const value = check.kind === "dihedral-sine-3d" ? len3(cross3(u, v)) / scale : dot3(u, v) / scale
+      return { passed: near(value, check.value, 1e-2), detail: `${check.kind}=${value} vs ${check.value}` }
+    }
     case "ratio-3d": {
       const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d)
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 3d vertices for ratio` }
@@ -435,17 +543,38 @@ function evaluateCheck(
       return { passed: near(area, check.value, 1e-2), detail: `area=${area} vs ${check.value}` }
     }
     case "prism-3d": {
-      const ok = prims.some((p) => p.type === "polyhedron3" || p.type === "face3" || p.type === "prism3")
-      return { passed: ok && pts3.size >= 6, detail: ok ? "prism geometry present" : "missing 3d prism primitives" }
+      const ok = check.hasEqualEdges === true
+        ? equalEdgeTriangularPrismPoints(prims) !== null
+        : polyhedronVertexSets(prims).some((points) => points.length >= 6)
+      return { passed: ok, detail: ok ? "verified right equal-edge triangular prism" : "missing equal-edge right triangular prism geometry" }
     }
-    case "circumsphere-3d":
+    case "circumsphere-3d": {
+      const sets = polyhedronVertexSets(prims)
+      const ok = spheres(prims).some((sphere) => sets.some((points) => points.every((point) => near(dist3(point, sphere.center), sphere.radius))))
+      return { passed: ok, detail: ok ? "all polyhedron vertices lie on the sphere" : "no sphere passes through the polyhedron vertices" }
+    }
     case "hemisphere-3d": {
-      const ok = prims.some((p) => p.type === "sphere3" || p.type === "surface3" || p.type === "hemisphere3")
-      return { passed: ok, detail: ok ? "sphere/hemisphere present" : "missing 3d sphere/hemisphere primitive" }
+      const cube = cubePoints(prims)
+      let ok = false
+      if (cube) {
+        for (const sphere of spheres(prims)) {
+          if (!near(sphere.radius, check.radius)) continue
+          for (let a = 0; a < 5 && !ok; a += 1) for (let b = a + 1; b < 6 && !ok; b += 1) for (let c = b + 1; c < 7 && !ok; c += 1) for (let d = c + 1; d < 8 && !ok; d += 1) {
+            const baseIds = new Set([a, b, c, d])
+            const base = [...baseIds].map((index) => cube[index]!)
+            const center = base.reduce((sum, point) => ({ x: sum.x + point.x / 4, y: sum.y + point.y / 4, z: sum.z + point.z / 4 }), { x: 0, y: 0, z: 0 })
+            const centered = near(center.x, sphere.center.x) && near(center.y, sphere.center.y) && near(center.z, sphere.center.z)
+            const baseInside = base.every((point) => dist3(point, sphere.center) <= sphere.radius + TOL)
+            const capOnSphere = cube.filter((_, index) => !baseIds.has(index)).every((point) => near(dist3(point, sphere.center), sphere.radius))
+            ok = centered && baseInside && capOnSphere
+          }
+        }
+      }
+      return { passed: ok, detail: ok ? `verified hemisphere radius ${check.radius} with inscribed cube` : "missing cube base center or cap vertices on the required hemisphere" }
     }
     case "cube-3d": {
-      const ok = prims.some((p) => p.type === "polyhedron3" || p.type === "face3") && pts3.size >= 8
-      return { passed: ok, detail: ok ? "cube geometry present" : "missing cube vertices/polyhedron" }
+      const ok = cubePoints(prims, check.edgeLength) !== null
+      return { passed: ok, detail: ok ? `verified cube edge length ${check.edgeLength}` : `missing cube with edge length ${check.edgeLength}` }
     }
     case "point-2d": {
       const pt = p2(check.label)
@@ -497,22 +626,20 @@ function evaluateCheck(
       return { passed: ok, detail: ok ? "parabola matches" : "missing/mismatched parabola" }
     }
     case "line-through-2d": {
-      const lines = prims.filter((p) => p.type === "line")
-      const ok = lines.some((l) => {
-        const a = l.a as Vec2 | undefined, b = l.b as Vec2 | undefined
-        if (!a || !b) return false
-        const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy)
-        return len > 1e-9 && Math.abs(dx * (check.y - a.y) - dy * (check.x - a.x)) / len <= 1e-2
-      })
-      return { passed: ok, detail: ok ? "line passes point" : `no line passing (${check.x},${check.y})` }
+      const line = uniqueEntity(prims, check.entityId, "line")
+      if (!line) return { passed: false, detail: `missing or ambiguous line entity ${check.entityId}` }
+      const a = line.a as Vec2 | undefined, b = line.b as Vec2 | undefined
+      if (!a || !b) return { passed: false, detail: `line ${check.entityId} has invalid endpoints` }
+      const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy)
+      const ok = len > 1e-9 && Math.abs(dx * (check.y - a.y) - dy * (check.x - a.x)) / len <= 1e-2
+      return { passed: ok, detail: ok ? `line ${check.entityId} passes point` : `line ${check.entityId} does not pass (${check.x},${check.y})` }
     }
     case "line-vertical-2d": {
-      const ok = prims.some((p) => {
-        if (p.type !== "line") return false
-        const a = p.a as Vec2 | undefined, b = p.b as Vec2 | undefined
-        return !!a && !!b && near(a.x, check.x, 1e-2) && near(b.x, check.x, 1e-2)
-      })
-      return { passed: ok, detail: ok ? `line x=${check.x} present` : `missing vertical line x=${check.x}` }
+      const line = uniqueEntity(prims, check.entityId, "line")
+      if (!line) return { passed: false, detail: `missing or ambiguous line entity ${check.entityId}` }
+      const a = line.a as Vec2 | undefined, b = line.b as Vec2 | undefined
+      const ok = !!a && !!b && near(a.x, check.x, 1e-2) && near(b.x, check.x, 1e-2)
+      return { passed: ok, detail: ok ? `line ${check.entityId} is x=${check.x}` : `line ${check.entityId} is not x=${check.x}` }
     }
     case "collinear-2d": {
       const a = p2(check.a), b = p2(check.b), c = p2(check.c)
@@ -559,25 +686,30 @@ function evaluateCheck(
       return { passed: near(v, check.value, 1e-2), detail: `dot=${v} vs ${check.value}` }
     }
     case "function-sample-2d": {
-      const fns = prims.filter((p) => p.type === "function" && typeof p.expression === "string")
-      for (const fn of fns) {
-        try {
-          const val = evaluateExpression(compileExpression(fn.expression as string), { x: check.x })
-          if (near(val, check.value, 1e-2)) return { passed: true, detail: `function sample f(${check.x})=${val}` }
-        } catch {
-          // ignore non-matching curve
-        }
+      const fn = uniqueEntity(prims, check.entityId, "function")
+      if (!fn || typeof fn.expression !== "string") return { passed: false, detail: `missing or ambiguous function entity ${check.entityId}` }
+      try {
+        const val = evaluateExpression(compileExpression(fn.expression), { x: check.x })
+        return { passed: near(val, check.value, 1e-2), detail: `${check.entityId}(${check.x})=${val} vs ${check.value}` }
+      } catch {
+        return { passed: false, detail: `${check.entityId} cannot be evaluated at x=${check.x}` }
       }
-      return { passed: false, detail: `no function primitive matched sample (${check.x}, ${check.value})` }
     }
     case "infeasible-branch": {
       const explicitFlag = options.infeasibleDiagnosedSubquestions?.includes(check.subquestion) === true
       const textDiagnosed = typeof options.answerText === "string" && /无解|不存在|不成立|矛盾|不可行|infeasible/i.test(options.answerText)
-      const fabricatedFakePoint = check.subquestion === "(2)" && pts2.has("P") && !explicitFlag && !textDiagnosed
-      const ok = (explicitFlag || textDiagnosed) && !fabricatedFakePoint
+      const fabricatedEntity = check.forbiddenEntityIds.find((label) => {
+        const key = normalizeLabel(label)
+        return pts2.has(key) || pts3.has(key) || allLabels.has(key)
+      })
+      const ok = (explicitFlag || textDiagnosed) && fabricatedEntity === undefined
       return {
         passed: ok,
-        detail: ok ? `subquestion ${check.subquestion} infeasibility explicitly disclosed` : `infeasible branch ${check.subquestion} not disclosed or fabricated`
+        detail: ok
+          ? `subquestion ${check.subquestion} infeasibility explicitly disclosed`
+          : fabricatedEntity === undefined
+            ? `infeasible branch ${check.subquestion} not disclosed`
+            : `infeasible branch ${check.subquestion} contains forbidden entity ${fabricatedEntity}`
       }
     }
   }
@@ -620,7 +752,10 @@ export function evaluateDrawingContract(
 
   const objectCoverage = contract.requiredEntityIds.length === 0 ? 1 : presentEntityIds.length / contract.requiredEntityIds.length
 
-  const obligationResults: ObligationEvaluation[] = contract.requiredObligations.map((ob) => {
+  const scopedObligations = options.scopeId === undefined
+    ? contract.requiredObligations
+    : contract.requiredObligations.filter((ob) => ob.scope === "stem" || ob.scope === options.scopeId)
+  const obligationResults: ObligationEvaluation[] = scopedObligations.map((ob) => {
     const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
     return { id: ob.id, kind: ob.kind, passed: outcome.passed, detail: outcome.detail }
   })
@@ -656,6 +791,28 @@ export function evaluateDrawingContract(
     passedObligationIds,
     failedObligationIds,
     obligationResults
+  }
+}
+
+export function evaluateDrawingContractScopes(
+  contract: DrawingContractCase,
+  inputs: Readonly<Record<string, { candidate: unknown; options?: ContractEvaluationOptions }>>
+): ContractScopeEvaluationResult {
+  const requiredScopeIds = contract.subquestions.map((subquestion) => subquestion.id)
+  const missingScopeIds = requiredScopeIds.filter((scopeId) => inputs[scopeId] === undefined)
+  const scopeResults: Record<string, ContractEvaluationResult> = {}
+  for (const scopeId of requiredScopeIds) {
+    const input = inputs[scopeId]
+    if (input === undefined) continue
+    scopeResults[scopeId] = evaluateDrawingContract(contract, input.candidate, { ...input.options, scopeId })
+  }
+  const passed = missingScopeIds.length === 0 && requiredScopeIds.every((scopeId) => scopeResults[scopeId]?.passed === true)
+  const partial = !passed && Object.values(scopeResults).some((result) => result.passed || result.partial)
+  return {
+    passed,
+    status: passed ? "passed" : missingScopeIds.length > 0 ? "incomplete" : partial ? "partial" : "failed",
+    missingScopeIds,
+    scopeResults
   }
 }
 

@@ -216,6 +216,62 @@
             "b": "B",
             "value": 1.7320508075688772
           }
+        },
+        {
+          "id": "ob-1-ad-pb",
+          "kind": "perpendicular",
+          "description": "AD⊥PB in subquestion (1)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "AD⊥PB",
+            "start": 51,
+            "end": 56
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "D",
+            "c": "P",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-2-ad-dc",
+          "kind": "perpendicular",
+          "description": "AD⊥DC in subquestion (2)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "AD⊥DC",
+            "start": 75,
+            "end": 80
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "D",
+            "c": "D",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-2-dihedral-sine",
+          "kind": "dihedral_sine",
+          "description": "sin(dihedral A-CP-D)=√42/7 in subquestion (2)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "二面角 A-CP-D 的正弦值为 √42/7",
+            "start": 82,
+            "end": 104
+          },
+          "expectedValue": 0.9258200997725514,
+          "check": {
+            "kind": "dihedral-sine-3d",
+            "edgeStart": "C",
+            "edgeEnd": "P",
+            "firstPoint": "A",
+            "secondPoint": "D",
+            "value": 0.9258200997725514
+          }
         }
       ],
       "displayPolicy": {
@@ -1063,8 +1119,7 @@
         "A₂",
         "B₂",
         "C₂",
-        "D₂",
-        "P"
+        "D₂"
       ],
       "sharedScope": {
         "entities": [
@@ -1079,8 +1134,7 @@
           "A₂",
           "B₂",
           "C₂",
-          "D₂",
-          "P"
+          "D₂"
         ],
         "stemConditions": [
           "正四棱柱ABCD-A₁B₁C₁D₁",
@@ -1291,19 +1345,19 @@
           }
         },
         {
-          "id": "ob-p-present",
-          "kind": "entity_present",
-          "description": "Point P named on diagram",
+          "id": "ob-infeasible-2",
+          "kind": "infeasible_branch",
+          "description": "Diagnose that no P on segment BB₁ gives dihedral 120°; do not fabricate P",
           "scope": "(2)",
           "sourceSpan": {
-            "text": "点 P 在棱 BB₁ 上",
+            "text": "点 P 在棱 BB₁ 上，当二面角 P-A₂C₂-D₂ 为 120° 时，求 BP 的长。",
             "start": 114,
-            "end": 126
+            "end": 159
           },
           "check": {
-            "kind": "entity-present",
-            "entityId": "P",
-            "space": "3d"
+            "kind": "infeasible-branch",
+            "subquestion": "(2)",
+            "forbiddenEntityIds": ["P"]
           }
         }
       ],
@@ -2398,9 +2452,9 @@
           }
         },
         {
-          "id": "ob-ac-bb1",
-          "kind": "perpendicular",
-          "description": "AC⊥BB₁",
+          "id": "ob-plane-perp",
+          "kind": "planes_perpendicular",
+          "description": "Plane AA₁C₁C⊥plane BB₁C₁C (given, not the proof target AC⊥BB₁)",
           "scope": "stem",
           "sourceSpan": {
             "text": "平面 AA₁C₁C⊥平面 BB₁C₁C",
@@ -2408,11 +2462,9 @@
             "end": 54
           },
           "check": {
-            "kind": "perp-3d",
-            "a": "A",
-            "b": "C",
-            "c": "B",
-            "d": "B₁"
+            "kind": "planes-perpendicular-3d",
+            "first": ["A", "A₁", "C"],
+            "second": ["B", "B₁", "C"]
           }
         },
         {
@@ -2470,19 +2522,42 @@
           }
         },
         {
-          "id": "ob-p",
-          "kind": "entity_present",
-          "description": "P present on A₁B₁",
+          "id": "ob-2-p-host",
+          "kind": "ratio",
+          "description": "P lies on A₁B₁ with A₁P/A₁B₁=1−√2/2",
           "scope": "(2)",
           "sourceSpan": {
             "text": "在棱 A₁B₁ 上是否存在一点 P",
             "start": 85,
             "end": 102
           },
+          "expectedValue": 0.2928932188134524,
           "check": {
-            "kind": "entity-present",
-            "entityId": "P",
-            "space": "3d"
+            "kind": "point-on-segment-ratio-3d",
+            "p": "P",
+            "a": "A₁",
+            "b": "B₁",
+            "t": 0.2928932188134524
+          }
+        },
+        {
+          "id": "ob-2-dihedral-cos",
+          "kind": "dihedral_cosine",
+          "description": "cos(dihedral P-BC-C₁)=√6/3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "使二面角 P-BC-C₁ 的余弦值为 √6/3",
+            "start": 103,
+            "end": 126
+          },
+          "expectedValue": 0.816496580927726,
+          "check": {
+            "kind": "dihedral-cosine-3d",
+            "edgeStart": "B",
+            "edgeEnd": "C",
+            "firstPoint": "P",
+            "secondPoint": "C₁",
+            "value": 0.816496580927726
           }
         }
       ],
@@ -4123,6 +4198,7 @@
           },
           "check": {
             "kind": "line-through-2d",
+            "entityId": "l",
             "x": 0,
             "y": -2
           }
@@ -4682,7 +4758,8 @@
           "text": "求 a 的取值范围",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "a ∈ [-1, +∞)"
         }
       ],
       "requiredObligations": [
@@ -4698,6 +4775,7 @@
           },
           "check": {
             "kind": "function-sample-2d",
+            "entityId": "f",
             "x": 2,
             "value": 6
           }
@@ -4714,6 +4792,7 @@
           },
           "check": {
             "kind": "function-sample-2d",
+            "entityId": "g",
             "x": 1,
             "value": 4
           }
@@ -4730,6 +4809,7 @@
           },
           "check": {
             "kind": "line-through-2d",
+            "entityId": "tangent",
             "x": -1,
             "y": 0
           }
@@ -4743,7 +4823,7 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [
-        "In (2), parameter a ∈ (-∞, 4] varies; in (1), x₁=-1 fixes a=3 and tangent y=2x+2"
+        "In (2), parameter a ∈ [-1, +∞) varies; in (1), x₁=-1 fixes a=3 and tangent y=2x+2"
       ],
       "unsupportedReasons": []
     },
@@ -4879,6 +4959,7 @@
           },
           "check": {
             "kind": "line-vertical-2d",
+            "entityId": "l",
             "x": 1
           }
         }
@@ -5336,6 +5417,7 @@
           },
           "check": {
             "kind": "function-sample-2d",
+            "entityId": "f",
             "x": 1,
             "value": -1
           }
@@ -5352,6 +5434,7 @@
           },
           "check": {
             "kind": "function-sample-2d",
+            "entityId": "f",
             "x": 2,
             "value": 0
           }
@@ -5368,6 +5451,7 @@
           },
           "check": {
             "kind": "line-through-2d",
+            "entityId": "tangent",
             "x": 0,
             "y": 1
           }
@@ -5686,6 +5770,7 @@
           },
           "check": {
             "kind": "line-vertical-2d",
+            "entityId": "host",
             "x": -1
           }
         },
@@ -5848,6 +5933,7 @@
           },
           "check": {
             "kind": "line-through-2d",
+            "entityId": "l",
             "x": 0,
             "y": 1
           }
@@ -5956,7 +6042,7 @@
               "AC,BD ⊥ directrix y=-1",
               "A,C,P,D concyclic"
             ],
-            "branchPolicy": "merge_into_main"
+            "branchPolicy": "diagnosis_if_infeasible"
           }
         ]
       },
@@ -5977,7 +6063,8 @@
             "C,D准线垂足"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": false,
+          "expectedResult": "不存在满足条件的实数点 P"
         }
       ],
       "requiredObligations": [
@@ -6042,9 +6129,11 @@
         "labelReadabilityRequired": true
       },
       "freeChoices": [
-        "In (1) x_P varies along y=-2; in (2) concyclic fixes P(0,-2)"
+        "In (1) x_P varies along y=-2"
       ],
-      "unsupportedReasons": []
+      "unsupportedReasons": [
+        "Subquestion (2) is infeasible over real coordinates: writing the tangent-point abscissas as u,v gives uv=-8, and the concyclic condition reduces to -v²/4-2=0, which has no real solution."
+      ]
     },
     {
       "id": "JT-P05",
@@ -6345,7 +6434,8 @@
           },
           "check": {
             "kind": "infeasible-branch",
-            "subquestion": "(2)"
+            "subquestion": "(2)",
+            "forbiddenEntityIds": ["P"]
           }
         }
       ],

@@ -42,6 +42,7 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 - `GK-S02`：`routeDeterministicProblem(prompt)` 无路由，回退 `createLocalPlanner()` 后 `waiting`，问题文本为“本地规划器无法识别”，零图元。
 - `GK-P01`：独立合同对象/义务覆盖均为 1，但最终 `verificationStatus=not_supported`、无草稿，说明生成结果与生产完整验收尚未闭环。
 - 第二独立 reviewer 已逐题复核36/36，结论为 `changes_required`：仅 GK-P08 作图数学合同可批准，其余35题须整改。Task 1 不得以“已完成审阅”代替“复核通过”；先保存并推送否定性审计 checkpoint，再继续同一 Task 1 的合同/评测语义 RED→GREEN 整改，T01/P0 保持未退出。证据：`docs/audit/2026-11-16-g3-truth-baseline/README.md`。
+- 第一批合同安全整改已完成并验证：不可行伪造、双scope、JT-S02目标/题设、结构谓词、GK-P04/JT-P04数学错误及函数/直线绑定。最新36题为1 passed/10 partial/25 failed；这是补齐漏检后的诚实下降。T01仍未批准，继续剩余关联义务、拓扑、显示策略和统一scope入口。证据：`docs/audit/2026-11-16-g3-contract-safety/README.md`。
 
 ---
 
