@@ -49,6 +49,8 @@
 
 - **切线端点与目标直线已绑定**：GK-P05补O原点、P/Q与Aᵢ端点，GK-P07/JT-P04绑定P/A/B与命名切点，JT-P08每支EF均验证E/F在线上；错误切点、脱离目标直线均被拒绝。39项目标测试、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过，未新增离线 reliability 读数。证据：[切线端点与目标直线](audit/2026-11-16-g3-tangent-endpoints/README.md)。参数域/最值和生产接线仍未完成。
 
+- **函数表达式与公共切线参数域已落地**：GK-P04/GK-P09 以多项式系数核验全局函数表达式，GK-P04(2) 以独立推导的 `a≥−1` 核验 `x²+a` 与公共切线范围；微小偏移函数、低于下界的参数被拒绝，等价表达式可接受。39项目标测试、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过，未新增离线 reliability 读数。证据：[函数表达式与公共切线参数域](audit/2026-11-16-g3-function-domains/README.md)。其余最值、生产接线与T01独立复审仍未完成。
+
 ### 当前执行范围与区块结果
 
 前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。当前按用户 goal 持续推进 **G3（先 G3-Math，再 B5/G3-UX）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。
@@ -82,7 +84,7 @@
 | B4 / P4 / T12 有界局部修复与 Worker 取消 | **已完成** | [P4 / T12有界修复证据](audit/2026-11-16-p4-bounded-repair/README.md)：新增 `reliabilityDiagnostics.ts` 覆盖 10 类故障分类、`normalizeSolveOutcome`（强制 `provenUnsat: false`）与 `createRepairStagnationTracker`；`budget.ts` 新增 `consumeAll` 原子多账本扣减（同步接入 `modelPlanner`、`examRequestBudget`、`examRunCoordinated`）；`coordinator.ts` 接入停滞与 `capability_missing` 阻断；`geometryWorkerClient.ts` / `geometryCompileStrategy.ts` 接入 `AbortSignal` 取消并安全丢弃迟到回包；RED 4 fail → 定向 4 文件 76 + `examRunCoordinated` 15 通过，全量 Vitest 537 文件/5695 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T13 完整数学证书与变异拒绝 | **已完成** | [P4 / T13数学证书证据](audit/2026-11-16-p4-math-certificate/README.md)：新增 `drawingCertificate.ts` 区分作图请求与闲聊（同步 `acceptance.ts` `isDrawingPrompt`）、实现 `evaluateMathGate` 与 `certifyDrawingAgainstContract`（基于最终图元坐标独立重算、忽略自报证据、严分 `passed`/`partial`/`blocked` 与 `"未完整核验"` 开关）；`completionGate.ts` 拦截重复检查 ID、`diagramVerification.ts` 扫描非有限坐标 `NaN`/`Infinity`；新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts` 覆验 36 题合同结构与 8 类变异拒收+辅助点不变性（RED 2 failed → 定向 3 文件 16 通过），全量 Vitest 539 文件/5701 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T14 最终候选绑定与原子确认 | **实现工作包已完成（G3-Math未退出）** | [P4 / T14原子提交与保鲜证据](audit/2026-11-16-p4-atomic-commit-staleness/README.md)：`drawingCertificate.ts` 新增 `verifyCertificateFreshness`（覆盖题文/scope/会话/基线修订/策略版本过期）；`renderEvidence.ts` 新增 `cameraHash` 与 `camera_changed`（`mathStale: false, visualStale: true, requiresReplan: false`）；`committerAdapter.ts`、`agentRuntime.ts`、`agentRunner.ts` 与 `draftStore.ts` 落地双击仅一次写入（`committedOnce` / `committedDraftIds` / `already_committed`）与 `promptHash` 保鲜检查；新建 `drawingCertificateStaleness.test.ts` 并扩充 `committerAdapter.test.ts`（RED 4 failed → 定向 5 文件 103 通过），全量 Vitest 540 文件/5705 通过+1todo，类型/Lint/Web 构建/离线评测通过。上述为该工作包历史证据；G3须另满足36题完整数学/视觉/交互门禁 |
-| 后续阶段范围 | **G3合同整改与验收进行中** | 当前先完成T01合同及评测语义整改，随后生产证书、平面/立体数学门禁，再进入 `B5`（`T15 → T16`）；`P8`、付费 provider 与发布均未开启 |
+| 后续阶段范围 | **G3合同整改与验收进行中** | 当前先完成T01合同及评测语义整改，随后生产证书、平面/立体数学门禁，再进入 `B5`（`T15 → T16`）；`P8`与发布未开启；仅用户授权的保存DeepSeek可做真实评测，其他付费provider未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。历史文档对齐与 G3 前四个合同区块均已推送并核对 upstream 0/0；本第二轮复核整改区块按同一规则提交、推送和核对，不把历史推送写成当前已推送。
 
@@ -128,9 +130,9 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 | 序号 | 阶段 | 状态 | 退出门槛摘要 |
 | --- | --- | --- | --- |
-| 1 | P0 基准与测量 | **整改中（第二独立复核未通过）** | 36题来源/hash/span结构已冻结；35题合同需修正，独立复核通过后才退出 |
+| 1 | P0 基准与测量 | **整改中（第二独立复核未通过）** | 36题来源/hash/span结构已冻结；第二轮有32题需整改，后续合同修正仍须独立复核通过后才退出 |
 | 2 | P1 来源与语义合同 | **实现已有提交，验收重开** | scope在独立合同中存在丢失/目标混入，须通过逐题scope反例 |
-| 3 | P2 解析与归一化 | **实现已有提交，验收重开** | AST/角链等已有实现；GK-P04/JT-P04等数学语义与定义域须纠正 |
+| 3 | P2 解析与归一化 | **实现已有提交，验收重开** | AST/角链等已有实现；GK-P04/JT-P04合同值域已纠正，GK-P04/P09全局表达式与参数下界已补；生产语义和统一门禁仍须闭环 |
 | 4 | P3 平面确定性构造 | **进行中** | 当前平面未达18/18对象与数学合同；逐题闭环并保留反例 |
 | 5 | P4 立体与折叠构造 | **进行中** | 当前立体未达18/18；拓扑、宿主、state和分支证据须补齐 |
 | 6 | P5 有界求解与修复 | **实现已有提交，验收重开** | 预算/取消已有实现；须验证统一生产入口的实际终态与有界修复 |
@@ -140,9 +142,9 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 ### 3. 下一步及授权边界
 
-**当前按 G3 续作计划先整改 T01 合同及评测语义**：第二独立 reviewer 已给出 `changes_required`，须为 scope、不可行伪造、稳定实体绑定、拓扑、定义域/分支和显示策略建立RED反例并修正，复核通过后才进入生产完整证书接线、平面18题、立体/折叠18题与 `B5`（`T15 → T16`）。
+**当前按 G3 续作计划先整改 T01 合同及评测语义**：第二独立 reviewer 已给出 `changes_required`，须为 scope、不可行伪造、稳定实体绑定、拓扑、定义域/分支和显示策略建立RED反例并修正。函数表达式与公共切线参数域已补齐，下一步处理其余最值、完整棱向量、结构化不可行诊断及其他折叠；复核通过后才进入生产完整证书接线、平面18题、立体/折叠18题与 `B5`（`T15 → T16`）。
 
-全部实现须RED→GREEN、生产接线、反例/兼容与独立复核；安全补丁回退只能关闭入口，不能重新开放已知漏洞。历史版本和授权不自动继承。付费预算、依赖升级和产品发布不在本次范围内，不自动触发。
+全部实现须RED→GREEN、生产接线、反例/兼容与独立复核；安全补丁回退只能关闭入口，不能重新开放已知漏洞。历史版本和授权不自动继承。仅用户明确授权的保存DeepSeek可做真实评测；其他付费预算、依赖升级和产品发布不在本次范围内，不自动触发。
 
 ### 4. 记录和验证导航
 

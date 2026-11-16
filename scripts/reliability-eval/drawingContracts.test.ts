@@ -363,6 +363,13 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       ]
     }, { verificationStatus: "passed" })
     expect(wrongSlope.failedObligationIds).toContain("ob-tan-derivative")
+    const wrongExpression = evaluateDrawingContract(gkp09, {
+      primitives: [
+        { type: "function", id: "f", label: "f", expression: "x^4-2*x^3+0.000000001", domain: [-5, 5] },
+        { type: "line", id: "tangent", label: "tangent", a: { x: 0, y: 1 }, b: { x: 1, y: -1 } }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(wrongExpression.failedObligationIds).toContain("ob-f-expression")
     const degenerate = evaluateDrawingContract(gkp09, {
       primitives: [
         { type: "function", id: "f", label: "f", expression: "x^4-2*x^3", domain: [-5, 5] },
@@ -703,6 +710,23 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       primitives: [fn("f", "x^3-x"), fn("g", "x^2+3"), tangent]
     }, { verificationStatus: "passed", scopeId: "(1)" })
     expect(valid.passed).toBe(true)
+    const range = evaluateDrawingContract(gkp04, {
+      primitives: [fn("f", "x^3-x"), fn("g", "x^2-1"), tangent]
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(range.passed, JSON.stringify(range.obligationResults)).toBe(true)
+    expect(range.passedObligationIds).toEqual(expect.arrayContaining(["ob-f-expression", "ob-g-domain", "ob-common-tangent-range"]))
+    const equivalentExpression = evaluateDrawingContract(gkp04, {
+      primitives: [fn("f", "x*x*x-x"), fn("g", "x^2-1"), tangent]
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(equivalentExpression.passed, JSON.stringify(equivalentExpression.obligationResults)).toBe(true)
+    const invalidRange = evaluateDrawingContract(gkp04, {
+      primitives: [fn("f", "x^3-x"), fn("g", "x^2-2"), tangent]
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(invalidRange.failedObligationIds).toEqual(expect.arrayContaining(["ob-g-domain", "ob-common-tangent-range"]))
+    const sampledButWrong = evaluateDrawingContract(gkp04, {
+      primitives: [fn("f", "x^3-x+0.000000001"), fn("g", "x^2+3"), tangent]
+    }, { verificationStatus: "passed", scopeId: "(1)" })
+    expect(sampledButWrong.failedObligationIds).toContain("ob-f-expression")
 
     const swapped = evaluateDrawingContract(gkp04, {
       primitives: [fn("f", "x^2+3"), fn("g", "x^3-x"), tangent]

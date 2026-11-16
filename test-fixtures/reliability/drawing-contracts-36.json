@@ -5749,6 +5749,55 @@
       ],
       "requiredObligations": [
         {
+          "id": "ob-f-expression",
+          "kind": "function_expression",
+          "description": "f(x) = x³-x as a global polynomial identity",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "$f(x)=x^{3}-x",
+            "start": 9,
+            "end": 22
+          },
+          "check": {
+            "kind": "function-expression-2d",
+            "functionId": "f",
+            "expression": "x^3-x"
+          }
+        },
+        {
+          "id": "ob-g-domain",
+          "kind": "parameter_domain",
+          "description": "g(x) = x²+a with a ≥ -1 in (2)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "求 $a$ 的取值范围",
+            "start": 150,
+            "end": 161
+          },
+          "check": {
+            "kind": "quadratic-with-constant-2d",
+            "functionId": "g",
+            "minimumConstant": -1
+          }
+        },
+        {
+          "id": "ob-common-tangent-range",
+          "kind": "parameter_domain",
+          "description": "Common tangents of f and g exist exactly for a ≥ -1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "求 $a$ 的取值范围",
+            "start": 150,
+            "end": 161
+          },
+          "check": {
+            "kind": "common-tangent-range-2d",
+            "cubicFunctionId": "f",
+            "functionId": "g",
+            "minimumConstant": -1
+          }
+        },
+        {
           "id": "ob-f-0",
           "kind": "function_sample",
           "description": "f(2) = 6",
@@ -7035,6 +7084,22 @@
         }
       ],
       "requiredObligations": [
+        {
+          "id": "ob-f-expression",
+          "kind": "function_expression",
+          "description": "f(x) = x⁴-2x³ as a global polynomial identity",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "函数 $f(x)=x^{4}-2 x^{3}$",
+            "start": 3,
+            "end": 26
+          },
+          "check": {
+            "kind": "function-expression-2d",
+            "functionId": "f",
+            "expression": "x^4-2*x^3"
+          }
+        },
         {
           "id": "ob-f1",
           "kind": "function_sample",

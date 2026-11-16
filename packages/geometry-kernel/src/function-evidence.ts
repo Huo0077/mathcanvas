@@ -353,7 +353,7 @@ function constantValue(coefficients: Coefficients): number | null {
   return coefficients.length === 1 ? coefficients[0] : null
 }
 
-function polynomialOf(node: ExpressionNode, variable = "x"): Coefficients | null {
+export function polynomialOf(node: ExpressionNode, variable = "x"): Coefficients | null {
   if (node.type === "number") return [node.value]
   if (node.type === "variable") return node.name === variable ? [0, 1] : null
   if (node.type === "call") return null

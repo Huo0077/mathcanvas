@@ -58,6 +58,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - 切线端点区块完成：GK-P05/P07、JT-P04 的 P/A/B 和命名切点绑定，JT-P08 每支EF均验证端点；错误切点和脱离目标直线有 RED→GREEN。39项目标测试、类型/Lint/Web构建通过，未新增离线 reliability 读数。下一区块为参数域/最值。证据：`docs/audit/2026-11-16-g3-tangent-endpoints/README.md`。
 
+- 函数表达式/公共切线参数域区块完成：GK-P04/P09 使用内核AST多项式系数核验全局身份，拒绝微小常量偏移；GK-P04(2) 根据公共切线推导锁定 `a∈[-1,+∞)`，越界反例被拒绝。39项目标测试、全量540文件/5735通过+1todo、类型/Lint/Web构建通过，未新增离线 reliability 读数。其余最值、完整棱向量、结构化不可行诊断、其他折叠与生产接线仍待完成；T01仍未批准。证据：`docs/audit/2026-11-16-g3-function-domains/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

@@ -1,4 +1,4 @@
-import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact, rotatePointAboutHinge } from "@draw/geometry-kernel"
+import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact, polynomialOf, rotatePointAboutHinge } from "@draw/geometry-kernel"
 
 export interface ContractSourceSpan {
   text: string
@@ -64,6 +64,9 @@ export type ContractCheckSpec =
   | { kind: "quadrilateral-area-2d"; points: [string, string, string, string]; value: number }
   | { kind: "dot-2d"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "function-sample-2d"; entityId: string; x: number; value: number }
+  | { kind: "function-expression-2d"; functionId: string; expression: string }
+  | { kind: "quadratic-with-constant-2d"; functionId: string; minimumConstant: number }
+  | { kind: "common-tangent-range-2d"; cubicFunctionId: string; functionId: string; minimumConstant: number }
   | { kind: "infeasible-branch"; subquestion: string; forbiddenEntityIds: readonly string[] }
 
 export interface ContractObligation {
@@ -1010,6 +1013,47 @@ function evaluateCheck(
         return { passed: near(val, check.value, 1e-2), detail: `${check.entityId}(${check.x})=${val} vs ${check.value}` }
       } catch {
         return { passed: false, detail: `${check.entityId} cannot be evaluated at x=${check.x}` }
+      }
+    }
+    case "function-expression-2d": {
+      const fn = uniqueEntity(prims, check.functionId, "function")
+      if (!fn || typeof fn.expression !== "string") return { passed: false, detail: `missing or ambiguous function entity ${check.functionId}` }
+      try {
+        const actual = polynomialOf(compileExpression(fn.expression))
+        const expected = polynomialOf(compileExpression(check.expression))
+        const passed = actual !== null && expected !== null && actual.length === expected.length && actual.every((value, index) => value === expected[index])
+        return { passed, detail: passed ? `${check.functionId} matches the required polynomial identity` : `${check.functionId} polynomial coefficients ${JSON.stringify(actual)} vs ${JSON.stringify(expected)}` }
+      } catch {
+        return { passed: false, detail: `${check.functionId} expression cannot be compared as a polynomial identity` }
+      }
+    }
+    case "quadratic-with-constant-2d": {
+      const fn = uniqueEntity(prims, check.functionId, "function")
+      if (!fn || typeof fn.expression !== "string") return { passed: false, detail: `missing or ambiguous function entity ${check.functionId}` }
+      try {
+        const coefficients = polynomialOf(compileExpression(fn.expression))
+        const passed = coefficients !== null && coefficients.length === 3 && coefficients[1] === 0 && coefficients[2] === 1 &&
+          Number.isFinite(coefficients[0]) && Number.isFinite(check.minimumConstant) && coefficients[0] >= check.minimumConstant
+        return { passed, detail: `${check.functionId} coefficients=${JSON.stringify(coefficients)}, required constant >= ${check.minimumConstant}` }
+      } catch {
+        return { passed: false, detail: `${check.functionId} is not a supported quadratic expression` }
+      }
+    }
+    case "common-tangent-range-2d": {
+      const cubic = uniqueEntity(prims, check.cubicFunctionId, "function")
+      const quadratic = uniqueEntity(prims, check.functionId, "function")
+      if (!cubic || typeof cubic.expression !== "string" || !quadratic || typeof quadratic.expression !== "string") {
+        return { passed: false, detail: `missing or ambiguous common-tangent function entities` }
+      }
+      try {
+        const cubicCoefficients = polynomialOf(compileExpression(cubic.expression))
+        const quadraticCoefficients = polynomialOf(compileExpression(quadratic.expression))
+        const cubicMatches = cubicCoefficients?.length === 4 && cubicCoefficients.every((value, index) => value === [0, -1, 0, 1][index])
+        const a = quadraticCoefficients?.length === 3 && quadraticCoefficients[1] === 0 && quadraticCoefficients[2] === 1 ? quadraticCoefficients[0] : null
+        const passed = cubicMatches && a !== null && Number.isFinite(a) && check.minimumConstant === -1 && a >= check.minimumConstant
+        return { passed, detail: `common-tangent cubic=${JSON.stringify(cubicCoefficients)}, a=${a}, proven range=[-1,+∞)` }
+      } catch {
+        return { passed: false, detail: `common-tangent functions are not supported polynomial expressions` }
       }
     }
     case "infeasible-branch": {

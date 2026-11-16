@@ -4,13 +4,13 @@
 > **文档角色（2026-11-15 对齐）**：发布验收合同；不是第二份实时进度。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->
 
-最后更新：2026-11-15（仅发布合同与导航对齐，未执行功能验收）。
+最后更新：2026-11-16（G3合同整改中，发布仍阻断）。
 
 ## 本轮发布合同
 
 本页定义“满足哪些条件才可发布”，不复制完成读数。是否已满足、未解决问题和测试时点只看[当前状态](../current-status.md)；首批任务及依赖只看[实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)。
 
-当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../audit/2026-11-16-g3-scope-entities/README.md)、[公共曲线整改](../audit/2026-11-16-g3-shared-curves/README.md)、[指定拓扑整改](../audit/2026-11-16-g3-named-topology/README.md)一致；试点合同通过不改变阻断结论。用户重新授权后的DeepSeek最小评测为1 planned/2 clarification/0 error，真实调用链已连通，但不满足固定36题或发布门禁，详见[DeepSeek审计](../audit/2026-11-16-g3-deepseek-provider/README.md)。[JT-S04跨状态折叠](../../audit/2026-11-16-g3-fold-lineage/README.md)已建立真实谱系和伪刚体拒绝证据，但其他折叠与生产验收仍未完成。[切线端点与目标直线](../../audit/2026-11-16-g3-tangent-endpoints/README.md)已补指定点/切点拒绝证据，仍不构成整题或发布通过。
+当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../audit/2026-11-16-g3-scope-entities/README.md)、[公共曲线整改](../audit/2026-11-16-g3-shared-curves/README.md)、[指定拓扑整改](../audit/2026-11-16-g3-named-topology/README.md)一致；试点合同通过不改变阻断结论。用户重新授权后的DeepSeek最小评测为1 planned/2 clarification/0 error，真实调用链已连通，但不满足固定36题或发布门禁，详见[DeepSeek审计](../audit/2026-11-16-g3-deepseek-provider/README.md)。[JT-S04跨状态折叠](../../audit/2026-11-16-g3-fold-lineage/README.md)已建立真实谱系和伪刚体拒绝证据，但其他折叠与生产验收仍未完成。[切线端点与目标直线](../../audit/2026-11-16-g3-tangent-endpoints/README.md)已补指定点/切点拒绝证据，仍不构成整题或发布通过。[函数表达式与公共切线参数域](../../audit/2026-11-16-g3-function-domains/README.md)已补全局多项式身份、GK-P04公共切线范围及近似/越界拒绝证据，未重跑离线 reliability，也不改变T01/G3-Math阻断。
 
 | 门禁 | 必须提交的证据 | 不能替代的条件 |
 | --- | --- | --- |
@@ -21,7 +21,7 @@
 | G3-UX | 同候选真实渲染、确认/撤销/重载/拖动与配图证据 | 结构布局估计、截图或mock不能互相替代 |
 | G4 | 未见题/成本、安装/冷启动、性能、安全回滚与人工签收 | 文档或main提交不是发布；安全回滚不得重新打开漏洞 |
 
-旧Task 1–21、N/V/W阶段、旧付费授权或历史安装验收不映射为本轮已完成。真实provider、费用和产品发布另行批准；被舍弃旧线只供取证，详见[版本决定](../audit/2026-11-15-main-restart/README.md)。
+旧Task 1–21、N/V/W阶段、旧付费授权或历史安装验收不映射为本轮已完成。本轮仅用户明确授权的保存DeepSeek可进行真实评测；其他provider、新增费用和产品发布另行批准。被舍弃旧线只供取证，详见[版本决定](../audit/2026-11-15-main-restart/README.md)。
 
 ## 历史发布门禁记录（下文仅保留当时上下文）
 
