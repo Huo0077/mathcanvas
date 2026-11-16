@@ -1,4 +1,12 @@
-import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/geometry-kernel"
+import {
+  canonicalPointName,
+  parseRelationConstraint,
+  parseSymbolicConicEquation,
+  POINT_NAME_SOURCE,
+  solveSymbolicConicContract,
+  splitPointNames,
+  type SymbolicConicMetricConstraint
+} from "@draw/geometry-kernel"
 
 import { readExplicitSolidConditions } from "./explicitSolidConditions"
 import { parseShapeClause } from "./solver/shapeGrammar"
@@ -171,6 +179,9 @@ export type DiagramObligationKind =
    * 是两种不同的读错法（判据文案会指名是哪一种，见 `diagramVerification` 那一支）。
    */
   | "pointOnSegment"
+  /** T04：参数定义域不等式（如 `a>b>0` / `m>0`）与欠定符号圆锥曲线。 */
+  | "parameterDomain"
+  | "symbolicConic"
 
 /**
  * 题面写下的**直线**（用于 `conicChord`）。
@@ -255,6 +266,23 @@ export interface DiagramObligation {
    */
   splitPoint?: boolean
   chainIndex?: number
+  domain?: {
+    expression: string
+    operators: string[]
+    variables: string[]
+    entityLabel?: string
+  }
+  symbolicConic?: {
+    kind: "ellipse" | "hyperbola"
+    entityLabel?: string
+    equation: string
+    axis: "x" | "y" | "undetermined"
+    status: "solved" | "underdetermined"
+    domains: string[]
+    parameters?: Record<string, number>
+    asymptotes?: string[]
+    tangencyPoints?: { x: number; y: number }[]
+  }
 }
 
 export interface DiagramSourceSpan {
@@ -495,6 +523,209 @@ function focusDistance(raw: string): number | null {
  * 以上每一条都**落进未核验并给理由**，因为"读不出"必须看得见（本项目的第一条纪律）。
  * 已经有方程时不再从参数推一遍：窗口里已经有 `conicAxes` 就打住，只留方程那一条。
  */
+/**
+ * **符号圆锥曲线与参数定义域**（T04）：
+ * - 先在常规正则之前扫描带字母参数的圆锥曲线（如 `x²/a²+y²/b²=1 (a>b>0)`、`y²-x²/m²=1(m>0)`），
+ *   纯数字圆锥曲线一律留给既有 `DIAGRAM_OBLIGATION_MATCHERS`（零干扰）；
+ * - 若同时满足足够几何/代数条件，求解出具体 `conicAxes` 并在 `symbolicConic` 中保留原符号参数、定义域与切点校验证据；
+ * - 若欠定（如仅有 `e=√2/2`），保留 `symbolicConic`（`judgeability: "ambiguous"`）并如实落未核验，绝不猜测 `a=2`；
+ * - 对非法定义域或矛盾参数，不入 `givens` 并如实落未核验。
+ */
+const SYMBOLIC_CONIC_PATTERN = /(?:(椭圆|双曲线)\s*(?:([A-Z])\s*[：:]\s*)?)?([xy]\s*(?:\^2|²)(?:\s*\/\s*[A-Za-z0-9_()^²]+)?\s*[+\-−–]\s*[xy]\s*(?:\^2|²)(?:\s*\/\s*[A-Za-z0-9_()^²]+)?\s*=\s*1)(?!\d)/g
+
+function resolveSymbolicConics(
+  givens: DiagramObligation[],
+  unverified: DiagramObligationSet["unverified"],
+  givenText: string,
+  used: Set<number>
+): void {
+  const consumedRanges: [number, number][] = []
+  const markUsed = (from: number, to: number): void => {
+    for (let at = Math.max(0, from); at < Math.min(givenText.length, to); at += 1) used.add(at)
+  }
+
+  for (const match of givenText.matchAll(SYMBOLIC_CONIC_PATTERN)) {
+    const eqText = match[3]!
+    const eqOffsetInMatch = match[0].lastIndexOf(eqText)
+    const eqStart = match.index + eqOffsetInMatch
+    const eqEnd = eqStart + eqText.length
+    if (consumedRanges.some(([s, e]) => eqStart < e && eqEnd > s)) continue
+    if (Array.from({ length: eqEnd - eqStart }, (_, i) => eqStart + i).some((at) => used.has(at))) continue
+
+    // Fast pre-check via symbolic equation parser; leave purely numeric conics to existing matchers.
+    const rawPrecheck = parseSymbolicConicEquation(eqText)
+    if (rawPrecheck.ok && rawPrecheck.symbols.length === 0) continue
+
+    const kindHint = match[1]
+    const entityLabel = match[2]
+    const sentenceEndMatch = /[。；;\n]/.exec(givenText.slice(eqEnd))
+    const windowEnd = Math.min(givenText.length, eqEnd + Math.min(sentenceEndMatch?.index ?? 180, 180))
+    const windowText = givenText.slice(eqEnd, windowEnd)
+
+    const domainStrings: string[] = []
+    let domainSpan: { text: string; start: number; end: number; operators: string[]; variables: string[] } | null = null
+    const domainParenMatch = /^\s*[（(]\s*([^）)]+)\s*[）)]/.exec(windowText)
+    if (domainParenMatch !== null) {
+      const innerRaw = domainParenMatch[1]!
+      const trimmedInner = innerRaw.trim()
+      try {
+        const parsedRel = parseRelationConstraint(trimmedInner)
+        const innerOffset = domainParenMatch[0].indexOf(trimmedInner)
+        const dStart = eqEnd + domainParenMatch.index + innerOffset
+        const dEnd = dStart + trimmedInner.length
+        domainStrings.push(trimmedInner)
+        domainSpan = {
+          text: trimmedInner,
+          start: dStart,
+          end: dEnd,
+          operators: parsedRel.operators,
+          variables: parsedRel.variables
+        }
+      } catch {
+        // Parenthetical was not a domain relation (e.g. prose clarification).
+      }
+    }
+
+    const spec = parseSymbolicConicEquation(eqText, domainStrings)
+    if (!spec.ok) {
+      if (rawPrecheck.ok) {
+        // Equation syntax was valid symbolic conic, but domain constraint was invalid (e.g. a<=0).
+        markUsed(eqStart, domainSpan ? Math.max(eqEnd, domainSpan.end) : eqEnd)
+        consumedRanges.push([eqStart, eqEnd])
+        unverified.push({ sourceText: givenText.slice(eqStart, domainSpan?.end ?? eqEnd), reason: spec.error })
+      }
+      continue
+    }
+    if (kindHint === "椭圆" && spec.kind !== "ellipse") {
+      markUsed(match.index, eqEnd)
+      unverified.push({ sourceText: eqText, reason: "题面说是椭圆，但方程平方项符号不一致，未核验。" })
+      continue
+    }
+    if (kindHint === "双曲线" && spec.kind !== "hyperbola") {
+      markUsed(match.index, eqEnd)
+      unverified.push({ sourceText: eqText, reason: "题面说是双曲线，但方程平方项同号，未核验。" })
+      continue
+    }
+
+    const metrics: SymbolicConicMetricConstraint[] = []
+    const metricSpans: [number, number][] = []
+
+    const eccMatch = /离心率\s*e?\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/.exec(windowText)
+    if (eccMatch !== null) {
+      const eccVal = positiveRadicalOrFraction(eccMatch[1]!)
+      if (eccVal !== null) {
+        metrics.push({ kind: "eccentricity", value: eccVal })
+        metricSpans.push([eqEnd + eccMatch.index, eqEnd + eccMatch.index + eccMatch[0].length])
+      }
+    }
+
+    const metricMatchers: { pattern: RegExp; kind: Extract<SymbolicConicMetricConstraint["kind"], "majorAxisLength" | "minorAxisLength" | "realAxisLength" | "imaginaryAxisLength" | "focalLength"> }[] = [
+      { pattern: /长轴长?\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/, kind: "majorAxisLength" },
+      { pattern: /短轴长?\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/, kind: "minorAxisLength" },
+      { pattern: /实轴长?\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/, kind: "realAxisLength" },
+      { pattern: /虚轴长?\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/, kind: "imaginaryAxisLength" },
+      { pattern: /焦距\s*(?:为|是|=|＝)?\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/, kind: "focalLength" }
+    ]
+    for (const { pattern, kind } of metricMatchers) {
+      const m = pattern.exec(windowText)
+      if (m === null) continue
+      const val = positiveRadicalOrFraction(m[1]!)
+      if (val !== null) {
+        metrics.push({ kind, value: val })
+        metricSpans.push([eqEnd + m.index, eqEnd + m.index + m[0].length])
+      }
+    }
+
+    const tangentCircleMatch = /渐近线[^。；;\n]{0,40}?圆\s*(?:[A-Z]\s*[：:]\s*)?(x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)([^=，。；;\n]*)=\s*(-?\d+(?:\.\d+)?))[^，。；;\n]{0,16}?相切/.exec(windowText)
+    if (tangentCircleMatch !== null) {
+      const circleObligation = circleFromGeneralEquation(tangentCircleMatch[2] ?? "", Number(tangentCircleMatch[3]))
+      if (circleObligation?.conic?.kind === "circle") {
+        metrics.push({
+          kind: "asymptoteTangentCircle",
+          circle: {
+            centerX: circleObligation.conic.centerX,
+            centerY: circleObligation.conic.centerY,
+            radius: circleObligation.conic.radius
+          }
+        })
+        const bridgeStart = eqEnd + tangentCircleMatch.index
+        const circleEqOffset = tangentCircleMatch[0].indexOf(tangentCircleMatch[1]!)
+        const circleEqStart = bridgeStart + circleEqOffset
+        const circleEqEnd = circleEqStart + tangentCircleMatch[1]!.length
+        const bridgeEnd = bridgeStart + tangentCircleMatch[0].length
+        // Mark tangency wording used, leaving the circle equation itself for the circle conicAxes matcher.
+        metricSpans.push([bridgeStart, circleEqStart], [circleEqEnd, bridgeEnd])
+      }
+    }
+
+    const resolution = solveSymbolicConicContract(spec, metrics, domainStrings)
+    markUsed(eqStart, eqEnd)
+    if (domainSpan !== null) markUsed(domainSpan.start, domainSpan.end)
+    for (const [mStart, mEnd] of metricSpans) markUsed(mStart, mEnd)
+    consumedRanges.push([eqStart, eqEnd])
+
+    if (resolution.status === "invalid") {
+      unverified.push({ sourceText: eqText, reason: resolution.reason })
+      continue
+    }
+
+    if (domainSpan !== null) {
+      givens.push({
+        kind: "parameterDomain",
+        sourceText: domainSpan.text,
+        start: domainSpan.start,
+        end: domainSpan.end,
+        targets: [],
+        domain: {
+          expression: domainSpan.text,
+          operators: domainSpan.operators,
+          variables: domainSpan.variables,
+          ...(entityLabel === undefined ? {} : { entityLabel })
+        }
+      })
+    }
+
+    if (resolution.status === "solved") {
+      givens.push({
+        kind: "conicAxes",
+        sourceText: eqText,
+        start: eqStart,
+        end: eqEnd,
+        targets: [],
+        conic: resolution.conic,
+        symbolicConic: {
+          kind: resolution.kind,
+          ...(entityLabel === undefined ? {} : { entityLabel }),
+          equation: eqText,
+          axis: spec.resolvedAxis,
+          status: "solved",
+          domains: resolution.domains,
+          parameters: resolution.parameterValues,
+          ...(resolution.asymptotes.length > 0 ? { asymptotes: resolution.asymptotes } : {}),
+          ...(resolution.independentCheck.tangencyPoints ? { tangencyPoints: resolution.independentCheck.tangencyPoints } : {})
+        }
+      })
+    } else {
+      givens.push({
+        kind: "symbolicConic",
+        sourceText: eqText,
+        start: eqStart,
+        end: eqEnd,
+        targets: [],
+        symbolicConic: {
+          kind: resolution.kind,
+          ...(entityLabel === undefined ? {} : { entityLabel }),
+          equation: eqText,
+          axis: resolution.axis,
+          status: "underdetermined",
+          domains: resolution.domains
+        }
+      })
+      unverified.push({ sourceText: eqText, reason: resolution.reason })
+    }
+  }
+}
+
 function resolveFocusEccentricity(
   givens: DiagramObligation[],
   unverified: DiagramObligationSet["unverified"],
@@ -517,7 +748,7 @@ function resolveFocusEccentricity(
      * 已经有方程覆盖这条曲线时**不重复读**：`双曲线C：x²/4−y²/16=1，其右焦点为(2√5,0)…`
      * 那句里参数是方程的注脚，再从参数推一遍会得到**第二条**同义义务。
      */
-    if (givens.some((entry) => entry.kind === "conicAxes" && (entry.start ?? -1) >= start && (entry.start ?? -1) < end)) continue
+    if (givens.some((entry) => (entry.kind === "conicAxes" || entry.kind === "symbolicConic") && (entry.start ?? -1) >= start && (entry.start ?? -1) < end)) continue
     const focus = FOCUS_COORDINATE.exec(window)
     const eccentricity = ECCENTRICITY_VALUE.exec(window)
     if (focus === null && eccentricity === null) continue
@@ -2321,6 +2552,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
    * 遇到 `1e999` / `1/2` 会截成 `1`。先由共享读取器把整段消费掉，读不懂就直接落未核验。
    */
   resolveExplicitSolidConditions(givens, unverified, givenText, used)
+  resolveSymbolicConics(givens, unverified, givenText, used)
 
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
   for (const { pattern, read, allowAfterLabelColon, allowOverlap } of matchers) {

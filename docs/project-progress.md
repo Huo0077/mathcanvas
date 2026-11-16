@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P2 / T04 表达式 AST、定义域保留与符号圆锥曲线契约
+
+- **RED 复现与根因确认**：在 `latexNormalisation.chain.test.ts`、`symbolicConicContract.test.ts` 与 `obligationIR.test.ts` 构造 12 项失败契约，实测 RED `3 files failed | 12 failed | 28 passed (40)`，确认 `x^{4}-2x^{3}` 与 `\frac{x^{2}}{m^{2}}` 降级缺失、`expression.ts` 缺少预算与未化简定义域提取、`conic-parameters.ts` 缺少符号圆锥轴向/欠定/渐近线相切求解，以及 `GK-P01` / `GK-P08` 在 `ObligationIR` 中缺失域与符号信息。
+- **LaTeX 迭代降级与有界 AST**：`latexNormalisation.ts` 在 `lowerMathGroupsTracked` 迭代处理 `^{n}` 并修正闭花括号区间映射；`expression.ts` 实现 `MAX_EXPRESSION_LENGTH=512` / `MAX_EXPRESSION_DEPTH=24`、Unicode 幂/隐式乘法（仍拒收 `foo(x)` 等未知函数）、`extractExpressionDomains`、`evaluateExpressionWithDomain`（不化简 `x/x`、`x=0` 除零报错）及 `parseRelationConstraint` / `evaluateRelationConstraint`。
+- **一般化符号圆锥曲线与 IR/核验接通**：`conic-parameters.ts` 实现 `parseSymbolicConicEquation` 与 `solveSymbolicConicContract`，区分主轴/轴对调与欠定状态（绝不猜测 `a=2`），并通过一般二次相切方程、`conicResidualAt` 与切点回代完成独立校验；`diagramObligations.ts`、`claimEvidence.ts`、`obligationIR.ts` 与 `diagramVerification.ts` 接通 `parameterDomain` / `symbolicConic`（单问 off-path 黄金 JSON 零变化）；静态无 `eval` 源码检查置于 `drawingContracts.test.ts` 以维持 `@draw/agent-core` 纯 TS 无 Node 依赖。
+- **验证**：定向 9 文件 252 项通过，全量 Vitest **529 文件 / 5634 passed | 1 todo**、`typecheck`、`lint`（0 errors / 33 既有 warnings）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P2 / T04符号圆锥曲线与AST证据](audit/2026-11-16-p2-symbolic-conic-ast/README.md)。
+
 ## 2026-11-16 —— P2 / T03 比例/位置语义分离与完整角等式链解析
 
 - **RED 复现与领域纠偏确认**：在 `lengthEquality.test.ts`、`diagramObligations.test.ts` 与 `diagramVerification.test.ts` 补齐反例与纠错说明，实测 RED `3 files failed | 9 failed | 197 passed (206)`，确认裸 `DE=2EA` 仍误标 `splitPoint: true`、`GK-S06` 仅读右端 `∠ADC=60°` 而残留 `"∠ADB="`、`∠ADB=∠ADC` 与显式弧度 `(0, π)` 缺解析。

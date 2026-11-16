@@ -80,7 +80,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** A3（2026-10-26）：矩形（非退化 + 闭合 + 共面 + 四个直角），由核验器自己算。 */
   "rectangle",
   /** 2026-11-01：实体标量尺寸、球心与棱柱形状，由核验器从最终图元自己算。 */
-  "solidDimension", "solidCenter", "solidPrismShape"
+  "solidDimension", "solidCenter", "solidPrismShape",
+  /** T04（2026-11-16）：圆锥曲线参数定义域约束（如 `a>b>0` / `m>0`），对照drawn圆锥曲线半轴大小检验。 */
+  "parameterDomain"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -131,7 +133,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   // 「点在曲线上」比的是**残差**（内核 `conicResidualAt`，长度量纲的**一阶**距离估计）
   // ⇒ 与点坐标、半轴同一把绝对尺子。用相对容差会把"偏离 0.3"这种明显错误按比例放过去。
   if (kind === "pointOnConic") return { kind: "absolute", value: distanceTolerance(1) }
-  if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel") {
+  if (kind === "segmentRatio" || kind === "planePerpendicular" || kind === "perpendicular" || kind === "parallel" || kind === "parameterDomain") {
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
   // 面积是 L²：与核验器同一把相对尺子（构造满足到数值精度）。
@@ -162,7 +164,17 @@ function claimOf(
     ...(item.expression === undefined ? {} : { expression: item.expression }),
     ...(item.expressions === undefined ? {} : { expressions: [...item.expressions] as [string, string] }),
     ...(item.solid === undefined ? {} : { solid: { ...item.solid } }),
-    ...(item.prismShape === undefined ? {} : { prismShape: { ...item.prismShape } })
+    ...(item.prismShape === undefined ? {} : { prismShape: { ...item.prismShape } }),
+    ...(item.domain === undefined ? {} : { domain: { ...item.domain, operators: [...item.domain.operators], variables: [...item.domain.variables] } }),
+    ...(item.symbolicConic === undefined ? {} : {
+      symbolicConic: {
+        ...item.symbolicConic,
+        domains: [...item.symbolicConic.domains],
+        ...(item.symbolicConic.parameters ? { parameters: { ...item.symbolicConic.parameters } } : {}),
+        ...(item.symbolicConic.asymptotes ? { asymptotes: [...item.symbolicConic.asymptotes] } : {}),
+        ...(item.symbolicConic.tangencyPoints ? { tangencyPoints: item.symbolicConic.tangencyPoints.map((pt) => ({ ...pt })) } : {})
+      }
+    })
   }
   return {
     id,
@@ -447,7 +459,17 @@ function toLegacyObligation(item: GeometryObligation): DiagramObligation {
     ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression }),
     ...(item.geometry?.expressions === undefined ? {} : { expressions: [...item.geometry.expressions] as [string, string] }),
     ...(item.geometry?.solid === undefined ? {} : { solid: { ...item.geometry.solid } }),
-    ...(item.geometry?.prismShape === undefined ? {} : { prismShape: { ...item.geometry.prismShape } })
+    ...(item.geometry?.prismShape === undefined ? {} : { prismShape: { ...item.geometry.prismShape } }),
+    ...(item.geometry?.domain === undefined ? {} : { domain: { ...item.geometry.domain, operators: [...item.geometry.domain.operators], variables: [...item.geometry.domain.variables] } }),
+    ...(item.geometry?.symbolicConic === undefined ? {} : {
+      symbolicConic: {
+        ...item.geometry.symbolicConic,
+        domains: [...item.geometry.symbolicConic.domains],
+        ...(item.geometry.symbolicConic.parameters ? { parameters: { ...item.geometry.symbolicConic.parameters } } : {}),
+        ...(item.geometry.symbolicConic.asymptotes ? { asymptotes: [...item.geometry.symbolicConic.asymptotes] } : {}),
+        ...(item.geometry.symbolicConic.tangencyPoints ? { tangencyPoints: item.geometry.symbolicConic.tangencyPoints.map((pt) => ({ ...pt })) } : {})
+      }
+    })
   }
 }
 

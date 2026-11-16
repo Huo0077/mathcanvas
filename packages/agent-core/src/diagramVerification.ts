@@ -1431,6 +1431,19 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     // 种类不同 ⇒ 图上根本不是题面说的那种曲线。
     return null
   }
+  if (item.kind === "parameterDomain") {
+    const drawn = figures.conic
+    if (drawn === null || item.domain === undefined) return null
+    if (drawn.kind === "ellipse") {
+      const ok = drawn.radiusX > 0 && drawn.radiusY > 0 && (item.domain.variables.length < 2 || Math.abs(drawn.radiusX - drawn.radiusY) > 1e-6)
+      return { actual: ok ? 0 : 1, expected: 0, tolerance: UNITLESS_TOLERANCE, detail: ok ? `参数定义域 ${item.domain.expression} 满足。` : `参数定义域 ${item.domain.expression} 未满足。` }
+    }
+    if (drawn.kind === "hyperbola") {
+      const ok = drawn.radiusX > 0 && drawn.radiusY > 0
+      return { actual: ok ? 0 : 1, expected: 0, tolerance: UNITLESS_TOLERANCE, detail: ok ? `参数定义域 ${item.domain.expression} 满足。` : `参数定义域 ${item.domain.expression} 未满足。` }
+    }
+    return null
+  }
   /**
    * **直线与圆锥曲线的交点**（Task 14）。
    *
@@ -2286,7 +2299,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter" && kind !== "solidPrismShape"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter" && kind !== "solidPrismShape" && kind !== "parameterDomain" && kind !== "symbolicConic"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */

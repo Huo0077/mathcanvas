@@ -202,3 +202,80 @@ describe("V0a coordinate obligation IR", () => {
     expect(toLegacyObligationSet(parsed.ir)).toEqual(parsed.legacy)
   })
 })
+
+describe("T04 symbolic conic IR and domain retention", () => {
+  it("retains GK-P01 ellipse domain and solved parameters in IR without rewriting sourceText or mixing subquestions", () => {
+    const prompt = "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4。（1）求C的方程；（2）过点(0,-2)的直线l交C于A、B两点，O为坐标原点。若△OAB的面积为√2，求|AB|。"
+    const parsed = parseObligationWithLegacy(prompt, { selectedPart: 1 })
+    expect(toLegacyObligationSet(parsed.ir)).toEqual(parsed.legacy)
+
+    const domainClaim = parsed.ir.obligations.find((item) => item.kind === "parameterDomain")
+    expect(domainClaim).toBeDefined()
+    expect(domainClaim?.sourceText).toBe("a>b>0")
+    expect(prompt.slice(domainClaim!.start, domainClaim!.end)).toBe("a>b>0")
+    expect(domainClaim?.geometry?.domain).toMatchObject({
+      expression: "a>b>0",
+      variables: ["a", "b"],
+      entityLabel: "C"
+    })
+
+    const conicClaim = parsed.ir.obligations.find((item) => item.kind === "conicAxes")
+    expect(conicClaim).toBeDefined()
+    expect(conicClaim?.judgeability).toBe("supported")
+    expect(conicClaim?.sourceText).not.toContain("x²/4")
+    expect(conicClaim?.geometry?.conic).toEqual({
+      kind: "ellipse",
+      radiusX: 2,
+      radiusY: expect.closeTo(Math.SQRT2, 9)
+    })
+    expect(conicClaim?.geometry?.symbolicConic).toMatchObject({
+      kind: "ellipse",
+      entityLabel: "C",
+      axis: "x",
+      status: "solved",
+      domains: expect.arrayContaining(["a>b>0"])
+    })
+  })
+
+  it("retains GK-P08 hyperbola domain and solved asymptote-circle tangency in IR without false unverified clauses", () => {
+    const raw = "14. 若双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$ 的渐近线与圆 $x^{2}+y^{2}-4 y+3=0$ 相切, 则\n\n$m=$\n"
+    const parsed = parseObligationWithLegacy(raw)
+    expect(toLegacyObligationSet(parsed.ir)).toEqual(parsed.legacy)
+    expect(parsed.ir.unverified).toEqual([])
+
+    const domainClaim = parsed.ir.obligations.find((item) => item.kind === "parameterDomain")
+    expect(domainClaim?.sourceText).toBe("m>0")
+
+    const hyperbola = parsed.ir.obligations.find(
+      (item) => item.kind === "conicAxes" && item.geometry?.conic?.kind === "hyperbola"
+    )
+    expect(hyperbola?.geometry?.conic).toEqual({
+      kind: "hyperbola",
+      radiusX: expect.closeTo(1 / Math.sqrt(3), 9),
+      radiusY: 1,
+      axis: "y"
+    })
+    const circle = parsed.ir.obligations.find(
+      (item) => item.kind === "conicAxes" && item.geometry?.conic?.kind === "circle"
+    )
+    expect(circle?.geometry?.conic).toEqual({
+      kind: "circle",
+      centerX: 0,
+      centerY: 2,
+      radius: 1
+    })
+  })
+
+  it("keeps underdetermined symbolic conics ambiguous instead of guessing scale", () => {
+    const prompt = "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2。"
+    const parsed = parseObligationWithLegacy(prompt)
+    expect(parsed.ir.obligations.some((item) => item.kind === "conicAxes")).toBe(false)
+    const symbolic = parsed.ir.obligations.find((item) => item.kind === "symbolicConic")
+    expect(symbolic).toBeDefined()
+    expect(symbolic?.judgeability).toBe("ambiguous")
+    expect(symbolic?.geometry?.symbolicConic).toMatchObject({
+      status: "underdetermined",
+      axis: "x"
+    })
+  })
+})

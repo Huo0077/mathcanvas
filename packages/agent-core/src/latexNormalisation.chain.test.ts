@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { expandExamShorthand } from "./latexNormalisation"
+import {
+  expandExamShorthand,
+  mapNormalizedRangeToOriginal,
+  normalizeGeometryPrompt,
+  normalizeGeometryPromptWithSourceMap
+} from "./latexNormalisation"
 
 /**
  * **连等不再由 LaTeX 入口改写**（2026-10-26）。
@@ -30,5 +35,35 @@ describe("expandExamShorthand leaves chains to the deterministic parser", () => 
 
   it("expands an equilateral triangle with an explicit side", () => {
     expect(expandExamShorthand("△ABC是边长为3的等边三角形")).toBe("AB=3，AC=3，BC=3")
+  })
+})
+
+describe("T04 LaTeX lowering and sourceMap roundtrips", () => {
+  it("lowers higher powers and nested fractions while preserving sourceMap spans", () => {
+    const polyPrompt = "设函数 $f(x)=x^{4}-2x^{3}$，在 $x=1$ 处作切线。"
+    const mappedPoly = normalizeGeometryPromptWithSourceMap(polyPrompt)
+    expect(mappedPoly.normalized).toContain("f(x)=x^4-2x^3")
+    const exprStart = mappedPoly.normalized.indexOf("x^4-2x^3")
+    const origSlice = mapNormalizedRangeToOriginal(mappedPoly, exprStart, exprStart + "x^4-2x^3".length)
+    expect(polyPrompt.slice(origSlice.start, origSlice.end)).toContain("x^{4}-2x^{3}")
+
+    const nestedFracPrompt = "已知 $f(x)=\\frac{1}{1+\\frac{1}{x}}$ 与 $x^{2}/a^{2}$"
+    const normalizedNested = normalizeGeometryPrompt(nestedFracPrompt)
+    expect(normalizedNested).not.toContain("\\frac")
+    expect(normalizedNested).toContain("(1/(1+(1/x)))")
+    expect(normalizedNested).toContain("x²/a²")
+  })
+
+  it("normalizes GK-P08 raw LaTeX hyperbola and circle cleanly with sourceMap provenance", () => {
+    const raw = "14. 若双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$ 的渐近线与圆 $x^{2}+y^{2}-4 y+3=0$ 相切, 则\n\n$m=$\n"
+    const mapped = normalizeGeometryPromptWithSourceMap(raw)
+    expect(mapped.normalized).not.toContain("\\frac")
+    expect(mapped.normalized).not.toContain("{")
+    expect(mapped.normalized).toContain("y²-x²/m²=1(m>0)")
+    expect(mapped.normalized).toContain("x²+y²-4y+3=0")
+
+    const domainStart = mapped.normalized.indexOf("m>0")
+    const domainOrig = mapNormalizedRangeToOriginal(mapped, domainStart, domainStart + "m>0".length)
+    expect(raw.slice(domainOrig.start, domainOrig.end)).toContain("m>0")
   })
 })

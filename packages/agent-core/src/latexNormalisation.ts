@@ -157,7 +157,7 @@ function groupOperandTracked(doc: TrackedText, start: number, end: number): Trac
   const trimmedStart = start + leadingSpaces
   const trimmedEnd = Math.max(trimmedStart, end - trailingSpaces)
   const trimmed = doc.text.slice(trimmedStart, trimmedEnd)
-  if (/^(?:√?\d+(?:\.\d+)?|π|[A-Za-z])$/.test(trimmed)) {
+  if (/^(?:√?\d+(?:\.\d+)?|π|[A-Za-z](?:[²³⁴⁵⁶⁷⁸⁹]|\^\d+)?)$/.test(trimmed)) {
     return sliceTracked(doc, trimmedStart, trimmedEnd)
   }
   const span = spanOfMatch(doc, start, end)
@@ -172,10 +172,35 @@ function lowerMathGroupsTracked(source: TrackedText, inFunction: boolean): Track
   let current = source
   for (let depth = 0; depth < 32; depth += 1) {
     let changed = false
-    const withSqrt = trackedReplace(current, /\\sqrt\s*\{([^{}]+)\}/g, (match, span) => {
+    const withBracedExponent = trackedReplace(current, /\^\s*\{([^{}]+)\}/g, (match, span) => {
       changed = true
       const group = captureRange(match, 1)
       const inner = group === null ? literalTracked(match[1] ?? "", span.origStart, span.origEnd) : sliceTracked(current, group.from, group.to)
+      const leading = inner.text.length - inner.text.trimStart().length
+      const trailing = inner.text.length - inner.text.trimEnd().length
+      const trimmed = sliceTracked(inner, leading, inner.text.length - trailing)
+      if (trimmed.text === "2") return [{ literal: "²", origStart: span.origStart, origEnd: span.origEnd }]
+      if (trimmed.text === "°") return [{ literal: "°", origStart: span.origStart, origEnd: span.origEnd }]
+      const caretEnd = Math.min(span.origEnd, trimmed.starts[0] ?? span.origStart + 1)
+      const innerTokens: TrackedToken[] = Array.from({ length: trimmed.text.length }, (_, i) => ({
+        literal: trimmed.text[i]!,
+        origStart: trimmed.starts[i]!,
+        origEnd: i === trimmed.text.length - 1 ? span.origEnd : trimmed.ends[i]!
+      }))
+      if (/^[A-Za-z0-9]+$/.test(trimmed.text)) {
+        return [{ literal: "^", origStart: span.origStart, origEnd: caretEnd }, ...innerTokens]
+      }
+      return [
+        { literal: "^(", origStart: span.origStart, origEnd: caretEnd },
+        ...innerTokens,
+        { literal: ")", origStart: Math.max(span.origStart, span.origEnd - 1), origEnd: span.origEnd }
+      ]
+    })
+
+    const withSqrt = trackedReplace(withBracedExponent, /\\sqrt\s*\{([^{}]+)\}/g, (match, span) => {
+      changed = true
+      const group = captureRange(match, 1)
+      const inner = group === null ? literalTracked(match[1] ?? "", span.origStart, span.origEnd) : sliceTracked(withBracedExponent, group.from, group.to)
       const trimmed = inner.text.trim()
       if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
         const leading = inner.text.length - inner.text.trimStart().length

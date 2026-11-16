@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02` 与 `P2 / T03`，下一步进入 `P2 / T04`；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02` 与 `P2`（`T03`、`T04`），下一步进入 `P3 / T05`；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -48,7 +48,8 @@
 | B4 / P0 / T01 36题黄金契约与统一口径 | **已完成（待第二审阅者复核）** | [P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)：冻结 36 题 `drawing-contracts-36.json`（匹配 `manifest.json` SHA-256 与逐字 `sourceSpan`，补齐 `JT-P08` `EC=2CF` 与 `GK-S05(2)`/`JT-P06(2)` 不可行契约，`independentReviewStatus: "pending_second_reviewer"`）；`drawingContracts.test.ts` 8 项、`finalOutcome.test.ts` 4 项、离线/`dev-smoke`回放/36题离线评测（`denominator: 36, passed: 1, partial: 2, failed: 33, incomplete: 0, liveWrites: 0, costKnown: false`）、基线 25/36 & 4/36 & null 重建、全量 Vitest 526 文件/5600 通过+1todo、类型/Lint/Web 构建通过 |
 | B4 / P1 / T02 原文映射、分问作用域与无损IR | **已完成（R01-B选问收口）** | [P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)：新增 `problemContract.ts`、`normalizeGeometryPromptWithSourceMap`、`NormalisationApplication.sourceMap`、`selectedPart`/`selectedScopeId` 选问隔离与 `toLegacyObligationSet.parts` 无损往返；实现 `A1`/`A₁` 别名归并与折前/折后跨 state 歧义检测、阻断模型自选参数（`a=2`）升级硬前提与改题失效检测；定向 5 文件 66 项通过（含 `planCompiler.offPath.golden.test.ts` 13 项），全量 Vitest 527 文件/5611 通过+1todo，类型/Lint/Web 构建（635 modules）/离线评测通过 |
 | B4 / P2 / T03 比例位置分离与完整角链 | **已完成** | [P2 / T03关系语义与角链证据](audit/2026-11-16-p2-relation-chains/README.md)：取消 `DE=2EA` / `AB=2BC` 裸比例共线推断（`splitPoint: false`，`diagramVerification` 仅显式 `true` 检查分点），补齐 `E在DA线段内` 显式位置解析与非共线反例；新增 `relationChains.ts` 完整消费 `∠ADB=∠ADC=60°` / `∠ADB=∠ADC` (`equalAngle`) 与合法显式弧度一次转度、保留全链 `sourceSpan` 与 `chainIndex`、消除 `GK-S06` `"∠ADB="` 残留并拒绝截断/长度=角/度弧混用/非法角域；RED 9 项失败 → 定向 6 文件/236 项通过，全量 Vitest 528 文件/5620 通过+1todo，类型/Lint/Web 构建（636 modules）/离线评测通过 |
-| 后续阶段范围 | 进行中（下一步 `P2 / T04`） | 按 DAG 推进 `T04 → T05 → T06 → T11 → ... → T14`；`P7–P8`、付费 provider 与发布均未开启 |
+| B4 / P2 / T04 符号圆锥曲线与AST定义域 | **已完成（P2收口）** | [P2 / T04符号圆锥曲线与AST证据](audit/2026-11-16-p2-symbolic-conic-ast/README.md)：`latexNormalisation` 将带括号指数移入迭代降级环解决 `$x^{4}-2x^{3}$` 与 `\frac{x^{2}}{m^{2}}` 及 `sourceMap`；`expression.ts` 补齐长度/深度预算、`x/x` 未化简域保留与 `a>b>0` 链式不等式并维持零 `eval`（由 `drawingContracts.test.ts` 源码守卫锁定）；`conic-parameters.ts` 支持轴对调区分、欠定不猜与 `GK-P01`/`GK-P08` 一般求解+`conicResidualAt`/切点独立核验；打通 `parameterDomain`/`symbolicConic` 与 `ObligationIR` 无损往返；RED 12 fail → 全量 Vitest 529 文件/5634 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
+| 后续阶段范围 | 进行中（下一步 `P3 / T05`） | 按 DAG 推进 `T05 → T06 → T11 → T07 → ... → T14 → T15 → T16`；`P8`、付费 provider 与发布均未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 至 `R11` 提交 `d7e1e3af` 均已推送；`P0 / T01` 随本变更提交并核对远端。
 

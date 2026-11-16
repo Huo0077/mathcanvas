@@ -130,6 +130,8 @@ export interface ObligationGeometry {
   expressions?: [string, string]
   solid?: DiagramObligation["solid"]
   prismShape?: DiagramObligation["prismShape"]
+  domain?: DiagramObligation["domain"]
+  symbolicConic?: DiagramObligation["symbolicConic"]
 }
 
 /**

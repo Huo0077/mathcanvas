@@ -259,4 +259,11 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       cases: "test-fixtures/reliability/drawing-contracts-36.json"
     })
   })
+
+  it("ensures geometry-kernel expression and symbolic conic modules contain zero dynamic eval or new Function", () => {
+    const exprSource = readFileSync("packages/geometry-kernel/src/expression.ts", "utf8")
+    const conicSource = readFileSync("packages/geometry-kernel/src/conic-parameters.ts", "utf8")
+    expect(exprSource).not.toMatch(/\beval\s*\(|new\s+Function\b/)
+    expect(conicSource).not.toMatch(/\beval\s*\(|new\s+Function\b/)
+  })
 })

@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— P2 / T04 表达式 AST、定义域保留与符号圆锥曲线契约
+
+- **LaTeX 高次幂与嵌套分式降级**：`packages/agent-core/src/latexNormalisation.ts` 将带括号指数降级并入 `lowerMathGroupsTracked` 迭代环（支持 `$x^{4}-2x^{3}$`、`\frac{x^{2}}{m^{2}}` 与 nested `\frac{1}{1+\frac{1}{x}}`），在 `groupOperandTracked` 保留单项幂原子（`x²/m²`、`x²/a²`）并保证 `sourceMap` 闭合花括号区间准确。
+- **有界表达 AST 与定义域提取**：`packages/geometry-kernel/src/expression.ts` 保持零 `eval`/`new Function`，新增 `MAX_EXPRESSION_LENGTH=512` / `MAX_EXPRESSION_DEPTH=24` 预算、Unicode 上标/隐式乘法支持（同时保持未知函数如 `foo(x)` 拒收）、`extractExpressionDomains`（从原始未化简 AST 提取 `nonzero`/`nonnegative`/`positive`，不将 `x/x` 化简为 `1`）、`evaluateExpressionWithDomain`（严拒除零与负被开方数）、`parseRelationConstraint` 与 `evaluateRelationConstraint`（支持 `a>b>0` 链式不等式与单调性校验）。
+- **一般符号圆锥曲线求解与独立核验**：`packages/geometry-kernel/src/conic-parameters.ts` 新增 `parseSymbolicConicEquation` 与 `solveSymbolicConicContract`，区分椭圆轴向/轴对调、拒绝非正半轴域、在欠定时明确标 `underdetermined` 不猜参数，并用一般二次切距方程与 `conicResidualAt` / 切点回代独立校验 `GK-P01` 与 `GK-P08`（及任意通用参数圆-渐近线相切）。
+- **Parser / IR / Verifier 衔接与验证**：`diagramObligations.ts`、`claimEvidence.ts`、`obligationIR.ts` 与 `diagramVerification.ts` 新增 `parameterDomain` 与 `symbolicConic` 支持（`toLegacyObligationSet` 无损往返，off-path 黄金基线零变化）。RED 12 项失败 → 全量 Vitest **529 文件 / 5634 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P2 / T04符号圆锥曲线与AST证据](docs/audit/2026-11-16-p2-symbolic-conic-ast/README.md)。
+
 ## 2026-11-16 —— P2 / T03 比例/位置语义分离与完整角等式链解析
 
 - **裸比例与位置约束解耦**：`lengthEquality.ts`、`diagramObligations.ts` 与 `diagramVerification.ts` 取消无锚点共享端点比（如 `DE=2EA`、`AB=2BC`）的默认 `splitPoint: true` 共线推断，`segmentRatio` 默认仅核验长度比（`splitPoint: false`，核验分支收紧为 `item.splitPoint === true`）；`diagramObligations.ts` 在保留歧义短语不猜边界的同时补齐 `E在DA线段内` / `E在线段DA内` 的显式 `pointOnSegment` 识别，并在测试中明确记录对旧错误比例假设的纠偏（保留 `A=(0,0,0), E=(1,0,0), D=(1,2,0)` 与线段内正/反例）。
