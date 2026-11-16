@@ -20,7 +20,7 @@
 
 ## 审查修订：本阶段计划不是现在的起手顺序
 
-总顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)，具体R任务见[审查技术附录](2026-11-15-review-driven-next-implementation-plan.md)：R00基线→R01-A→R09-A→R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）均已收口。当前正在按 DAG 推进 `B4`（`P0–P6`）：`P0 / T01` 黄金契约与统一口径已落地（[P0 / T01契约与口径证据](../../audit/2026-11-16-p0-drawing-contracts/README.md)，待第二位独立审阅者复核后退出 P0），下一步进入 `P1 / T02`；`P7–P8` 仍未开始。
+总顺序统一按[完整实施主计划](2026-11-15-main-restart-master-plan.md)，具体R任务见[审查技术附录](2026-11-15-review-driven-next-implementation-plan.md)：R00基线→R01-A→R09-A→R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）均已收口。当前正在按 DAG 推进 `B4`（`P0–P6`）：`P0 / T01` 黄金契约与统一口径已落地（[P0 / T01契约与口径证据](../../audit/2026-11-16-p0-drawing-contracts/README.md)，待第二位独立审阅者复核后退出 P0），`P1 / T02` 单一 `ProblemContract` / 来源映射 / 作用域 / 无损 `ObligationIR` 与 `R01-B` 选问已收口（[P1 / T02契约证据](../../audit/2026-11-16-p1-problem-contract/README.md)），下一步进入 `P2 / T03`；`P7–P8` 仍未开始。
 
 C1安全护栏不依赖P0全36题审完；P1必须处理裸条件/设/且导致的原始解析丢失，不仅是IR迁移。P7需先解决审查已发现的E2E定位器漂移、宽度/网格契约和生产外接球披露；P8新增G1/G2安全/干净CI前提。
 

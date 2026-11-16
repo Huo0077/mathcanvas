@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P1 / T02 ProblemContract、来源映射、作用域隔离与无损 ObligationIR
+
+- **来源映射与文本/改写防线**：`latexNormalisation.ts` 新增 `normalizeGeometryPromptWithSourceMap` / `mapNormalizedRangeToOriginal`，`promptNormalization.ts` 新增 `NormalisationApplication.sourceMap` / `mapEditedRangeToOriginal` 并拒绝把目标或自由点混入前提、篡改小问编号的改写，确保重复从句、LaTeX 展开与代理对 Unicode 字符仍能逐字映回原始 UTF-16 区间。
+- **作用域无损往返与 `R01-B` 选问收口**：`numberedProblem.ts`、`diagramObligations.ts`、`claimEvidence.ts`、`obligationIR.ts` 与 `planCompiler.ts` 补齐 `shared` / `subquestion:N` 作用域元数据、`selectedPart` / `selectedScopeId` 选问隔离与 `toLegacyObligationSet(ir).parts` 无损还原；修复首问前提漏检与 `任取一点` 自由点识别，并在单问路径严格维持 R6 / off-path 黄金基线 JSON 不变。
+- **统一 `ProblemContract` 与跨状态实体解析**：新增 `packages/agent-core/src/problemContract.ts`（`buildProblemContract`、`resolveEntityBinding`、`recordModelProposal`、`isContractStale`），支持 `A1` ↔ `A₁` 同态别名归并、折前/折后同名点跨 state 歧义拦截、禁止模型自选参数（如 `a=2`）升级为原题前提及改题自动失效检测；详见[P1 / T02契约证据](docs/audit/2026-11-16-p1-problem-contract/README.md)。
+
 ## 2026-11-16 —— P0 / T01 36 题黄金作图契约与统一评测口径
 
 - 新增 `test-fixtures/reliability/drawing-contracts-36.json`：按基线原件 [`docs/audit/2026-11-15-drawing-baseline/manifest.json`](docs/audit/2026-11-15-drawing-baseline/manifest.json) 冻结全部 36 道真题契约（`denominator = 36`），包含 UTF-8 `inputHash`/`sourceHash`、`inputMode`、`sharedScope`、`subquestions`、`requiredEntityIds`、带逐字原文偏移 `sourceSpan` 的 `requiredObligations`、`displayPolicy`、`freeChoices`、`unsupportedReasons` 及 `independentReviewStatus: "pending_second_reviewer"`；修补 `JT-P08` 仅点在椭圆而未校 `EC=2CF` 的漏洞，并登记 `GK-S05 (2)` 与 `JT-P06 (2)` 不可行分支契约。

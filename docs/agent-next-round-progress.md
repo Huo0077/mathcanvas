@@ -6,8 +6,8 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：`R00–R11`（含 G1/G2）及 `B4 / P0 / T01` 已完成，见[干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)与[P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)；RustSec因未装 `cargo-audit` 留为 `unknown`，`T01` 待第二位独立审阅者复核。
-2. 当前按 `implementation-task-ledger.json` DAG 持续推进 `B4`（`P0–P6`）：已完成 `P0 / T01`，下一步进入 **`P1 / T02`**（`ProblemContract` / 来源映射 / scope / `ObligationIR` 无损迁移），其后依次推进 `T03 → T11 → T04 → ... → T14`。
+1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：`R00–R11`（含 G1/G2）、`B4 / P0 / T01` 与 `B4 / P1 / T02` 已完成，见[干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)、[P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)与[P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)；RustSec因未装 `cargo-audit` 留为 `unknown`，`T01` 仍待第二位独立审阅者复核。
+2. 当前按 `implementation-task-ledger.json` DAG 持续推进 `B4`（`P0–P6`）：已完成 `P0 / T01` 与 `P1 / T02`，下一步进入 **`P2 / T03`**（比例语义纠正与链式角/长度关系解析），其后依次推进 `T11 → T04 → T05 → ... → T14`。
 3. 真实 provider 付费评测、安装与正式发布均仍未开启，等待显式预算批准后再执行。
 4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为技术参考，不把计划当成完成证据。
 5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。

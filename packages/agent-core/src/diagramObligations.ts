@@ -3,7 +3,7 @@ import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/ge
 import { readExplicitSolidConditions } from "./explicitSolidConditions"
 import { parseShapeClause } from "./solver/shapeGrammar"
 import { parseLengthChains } from "./lengthEquality"
-import { splitNumberedProblem, type ProblemPart } from "./numberedProblem"
+import { SHARED_SCOPE_ID, parseSubquestionScopeId, splitNumberedProblem, subquestionScopeId, type ProblemPart } from "./numberedProblem"
 
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
 export type DiagramObligationKind =
@@ -269,6 +269,7 @@ export interface DiagramObligationSet {
   freeChoiceSources?: (DiagramSourceSpan & { name: string })[]
   unverified: { sourceText: string; reason: string }[]
   parts?: (ProblemPart & { obligations: DiagramObligationSet })[]
+  selectedScopeId?: string
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
@@ -297,7 +298,11 @@ interface Matcher {
   allowOverlap?: boolean
 }
 
-export interface DiagramParseOptions { spatialPointConditions?: boolean }
+export interface DiagramParseOptions {
+  spatialPointConditions?: boolean
+  selectedPart?: number
+  selectedScopeId?: string
+}
 
 /** Only the explicit V0a experimental path recognizes these narrow 3D coordinates. */
 const POINT_COORDINATE_MATCHER: Matcher = {
@@ -2155,12 +2160,61 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
     const shared = parseDiagramScope(problem.stem, options)
     const parts = problem.parts.map(part => {
       const scopedPrompt = problem.stem.padEnd(part.start) + part.text
-      return { ...part, obligations: parseDiagramScope(scopedPrompt, options, true) }
+      return { ...part, obligations: parseDiagramScope(scopedPrompt, options, part.start) }
     })
-    const needsScopedVerification = problem.parts.slice(1).some(part => {
+    const hasPartPremise = (part: ProblemPart & { obligations: DiagramObligationSet }): boolean => {
       const boundary = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/.exec(part.text)
-      return (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim().length > 0
-    })
+      const premiseText = (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim()
+      return premiseText.length > 0
+        || part.obligations.givens.length > shared.givens.length
+        || part.obligations.freeChoices.length > shared.freeChoices.length
+        || part.obligations.unverified.length > shared.unverified.length
+    }
+    const needsScopedVerification = problem.parts.some((_, index) => hasPartPremise(parts[index]!))
+    const requestedPart = options.selectedPart ?? parseSubquestionScopeId(options.selectedScopeId)
+
+    if (options.selectedScopeId === SHARED_SCOPE_ID) {
+      return {
+        ...shared,
+        parts,
+        selectedScopeId: SHARED_SCOPE_ID,
+        goals: parts.flatMap(part => part.obligations.goals),
+        goalSources: parts.flatMap(part => part.obligations.goalSources ?? []),
+        unverified: [
+          ...shared.unverified,
+          ...(needsScopedVerification
+            ? [{
+                sourceText: "各小问的条件",
+                reason: "当前仅选择了公共题设（shared）作用域，各小问专用条件未核验，整题不能按完整通过处理。"
+              }]
+            : [])
+        ]
+      }
+    }
+
+    if (requestedPart !== null) {
+      const selected = parts.find(part => part.number === requestedPart)
+      if (!selected) {
+        return {
+          ...shared,
+          parts,
+          selectedScopeId: subquestionScopeId(requestedPart),
+          unverified: [
+            ...shared.unverified,
+            {
+              sourceText: "指定小问",
+              reason: `找不到第 (${requestedPart}) 问，无法核验对应作用域的题设。`
+            }
+          ]
+        }
+      }
+      return {
+        ...selected.obligations,
+        parts,
+        selectedScopeId: subquestionScopeId(selected.number)
+      }
+    }
+
     if (!needsScopedVerification) return { ...parseDiagramScope(prompt, options), parts }
     return {
       ...shared,
@@ -2176,10 +2230,14 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
   return parseDiagramScope(prompt, options)
 }
 
-function parseDiagramScope(prompt: string, options: DiagramParseOptions, numberedPart = false): DiagramObligationSet {
-  const boundary = (numberedPart ? /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/ : /(?:求证|试?证明)/).exec(prompt)
-  const givenText = boundary === null ? prompt : prompt.slice(0, boundary.index)
-  const goalRawStart = boundary === null ? -1 : boundary.index + boundary[0].length
+function parseDiagramScope(prompt: string, options: DiagramParseOptions, partStart?: number): DiagramObligationSet {
+  const partPattern = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/
+  const boundaryMatch = partStart !== undefined
+    ? partPattern.exec(prompt.slice(partStart))
+    : /(?:求证|试?证明)/.exec(prompt)
+  const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
+  const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
+  const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length
   const goalRaw = goalRawStart < 0 ? "" : prompt.slice(goalRawStart)
   const prefixLength = /^[：:，,\s]*/.exec(goalRaw)?.[0].length ?? 0
   const goalText = goalRaw.slice(prefixLength).trim()
@@ -2187,7 +2245,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, numbere
   const goalSources: DiagramSourceSpan[] = goalText ? [{ sourceText: goalText, start: goalRawStart + prefixLength, end: goalRawStart + prefixLength + goalText.length }] : []
   const freeChoiceSources: (DiagramSourceSpan & { name: string })[] = []
   const namedChoices = new Set<string>()
-  for (const match of givenText.matchAll(/(?:任取|任意|自由)(?:一?个)?\s*点\s*([A-Z])/g)) {
+  for (const match of givenText.matchAll(/(?<!(?:椭圆|双曲线|抛物线|圆)上)(?:任取|任意|自由)(?:一个|一|个)?\s*点\s*([A-Z])/g)) {
     const name = match[1]
     if (namedChoices.has(name)) continue
     namedChoices.add(name)

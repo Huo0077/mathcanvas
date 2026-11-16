@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核），下一步进入 `P1 / T02`；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）与 `P1 / T02`，下一步进入 `P2 / T03`；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -46,7 +46,8 @@
 | G2 / R09-B Schema与运行时叶子约束同源 | **已完成** | [Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)：建立 `LEAF_CONSTRAINTS` / `readStringLeaf` / `planActionToolItemSchema` 单源约束并导出 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 降级清单；修复 `actionKey` 全空白/零宽放行、`normalisations` 未知字段/超长/trim 漏检及 `buildPlanToolSchema` 漂移；RED 8 fail → 定向 4 文件/169 项通过，`eval:reliability -- --offline` 通过，Vitest 524 文件/5590 通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R11 干净依赖、公告与Rust审计 | **已完成（G2闭环；RustSec显式标为unknown）** | [干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)：最小兼容升级修复全部3项High与可修Moderate公告（`vitest@4.1.12`、`vite@7.3.8`、`eslint@10.15.0`、`typescript-eslint@8.72.2`、`source-map-js@1.2.2`、`zod@4.6.7`）；`--omit=dev` 0公告；仅余 `@typescript-eslint/typescript-estree -> minimatch@10.2.6` 1条上游中危（`GHSA-g3hv-75wg-m249`，已登记例外与 `2026-12-31` 到期）；`cargo audit` 未安装标为 `unknown`；Node `v22.23.5` 隔离 `npm ci`、`npm ls --depth=0`、类型/Lint/Web构建/离线评测、`licences:scan`、全量Rust 317 passed（+4 ignored）及全量串行E2E 286 passed 全部通过；新增 `dependencyLockPolicy.test.ts` |
 | B4 / P0 / T01 36题黄金契约与统一口径 | **已完成（待第二审阅者复核）** | [P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)：冻结 36 题 `drawing-contracts-36.json`（匹配 `manifest.json` SHA-256 与逐字 `sourceSpan`，补齐 `JT-P08` `EC=2CF` 与 `GK-S05(2)`/`JT-P06(2)` 不可行契约，`independentReviewStatus: "pending_second_reviewer"`）；`drawingContracts.test.ts` 8 项、`finalOutcome.test.ts` 4 项、离线/`dev-smoke`回放/36题离线评测（`denominator: 36, passed: 1, partial: 2, failed: 33, incomplete: 0, liveWrites: 0, costKnown: false`）、基线 25/36 & 4/36 & null 重建、全量 Vitest 526 文件/5600 通过+1todo、类型/Lint/Web 构建通过 |
-| 后续阶段范围 | 进行中（下一步 `P1 / T02`） | 按 DAG 推进 `T02 → T03 → T11 → T04 → ... → T14`；`P7–P8`、付费 provider 与发布均未开启 |
+| B4 / P1 / T02 原文映射、分问作用域与无损IR | **已完成（R01-B选问收口）** | [P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)：新增 `problemContract.ts`、`normalizeGeometryPromptWithSourceMap`、`NormalisationApplication.sourceMap`、`selectedPart`/`selectedScopeId` 选问隔离与 `toLegacyObligationSet.parts` 无损往返；实现 `A1`/`A₁` 别名归并与折前/折后跨 state 歧义检测、阻断模型自选参数（`a=2`）升级硬前提与改题失效检测；定向 5 文件 66 项通过（含 `planCompiler.offPath.golden.test.ts` 13 项），全量 Vitest 527 文件/5611 通过+1todo，类型/Lint/Web 构建（635 modules）/离线评测通过 |
+| 后续阶段范围 | 进行中（下一步 `P2 / T03`） | 按 DAG 推进 `T03 → T11 → T04 → ... → T14`；`P7–P8`、付费 provider 与发布均未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 至 `R11` 提交 `d7e1e3af` 均已推送；`P0 / T01` 随本变更提交并核对远端。
 
@@ -86,15 +87,15 @@ R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口�
 
 [8个解析探针](audit/2026-11-15-drawing-implementation-audit/README.md)与[4个compile只读探针](audit/2026-11-15-implementation-plan-verification/README.md)用于核对已知缺口：裸条件/设/且仍passed，若为unverified warning；无模型调用、无主场景提交。6个最终产物选择示例断言只验证计划内代码，不是生产接线通过。
 
-### 2. 本轮阶段验收（0 件已解决、9 件待定）
+### 2. 本轮阶段验收（1 件已解决、8 件待定）
 
 P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不能相加为新的完成总数。R01-A/B、R09-A/B是任务切片，不把31项再拆成另一份重复计数。
 
 | 序号 | 阶段 | 状态 | 退出门槛摘要 |
 | --- | --- | --- | --- |
 | 1 | P0 基准与测量 | 进行中（T01 已完成，待第二独立审阅者复核） | 36题黄金合同/统一回放口径已落地；待第二位独立审阅者复核后退出 |
-| 2 | P1 来源与语义合同 | 未开始 | R01-A先止损，T02再完整scope/source/entity/IR无损迁移 |
-| 3 | P2 解析与归一化 | 未开始 | AST/链式关系/别名/小问；必要条件不丢失 |
+| 2 | ~~P1 来源与语义合同~~ | **已完成（T02 已收口；多图元绑定随 T05 深化）** | R01-A止损、R01-B选问隔离与T02完整 `ProblemContract`/UTF-16来源映射/scope/实体state/IR无损往返已落地 |
+| 3 | P2 解析与归一化 | 进行中（下一步 T03） | AST/链式关系/别名/小问；必要条件不丢失 |
 | 4 | P3 平面确定性构造 | 未开始 | 平面18/18对象与数学合同；依赖稳定绑定和T11数值策略 |
 | 5 | P4 立体与折叠构造 | 未开始 | 立体18/18合同与拓扑/state/分支负例 |
 | 6 | P5 有界求解与修复 | 未开始 | 共享预算、限长、停滞、取消与过期安全 |
@@ -104,7 +105,7 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 ### 3. 下一步及授权边界
 
-**当前按主计划持续推进 B4（P0–P6）**：`R00–R11`（含 G1/G2）与 `P0 / T01` 已有关闭证据（`T01` 第二独立审阅者复核标 `pending_second_reviewer`）；下一步进入 `P1 / T02`（完整 `ProblemContract` / 来源映射 / scope / `ObligationIR` 无损迁移）。
+**当前按主计划持续推进 B4（P0–P6）**：`R00–R11`（含 G1/G2）、`P0 / T01`（`pending_second_reviewer`）与 `P1 / T02`（`ProblemContract` / 来源映射 / scope / `ObligationIR` 无损迁移 / `R01-B` 选问收口）已有关闭证据；下一步进入 `P2 / T03`（比例语义纠正：`segmentRatio` 默认不推共线、`splitPoint` 仅显式分点生效，与链式角/长度关系解析）。
 
 全部实现须RED→GREEN、生产接线、反例/兼容与独立复核；安全补丁回退只能关闭入口，不能重新开放已知漏洞。历史版本和授权不自动继承。付费预算、依赖升级和产品发布不在本次范围内，不自动触发。
 

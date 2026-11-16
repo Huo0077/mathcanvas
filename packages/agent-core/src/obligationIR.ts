@@ -4,10 +4,12 @@ import {
   type DiagramObligation,
   type DiagramObligationKind,
   type DiagramObligationSet,
-  type DiagramParseOptions
+  type DiagramParseOptions,
+  type DiagramSourceSpan
 } from "./diagramObligations"
 import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance } from "./claimEvidence"
 import { normalizeGeometryPrompt } from "./latexNormalisation"
+import { SHARED_SCOPE_ID, parseSubquestionScopeId, subquestionScopeId } from "./numberedProblem"
 
 /**
  * **统一数学状态 IR**（设计 2026-10-04 §3；Phase N1）。
@@ -140,7 +142,13 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   return undefined
 }
 
-function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgeability: Judgeability): GeometryObligation {
+function claimOf(
+  item: DiagramObligation,
+  id: string,
+  role: ClaimRole,
+  judgeability: Judgeability,
+  scopeId?: string
+): GeometryObligation {
   const tolerance = toleranceFor(item.kind, item.value)
   const geometry = {
     ...(item.planeLengths === undefined ? {} : { planeLengths: [...item.planeLengths] as [number, number] }),
@@ -156,7 +164,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     ...(item.prismShape === undefined ? {} : { prismShape: { ...item.prismShape } })
   }
   return {
-    id: `obligation-${index}`,
+    id,
     role,
     kind: item.kind,
     sourceText: item.sourceText,
@@ -167,6 +175,7 @@ function claimOf(item: DiagramObligation, index: number, role: ClaimRole, judgea
     // 编一个 0 会让"实测 0 / 题设 0"看起来像验过一条数值条件。
     ...(item.value === undefined ? {} : { expected: item.value }),
     judgeability,
+    ...(scopeId === undefined ? {} : { scopeId }),
     ...(tolerance === undefined ? {} : { tolerance }),
     // 兼容适配（R4）要的已解析结构：见 `ObligationGeometry` 的注释。
     ...(Object.keys(geometry).length === 0 ? {} : { geometry })
@@ -208,16 +217,12 @@ export function recognizeObligationText(text: string): RecognizedObligation | nu
   return null
 }
 
-/**
- * 由**已解析的原话清单**建 IR（纯函数，不看模型声明）。
- *
- * 顺序与 `parseDiagramObligations().givens` 一致，`id` 按序号分配 —— 于是
- * "同一个题面 → 同一份 IR"是可重复的，UI 与 trace 才能拿 `id` 对齐。
- */
-export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
-  const givens = set.givens.map((item, index) => claimOf(item, index, "given", JUDGED_KINDS.has(item.kind) ? "supported" : "ambiguous"))
+function buildFlatClaims(set: DiagramObligationSet, idPrefix: string, scopeId?: string): GeometryObligation[] {
+  const givens = set.givens.map((item, index) =>
+    claimOf(item, `${idPrefix}${index}`, "given", JUDGED_KINDS.has(item.kind) ? "supported" : "ambiguous", scopeId)
+  )
   const freeChoices = set.freeChoices.map((name, index): GeometryObligation => ({
-    id: `obligation-free-${index}`,
+    id: `${idPrefix}free-${index}`,
     role: "free_choice",
     kind: "freeChoice",
     sourceText: set.freeChoiceSources?.[index]?.name === name ? set.freeChoiceSources[index].sourceText : name,
@@ -226,7 +231,8 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
     end: set.freeChoiceSources?.[index]?.name === name ? set.freeChoiceSources[index].end : 0,
     targets: [name],
     // 自由点的**名字**是原话给的，"取在哪"不是 —— 所以没有 expected。
-    judgeability: "unsupported"
+    judgeability: "unsupported",
+    ...(scopeId === undefined ? {} : { scopeId })
   }))
   const goals = set.goals.map((goal, index): GeometryObligation => {
     /**
@@ -243,31 +249,186 @@ export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
      */
     const recognized = recognizeObligationText(goal)
     return {
-      id: `obligation-goal-${index}`,
+      id: `${idPrefix}goal-${index}`,
       role: "goal",
       kind: recognized?.kind ?? "proposition",
       sourceText: goal,
       start: set.goalSources?.[index]?.sourceText === goal ? set.goalSources[index].start : 0,
       end: set.goalSources?.[index]?.sourceText === goal ? set.goalSources[index].end : 0,
       targets: recognized?.targets ?? [],
-      judgeability: "unsupported"
+      judgeability: "unsupported",
+      ...(scopeId === undefined ? {} : { scopeId })
     }
   })
-  return {
-    obligations: [...givens, ...freeChoices, ...goals],
-    unverified: set.unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
-  }
+  return [...givens, ...freeChoices, ...goals]
 }
 
 /**
- * **R4 的兼容适配**：IR → 旧结构，必须与 `parseDiagramObligations` 的产出**逐字段相等**
- * （`obligationIR.test.ts` 用 `toEqual(legacy)` 钉住它）。
+ * 由**已解析的原话清单**建 IR（纯函数，不看模型声明）。
  *
- * 这是"两个调用点语义不变"的可执行证据：只要这条相等成立，`planCompiler` 与
- * `draftStore` 即使改走 `parseObligationIR` 这条路，行为也与改动之前完全一致。
+ * 顺序与 `parseDiagramObligations().givens` 一致，`id` 按序号分配 —— 于是
+ * "同一个题面 → 同一份 IR"是可重复的，UI 与 trace 才能拿 `id` 对齐。
  */
-export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
-  const givens: DiagramObligation[] = ir.obligations.filter((item) => item.role === "given").map((item) => ({
+export function buildObligationIR(set: DiagramObligationSet): ObligationIR {
+  const parts = set.parts
+  if (parts === undefined || parts.length === 0) {
+    return {
+      obligations: buildFlatClaims(set, "obligation-"),
+      unverified: set.unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
+    }
+  }
+
+  const minPartStart = Math.min(...parts.map((part) => part.start))
+  const isStemItem = (start: number, end: number): boolean => end <= minPartStart || start < minPartStart
+  const hasGuard = set.unverified.some((entry) => entry.sourceText === "各小问的条件" || entry.sourceText === "指定小问")
+  const mode: ObligationScopeMode = set.selectedScopeId !== undefined
+    ? "selected"
+    : hasGuard
+      ? "unscoped_guarded"
+      : "unscoped_combined"
+
+  const baseGivens = set.selectedScopeId === SHARED_SCOPE_ID || mode === "unscoped_guarded"
+    ? set.givens
+    : set.givens.filter((item) => isStemItem(item.start, item.end))
+  const sharedFreeChoices: { name: string; source?: DiagramSourceSpan & { name: string } }[] = []
+  for (let index = 0; index < set.freeChoices.length; index += 1) {
+    const name = set.freeChoices[index]!
+    const src = set.freeChoiceSources?.[index]
+    const inPart = parts.some((part) => src !== undefined && src.start >= part.start && src.end <= part.end)
+    if (!inPart) sharedFreeChoices.push({ name, source: src })
+  }
+  const sharedSet: DiagramObligationSet = {
+    givens: baseGivens,
+    goals: [],
+    freeChoices: sharedFreeChoices.map((entry) => entry.name),
+    ...(sharedFreeChoices.some((entry) => entry.source !== undefined)
+      ? { freeChoiceSources: sharedFreeChoices.map((entry) => entry.source!).filter(Boolean) }
+      : {}),
+    unverified: []
+  }
+
+  const obligations: GeometryObligation[] = buildFlatClaims(sharedSet, "obligation-", SHARED_SCOPE_ID)
+  const unverified: ObligationUnverified[] = []
+  const scopes: ObligationScope[] = [{
+    id: SHARED_SCOPE_ID,
+    kind: "shared",
+    mode,
+    ...(mode === "unscoped_combined" && set.goals.length > 0 ? { combinedGoals: [...set.goals] } : {}),
+    ...(mode === "unscoped_combined" && set.goalSources !== undefined ? { combinedGoalSources: set.goalSources.map((s) => ({ ...s })) } : {})
+  }]
+
+  const seenSharedUnverified = new Set<string>()
+  if (mode === "unscoped_guarded" || set.selectedScopeId === SHARED_SCOPE_ID) {
+    for (const entry of set.unverified) {
+      if (entry.sourceText === "各小问的条件" || entry.sourceText === "指定小问") continue
+      const inAnyPartOnly = parts.some((part) => part.obligations.unverified.some((u) => u.sourceText === entry.sourceText && u.reason === entry.reason)
+        && !sharedInPartUnverified(parts, entry.sourceText, entry.reason))
+      if (!inAnyPartOnly) {
+        const key = `${entry.sourceText}\u0000${entry.reason}`
+        if (!seenSharedUnverified.has(key)) {
+          seenSharedUnverified.add(key)
+          unverified.push({ sourceText: entry.sourceText, reason: entry.reason, scopeId: SHARED_SCOPE_ID })
+        }
+      }
+    }
+  } else {
+    // In selected/combined mode, keep any shared-origin unverified items from the selected part's unverified that appear before parts or in all parts.
+    for (const entry of set.unverified) {
+      if (entry.sourceText === "各小问的条件" || entry.sourceText === "指定小问") continue
+      const isPartSpecific = parts.some((part) => part.start !== undefined && part.text.includes(entry.sourceText))
+      if (!isPartSpecific) {
+        const key = `${entry.sourceText}\u0000${entry.reason}`
+        if (!seenSharedUnverified.has(key)) {
+          seenSharedUnverified.add(key)
+          unverified.push({ sourceText: entry.sourceText, reason: entry.reason, scopeId: SHARED_SCOPE_ID })
+        }
+      }
+    }
+  }
+
+  for (const part of parts) {
+    const scopeId = subquestionScopeId(part.number)
+    const partOwnGivens = part.obligations.givens.filter((item) => !isStemItem(item.start, item.end))
+    const partFreeIndices: number[] = []
+    for (let index = 0; index < part.obligations.freeChoices.length; index += 1) {
+      const src = part.obligations.freeChoiceSources?.[index]
+      if (src === undefined || (src.start >= part.start && src.end <= part.end)) {
+        partFreeIndices.push(index)
+      }
+    }
+    const partOwnSet: DiagramObligationSet = {
+      givens: partOwnGivens,
+      goals: part.obligations.goals,
+      ...(part.obligations.goalSources ? { goalSources: part.obligations.goalSources } : {}),
+      freeChoices: partFreeIndices.map((index) => part.obligations.freeChoices[index]!),
+      ...(part.obligations.freeChoiceSources
+        ? { freeChoiceSources: partFreeIndices.map((index) => part.obligations.freeChoiceSources![index]!).filter(Boolean) }
+        : {}),
+      unverified: []
+    }
+    obligations.push(...buildFlatClaims(partOwnSet, `obligation-sub${part.number}-`, scopeId))
+
+    for (const entry of part.obligations.unverified) {
+      const key = `${entry.sourceText}\u0000${entry.reason}`
+      if (seenSharedUnverified.has(key)) continue
+      unverified.push({ sourceText: entry.sourceText, reason: entry.reason, scopeId })
+    }
+
+    const sharedOverrides: { index: number; splitPoint?: boolean; targets?: string[] }[] = []
+    const partStemGivens = part.obligations.givens.filter((item) => isStemItem(item.start, item.end))
+    for (let sharedIdx = 0; sharedIdx < baseGivens.length; sharedIdx += 1) {
+      const base = baseGivens[sharedIdx]!
+      const inPart = partStemGivens[sharedIdx]
+      if (inPart === undefined) continue
+      const patch: { index: number; splitPoint?: boolean; targets?: string[] } = { index: sharedIdx }
+      let modified = false
+      if (inPart.splitPoint !== base.splitPoint) {
+        patch.splitPoint = inPart.splitPoint
+        modified = true
+      }
+      if (inPart.targets.join("|") !== base.targets.join("|")) {
+        patch.targets = [...inPart.targets]
+        modified = true
+      }
+      if (modified) sharedOverrides.push(patch)
+    }
+
+    scopes.push({
+      id: scopeId,
+      parentId: SHARED_SCOPE_ID,
+      kind: "subquestion",
+      number: part.number,
+      start: part.start,
+      end: part.end,
+      text: part.text,
+      ...(sharedOverrides.length > 0 ? { sharedOverrides } : {})
+    })
+  }
+
+  for (const entry of set.unverified) {
+    if (entry.sourceText === "各小问的条件" || entry.sourceText === "指定小问") {
+      unverified.push({ sourceText: entry.sourceText, reason: entry.reason, scopeId: "scope_blocker" })
+    }
+  }
+
+  return {
+    obligations,
+    unverified,
+    scopes,
+    ...(set.selectedScopeId === undefined ? {} : { selectedScopeId: set.selectedScopeId })
+  }
+}
+
+function sharedInPartUnverified(
+  parts: NonNullable<DiagramObligationSet["parts"]>,
+  sourceText: string,
+  reason: string
+): boolean {
+  return parts.every((part) => part.obligations.unverified.some((entry) => entry.sourceText === sourceText && entry.reason === reason))
+}
+
+function toLegacyObligation(item: GeometryObligation): DiagramObligation {
+  return {
     kind: item.kind as DiagramObligationKind,
     sourceText: item.sourceText,
     start: item.start,
@@ -285,18 +446,123 @@ export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
     ...(item.geometry?.expressions === undefined ? {} : { expressions: [...item.geometry.expressions] as [string, string] }),
     ...(item.geometry?.solid === undefined ? {} : { solid: { ...item.geometry.solid } }),
     ...(item.geometry?.prismShape === undefined ? {} : { prismShape: { ...item.geometry.prismShape } })
-  }))
+  }
+}
+
+function toLegacyScopeSlice(
+  items: readonly GeometryObligation[],
+  unverified: readonly ObligationUnverified[]
+): DiagramObligationSet {
+  const givens = items.filter((item) => item.role === "given").map(toLegacyObligation).sort((a, b) => a.start - b.start)
+  const goalItems = items.filter((item) => item.role === "goal")
+  const freeItems = items.filter((item) => item.role === "free_choice")
   return {
     givens,
-    goals: ir.obligations.filter((item) => item.role === "goal").map((item) => item.sourceText),
-    ...(ir.obligations.some((item) => item.role === "goal" && item.end > item.start) ? {
-      goalSources: ir.obligations.filter((item) => item.role === "goal").map(({ sourceText, start, end }) => ({ sourceText, start, end }))
-    } : {}),
-    freeChoices: ir.obligations.filter((item) => item.role === "free_choice").flatMap((item) => item.targets),
-    ...(ir.obligations.some((item) => item.role === "free_choice" && item.end > item.start) ? {
-      freeChoiceSources: ir.obligations.filter((item) => item.role === "free_choice").map(({ targets, sourceText, start, end }) => ({ name: targets[0], sourceText, start, end }))
-    } : {}),
-    unverified: ir.unverified.map((entry) => ({ sourceText: entry.sourceText, reason: entry.reason }))
+    goals: goalItems.map((item) => item.sourceText),
+    ...(goalItems.some((item) => item.end > item.start)
+      ? { goalSources: goalItems.map(({ sourceText, start, end }) => ({ sourceText, start, end })) }
+      : {}),
+    freeChoices: freeItems.flatMap((item) => item.targets),
+    ...(freeItems.some((item) => item.end > item.start)
+      ? { freeChoiceSources: freeItems.map(({ targets, sourceText, start, end }) => ({ name: targets[0]!, sourceText, start, end })) }
+      : {}),
+    unverified: unverified.map(({ sourceText, reason }) => ({ sourceText, reason }))
+  }
+}
+
+/**
+ * **R4 / T02 的无损兼容适配**：IR → 旧结构，包含 `parts` 与当前选择 `selectedScopeId`，
+ * 必须与 `parseDiagramObligations` 的产出**逐字段相等**。
+ */
+export function toLegacyObligationSet(ir: ObligationIR): DiagramObligationSet {
+  const subScopes = (ir.scopes ?? []).filter((scope) => scope.kind === "subquestion" && scope.number !== undefined)
+  if (subScopes.length === 0) {
+    return toLegacyScopeSlice(ir.obligations, ir.unverified)
+  }
+
+  const sharedScope = (ir.scopes ?? []).find((scope) => scope.kind === "shared")
+  const sharedItems = ir.obligations.filter((item) => (item.scopeId ?? SHARED_SCOPE_ID) === SHARED_SCOPE_ID)
+  const sharedUnverified = ir.unverified.filter((entry) => (entry.scopeId ?? SHARED_SCOPE_ID) === SHARED_SCOPE_ID)
+  const blockerUnverified = ir.unverified.filter((entry) => entry.scopeId === "scope_blocker")
+
+  const parts: NonNullable<DiagramObligationSet["parts"]> = subScopes.map((scope) => {
+    const scopeGivensBase = sharedItems.map((item) => ({ ...item, geometry: item.geometry ? { ...item.geometry } : undefined, targets: [...item.targets] }))
+    if (scope.sharedOverrides) {
+      let givenCursor = 0
+      for (const item of scopeGivensBase) {
+        if (item.role !== "given") continue
+        const patch = scope.sharedOverrides.find((entry) => entry.index === givenCursor)
+        if (patch !== undefined) {
+          if (patch.splitPoint !== undefined) item.geometry = { ...item.geometry, splitPoint: patch.splitPoint }
+          if (patch.targets !== undefined) item.targets = [...patch.targets]
+        }
+        givenCursor += 1
+      }
+    }
+    const ownItems = ir.obligations.filter((item) => item.scopeId === scope.id)
+    const ownUnverified = ir.unverified.filter((entry) => entry.scopeId === scope.id)
+    return {
+      number: scope.number!,
+      text: scope.text ?? "",
+      start: scope.start ?? 0,
+      end: scope.end ?? 0,
+      obligations: toLegacyScopeSlice([...scopeGivensBase, ...ownItems], [...sharedUnverified, ...ownUnverified])
+    }
+  })
+
+  const requestedPart = parseSubquestionScopeId(ir.selectedScopeId)
+  if (requestedPart !== null) {
+    const matched = parts.find((part) => part.number === requestedPart)
+    if (matched !== undefined) {
+      return {
+        ...matched.obligations,
+        parts,
+        selectedScopeId: ir.selectedScopeId
+      }
+    }
+    const sharedSlice = toLegacyScopeSlice(sharedItems, [...sharedUnverified, ...blockerUnverified])
+    return {
+      ...sharedSlice,
+      parts,
+      selectedScopeId: ir.selectedScopeId
+    }
+  }
+
+  if (ir.selectedScopeId === SHARED_SCOPE_ID) {
+    const sharedSlice = toLegacyScopeSlice(sharedItems, [...sharedUnverified, ...blockerUnverified])
+    return {
+      ...sharedSlice,
+      parts,
+      goals: parts.flatMap((part) => part.obligations.goals),
+      goalSources: parts.flatMap((part) => part.obligations.goalSources ?? []),
+      selectedScopeId: SHARED_SCOPE_ID
+    }
+  }
+
+  if (sharedScope?.mode === "unscoped_combined") {
+    const allItems = [...sharedItems, ...subScopes.flatMap((scope) => ir.obligations.filter((item) => item.scopeId === scope.id && item.role !== "goal"))]
+    const combinedSlice = toLegacyScopeSlice(allItems, ir.unverified)
+    return {
+      ...combinedSlice,
+      goals: sharedScope.combinedGoals ? [...sharedScope.combinedGoals] : parts.flatMap((part) => part.obligations.goals),
+      ...(sharedScope.combinedGoalSources ? { goalSources: sharedScope.combinedGoalSources.map((s) => ({ ...s })) } : {}),
+      parts
+    }
+  }
+
+  const sharedSlice = toLegacyScopeSlice(sharedItems, [])
+  return {
+    ...sharedSlice,
+    parts,
+    goals: parts.flatMap((part) => part.obligations.goals),
+    goalSources: parts.flatMap((part) => part.obligations.goalSources ?? []),
+    unverified: [
+      ...sharedUnverified.map(({ sourceText, reason }) => ({ sourceText, reason })),
+      ...subScopes.flatMap((scope) =>
+        ir.unverified.filter((entry) => entry.scopeId === scope.id).map(({ sourceText, reason }) => ({ sourceText, reason }))
+      ),
+      ...blockerUnverified.map(({ sourceText, reason }) => ({ sourceText, reason }))
+    ]
   }
 }
 
@@ -307,8 +573,30 @@ export function parseObligationWithLegacy(prompt: string, options: DiagramParseO
 }
 
 /** 只要 IR 的便捷入口（语义与 `buildObligationIR(parseDiagramObligations(prompt))` 完全相同）。 */
-export function parseObligationIR(prompt: string): ObligationIR {
-  return buildObligationIR(parseDiagramObligations(normalizeGeometryPrompt(prompt)))
+export function parseObligationIR(prompt: string, options: DiagramParseOptions = {}): ObligationIR {
+  return buildObligationIR(parseDiagramObligations(normalizeGeometryPrompt(prompt), options))
+}
+
+export type ObligationScopeMode = "unscoped_combined" | "unscoped_guarded" | "selected"
+
+export interface ObligationScope {
+  id: string
+  parentId?: string
+  kind: "shared" | "subquestion"
+  number?: number
+  start?: number
+  end?: number
+  text?: string
+  mode?: ObligationScopeMode
+  combinedGoals?: string[]
+  combinedGoalSources?: DiagramSourceSpan[]
+  sharedOverrides?: { index: number; splitPoint?: boolean; targets?: string[] }[]
+}
+
+export interface ObligationUnverified {
+  sourceText: string
+  reason: string
+  scopeId?: string
 }
 
 /**
@@ -317,6 +605,8 @@ export function parseObligationIR(prompt: string): ObligationIR {
  */
 export interface ObligationIR {
   obligations: GeometryObligation[]
-  unverified: { sourceText: string; reason: string }[]
+  unverified: ObligationUnverified[]
+  scopes?: ObligationScope[]
+  selectedScopeId?: string
 }
 

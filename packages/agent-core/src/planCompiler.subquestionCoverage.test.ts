@@ -65,4 +65,30 @@ describe("subquestion condition coverage", () => {
     expect(result.diagramVerification?.status).toBe("passed")
     before()
   })
+
+  it("isolates selected subquestion scope through compilePlan (R01-B): passes subquestion (1) and checks subquestion (2)", () => {
+    const prompt = "四棱锥P-ABCD中，PA=2。（1）证明AD∥平面PBC；（2）设AD⊥DC，求AD。"
+    const sub1Document = createEmptyDocument("geometry3d")
+    const sub1Result = compilePlan(candidatePlan, {
+      document: sub1Document,
+      prompt,
+      selectedSubquestion: 1,
+      conversationId: "scope-sub1",
+      documentGeneration: sub1Document.revision
+    })
+    expect(sub1Result.ok).toBe(true)
+    expect(sub1Result.diagramVerification?.status).toBe("passed")
+
+    const sub2Document = createEmptyDocument("geometry3d")
+    const sub2Result = compilePlan(candidatePlan, {
+      document: sub2Document,
+      prompt,
+      selectedSubquestion: 2,
+      conversationId: "scope-sub2",
+      documentGeneration: sub2Document.revision
+    })
+    expect(sub2Result.ok).toBe(false)
+    expect(sub2Result.diagramVerification?.status).toBe("failed")
+    expect(sub2Result.diagramVerification?.checks.some((check) => check.sourceText === "AD⊥DC" && check.status === "failed")).toBe(true)
+  })
 })

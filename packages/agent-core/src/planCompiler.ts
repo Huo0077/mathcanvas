@@ -233,6 +233,9 @@ export interface PlanCompileContext {
    * 与 `rescuedByWitnessSearch` 的注释）。搜索**不会**在模型坐标已经合格时跑（R37①）。
    */
   diagramWitnessSearch?: boolean
+  /** Explicit subquestion selection for scoped verification (`R01-B` / `T02`). */
+  selectedSubquestion?: number
+  selectedScopeId?: string
 }
 
 export interface PlanCompileResult {
@@ -807,7 +810,12 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
    * 这里读的是 `effectivePrompt`（原文，或规范化之后的题面）—— 两处都只有这一个来源。
    */
   const obligationParse = parserPrompt && (planHasVerifiableFigure(compiledActions) || solidDimensionGate(parserPrompt, compiledActions) || readFoldTransformations(parserPrompt).length > 0)
-    ? parseObligationWithLegacy(parserPrompt, { spatialPointConditions: context.diagramWitnessSearch === true }) : null
+    ? parseObligationWithLegacy(parserPrompt, {
+        spatialPointConditions: context.diagramWitnessSearch === true,
+        selectedPart: context.selectedSubquestion,
+        selectedScopeId: context.selectedScopeId
+      })
+    : null
   const obligations = obligationParse?.legacy ?? null
   const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0)
     ? verifyDiagramObligations(obligations, plan, working, context.document, { obligationIR: context.diagramObligationIR === true, prompt: parserPrompt }) : undefined

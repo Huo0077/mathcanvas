@@ -148,6 +148,8 @@ export interface GeometryObligation {
   targets: string[]
   expected?: number | string
   judgeability: Judgeability
+  scopeId?: string
+  stateId?: string
   tolerance?: ObligationTolerance
   /** 见 `ObligationGeometry`：R4 兼容适配需要的、通用字段装不下的已解析事实。 */
   geometry?: ObligationGeometry

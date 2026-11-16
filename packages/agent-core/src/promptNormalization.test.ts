@@ -240,4 +240,26 @@ describe("A2 改写等价闸门", () => {
     expect(application.applied).toEqual([])
     expect(application.skipped).toHaveLength(2)
   })
+
+  it("tracks exact UTF-16 original spans for repeated clauses and surrogate Unicode, and rejects goal/free-choice promotion", () => {
+    const prompt = "图形𝔭，ABCD中，AB=CD，AD=BC，AB=CD。任取一点P。求证：AB⊥BC"
+    const application = applyNormalisationWithReport(prompt, [
+      { original: "AB=CD", normalized: "AB=CD（一）" },
+      { original: "AB=CD", normalized: "AB=CD（二）" }
+    ])
+
+    expect(application.applied).toHaveLength(2)
+    expect(prompt.slice(application.applied[0]!.start, application.applied[0]!.end)).toBe("AB=CD")
+    expect(prompt.slice(application.applied[1]!.start, application.applied[1]!.end)).toBe("AB=CD")
+    expect(application.applied[1]!.start).toBeGreaterThan(application.applied[0]!.end)
+    expect(application.sourceMap?.length).toBeGreaterThan(0)
+
+    // A rewrite must not inject a goal/premise shift or change a canonical subscript/point alias illegally.
+    const reportGoalInjection = parseNormalisationReply(
+      replyWith([{ original: "AB=CD", normalized: "证明AB=CD" }]),
+      prompt,
+      [{ sourceText: "AB=CD", reason: "未核验。" }]
+    )
+    expect(reportGoalInjection.accepted).toEqual([])
+  })
 })

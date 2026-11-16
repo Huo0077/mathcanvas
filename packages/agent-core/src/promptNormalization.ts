@@ -312,6 +312,21 @@ export function parseNormalisationReply(reply: unknown, prompt: string, unread: 
       reject(`改写把关系换弱了（${weakened.map((family) => family.name).join("、")}）：条件不许改。`)
       continue
     }
+    const goalPattern = /(?:求证|试?证明|(?:^|[，,。；;\n])\s*(?:证明|求)(?![\u4e00-\u9fff]*的))/
+    if (!goalPattern.test(original) && goalPattern.test(normalized)) {
+      reject("改写把待求目标混入了已知条件。")
+      continue
+    }
+    const freeChoicePattern = /(?:任取|任意|自由)(?:一?个)?\s*点/
+    if (freeChoicePattern.test(original) && !freeChoicePattern.test(normalized)) {
+      reject("改写不得把自由点降级或改写为普通固定条件。")
+      continue
+    }
+    const subquestionPattern = /(?:^|[。；;.!！?？:：\r\n])\s*(?:[（(]\s*[1-9]\d*\s*[）)]|[①-⑳])/
+    if (!subquestionPattern.test(original) && subquestionPattern.test(normalized)) {
+      reject("改写不得引入或篡改小问编号。")
+      continue
+    }
     /**
      * **原文读不完整 ⇒ 不许声称等价**（A2.1）。
      *
@@ -352,6 +367,14 @@ export interface AppliedNormalisation {
   end: number
 }
 
+export interface SourceSpanMapping {
+  editedStart: number
+  editedEnd: number
+  originalStart: number
+  originalEnd: number
+  kind: "unchanged" | "replaced"
+}
+
 export interface SkippedNormalisation {
   candidate: NormalisationCandidate
   reason: string
@@ -362,6 +385,7 @@ export interface NormalisationApplication {
   applied: AppliedNormalisation[]
   /** 没被采用的条目与原因 —— 重叠、重复原文、定位不到，都如实摆出来。 */
   skipped: SkippedNormalisation[]
+  sourceMap?: SourceSpanMapping[]
 }
 
 /**
@@ -426,7 +450,66 @@ export function applyNormalisationWithReport(prompt: string, accepted: readonly 
   for (const span of [...chosen].sort((left, right) => right.start - left.start)) {
     result = result.slice(0, span.start) + span.candidate.normalized + result.slice(span.end)
   }
-  return { text: result, applied: chosen, skipped }
+
+  const sourceMap: SourceSpanMapping[] = []
+  let origCursor = 0
+  let editedCursor = 0
+  for (const span of [...chosen].sort((left, right) => left.start - right.start)) {
+    if (span.start > origCursor) {
+      const gap = span.start - origCursor
+      sourceMap.push({
+        editedStart: editedCursor,
+        editedEnd: editedCursor + gap,
+        originalStart: origCursor,
+        originalEnd: span.start,
+        kind: "unchanged"
+      })
+      editedCursor += gap
+    }
+    const replacementLength = span.candidate.normalized.length
+    sourceMap.push({
+      editedStart: editedCursor,
+      editedEnd: editedCursor + replacementLength,
+      originalStart: span.start,
+      originalEnd: span.end,
+      kind: "replaced"
+    })
+    editedCursor += replacementLength
+    origCursor = span.end
+  }
+  if (origCursor < prompt.length) {
+    const tail = prompt.length - origCursor
+    sourceMap.push({
+      editedStart: editedCursor,
+      editedEnd: editedCursor + tail,
+      originalStart: origCursor,
+      originalEnd: prompt.length,
+      kind: "unchanged"
+    })
+  }
+
+  return { text: result, applied: chosen, skipped, sourceMap }
+}
+
+export function mapEditedRangeToOriginal(
+  application: Pick<NormalisationApplication, "sourceMap">,
+  editedStart: number,
+  editedEnd: number
+): { start: number; end: number } {
+  const segments = application.sourceMap ?? []
+  if (segments.length === 0) return { start: editedStart, end: editedEnd }
+  if (editedEnd <= editedStart) {
+    const at = segments.find((seg) => editedStart >= seg.editedStart && editedStart <= seg.editedEnd) ?? segments[segments.length - 1]!
+    const offset = at.kind === "unchanged" ? at.originalStart + (editedStart - at.editedStart) : at.originalStart
+    return { start: offset, end: offset }
+  }
+  const overlapping = segments.filter((seg) => seg.editedEnd > editedStart && seg.editedStart < editedEnd)
+  if (overlapping.length === 0) return { start: 0, end: 0 }
+  const first = overlapping[0]!
+  const last = overlapping[overlapping.length - 1]!
+  const start = first.kind === "unchanged" ? first.originalStart + Math.max(0, editedStart - first.editedStart) : first.originalStart
+  const end = last.kind === "unchanged" ? last.originalStart + Math.min(last.editedEnd - last.editedStart, editedEnd - last.editedStart) : last.originalEnd
+  return { start, end: Math.max(start, end) }
 }
 
 export function applyNormalisation(prompt: string, accepted: readonly NormalisationCandidate[]): string {

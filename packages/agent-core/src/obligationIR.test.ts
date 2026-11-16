@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { parseDiagramObligations } from "./diagramObligations"
 import { verifyDiagramObligations } from "./diagramVerification"
-import { buildObligationIR, parseObligationIR, toLegacyObligationSet } from "./obligationIR"
+import { buildObligationIR, parseObligationIR, parseObligationWithLegacy, toLegacyObligationSet } from "./obligationIR"
 
 /**
  * 用**当前真实题面**（`diagramVerification.test.ts` 的同一道三棱锥题）钉住 IR：
@@ -180,5 +180,25 @@ describe("V0a coordinate obligation IR", () => {
       expect(toLegacyObligationSet(ir), prompt).toEqual(legacy)
       expect(ir.obligations.every((item) => item.judgeability === "supported"), prompt).toBe(true)
     }
+  })
+
+  it("IR roundtrip preserves subquestion scopes and parts", () => {
+    const text = "四棱锥P-ABCD，PA⊥底面ABCD。（1）证明AD∥平面PBC；（2）若AD⊥DC，求AD。"
+    const parsed = parseObligationWithLegacy(text)
+    expect(parsed.legacy.parts).toHaveLength(2)
+    expect(toLegacyObligationSet(parsed.ir).parts).toEqual(parsed.legacy.parts)
+    // `(1) 证明AD∥平面PBC` must remain a goal, not a premise.
+    expect(parsed.ir.obligations.some((item) => item.role === "given" && item.sourceText.includes("AD∥平面PBC"))).toBe(false)
+    expect(parsed.ir.obligations.some((item) => item.role === "goal" && item.sourceText.includes("AD∥平面PBC"))).toBe(true)
+  })
+
+  it("supports selecting a subquestion scope without cross-question pollution while retaining parts", () => {
+    const text = "四棱锥P-ABCD，PA=2。（1）若AB=3，证明AD∥平面PBC；（2）若AD⊥DC，求AD。"
+    const parsed = parseObligationWithLegacy(text, { selectedPart: 2 })
+    expect(parsed.legacy.givens.map((item) => item.sourceText)).toEqual(["PA=2", "AD⊥DC"])
+    expect(parsed.legacy.givens.some((item) => item.sourceText === "AB=3")).toBe(false)
+    expect(parsed.legacy.unverified.some((entry) => entry.sourceText === "各小问的条件")).toBe(false)
+    expect(parsed.ir.selectedScopeId).toBe("subquestion:2")
+    expect(toLegacyObligationSet(parsed.ir)).toEqual(parsed.legacy)
   })
 })

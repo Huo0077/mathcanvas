@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P1 / T02 ProblemContract、来源映射、作用域隔离与无损 ObligationIR
+
+- **RED 复现与安全缺口定位**：建立 `problemContract.test.ts` 与 `obligationIR.test.ts` / `promptNormalization.test.ts` RED 用例，实测确认 `toLegacyObligationSet(parsed.ir).parts` 丢失返回 `undefined`、`selectedPart: 2` 选问隔离未打通（遗漏 `AD⊥DC`）、`NormalisationApplication.sourceMap` 缺失，并覆盖第 (1) 问前提漏检与 `"任取一点P"` 未识别等边缘场景。
+- **单一 `ProblemContract` 与 UTF-16 来源映射**：在 `latexNormalisation.ts` 新增 `normalizeGeometryPromptWithSourceMap` / `mapNormalizedRangeToOriginal` 并让 `normalizeGeometryPrompt` 同源复用；在 `promptNormalization.ts` 输出 `NormalisationApplication.sourceMap`（`mapEditedRangeToOriginal`），并拒绝将待求目标混入前提、降级自由点或篡改小问编号的改写。新增 `packages/agent-core/src/problemContract.ts`（`buildProblemContract`、`resolveEntityBinding`、`recordModelProposal`、`isContractStale`），统一 `A1` ↔ `A₁` 规范别名归并、折前 `D@s0` / 折后 `P@s1` 与同显示名跨 state 歧义检测（未指定 `stateId` 返回 `ambiguous`），显式阻断模型自选参数（如 `a=2`）升级为原题给定前提，并在改题或缺来源旧合同时显式失效/阻断证书。
+- **`R01-B` 选问隔离与 `ObligationIR` 无损往返**：扩展 `numberedProblem.ts`、`diagramObligations.ts`、`claimEvidence.ts`、`obligationIR.ts` 与 `planCompiler.ts`，保留 `shared` / `subquestion:N` 作用域与 `selectedPart` / `selectedScopeId` 选问隔离（仅 `shared` 在多问含前提题面下显式标 `partial`），实现 `toLegacyObligationSet(ir).parts` 无损往返且单问路径维持 R6 / off-path 黄金 JSON 零变化。
+- **验证**：`problemContract.test.ts`（7 passed）、`obligationIR.test.ts`（14 passed）、`promptNormalization.test.ts`（23 passed）、`planCompiler.subquestionCoverage.test.ts`（9 passed）、`planCompiler.offPath.golden.test.ts`（13 passed）全部通过；全量 Vitest **527 文件 / 5611 passed | 1 todo**、`typecheck`（0 errors）、`lint`（0 errors / 32 既有 warning）、Web 构建（635 modules）、`eval:reliability -- --offline`（3 passed）与 `test:docs` 通过。证据见[P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)。
+
 ## 2026-11-16 —— P0 / T01 36 题黄金作图契约冻结与统一评测口径
 
 - **RED 复现与黄金契约冻结**：依据 [`manifest.json`](audit/2026-11-15-drawing-baseline/manifest.json) 生成 `test-fixtures/reliability/drawing-contracts-36.json`（固定 `denominator = 36`），逐字匹配原文与 UTF-8 SHA-256 `inputHash`/`sourceHash`，并为每条必需义务绑定精确原文下标 `sourceSpan`。显式修正基线 `JT-P08` 仅点在椭圆而未校 `C - E = 2(F - C)` 的判据缺口，同时为 `GK-S05 (2)` 与 `JT-P06 (2)` 标注不可行分支与诚实披露要求，独立审阅状态如实标为 `pending_second_reviewer`。
