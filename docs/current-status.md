@@ -1,6 +1,6 @@
 # MathCanvas 当前状态
 
-最后更新：2026-11-16；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
+最后更新：2026-11-17；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
 
 ## 2026-11-15 —— 进度文档统一对齐（仅文档，产品禁止发布）
 
@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`P0–P6`：`T01–T14`）已有实现提交，但 **G3-Math 尚未退出**。用户已创建持续 goal，当前按[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)先整改 T01 合同与生产验收，再依次完成 `B5`（`T15 → T16`）；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`P0–P6`：`T01–T14`）已有实现提交，但 **G3-Math 尚未退出**。用户已创建持续 goal，但按最新要求已停止；T01 合同与生产验收及 `B5`（`T15 → T16`）均留作待办，产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -67,9 +67,11 @@
 
 - **GK-S02 文字可确定的折叠证据已补齐**：A→P 的 ±90° 真实旋转、按state的对象集合、EF⊥PD和面PCD/PBF正弦8/√65均验证；伪旋转、缺状态均拒绝。谱系聚合改用全状态实体并集，不再把折前无P误报为缺失。44项目标测试、全量540文件/5740通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过，未新增离线 reliability 读数。证据：[GK-S02折叠证据](audit/2026-11-16-g3-gks02-fold/README.md)。**未审核题图的面环与宿主仍未关闭**，T01不退出，下一步恢复第二独立reviewer全量复审。
 
+- **第三轮独立复核已完成，suite仍不可批准**：agent-0逐题确认16/18平面、10/18立体的case专属数学内容可批准，但未改任何审核标志。新阻断为GK-P06的AB宿主、JT-P02退化交点、JT-S04镜像与闭合六面体、GK-S09/JT-S01/JT-S09指定实体绑定，以及全局重复规范化点标签覆盖。GK-S02/GK-S03/JT-S06/JT-S07题图来源仍未关闭。证据：[第三轮独立全量复核](audit/2026-11-16-g3-contract-review-r3/README.md)。用户已要求停止goal，后续整改仅登记为待办，尚未执行；不得把16/18+10/18写成36题验收通过率。
+
 ### 当前执行范围与区块结果
 
-前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。当前按用户 goal 持续推进 **G3（先 G3-Math，再 B5/G3-UX）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。
+前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。**按用户最新要求，G3 goal 已停止**；未完成的合同整改、生产接线、真实渲染与交互仅保留为待办，未启动、未验收，发布阻断不解除。
 
 | 工作包 | 当前状态 | 证据 |
 | --- | --- | --- |
@@ -86,7 +88,7 @@
 | G2 / R08 E2E与生产UI/合同对齐 | **已完成** | [E2E与生产UI对齐证据](audit/2026-11-15-e2e-ui-contract-alignment/README.md)：修复参数化外接球动作/内核披露、`tryBuildRightPrismMidpointsPlan` 分问路由与 `.clean-chrome` `z-index: 100` 遮挡缺陷；新增 `MathCanvasPage` 并对齐 `310px`/网格/工作区Chrome/空状态契约；全量串行E2E 286 passed/0 failed（retries=0），16-worker并发282/286（4项为高并发5s/30s超时），Vitest 524文件/5580通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R09-B Schema与运行时叶子约束同源 | **已完成** | [Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)：建立 `LEAF_CONSTRAINTS` / `readStringLeaf` / `planActionToolItemSchema` 单源约束并导出 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 降级清单；修复 `actionKey` 全空白/零宽放行、`normalisations` 未知字段/超长/trim 漏检及 `buildPlanToolSchema` 漂移；RED 8 fail → 定向 4 文件/169 项通过，`eval:reliability -- --offline` 通过，Vitest 524 文件/5590 通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R11 干净依赖、公告与Rust审计 | **已完成（G2闭环；RustSec显式标为unknown）** | [干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)：最小兼容升级修复全部3项High与可修Moderate公告（`vitest@4.1.12`、`vite@7.3.8`、`eslint@10.15.0`、`typescript-eslint@8.72.2`、`source-map-js@1.2.2`、`zod@4.6.7`）；`--omit=dev` 0公告；仅余 `@typescript-eslint/typescript-estree -> minimatch@10.2.6` 1条上游中危（`GHSA-g3hv-75wg-m249`，已登记例外与 `2026-12-31` 到期）；`cargo audit` 未安装标为 `unknown`；Node `v22.23.5` 隔离 `npm ci`、`npm ls --depth=0`、类型/Lint/Web构建/离线评测、`licences:scan`、全量Rust 317 passed（+4 ignored）及全量串行E2E 286 passed 全部通过；新增 `dependencyLockPolicy.test.ts` |
-| B4 / P0 / T01 36题黄金契约与统一口径 | **合同整改中（第二轮独立复核未通过）** | 第二轮 reviewer 逐题复核36/36：GK-P08、GK-S09、JT-S09、JT-P09 的作图数学合同可批准，32题须整改；suite/case 保持 `pending_second_reviewer`。GK-P03最优直线、GK-P06三分支、JT-S04旋转夹具及JT-S09闭合拓扑已针对性修正但待复审。最新实测为 **0 passed/11 partial/25 failed/0 incomplete**，义务覆盖约20.39%；详见[第二轮独立复核与整改](audit/2026-11-16-g3-contract-review-r2/README.md)。T01/P0 不得退出 |
+| B4 / P0 / T01 36题黄金契约与统一口径 | **停止时未批准（第三轮独立复核）** | 第二轮 reviewer 逐题复核36/36：GK-P08、GK-S09、JT-S09、JT-P09 的作图数学合同可批准，32题须整改；suite/case 保持 `pending_second_reviewer`。GK-P03最优直线、GK-P06三分支、JT-S04旋转夹具及JT-S09闭合拓扑已针对性修正但待复审。最新实测为 **0 passed/11 partial/25 failed/0 incomplete**，义务覆盖约20.39%；详见[第二轮独立复核与整改](audit/2026-11-16-g3-contract-review-r2/README.md)。T01/P0 不得退出 |
 | B4 / P1 / T02 原文映射、分问作用域与无损IR | **已完成（R01-B选问收口）** | [P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)：新增 `problemContract.ts`、`normalizeGeometryPromptWithSourceMap`、`NormalisationApplication.sourceMap`、`selectedPart`/`selectedScopeId` 选问隔离与 `toLegacyObligationSet.parts` 无损往返；实现 `A1`/`A₁` 别名归并与折前/折后跨 state 歧义检测、阻断模型自选参数（`a=2`）升级硬前提与改题失效检测；定向 5 文件 66 项通过（含 `planCompiler.offPath.golden.test.ts` 13 项），全量 Vitest 527 文件/5611 通过+1todo，类型/Lint/Web 构建（635 modules）/离线评测通过 |
 | B4 / P2 / T03 比例位置分离与完整角链 | **已完成** | [P2 / T03关系语义与角链证据](audit/2026-11-16-p2-relation-chains/README.md)：取消 `DE=2EA` / `AB=2BC` 裸比例共线推断（`splitPoint: false`，`diagramVerification` 仅显式 `true` 检查分点），补齐 `E在DA线段内` 显式位置解析与非共线反例；新增 `relationChains.ts` 完整消费 `∠ADB=∠ADC=60°` / `∠ADB=∠ADC` (`equalAngle`) 与合法显式弧度一次转度、保留全链 `sourceSpan` 与 `chainIndex`、消除 `GK-S06` `"∠ADB="` 残留并拒绝截断/长度=角/度弧混用/非法角域；RED 9 项失败 → 定向 6 文件/236 项通过，全量 Vitest 528 文件/5620 通过+1todo，类型/Lint/Web 构建（636 modules）/离线评测通过 |
 | B4 / P2 / T04 符号圆锥曲线与AST定义域 | **已完成（P2收口）** | [P2 / T04符号圆锥曲线与AST证据](audit/2026-11-16-p2-symbolic-conic-ast/README.md)：`latexNormalisation` 将带括号指数移入迭代降级环解决 `$x^{4}-2x^{3}$` 与 `\frac{x^{2}}{m^{2}}` 及 `sourceMap`；`expression.ts` 补齐长度/深度预算、`x/x` 未化简域保留与 `a>b>0` 链式不等式并维持零 `eval`（由 `drawingContracts.test.ts` 源码守卫锁定）；`conic-parameters.ts` 支持轴对调区分、欠定不猜与 `GK-P01`/`GK-P08` 一般求解+`conicResidualAt`/切点独立核验；打通 `parameterDomain`/`symbolicConic` 与 `ObligationIR` 无损往返；RED 12 fail → 全量 Vitest 529 文件/5634 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
@@ -100,7 +102,7 @@
 | B4 / P4 / T12 有界局部修复与 Worker 取消 | **已完成** | [P4 / T12有界修复证据](audit/2026-11-16-p4-bounded-repair/README.md)：新增 `reliabilityDiagnostics.ts` 覆盖 10 类故障分类、`normalizeSolveOutcome`（强制 `provenUnsat: false`）与 `createRepairStagnationTracker`；`budget.ts` 新增 `consumeAll` 原子多账本扣减（同步接入 `modelPlanner`、`examRequestBudget`、`examRunCoordinated`）；`coordinator.ts` 接入停滞与 `capability_missing` 阻断；`geometryWorkerClient.ts` / `geometryCompileStrategy.ts` 接入 `AbortSignal` 取消并安全丢弃迟到回包；RED 4 fail → 定向 4 文件 76 + `examRunCoordinated` 15 通过，全量 Vitest 537 文件/5695 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T13 完整数学证书与变异拒绝 | **已完成** | [P4 / T13数学证书证据](audit/2026-11-16-p4-math-certificate/README.md)：新增 `drawingCertificate.ts` 区分作图请求与闲聊（同步 `acceptance.ts` `isDrawingPrompt`）、实现 `evaluateMathGate` 与 `certifyDrawingAgainstContract`（基于最终图元坐标独立重算、忽略自报证据、严分 `passed`/`partial`/`blocked` 与 `"未完整核验"` 开关）；`completionGate.ts` 拦截重复检查 ID、`diagramVerification.ts` 扫描非有限坐标 `NaN`/`Infinity`；新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts` 覆验 36 题合同结构与 8 类变异拒收+辅助点不变性（RED 2 failed → 定向 3 文件 16 通过），全量 Vitest 539 文件/5701 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T14 最终候选绑定与原子确认 | **实现工作包已完成（G3-Math未退出）** | [P4 / T14原子提交与保鲜证据](audit/2026-11-16-p4-atomic-commit-staleness/README.md)：`drawingCertificate.ts` 新增 `verifyCertificateFreshness`（覆盖题文/scope/会话/基线修订/策略版本过期）；`renderEvidence.ts` 新增 `cameraHash` 与 `camera_changed`（`mathStale: false, visualStale: true, requiresReplan: false`）；`committerAdapter.ts`、`agentRuntime.ts`、`agentRunner.ts` 与 `draftStore.ts` 落地双击仅一次写入（`committedOnce` / `committedDraftIds` / `already_committed`）与 `promptHash` 保鲜检查；新建 `drawingCertificateStaleness.test.ts` 并扩充 `committerAdapter.test.ts`（RED 4 failed → 定向 5 文件 103 通过），全量 Vitest 540 文件/5705 通过+1todo，类型/Lint/Web 构建/离线评测通过。上述为该工作包历史证据；G3须另满足36题完整数学/视觉/交互门禁 |
-| 后续阶段范围 | **G3合同整改与验收进行中** | 当前先完成T01合同及评测语义整改，随后生产证书、平面/立体数学门禁，再进入 `B5`（`T15 → T16`）；`P8`与发布未开启；仅用户授权的保存DeepSeek可做真实评测，其他付费provider未开启 |
+| 后续阶段范围 | **按用户要求停止，G3未退出** | 合同整改、生产证书、平面/立体数学门禁及 `B5`（`T15 → T16`）全部保留为待办，未执行、未验收；`P8`与发布未开启；仅用户授权的保存DeepSeek可做真实评测，其他付费provider未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。历史文档对齐与 G3 前四个合同区块均已推送并核对 upstream 0/0；本第二轮复核整改区块按同一规则提交、推送和核对，不把历史推送写成当前已推送。
 
@@ -146,19 +148,19 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 | 序号 | 阶段 | 状态 | 退出门槛摘要 |
 | --- | --- | --- | --- |
-| 1 | P0 基准与测量 | **整改中（第二独立复核未通过）** | 36题来源/hash/span结构已冻结；第二轮有32题需整改，后续合同修正仍须独立复核通过后才退出 |
+| 1 | P0 基准与测量 | **停止时未批准（第三轮独立复核）** | 36题来源/hash/span结构已冻结；第三轮仅16/18平面、10/18立体case内容可批准，suite未批准，后续整改未执行 |
 | 2 | P1 来源与语义合同 | **实现已有提交，验收重开** | scope在独立合同中存在丢失/目标混入，须通过逐题scope反例 |
 | 3 | P2 解析与归一化 | **实现已有提交，验收重开** | AST/角链等已有实现；GK-P04/JT-P04合同值域已纠正，GK-P04/P09全局表达式与参数下界已补；生产语义和统一门禁仍须闭环 |
-| 4 | P3 平面确定性构造 | **进行中** | 当前平面未达18/18对象与数学合同；逐题闭环并保留反例 |
-| 5 | P4 立体与折叠构造 | **进行中** | 当前立体未达18/18；拓扑、宿主、state和分支证据须补齐 |
+| 4 | P3 平面确定性构造 | **停止时未退出** | 当前平面未达18/18对象与数学合同；逐题闭环并保留反例 |
+| 5 | P4 立体与折叠构造 | **停止时未退出** | 当前立体未达18/18；拓扑、宿主、state和分支证据须补齐 |
 | 6 | P5 有界求解与修复 | **实现已有提交，验收重开** | 预算/取消已有实现；须验证统一生产入口的实际终态与有界修复 |
-| 7 | P6 独立完整验收 | **进行中** | 证书函数已有实现但生产stage存在not_supported；36题完整覆盖与stale/错图拒绝未闭环 |
+| 7 | P6 独立完整验收 | **停止时未退出** | 证书函数已有实现但生产stage存在not_supported；36题完整覆盖与stale/错图拒绝未闭环 |
 | 8 | P7 真实画布与交互 | 未开始 | G3-Math退出后执行T15/T16；真实渲染、桌面交互与人工签收不可互相替代 |
 | 9 | P8 泛化与发布 | 未开始、未授权 | G1/G2前置，盲测/成本/安装/性能/安全回滚与人工批准 |
 
 ### 3. 下一步及授权边界
 
-**当前按 G3 续作计划先整改 T01 合同及评测语义**：第二独立 reviewer 已给出 `changes_required`，须为 scope、不可行伪造、稳定实体绑定、拓扑、定义域/分支和显示策略建立RED反例并修正。函数表达式与公共切线参数域、结构化不可行诊断、完整棱柱、平面最值、GK-S05(2)不可行、JT-S04(2)/JT-S08、JT-S01球半径/最值和GK-S02文字折叠证据已补齐，GK-S02题图面环仍未确认；下一步恢复第二独立reviewer全量复审，整改后再进入生产完整证书接线、平面18题、立体/折叠18题与 `B5`（`T15 → T16`）。
+**停止时的后续待办（未执行）**：GK-P06/JT-P02宿主与退化、重复标签与指定实体、JT-S04镜像与闭合六面体、未确认题图与T01最终复核；随后才是Task2生产证书、Task3平面18题、Task4立体/折叠18题与G3-Math、Task5真实渲染/人工签收、Task6浏览器与桌面交互、Task7 G3总验收。用户已要求停止goal，上述事项均未开始、未验收，T01与G3不退出。
 
 全部实现须RED→GREEN、生产接线、反例/兼容与独立复核；安全补丁回退只能关闭入口，不能重新开放已知漏洞。历史版本和授权不自动继承。仅用户明确授权的保存DeepSeek可做真实评测；其他付费预算、依赖升级和产品发布不在本次范围内，不自动触发。
 
