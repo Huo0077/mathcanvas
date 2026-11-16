@@ -51,7 +51,7 @@ export type ContractCheckSpec =
   | { kind: "line-through-2d"; entityId: string; x: number; y: number }
   | { kind: "line-equation-2d"; entityId: string; a: number; b: number; c: number }
   | { kind: "tangent-to-function-2d"; lineId: string; functionId: string; x: number }
-  | { kind: "tangent-to-conic-2d"; lineId: string; conicId: string; touchPoint?: { x: number; y: number } }
+  | { kind: "tangent-to-conic-2d"; lineId: string; conicId: string; touchPoint?: { x: number; y: number }; touchPointLabel?: string }
   | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
   | { kind: "distinct-2d"; a: string; b: string }
@@ -915,7 +915,9 @@ function evaluateCheck(
       if (!start || !end) return { passed: false, detail: `line ${check.lineId} has invalid endpoints` }
       const result = intersectPlanarLineAndConicExact({ type: "line", a: start, b: end } as never, curve as never)
       const touchMatches = check.touchPoint === undefined || result.points.some((point) => near(point.x, check.touchPoint!.x, 1e-5) && near(point.y, check.touchPoint!.y, 1e-5))
-      const ok = result.kind === "tangent" && touchMatches
+      const labelledTouch = check.touchPointLabel === undefined ? undefined : p2(check.touchPointLabel)
+      const labelMatches = check.touchPointLabel === undefined || (labelledTouch !== undefined && result.points.some((point) => near(point.x, labelledTouch.x, 1e-5) && near(point.y, labelledTouch.y, 1e-5)))
+      const ok = result.kind === "tangent" && touchMatches && labelMatches
       return { passed: ok, detail: `conic intersection=${result.kind}, points=${result.points.length}` }
     }
     case "line-vertical-2d": {

@@ -5985,6 +5985,42 @@
           }
         },
         {
+          "id": "ob-o-origin",
+          "kind": "point_value",
+          "description": "O is the coordinate origin",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "抛物线 $C$ 的顶点为坐标原点 $O$",
+            "start": 4,
+            "end": 24
+          },
+          "check": { "kind": "point-2d", "label": "O", "x": 0, "y": 0 }
+        },
+        {
+          "id": "ob-p-on-l",
+          "kind": "incidence",
+          "description": "P lies on the named line l",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$",
+            "start": 38,
+            "end": 49
+          },
+          "check": { "kind": "point-on-line-2d", "point": "P", "lineId": "l" }
+        },
+        {
+          "id": "ob-q-on-l",
+          "kind": "incidence",
+          "description": "Q lies on the named line l",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$",
+            "start": 38,
+            "end": 49
+          },
+          "check": { "kind": "point-on-line-2d", "point": "Q", "lineId": "l" }
+        },
+        {
           "id": "ob-p-on-c",
           "kind": "incidence",
           "description": "P lies on parabola C",
@@ -6081,6 +6117,78 @@
             "label": "A₃",
             "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "x", "focalParameter": 0.5 }
           }
+        },
+        {
+          "id": "ob-a1-on-a1a2",
+          "kind": "incidence",
+          "description": "A₁ lies on named line A1A2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₁", "lineId": "A1A2" }
+        },
+        {
+          "id": "ob-a2-on-a1a2",
+          "kind": "incidence",
+          "description": "A₂ lies on named line A1A2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₂", "lineId": "A1A2" }
+        },
+        {
+          "id": "ob-a1-on-a1a3",
+          "kind": "incidence",
+          "description": "A₁ lies on named line A1A3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₁", "lineId": "A1A3" }
+        },
+        {
+          "id": "ob-a3-on-a1a3",
+          "kind": "incidence",
+          "description": "A₃ lies on named line A1A3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切",
+            "start": 191,
+            "end": 236
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₃", "lineId": "A1A3" }
+        },
+        {
+          "id": "ob-a2-on-a2a3",
+          "kind": "incidence",
+          "description": "A₂ lies on named line A2A3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "判断直线 $A_{2} A_{3}$ 与 $\\odot M$ 的位置关系",
+            "start": 238,
+            "end": 274
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₂", "lineId": "A2A3" }
+        },
+        {
+          "id": "ob-a3-on-a2a3",
+          "kind": "incidence",
+          "description": "A₃ lies on named line A2A3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "判断直线 $A_{2} A_{3}$ 与 $\\odot M$ 的位置关系",
+            "start": 238,
+            "end": 274
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A₃", "lineId": "A2A3" }
         },
         {
           "id": "ob-a1a2-tangent",
@@ -6690,9 +6798,57 @@
           }
         },
         {
+          "id": "ob-p-on-pa",
+          "kind": "incidence",
+          "description": "P lies on named tangent PA",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-line-2d", "point": "P", "lineId": "PA" }
+        },
+        {
+          "id": "ob-p-on-pb",
+          "kind": "incidence",
+          "description": "P lies on named tangent PB",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-line-2d", "point": "P", "lineId": "PB" }
+        },
+        {
+          "id": "ob-a-on-pa",
+          "kind": "incidence",
+          "description": "A lies on named tangent PA",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-line-2d", "point": "A", "lineId": "PA" }
+        },
+        {
+          "id": "ob-b-on-pb",
+          "kind": "incidence",
+          "description": "B lies on named tangent PB",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-line-2d", "point": "B", "lineId": "PB" }
+        },
+        {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A is a tangent point on C",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-conic-2d", "label": "A", "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 2 } }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B is a tangent point on C",
+          "scope": "(2)",
+          "sourceSpan": { "text": "$P A, P B$ 是 $C$ 的两条切线", "start": 122, "end": 144 },
+          "check": { "kind": "point-on-conic-2d", "label": "B", "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 2 } }
+        },
+        {
           "id": "ob-pa-tangent",
           "kind": "tangent",
-          "description": "PA is tangent to parabola C",
+          "description": "PA is tangent to parabola C at A",
           "scope": "(2)",
           "sourceSpan": {
             "text": "$P A, P B$ 是 $C$ 的两条切线",
@@ -6702,13 +6858,14 @@
           "check": {
             "kind": "tangent-to-conic-2d",
             "lineId": "PA",
-            "conicId": "C"
+            "conicId": "C",
+            "touchPointLabel": "A"
           }
         },
         {
           "id": "ob-pb-tangent",
           "kind": "tangent",
-          "description": "PB is tangent to parabola C",
+          "description": "PB is tangent to parabola C at B",
           "scope": "(2)",
           "sourceSpan": {
             "text": "$P A, P B$ 是 $C$ 的两条切线",
@@ -6718,7 +6875,8 @@
           "check": {
             "kind": "tangent-to-conic-2d",
             "lineId": "PB",
-            "conicId": "C"
+            "conicId": "C",
+            "touchPointLabel": "B"
           }
         }
       ],
@@ -7848,9 +8006,57 @@
           }
         },
         {
+          "id": "ob-p-on-pa",
+          "kind": "incidence",
+          "description": "P lies on named tangent PA",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-line-2d", "point": "P", "lineId": "PA" }
+        },
+        {
+          "id": "ob-a-on-pa",
+          "kind": "incidence",
+          "description": "A lies on named tangent PA",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-line-2d", "point": "A", "lineId": "PA" }
+        },
+        {
+          "id": "ob-p-on-pb",
+          "kind": "incidence",
+          "description": "P lies on named tangent PB",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-line-2d", "point": "P", "lineId": "PB" }
+        },
+        {
+          "id": "ob-b-on-pb",
+          "kind": "incidence",
+          "description": "B lies on named tangent PB",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-line-2d", "point": "B", "lineId": "PB" }
+        },
+        {
+          "id": "ob-a-on-c",
+          "kind": "incidence",
+          "description": "A is a tangent point on Γ",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-conic-2d", "label": "A", "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 2 } }
+        },
+        {
+          "id": "ob-b-on-c",
+          "kind": "incidence",
+          "description": "B is a tangent point on Γ",
+          "scope": "stem",
+          "sourceSpan": { "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B", "start": 28, "end": 53 },
+          "check": { "kind": "point-on-conic-2d", "label": "B", "conic": { "kind": "parabola", "vx": 0, "vy": 0, "axis": "y", "focalParameter": 2 } }
+        },
+        {
           "id": "ob-pa-tangent",
           "kind": "tangent",
-          "description": "PA is tangent to Γ",
+          "description": "PA is tangent to Γ at A",
           "scope": "stem",
           "sourceSpan": {
             "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B",
@@ -7860,13 +8066,14 @@
           "check": {
             "kind": "tangent-to-conic-2d",
             "lineId": "PA",
-            "conicId": "Γ"
+            "conicId": "Γ",
+            "touchPointLabel": "A"
           }
         },
         {
           "id": "ob-pb-tangent",
           "kind": "tangent",
-          "description": "PB is tangent to Γ",
+          "description": "PB is tangent to Γ at B",
           "scope": "stem",
           "sourceSpan": {
             "text": "过动点 P 作抛物线的两条切线，切点分别为 A、B",
@@ -7876,7 +8083,8 @@
           "check": {
             "kind": "tangent-to-conic-2d",
             "lineId": "PB",
-            "conicId": "Γ"
+            "conicId": "Γ",
+            "touchPointLabel": "B"
           }
         },
         {
@@ -8921,6 +9129,30 @@
             "rx": 2,
             "ry": 1.7320508075688772
           }
+        },
+        {
+          "id": "ob-e-on-ef",
+          "kind": "incidence",
+          "description": "E lies on the named line EF in each branch",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "与 G 相交于 E、F 两点",
+            "start": 94,
+            "end": 108
+          },
+          "check": { "kind": "point-on-line-2d", "point": "E", "lineId": "EF" }
+        },
+        {
+          "id": "ob-f-on-ef",
+          "kind": "incidence",
+          "description": "F lies on the named line EF in each branch",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "与 G 相交于 E、F 两点",
+            "start": 94,
+            "end": 108
+          },
+          "check": { "kind": "point-on-line-2d", "point": "F", "lineId": "EF" }
         },
         {
           "id": "ob-ec-2cf",

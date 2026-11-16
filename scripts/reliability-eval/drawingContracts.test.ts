@@ -179,12 +179,16 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     ]
     const valid = evaluateDrawingContract(gkp05, { primitives }, { verificationStatus: "passed" })
     expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
-    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-c", "ob-q-on-c", "ob-op-oq", "ob-a1-on-c", "ob-a2-on-c", "ob-a3-on-c", "ob-a1a2-tangent", "ob-a1a3-tangent", "ob-a2a3-tangent"]))
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-c", "ob-q-on-c", "ob-op-oq", "ob-o-origin", "ob-p-on-l", "ob-q-on-l", "ob-a1-on-c", "ob-a2-on-c", "ob-a3-on-c", "ob-a1-on-a1a2", "ob-a2-on-a1a2", "ob-a1-on-a1a3", "ob-a3-on-a1a3", "ob-a2-on-a2a3", "ob-a3-on-a2a3", "ob-a1a2-tangent", "ob-a1a3-tangent", "ob-a2a3-tangent"]))
 
     const invalid = evaluateDrawingContract(gkp05, {
       primitives: primitives.map((primitive) => primitive.id === "a2a3" ? { ...primitive, b: { x: 4, y: -2 } } : primitive)
     }, { verificationStatus: "passed" })
     expect(invalid.failedObligationIds).toContain("ob-a2a3-tangent")
+    const wrongOrigin = evaluateDrawingContract(gkp05, { primitives: primitives.map((primitive) => primitive.id === "o" ? { ...primitive, x: 1 } : primitive) }, { verificationStatus: "passed" })
+    expect(wrongOrigin.failedObligationIds).toContain("ob-o-origin")
+    const detachedA2 = evaluateDrawingContract(gkp05, { primitives: primitives.map((primitive) => primitive.id === "a2" ? { ...primitive, x: 4, y: 0 } : primitive) }, { verificationStatus: "passed" })
+    expect(detachedA2.failedObligationIds).toContain("ob-a2-on-a1a2")
   })
 
   it("verifies JT-P05 hyperbola incidences, parallel chords and the constant ratio", () => {
@@ -238,6 +242,15 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
     expect(result.scopeResults["(1)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pa-tangent", "ob-pb-tangent"]))
     expect(result.scopeResults["(2)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-c-directrix", "ob-d-directrix", "ob-ac-vertical", "ob-bd-vertical", "ob-2-infeasible"]))
+    const detached = evaluateDrawingContract(jtp04, {
+      primitives: primitives.map((primitive) => primitive.id === "p" ? { ...primitive, x: 0 } : primitive.id === "a" ? { ...primitive, y: 2 } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(1)" })
+    expect(detached.failedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-pa", "ob-a-on-pa", "ob-a-on-c", "ob-pa-tangent"]))
+    const touchContract = { ...jtp04, requiredObligations: jtp04.requiredObligations.filter((obligation) => obligation.id === "ob-pa-tangent") }
+    const wrongTouch = evaluateDrawingContract(touchContract, {
+      primitives: primitives.map((primitive) => primitive.id === "a" ? { ...primitive, y: 2 } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(1)" })
+    expect(wrongTouch.failedObligationIds).toContain("ob-pa-tangent")
   })
 
   it("verifies JT-P03 parabola secant and D/E intersections with OA/OB and l", () => {
@@ -374,7 +387,15 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       ]
     }, { verificationStatus: "passed" })
     expect(validCircle.passed, JSON.stringify(validCircle.obligationResults)).toBe(true)
-    expect(validCircle.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-m", "ob-pa-tangent", "ob-pb-tangent"]))
+    expect(validCircle.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-m", "ob-p-on-pa", "ob-p-on-pb", "ob-a-on-pa", "ob-b-on-pb", "ob-a-on-c", "ob-b-on-c", "ob-pa-tangent", "ob-pb-tangent"]))
+    const detachedP = evaluateDrawingContract(gkp07, {
+      primitives: [circle, parabola,
+        { type: "point", id: "p", label: "P", x: 0, y: -4 }, { type: "point", id: "f", label: "F", x: 0, y: 1 },
+        { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+        { type: "line", id: "pa", label: "PA", a: P, b: A }, { type: "line", id: "pb", label: "PB", a: P, b: B }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(detachedP.failedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-pa", "ob-p-on-pb"]))
   })
 
   it("verifies JT-P09 circle incidences, chord hosts and quadrilateral area", () => {
@@ -423,6 +444,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(valid.passed, JSON.stringify(valid.scopeResults)).toBe(true)
     expect(valid.scopeResults.positive?.passedObligationIds).toContain("ob-ef-positive")
     expect(valid.scopeResults.negative?.passedObligationIds).toContain("ob-ef-negative")
+    expect(valid.scopeResults.positive?.passedObligationIds).toEqual(expect.arrayContaining(["ob-e-on-ef", "ob-f-on-ef"]))
+    const detachedF = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
+      positive: { candidate: { primitives: makeBranch(1).primitives.map((primitive) => primitive.id === "f" ? { ...primitive, y: 0 } : primitive) }, options: { verificationStatus: "passed" } },
+      negative: { candidate: makeBranch(-1), options: { verificationStatus: "passed" } }
+    })
+    expect(detachedF.scopeResults.positive?.failedObligationIds).toContain("ob-f-on-ef")
 
     const missingBranch = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
       positive: { candidate: makeBranch(1), options: { verificationStatus: "passed" } }

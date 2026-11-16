@@ -56,6 +56,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - 跨状态折叠区块完成：JT-S04 以真实 F→E +90° 谱系核验，聚合 `evaluateDrawingContractStates`，局部正确但非同一翻折的伪候选被拒绝；缺状态返回 incomplete。39项目标测试、类型/Lint/Web构建通过；未新增离线 reliability 读数。下一区块为切线端点与参数域/最值。证据：`docs/audit/2026-11-16-g3-fold-lineage/README.md`。
 
+- 切线端点区块完成：GK-P05/P07、JT-P04 的 P/A/B 和命名切点绑定，JT-P08 每支EF均验证端点；错误切点和脱离目标直线有 RED→GREEN。39项目标测试、类型/Lint/Web构建通过，未新增离线 reliability 读数。下一区块为参数域/最值。证据：`docs/audit/2026-11-16-g3-tangent-endpoints/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

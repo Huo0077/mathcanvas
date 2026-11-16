@@ -10,7 +10,7 @@
 
 本页定义“满足哪些条件才可发布”，不复制完成读数。是否已满足、未解决问题和测试时点只看[当前状态](../current-status.md)；首批任务及依赖只看[实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)。
 
-当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../audit/2026-11-16-g3-scope-entities/README.md)、[公共曲线整改](../audit/2026-11-16-g3-shared-curves/README.md)、[指定拓扑整改](../audit/2026-11-16-g3-named-topology/README.md)一致；试点合同通过不改变阻断结论。用户重新授权后的DeepSeek最小评测为1 planned/2 clarification/0 error，真实调用链已连通，但不满足固定36题或发布门禁，详见[DeepSeek审计](../audit/2026-11-16-g3-deepseek-provider/README.md)。[JT-S04跨状态折叠](../../audit/2026-11-16-g3-fold-lineage/README.md)已建立真实谱系和伪刚体拒绝证据，但其他折叠与生产验收仍未完成。
+当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../audit/2026-11-16-g3-scope-entities/README.md)、[公共曲线整改](../audit/2026-11-16-g3-shared-curves/README.md)、[指定拓扑整改](../audit/2026-11-16-g3-named-topology/README.md)一致；试点合同通过不改变阻断结论。用户重新授权后的DeepSeek最小评测为1 planned/2 clarification/0 error，真实调用链已连通，但不满足固定36题或发布门禁，详见[DeepSeek审计](../audit/2026-11-16-g3-deepseek-provider/README.md)。[JT-S04跨状态折叠](../../audit/2026-11-16-g3-fold-lineage/README.md)已建立真实谱系和伪刚体拒绝证据，但其他折叠与生产验收仍未完成。[切线端点与目标直线](../../audit/2026-11-16-g3-tangent-endpoints/README.md)已补指定点/切点拒绝证据，仍不构成整题或发布通过。
 
 | 门禁 | 必须提交的证据 | 不能替代的条件 |
 | --- | --- | --- |

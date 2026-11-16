@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 切线端点与目标直线绑定
+
+- **RED**：GK-P05 原点/端点、GK-P07 切线点名、JT-P04 错误切点、JT-P08 脱离 EF 的点均先复现4项失败。
+- **GREEN**：新增 `touchPointLabel` 与实际交点绑定；补O原点、P/Q与Aᵢ端点、P/A/B曲线/直线、每支EF端点义务，恢复39项通过。全量540文件/5735通过+1todo、类型、Lint（0 errors/33既有warnings）、Web构建（640 modules）及文档61项通过。
+- **边界**：未新增离线 reliability 读数，未由局部切线正确推导整题正确；参数域/最值、其他折叠与生产验收未完成。证据：[切线端点与目标直线](audit/2026-11-16-g3-tangent-endpoints/README.md)。
+
 ## 2026-11-16 —— G3 / T01 跨状态折叠谱系
 
 - **实现**：新增 `fold-transform-3d`、`stateCandidates` 与 `evaluateDrawingContractStates`，内核重算 F→E +90° 的 A/B 位置并核验铰链漂移，缺状态/缺点/非刚体旋转失败。
