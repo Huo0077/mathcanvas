@@ -329,6 +329,11 @@
         "F",
         "P"
       ],
+      "stateRequiredEntityIds": {
+        "before_fold": ["A", "B", "C", "D", "E", "F"],
+        "after_fold": ["B", "C", "D", "E", "F", "P"]
+      },
+      "stemStateId": "before_fold",
       "sharedScope": {
         "entities": [
           "A",
@@ -379,7 +384,8 @@
           "text": "求面 PCD 与面 PBF 所成的二面角的正弦值",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "8/√65, identical on the two mirror folds"
         }
       ],
       "requiredObligations": [
@@ -518,6 +524,7 @@
           "kind": "length",
           "description": "PE = AE = 2√3",
           "scope": "stem",
+          "stateId": "after_fold",
           "sourceSpan": {
             "text": "将 △AEF 沿 EF 对折至 △PEF",
             "start": 80,
@@ -536,6 +543,7 @@
           "kind": "length",
           "description": "PF = AF = 4",
           "scope": "stem",
+          "stateId": "after_fold",
           "sourceSpan": {
             "text": "将 △AEF 沿 EF 对折至 △PEF",
             "start": 80,
@@ -554,6 +562,7 @@
           "kind": "length",
           "description": "PC=4√3",
           "scope": "stem",
+          "stateId": "after_fold",
           "sourceSpan": {
             "text": "PC=4√3",
             "start": 104,
@@ -587,6 +596,7 @@
           "kind": "topology",
           "description": "Original and folded faces form a valid connected open surface",
           "scope": "stem",
+          "stateId": "after_fold",
           "sourceSpan": {
             "text": "将 △AEF 沿 EF 对折至 △PEF",
             "start": 80,
@@ -594,8 +604,44 @@
           },
           "check": {
             "kind": "topology-3d",
-            "open": true
+            "open": true,
+            "expectedVertexIds": ["B", "C", "D", "E", "F", "P"]
           }
+        },
+        {
+          "id": "ob-fold-transform",
+          "kind": "fold_lineage",
+          "description": "A rotates to P about EF by 90° in either mirror direction",
+          "scope": "fold_lineage",
+          "sourceSpan": { "text": "将 △AEF 沿 EF 对折至 △PEF", "start": 80, "end": 100 },
+          "check": {
+            "kind": "fold-transform-3d",
+            "beforeStateId": "before_fold",
+            "afterStateId": "after_fold",
+            "hinge": ["E", "F"],
+            "moving": [{ "before": "A", "after": "P" }],
+            "angleDegrees": 90,
+            "allowMirror": true
+          }
+        },
+        {
+          "id": "ob-ef-pd",
+          "kind": "perpendicular",
+          "description": "EF⊥PD after the actual rigid fold",
+          "scope": "(1)",
+          "stateId": "after_fold",
+          "sourceSpan": { "text": "证明：EF⊥PD", "start": 114, "end": 122 },
+          "check": { "kind": "perp-3d", "a": "E", "b": "F", "c": "P", "d": "D" }
+        },
+        {
+          "id": "ob-plane-sine",
+          "kind": "dihedral_sine",
+          "description": "The actual PCD/PBF plane-angle sine is 8/√65 on either mirror fold",
+          "scope": "(2)",
+          "stateId": "after_fold",
+          "sourceSpan": { "text": "面 PCD 与面 PBF 所成的二面角的正弦值", "start": 127, "end": 150 },
+          "expectedValue": 0.9922778767136146,
+          "check": { "kind": "plane-sine-3d", "first": ["P", "C", "D"], "second": ["P", "B", "F"], "value": 0.9922778767136146 }
         }
       ],
       "displayPolicy": {
@@ -603,6 +649,7 @@
         "requiresVisualChecks": true,
         "allowOmittedSubquestion": false,
         "multiBranchHandling": "single_consistent_figure",
+        "multiStateHandling": "enumerate:before_fold,after_fold",
         "labelReadabilityRequired": true
       },
       "freeChoices": [],

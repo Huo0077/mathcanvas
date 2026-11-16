@@ -26,7 +26,8 @@ export type ContractCheckSpec =
   | { kind: "vector-equal-3d"; a: string; b: string; c: string; d: string }
   | { kind: "sum-distance-3d"; p: string; a: string; b: string; total: number }
   | { kind: "planes-perpendicular-3d"; first: [string, string, string]; second: [string, string, string] }
-  | { kind: "fold-transform-3d"; beforeStateId: string; afterStateId: string; hinge: [string, string]; moving: readonly { before: string; after: string }[]; angleDegrees: number }
+  | { kind: "fold-transform-3d"; beforeStateId: string; afterStateId: string; hinge: [string, string]; moving: readonly { before: string; after: string }[]; angleDegrees: number; allowMirror?: boolean }
+  | { kind: "plane-sine-3d"; first: [string, string, string]; second: [string, string, string]; value: number }
   | { kind: "folded-trapezoid-min-skew-cosine-3d"; beforeStateId: string; afterStateId: string; a: string; b: string; c: string; d: string; e: string; f: string; value: number }
   | { kind: "rectangle-ef-plane-cos-range-3d"; a: string; b: string; c: string; d: string; e: string; f: string; m: string; endpoint: 0 | 1; value: number }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
@@ -144,6 +145,8 @@ export interface DrawingContractCase {
   inputMode: "text_only" | "text_with_figure_reference"
   independentReviewStatus: "pending_second_reviewer" | "approved"
   requiredEntityIds: string[]
+  stateRequiredEntityIds?: Readonly<Record<string, readonly string[]>>
+  stemStateId?: string
   sharedScope: ContractSharedScope
   subquestions: ContractSubquestion[]
   requiredObligations: ContractObligation[]
@@ -831,6 +834,15 @@ function evaluateCheck(
       const err = scale > 1e-9 ? Math.abs(dot3(n1, n2)) / scale : Number.POSITIVE_INFINITY
       return { passed: err <= 1e-2, detail: `plane normal cosine=${err}` }
     }
+    case "plane-sine-3d": {
+      const first = check.first.map(p3), second = check.second.map(p3)
+      if (first.some((point) => !point) || second.some((point) => !point)) return { passed: false, detail: "missing points for plane-angle sine" }
+      const firstNormal = cross3(sub3(first[1]!, first[0]!), sub3(first[2]!, first[0]!))
+      const secondNormal = cross3(sub3(second[1]!, second[0]!), sub3(second[2]!, second[0]!))
+      const scale = len3(firstNormal) * len3(secondNormal)
+      const value = scale > 1e-12 ? len3(cross3(firstNormal, secondNormal)) / scale : Number.POSITIVE_INFINITY
+      return { passed: near(value, check.value, 1e-2), detail: `plane sine=${value} vs ${check.value}` }
+    }
     case "rectangle-ef-plane-cos-range-3d": {
       const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d), e = p3(check.e), f = p3(check.f), m = p3(check.m)
       if (!a || !b || !c || !d || !e || !f || !m) return { passed: false, detail: "missing trapezoid, rectangle or moving point" }
@@ -868,16 +880,26 @@ function evaluateCheck(
         const drift = dist3(hingeBefore[index]!, hingeAfter[index]!)
         if (drift > TOL * scale) return { passed: false, detail: `fold hinge drift=${drift}, tolerance=${TOL * scale}` }
       }
-      for (const mapping of check.moving) {
-        const before = beforePoints.get(normalizeLabel(mapping.before))
-        const after = afterPoints.get(normalizeLabel(mapping.after))
-        if (!before || !after) return { passed: false, detail: `missing moving point ${mapping.before}→${mapping.after}` }
-        const rotated = rotatePointAboutHinge(before, first, second, check.angleDegrees)
-        if (rotated.status !== "ok") return { passed: false, detail: rotated.detail }
-        const error = dist3(rotated.point, after)
-        if (error > TOL * scale) return { passed: false, detail: `fold transform error for ${mapping.before}→${mapping.after}=${error}, tolerance=${TOL * scale}, before=${JSON.stringify(before)}, expected=${JSON.stringify(rotated.point)}, actual=${JSON.stringify(after)}` }
+      const angles = check.allowMirror === true ? [check.angleDegrees, -check.angleDegrees] : [check.angleDegrees]
+      let lastError = Number.NaN
+      for (const angle of angles) {
+        let matches = true
+        for (const mapping of check.moving) {
+          const before = beforePoints.get(normalizeLabel(mapping.before))
+          const after = afterPoints.get(normalizeLabel(mapping.after))
+          if (!before || !after) return { passed: false, detail: `missing moving point ${mapping.before}→${mapping.after}` }
+          const rotated = rotatePointAboutHinge(before, first, second, angle)
+          if (rotated.status !== "ok") return { passed: false, detail: rotated.detail }
+          const error = dist3(rotated.point, after)
+          if (error > TOL * scale) {
+            matches = false
+            lastError = error
+            break
+          }
+        }
+        if (matches) return { passed: true, detail: `verified rigid fold about ${check.hinge.join("-")} at ${angle} degrees` }
       }
-      return { passed: true, detail: `verified rigid fold about ${check.hinge.join("-")} at ${check.angleDegrees} degrees` }
+      return { passed: false, detail: `no allowed rigid fold angle matches; last transform error=${lastError}, tolerance=${TOL * scale}` }
     }
     case "folded-trapezoid-min-skew-cosine-3d": {
       const beforeCandidate = options.stateCandidates?.[check.beforeStateId]
@@ -1360,6 +1382,7 @@ export function evaluateDrawingContract(
   candidate: unknown,
   options: ContractEvaluationOptions = {}
 ): ContractEvaluationResult {
+  const requiredEntityIds = options.stateId === undefined ? contract.requiredEntityIds : contract.stateRequiredEntityIds?.[options.stateId] ?? contract.requiredEntityIds
   if (options.incomplete === true) {
     return {
       id: contract.id,
@@ -1370,7 +1393,7 @@ export function evaluateDrawingContract(
       objectCoverage: 0,
       obligationCoverage: 0,
       presentEntityIds: [],
-      missingEntityIds: [...contract.requiredEntityIds],
+      missingEntityIds: [...requiredEntityIds],
       passedObligationIds: [],
       failedObligationIds: contract.requiredObligations.map((ob) => ob.id),
       obligationResults: []
@@ -1384,13 +1407,13 @@ export function evaluateDrawingContract(
 
   const presentEntityIds: string[] = []
   const missingEntityIds: string[] = []
-  for (const id of contract.requiredEntityIds) {
+  for (const id of requiredEntityIds) {
     const key = normalizeLabel(id)
     if (pts3.has(key) || pts2.has(key) || allLabels.has(key)) presentEntityIds.push(id)
     else missingEntityIds.push(id)
   }
 
-  const objectCoverage = contract.requiredEntityIds.length === 0 ? 1 : presentEntityIds.length / contract.requiredEntityIds.length
+  const objectCoverage = requiredEntityIds.length === 0 ? 1 : presentEntityIds.length / requiredEntityIds.length
 
   const inheritedScopeIds = new Set<string>(["stem"])
   const inheritScope = (scopeId: string) => {
@@ -1400,11 +1423,12 @@ export function evaluateDrawingContract(
     for (const dependency of subquestion?.dependsOn ?? []) inheritScope(dependency)
   }
   if (options.scopeId !== undefined) inheritScope(options.scopeId)
-  const scopedObligations = contract.requiredObligations.filter((ob) =>
-    (options.scopeId === undefined || inheritedScopeIds.has(ob.scope)) &&
-    (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId) &&
-    (options.stateId === undefined || ob.stateId === undefined || ob.stateId === options.stateId)
-  )
+  const scopedObligations = contract.requiredObligations.filter((ob) => {
+    const stateId = ob.stateId ?? (ob.scope === "stem" ? contract.stemStateId : undefined)
+    return (options.scopeId === undefined || inheritedScopeIds.has(ob.scope)) &&
+      (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId) &&
+      (options.stateId === undefined || stateId === undefined || stateId === options.stateId)
+  })
   const obligationResults: ObligationEvaluation[] = scopedObligations.map((ob) => {
     const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
     return { id: ob.id, kind: ob.kind, passed: outcome.passed, detail: outcome.detail }
@@ -1465,10 +1489,16 @@ export function evaluateDrawingContractStates(
     stateResults[stateId] = evaluateDrawingContract(contract, input.candidate, { ...input.options, stateId, stateCandidates })
   }
   const foldObligations = contract.requiredObligations.filter((obligation) => obligation.check.kind === "fold-transform-3d")
+  const lineageContract = {
+    ...contract,
+    requiredObligations: foldObligations,
+    requiredEntityIds: contract.stateRequiredEntityIds === undefined ? contract.requiredEntityIds : [...new Set(Object.values(contract.stateRequiredEntityIds).flatMap((ids) => [...ids]))]
+  }
+  const lineageCandidate = { primitives: Object.values(inputs).flatMap((input) => collectPrimitives(input.candidate)) }
   const lineageResult = foldObligations.length > 0
     ? evaluateDrawingContract(
-        { ...contract, requiredObligations: foldObligations },
-        Object.values(inputs)[0]?.candidate,
+        lineageContract,
+        lineageCandidate,
         { ...Object.values(inputs)[0]?.options, scopeId: "fold_lineage", stateCandidates }
       )
     : null

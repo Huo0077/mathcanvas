@@ -1248,6 +1248,55 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(result.bucket).not.toBe("passed")
   })
 
+  it("verifies GK-S02's two rigid mirror folds, named states and actual plane-angle sine", () => {
+    const gks02 = loadContracts().cases.find((c) => c.id === "GK-S02")!
+    const makeFold = (angle: 90 | -90) => {
+      const r = Math.sqrt(3)
+      const points = {
+        A: { x: 5 * r, y: 0, z: 0 }, B: { x: r, y: 4, z: 0 }, C: { x: 0, y: 3, z: 0 }, D: { x: 0, y: 0, z: 0 },
+        E: { x: 3 * r, y: 0, z: 0 }, F: { x: 3 * r, y: 2, z: 0 }
+      }
+      const before = Object.entries(points).map(([label, position]) => ({ type: "point3", id: label.toLowerCase(), label, position }))
+      const folded = rotatePointAboutHinge(points.A, points.E, points.F, angle)
+      if (folded.status !== "ok") throw new Error("valid fold")
+      const after: Record<string, unknown>[] = [
+        ...before,
+        { type: "point3", id: "p", label: "P", position: folded.point },
+        { type: "face3", id: "base", pointIds: ["e", "d", "c", "b", "f"] },
+        { type: "face3", id: "fold", pointIds: ["p", "e", "f"] },
+        { type: "polyhedron3", id: "surface", vertexIds: ["e", "d", "c", "b", "f", "p"], edgeIds: [], faceIds: ["base", "fold"] }
+      ]
+      return { before, after }
+    }
+    for (const angle of [90, -90] as const) {
+      const fold = makeFold(angle)
+      const result = evaluateDrawingContractStates(gks02, {
+        before_fold: { candidate: { primitives: fold.before }, options: { verificationStatus: "passed", scopeId: "(1)" } },
+        after_fold: { candidate: { primitives: fold.after }, options: { verificationStatus: "passed", scopeId: "(1)" } }
+      })
+      expect(result.passed, JSON.stringify({ scopes: result.scopeResults, lineage: result.lineageResult })).toBe(true)
+      expect(result.scopeResults.before_fold?.passedObligationIds).toContain("ob-ae")
+      expect(result.scopeResults.after_fold?.passedObligationIds).toEqual(expect.arrayContaining(["ob-ef-pd", "ob-open-topology"]))
+      expect(result.lineageResult?.passedObligationIds).toContain("ob-fold-transform")
+      const measurement = evaluateDrawingContract(gks02, { primitives: fold.after }, { verificationStatus: "passed", scopeId: "(2)", stateId: "after_fold" })
+      expect(measurement.passed, JSON.stringify(measurement.obligationResults)).toBe(true)
+      expect(measurement.passedObligationIds).toContain("ob-plane-sine")
+    }
+    const fold = makeFold(90)
+    const foldContract = { ...gks02, requiredObligations: gks02.requiredObligations.filter((obligation) => obligation.id === "ob-fold-transform") }
+    const wrongP = fold.after.map((primitive) => primitive.id === "p" && "position" in primitive ? { ...primitive, position: { x: 3 * Math.sqrt(3), y: 0, z: 1 } } : primitive)
+    const forged = evaluateDrawingContract(foldContract, { primitives: wrongP }, {
+      verificationStatus: "passed", scopeId: "fold_lineage",
+      stateCandidates: { before_fold: { primitives: fold.before }, after_fold: { primitives: wrongP } }
+    })
+    expect(forged.failedObligationIds).toContain("ob-fold-transform")
+    const missingBefore = evaluateDrawingContractStates(gks02, {
+      after_fold: { candidate: { primitives: fold.after }, options: { verificationStatus: "passed", scopeId: "(2)" } }
+    })
+    expect(missingBefore.status).toBe("incomplete")
+    expect(missingBefore.missingScopeIds).toEqual(["before_fold"])
+  })
+
   it("catches JT-P08 EC=2CF negative counterexample where E and F both lie on the ellipse without satisfying vectorEC = 2*vectorCF", () => {
     const suite = loadContracts()
     const jtp08 = suite.cases.find((c) => c.id === "JT-P08")!
