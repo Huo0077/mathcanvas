@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— P0 / T01 终审（R4）收口与 R3 五项合同阻断整改
+
+- **合同及判据安全加固**：`scripts/reliability-eval/drawingContracts.ts` 与 `test-fixtures/reliability/drawing-contracts-36.json` 完成 R3 五项阻断整改：`GK-P06` 全分支绑定 `A,B,M` 至弦 `AB` 及 `touchPointLabel: "M"`；`JT-P02` 新增 `noncollinear-2d` 与 `distinct-2d` 强制 `y_P ≠ 0` 且 `M≠A₁, N≠A₂, M≠N`；`JT-S04` 改为闭合 6 面六面体 `ABCDEF` 并全链开启 `±90°` 对称镜像；`GK-S09 / JT-S01 / JT-S09` 通过 `resolveNamedPolyhedronVertexSets` 严格绑定命名立体与唯一球体、拒绝匿名替身立体；`inspectPointAndPrimitiveIntegrity` 全面拦截归一化重复点标/别名与 2D/3D 类型错配，`evaluateDrawingContractStates` 隔离跨状态实体检查。
+- **T01 独立复核签收与 G3-Math 真实基线**：只读独立审阅复核结论 `PASS`（5/5 R3 阻断全消、36/36 原文/哈希/区间一致、`GK-S02/GK-S03/JT-S06/JT-S07` 保持 `text_with_figure_reference` 诚实未知边界），suite 及 36 题 `independentReviewStatus` 正式改为 `"approved"`。
+- **验证**：`drawingContracts.test.ts` **45/45 passed**、`typecheck`、`lint`（0 errors）、全量 Vitest **540 文件 / 5743 passed | 1 todo** 全部通过；36 题离线基线（`eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`）实测 **0 passed / 11 partial / 25 failed / 0 incomplete**（对象覆盖 23.5%、义务覆盖 18.9%），下一步进入 Task 2 生产完整证书接线。证据见 [P0 / T01 R4 终审与基线](docs/audit/2026-11-17-g3-contract-review-r4/README.md)。
+
 ## 2026-11-17 —— P7 / T15 真实画布渲染证据、分层视觉校验与标签不改数学避让
 
 - **三层视觉证据隔离与标签避让**：`packages/agent-core/src/verification/renderEvidence.ts` 新增 `VisualEvidenceTier`（`structuredOnly` / `rendered` / `humanReviewed`）、`classifyVisualEvidenceTier`、`assertNoVisualTierUpgrade`（关停渲染校验开关退回 `visualStatus: "unverified"`）与 `adjustLayoutWithoutMutatingMath`（只允许偏移标签位置而不改动数学对象坐标，无解降级 `needs_human_review`）；`apps/web/src/agent/renderLayoutInput.ts`、`canvasEvidence.ts` 与 `agentRunner.ts` 同步打通 `tier: "rendered"` 与 `tier: "structuredOnly"` 标识。

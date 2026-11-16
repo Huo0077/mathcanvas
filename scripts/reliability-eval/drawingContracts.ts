@@ -32,12 +32,12 @@ export type ContractCheckSpec =
   | { kind: "rectangle-ef-plane-cos-range-3d"; a: string; b: string; c: string; d: string; e: string; f: string; m: string; endpoint: 0 | 1; value: number }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
-  | { kind: "prism-3d"; hasEqualEdges?: boolean }
+  | { kind: "prism-3d"; hasEqualEdges?: boolean; solidId?: string; expectedVertexIds?: readonly string[] }
   | { kind: "topology-3d"; solidId?: string; open?: boolean; expectedVertexIds?: readonly string[]; expectedFaceRings?: readonly (readonly string[])[] }
   | { kind: "coplanar-3d"; points: readonly string[] }
-  | { kind: "circumsphere-3d"; sphereId?: string; radius?: number }
-  | { kind: "cube-3d"; edgeLength: number }
-  | { kind: "hemisphere-3d"; radius: number }
+  | { kind: "circumsphere-3d"; sphereId?: string; radius?: number; solidId?: string; expectedVertexIds?: readonly string[] }
+  | { kind: "cube-3d"; edgeLength: number; solidId?: string; expectedVertexIds?: readonly string[] }
+  | { kind: "hemisphere-3d"; radius: number; sphereId?: string; solidId?: string; expectedVertexIds?: readonly string[] }
   | { kind: "point-2d"; label: string; x: number; y: number }
   | { kind: "point-y-2d"; label: string; y: number }
   | { kind: "point-x-2d"; label: string; x: number }
@@ -58,6 +58,7 @@ export type ContractCheckSpec =
   | { kind: "tangent-to-conic-2d"; lineId: string; conicId: string; touchPoint?: { x: number; y: number }; touchPointLabel?: string }
   | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
+  | { kind: "noncollinear-2d"; a: string; b: string; c: string }
   | { kind: "distinct-2d"; a: string; b: string }
   | { kind: "vector-ratio-2d"; a: string; b: string; c: string; d: string; k: number }
   | { kind: "distance-2d"; a: string; b: string; value: number }
@@ -461,8 +462,47 @@ function distanceMultiplicityMatches(distances: readonly number[], edge: number,
   return offset === distances.length
 }
 
-function equalEdgeTriangularPrismPoints(prims: readonly Record<string, unknown>[]): Vec3[] | null {
-  for (const points of polyhedronVertexSets(prims)) {
+function resolveNamedPolyhedronVertexSets(
+  prims: readonly Record<string, unknown>[],
+  solidId?: string,
+  expectedVertexIds?: readonly string[]
+): Vec3[][] {
+  if (solidId === undefined && expectedVertexIds === undefined) return polyhedronVertexSets(prims)
+  const positions = new Map<string, Vec3>()
+  const nameFor = (id: unknown): string | null => {
+    if (typeof id !== "string") return null
+    const point = prims.find((primitive) => primitive.type === "point3" && primitive.id === id)
+    return normalizeLabel(String(point?.label ?? id))
+  }
+  for (const primitive of prims) {
+    if (primitive.type !== "point3" || typeof primitive.id !== "string") continue
+    const position = primitive.position as Vec3 | undefined
+    if (position && [position.x, position.y, position.z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+      positions.set(primitive.id, position)
+    }
+  }
+  const expected = expectedVertexIds?.map(normalizeLabel)
+  const matchingSolids = prims.filter((primitive) => {
+    if (primitive.type !== "polyhedron3" || !Array.isArray(primitive.vertexIds)) return false
+    if (solidId !== undefined && primitive.id !== solidId && primitive.label !== solidId) return false
+    if (expected === undefined) return true
+    const actual = primitive.vertexIds.map(nameFor)
+    return actual.every((name): name is string => name !== null) &&
+      new Set(actual).size === actual.length &&
+      actual.length === expected.length &&
+      expected.every((name) => actual.includes(name))
+  })
+  if (matchingSolids.length !== 1) return []
+  const points = (matchingSolids[0]!.vertexIds as unknown[]).map((id) => typeof id === "string" ? positions.get(id) : undefined)
+  return points.length > 0 && points.every((point): point is Vec3 => point !== undefined) ? [points] : []
+}
+
+function equalEdgeTriangularPrismPoints(
+  prims: readonly Record<string, unknown>[],
+  solidId?: string,
+  expectedVertexIds?: readonly string[]
+): Vec3[] | null {
+  for (const points of resolveNamedPolyhedronVertexSets(prims, solidId, expectedVertexIds)) {
     if (points.length !== 6) continue
     const distances = sortedPairDistances(points)
     if (distanceMultiplicityMatches(distances, distances[0]!, [
@@ -473,8 +513,13 @@ function equalEdgeTriangularPrismPoints(prims: readonly Record<string, unknown>[
   return null
 }
 
-function cubePoints(prims: readonly Record<string, unknown>[], edgeLength?: number): Vec3[] | null {
-  for (const points of polyhedronVertexSets(prims)) {
+function cubePoints(
+  prims: readonly Record<string, unknown>[],
+  edgeLength?: number,
+  solidId?: string,
+  expectedVertexIds?: readonly string[]
+): Vec3[] | null {
+  for (const points of resolveNamedPolyhedronVertexSets(prims, solidId, expectedVertexIds)) {
     if (points.length !== 8) continue
     const distances = sortedPairDistances(points)
     const edge = distances[0]!
@@ -551,27 +596,96 @@ function collectPrimitives(candidate: unknown): readonly Record<string, unknown>
   return Array.isArray(prims) ? (prims as Record<string, unknown>[]) : []
 }
 
-function points3Of(prims: readonly Record<string, unknown>[]): Map<string, Vec3> {
-  const map = new Map<string, Vec3>()
-  for (const p of prims) {
-    if (p.type !== "point3") continue
-    const pos = p.position as { x?: unknown; y?: unknown; z?: unknown } | undefined
-    if (!pos || ![pos.x, pos.y, pos.z].every((v) => typeof v === "number" && Number.isFinite(v))) continue
-    const lbl = normalizeLabel(String(p.label ?? p.id ?? ""))
-    if (lbl) map.set(lbl, { x: pos.x as number, y: pos.y as number, z: pos.z as number })
+interface PointAndPrimitiveIntegrity {
+  pts3: Map<string, Vec3>
+  pts2: Map<string, Vec2>
+  errors: string[]
+  conflictedPointLabels: Set<string>
+}
+
+function inspectPointAndPrimitiveIntegrity(
+  prims: readonly Record<string, unknown>[],
+  expectedCategory?: DrawingContractCase["category"]
+): PointAndPrimitiveIntegrity {
+  const pts3 = new Map<string, Vec3>()
+  const pts2 = new Map<string, Vec2>()
+  const seenIds = new Set<string>()
+  const duplicateIds = new Set<string>()
+  const point3Owners = new Map<string, number>()
+  const point2Owners = new Map<string, number>()
+  const duplicatePoint3 = new Set<string>()
+  const duplicatePoint2 = new Set<string>()
+  const crossDimensionConflicts = new Set<string>()
+  const unexpected2dInSolid: string[] = []
+  const unexpected3dInPlane: string[] = []
+
+  prims.forEach((p, index) => {
+    if (typeof p.id === "string" && p.id.length > 0) {
+      if (seenIds.has(p.id)) duplicateIds.add(p.id)
+      seenIds.add(p.id)
+    }
+    if (p.type === "point3") {
+      if (expectedCategory === "plane") {
+        unexpected3dInPlane.push(String(p.label ?? p.id ?? `point3@${index}`))
+      }
+      const pos = p.position as { x?: unknown; y?: unknown; z?: unknown } | undefined
+      const primary = normalizeLabel(String(p.label ?? p.id ?? ""))
+      const idAlias = typeof p.id === "string" ? normalizeLabel(p.id) : ""
+      const keys = new Set([primary, ...(idAlias && idAlias !== primary ? [idAlias] : [])].filter(Boolean))
+      for (const key of keys) {
+        const owner = point3Owners.get(key)
+        if (owner !== undefined && owner !== index) duplicatePoint3.add(key)
+        else point3Owners.set(key, index)
+      }
+      if (primary && !duplicatePoint3.has(primary) && pos && [pos.x, pos.y, pos.z].every((v) => typeof v === "number" && Number.isFinite(v))) {
+        pts3.set(primary, { x: pos.x as number, y: pos.y as number, z: pos.z as number })
+      }
+    } else if (p.type === "point") {
+      if (expectedCategory === "solid") {
+        unexpected2dInSolid.push(String(p.label ?? p.id ?? `point@${index}`))
+      }
+      const primary = normalizeLabel(String(p.label ?? p.id ?? ""))
+      const idAlias = typeof p.id === "string" ? normalizeLabel(p.id) : ""
+      const keys = new Set([primary, ...(idAlias && idAlias !== primary ? [idAlias] : [])].filter(Boolean))
+      for (const key of keys) {
+        const owner = point2Owners.get(key)
+        if (owner !== undefined && owner !== index) duplicatePoint2.add(key)
+        else point2Owners.set(key, index)
+      }
+      if (primary && !duplicatePoint2.has(primary) && typeof p.x === "number" && typeof p.y === "number" && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+        pts2.set(primary, { x: p.x, y: p.y })
+      }
+    }
+  })
+
+  for (const key of duplicatePoint3) pts3.delete(key)
+  for (const key of duplicatePoint2) pts2.delete(key)
+  for (const key of point3Owners.keys()) {
+    if (point2Owners.has(key)) {
+      crossDimensionConflicts.add(key)
+      pts3.delete(key)
+      pts2.delete(key)
+    }
   }
-  return map
+
+  const errors: string[] = []
+  if (duplicateIds.size > 0) errors.push(`duplicate primitive ids: ${[...duplicateIds].join(",")}`)
+  if (duplicatePoint3.size > 0) errors.push(`duplicate normalized 3d point labels/aliases: ${[...duplicatePoint3].join(",")}`)
+  if (duplicatePoint2.size > 0) errors.push(`duplicate normalized 2d point labels/aliases: ${[...duplicatePoint2].join(",")}`)
+  if (crossDimensionConflicts.size > 0) errors.push(`mismatched point/point3 primitive types for labels: ${[...crossDimensionConflicts].join(",")}`)
+  if (unexpected2dInSolid.length > 0) errors.push(`mismatched 2d point primitive(s) in solid contract: ${unexpected2dInSolid.join(",")}`)
+  if (unexpected3dInPlane.length > 0) errors.push(`mismatched 3d point3 primitive(s) in plane contract: ${unexpected3dInPlane.join(",")}`)
+
+  const conflictedPointLabels = new Set<string>([...duplicatePoint3, ...duplicatePoint2, ...crossDimensionConflicts])
+  return { pts3, pts2, errors, conflictedPointLabels }
+}
+
+function points3Of(prims: readonly Record<string, unknown>[]): Map<string, Vec3> {
+  return inspectPointAndPrimitiveIntegrity(prims).pts3
 }
 
 function points2Of(prims: readonly Record<string, unknown>[]): Map<string, Vec2> {
-  const map = new Map<string, Vec2>()
-  for (const p of prims) {
-    if (p.type !== "point") continue
-    if (typeof p.x !== "number" || typeof p.y !== "number" || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue
-    const lbl = normalizeLabel(String(p.label ?? p.id ?? ""))
-    if (lbl) map.set(lbl, { x: p.x, y: p.y })
-  }
-  return map
+  return inspectPointAndPrimitiveIntegrity(prims).pts2
 }
 
 function labelsOf(prims: readonly Record<string, unknown>[]): Set<string> {
@@ -916,7 +1030,7 @@ function evaluateCheck(
       if (!baseMatches) return { passed: false, detail: `invalid pre-fold right trapezoid or E outside BC: x=${x}` }
       const lineage = evaluateCheck({
         kind: "fold-transform-3d", beforeStateId: check.beforeStateId, afterStateId: check.afterStateId,
-        hinge: [check.f, check.e], moving: [{ before: check.a, after: check.a }, { before: check.b, after: check.b }], angleDegrees: 90
+        hinge: [check.f, check.e], moving: [{ before: check.a, after: check.a }, { before: check.b, after: check.b }], angleDegrees: 90, allowMirror: true
       }, prims, pts3, pts2, allLabels, options)
       if (!lineage.passed) return { passed: false, detail: `skew-angle fold lineage failed: ${lineage.detail}` }
       const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d)
@@ -960,15 +1074,17 @@ function evaluateCheck(
     case "topology-3d":
       return evaluatePolyhedronTopology(prims, check)
     case "prism-3d": {
+      const sets = resolveNamedPolyhedronVertexSets(prims, check.solidId, check.expectedVertexIds)
       const ok = check.hasEqualEdges === true
-        ? equalEdgeTriangularPrismPoints(prims) !== null
-        : polyhedronVertexSets(prims).some((points) => points.length >= 6)
-      return { passed: ok, detail: ok ? "verified right equal-edge triangular prism" : "missing equal-edge right triangular prism geometry" }
+        ? equalEdgeTriangularPrismPoints(prims, check.solidId, check.expectedVertexIds) !== null
+        : sets.some((points) => points.length >= 6)
+      return { passed: ok, detail: ok ? "verified right equal-edge triangular prism" : "missing named equal-edge right triangular prism geometry" }
     }
     case "circumsphere-3d": {
-      const sets = polyhedronVertexSets(prims)
+      const sets = resolveNamedPolyhedronVertexSets(prims, check.solidId, check.expectedVertexIds)
       const bound = check.sphereId === undefined ? null : uniqueEntity(prims, check.sphereId, "sphere")
-      const candidates = check.sphereId === undefined ? spheres(prims) : bound ? spheres([bound]) : []
+      const allSpheres = spheres(prims)
+      const candidates = check.sphereId === undefined ? (allSpheres.length === 1 ? allSpheres : []) : bound ? spheres([bound]) : []
       const onSphere = candidates.some((sphere) => sets.some((points) => points.every((point) => near(dist3(point, sphere.center), sphere.radius))))
       let radiusMatches = true
       if (check.radius !== undefined) {
@@ -994,13 +1110,16 @@ function evaluateCheck(
         }
       }
       const passed = onSphere && radiusMatches
-      return { passed, detail: passed ? "all vertices lie on the sphere with independently verified center/radius" : "sphere incidence or independently computed center/radius mismatch" }
+      return { passed, detail: passed ? "all vertices of the named solid lie on the sphere with independently verified center/radius" : "named solid sphere incidence or independently computed center/radius mismatch" }
     }
     case "hemisphere-3d": {
-      const cube = cubePoints(prims)
+      const cube = cubePoints(prims, undefined, check.solidId, check.expectedVertexIds)
+      const bound = check.sphereId === undefined ? null : uniqueEntity(prims, check.sphereId, "sphere")
+      const allSpheres = spheres(prims)
+      const candidates = check.sphereId === undefined ? (allSpheres.length === 1 ? allSpheres : []) : bound ? spheres([bound]) : []
       let ok = false
       if (cube) {
-        for (const sphere of spheres(prims)) {
+        for (const sphere of candidates) {
           if (!near(sphere.radius, check.radius)) continue
           for (let a = 0; a < 5 && !ok; a += 1) for (let b = a + 1; b < 6 && !ok; b += 1) for (let c = b + 1; c < 7 && !ok; c += 1) for (let d = c + 1; d < 8 && !ok; d += 1) {
             const baseIds = new Set([a, b, c, d])
@@ -1013,11 +1132,11 @@ function evaluateCheck(
           }
         }
       }
-      return { passed: ok, detail: ok ? `verified hemisphere radius ${check.radius} with inscribed cube` : "missing cube base center or cap vertices on the required hemisphere" }
+      return { passed: ok, detail: ok ? `verified hemisphere radius ${check.radius} with named inscribed cube` : "missing named cube base center or cap vertices on the required hemisphere" }
     }
     case "cube-3d": {
-      const ok = cubePoints(prims, check.edgeLength) !== null
-      return { passed: ok, detail: ok ? `verified cube edge length ${check.edgeLength}` : `missing cube with edge length ${check.edgeLength}` }
+      const ok = cubePoints(prims, check.edgeLength, check.solidId, check.expectedVertexIds) !== null
+      return { passed: ok, detail: ok ? `verified named cube edge length ${check.edgeLength}` : `missing named cube with edge length ${check.edgeLength}` }
     }
     case "point-2d": {
       const pt = p2(check.label)
@@ -1177,6 +1296,14 @@ function evaluateCheck(
       if (len <= 1e-9) return { passed: false, detail: `degenerate collinearity base ${check.a}${check.b}` }
       const dist = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / len
       return { passed: dist <= 1e-2, detail: `collinear distance=${dist}` }
+    }
+    case "noncollinear-2d": {
+      const a = p2(check.a), b = p2(check.b), c = p2(check.c)
+      if (!a || !b || !c) return { passed: false, detail: `missing 2d point for non-collinearity` }
+      const len = Math.hypot(b.x - a.x, b.y - a.y)
+      if (len <= 1e-9) return { passed: false, detail: `degenerate non-collinearity base ${check.a}${check.b}` }
+      const dist = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / len
+      return { passed: dist > 1e-6, detail: `non-collinear distance=${dist}` }
     }
     case "distinct-2d": {
       const a = p2(check.a), b = p2(check.b)
@@ -1401,15 +1528,17 @@ export function evaluateDrawingContract(
   }
 
   const prims = collectPrimitives(candidate)
-  const pts3 = points3Of(prims)
-  const pts2 = points2Of(prims)
+  const integrity = inspectPointAndPrimitiveIntegrity(prims, contract.category)
+  const pts3 = integrity.pts3
+  const pts2 = integrity.pts2
   const allLabels = labelsOf(prims)
+  for (const conflict of integrity.conflictedPointLabels) allLabels.delete(conflict)
 
   const presentEntityIds: string[] = []
   const missingEntityIds: string[] = []
   for (const id of requiredEntityIds) {
     const key = normalizeLabel(id)
-    if (pts3.has(key) || pts2.has(key) || allLabels.has(key)) presentEntityIds.push(id)
+    if (!integrity.conflictedPointLabels.has(key) && (pts3.has(key) || pts2.has(key) || allLabels.has(key))) presentEntityIds.push(id)
     else missingEntityIds.push(id)
   }
 
@@ -1429,10 +1558,19 @@ export function evaluateDrawingContract(
       (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId) &&
       (options.stateId === undefined || stateId === undefined || stateId === options.stateId)
   })
-  const obligationResults: ObligationEvaluation[] = scopedObligations.map((ob) => {
-    const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
-    return { id: ob.id, kind: ob.kind, passed: outcome.passed, detail: outcome.detail }
-  })
+  const stateIntegrityErrors = Object.entries(options.stateCandidates ?? {}).flatMap(([stateId, stateCandidate]) =>
+    inspectPointAndPrimitiveIntegrity(collectPrimitives(stateCandidate), contract.category).errors.map((err) => `${stateId}: ${err}`)
+  )
+  const allIntegrityErrors = [...integrity.errors, ...stateIntegrityErrors]
+  const obligationResults: ObligationEvaluation[] = [
+    ...scopedObligations.map((ob) => {
+      const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
+      return { id: ob.id, kind: ob.kind, passed: outcome.passed, detail: outcome.detail }
+    }),
+    ...(allIntegrityErrors.length > 0
+      ? [{ id: "ob-primitive-integrity", kind: "integrity", passed: false, detail: allIntegrityErrors.join("; ") }]
+      : [])
+  ]
 
   const passedObligationIds = obligationResults.filter((r) => r.passed).map((r) => r.id)
   const failedObligationIds = obligationResults.filter((r) => !r.passed).map((r) => r.id)
@@ -1492,14 +1630,17 @@ export function evaluateDrawingContractStates(
   const lineageContract = {
     ...contract,
     requiredObligations: foldObligations,
-    requiredEntityIds: contract.stateRequiredEntityIds === undefined ? contract.requiredEntityIds : [...new Set(Object.values(contract.stateRequiredEntityIds).flatMap((ids) => [...ids]))]
+    requiredEntityIds: contract.stateRequiredEntityIds === undefined
+      ? contract.requiredEntityIds
+      : [...(contract.stateRequiredEntityIds[enumerated[enumerated.length - 1] ?? ""] ?? [])]
   }
-  const lineageCandidate = { primitives: Object.values(inputs).flatMap((input) => collectPrimitives(input.candidate)) }
+  const primaryStateId = enumerated[enumerated.length - 1] ?? Object.keys(inputs)[0]
+  const lineageCandidate = primaryStateId ? inputs[primaryStateId]?.candidate : undefined
   const lineageResult = foldObligations.length > 0
     ? evaluateDrawingContract(
         lineageContract,
         lineageCandidate,
-        { ...Object.values(inputs)[0]?.options, scopeId: "fold_lineage", stateCandidates }
+        { ...Object.values(inputs)[0]?.options, scopeId: "fold_lineage", stateId: primaryStateId, stateCandidates }
       )
     : null
   const passed = missingScopeIds.length === 0 && enumerated.length > 0 && enumerated.every((stateId) => stateResults[stateId]?.passed === true) && (lineageResult?.passed ?? true)

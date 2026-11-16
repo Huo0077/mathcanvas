@@ -22,9 +22,11 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）及 `T15` 渲染可见性框架与四族 DOM/E2E 检查已完成，但 **G3-Math 尚未退出**（T01 第三轮复核余 5 项合同阻断、生产证书与 18 平面/18 立体端到端及 `T16` 生命周期闭环正在持续推进中）；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）及 `T15` 已完成，且 `T01 / P0` 第四轮（终审 R4）36 题合同复核已通过并更新为 `"approved"`，但 **G3-Math 尚未退出**（当前 36 题离线基线 **0 passed / 11 partial / 25 failed / 0 incomplete**，正继续推进 Task 2 生产证书接线、Task 3–4 平面/立体 36 题及 `T16` 生命周期闭环）；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
+
+- **T01 / P0 终审（R4）已通过，36 题契约 suite 获 `approved`**：针对 R3 五项阻断（`GK-P06` AB 弦宿主与三分支、`JT-P02` `y_P≠0` 与互异交点、`JT-S04` 闭合六面体与 `±90°` 镜像、`GK-S09/JT-S01/JT-S09` 命名立体防匿名替身、`points3Of/points2Of` 重复归一化标签/别名/错维点拦截）完成 RED→GREEN 修复；只读独立 reviewer 复核 `PASS`，`GK-S02/GK-S03/JT-S06/JT-S07` 保持 `text_with_figure_reference` 诚实未知边界。`drawingContracts.test.ts` 45/45、全量 Vitest **540 文件 / 5743 passed + 1 todo**、`typecheck` 与 `lint`（0 errors）通过；36 题离线 `eval:reliability` 基线为 **0 passed / 11 partial / 25 failed / 0 incomplete**（对象覆盖 **23.5%**、义务覆盖 **18.9%**）。证据：[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)。下一步进入 Task 2（生产完整 `DrawingCertificateResult` 接线与统一评测入口）。
 
 - **T15 真实画布渲染证据、分层视觉校验与标签布局已落地**：`renderEvidence.ts` 新增 `VisualEvidenceTier`（`structuredOnly` / `rendered` / `humanReviewed`）防升级与 `adjustLayoutWithoutMutatingMath`（标签避让不改数学坐标、开关关停落 `unverified`）；`renderLayoutInput.ts`、`canvasEvidence.ts`、`agentRunner.ts` 对齐 `rendered` / `structuredOnly` 口径；`planarDrawing.ts` 补齐显式直线与圆锥曲线求交；`renderEvidence.test.ts`+`planarDrawing.test.ts`+`canvasEvidence.test.ts`（47 项）与 Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`，四族渲染与反例通过，AI 已抽检 `t15-conic-rendered.png` 与 `t15-solid-fold-rendered.png`，记为 `agent_visual_review`），全量 Vitest 540 文件/5742 通过+1todo、类型/Lint（0 errors）/Web 构建/离线评测通过。证据：[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)。当前按 `2026-11-16-g3-completion-plan.md` 持续推进 G3（下一步先关闭 r3 合同剩余 5 项阻断与 T01 复核）。
 

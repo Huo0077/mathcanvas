@@ -5,7 +5,7 @@
   "denominator": 36,
   "enforceAllPass": false,
   "sourceManifest": "docs/audit/2026-11-15-drawing-baseline/manifest.json",
-  "independentReviewStatus": "pending_second_reviewer",
+  "independentReviewStatus": "approved",
   "notice": "Frozen 36-case golden drawing contracts derived strictly from the baseline manifest prompts. Denominator is immutably 36; incomplete or infeasible subquestions remain in the denominator.",
   "cases": [
     {
@@ -25,7 +25,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "P",
         "A",
@@ -319,7 +319,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -674,7 +674,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -981,7 +981,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "P",
         "A",
@@ -1250,7 +1250,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -1642,7 +1642,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -1880,7 +1880,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -2180,7 +2180,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "P",
         "A",
@@ -2438,7 +2438,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": ["A", "B", "C", "A₁", "B₁", "C₁"],
       "sharedScope": {
         "entities": ["A", "B", "C", "A₁", "B₁", "C₁"],
@@ -2479,7 +2479,8 @@
           },
           "check": {
             "kind": "prism-3d",
-            "hasEqualEdges": true
+            "hasEqualEdges": true,
+            "expectedVertexIds": ["A", "B", "C", "A₁", "B₁", "C₁"]
           }
         },
         {
@@ -2493,7 +2494,8 @@
             "end": 46
           },
           "check": {
-            "kind": "circumsphere-3d"
+            "kind": "circumsphere-3d",
+            "expectedVertexIds": ["A", "B", "C", "A₁", "B₁", "C₁"]
           }
         },
         {
@@ -2542,7 +2544,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -2765,7 +2767,9 @@
             "end": 110
           },
           "check": {
-            "kind": "circumsphere-3d"
+            "kind": "circumsphere-3d",
+            "sphereId": "O",
+            "expectedVertexIds": ["A", "B", "C", "P"]
           }
         },
         {
@@ -2791,7 +2795,7 @@
           "scope": "(1)(ii)",
           "sourceSpan": { "text": "三棱锥 P-ABC 的各个顶点都在球 O 的球面上", "start": 85, "end": 110 },
           "expectedValue": 1.118033988749895,
-          "check": { "kind": "circumsphere-3d", "sphereId": "O", "radius": 1.118033988749895 }
+          "check": { "kind": "circumsphere-3d", "sphereId": "O", "expectedVertexIds": ["A", "B", "C", "P"], "radius": 1.118033988749895 }
         },
         {
           "id": "ob-min-dihedral",
@@ -2841,7 +2845,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -3135,7 +3139,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "P",
         "A",
@@ -3424,7 +3428,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -3699,7 +3703,8 @@
             "afterStateId": "after_fold",
             "hinge": ["F", "E"],
             "moving": [{ "before": "A", "after": "A" }, { "before": "B", "after": "B" }],
-            "angleDegrees": 90
+            "angleDegrees": 90,
+            "allowMirror": true
           }
         },
         {
@@ -3739,9 +3744,9 @@
           }
         },
         {
-          "id": "ob-open-topology",
+          "id": "ob-closed-topology",
           "kind": "topology",
-          "description": "Two folded rectangles share EF as a valid open surface",
+          "description": "Closed hexahedron ABCDEF with 6 faces after 90° fold",
           "scope": "stem",
           "stateId": "after_fold",
           "sourceSpan": {
@@ -3751,9 +3756,8 @@
           },
           "check": {
             "kind": "topology-3d",
-            "open": true,
             "expectedVertexIds": ["A", "B", "E", "F", "C", "D"],
-            "expectedFaceRings": [["A", "B", "E", "F"], ["E", "C", "D", "F"]]
+            "expectedFaceRings": [["A", "B", "E", "F"], ["F", "E", "C", "D"], ["A", "F", "D"], ["B", "C", "E"], ["A", "D", "B"], ["B", "D", "C"]]
           }
         },
         {
@@ -3827,7 +3831,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "P",
         "A",
@@ -4107,7 +4111,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -4350,7 +4354,7 @@
         "verification_passed"
       ],
       "inputMode": "text_with_figure_reference",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -4639,7 +4643,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -4969,7 +4973,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
       "sharedScope": {
         "entities": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"],
@@ -5010,7 +5014,8 @@
           },
           "check": {
             "kind": "cube-3d",
-            "edgeLength": 2
+            "edgeLength": 2,
+            "expectedVertexIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"]
           }
         },
         {
@@ -5041,7 +5046,8 @@
           },
           "check": {
             "kind": "hemisphere-3d",
-            "radius": 2.449489742783178
+            "radius": 2.449489742783178,
+            "expectedVertexIds": ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"]
           }
         }
       ],
@@ -5074,7 +5080,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "l",
@@ -5308,7 +5314,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "E",
         "A",
@@ -5598,7 +5604,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "F",
@@ -5959,7 +5965,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "f",
         "g"
@@ -6178,7 +6184,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "O",
@@ -6583,7 +6589,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "D",
@@ -6848,6 +6854,54 @@
           "check": { "kind": "conic-2d", "curveType": "circle", "entityId": "E", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
         },
         {
+          "id": "ob-a-on-ab",
+          "kind": "incidence",
+          "description": "A lies on chord line AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": { "kind": "point-on-line-2d", "point": "A", "lineId": "AB" }
+        },
+        {
+          "id": "ob-b-on-ab",
+          "kind": "incidence",
+          "description": "B lies on chord line AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": ", 切点分别为 $A$, B.\n\n",
+            "start": 79,
+            "end": 96
+          },
+          "check": { "kind": "point-on-line-2d", "point": "B", "lineId": "AB" }
+        },
+        {
+          "id": "ob-m-on-ab",
+          "kind": "incidence",
+          "description": "Tangent midpoint M lies on chord line AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": { "kind": "point-on-line-2d", "point": "M", "lineId": "AB" }
+        },
+        {
+          "id": "ob-m-on-seg-ab",
+          "kind": "incidence",
+          "description": "Tangent point M lies on segment AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": { "kind": "point-on-segment-2d", "p": "M", "a": "A", "b": "B" }
+        },
+        {
           "id": "ob-ab-midpoint",
           "kind": "midpoint",
           "description": "M is the midpoint of AB",
@@ -6877,7 +6931,7 @@
             "start": 176,
             "end": 192
           },
-          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 0, "y": 0.5 } }
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 0, "y": 0.5 }, "touchPointLabel": "M" }
         },
         {
           "id": "ob-e-tangent",
@@ -6890,7 +6944,7 @@
             "start": 176,
             "end": 192
           },
-          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 1, "y": 1.5 } }
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": 1, "y": 1.5 }, "touchPointLabel": "M" }
         },
         {
           "id": "ob-e-tangent",
@@ -6903,7 +6957,7 @@
             "start": 176,
             "end": 192
           },
-          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": -1, "y": 1.5 } }
+          "check": { "kind": "tangent-to-conic-2d", "lineId": "AB", "conicId": "E", "touchPoint": { "x": -1, "y": 1.5 }, "touchPointLabel": "M" }
         },
         {
           "id": "ob-area",
@@ -6977,7 +7031,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "F",
@@ -7243,7 +7297,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [],
       "sharedScope": {
         "entities": [],
@@ -7337,7 +7391,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "f"
       ],
@@ -7464,7 +7518,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "F₁",
@@ -7687,7 +7741,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "A₁",
@@ -7915,6 +7969,71 @@
             "b": "A₂",
             "c": "N"
           }
+        },
+        {
+          "id": "ob-p-off-axis",
+          "kind": "non_degeneracy",
+          "description": "P moves on x=-1 with y_P ≠ 0 (off axis A₁A₂)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 P 在定直线 x=-1 上运动",
+            "start": 73,
+            "end": 90
+          },
+          "check": {
+            "kind": "noncollinear-2d",
+            "a": "P",
+            "b": "A₁",
+            "c": "A₂"
+          }
+        },
+        {
+          "id": "ob-m-ne-a1",
+          "kind": "distinctness",
+          "description": "M is the second intersection distinct from A₁",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与双曲线分别交于 M，N 两点",
+            "start": 104,
+            "end": 119
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "M",
+            "b": "A₁"
+          }
+        },
+        {
+          "id": "ob-n-ne-a2",
+          "kind": "distinctness",
+          "description": "N is the second intersection distinct from A₂",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与双曲线分别交于 M，N 两点",
+            "start": 104,
+            "end": 119
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "N",
+            "b": "A₂"
+          }
+        },
+        {
+          "id": "ob-m-ne-n",
+          "kind": "distinctness",
+          "description": "Intersections M and N are distinct",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "与双曲线分别交于 M，N 两点",
+            "start": 104,
+            "end": 119
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "M",
+            "b": "N"
+          }
         }
       ],
       "displayPolicy": {
@@ -7946,7 +8065,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "O",
@@ -8271,7 +8390,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "Γ",
         "M",
@@ -8590,7 +8709,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "M",
@@ -8873,7 +8992,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "F₁",
@@ -9054,7 +9173,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "C",
         "A",
@@ -9379,7 +9498,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "A",
         "B",
@@ -9693,7 +9812,7 @@
         "verification_passed"
       ],
       "inputMode": "text_only",
-      "independentReviewStatus": "pending_second_reviewer",
+      "independentReviewStatus": "approved",
       "requiredEntityIds": [
         "M",
         "O",
