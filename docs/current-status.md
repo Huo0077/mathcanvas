@@ -39,6 +39,8 @@
 
 - **scope 与实体绑定试点已整改**：JT-P05 显式继承前问 C，JT-P08 绑定实际 G 参数，JT-S01 两个子问继承 PC⊥AB 且 O 仅在 (1)(ii) 必需；函数切线拒绝零长度端点。跨问错曲线、错误轨迹、缺球/缺父条件均有 RED→GREEN。定向39项、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过；最新离线仍为 **0 passed / 12 partial / 24 failed**，不代表生产提分。证据：[scope与实体绑定试点](audit/2026-11-16-g3-scope-entities/README.md)。其余合同推广、指定拓扑和折叠谱系仍未完成。
 
+- **公共曲线与实体绑定已推广**：前问确定且后续共用的 C/E/Γ 按 `stem` 在每个 scope 实核，并绑定命名曲线；GK-P02 补 M≠N。跨问错曲线、匿名替身、不可行披露搭配错误 C、重合交点均有 RED→GREEN。全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过。离线仍为0/12/24，义务覆盖约22.24%。证据：[公共曲线整改](audit/2026-11-16-g3-shared-curves/README.md)。指定拓扑和折叠谱系仍未完成，T01不退出。
+
 ### 当前执行范围与区块结果
 
 前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。当前按用户 goal 持续推进 **G3（先 G3-Math，再 B5/G3-UX）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。

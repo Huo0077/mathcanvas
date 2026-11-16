@@ -291,6 +291,10 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       "(3)": { candidate: base, options: { verificationStatus: "passed" } }
     })
     expect(honest.passed).toBe(true)
+    const wrongCurve = evaluateDrawingContract(jtp01, {
+      primitives: base.primitives.map((primitive) => primitive.id === "c" ? { ...primitive, radiusX: 3 } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)", answerText: "第(2)问不成立：有两个公共点。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(wrongCurve.failedObligationIds).toContain("ob-c")
   })
 
   it("verifies all three GK-P06 tangent-circle branches and binds the named endpoints", () => {
@@ -501,6 +505,10 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       primitives: primitives.map((primitive) => primitive.id === "t" ? { ...primitive, x: 2 } : primitive)
     }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(invalid.failedObligationIds).toContain("ob-t-on-ab")
+    const coincident = evaluateDrawingContract(gkp02, {
+      primitives: primitives.map((primitive) => primitive.id === "n" ? { ...primitive, ...M } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(coincident.failedObligationIds).toContain("ob-mn-distinct")
   })
 
   it("binds GK-P01 A and B to line l and verifies the origin O", () => {
@@ -523,6 +531,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       primitives: primitives.map((primitive) => primitive.id === "b" ? { ...primitive, ...offLine } : primitive)
     }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(invalid.failedObligationIds).toContain("ob-b-on-l")
+    const scopes = evaluateDrawingContractScopes(gkp01, {
+      "(1)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives: [...primitives.filter((primitive) => primitive.id !== "c"), { type: "ellipse", id: "c", label: "C", center: { x: 0, y: 0 }, radiusX: 3, radiusY: Math.SQRT2 }, { ...primitives[0]!, id: "decoy", label: "decoy" }] }, options: { verificationStatus: "passed" } }
+    })
+    expect(scopes.scopeResults["(2)"]?.failedObligationIds).toContain("ob-c")
+    expect(scopes.scopeResults["(1)"]?.passedObligationIds).toContain("ob-c")
   })
 
   it("verifies GK-S07 prism correspondence and closed topology alongside its metric constraints", () => {
@@ -1038,6 +1052,11 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       }
     )
     expect(honest.passed).toBe(true)
+    const wrongCurve = evaluateDrawingContractScopes(jtp06, {
+      "(1)": { candidate: { primitives: basePrims }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives: basePrims.map((primitive) => primitive.id === "ell-c" ? { ...primitive, radiusX: 3 } : primitive) }, options: { verificationStatus: "passed", answerText: "第(2)问不成立。", infeasibleDiagnosedSubquestions: ["(2)"] } }
+    })
+    expect(wrongCurve.scopeResults["(2)"]?.failedObligationIds).toContain("ob-c")
 
     const forgedWithDisclaimer = evaluateDrawingContract(
       jtp06,

@@ -4824,7 +4824,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Ellipse x²/4 + y²/2 = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "离心率为√2/2，长轴长为4",
             "start": 28,
@@ -4833,6 +4833,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "rx": 2,
@@ -5062,7 +5063,7 @@
           "id": "ob-e",
           "kind": "conic_equation",
           "description": "Ellipse x²/3 + y²/4 = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "且过 $A(0,-2), B\\left(\\frac{3}{2},-1\\right)$ 两点",
             "start": 42,
@@ -5071,6 +5072,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "E",
             "cx": 0,
             "cy": 0,
             "rx": 1.7320508075688772,
@@ -5164,6 +5166,22 @@
             "cy": 0,
             "rx": 1.7320508075688772,
             "ry": 2
+          }
+        },
+        {
+          "id": "ob-mn-distinct",
+          "kind": "distinct",
+          "description": "M and N are two distinct intersections",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交 $E$ 于 $M, N$ 两点",
+            "start": 127,
+            "end": 144
+          },
+          "check": {
+            "kind": "distinct-2d",
+            "a": "M",
+            "b": "N"
           }
         },
         {
@@ -5342,6 +5360,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "C",
             "vx": 0,
             "vy": 0,
             "axis": "x",
@@ -5865,7 +5884,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Parabola y² = x (p=0.5)",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$",
             "start": 38,
@@ -5874,6 +5893,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "C",
             "vx": 0,
             "vy": 0,
             "axis": "x",
@@ -5884,7 +5904,7 @@
           "id": "ob-circle",
           "kind": "circle_equation",
           "description": "Circle (x-2)² + y² = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "已知 点 $M(2,0)$, 且 $\\odot M$ 与 $l$ 相切",
             "start": 88,
@@ -5893,6 +5913,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "circle",
+            "entityId": "M",
             "cx": 2,
             "cy": 0,
             "radius": 1
@@ -6163,6 +6184,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "C",
             "vx": 0,
             "vy": 0,
             "axis": "y",
@@ -6325,7 +6347,7 @@
             "start": 126,
             "end": 162
           },
-          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 2 }
+          "check": { "kind": "conic-2d", "curveType": "circle", "entityId": "E", "cx": 0, "cy": 2.5, "radius": 2 }
         },
         {
           "id": "ob-e-circle",
@@ -6338,7 +6360,7 @@
             "start": 126,
             "end": 162
           },
-          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
+          "check": { "kind": "conic-2d", "curveType": "circle", "entityId": "E", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
         },
         {
           "id": "ob-e-circle",
@@ -6351,7 +6373,7 @@
             "start": 126,
             "end": 162
           },
-          "check": { "kind": "conic-2d", "curveType": "circle", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
+          "check": { "kind": "conic-2d", "curveType": "circle", "entityId": "E", "cx": 0, "cy": 2.5, "radius": 1.4142135623730951 }
         },
         {
           "id": "ob-ab-midpoint",
@@ -6550,7 +6572,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Parabola x² = 4y (p=2)",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "已知抛物线 $C: x^{2}=2 p y(p>0)$",
             "start": 3,
@@ -6559,6 +6581,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "C",
             "vx": 0,
             "vy": 0,
             "axis": "y",
@@ -6578,6 +6601,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "circle",
+            "entityId": "M",
             "cx": 0,
             "cy": -4,
             "radius": 1
@@ -6962,7 +6986,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Ellipse x²/4 + y²/3 = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "离心率为 1/2，左、右焦点分别为 F₁(-1,0)，F₂(1,0)",
             "start": 8,
@@ -6971,6 +6995,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "rx": 2,
@@ -7041,6 +7066,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "circle",
+            "entityId": "M",
             "cx": 1,
             "cy": 0,
             "radius": 4
@@ -7160,7 +7186,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Hyperbola x²/4 - y²/16 = 1 (both branches)",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "右焦点为 (2√5, 0)，离心率为 √5",
             "start": 17,
@@ -7169,6 +7195,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "hyperbola",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "axis": "x",
@@ -7431,6 +7458,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "C",
             "vx": 0,
             "vy": 0,
             "axis": "x",
@@ -7730,6 +7758,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "parabola",
+            "entityId": "Γ",
             "vx": 0,
             "vy": 0,
             "axis": "y",
@@ -8258,7 +8287,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Ellipse x²/5 + y²/4 = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点",
             "start": 47,
@@ -8267,6 +8296,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "rx": 2.23606797749979,
@@ -8434,7 +8464,7 @@
           "id": "ob-c",
           "kind": "conic_equation",
           "description": "Ellipse x²/4 + y² = 1",
-          "scope": "(1)",
+          "scope": "stem",
           "sourceSpan": {
             "text": "椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)",
             "start": 12,
@@ -8443,6 +8473,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "rx": 2,
@@ -9012,6 +9043,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "circle",
+            "entityId": "M",
             "cx": 2,
             "cy": -1,
             "radius": 3
