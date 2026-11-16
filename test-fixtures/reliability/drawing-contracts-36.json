@@ -1370,6 +1370,87 @@
           }
         },
         {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=AB=2 in the square base",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2", "start": 3, "end": 29 },
+          "expectedValue": 2,
+          "check": { "kind": "distance-3d", "a": "A", "b": "D", "value": 2 }
+        },
+        {
+          "id": "ob-aa1-ad",
+          "kind": "perpendicular",
+          "description": "AA₁⊥AD: the lateral edge is perpendicular to a second independent base direction",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "perp-3d", "a": "A", "b": "A₁", "c": "A", "d": "D" }
+        },
+        {
+          "id": "ob-base-ab-dc",
+          "kind": "vector_equality",
+          "description": "AB=DC as directed base vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "B", "c": "D", "d": "C" }
+        },
+        {
+          "id": "ob-base-ad-bc",
+          "kind": "vector_equality",
+          "description": "AD=BC as directed base vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "D", "c": "B", "d": "C" }
+        },
+        {
+          "id": "ob-aa1-bb1",
+          "kind": "vector_equality",
+          "description": "AA₁=BB₁ as corresponding lateral-edge vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "A₁", "c": "B", "d": "B₁" }
+        },
+        {
+          "id": "ob-aa1-cc1",
+          "kind": "vector_equality",
+          "description": "AA₁=CC₁ as corresponding lateral-edge vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "A₁", "c": "C", "d": "C₁" }
+        },
+        {
+          "id": "ob-aa1-dd1",
+          "kind": "vector_equality",
+          "description": "AA₁=DD₁ as corresponding lateral-edge vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "A₁", "c": "D", "d": "D₁" }
+        },
+        {
+          "id": "ob-top-a1b1-d1c1",
+          "kind": "vector_equality",
+          "description": "A₁B₁=D₁C₁ as directed top-base vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A₁", "b": "B₁", "c": "D₁", "d": "C₁" }
+        },
+        {
+          "id": "ob-top-a1d1-b1c1",
+          "kind": "vector_equality",
+          "description": "A₁D₁=B₁C₁ as directed top-base vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中", "start": 3, "end": 24 },
+          "check": { "kind": "vector-equal-3d", "a": "A₁", "b": "D₁", "c": "B₁", "d": "C₁" }
+        },
+        {
+          "id": "ob-1-b2c2-a2d2",
+          "kind": "vector_equality",
+          "description": "B₂C₂=A₂D₂, proving the required parallel segments",
+          "scope": "(1)",
+          "sourceSpan": { "text": "证明：B₂C₂∥A₂D₂", "start": 98, "end": 110 },
+          "check": { "kind": "vector-equal-3d", "a": "B₂", "b": "C₂", "c": "A₂", "d": "D₂" }
+        },
+        {
           "id": "ob-a2",
           "kind": "ratio",
           "description": "A₂ at 1/4 of AA₁",
@@ -2883,6 +2964,46 @@
             "secondPoint": "C₁",
             "value": 0.816496580927726
           }
+        },
+        {
+          "id": "ob-translation-aa1-bb1",
+          "kind": "vector_equality",
+          "description": "AA₁=BB₁ as prism translation vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "三棱柱 ABC-A₁B₁C₁", "start": 4, "end": 18 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "A₁", "c": "B", "d": "B₁" }
+        },
+        {
+          "id": "ob-translation-aa1-cc1",
+          "kind": "vector_equality",
+          "description": "AA₁=CC₁ as prism translation vectors",
+          "scope": "stem",
+          "sourceSpan": { "text": "三棱柱 ABC-A₁B₁C₁", "start": 4, "end": 18 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "A₁", "c": "C", "d": "C₁" }
+        },
+        {
+          "id": "ob-corresponding-ab-a1b1",
+          "kind": "vector_equality",
+          "description": "AB=A₁B₁ as corresponding prism edges",
+          "scope": "stem",
+          "sourceSpan": { "text": "三棱柱 ABC-A₁B₁C₁", "start": 4, "end": 18 },
+          "check": { "kind": "vector-equal-3d", "a": "A", "b": "B", "c": "A₁", "d": "B₁" }
+        },
+        {
+          "id": "ob-corresponding-bc-b1c1",
+          "kind": "vector_equality",
+          "description": "BC=B₁C₁ as corresponding prism edges",
+          "scope": "stem",
+          "sourceSpan": { "text": "三棱柱 ABC-A₁B₁C₁", "start": 4, "end": 18 },
+          "check": { "kind": "vector-equal-3d", "a": "B", "b": "C", "c": "B₁", "d": "C₁" }
+        },
+        {
+          "id": "ob-corresponding-ca-c1a1",
+          "kind": "vector_equality",
+          "description": "CA=C₁A₁ as corresponding prism edges",
+          "scope": "stem",
+          "sourceSpan": { "text": "三棱柱 ABC-A₁B₁C₁", "start": 4, "end": 18 },
+          "check": { "kind": "vector-equal-3d", "a": "C", "b": "A", "c": "C₁", "d": "A₁" }
         },
         {
           "id": "ob-topology",

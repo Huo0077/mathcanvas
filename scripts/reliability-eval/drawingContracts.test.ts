@@ -768,8 +768,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     const validP = point("P", { x: -2 * ratio, y: 2 - 2 * ratio, z: 2 })
     const valid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, validP, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(valid.passed).toBe(true)
-    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-plane-perp", "ob-2-p-host", "ob-2-dihedral-cos"]))
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-plane-perp", "ob-2-p-host", "ob-2-dihedral-cos", "ob-translation-aa1-bb1", "ob-translation-aa1-cc1", "ob-corresponding-ab-a1b1", "ob-corresponding-bc-b1c1", "ob-corresponding-ca-c1a1"]))
     expect(jts02.requiredObligations.map((obligation) => obligation.id)).not.toContain("ob-ac-bb1")
+
+    const skewed = point("B₁", { x: -1, y: 0, z: 2 })
+    const wrongPrism = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, skewed, C1, validP, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(wrongPrism.failedObligationIds).toEqual(expect.arrayContaining(["ob-translation-aa1-bb1", "ob-corresponding-ab-a1b1", "ob-corresponding-bc-b1c1"]))
 
     const midpoint = point("P", { x: -1, y: 1, z: 2 })
     const invalid = evaluateDrawingContract(jts02, { primitives: [A, B, C, A1, B1, C1, midpoint, ...topology] }, { verificationStatus: "passed", scopeId: "(2)" })
@@ -1056,7 +1060,30 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       answerText: "第(2)问不存在满足120°的点P。",
       infeasibleDiagnosedSubquestions: ["(2)"]
     })
-    expect(honest.passed).toBe(true)
+    expect(honest.passed, JSON.stringify(honest.obligationResults)).toBe(true)
+    expect(honest.passedObligationIds).toEqual(expect.arrayContaining(["ob-ad", "ob-aa1-ad", "ob-base-ab-dc", "ob-base-ad-bc", "ob-aa1-bb1", "ob-aa1-cc1", "ob-aa1-dd1", "ob-top-a1b1-d1c1", "ob-top-a1d1-b1c1", "ob-1-b2c2-a2d2"]))
+    const oblique = evaluateDrawingContract(gks05, {
+      primitives: basePrims.map((primitive) => {
+        if (!("position" in primitive)) return primitive
+        const t = primitive.id.endsWith("1") ? 1 : primitive.id.endsWith("2") ? 0.25 : 0
+        return { ...primitive, position: { ...primitive.position, y: primitive.position.y + 2 * t, z: primitive.position.z + Math.sqrt(12) * t } }
+      })
+    }, { verificationStatus: "passed", scopeId: "stem", answerText: "第(2)问不存在满足120°的点P。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(oblique.failedObligationIds).toContain("ob-aa1-ad")
+    const shortAd = evaluateDrawingContract(gks05, {
+      primitives: basePrims.map((primitive) => "position" in primitive && ["d", "d1", "d2"].includes(primitive.id)
+        ? { ...primitive, position: { ...primitive.position, y: primitive.id === "d2" ? 1.5 : 1 } }
+        : primitive)
+    }, { verificationStatus: "passed", scopeId: "stem", answerText: "第(2)问不存在满足120°的点P。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(shortAd.failedObligationIds).toEqual(expect.arrayContaining(["ob-ad", "ob-base-ad-bc"]))
+    const wrongCorrespondence = evaluateDrawingContract(gks05, {
+      primitives: basePrims.map((primitive) => primitive.type === "point3" && primitive.id === "c1"
+        ? { ...primitive, position: { x: 3, y: 3, z: 4 } }
+        : primitive.type === "point3" && primitive.id === "c2"
+          ? { ...primitive, position: { x: 2.75, y: 2.75, z: 3 } }
+          : primitive)
+    }, { verificationStatus: "passed", scopeId: "stem", answerText: "第(2)问不存在满足120°的点P。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(wrongCorrespondence.failedObligationIds).toContain("ob-aa1-cc1")
 
     const forged = evaluateDrawingContract(gks05, {
       primitives: [...basePrims, { type: "point3", id: "p", label: "P", position: { x: 2, y: 0, z: 1 } }]
