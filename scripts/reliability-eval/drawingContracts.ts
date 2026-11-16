@@ -27,6 +27,7 @@ export type ContractCheckSpec =
   | { kind: "planes-perpendicular-3d"; first: [string, string, string]; second: [string, string, string] }
   | { kind: "fold-transform-3d"; beforeStateId: string; afterStateId: string; hinge: [string, string]; moving: readonly { before: string; after: string }[]; angleDegrees: number }
   | { kind: "folded-trapezoid-min-skew-cosine-3d"; beforeStateId: string; afterStateId: string; a: string; b: string; c: string; d: string; e: string; f: string; value: number }
+  | { kind: "rectangle-ef-plane-cos-range-3d"; a: string; b: string; c: string; d: string; e: string; f: string; m: string; endpoint: 0 | 1; value: number }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
@@ -806,6 +807,23 @@ function evaluateCheck(
       const scale = len3(n1) * len3(n2)
       const err = scale > 1e-9 ? Math.abs(dot3(n1, n2)) / scale : Number.POSITIVE_INFINITY
       return { passed: err <= 1e-2, detail: `plane normal cosine=${err}` }
+    }
+    case "rectangle-ef-plane-cos-range-3d": {
+      const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d), e = p3(check.e), f = p3(check.f), m = p3(check.m)
+      if (!a || !b || !c || !d || !e || !f || !m) return { passed: false, detail: "missing trapezoid, rectangle or moving point" }
+      const h = Math.sqrt(3) / 2, t = check.endpoint
+      const matches = (point: Vec3, expected: Vec3) => near(point.x, expected.x, 1e-6) && near(point.y, expected.y, 1e-6) && near(point.z, expected.z, 1e-6)
+      const shapeMatches = matches(a, { x: 0, y: 0, z: 0 }) && matches(b, { x: 2, y: 0, z: 0 }) &&
+        matches(c, { x: 1.5, y: h, z: 0 }) && matches(d, { x: 0.5, y: h, z: 0 }) &&
+        matches(e, { x: 0, y: 0, z: 1 }) && matches(f, { x: 1.5, y: h, z: 1 })
+      const mMatches = matches(m, { x: 1.5 * t, y: h * t, z: 1 })
+      const firstNormal = cross3(sub3(b, a), sub3(m, a)), secondNormal = cross3(sub3(f, c), sub3(b, c))
+      const scale = len3(firstNormal) * len3(secondNormal)
+      if (scale <= 1e-12) return { passed: false, detail: "degenerate plane-angle normals" }
+      const cosine = Math.abs(dot3(firstNormal, secondNormal)) / scale
+      const expected = t === 0 ? 0.5 : 1 / Math.sqrt(7)
+      const passed = shapeMatches && mMatches && near(cosine, 1 / Math.sqrt(4 + 3 * t * t), 1e-6) && near(cosine, check.value, 1e-6) && near(check.value, expected, 1e-9)
+      return { passed, detail: `t=${t}, cosθ=${cosine}; cosθ=1/√(4+3t²) decreases on [0,1], range=[1/√7,1/2]` }
     }
     case "fold-transform-3d": {
       const beforeCandidate = options.stateCandidates?.[check.beforeStateId]

@@ -4624,7 +4624,8 @@
             "M∈EF"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "[1/√7, 1/2], with t=0 and t=1 as the two endpoints"
         }
       ],
       "requiredObligations": [
@@ -4824,17 +4825,53 @@
             "first": ["A", "C", "F"],
             "second": ["A", "B", "C"]
           }
+        },
+        {
+          "id": "ob-1-bc-ac",
+          "kind": "perpendicular",
+          "description": "BC⊥AC, one of two independent directions for BC⊥plane ACFE",
+          "scope": "(1)",
+          "sourceSpan": { "text": "求证：BC⊥平面 ACFE", "start": 74, "end": 87 },
+          "check": { "kind": "perp-3d", "a": "B", "b": "C", "c": "A", "d": "C" }
+        },
+        {
+          "id": "ob-1-bc-cf",
+          "kind": "perpendicular",
+          "description": "BC⊥CF, the second independent direction for BC⊥plane ACFE",
+          "scope": "(1)",
+          "sourceSpan": { "text": "求证：BC⊥平面 ACFE", "start": 74, "end": 87 },
+          "check": { "kind": "perp-3d", "a": "B", "b": "C", "c": "C", "d": "F" }
+        },
+        {
+          "id": "ob-2-cos-max",
+          "kind": "parameter_domain",
+          "description": "At t=0, M=E and the acute plane-angle cosine is 1/2",
+          "scope": "(2)",
+          "branchId": "t0",
+          "sourceSpan": { "text": "cosθ 的范围", "start": 133, "end": 141 },
+          "expectedValue": 0.5,
+          "check": { "kind": "rectangle-ef-plane-cos-range-3d", "a": "A", "b": "B", "c": "C", "d": "D", "e": "E", "f": "F", "m": "M", "endpoint": 0, "value": 0.5 }
+        },
+        {
+          "id": "ob-2-cos-min",
+          "kind": "parameter_domain",
+          "description": "At t=1, M=F and the acute plane-angle cosine is 1/√7",
+          "scope": "(2)",
+          "branchId": "t1",
+          "sourceSpan": { "text": "cosθ 的范围", "start": 133, "end": 141 },
+          "expectedValue": 0.3779644730092272,
+          "check": { "kind": "rectangle-ef-plane-cos-range-3d", "a": "A", "b": "B", "c": "C", "d": "D", "e": "E", "f": "F", "m": "M", "endpoint": 1, "value": 0.3779644730092272 }
         }
       ],
       "displayPolicy": {
         "requiresDiagram": true,
         "requiresVisualChecks": true,
         "allowOmittedSubquestion": false,
-        "multiBranchHandling": "merge_into_main",
+        "multiBranchHandling": "enumerate:t0,t1",
         "labelReadabilityRequired": true
       },
       "freeChoices": [
-        "In (2), M moves on segment EF (any interior point M on EF satisfies representation)"
+        "In (2), M=E+t(F-E) for t∈[0,1]; both endpoints are required to certify the monotone range [1/√7,1/2]"
       ],
       "unsupportedReasons": [
         "The shared AC diagonal/crease must not be represented as three coplanar-sharing faces; that would be a non-manifold edge. A dedicated crease graph is required before claiming open-surface topology acceptance."

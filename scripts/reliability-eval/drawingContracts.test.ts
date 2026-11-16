@@ -987,22 +987,40 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(missingLineage.failedObligationIds).toContain("ob-2-skew-min-cos")
   })
 
-  it("verifies JT-S08 perpendicular folded planes without inventing manifold topology", () => {
+  it("verifies JT-S08's actual trapezoid, proof and full plane-angle range", () => {
     const suite = loadContracts()
     const jts08 = suite.cases.find((c) => c.id === "JT-S08")!
     const h = Math.sqrt(3) / 2
-    const primitives = [
+    const makeM = (t: number) => [
       { type: "point3", id: "a", label: "A", position: { x: 0, y: 0, z: 0 } },
-      { type: "point3", id: "b", label: "B", position: { x: 1, y: 0, z: 0 } },
-      { type: "point3", id: "c", label: "C", position: { x: 0.5, y: h, z: 0 } },
-      { type: "point3", id: "d", label: "D", position: { x: -0.5, y: h, z: 0 } },
+      { type: "point3", id: "b", label: "B", position: { x: 2, y: 0, z: 0 } },
+      { type: "point3", id: "c", label: "C", position: { x: 1.5, y: h, z: 0 } },
+      { type: "point3", id: "d", label: "D", position: { x: 0.5, y: h, z: 0 } },
       { type: "point3", id: "e", label: "E", position: { x: 0, y: 0, z: 1 } },
-      { type: "point3", id: "f", label: "F", position: { x: 0.5, y: h, z: 1 } },
-      { type: "point3", id: "m", label: "M", position: { x: 0.25, y: h / 2, z: 1 } }
+      { type: "point3", id: "f", label: "F", position: { x: 1.5, y: h, z: 1 } },
+      { type: "point3", id: "m", label: "M", position: { x: 1.5 * t, y: h * t, z: 1 } }
     ]
-    const valid = evaluateDrawingContract(jts08, { primitives }, { verificationStatus: "passed", scopeId: "(2)" })
-    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
-    expect(valid.passedObligationIds).toContain("ob-planes-perpendicular")
+    const proof = evaluateDrawingContract(jts08, { primitives: makeM(0) }, { verificationStatus: "passed", scopeId: "(1)" })
+    expect(proof.passed, JSON.stringify(proof.obligationResults)).toBe(true)
+    expect(proof.passedObligationIds).toEqual(expect.arrayContaining(["ob-1-bc-ac", "ob-1-bc-cf"]))
+    const valid = evaluateDrawingContractBranches(jts08, "(2)", {
+      t0: { candidate: { primitives: makeM(0) }, options: { verificationStatus: "passed" } },
+      t1: { candidate: { primitives: makeM(1) }, options: { verificationStatus: "passed" } }
+    })
+    expect(valid.passed, JSON.stringify(valid.scopeResults)).toBe(true)
+    expect(valid.scopeResults.t0?.passedObligationIds).toContain("ob-2-cos-max")
+    expect(valid.scopeResults.t1?.passedObligationIds).toContain("ob-2-cos-min")
+    const middle = evaluateDrawingContract(jts08, { primitives: makeM(0.5) }, { verificationStatus: "passed", scopeId: "(2)", branchId: "t0" })
+    expect(middle.failedObligationIds).toContain("ob-2-cos-max")
+    const missingEnd = evaluateDrawingContractBranches(jts08, "(2)", {
+      t0: { candidate: { primitives: makeM(0) }, options: { verificationStatus: "passed" } }
+    })
+    expect(missingEnd.status).toBe("incomplete")
+    expect(missingEnd.missingScopeIds).toEqual(["t1"])
+    const wrongTrapezoid = makeM(0).map((primitive) => primitive.id === "b" ? { ...primitive, position: { x: 1, y: 0, z: 0 } }
+      : primitive.id === "c" || primitive.id === "f" ? { ...primitive, position: { x: 0.5, y: h, z: primitive.id === "f" ? 1 : 0 } }
+        : primitive.id === "d" ? { ...primitive, position: { x: -0.5, y: h, z: 0 } } : primitive)
+    expect(evaluateDrawingContract(jts08, { primitives: wrongTrapezoid }, { verificationStatus: "passed", scopeId: "(1)" }).failedObligationIds).toContain("ob-1-bc-ac")
   })
 
   it("verifies JT-S05 rectangle, equilateral PCD, volume and closed topology", () => {
