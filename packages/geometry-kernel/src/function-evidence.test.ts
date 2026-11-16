@@ -4,10 +4,12 @@ import {
   functionGraphEvidence,
   functionIntersections,
   functionLineRoots,
+  invalidateEvidenceOnDomainChange,
   judgeUniversalClaim,
   tangentsFromPoint,
   verifyTangentLine
 } from "./function-evidence"
+import { compileExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative } from "./expression"
 
 /**
  * **Task 15：函数与导数的证据分级**（计划 `Task 15｜函数与导数真题纵向交付`）。
@@ -249,5 +251,72 @@ describe("Task 15 反例：把一个参数实例写成「所有参数成立」",
     const verdict = judgeUniversalClaim({ scope: "at-parameters", parameterNames: ["a"] }, [])
     expect(verdict.upheld).toBe(false)
     expect(verdict.reason).toContain("没有任何参数取值")
+  })
+})
+
+describe("P4 / T08 符号导数、定义域断点、不可导尖点拒收与域变更失效", () => {
+  it("sqrt(x) 不画 x < 0，且 1/(x-0.37) 奇数步长与无理极点不跨渐近线连线", () => {
+    const rootEv = functionGraphEvidence("sqrt(x)", [-4, 4])
+    expect(rootEv.segments.length).toBeGreaterThanOrEqual(1)
+    for (const seg of rootEv.segments) {
+      for (const pt of seg) expect(pt.x).toBeGreaterThanOrEqual(0)
+    }
+
+    const oddPole = functionGraphEvidence("1/(x-0.37)", [0, 1], { steps: 33 })
+    expect(oddPole.breaks.length).toBeGreaterThanOrEqual(1)
+    for (const seg of oddPole.segments) {
+      const lo = seg[0].x
+      const hi = seg[seg.length - 1].x
+      expect(lo < 0.37 && hi > 0.37).toBe(false)
+    }
+  })
+
+  it("x/x 与 sqrt(-1) 保留原始定义域，不因化简伪造连续值", () => {
+    const hole = evaluateFunctionWithDomain("x/x", 0)
+    expect(hole.ok).toBe(false)
+    const outsideSqrt = evaluateFunctionWithDomain("sqrt(x)", -1)
+    expect(outsideSqrt.ok).toBe(false)
+    const ast = compileExpression("x^2 + 3*x")
+    expect(ast).toBeDefined()
+  })
+
+  it("符号导数给出精确值，并对 abs(x)/未知算子显式返回 unsupported 而不用有限差分伪装", () => {
+    const quad = evaluateSymbolicDerivative("x^2", 1)
+    expect(quad.ok).toBe(true)
+    if (quad.ok) expect(quad.value).toBeCloseTo(2, 12)
+
+    const expD = evaluateSymbolicDerivative("exp(2*x)", 0)
+    expect(expD.ok).toBe(true)
+    if (expD.ok) expect(expD.value).toBeCloseTo(2, 12)
+
+    const corner = evaluateSymbolicDerivative("abs(x)", 0)
+    expect(corner.ok).toBe(false)
+    if (!corner.ok) expect(corner.code).toBe("unsupported_derivative")
+
+    const sqrtEndpoint = evaluateSymbolicDerivative("sqrt(x)", 0)
+    expect(sqrtEndpoint.ok).toBe(false)
+  })
+
+  it("外点切线记录区间范围并拒绝 abs(x) 在尖点的伪水平切线（含 verifyTangentLine）", () => {
+    const poly = tangentsFromPoint("x^2", [0, 3], { x: 1, y: 0 })
+    expect(poly.status).toBe("solved")
+    expect(poly.searchInterval).toEqual([0, 3])
+    expect(poly.tangents.some((t) => Math.abs(t.parameter - 0) < 1e-6)).toBe(true)
+    expect(poly.tangents.some((t) => Math.abs(t.parameter - 2) < 1e-6)).toBe(true)
+
+    const cornerExt = tangentsFromPoint("abs(x)", [-2, 2], { x: 1, y: 0 })
+    expect(cornerExt.status).toBe("unsupported")
+    expect(cornerExt.tangents).toEqual([])
+
+    const cornerVerify = verifyTangentLine("abs(x)", [-2, 2], { slope: 0, intercept: 0 })
+    expect(cornerVerify.tangent).toBe(false)
+  })
+
+  it("改变数学定义域时使旧曲线证据显式失效（stale: true）", () => {
+    const ev = functionGraphEvidence("x^2", [-2, 2])
+    const sameDomain = invalidateEvidenceOnDomainChange([-2, 2], [-2, 2], ev)
+    expect(sameDomain.stale).toBe(false)
+    const narrowed = invalidateEvidenceOnDomainChange([-2, 2], [-1, 1], ev)
+    expect(narrowed.stale).toBe(true)
   })
 })

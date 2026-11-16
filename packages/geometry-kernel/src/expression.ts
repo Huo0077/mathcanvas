@@ -551,7 +551,164 @@ export function evaluateRelationConstraint(
             : op === ">"
               ? left > right + eps
               : left >= right - eps
+    if (holds) continue
     if (!holds) return { ok: false, error: `Relation ${formatExpressionNode(constraint.terms[i]!)} ${op} ${formatExpressionNode(constraint.terms[i + 1]!)} failed (${left} vs ${right})` }
   }
   return { ok: true }
+}
+
+export function evaluateFunctionWithDomain(
+  sourceOrNode: string | ExpressionNode,
+  x: number,
+  extraVariables: Record<string, number> = {}
+): ExpressionEvalResult {
+  if (!Number.isFinite(x)) {
+    return { ok: false, error: "Domain error: non-finite evaluation coordinate", domains: [] }
+  }
+  return evaluateExpressionWithDomain(sourceOrNode, { ...extraVariables, x })
+}
+
+const num = (value: number): ExpressionNode => ({ type: "number", value })
+const bin = (operator: "+" | "-" | "*" | "/" | "^", left: ExpressionNode, right: ExpressionNode): ExpressionNode => ({
+  type: "binary",
+  operator,
+  left,
+  right
+})
+const callNode = (name: string, argument: ExpressionNode): ExpressionNode => ({ type: "call", name, argument })
+
+function dependsOnVariable(node: ExpressionNode, variable: string): boolean {
+  if (node.type === "number") return false
+  if (node.type === "variable") return node.name === variable
+  if (node.type === "unary" || node.type === "call") return dependsOnVariable(node.argument, variable)
+  return dependsOnVariable(node.left, variable) || dependsOnVariable(node.right, variable)
+}
+
+/**
+ * Exact symbolic AST derivative with respect to `variable`.
+ * Returns `null` for non-differentiable/unsupported operators (e.g. `abs`, `floor`)
+ * so callers never silently mask them with finite differences.
+ */
+export function differentiateExpressionAst(node: ExpressionNode, variable = "x"): ExpressionNode | null {
+  if (node.type === "number") return num(0)
+  if (node.type === "variable") return num(node.name === variable ? 1 : 0)
+  if (node.type === "unary") {
+    const inner = differentiateExpressionAst(node.argument, variable)
+    if (!inner) return null
+    return node.operator === "-" ? { type: "unary", operator: "-", argument: inner } : inner
+  }
+  if (node.type === "call") {
+    const u = node.argument
+    const du = differentiateExpressionAst(u, variable)
+    if (!du) return null
+    switch (node.name) {
+      case "sin":
+        return bin("*", callNode("cos", u), du)
+      case "cos":
+        return bin("*", { type: "unary", operator: "-", argument: callNode("sin", u) }, du)
+      case "tan":
+        return bin("/", du, bin("^", callNode("cos", u), num(2)))
+      case "exp":
+        return bin("*", callNode("exp", u), du)
+      case "ln":
+      case "log":
+        return bin("/", du, u)
+      case "log10":
+        return bin("/", du, bin("*", u, callNode("ln", num(10))))
+      case "sqrt":
+        return bin("/", du, bin("*", num(2), callNode("sqrt", u)))
+      case "sinh":
+        return bin("*", callNode("cosh", u), du)
+      case "cosh":
+        return bin("*", callNode("sinh", u), du)
+      case "tanh":
+        return bin("/", du, bin("^", callNode("cosh", u), num(2)))
+      case "atan":
+        return bin("/", du, bin("+", num(1), bin("^", u, num(2))))
+      case "asin":
+        return bin("/", du, callNode("sqrt", bin("-", num(1), bin("^", u, num(2)))))
+      case "acos":
+        return bin("/", { type: "unary", operator: "-", argument: du }, callNode("sqrt", bin("-", num(1), bin("^", u, num(2)))))
+      default:
+        return null
+    }
+  }
+
+  const u = node.left
+  const v = node.right
+  const du = differentiateExpressionAst(u, variable)
+  const dv = differentiateExpressionAst(v, variable)
+  if (!du || !dv) return null
+
+  switch (node.operator) {
+    case "+":
+    case "-":
+      return bin(node.operator, du, dv)
+    case "*":
+      return bin("+", bin("*", du, v), bin("*", u, dv))
+    case "/":
+      return bin("/", bin("-", bin("*", du, v), bin("*", u, dv)), bin("^", v, num(2)))
+    case "^": {
+      if (!dependsOnVariable(v, variable)) {
+        return bin("*", bin("*", v, bin("^", u, bin("-", v, num(1)))), du)
+      }
+      if (!dependsOnVariable(u, variable)) {
+        return bin("*", bin("*", node, callNode("ln", u)), dv)
+      }
+      // f(x)^g(x) = exp(g*ln(f)) -> node * (g' * ln(f) + g * f'/f)
+      return bin("*", node, bin("+", bin("*", dv, callNode("ln", u)), bin("*", v, bin("/", du, u))))
+    }
+  }
+}
+
+export type SymbolicDerivativeResult =
+  | {
+      ok: true
+      value: number
+      derivativeAst: ExpressionNode
+      domains: DomainConstraint[]
+    }
+  | {
+      ok: false
+      code: "parse_error" | "unsupported_derivative" | "domain_violation"
+      reason: string
+    }
+
+export function evaluateSymbolicDerivative(
+  sourceOrNode: string | ExpressionNode,
+  x: number,
+  extraVariables: Record<string, number> = {}
+): SymbolicDerivativeResult {
+  if (!Number.isFinite(x)) {
+    return { ok: false, code: "domain_violation", reason: "Domain error: non-finite evaluation coordinate" }
+  }
+  let ast: ExpressionNode
+  try {
+    ast = resolveExpressionNode(sourceOrNode)
+  } catch (error) {
+    return { ok: false, code: "parse_error", reason: error instanceof Error ? error.message : String(error) }
+  }
+  const vars = { ...extraVariables, x }
+  const baseEval = evaluateExpressionWithDomain(ast, vars)
+  if (!baseEval.ok) {
+    return { ok: false, code: "domain_violation", reason: baseEval.error }
+  }
+  const derivAst = differentiateExpressionAst(ast, "x")
+  if (derivAst === null) {
+    return {
+      ok: false,
+      code: "unsupported_derivative",
+      reason: `Expression "${typeof sourceOrNode === "string" ? sourceOrNode : formatExpressionNode(ast)}" contains operators without supported symbolic derivative.`
+    }
+  }
+  const derivEval = evaluateExpressionWithDomain(derivAst, vars)
+  if (!derivEval.ok) {
+    return { ok: false, code: "domain_violation", reason: derivEval.error }
+  }
+  return {
+    ok: true,
+    value: derivEval.value,
+    derivativeAst: derivAst,
+    domains: [...baseEval.domains, ...derivEval.domains]
+  }
 }

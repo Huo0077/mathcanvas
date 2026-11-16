@@ -30,13 +30,24 @@ export interface NumericalAnalysisPoint extends FunctionSamplePoint {
 }
 
 function isDiscontinuousInterval(functionValue: (x: number) => number, first: FunctionSamplePoint, second: FunctionSamplePoint): boolean {
-  const quarter = (first.x * 3 + second.x) / 4
-  const midpoint = (first.x + second.x) / 2
-  const threeQuarter = (first.x + second.x * 3) / 4
-  const probes = [quarter, midpoint, threeQuarter].map((x) => functionValue(x))
-  if (probes.some((value) => !Number.isFinite(value))) return true
+  const probes: number[] = []
+  for (let i = 1; i <= 7; i += 1) {
+    const val = functionValue(first.x + ((second.x - first.x) * i) / 8)
+    if (!Number.isFinite(val)) return true
+    probes.push(val)
+  }
   const endpointScale = Math.max(1, Math.abs(first.y), Math.abs(second.y))
-  return first.y * second.y < 0 && Math.max(...probes.map((value) => Math.abs(value))) > endpointScale * 3
+  if (first.y * second.y < 0 && Math.max(...probes.map((value) => Math.abs(value))) > endpointScale * 2) {
+    return true
+  }
+  if (first.y * second.y < 0) {
+    for (let i = 1; i < probes.length; i += 1) {
+      if (probes[i - 1]! * probes[i]! < 0 && (Math.abs(probes[i - 1]!) > 3 || Math.abs(probes[i]!) > 3)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 function segmentsFromSamples(functionValue: (x: number) => number, samples: Array<FunctionSamplePoint | null>): FunctionSamplePoint[][] {

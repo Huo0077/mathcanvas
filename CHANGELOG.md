@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— P4 / T08 函数符号导数、定义域保留与竖直宿主动态依赖
+
+- **符号导数 AST 与定义域保留**：`packages/geometry-kernel/src/expression.ts` 新增 `differentiateExpressionAst`、`evaluateFunctionWithDomain` 与 `evaluateSymbolicDerivative`，覆盖四则/幂/三角/指数对数/根式求导并保持 `x/x`、`sqrt(x)`（含导数 `x > 0`）原始定义域；对 `abs(x)` 等非光滑/未支持算子显式返回 `unsupported_derivative`，绝不静默以有限差分伪装精确导数。
+- **间断切分、可导性边界拒收与域失效**：`calculus.ts` 加强 `isDiscontinuousInterval`（7 探针捕捉非格点极点 `1/(x-0.37)`）；`function-evidence.ts` 与 `diagramVerification.ts` 将 `compiledOrNull`、`differentiabilityAt`、`tangentsFromPoint`、`verifyTangentLine` 及 `derivativeAt` 绑定符号求导与定义域检验，附加 `searchInterval` 并新增 `invalidateEvidenceOnDomainChange`（域变化即标 `stale: true`）。
+- **竖直宿主与展示窗解耦**：`planar-constraints.ts` 新增 `verticalLineConstraint`（分离 `mathDomain` 与 `displayRange`），支持 `JT-P02` `P(t)=(-1,t)` 在跨越展示窗多次拖动下通过 `createReactiveGraph` 精确重算双曲线交点 `M, N` 与定点 `(-4,0)`。
+- **验证**：RED 8 fail → 定向 3 文件 98 项与全量 Vitest **535 文件 / 5674 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T08函数作图证据](docs/audit/2026-11-16-p4-function-drawing/README.md)。
+
 ## 2026-11-16 —— P4 / T07 平面与圆锥曲线确定性构造与定义域裁剪相交
 
 - **几何内核精确平面与圆锥接口**：`packages/geometry-kernel/src/conics.ts` 新增带旋转/平移变换的 `conicFoci` 与 `tangentLineToConicAt`；`conic-line.ts` 新增参数化直线与定义域筛选接口 `intersectParametricLineWithConic`（支持垂直线、线段/射线 `t` 界与 `x ≠ 0` 排除并严格区分 `single` 与二重切根 `tangent`）；`conic-parameters.ts` 新增 `fitOriginConicThroughPoints`（两点反求中心在原点圆锥系数并附残差校验）；`curve-intersections.ts` 新增 `intersectPlanarLineAndConicExact`，将直线/线段/射线与圆锥曲线直接路由至代数求交。

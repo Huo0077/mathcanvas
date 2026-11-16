@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T08 函数符号导数、定义域保留与竖直宿主动态依赖
+
+- **RED 复现与漏洞拦截**：在 `function-evidence.test.ts` 扩展 5 项并新建 `functionDrawing.test.ts`（4 项），实现前 RED `2 failed | 8 failed | 20 passed (28)`，覆盖 `1/(x-0.37)` 奇数步长极点、`x/x`/`sqrt(-1)` 域保留、`abs(x)` 不可导尖点、域变更失效与 `JT-P02` 10 次拖动重算。
+- **精确符号求导与宿主重算修复**：`expression.ts` 落盘 `differentiateExpressionAst`、`evaluateFunctionWithDomain` 与 `evaluateSymbolicDerivative`（不化简 `x/x`、对 `abs` 显式报 `unsupported_derivative`）；`calculus.ts` / `function-evidence.ts` / `diagramVerification.ts` 强化极点断开、外点切线区间报告、尖点/未定义点切线拒收与 `invalidateEvidenceOnDomainChange`；`planar-constraints.ts` 新增 `verticalLineConstraint` 解耦 `mathDomain` 与 `displayRange`，实测 `JT-P02` `P(t)=(-1,t)` 经 10 次跨窗拖动稳定保持 `x=-1`、`M,N` 在曲线上及共线定点 `(-4,0)`。
+- **验证**：定向 3 文件 98 项与全量 Vitest **535 文件 / 5674 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T08函数作图证据](audit/2026-11-16-p4-function-drawing/README.md)。
+
 ## 2026-11-16 —— P4 / T07 平面与圆锥曲线确定性构造与定义域裁剪相交
 
 - **RED 复现与内核扩展**：扩充 `conic-line.test.ts` 并新建 `planarDrawing.test.ts` 复现 RED 缺失；在 `@draw/geometry-kernel` 落盘旋转/平移 `conicFoci`、`tangentLineToConicAt`、`fitOriginConicThroughPoints`、参数化直线定义域排除 `intersectParametricLineWithConic`（区分截面截断 `single` 与二重切根 `tangent`）及 `intersectPlanarLineAndConicExact`。

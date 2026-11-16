@@ -292,6 +292,60 @@ export function rayConstraint(id: string, a: Coordinate, b: Coordinate): PlanarC
   return linearConstraint("ray", id, a, b)
 }
 
+export interface VerticalLineHostConstraint extends PlanarConstraint {
+  readonly xConstant: number
+  readonly mathDomain: readonly [number, number]
+  readonly displayRange: readonly [number, number]
+}
+
+export function verticalLineConstraint(
+  id: string,
+  xConstant: number,
+  options: { mathDomain?: readonly [number, number]; displayRange?: readonly [number, number] } = {}
+): VerticalLineHostConstraint {
+  const mathDomain: [number, number] = options.mathDomain
+    ? [Math.min(options.mathDomain[0], options.mathDomain[1]), Math.max(options.mathDomain[0], options.mathDomain[1])]
+    : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+  const displayRange: [number, number] = options.displayRange
+    ? [Math.min(options.displayRange[0], options.displayRange[1]), Math.max(options.displayRange[0], options.displayRange[1])]
+    : [-10, 10]
+  return {
+    kind: "line",
+    id,
+    xConstant,
+    mathDomain,
+    displayRange,
+    branchCount: 1,
+    parameterBounds: () => ({ min: mathDomain[0], max: mathDomain[1], wrap: false }),
+    evaluate(parameter) {
+      if (!Number.isFinite(xConstant) || !Number.isFinite(parameter)) return null
+      if (parameter < mathDomain[0] - EPSILON || parameter > mathDomain[1] + EPSILON) return null
+      return { x: xConstant, y: parameter }
+    },
+    project(desired) {
+      if (!Number.isFinite(desired.x) || !Number.isFinite(desired.y) || !Number.isFinite(xConstant)) return null
+      const parameter = clamp(desired.y, mathDomain[0], mathDomain[1])
+      const point = { x: xConstant, y: parameter }
+      const clamped = parameter !== desired.y
+      return {
+        parameter,
+        branch: 0,
+        point,
+        distance: Math.hypot(desired.x - xConstant, desired.y - parameter),
+        converged: true,
+        iterations: 1,
+        clamped
+      }
+    },
+    residual(point) {
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return Number.POSITIVE_INFINITY
+      const y = clamp(point.y, mathDomain[0], mathDomain[1])
+      return Math.hypot(point.x - xConstant, point.y - y)
+    },
+    tangent: () => ({ x: 0, y: 1 })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 圆形约束：点在圆 / 圆弧上
 // ---------------------------------------------------------------------------

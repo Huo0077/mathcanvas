@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, commonTangents, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, NUMERIC_POLICY_VERSION, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, evaluateSymbolicDerivative, functionGraphEvidence, functionLineRoots, commonTangents, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, NUMERIC_POLICY_VERSION, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -864,14 +864,8 @@ function curveGapAcrossBreaks(stated: string, drawn: FigureFunction): number | n
  * 远小于判据容差；而太小会让浮点相消吃掉全部有效位。
  */
 function derivativeAt(source: { expression: string }, x: number): number | null {
-  try {
-    const compiled = compileExpression(source.expression)
-    const step = 1e-5 * Math.max(1, Math.abs(x))
-    const value = (evaluateExpression(compiled, { x: x + step }) - evaluateExpression(compiled, { x: x - step })) / (2 * step)
-    return Number.isFinite(value) ? value : null
-  } catch {
-    return null
-  }
+  const sym = evaluateSymbolicDerivative(source.expression, x)
+  return sym.ok ? sym.value : null
 }
 
 /**

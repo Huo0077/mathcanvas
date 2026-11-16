@@ -1,5 +1,11 @@
 import { findZeros, numericalDerivative, sampleFunctionSegments, type FunctionSamplePoint } from "./calculus"
-import { compileExpression, evaluateExpression, type ExpressionNode } from "./expression"
+import {
+  compileExpression,
+  differentiateExpressionAst,
+  evaluateFunctionWithDomain,
+  evaluateSymbolicDerivative,
+  type ExpressionNode
+} from "./expression"
 
 /**
  * **函数与导数的证据分级**（计划 `Task 15｜函数与导数真题纵向交付`）。
@@ -96,7 +102,31 @@ export interface TangentSet<T> {
   grade: EvidenceGrade
   /** 切线**条数**是否被复核过（见文件头边界②）。 */
   complete: boolean
+  /** The finite interval over which roots/tangents were searched. */
+  searchInterval?: [number, number]
   diagnostic?: string
+}
+
+export interface DomainChangeInvalidation {
+  stale: boolean
+  reason?: "domain_changed"
+  previousDomain: [number, number]
+  nextDomain: [number, number]
+}
+
+export function invalidateEvidenceOnDomainChange(
+  previousDomain: readonly [number, number],
+  nextDomain: readonly [number, number],
+  _evidence?: GraphEvidence | TangentSet<unknown>
+): DomainChangeInvalidation {
+  const changed = Math.abs(previousDomain[0] - nextDomain[0]) > 1e-12
+    || Math.abs(previousDomain[1] - nextDomain[1]) > 1e-12
+  return {
+    stale: changed,
+    ...(changed ? { reason: "domain_changed" as const } : {}),
+    previousDomain: [previousDomain[0], previousDomain[1]],
+    nextDomain: [nextDomain[0], nextDomain[1]]
+  }
 }
 
 export interface TangentVerdict {
@@ -133,10 +163,15 @@ export function differentiabilityAt(source: string, x: number, domain?: [number,
   if (domain !== undefined && (x < domain[0] || x > domain[1])) {
     return { differentiable: false, derivative: null, left: null, right: null, reason: `x = ${formatNumber(x)} 不在定义域 [${formatNumber(domain[0])}, ${formatNumber(domain[1])}] 里。` }
   }
-  const center = evaluate(x)
-  if (!Number.isFinite(center)) {
-    return { differentiable: false, derivative: null, left: null, right: null, reason: `x = ${formatNumber(x)} 处函数没有定义（${formatNumber(center)}），那里不可能有切线。` }
+  const domainEval = evaluateFunctionWithDomain(source, x)
+  if (!domainEval.ok) {
+    return { differentiable: false, derivative: null, left: null, right: null, reason: `x = ${formatNumber(x)} 处超出定义域（${domainEval.error}），没有切线。` }
   }
+  const sym = evaluateSymbolicDerivative(source, x)
+  if (!sym.ok && sym.code === "domain_violation") {
+    return { differentiable: false, derivative: null, left: null, right: null, reason: `x = ${formatNumber(x)} 处导数无定义（${sym.reason}），没有切线。` }
+  }
+  const center = domainEval.value
   const scale = Math.max(1, Math.abs(center))
   const h = 1e-6 * scale
   const forward = evaluate(x + h)
@@ -152,6 +187,19 @@ export function differentiabilityAt(source: string, x: number, domain?: [number,
       reason: `x = ${formatNumber(x)} 处只有单侧导数（左 ${left === null ? "不存在" : formatNumber(left)}、右 ${right === null ? "不存在" : formatNumber(right)}），该点没有切线。`
     }
   }
+  if (!sym.ok && sym.code === "unsupported_derivative") {
+    const tolerance = 1e-4 * Math.max(1, Math.abs(left), Math.abs(right))
+    if (Math.abs(left - right) > tolerance) {
+      return {
+        differentiable: false,
+        derivative: null,
+        left,
+        right,
+        reason: `x = ${formatNumber(x)} 处**左右导数不等**（左 ${formatNumber(left)}、右 ${formatNumber(right)}）：这是尖点/角点，该点没有切线。`
+      }
+    }
+    return { differentiable: false, derivative: null, left, right, reason: sym.reason }
+  }
   const tolerance = 1e-4 * Math.max(1, Math.abs(left), Math.abs(right))
   if (Math.abs(left - right) > tolerance) {
     return {
@@ -162,7 +210,13 @@ export function differentiabilityAt(source: string, x: number, domain?: [number,
       reason: `x = ${formatNumber(x)} 处**左右导数不等**（左 ${formatNumber(left)}、右 ${formatNumber(right)}）：这是尖点/角点，该点没有切线。`
     }
   }
-  return { differentiable: true, derivative: (left + right) / 2, left, right, reason: `x = ${formatNumber(x)} 处可导，导数 ≈ ${formatNumber((left + right) / 2)}。` }
+  return {
+    differentiable: true,
+    derivative: sym.ok ? sym.value : (left + right) / 2,
+    left,
+    right,
+    reason: `x = ${formatNumber(x)} 处可导，导数 = ${formatNumber(sym.ok ? sym.value : (left + right) / 2)}。`
+  }
 }
 
 
@@ -195,7 +249,10 @@ function normalizedTolerance(value: number | undefined): number {
 function compiledOrNull(source: string): ((x: number) => number) | null {
   try {
     const compiled = compileExpression(source)
-    return (x: number) => evaluateExpression(compiled, { x })
+    return (x: number) => {
+      const checked = evaluateFunctionWithDomain(compiled, x)
+      return checked.ok ? checked.value : Number.NaN
+    }
   } catch {
     return null
   }
@@ -596,23 +653,52 @@ function polynomialSubtract(first: Coefficients, second: Coefficients): Coeffici
  */
 export function tangentsFromPoint(source: string, domain: [number, number], point: { x: number; y: number }, options: EvidenceOptions = {}): TangentSet<ExternalTangent> {
   const evaluate = compiledOrNull(source)
-  if (evaluate === null) return { status: "unsupported", tangents: [], grade: "plot-only", complete: false, diagnostic: `表达式 ${source} 解析不了。` }
-  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return { status: "unsupported", tangents: [], grade: "plot-only", complete: false, diagnostic: "定点坐标不是有限数。" }
-  const derivative = (t: number) => numericalDerivative(evaluate, t)
+  if (evaluate === null) return { status: "unsupported", tangents: [], grade: "plot-only", complete: false, searchInterval: [domain[0], domain[1]], diagnostic: `表达式 ${source} 解析不了。` }
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return { status: "unsupported", tangents: [], grade: "plot-only", complete: false, searchInterval: [domain[0], domain[1]], diagnostic: "定点坐标不是有限数。" }
+  try {
+    const ast = compileExpression(source)
+    if (differentiateExpressionAst(ast, "x") === null) {
+      return {
+        status: "unsupported",
+        tangents: [],
+        grade: "plot-only",
+        complete: false,
+        searchInterval: [domain[0], domain[1]],
+        diagnostic: `表达式 ${source} 包含不支持符号求导的算子，不以有限差分伪装切线。`
+      }
+    }
+  } catch {
+    return { status: "unsupported", tangents: [], grade: "plot-only", complete: false, searchInterval: [domain[0], domain[1]], diagnostic: `表达式 ${source} 解析不了。` }
+  }
+  const derivative = (t: number) => {
+    const sym = evaluateSymbolicDerivative(source, t)
+    return sym.ok ? sym.value : numericalDerivative(evaluate, t)
+  }
   const residual = (t: number) => {
     const slope = derivative(t)
     return point.y - evaluate(t) - slope * (point.x - t)
   }
   const solved = solveResidual(residual, domain, options)
+  const candidates = solved.xs.map((entry) => entry.x)
+  for (const endpoint of domain) {
+    const val = residual(endpoint)
+    if (Number.isFinite(val) && Math.abs(val) <= normalizedTolerance(options.tolerance) * valueScale([point.y, evaluate(endpoint)])) {
+      if (!candidates.some((x) => Math.abs(x - endpoint) <= 1e-6)) candidates.push(endpoint)
+    }
+  }
+  candidates.sort((a, b) => a - b)
+
   const tangents: ExternalTangent[] = []
-  for (const entry of solved.xs) {
-    const y = evaluate(entry.x)
-    const slope = derivative(entry.x)
+  for (const x of candidates) {
+    const y = evaluate(x)
+    const slope = derivative(x)
     if (!Number.isFinite(y) || !Number.isFinite(slope)) continue
-    const gap = Math.abs(point.y - (y + slope * (point.x - entry.x)))
+    const gap = Math.abs(point.y - (y + slope * (point.x - x)))
     const tolerance = normalizedTolerance(options.tolerance) * valueScale([point.y, y])
     if (gap > tolerance) continue
-    tangents.push({ parameter: entry.x, x: entry.x, y, slope, intercept: y - slope * entry.x, residual: gap })
+    const symCheck = evaluateSymbolicDerivative(source, x)
+    if (!symCheck.ok) continue
+    tangents.push({ parameter: x, x, y, slope, intercept: y - slope * x, residual: gap })
   }
   const status = tangents.length > 0 ? "solved" : solved.complete ? "none" : "unsupported"
   return {
@@ -620,6 +706,7 @@ export function tangentsFromPoint(source: string, domain: [number, number], poin
     tangents,
     grade: "verified-numeric",
     complete: solved.complete,
+    searchInterval: [domain[0], domain[1]],
     ...(solved.diagnostic === undefined ? {} : { diagnostic: solved.diagnostic })
   }
 }
@@ -787,6 +874,15 @@ export function verifyTangentLine(source: string, domain: [number, number], line
   best = { x: polished, residual: gap(polished) }
   const tolerance = normalizedTolerance(options.tolerance) * valueScale([evaluate(best.x), line.intercept, 1])
   if (Math.abs(best.residual) <= tolerance) {
+    const diffVerdict = differentiabilityAt(source, best.x, domain)
+    if (!diffVerdict.differentiable) {
+      return {
+        tangent: false,
+        parameter: best.x,
+        residual: Math.abs(best.residual),
+        reason: `直线虽与曲线在 x = ${formatNumber(best.x)} 接触，但该点不可导或缺少支持的符号导数：${diffVerdict.reason}`
+      }
+    }
     return { tangent: true, parameter: best.x, residual: Math.abs(best.residual), reason: `在 x = ${formatNumber(best.x)} 处直线与曲线相切（偏差 ${best.residual.toPrecision(3)}）。` }
   }
   return {
