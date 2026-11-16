@@ -3476,6 +3476,25 @@
           }
         },
         {
+          "id": "ob-fold-transform",
+          "kind": "fold_lineage",
+          "description": "A and B follow the same 90° rigid rotation about EF from before_fold to after_fold",
+          "scope": "fold_lineage",
+          "sourceSpan": {
+            "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
+            "start": 88,
+            "end": 111
+          },
+          "check": {
+            "kind": "fold-transform-3d",
+            "beforeStateId": "before_fold",
+            "afterStateId": "after_fold",
+            "hinge": ["F", "E"],
+            "moving": [{ "before": "A", "after": "A" }, { "before": "B", "after": "B" }],
+            "angleDegrees": 90
+          }
+        },
+        {
           "id": "ob-cf-bd",
           "kind": "perpendicular",
           "description": "CF⊥BD in subquestion (1)",

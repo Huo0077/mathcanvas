@@ -10,6 +10,7 @@ import {
   evaluateDrawingContract,
   evaluateDrawingContractBranches,
   evaluateDrawingContractScopes,
+  evaluateDrawingContractStates,
   reconstructBaselineContractSummary,
   summarizeContractReports,
   validateContractSuite,
@@ -774,6 +775,43 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-cf-bd", "ob-planes-perpendicular", "ob-open-topology"]))
     expect(jts04.subquestions.find((subquestion) => subquestion.id === "(1)")?.expectedResult).toBe("5")
     expect(jts04.requiredObligations.map((obligation) => obligation.id)).not.toContain("ob-be-ec-perp")
+    const foldContract = { ...jts04, requiredObligations: jts04.requiredObligations.filter((obligation) => obligation.id === "ob-fold-transform") }
+    const lineage = evaluateDrawingContract(foldContract, { primitives }, {
+      verificationStatus: "passed", scopeId: "fold_lineage",
+      stateCandidates: { before_fold: { primitives: beforePrimitives }, after_fold: { primitives } }
+    })
+    expect(lineage.passed, JSON.stringify(lineage.obligationResults)).toBe(true)
+    const aggregated = evaluateDrawingContractStates(jts04, {
+      before_fold: { candidate: { primitives: beforePrimitives }, options: { verificationStatus: "passed", scopeId: "(1)" } },
+      after_fold: { candidate: { primitives }, options: { verificationStatus: "passed", scopeId: "(1)" } }
+    })
+    expect(aggregated.passed, JSON.stringify(aggregated.scopeResults)).toBe(true)
+    expect(aggregated.missingScopeIds).toEqual([])
+    expect(aggregated.lineageResult?.passedObligationIds).toContain("ob-fold-transform")
+    const incomplete = evaluateDrawingContractStates(jts04, {
+      before_fold: { candidate: { primitives: beforePrimitives }, options: { verificationStatus: "passed", scopeId: "(1)" } }
+    })
+    expect(incomplete.status).toBe("incomplete")
+    expect(incomplete.missingScopeIds).toEqual(["after_fold"])
+
+    const forgedPrimitives = primitives.map((primitive) => {
+      if (primitive.type !== "point3" || primitive.position === undefined) return primitive
+      if (primitive.id === "a") return { ...primitive, position: { ...primitive.position, y: 1 } }
+      if (primitive.id === "b") return { ...primitive, position: { ...primitive.position, y: h + 1 } }
+      if (primitive.id === "c") return { ...primitive, position: { ...primitive.position, y: 12 / (h + 1) } }
+      return primitive
+    })
+    const locallyPlausible = evaluateDrawingContract(jts04, { primitives: forgedPrimitives }, { verificationStatus: "passed", scopeId: "(1)", stateId: "after_fold" })
+    expect(locallyPlausible.passed, JSON.stringify(locallyPlausible.obligationResults)).toBe(true)
+    const forgedLineage = evaluateDrawingContract(foldContract, { primitives: forgedPrimitives }, {
+      verificationStatus: "passed", scopeId: "fold_lineage",
+      stateCandidates: { before_fold: { primitives: beforePrimitives }, after_fold: { primitives: forgedPrimitives } }
+    })
+    expect(forgedLineage.failedObligationIds).toContain("ob-fold-transform")
+    expect(evaluateDrawingContractStates(jts04, {
+      before_fold: { candidate: { primitives: beforePrimitives }, options: { verificationStatus: "passed", scopeId: "(1)" } },
+      after_fold: { candidate: { primitives: forgedPrimitives }, options: { verificationStatus: "passed", scopeId: "(1)" } }
+    }).lineageResult?.failedObligationIds).toContain("ob-fold-transform")
 
     const wrongLength = primitives.map((primitive) => primitive.type === "point3" && ["a", "b", "e", "f"].includes(primitive.id)
       ? { ...primitive, position: { ...primitive.position, x: 20 / 3 } }

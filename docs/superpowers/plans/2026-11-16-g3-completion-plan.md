@@ -54,6 +54,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - 指定拓扑区块完成：14个可确定合同绑定顶点与面环，GK-S03四面体反例先RED后拒绝，GK-S09/JT-S09补辅助命名。最新离线0/11/25，对象/义务覆盖约23.50%/20.39%；未提供题图不猜面环。下一区块为fold-transform跨状态谱系。证据：`docs/audit/2026-11-16-g3-named-topology/README.md`。
 
+- 跨状态折叠区块完成：JT-S04 以真实 F→E +90° 谱系核验，聚合 `evaluateDrawingContractStates`，局部正确但非同一翻折的伪候选被拒绝；缺状态返回 incomplete。39项目标测试、类型/Lint/Web构建通过；未新增离线 reliability 读数。下一区块为切线端点与参数域/最值。证据：`docs/audit/2026-11-16-g3-fold-lineage/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

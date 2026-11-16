@@ -1,4 +1,4 @@
-import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact } from "@draw/geometry-kernel"
+import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact, rotatePointAboutHinge } from "@draw/geometry-kernel"
 
 export interface ContractSourceSpan {
   text: string
@@ -25,6 +25,7 @@ export type ContractCheckSpec =
   | { kind: "vector-equal-3d"; a: string; b: string; c: string; d: string }
   | { kind: "sum-distance-3d"; p: string; a: string; b: string; total: number }
   | { kind: "planes-perpendicular-3d"; first: [string, string, string]; second: [string, string, string] }
+  | { kind: "fold-transform-3d"; beforeStateId: string; afterStateId: string; hinge: [string, string]; moving: readonly { before: string; after: string }[]; angleDegrees: number }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
@@ -178,6 +179,7 @@ export interface ContractEvaluationOptions {
   scopeId?: string
   branchId?: string
   stateId?: string
+  stateCandidates?: Readonly<Record<string, unknown>>
 }
 
 export interface ContractEvaluationResult {
@@ -678,6 +680,37 @@ function evaluateCheck(
       const err = scale > 1e-9 ? Math.abs(dot3(n1, n2)) / scale : Number.POSITIVE_INFINITY
       return { passed: err <= 1e-2, detail: `plane normal cosine=${err}` }
     }
+    case "fold-transform-3d": {
+      const beforeCandidate = options.stateCandidates?.[check.beforeStateId]
+      const afterCandidate = options.stateCandidates?.[check.afterStateId]
+      if (beforeCandidate === undefined || afterCandidate === undefined) return { passed: false, detail: "missing before/after fold state candidates" }
+      const beforePoints = points3Of(collectPrimitives(beforeCandidate))
+      const afterPoints = points3Of(collectPrimitives(afterCandidate))
+      const hingeBefore = check.hinge.map((name) => beforePoints.get(normalizeLabel(name)))
+      const hingeAfter = check.hinge.map((name) => afterPoints.get(normalizeLabel(name)))
+      if (hingeBefore.some((point) => point === undefined) || hingeAfter.some((point) => point === undefined)) {
+        return { passed: false, detail: "missing fold hinge endpoints in before/after states" }
+      }
+      const first = hingeBefore[0]!, second = hingeBefore[1]!
+      const scale = Math.max(1, dist3(first, second), ...check.moving.map(({ before }) => {
+        const point = beforePoints.get(normalizeLabel(before))
+        return point === undefined ? 0 : dist3(point, first)
+      }))
+      for (let index = 0; index < hingeBefore.length; index += 1) {
+        const drift = dist3(hingeBefore[index]!, hingeAfter[index]!)
+        if (drift > TOL * scale) return { passed: false, detail: `fold hinge drift=${drift}, tolerance=${TOL * scale}` }
+      }
+      for (const mapping of check.moving) {
+        const before = beforePoints.get(normalizeLabel(mapping.before))
+        const after = afterPoints.get(normalizeLabel(mapping.after))
+        if (!before || !after) return { passed: false, detail: `missing moving point ${mapping.before}→${mapping.after}` }
+        const rotated = rotatePointAboutHinge(before, first, second, check.angleDegrees)
+        if (rotated.status !== "ok") return { passed: false, detail: rotated.detail }
+        const error = dist3(rotated.point, after)
+        if (error > TOL * scale) return { passed: false, detail: `fold transform error for ${mapping.before}→${mapping.after}=${error}, tolerance=${TOL * scale}, before=${JSON.stringify(before)}, expected=${JSON.stringify(rotated.point)}, actual=${JSON.stringify(after)}` }
+      }
+      return { passed: true, detail: `verified rigid fold about ${check.hinge.join("-")} at ${check.angleDegrees} degrees` }
+    }
     case "volume-tetrahedron-3d": {
       const p = p3(check.p), a = p3(check.a), b = p3(check.b), c = p3(check.c)
       if (!p || !a || !b || !c) return { passed: false, detail: `missing 3d vertices for volume` }
@@ -1085,6 +1118,45 @@ export function evaluateDrawingContract(
     passedObligationIds,
     failedObligationIds,
     obligationResults
+  }
+}
+
+export interface ContractStateEvaluationResult extends ContractScopeEvaluationResult {
+  lineageResult: ContractEvaluationResult | null
+}
+
+export function evaluateDrawingContractStates(
+  contract: DrawingContractCase,
+  inputs: Readonly<Record<string, { candidate: unknown; options?: ContractEvaluationOptions }>>
+): ContractStateEvaluationResult {
+  const policy = contract.displayPolicy.multiStateHandling
+  const enumerated = policy?.startsWith("enumerate:")
+    ? policy.slice("enumerate:".length).split(",").map((stateId) => stateId.trim()).filter(Boolean)
+    : Object.keys(inputs)
+  const missingScopeIds = enumerated.filter((stateId) => inputs[stateId] === undefined)
+  const stateCandidates = Object.fromEntries(Object.entries(inputs).map(([stateId, input]) => [stateId, input.candidate]))
+  const stateResults: Record<string, ContractEvaluationResult> = {}
+  for (const stateId of enumerated) {
+    const input = inputs[stateId]
+    if (input === undefined) continue
+    stateResults[stateId] = evaluateDrawingContract(contract, input.candidate, { ...input.options, stateId, stateCandidates })
+  }
+  const foldObligations = contract.requiredObligations.filter((obligation) => obligation.check.kind === "fold-transform-3d")
+  const lineageResult = foldObligations.length > 0
+    ? evaluateDrawingContract(
+        { ...contract, requiredObligations: foldObligations },
+        Object.values(inputs)[0]?.candidate,
+        { ...Object.values(inputs)[0]?.options, scopeId: "fold_lineage", stateCandidates }
+      )
+    : null
+  const passed = missingScopeIds.length === 0 && enumerated.length > 0 && enumerated.every((stateId) => stateResults[stateId]?.passed === true) && (lineageResult?.passed ?? true)
+  const partial = !passed && (Object.values(stateResults).some((result) => result.partial) || lineageResult?.partial === true)
+  return {
+    passed,
+    status: passed ? "passed" : missingScopeIds.length > 0 ? "incomplete" : partial ? "partial" : "failed",
+    missingScopeIds,
+    scopeResults: stateResults,
+    lineageResult
   }
 }
 

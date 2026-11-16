@@ -45,6 +45,8 @@
 
 - **DeepSeek 最小真实评测已连通**：用户重新输入并保存 API key 后，界面显示工具调用、严格 JSON、图像、流式验证通过。重跑题集 planning 得到 **1 planned / 2 clarification / 0 error**，平均延迟1832ms，成本 not measured；真实模型与澄清链可用，不等于36题或G3通过。证据：[DeepSeek重新授权与最小真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)。未读取或记录密钥，未自动扩大为24/36次请求。
 
+- **JT-S04 跨状态折叠谱系已落地**：新增 `fold-transform-3d` 与 `evaluateDrawingContractStates`，用真实 `F→E,+90°` 旋转关联前后候选，拒绝局部垂直/面环成立但非同一翻折的伪候选；缺状态返回 incomplete。39项目标测试、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过。证据：[跨状态折叠谱系](audit/2026-11-16-g3-fold-lineage/README.md)。本区块未新增离线 reliability 读数，生产stage/runner和其他折叠合同仍未完成。
+
 ### 当前执行范围与区块结果
 
 前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。当前按用户 goal 持续推进 **G3（先 G3-Math，再 B5/G3-UX）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。

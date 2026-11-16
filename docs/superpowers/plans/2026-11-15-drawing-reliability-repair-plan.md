@@ -10,7 +10,7 @@
 
 > **状态：待批准；以下为最初文档状态，不代表现时进度。** 设计见[全面设计](../specs/2026-11-15-drawing-reliability-design.md)，实时进度见[当前状态](../../current-status.md)，原始依据见[基线审计](../../audit/2026-11-15-drawing-baseline/README.md)。
 >
-> **G3/T01 当前阻断**：第二轮独立复核仅4题作图数学合同可批准，32题需整改；GK-P03/P06数学分支、JT-S04旋转夹具、JT-S09闭合拓扑已修正但待复审。T01/P0不得退出，最新36题为0/11/25（通过/部分/失败），[14个指定拓扑](../../audit/2026-11-16-g3-named-topology/README.md)已落地，未提供题图与fold-transform仍未闭合。按[G3续作计划](2026-11-16-g3-completion-plan.md)继续合同与生产闭环；P8不开启。详见[第二轮审计](../../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../../audit/2026-11-16-g3-scope-entities/README.md)：显式dependsOn、曲线实际参数和JT-S01局部球O已落地，[公共曲线stem与实体绑定](../../audit/2026-11-16-g3-shared-curves/README.md)已推广，其余拓扑/折叠/最值合同仍待整改。用户重新授权后最小真实评测为1 planned/2 clarification/0 error，调用链已连通；不等于固定36题或G3通过，详见[DeepSeek审计](../../audit/2026-11-16-g3-deepseek-provider/README.md)。
+> **G3/T01 当前阻断**：第二轮独立复核仅4题作图数学合同可批准，32题需整改；GK-P03/P06数学分支、JT-S04旋转夹具、JT-S09闭合拓扑已修正但待复审。T01/P0不得退出，最新36题为0/11/25（通过/部分/失败），[14个指定拓扑](../../audit/2026-11-16-g3-named-topology/README.md)已落地，未提供题图仍未闭合；[JT-S04 fold-transform](../../audit/2026-11-16-g3-fold-lineage/README.md)已落地，真实F→E旋转与伪刚体反例通过验证。按[G3续作计划](2026-11-16-g3-completion-plan.md)继续合同与生产闭环；P8不开启。详见[第二轮审计](../../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../../audit/2026-11-16-g3-scope-entities/README.md)：显式dependsOn、曲线实际参数和JT-S01局部球O已落地，[公共曲线stem与实体绑定](../../audit/2026-11-16-g3-shared-curves/README.md)已推广，其余拓扑/折叠/最值合同仍待整改。用户重新授权后最小真实评测为1 planned/2 clarification/0 error，调用链已连通；不等于固定36题或G3通过，详见[DeepSeek审计](../../audit/2026-11-16-g3-deepseek-provider/README.md)。
 
 **Goal:** 在已审核、冻结的画图合同上实现 36/36 端到端通过，再用未见题验证泛化，不承诺任意题 100%。
 

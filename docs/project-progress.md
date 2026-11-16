@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 跨状态折叠谱系
+
+- **实现**：新增 `fold-transform-3d`、`stateCandidates` 与 `evaluateDrawingContractStates`，内核重算 F→E +90° 的 A/B 位置并核验铰链漂移，缺状态/缺点/非刚体旋转失败。
+- **纠错与反例**：诊断发现合同 E→F 与测试 F→E 镜像不同，修正有向铰链而不改容差。伪造坐标仍满足 CF⊥BD、面面垂直与开放面环，但不符合同一翻折，已被拒绝。聚合缺 after_fold 返回 incomplete。
+- **验证与边界**：定向39项、全量540文件/5735通过+1todo、类型、Lint（0 errors/33既有warnings）、Web构建（640 modules）及文档61项通过；未新增离线 reliability 读数。生产stage/runner、其他折叠和T15/T16未完成。证据：[跨状态折叠谱系](audit/2026-11-16-g3-fold-lineage/README.md)。
+
 ## 2026-11-16 —— DeepSeek 真实评测：端点重新授权阻断
 
 - **用户新授权**：改用保存的 DeepSeek 做真实 provider 评测，不再以离线结果代替；P8与正式发布仍不开启。未读取、输出或保存密钥到 shell/文档。
