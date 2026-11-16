@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P4 / T13 完整数学合同独立核验证书与变异拒绝矩阵
+
+- **独立数学证书与门禁收口**：新增 `packages/agent-core/src/verification/drawingCertificate.ts`（经 `index.ts` 导出），实现 `isDrawingRequestContract`（区分作图请求与闲聊）、`evaluateMathGate`（拦截空必检集/重复 ID/重复证据/非有限残差/陈旧候选绑定/源覆盖不全/实体缺失）及 `certifyDrawingAgainstContract`（基于最终图元坐标重算与椭圆残差/函数曲线绑核，严分 `passed` / `partial` / `blocked`，关闭开关显式报 `"未完整核验"`）；`apps/web/src/agent/acceptance.ts` 同步导出 `isDrawingPrompt`。
+- **门禁与图元非有限防线**：`packages/agent-core/src/verification/completionGate.ts` 拦阻重复检查 ID 自相矛盾；`diagramVerification.ts` 新增终态图元坐标非有限数（`NaN`/`Infinity`）独立失败项 `non_finite_geometry`。
+- **验证**：新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts`（RED `2 failed` → 定向 3 文件 16 项通过，覆验 36 题合同结构与删点/移点/`NaN`/交换曲线/漏条件/`unknown`/陈旧哈希/无关辅助点不变性）；最终编辑后全量 Vitest **539 文件 / 5701 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T13数学证书证据](docs/audit/2026-11-16-p4-math-certificate/README.md)。
+
 ## 2026-11-16 —— P4 / T12 有界局部修复、停滞拦截、原子账本与 Worker 取消
 
 - **结构化故障诊断与非无解语义保护**：新增 `packages/agent-core/src/reliabilityDiagnostics.ts`（经 `index.ts` 导出），确立 10 类结构化故障编码与优先动作、`normalizeSolveOutcome`（强制 `provenUnsat: false`，绝不将 `not-found`/`timeout`/`budget_exhausted` 映成无解）以及 `createRepairStagnationTracker`（识别 `stagnant_candidate`、`no_progress` 与 `capability_missing`）。

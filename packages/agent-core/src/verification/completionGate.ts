@@ -125,6 +125,22 @@ export function verificationGate(report: VerificationReport | null | undefined):
     }
   }
 
+  const seenIds = new Set<string>()
+  const duplicateIds: string[] = []
+  for (const check of report.checks) {
+    if (seenIds.has(check.id)) duplicateIds.push(check.id)
+    seenIds.add(check.id)
+  }
+  if (duplicateIds.length > 0 && report.status === "passed") {
+    return {
+      proceed: false,
+      code: "verification_self_inconsistent",
+      reason: `the report contains duplicate check ids (${duplicateIds.join(", ")})`,
+      report,
+      next_actions: ["ensure each verification check carries a unique id"]
+    }
+  }
+
   /**
    * 走到这里 `status === "passed"`。但**光看 status 不够**：
    * 一份"通过但一条 check 都没有"的报告是最危险的一种 —— 它长得像成功。

@@ -2796,6 +2796,24 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     if (!point) checks.push({ kind: "unparsed", sourceText: `自由点 ${name}`, status: "unverified", reason: "此自由点未能对应候选图中的点名。" })
     else sampleValues.push(`自由点 ${name} 采用示例坐标 (${point.x}, ${point.y}, ${point.z})`)
   }
+  for (const primitive of candidate.primitives) {
+    const raw = primitive as unknown as Record<string, unknown>
+    const coords = [
+      raw.x, raw.y, raw.z,
+      raw.radius, raw.radiusX, raw.radiusY, raw.focalParameter,
+      ...(typeof raw.position === "object" && raw.position !== null ? Object.values(raw.position as Record<string, unknown>) : []),
+      ...(typeof raw.center === "object" && raw.center !== null ? Object.values(raw.center as Record<string, unknown>) : [])
+    ]
+    if (coords.some((value) => typeof value === "number" && !Number.isFinite(value))) {
+      checks.push({
+        kind: "unparsed",
+        code: "non_finite_geometry",
+        sourceText: primitive.label ?? primitive.id,
+        status: "failed",
+        reason: `图元 ${primitive.label ?? primitive.id} 含非有限坐标（NaN/Infinity），不能通过数学核验。`
+      })
+    }
+  }
   if (checks.length === 0) checks.push({ kind: "unparsed", sourceText: "题设", status: "unverified", reason: "没有可靠识别到可核验的题设，不能用空报告宣布全部通过。" })
   const status = checks.some((entry) => entry.status === "failed") ? "failed" : checks.some((entry) => entry.status === "unverified") ? "unverified" : "passed"
   /**

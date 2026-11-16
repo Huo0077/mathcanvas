@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T13 完整数学合同独立核验证书与变异拒绝矩阵
+
+- **RED 复现**：新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts`，实现前 RED `2 failed (2)`（缺失 `drawingCertificate.ts`）。
+- **独立重算证书与变异拦截落盘**：实现 `drawingCertificate.ts`（`isDrawingRequestContract`、`evaluateMathGate`、`certifyDrawingAgainstContract`），结合 `acceptance.ts`（`isDrawingPrompt`）、`completionGate.ts`（重复 ID 自相矛盾检查）与 `diagramVerification.ts`（非有限坐标 `non_finite_geometry` 防线），直接对着最终图元坐标与 `conicResidualAt`/函数绑核重算，忽略自报证据并在关闭完整开关时显式报告 `"未完整核验"`。
+- **验证**：定向 3 文件 16 项通过（覆盖 36 题合同必填结构与 8 类数学变异拒收 + 无关辅助点不变性）；最终编辑后全量 Vitest **539 文件 / 5701 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T13数学证书证据](audit/2026-11-16-p4-math-certificate/README.md)。
+
 ## 2026-11-16 —— P4 / T12 有界局部修复、停滞拦截、原子账本与 Worker 取消
 
 - **RED 复现**：新建 `reliabilityDiagnostics.test.ts` 并扩充 `budget.test.ts`、`coordinator.test.ts` 与 `geometryWorkerClient.test.ts`，实现前 RED `4 failed (4) | 4 failed | 70 passed (74)`，涵盖停滞候选/非改进残差/缺失能力反复提问、跨账本部分扣减及 Worker 取消超时。

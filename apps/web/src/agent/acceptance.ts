@@ -1,4 +1,8 @@
-import type { AcceptanceCheck } from "@draw/agent-core"
+import { isDrawingRequestContract, type AcceptanceCheck } from "@draw/agent-core"
+
+export function isDrawingPrompt(prompt: string): boolean {
+  return isDrawingRequestContract(prompt)
+}
 
 /**
  * **从用户原话推出这次运行的验收条件**（Phase 3 的最后一步）。

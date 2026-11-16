@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02`、`P2`（`T03`、`T04`）、`P3`（`T05`、`T06`）、`T11`、`T07`、`T08`、`T09`、`T10` 与 `T12`，下一步进入 `T13`；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02`、`P2`（`T03`、`T04`）、`P3`（`T05`、`T06`）、`T11`、`T07`、`T08`、`T09`、`T10`、`T12` 与 `T13`，下一步进入 `T14`；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -57,7 +57,8 @@
 | B4 / P4 / T09 参数化立体构造与拓扑证据 | **已完成** | [P4 / T09立体作图证据](audit/2026-11-16-p4-solid-drawing/README.md)：`solid-builders.ts` 导出 `signedPolyhedronVolume` 并新增开放曲面构造校验 `buildOpenSurface`（与闭合流形校验严格分离），实测 `GK-S03` 正体积闭合五面体与 7 类拓扑损坏拒收；`prism.ts` 新增 `constructParameterizedPrism`（严分直棱柱/斜棱柱）；`pyramid.ts` 新增 `constructPyramidFromFoot` 与 `describePyramidApexDomain`（未知垂足不默认底面中心）；`tetrahedron.ts` 新增正/负镜像分支枚举与筛选 `constructTetrahedronBranches`；`witnessSearch.ts` 与 `solverContracts.ts` 接入 `validateAuxiliaryHosts` 拦截缺失顶点宿主；RED 9 fail → 定向 4 文件 55 通过，全量 Vitest 536 文件/5684 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T10 折叠状态谱系与分支见证 | **已完成** | [P4 / T10折叠谱系证据](audit/2026-11-16-p4-fold-lineage/README.md)：`rotation3d.ts` 新增 `rotatePointAboutHinge` 与 `foldBranchesForTargetDistance` 枚举正负对称分支；`foldSystem.ts` 新增 `classifyFoldSystemResult`（保持 `provenUnsat: false`）；`solidGoalMeasurements.ts` 新增 `verifyTargetAngleContract` 严分 `interior_dihedral` 与 `plane_acute_angle`；`foldHinges.ts` 新增 `validateFoldLineageStep` / `buildFoldLineage` 拦截零长铰链/漂移/边长变化与 `dp_identity_conflation`；`coupledFolds.ts` 在保留 `solvePlanFoldSystem` 下新增 `solveCoupledFoldSequence` 校验逆序 `invalid_order` 与 `>3` 折 `unsupported` 并导出多分支 `candidateSolutions`（`complete: false`）；RED 5 fail → 定向 5 文件 26 通过，全量 Vitest 536 文件/5689 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T12 有界局部修复与 Worker 取消 | **已完成** | [P4 / T12有界修复证据](audit/2026-11-16-p4-bounded-repair/README.md)：新增 `reliabilityDiagnostics.ts` 覆盖 10 类故障分类、`normalizeSolveOutcome`（强制 `provenUnsat: false`）与 `createRepairStagnationTracker`；`budget.ts` 新增 `consumeAll` 原子多账本扣减（同步接入 `modelPlanner`、`examRequestBudget`、`examRunCoordinated`）；`coordinator.ts` 接入停滞与 `capability_missing` 阻断；`geometryWorkerClient.ts` / `geometryCompileStrategy.ts` 接入 `AbortSignal` 取消并安全丢弃迟到回包；RED 4 fail → 定向 4 文件 76 + `examRunCoordinated` 15 通过，全量 Vitest 537 文件/5695 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
-| 后续阶段范围 | 进行中（下一步 `T13`） | 按 DAG 推进 `T13 → T14 → T15 → T16`；`P8`、付费 provider 与发布均未开启 |
+| B4 / P4 / T13 完整数学证书与变异拒绝 | **已完成** | [P4 / T13数学证书证据](audit/2026-11-16-p4-math-certificate/README.md)：新增 `drawingCertificate.ts` 区分作图请求与闲聊（同步 `acceptance.ts` `isDrawingPrompt`）、实现 `evaluateMathGate` 与 `certifyDrawingAgainstContract`（基于最终图元坐标独立重算、忽略自报证据、严分 `passed`/`partial`/`blocked` 与 `"未完整核验"` 开关）；`completionGate.ts` 拦截重复检查 ID、`diagramVerification.ts` 扫描非有限坐标 `NaN`/`Infinity`；新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts` 覆验 36 题合同结构与 8 类变异拒收+辅助点不变性（RED 2 failed → 定向 3 文件 16 通过），全量 Vitest 539 文件/5701 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
+| 后续阶段范围 | 进行中（下一步 `T14`） | 按 DAG 推进 `T14 → T15 → T16`；`P8`、付费 provider 与发布均未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 至 `R11` 提交 `d7e1e3af` 均已推送；`P0 / T01` 随本变更提交并核对远端。
 
