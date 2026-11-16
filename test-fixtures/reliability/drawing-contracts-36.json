@@ -7357,7 +7357,17 @@
           "check": {
             "kind": "infeasible-branch",
             "subquestion": "(2)",
-            "forbiddenEntityIds": []
+            "forbiddenEntityIds": [],
+            "evidence": {
+              "kind": "line-conic-intersections-2d",
+              "lineId": "AF₁-bisector",
+              "conicId": "C",
+              "bisectorOf": ["A", "F₁"],
+              "points": [
+                { "x": 0.5, "y": 1.6770509831248424 },
+                { "x": 0.5, "y": -1.6770509831248424 }
+              ]
+            }
           }
         }
       ],
@@ -8229,7 +8239,16 @@
           "check": {
             "kind": "infeasible-branch",
             "subquestion": "(2)",
-            "forbiddenEntityIds": []
+            "forbiddenEntityIds": [],
+            "evidence": {
+              "kind": "parabola-directrix-cyclic-infeasible-2d",
+              "conicId": "Γ",
+              "tangentLineIds": ["PA", "PB"],
+              "tangentPointIds": ["A", "B"],
+              "footPointIds": ["C", "D"],
+              "intersectionPointId": "P",
+              "slopeProduct": -2
+            }
           }
         }
       ],
@@ -8244,7 +8263,7 @@
         "In (1) x_P varies along y=-2"
       ],
       "unsupportedReasons": [
-        "Subquestion (2) is infeasible over real coordinates: writing the tangent-point abscissas as u,v gives uv=-8, and the concyclic condition reduces to -v²/4-2=0, which has no real solution."
+        "Subquestion (2) is infeasible over real coordinates: with distinct tangent abscissas a,b and ab=-8, the concyclic condition forces a=b or b=0, contradicting ab=-8."
       ]
     },
     {
@@ -8689,7 +8708,13 @@
           "check": {
             "kind": "infeasible-branch",
             "subquestion": "(2)",
-            "forbiddenEntityIds": ["P"]
+            "forbiddenEntityIds": ["P"],
+            "evidence": {
+              "kind": "ellipse-focal-right-angle-infeasible-2d",
+              "conicId": "C",
+              "focusA": "F₁",
+              "focusB": "F₂"
+            }
           }
         }
       ],

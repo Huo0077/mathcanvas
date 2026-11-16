@@ -67,7 +67,17 @@ export type ContractCheckSpec =
   | { kind: "function-expression-2d"; functionId: string; expression: string }
   | { kind: "quadratic-with-constant-2d"; functionId: string; minimumConstant: number }
   | { kind: "common-tangent-range-2d"; cubicFunctionId: string; functionId: string; minimumConstant: number }
-  | { kind: "infeasible-branch"; subquestion: string; forbiddenEntityIds: readonly string[] }
+  | {
+    kind: "infeasible-branch"
+    subquestion: string
+    forbiddenEntityIds: readonly string[]
+    evidence?: ContractInfeasibleEvidence
+  }
+
+export type ContractInfeasibleEvidence =
+  | { kind: "line-conic-intersections-2d"; lineId: string; conicId: string; bisectorOf: [string, string]; points: readonly [Vec2, Vec2] }
+  | { kind: "ellipse-focal-right-angle-infeasible-2d"; conicId: string; focusA: string; focusB: string }
+  | { kind: "parabola-directrix-cyclic-infeasible-2d"; conicId: string; tangentLineIds: [string, string]; tangentPointIds: [string, string]; footPointIds: [string, string]; intersectionPointId: string; slopeProduct: number }
 
 export interface ContractObligation {
   id: string
@@ -564,6 +574,75 @@ function labelsOf(prims: readonly Record<string, unknown>[]): Set<string> {
   return set
 }
 
+function finitePoint2(value: unknown): value is Vec2 {
+  const point = value as Vec2 | undefined
+  return !!point && Number.isFinite(point.x) && Number.isFinite(point.y)
+}
+
+function distancePointToLine2(point: Vec2, a: Vec2, b: Vec2): number {
+  const length = Math.hypot(b.x - a.x, b.y - a.y)
+  return length <= 1e-12 ? Number.POSITIVE_INFINITY : Math.abs((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)) / length
+}
+
+function evaluateInfeasibleEvidence(
+  evidence: ContractInfeasibleEvidence,
+  prims: readonly Record<string, unknown>[],
+  pts2: Map<string, Vec2>
+): { passed: boolean; detail: string } {
+  const point = (label: string) => pts2.get(normalizeLabel(label))
+  if (evidence.kind === "line-conic-intersections-2d") {
+    const line = uniqueEntity(prims, evidence.lineId, "line")
+    const conic = uniqueConic(prims, evidence.conicId)
+    const first = point(evidence.bisectorOf[0]), second = point(evidence.bisectorOf[1])
+    if (!line || !conic || !first || !second || !finitePoint2(line.a) || !finitePoint2(line.b)) return { passed: false, detail: "missing line, conic or segment endpoints" }
+    const direction = { x: line.b.x - line.a.x, y: line.b.y - line.a.y }
+    const segment = { x: second.x - first.x, y: second.y - first.y }
+    const midpoint = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
+    const perpendicular = Math.abs(direction.x * segment.x + direction.y * segment.y) <= 1e-9 * Math.max(1, Math.hypot(direction.x, direction.y) * Math.hypot(segment.x, segment.y))
+    if (!perpendicular || distancePointToLine2(midpoint, line.a, line.b) > 1e-6) return { passed: false, detail: `${evidence.lineId} is not the perpendicular bisector of ${evidence.bisectorOf.join("/")}` }
+    const result = intersectPlanarLineAndConicExact({ type: "line", a: line.a, b: line.b } as never, conic as never)
+    const matches = result.kind === "secant" && evidence.points.every((expected) => result.points.some((actual) => near(actual.x, expected.x, 1e-6) && near(actual.y, expected.y, 1e-6)))
+    return { passed: matches, detail: `${evidence.lineId} intersection=${result.kind}, expected two independently checked points` }
+  }
+  if (evidence.kind === "ellipse-focal-right-angle-infeasible-2d") {
+    const conic = uniqueConic(prims, evidence.conicId)
+    const first = point(evidence.focusA), second = point(evidence.focusB)
+    if (conic?.type !== "ellipse" || !first || !second || !finitePoint2(conic.center) || (conic.rotation ?? 0) !== 0) return { passed: false, detail: "missing axis-aligned ellipse or foci" }
+    const center = conic.center
+    const a = Number(conic.radiusX), b = Number(conic.radiusY)
+    if (!(a > b && b > 0)) return { passed: false, detail: "the focal-right-angle proof requires a > b > 0" }
+    const c = Math.sqrt(a * a - b * b)
+    const fociMatch = [first, second].some((focus) => near(focus.x, center.x - c, 1e-6) && near(focus.y, center.y, 1e-6)) &&
+      [first, second].some((focus) => near(focus.x, center.x + c, 1e-6) && near(focus.y, center.y, 1e-6))
+    const passed = fociMatch && b > c
+    return { passed, detail: `ellipse b=${b}, c=${c}; focal dot product >= b²-c²=${b * b - c * c}, so perpendicularity is ${passed ? "impossible" : "not excluded"}` }
+  }
+  const conic = uniqueConic(prims, evidence.conicId)
+  const [a, b] = evidence.tangentPointIds.map(point)
+  const [c, d] = evidence.footPointIds.map(point)
+  const p = point(evidence.intersectionPointId)
+  if (conic?.type !== "parabola" || conic.axis !== "y" || conic.focalParameter !== 2 || (conic.rotation ?? 0) !== 0 ||
+    !finitePoint2(conic.vertex) || conic.vertex.x !== 0 || conic.vertex.y !== 0 || !a || !b || !c || !d || !p || evidence.slopeProduct !== -2) {
+    return { passed: false, detail: "unsupported parabola/directrix configuration or missing named points" }
+  }
+  const lines = evidence.tangentLineIds.map((lineId) => uniqueEntity(prims, lineId, "line"))
+  const tangentsValid = lines.every((line, index) => {
+    const touch = index === 0 ? a : b
+    if (!line || !finitePoint2(line.a) || !finitePoint2(line.b)) return false
+    const result = intersectPlanarLineAndConicExact({ type: "line", a: line.a, b: line.b } as never, conic as never)
+    const slope = (line.b.y - line.a.y) / (line.b.x - line.a.x)
+    const expectedSlope = (index === 0 ? a.x : b.x) / 2
+    return result.kind === "tangent" && result.points.some((point) => near(point.x, touch.x, 1e-6) && near(point.y, touch.y, 1e-6)) &&
+      Number.isFinite(slope) && near(slope, expectedSlope, 1e-6) && distancePointToLine2(p, line.a, line.b) <= 1e-6
+  })
+  const pointsValid = near(a.y, a.x * a.x / 4, 1e-6) && near(b.y, b.x * b.x / 4, 1e-6) &&
+    near(c.x, a.x, 1e-6) && near(c.y, -1, 1e-6) && near(d.x, b.x, 1e-6) && near(d.y, -1, 1e-6) &&
+    near(p.x, (a.x + b.x) / 2, 1e-6) && near(p.y, a.x * b.x / 4, 1e-6)
+  const product = a.x * b.x
+  const passed = tangentsValid && pointsValid && near(product / 4, -2, 1e-6) && Math.abs(a.x - b.x) > 1e-9
+  return { passed, detail: `tangent abscissas a=${a.x}, b=${b.x}; ab=${product}; concyclicity would require a=b or b=0, contradicting ab=-8` }
+}
+
 function evaluateCheck(
   check: ContractCheckSpec,
   prims: readonly Record<string, unknown>[],
@@ -1058,19 +1137,23 @@ function evaluateCheck(
     }
     case "infeasible-branch": {
       const explicitFlag = options.infeasibleDiagnosedSubquestions?.includes(check.subquestion) === true
-      const textDiagnosed = typeof options.answerText === "string" && /无解|不存在|不成立|矛盾|不可行|infeasible/i.test(options.answerText)
+      const textDiagnosed = check.evidence === undefined && typeof options.answerText === "string" && /无解|不存在|不成立|矛盾|不可行|infeasible/i.test(options.answerText)
       const fabricatedEntity = check.forbiddenEntityIds.find((label) => {
         const key = normalizeLabel(label)
         return pts2.has(key) || pts3.has(key) || allLabels.has(key)
       })
-      const ok = (explicitFlag || textDiagnosed) && fabricatedEntity === undefined
+      const evidence = check.evidence === undefined ? { passed: true, detail: "legacy disclosure without specialized evidence" } : evaluateInfeasibleEvidence(check.evidence, prims, pts2)
+      const diagnosed = check.evidence === undefined ? explicitFlag || textDiagnosed : explicitFlag
+      const ok = diagnosed && fabricatedEntity === undefined && evidence.passed
       return {
         passed: ok,
         detail: ok
-          ? `subquestion ${check.subquestion} infeasibility explicitly disclosed`
-          : fabricatedEntity === undefined
-            ? `infeasible branch ${check.subquestion} not disclosed`
-            : `infeasible branch ${check.subquestion} contains forbidden entity ${fabricatedEntity}`
+          ? `subquestion ${check.subquestion} infeasibility disclosed with scoped evidence`
+          : fabricatedEntity !== undefined
+            ? `infeasible branch ${check.subquestion} contains forbidden entity ${fabricatedEntity}`
+            : !evidence.passed
+              ? `infeasible branch ${check.subquestion} evidence failed: ${evidence.detail}`
+              : `infeasible branch ${check.subquestion} not disclosed in its structured scope`
       }
     }
     default:

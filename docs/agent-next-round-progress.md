@@ -6,8 +6,8 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)、[跨状态折叠谱系](audit/2026-11-16-g3-fold-lineage/README.md)、[切线端点与目标直线](audit/2026-11-16-g3-tangent-endpoints/README.md)、[函数表达式与公共切线参数域](audit/2026-11-16-g3-function-domains/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。G3-Math **尚未退出**；最近一次已保存的离线36题为0 passed/11 partial/25 failed，本函数区块未重跑离线评测，不能替代 provider 结果。
-2. DeepSeek 最小验证为 **1 planned / 2 clarification / 0 error**。JT-S04 已有真实铰链谱系，切线/EF 已绑定指定点与切点，GK-P04/P09 已补全局表达式与公共切线下界。下一步处理 **其余最值、完整棱向量/结构化不可行诊断、其他折叠及生产接线**，不得把 suite/case 自签为 `approved`。
+1. 先读[当前状态](current-status.md)、[函数表达式与公共切线参数域](audit/2026-11-16-g3-function-domains/README.md)、[结构化不可行诊断](audit/2026-11-16-g3-infeasible-evidence/README.md)、[跨状态折叠谱系](audit/2026-11-16-g3-fold-lineage/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。G3-Math **尚未退出**；最近一次已保存的离线36题为0 passed/11 partial/25 failed，最近合同区块均未重跑离线评测，不能替代 provider 结果。
+2. DeepSeek 最小验证为 **1 planned / 2 clarification / 0 error**。GK-P04/P09 已补全局表达式与公共切线下界，JT-P01/P04/P06 已绑定指定scope和代数不可行证据。下一步处理 **其余最值、完整棱向量、其他折叠及生产接线**，不得把 suite/case 自签为 `approved`。
 3. 合同复核关闭后依次执行：生产完整证书与统一评测入口 → 平面18题 → 立体/折叠18题及 G3-Math → `B5`（`T15 → T16`）真实渲染与交互生命周期 → G3 总验收。
 4. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
 5. 仅用户本次明确授权的保存 DeepSeek 可进行真实评测；其他付费 provider、P8、安装包/冷机与正式发布不在本 goal 内。实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。

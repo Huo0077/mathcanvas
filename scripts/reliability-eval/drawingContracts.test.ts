@@ -227,12 +227,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
   it("verifies JT-P04 tangent/directrix dependencies and honest infeasibility", () => {
     const suite = loadContracts()
     const jtp04 = suite.cases.find((c) => c.id === "JT-P04")!
-    const A = { x: 2, y: 1 }, B = { x: -4, y: 4 }, P = { x: -1, y: -2 }
+    const A = { x: 4, y: 4 }, B = { x: -2, y: 1 }, P = { x: 1, y: -2 }
     const primitives = [
       { type: "parabola", id: "gamma", label: "Γ", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 2 },
       { type: "point", id: "m", label: "M", x: 4, y: 4 }, { type: "point", id: "p", label: "P", ...P },
       { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
-      { type: "point", id: "c", label: "C", x: 2, y: -1 }, { type: "point", id: "d", label: "D", x: -4, y: -1 },
+      { type: "point", id: "c", label: "C", x: 4, y: -1 }, { type: "point", id: "d", label: "D", x: -2, y: -1 },
       { type: "line", id: "pa", label: "PA", a: P, b: A }, { type: "line", id: "pb", label: "PB", a: P, b: B }
     ]
     const result = evaluateDrawingContractScopes(jtp04, {
@@ -242,6 +242,10 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
     expect(result.scopeResults["(1)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pa-tangent", "ob-pb-tangent"]))
     expect(result.scopeResults["(2)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-c-directrix", "ob-d-directrix", "ob-ac-vertical", "ob-bd-vertical", "ob-2-infeasible"]))
+    const unrelatedDiagnosis = evaluateDrawingContract(jtp04, { primitives }, {
+      verificationStatus: "passed", scopeId: "(2)", answerText: "另一小问无解。", infeasibleDiagnosedSubquestions: ["(1)"]
+    })
+    expect(unrelatedDiagnosis.failedObligationIds).toContain("ob-2-infeasible")
     const detached = evaluateDrawingContract(jtp04, {
       primitives: primitives.map((primitive) => primitive.id === "p" ? { ...primitive, x: 0 } : primitive.id === "a" ? { ...primitive, y: 2 } : primitive)
     }, { verificationStatus: "passed", scopeId: "(1)" })
@@ -296,7 +300,8 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
         { type: "point", id: "f1", label: "F₁", x: -1, y: 0 },
         { type: "point", id: "f2", label: "F₂", x: 1, y: 0 },
         { type: "point", id: "a", label: "A", x: 2, y: 0 },
-        { type: "circle", id: "locus", label: "M", center: { x: 1, y: 0 }, radius: 4 }
+        { type: "circle", id: "locus", label: "M", center: { x: 1, y: 0 }, radius: 4 },
+        { type: "line", id: "af1-bisector", label: "AF₁-bisector", a: { x: 0.5, y: -1 }, b: { x: 0.5, y: 1 } }
       ]
     }
     const honest = evaluateDrawingContractScopes(jtp01, {
@@ -304,7 +309,15 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       "(2)": { candidate: base, options: { verificationStatus: "passed", answerText: "第(2)问不成立：垂直平分线与椭圆有两个公共点。", infeasibleDiagnosedSubquestions: ["(2)"] } },
       "(3)": { candidate: base, options: { verificationStatus: "passed" } }
     })
-    expect(honest.passed).toBe(true)
+    expect(honest.passed, JSON.stringify(honest.scopeResults)).toBe(true)
+    const unrelatedDiagnosis = evaluateDrawingContract(jtp01, base, {
+      verificationStatus: "passed", scopeId: "(2)", answerText: "另一小问无解。", infeasibleDiagnosedSubquestions: ["(1)"]
+    })
+    expect(unrelatedDiagnosis.failedObligationIds).toContain("ob-2-infeasible")
+    const wrongBisector = evaluateDrawingContract(jtp01, {
+      primitives: base.primitives.map((primitive) => primitive.id === "af1-bisector" ? { ...primitive, a: { x: 0.75, y: -1 }, b: { x: 0.75, y: 1 } } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)", answerText: "第(2)问不成立：有两个公共点。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(wrongBisector.failedObligationIds).toContain("ob-2-infeasible")
     const wrongCurve = evaluateDrawingContract(jtp01, {
       primitives: base.primitives.map((primitive) => primitive.id === "c" ? { ...primitive, radiusX: 3 } : primitive)
     }, { verificationStatus: "passed", scopeId: "(2)", answerText: "第(2)问不成立：有两个公共点。", infeasibleDiagnosedSubquestions: ["(2)"] })
@@ -1152,6 +1165,14 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       }
     )
     expect(honest.passed).toBe(true)
+    const unrelatedDiagnosis = evaluateDrawingContract(jtp06, { primitives: basePrims }, {
+      verificationStatus: "passed", scopeId: "(2)", answerText: "另一小问无解。", infeasibleDiagnosedSubquestions: ["(1)"]
+    })
+    expect(unrelatedDiagnosis.failedObligationIds).toContain("ob-infeasible-2")
+    const actuallyFeasible = evaluateDrawingContract(jtp06, {
+      primitives: basePrims.map((primitive) => primitive.id === "ell-c" ? { ...primitive, radiusY: 1 } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)", answerText: "第(2)问不成立。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(actuallyFeasible.failedObligationIds).toContain("ob-infeasible-2")
     const wrongCurve = evaluateDrawingContractScopes(jtp06, {
       "(1)": { candidate: { primitives: basePrims }, options: { verificationStatus: "passed" } },
       "(2)": { candidate: { primitives: basePrims.map((primitive) => primitive.id === "ell-c" ? { ...primitive, radiusX: 3 } : primitive) }, options: { verificationStatus: "passed", answerText: "第(2)问不成立。", infeasibleDiagnosedSubquestions: ["(2)"] } }
