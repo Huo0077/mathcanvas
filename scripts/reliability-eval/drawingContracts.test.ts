@@ -1058,19 +1058,27 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       { type: "sphere", id: "o", label: "O", center: { x: 0.5, y: 0.5, z: Math.sqrt(3) / 2 }, radius: Math.sqrt(5) / 2 }
     ]
     const withoutSphere = primitives.filter((primitive) => primitive.id !== "o")
+    const minimumPrimitives = withoutSphere.map((primitive) => primitive.id === "p" && "position" in primitive ? { ...primitive, position: { x: 1.5, y: -0.5, z: 1 / Math.SQRT2 } } : primitive)
     const result = evaluateDrawingContractScopes(jts01, {
       "(1)(i)": { candidate: { primitives: withoutSphere }, options: { verificationStatus: "passed" } },
       "(1)(ii)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
-      "(2)": { candidate: { primitives: withoutSphere }, options: { verificationStatus: "passed" } }
+      "(2)": { candidate: { primitives: minimumPrimitives }, options: { verificationStatus: "passed" } }
     })
     expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
     expect(result.scopeResults["(1)(i)"]?.passedObligationIds).toContain("ob-pc-ab")
-    expect(result.scopeResults["(1)(ii)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pc-ab", "ob-circumsphere", "ob-sphere-present"]))
+    expect(result.scopeResults["(1)(ii)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pc-ab", "ob-circumsphere", "ob-sphere-present", "ob-sphere-radius"]))
+    expect(result.scopeResults["(2)"]?.passedObligationIds).toContain("ob-min-dihedral")
     expect(jts01.requiredEntityIds).not.toContain("O")
     expect(jts01.sharedScope.subquestionScopes.map((scope) => scope.subquestion)).toEqual(expect.arrayContaining(["(1)(i)", "(1)(ii)"]))
     expect(evaluateDrawingContract(jts01, { primitives: withoutSphere }, { verificationStatus: "passed", scopeId: "(1)(ii)" }).failedObligationIds).toContain("ob-sphere-present")
     const wrongFold = primitives.map((primitive) => primitive.id === "p" && "position" in primitive ? { ...primitive, position: { ...primitive.position, y: 0.25 } } : primitive)
     expect(evaluateDrawingContract(jts01, { primitives: wrongFold }, { verificationStatus: "passed", scopeId: "(1)(ii)" }).failedObligationIds).toContain("ob-pc-ab")
+    const wrongRadius = primitives.map((primitive) => primitive.id === "o" ? { ...primitive, radius: 1 } : primitive)
+    expect(evaluateDrawingContract(jts01, { primitives: wrongRadius }, { verificationStatus: "passed", scopeId: "(1)(ii)" }).failedObligationIds).toContain("ob-sphere-radius")
+    const nonOptimal = evaluateDrawingContract(jts01, { primitives: withoutSphere }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(nonOptimal.failedObligationIds).toContain("ob-min-dihedral")
+    const mirror = minimumPrimitives.map((primitive) => primitive.id === "p" && "position" in primitive ? { ...primitive, position: { ...primitive.position, z: -1 / Math.SQRT2 } } : primitive)
+    expect(evaluateDrawingContract(jts01, { primitives: mirror }, { verificationStatus: "passed", scopeId: "(2)" }).passed).toBe(true)
   })
 
   it("freezes the independently recomputed GK-P04 range and JT-P04 infeasibility instead of known wrong values", () => {

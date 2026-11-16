@@ -19,6 +19,7 @@ export type ContractCheckSpec =
   | { kind: "parallel-3d"; a: string; b: string; c: string; d: string }
   | { kind: "angle-3d"; a: string; b: string; c: string; d: string; degrees: number }
   | { kind: "dihedral-sine-3d" | "dihedral-cosine-3d"; edgeStart: string; edgeEnd: string; firstPoint: string; secondPoint: string; value: number }
+  | { kind: "folded-triangle-dihedral-min-cosine-3d"; a: string; b: string; c: string; p: string; value: number; foldCosine: number }
   | { kind: "ratio-3d"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "point-on-segment-ratio-3d"; p: string; a: string; b: string; t: number }
   | { kind: "point-on-segment-3d"; p: string; a: string; b: string }
@@ -33,7 +34,7 @@ export type ContractCheckSpec =
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
   | { kind: "topology-3d"; solidId?: string; open?: boolean; expectedVertexIds?: readonly string[]; expectedFaceRings?: readonly (readonly string[])[] }
   | { kind: "coplanar-3d"; points: readonly string[] }
-  | { kind: "circumsphere-3d" }
+  | { kind: "circumsphere-3d"; sphereId?: string; radius?: number }
   | { kind: "cube-3d"; edgeLength: number }
   | { kind: "hemisphere-3d"; radius: number }
   | { kind: "point-2d"; label: string; x: number; y: number }
@@ -758,6 +759,28 @@ function evaluateCheck(
       const value = check.kind === "dihedral-sine-3d" ? len3(cross3(u, v)) / scale : dot3(u, v) / scale
       return { passed: near(value, check.value, 1e-2), detail: `${check.kind}=${value} vs ${check.value}` }
     }
+    case "folded-triangle-dihedral-min-cosine-3d": {
+      const a = p3(check.a), b = p3(check.b), c = p3(check.c), p = p3(check.p)
+      if (!a || !b || !c || !p) return { passed: false, detail: "missing folded triangle or moving point" }
+      const matches = (point: Vec3, expected: Vec3) => near(point.x, expected.x, 1e-6) && near(point.y, expected.y, 1e-6) && near(point.z, expected.z, 1e-6)
+      const radius = Math.sqrt(3) / 2, foldCosine = p.y / radius
+      const baseMatches = matches(a, { x: 0, y: 0, z: 0 }) && matches(b, { x: 0, y: 1, z: 0 }) && matches(c, { x: 1, y: 0, z: 0 }) &&
+        near(p.x, 1.5, 1e-6) && near(p.y * p.y + p.z * p.z, radius * radius, 1e-6)
+      const edge = sub3(p, c), firstVector = sub3(a, c), secondVector = sub3(b, c), edgeLengthSquared = dot3(edge, edge)
+      if (edgeLengthSquared <= 1e-18) return { passed: false, detail: "degenerate CP hinge" }
+      const project = (vector: Vec3): Vec3 => {
+        const scale = dot3(vector, edge) / edgeLengthSquared
+        return { x: vector.x - scale * edge.x, y: vector.y - scale * edge.y, z: vector.z - scale * edge.z }
+      }
+      const u = project(firstVector), v = project(secondVector), scale = len3(u) * len3(v)
+      if (scale <= 1e-12) return { passed: false, detail: "degenerate dihedral projection" }
+      const cosine = dot3(u, v) / scale
+      const formula = (Math.sqrt(3) + foldCosine) / Math.sqrt(7 - 3 * foldCosine * foldCosine + 2 * Math.sqrt(3) * foldCosine)
+      const expected = 1 / Math.sqrt(3), expectedFold = -1 / Math.sqrt(3)
+      const passed = baseMatches && near(cosine, formula, 1e-6) && near(cosine, check.value, 1e-6) &&
+        near(check.value, expected, 1e-9) && near(foldCosine, check.foldCosine, 1e-6) && near(check.foldCosine, expectedFold, 1e-9)
+      return { passed, detail: `fold cosine=${foldCosine}, dihedral cosine=${cosine}; derivative sign 8(1+√3c) gives the global minimum 1/√3 at c=-1/√3` }
+    }
     case "ratio-3d": {
       const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d)
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 3d vertices for ratio` }
@@ -922,8 +945,34 @@ function evaluateCheck(
     }
     case "circumsphere-3d": {
       const sets = polyhedronVertexSets(prims)
-      const ok = spheres(prims).some((sphere) => sets.some((points) => points.every((point) => near(dist3(point, sphere.center), sphere.radius))))
-      return { passed: ok, detail: ok ? "all polyhedron vertices lie on the sphere" : "no sphere passes through the polyhedron vertices" }
+      const bound = check.sphereId === undefined ? null : uniqueEntity(prims, check.sphereId, "sphere")
+      const candidates = check.sphereId === undefined ? spheres(prims) : bound ? spheres([bound]) : []
+      const onSphere = candidates.some((sphere) => sets.some((points) => points.every((point) => near(dist3(point, sphere.center), sphere.radius))))
+      let radiusMatches = true
+      if (check.radius !== undefined) {
+        radiusMatches = false
+        for (const sphere of candidates) {
+          if (!near(sphere.radius, check.radius, 1e-6)) continue
+          for (const points of sets) {
+            if (points.length !== 4) continue
+            const [a, b, c, p] = points
+            const u = sub3(b, a), v = sub3(c, a), normal = cross3(u, v), normalSquared = dot3(normal, normal)
+            if (normalSquared <= 1e-18) continue
+            const uv = dot3(u, v), uu = dot3(u, u), vv = dot3(v, v)
+            const alpha = uu * (vv - uv) / (2 * normalSquared), beta = vv * (uu - uv) / (2 * normalSquared)
+            const baseCenter = { x: a.x + alpha * u.x + beta * v.x, y: a.y + alpha * u.y + beta * v.y, z: a.z + alpha * u.z + beta * v.z }
+            const offset = dot3(sub3(p, baseCenter), normal) / normalSquared
+            const center = { x: baseCenter.x + offset * normal.x, y: baseCenter.y + offset * normal.y, z: baseCenter.z + offset * normal.z }
+            if (near(dist3(p, center), check.radius, 1e-6) && near(dist3(sphere.center, center), 1e-6)) {
+              radiusMatches = true
+              break
+            }
+          }
+          if (radiusMatches) break
+        }
+      }
+      const passed = onSphere && radiusMatches
+      return { passed, detail: passed ? "all vertices lie on the sphere with independently verified center/radius" : "sphere incidence or independently computed center/radius mismatch" }
     }
     case "hemisphere-3d": {
       const cube = cubePoints(prims)
