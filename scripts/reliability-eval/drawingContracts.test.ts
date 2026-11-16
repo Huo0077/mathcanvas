@@ -260,15 +260,16 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
   it("verifies JT-P03 parabola secant and D/E intersections with OA/OB and l", () => {
     const suite = loadContracts()
     const jtp03 = suite.cases.find((c) => c.id === "JT-P03")!
-    const A = { x: 2, y: 2 * Math.SQRT2 }, B = { x: 2, y: -2 * Math.SQRT2 }
+    const u = -4 + 3 * Math.SQRT2, v = -4 - 3 * Math.SQRT2
+    const A = { x: u * u, y: 2 * u }, B = { x: v * v, y: 2 * v }
     const primitives = [
       { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 },
       { type: "point", id: "o", label: "O", x: 0, y: 0 },
       { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
       { type: "line", id: "ab", label: "AB", a: A, b: B },
       { type: "line", id: "l", label: "l", a: { x: 0, y: 1 }, b: { x: 1, y: 2 } },
-      { type: "point", id: "d", label: "D", x: 1 + Math.SQRT2, y: 2 + Math.SQRT2 },
-      { type: "point", id: "e", label: "E", x: 1 - Math.SQRT2, y: 2 - Math.SQRT2 }
+      { type: "point", id: "d", label: "D", x: u / (2 - u), y: 2 / (2 - u) },
+      { type: "point", id: "e", label: "E", x: v / (2 - v), y: 2 / (2 - v) }
     ]
     const valid = evaluateDrawingContract(jtp03, { primitives }, { verificationStatus: "passed" })
     expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
@@ -279,6 +280,33 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     }, { verificationStatus: "passed" })
     expect(invalid.failedObligationIds).toContain("ob-d-on-l")
     expect(invalid.failedObligationIds).toContain("ob-oad")
+  })
+
+  it("requires JT-P03's global minimum DE and its attaining secant", () => {
+    const jtp03 = loadContracts().cases.find((c) => c.id === "JT-P03")!
+    const candidate = (sum: number) => {
+      const a = (sum + Math.sqrt(sum * sum + 8)) / 2, b = (sum - Math.sqrt(sum * sum + 8)) / 2
+      const A = { x: a * a, y: 2 * a }, B = { x: b * b, y: 2 * b }
+      return { primitives: [
+        { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 },
+        { type: "point", id: "o", label: "O", x: 0, y: 0 },
+        { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+        { type: "line", id: "ab", label: "AB", a: A, b: B },
+        { type: "line", id: "l", label: "l", a: { x: 0, y: 1 }, b: { x: 1, y: 2 } },
+        { type: "point", id: "d", label: "D", x: a / (2 - a), y: 2 / (2 - a) },
+        { type: "point", id: "e", label: "E", x: b / (2 - b), y: 2 / (2 - b) }
+      ] }
+    }
+    const optimal = evaluateDrawingContract(jtp03, candidate(-8), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(optimal.passed, JSON.stringify(optimal.obligationResults)).toBe(true)
+    expect(optimal.passedObligationIds).toContain("ob-de-min")
+    const nonOptimal = evaluateDrawingContract(jtp03, candidate(0), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(nonOptimal.failedObligationIds).toContain("ob-de-min")
+    const detached = candidate(-8)
+    const wrongChord = evaluateDrawingContract(jtp03, {
+      primitives: detached.primitives.map((primitive) => primitive.id === "ab" ? { ...primitive, a: { x: 2, y: 0 }, b: { x: 2, y: 1 } } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)" })
+    expect(wrongChord.failedObligationIds).toContain("ob-de-min")
   })
 
   it("diagnoses JT-P01(2) as two intersections rather than fabricating a tangent proof", () => {
@@ -418,6 +446,25 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(detachedP.failedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-pa", "ob-p-on-pb"]))
   })
 
+  it("requires GK-P07's actual maximum tangent triangle area, not just a valid tangent pair", () => {
+    const gkp07 = loadContracts().cases.find((c) => c.id === "GK-P07")!
+    const candidate = (v: number) => {
+      const P = { x: 0, y: v }, A = { x: Math.sqrt(-4 * v), y: -v }, B = { x: -Math.sqrt(-4 * v), y: -v }
+      return { primitives: [
+        { type: "circle", id: "m", label: "M", center: { x: 0, y: -4 }, radius: 1 },
+        { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 2 },
+        { type: "point", id: "p", label: "P", ...P }, { type: "point", id: "f", label: "F", x: 0, y: 1 },
+        { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+        { type: "line", id: "pa", label: "PA", a: P, b: A }, { type: "line", id: "pb", label: "PB", a: P, b: B }
+      ] }
+    }
+    const optimal = evaluateDrawingContract(gkp07, candidate(-5), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(optimal.passed, JSON.stringify(optimal.obligationResults)).toBe(true)
+    expect(optimal.passedObligationIds).toContain("ob-max-area")
+    const nonOptimal = evaluateDrawingContract(gkp07, candidate(-3), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(nonOptimal.failedObligationIds).toContain("ob-max-area")
+  })
+
   it("verifies JT-P09 circle incidences, chord hosts and quadrilateral area", () => {
     const suite = loadContracts()
     const jtp09 = suite.cases.find((c) => c.id === "JT-P09")!
@@ -509,6 +556,27 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       primitives: primitives.map((primitive) => primitive.id === "l" ? { ...primitive, a: { x: 0, y: -1 }, b: { x: 0, y: 1 } } : primitive)
     }, { verificationStatus: "passed" })
     expect(invalid.failedObligationIds).toEqual(expect.arrayContaining(["ob-l-through", "ob-p-on-l", "ob-q-on-l"]))
+  })
+
+  it("requires JT-P07's minimum vector dot product on the vertical chord and rejects a larger secant", () => {
+    const jtp07 = loadContracts().cases.find((c) => c.id === "JT-P07")!
+    const candidate = (vertical: boolean) => {
+      const P = vertical ? { x: 1, y: Math.sqrt(3) / 2 } : { x: 0, y: -1 }
+      const Q = vertical ? { x: 1, y: -Math.sqrt(3) / 2 } : { x: 1.6, y: 0.6 }
+      return { primitives: [
+        { type: "ellipse", id: "c", label: "C", center: { x: 0, y: 0 }, radiusX: 2, radiusY: 1 },
+        { type: "point", id: "a", label: "A", x: 0.5, y: Math.sqrt(15) / 4 }, { type: "point", id: "b", label: "B", x: 2, y: 0 },
+        { type: "point", id: "p", label: "P", ...P }, { type: "point", id: "q", label: "Q", ...Q },
+        { type: "line", id: "l", label: "l", a: P, b: Q },
+        { type: "point", id: "e", label: "E", x: 3, y: P.y / (P.x - 2) },
+        { type: "point", id: "f", label: "F", x: 3, y: Q.y / (Q.x - 2) }
+      ] }
+    }
+    const optimal = evaluateDrawingContract(jtp07, candidate(true), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(optimal.passed, JSON.stringify(optimal.obligationResults)).toBe(true)
+    expect(optimal.passedObligationIds).toEqual(expect.arrayContaining(["ob-pq-distinct", "ob-pe-qf-min"]))
+    const nonOptimal = evaluateDrawingContract(jtp07, candidate(false), { verificationStatus: "passed", scopeId: "(2)" })
+    expect(nonOptimal.failedObligationIds).toContain("ob-pe-qf-min")
   })
 
   it("verifies JT-P02 P host, hyperbola intersections and both collinear dependencies", () => {

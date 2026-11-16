@@ -6891,7 +6891,8 @@
             "PA,PB tangent to C"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "20√5, attained at P=(0,-5)"
         }
       ],
       "requiredObligations": [
@@ -7047,6 +7048,24 @@
             "lineId": "PB",
             "conicId": "C",
             "touchPointLabel": "B"
+          }
+        },
+        {
+          "id": "ob-max-area",
+          "kind": "global_extremum",
+          "description": "Maximum tangent-triangle area 20√5 at P=(0,-5), not a representative tangent pair",
+          "scope": "(2)",
+          "sourceSpan": { "text": "面积的最 大值", "start": 178, "end": 185 },
+          "expectedValue": 44.721359549995796,
+          "check": {
+            "kind": "parabola-circle-max-area-2d",
+            "parabolaId": "C",
+            "circleId": "M",
+            "p": "P",
+            "a": "A",
+            "b": "B",
+            "value": 44.721359549995796,
+            "optimum": { "x": 0, "y": -5 }
           }
         }
       ],
@@ -7844,7 +7863,8 @@
             "l: y=x+1"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "4/3, attained when the two parabola parameters sum to -8"
         }
       ],
       "requiredObligations": [
@@ -8053,6 +8073,27 @@
             "a": "O",
             "b": "B",
             "c": "E"
+          }
+        },
+        {
+          "id": "ob-de-min",
+          "kind": "global_extremum",
+          "description": "Global minimum |DE|=4/3 when the two parabola parameters sum to -8",
+          "scope": "(2)",
+          "sourceSpan": { "text": "求 |DE| 的最小值", "start": 110, "end": 121 },
+          "expectedValue": 1.3333333333333333,
+          "check": {
+            "kind": "parabola-secant-min-distance-2d",
+            "parabolaId": "C",
+            "chordId": "AB",
+            "lineId": "l",
+            "o": "O",
+            "a": "A",
+            "b": "B",
+            "d": "D",
+            "e": "E",
+            "value": 1.3333333333333333,
+            "parameterSum": -8
           }
         }
       ],
@@ -8924,7 +8965,8 @@
           "text": "向量PE·向量QF 是否存在最小值",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "1, attained for the vertical secant x=1"
         }
       ],
       "requiredObligations": [
@@ -9133,6 +9175,33 @@
             "kind": "point-x-2d",
             "label": "F",
             "x": 3
+          }
+        },
+        {
+          "id": "ob-pq-distinct",
+          "kind": "distinctness",
+          "description": "P and Q are two distinct intersections, so BP and BQ are defined",
+          "scope": "stem",
+          "sourceSpan": { "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点", "start": 45, "end": 76 },
+          "check": { "kind": "distinct-2d", "a": "P", "b": "Q" }
+        },
+        {
+          "id": "ob-pe-qf-min",
+          "kind": "global_extremum",
+          "description": "Minimum PE·QF=1 on the vertical secant x=1, not a larger finite-slope witness",
+          "scope": "(2)",
+          "sourceSpan": { "text": "向量PE·向量QF 是否存在最小值", "start": 123, "end": 140 },
+          "expectedValue": 1,
+          "check": {
+            "kind": "ellipse-secant-min-dot-2d",
+            "ellipseId": "C",
+            "lineId": "l",
+            "b": "B",
+            "p": "P",
+            "q": "Q",
+            "e": "E",
+            "f": "F",
+            "value": 1
           }
         }
       ],

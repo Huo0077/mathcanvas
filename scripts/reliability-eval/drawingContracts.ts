@@ -63,6 +63,9 @@ export type ContractCheckSpec =
   | { kind: "triangle-area-2d"; a: string; b: string; c: string; value: number }
   | { kind: "quadrilateral-area-2d"; points: [string, string, string, string]; value: number }
   | { kind: "dot-2d"; a: string; b: string; c: string; d: string; value: number }
+  | { kind: "parabola-circle-max-area-2d"; parabolaId: string; circleId: string; p: string; a: string; b: string; value: number; optimum: Vec2 }
+  | { kind: "parabola-secant-min-distance-2d"; parabolaId: string; chordId: string; lineId: string; o: string; a: string; b: string; d: string; e: string; value: number; parameterSum: number }
+  | { kind: "ellipse-secant-min-dot-2d"; ellipseId: string; lineId: string; b: string; p: string; q: string; e: string; f: string; value: number }
   | { kind: "function-sample-2d"; entityId: string; x: number; value: number }
   | { kind: "function-expression-2d"; functionId: string; expression: string }
   | { kind: "quadratic-with-constant-2d"; functionId: string; minimumConstant: number }
@@ -1083,6 +1086,61 @@ function evaluateCheck(
       if (!a || !b || !c || !d) return { passed: false, detail: `missing 2d points for dot` }
       const v = (b.x - a.x) * (d.x - c.x) + (b.y - a.y) * (d.y - c.y)
       return { passed: near(v, check.value, 1e-2), detail: `dot=${v} vs ${check.value}` }
+    }
+    case "parabola-circle-max-area-2d": {
+      const curve = uniqueConic(prims, check.parabolaId), circle = uniqueConic(prims, check.circleId)
+      const p = p2(check.p), a = p2(check.a), b = p2(check.b)
+      const shapeMatches = curve?.type === "parabola" && curve.axis === "y" && curve.focalParameter === 2 && (curve.rotation ?? 0) === 0 &&
+        finitePoint2(curve.vertex) && curve.vertex.x === 0 && curve.vertex.y === 0 && circle?.type === "circle" && circle.radius === 1 && (circle.rotation ?? 0) === 0 &&
+        finitePoint2(circle.center) && circle.center.x === 0 && circle.center.y === -4
+      if (!shapeMatches || !p || !a || !b) return { passed: false, detail: "missing or mismatched parabola, circle or tangent points" }
+      const q = p.x * p.x - 4 * p.y
+      const area = q > 0 ? 0.5 * q ** 1.5 : Number.NaN
+      const actualArea = Math.abs((a.x - p.x) * (b.y - p.y) - (a.y - p.y) * (b.x - p.x)) / 2
+      const geometryMatches = near(p.x * p.x + (p.y + 4) ** 2, 1, 1e-6) && near(a.y, a.x * a.x / 4, 1e-6) && near(b.y, b.x * b.x / 4, 1e-6) &&
+        near(p.x, (a.x + b.x) / 2, 1e-6) && near(p.y, a.x * b.x / 4, 1e-6) && Math.hypot(a.x - b.x, a.y - b.y) > 1e-9
+      const passed = geometryMatches && near(area, actualArea, 1e-6) && near(actualArea, check.value, 1e-6) &&
+        near(check.value, 20 * Math.sqrt(5), 1e-9) && near(p.x, check.optimum.x, 1e-6) && near(p.y, check.optimum.y, 1e-6)
+      return { passed, detail: `area=${actualArea}; on the circle q=x²-4y=21-(y+6)², y∈[-5,-3] is decreasing, maximum 20√5 at (0,-5)` }
+    }
+    case "parabola-secant-min-distance-2d": {
+      const curve = uniqueConic(prims, check.parabolaId)
+      const origin = p2(check.o), a = p2(check.a), b = p2(check.b), d = p2(check.d), e = p2(check.e)
+      const chord = uniqueEntity(prims, check.chordId, "line"), line = uniqueEntity(prims, check.lineId, "line")
+      const shapeMatches = curve?.type === "parabola" && curve.axis === "x" && curve.focalParameter === 2 && (curve.rotation ?? 0) === 0 &&
+        finitePoint2(curve.vertex) && curve.vertex.x === 0 && curve.vertex.y === 0
+      if (!shapeMatches || !origin || !a || !b || !d || !e || !chord || !line || !finitePoint2(chord.a) || !finitePoint2(chord.b) || !finitePoint2(line.a) || !finitePoint2(line.b)) {
+        return { passed: false, detail: "missing or mismatched parabola, secants, target line or named points" }
+      }
+      const u = a.y / 2, v = b.y / 2, sum = u + v
+      if (Math.abs(2 - u) <= 1e-12 || Math.abs(2 - v) <= 1e-12) return { passed: false, detail: "OA/OB is parallel to l and has no finite D/E intersection" }
+      const expectedD = { x: u / (2 - u), y: 2 / (2 - u) }, expectedE = { x: v / (2 - v), y: 2 / (2 - v) }
+      const geometryMatches = near(origin.x, 0, 1e-6) && near(origin.y, 0, 1e-6) && near(a.x, u * u, 1e-6) && near(b.x, v * v, 1e-6) &&
+        near(u * v, -2, 1e-6) && Math.hypot(a.x - b.x, a.y - b.y) > 1e-9 && distancePointToLine2({ x: 2, y: 0 }, chord.a, chord.b) <= 1e-6 &&
+        distancePointToLine2(a, chord.a, chord.b) <= 1e-6 && distancePointToLine2(b, chord.a, chord.b) <= 1e-6 &&
+        near(line.a.y - line.a.x, 1, 1e-6) && near(line.b.y - line.b.x, 1, 1e-6) &&
+        near(d.x, expectedD.x, 1e-6) && near(d.y, expectedD.y, 1e-6) && near(e.x, expectedE.x, 1e-6) && near(e.y, expectedE.y, 1e-6)
+      const distance = Math.hypot(d.x - e.x, d.y - e.y)
+      const distanceSquared = 2 * (sum * sum + 8) / (sum - 1) ** 2
+      const passed = geometryMatches && near(distance * distance, distanceSquared, 1e-6) && near(distance, check.value, 1e-6) &&
+        near(check.value, 4 / 3, 1e-9) && check.parameterSum === -8 && near(sum, check.parameterSum, 1e-6)
+      return { passed, detail: `parameter sum=${sum}, |DE|²=${distanceSquared}; |DE|²-16/9=2(s+8)²/(9(s-1)²)≥0, minimum 4/3 at s=-8` }
+    }
+    case "ellipse-secant-min-dot-2d": {
+      const curve = uniqueConic(prims, check.ellipseId)
+      const b = p2(check.b), p = p2(check.p), q = p2(check.q), e = p2(check.e), f = p2(check.f)
+      const line = uniqueEntity(prims, check.lineId, "line")
+      const shapeMatches = curve?.type === "ellipse" && curve.radiusX === 2 && curve.radiusY === 1 && (curve.rotation ?? 0) === 0 && finitePoint2(curve.center) && curve.center.x === 0 && curve.center.y === 0
+      if (!shapeMatches || !b || !p || !q || !e || !f || !line || !finitePoint2(line.a) || !finitePoint2(line.b)) return { passed: false, detail: "missing or mismatched ellipse, secant or named points" }
+      if (Math.abs(p.x - 2) <= 1e-12 || Math.abs(q.x - 2) <= 1e-12) return { passed: false, detail: "BP/BQ is undefined at B" }
+      const geometryMatches = near(b.x, 2, 1e-6) && near(b.y, 0, 1e-6) && near(p.x * p.x / 4 + p.y * p.y, 1, 1e-6) && near(q.x * q.x / 4 + q.y * q.y, 1, 1e-6) &&
+        Math.hypot(p.x - q.x, p.y - q.y) > 1e-9 && distancePointToLine2({ x: 1, y: 0 }, line.a, line.b) <= 1e-6 &&
+        distancePointToLine2(p, line.a, line.b) <= 1e-6 && distancePointToLine2(q, line.a, line.b) <= 1e-6 &&
+        near(e.x, 3, 1e-6) && near(e.y, p.y / (p.x - 2), 1e-6) && near(f.x, 3, 1e-6) && near(f.y, q.y / (q.x - 2), 1e-6)
+      const dot = (e.x - p.x) * (f.x - q.x) + (e.y - p.y) * (f.y - q.y)
+      const vertical = near(p.x, 1, 1e-6) && near(q.x, 1, 1e-6) && near(line.a.x, 1, 1e-6) && near(line.b.x, 1, 1e-6)
+      const passed = geometryMatches && vertical && near(dot, check.value, 1e-6) && check.value === 1
+      return { passed, detail: `PE·QF=${dot}; finite-slope chords give 1+1/(16k²+4)>1, vertical x=1 gives the minimum 1` }
     }
     case "function-sample-2d": {
       const fn = uniqueEntity(prims, check.entityId, "function")
