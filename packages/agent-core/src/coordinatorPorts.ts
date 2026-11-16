@@ -445,6 +445,8 @@ export interface CommitRequest {
    * 判据宁可严一点也不放松。
    */
   runSwitchedWorkspace?: boolean
+  /** Selected subquestion/scope id (`subquestion:2`, `shared`, etc.) for scoped obligation checks. */
+  selectedScopeId?: string
   signal: AbortSignal
 }
 

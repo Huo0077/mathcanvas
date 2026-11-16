@@ -22,9 +22,11 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）、`T15`、`T01` 终审（R4）及 Task 2 生产完整数学证书接线已完成，但 **G3-Math 尚未退出**（正推进 Task 3–4 平面/立体 36 题确定性求解/构造与 `T16` 生命周期闭环）；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）、`T15`、`T01` 终审（R4）、Task 2 完整证书接线及 Task 3 平面 18 题全链路闭环已完成，但 **G3-Math 尚未退出**（下一步推进 Task 4 立体/折叠 18 题及 `G3-Math` 36/36、`T16` 生命周期与 DeepSeek 实测）；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
+
+- **Task 3 平面 / 圆锥曲线 / 函数 18 题数学合同与协调器全链闭环已落地**：`excludedPoints` 端到端、`selectedScopeId`（含 `draftStore.stage` / `compileInProcess` / `parseObligationWithLegacy` / `verifyDiagramObligations`）与 `evaluateDrawingContractBranches` 已全线贯通；`verifyTangentLine` 拐点切线+防割线与 `pointOnCurve`/`collinear`/`pointLineCoord` 已落盘。`planarContracts18.test.ts` **23/23**（18 题全过 + 4 项篡改反例）、`eval:reliability -- --offline`（冒烟 3/3 + 36 题中 **18/18 平面全过**，`liveWrites=0`、`drawingCertificateStatus="passed"`；36 题暂 `18 passed / 2 partial / 16 failed`，对象覆盖 **54.17%**、义务覆盖 **52.31%**）、`typecheck`、`lint`（0 errors）、Web 构建与全量 Vitest **542 文件 / 5770 passed + 1 todo** 全部通过；`G3-Math` 尚未退出。证据：[Task 3 平面 18 题证据](audit/2026-11-17-g3-planar-18/README.md)。下一步立即进入 Task 4（18 道立体几何与折叠题闭环）。
 
 - **Task 2 生产完整 `DrawingCertificateResult` 接线与统一评测接入已落地**：`drawingCertificate` 与 `certificateBinding` 已贯通 `DraftStore.stage` → `CommitterAdapter` → `HostBridge`（`preview`/`requestConsent`/`commit` 双向核验 `verifyCertificateFreshness`）→ `AgentRuntime`/`AgentRunner`/`agentStore` → `ConfirmationPanel`（阻断 `blocked`/`partial`/`unverified` 与关闭开关时静默通过）及 `reliabilityEval.eval.test.ts`。定向 10 文件 183 项、`typecheck`、`lint`（0 errors）、Web 构建、离线/36 题 `eval:reliability`、Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`）与全量 Vitest **541 文件 / 5747 passed + 1 todo** 全部通过。证据：[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)。下一步进入 Task 3（18 题平面几何与函数确定性构造/核验）。
 

@@ -564,6 +564,13 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         if (value.axis !== "x" && value.axis !== "y") errors.push(fail("invalid_axis", `${path}.axis`, "expected 'x' or 'y'"))
         else out.axis = value.axis
       }
+      if (value.excludedPoints !== undefined) {
+        if (!Array.isArray(value.excludedPoints)) {
+          errors.push(fail("invalid_type", `${path}.excludedPoints`, "expected an array of 2D points"))
+        } else {
+          out.excludedPoints = value.excludedPoints.map((pt, idx) => readPoint2(pt, `${path}.excludedPoints[${idx}]`, errors))
+        }
+      }
       const label = boundLabel(value.label, `${path}.label`, errors)
       if (label !== undefined) out.label = label
       return out

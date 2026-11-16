@@ -860,31 +860,57 @@ export function verifyTangentLine(source: string, domain: [number, number], line
    * 写成"`derivativeGap` 的临界点"就变成 `f″(x) = 0` —— 那会把**割线交点**当成切点
    * （2026-10-12 实测：`y = 9x` 与 `x³ − 3x` 的割线交点 `x = 0` 混进来了）。
    */
-  const candidates = zerosOf(derivativeGap, domain, normalizedSteps(options.steps), normalizedTolerance(options.tolerance))
-  // 定义域端点也可能是切点（例如切线正好切在区间端点上）。
-  for (const endpoint of domain) candidates.push(endpoint)
-  let best: { x: number; residual: number } | null = null
-  for (const candidate of candidates) {
-    const value = gap(candidate)
-    if (!Number.isFinite(value)) continue
-    if (best === null || Math.abs(value) < Math.abs(best.residual)) best = { x: candidate, residual: value }
+  const derivZeros = zerosOf(derivativeGap, domain, normalizedSteps(options.steps), normalizedTolerance(options.tolerance))
+  const valueZeros = zerosOf(gap, domain, normalizedSteps(options.steps), normalizedTolerance(options.tolerance))
+  const tol = normalizedTolerance(options.tolerance)
+  const isWithinTolerances = (x: number, value: number): { ok: boolean; sGap: number } => {
+    const valTol = tol * valueScale([evaluate(x), line.intercept, 1])
+    const sym = evaluateSymbolicDerivative(source, x)
+    const sGap = sym.ok ? sym.value - line.slope : derivativeGap(x)
+    const slopeTol = (sym.ok ? tol : Math.max(tol, 1e-6)) * valueScale([line.slope, 1])
+    return {
+      ok: Number.isFinite(value) && Number.isFinite(sGap) && Math.abs(value) <= valTol && Math.abs(sGap) <= slopeTol,
+      sGap
+    }
   }
-  if (best === null) return { tangent: false, parameter: null, residual: Number.NaN, reason: "曲线在这段定义域上取不到有限值，判不了相切。" }
-  const polished = polish(gap, best.x)
-  best = { x: polished, residual: gap(polished) }
-  const tolerance = normalizedTolerance(options.tolerance) * valueScale([evaluate(best.x), line.intercept, 1])
-  if (Math.abs(best.residual) <= tolerance) {
-    const diffVerdict = differentiabilityAt(source, best.x, domain)
+  // Check tangent contacts across derivative roots, value crossings (catches inflection tangents where f'-m has even multiplicity), and domain endpoints.
+  // Only candidates satisfying BOTH value and slope tolerances count as tangent contacts so transversal secants (f=line, f'!=m) never mask true derivative-root residuals.
+  let bestVerified: { x: number; residual: number; slopeGap: number } | null = null
+  for (const rawCandidate of [...derivZeros, ...valueZeros, ...domain]) {
+    const probes = [rawCandidate, polish(gap, rawCandidate)]
+    for (const candidateX of probes) {
+      const value = gap(candidateX)
+      const checked = isWithinTolerances(candidateX, value)
+      if (!checked.ok) continue
+      const score = Math.abs(value) + Math.abs(checked.sGap)
+      if (bestVerified === null || score < Math.abs(bestVerified.residual) + Math.abs(bestVerified.slopeGap)) {
+        bestVerified = { x: candidateX, residual: value, slopeGap: checked.sGap }
+      }
+    }
+  }
+  if (bestVerified !== null) {
+    const diffVerdict = differentiabilityAt(source, bestVerified.x, domain)
     if (!diffVerdict.differentiable) {
       return {
         tangent: false,
-        parameter: best.x,
-        residual: Math.abs(best.residual),
-        reason: `直线虽与曲线在 x = ${formatNumber(best.x)} 接触，但该点不可导或缺少支持的符号导数：${diffVerdict.reason}`
+        parameter: bestVerified.x,
+        residual: Math.abs(bestVerified.residual),
+        reason: `直线虽与曲线在 x = ${formatNumber(bestVerified.x)} 接触，但该点不可导或缺少支持的符号导数：${diffVerdict.reason}`
       }
     }
-    return { tangent: true, parameter: best.x, residual: Math.abs(best.residual), reason: `在 x = ${formatNumber(best.x)} 处直线与曲线相切（偏差 ${best.residual.toPrecision(3)}）。` }
+    return { tangent: true, parameter: bestVerified.x, residual: Math.abs(bestVerified.residual), reason: `在 x = ${formatNumber(bestVerified.x)} 处直线与曲线相切（偏差 ${bestVerified.residual.toPrecision(3)}）。` }
   }
+  // No tangent contact found: report residual from matching-slope candidates (derivZeros), falling back to domain/valueZeros only when slope never matches.
+  const residualCandidates = derivZeros.length > 0 ? derivZeros : [...valueZeros, ...domain]
+  let best: { x: number; residual: number } | null = null
+  for (const candidate of residualCandidates) {
+    const value = gap(candidate)
+    if (!Number.isFinite(value)) continue
+    if (best === null || Math.abs(value) < Math.abs(best.residual)) {
+      best = { x: candidate, residual: value }
+    }
+  }
+  if (best === null) return { tangent: false, parameter: null, residual: Number.NaN, reason: "曲线在这段定义域上取不到有限值，判不了相切。" }
   return {
     tangent: false,
     parameter: null,

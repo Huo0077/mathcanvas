@@ -192,7 +192,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   center: "point", vertex: "point",
   origin: "vector", baseCenter: "vector", size: "vector", vector: "vector",
   // 数组族
-  points: "pointList", basePolygon: "vectorList", vertices: "vertexList", faces: "faceRings",
+  points: "pointList", excludedPoints: "pointList", basePolygon: "vectorList", vertices: "vertexList", faces: "faceRings",
   vertexNames: "stringList",
   // 折（2026-10-11）：被带走的那个点名，以及它折后叫什么 —— 都是点名。
   apex: "string", apexAs: "string",
@@ -364,7 +364,7 @@ export const ACTIONS = {
    * **半轴与焦准距不是** —— 猜错就等于换了题目里的一条曲线。
    */
   "planar.create_conic": {
-    inputFields: ["alias", "kind", "center", "radiusX", "radiusY", "vertex", "focalParameter", "axis", "rotation", "label"],
+    inputFields: ["alias", "kind", "center", "radiusX", "radiusY", "vertex", "focalParameter", "axis", "rotation", "excludedPoints", "label"],
     requiresAlias: true,
     rawFieldTypes: {},
     enumValues: { kind: CONIC_KINDS },

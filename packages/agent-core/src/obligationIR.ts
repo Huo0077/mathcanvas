@@ -83,7 +83,9 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** 2026-11-01：实体标量尺寸、球心与棱柱形状，由核验器从最终图元自己算。 */
   "solidDimension", "solidCenter", "solidPrismShape",
   /** T04（2026-11-16）：圆锥曲线参数定义域约束（如 `a>b>0` / `m>0`），对照drawn圆锥曲线半轴大小检验。 */
-  "parameterDomain"
+  "parameterDomain",
+  "collinear",
+  "pointLineCoord"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -124,7 +126,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "solidCenter") return { kind: "absolute", value: distanceTolerance(1) }
   if (kind === "solidPrismShape") return { kind: "absolute", value: 1e-9 }
   if (kind === "fixedLength") return { kind: "absolute", value: distanceTolerance(value ?? 1) }
-  if (kind === "pointCoordinate") return { kind: "absolute", value: distanceTolerance(1) }
+  if (kind === "pointCoordinate" || kind === "collinear" || kind === "pointLineCoord") return { kind: "absolute", value: distanceTolerance(1) }
   // 半轴是长度量 ⇒ 与点坐标同一条绝对容差；用相对容差会让"半轴差 0.3"这种明显错误通过。
   if (kind === "conicAxes") return { kind: "absolute", value: distanceTolerance(1) }
   // 切线的判据落在"横坐标差"与"斜率差"上，两个都是绝对量。
@@ -159,6 +161,7 @@ function claimOf(
     ...(item.conic === undefined ? {} : { conic: { ...item.conic } }),
     ...(item.conicKind === undefined ? {} : { conicKind: item.conicKind }),
     ...(item.line === undefined ? {} : { line: { ...item.line } }),
+    ...(item.axisAlignment === undefined ? {} : { axisAlignment: item.axisAlignment }),
     ...(item.expectation === undefined ? {} : { expectation: item.expectation }),
     ...(item.splitPoint === undefined ? {} : { splitPoint: item.splitPoint }),
     ...(item.chainIndex === undefined ? {} : { chainIndex: item.chainIndex }),
@@ -466,6 +469,7 @@ function toLegacyObligation(item: GeometryObligation): DiagramObligation {
     ...(item.geometry?.conic === undefined ? {} : { conic: { ...item.geometry.conic } }),
     ...(item.geometry?.conicKind === undefined ? {} : { conicKind: item.geometry.conicKind }),
     ...(item.geometry?.line === undefined ? {} : { line: { ...item.geometry.line } }),
+    ...(item.geometry?.axisAlignment === undefined ? {} : { axisAlignment: item.geometry.axisAlignment }),
     ...(item.geometry?.expectation === undefined ? {} : { expectation: item.geometry.expectation }),
     ...(item.geometry?.splitPoint === undefined ? {} : { splitPoint: item.geometry.splitPoint }),
     ...(item.geometry?.chainIndex === undefined ? {} : { chainIndex: item.geometry.chainIndex }),

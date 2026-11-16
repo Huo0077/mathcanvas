@@ -134,7 +134,10 @@ export interface StartRequest {
    */
   promptVersion?: string
   /** 用户在预览里点了确认；没有它协调器不会尝试提交。 */
+  /** 用户在预览里点了确认；没有它协调器不会尝试提交。 */
   confirmed?: boolean
+  /** Selected subquestion/scope id (`subquestion:2`, `shared`, etc.) for scoped obligation checks. */
+  selectedScopeId?: string
 }
 
 export interface AgentCoordinator {
@@ -681,7 +684,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }) })
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult

@@ -548,7 +548,9 @@ function selectConicForObligation(
     ? item.conic?.kind
     : item.kind === "pointOnConic"
       ? item.conicKind
-      : item.symbolicConic?.kind
+      : item.kind === "parameterDomain"
+        ? item.domain?.conicKind ?? item.symbolicConic?.kind
+        : item.symbolicConic?.kind
   const hasCircleAction = plan.kind === "plan" && plan.actions.some((action) => action.actionId === "planar.create_circle")
   const hasExplicitBinding = ref !== undefined && options.entityBindings?.[ref] !== undefined
 
@@ -2340,6 +2342,51 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * 是同一份数据，"只满足正弦定理而不核面积的图是错误图"（调研 §2.1）就永远抓不到。
    * 三点共线时面积是 0：那是**合法读数**（不是"算不出"），所以照实返回。
    */
+  if (item.kind === "collinear") {
+    if (item.coordinate !== undefined) {
+      if (vertices.length !== 2) return null
+      const [first, second] = vertices as Vector3[]
+      const anchor: Vector3 = { x: item.coordinate.x, y: item.coordinate.y, z: item.coordinate.z ?? 0 }
+      const ab = subtractVector3(second!, first!)
+      const ac = subtractVector3(anchor, first!)
+      const acLen = lengthVector3(ac)
+      const abLen = lengthVector3(ab)
+      const span = Math.max(1, abLen, acLen)
+      if (!(abLen > 1e-12)) return null
+      const cross = crossVector3(ab, ac)
+      return { actual: lengthVector3(cross) / abLen, expected: 0, tolerance: distanceTolerance(span) }
+    }
+    if (vertices.length !== 3) return null
+    const [a, b, c] = vertices as Vector3[]
+    const ab = subtractVector3(b!, a!)
+    const ac = subtractVector3(c!, a!)
+    const bc = subtractVector3(c!, b!)
+    const maxEdge = Math.max(lengthVector3(ab), lengthVector3(ac), lengthVector3(bc))
+    if (!(maxEdge > 1e-12)) return null
+    return { actual: lengthVector3(crossVector3(ab, ac)) / maxEdge, expected: 0, tolerance: distanceTolerance(maxEdge) }
+  }
+  if (item.kind === "pointLineCoord") {
+    if (item.axisAlignment === "horizontal" || item.axisAlignment === "vertical") {
+      if (vertices.length !== 2) return null
+      const [first, second] = vertices as Vector3[]
+      const diff = item.axisAlignment === "horizontal" ? Math.abs(first!.y - second!.y) : Math.abs(first!.x - second!.x)
+      return { actual: diff, expected: 0, tolerance: distanceTolerance(Math.max(1, Math.abs(first!.x), Math.abs(first!.y), Math.abs(second!.x), Math.abs(second!.y))) }
+    }
+    if (item.line === undefined || vertices.length === 0) return null
+    let maxErr = 0
+    let scale = 1
+    for (const pt of vertices as Vector3[]) {
+      if (item.line.kind === "vertical") {
+        maxErr = Math.max(maxErr, Math.abs(pt.x - item.line.x))
+        scale = Math.max(scale, Math.abs(pt.x), Math.abs(item.line.x))
+      } else {
+        const perp = Math.abs(item.line.slope * pt.x - pt.y + item.line.intercept) / Math.hypot(item.line.slope, 1)
+        maxErr = Math.max(maxErr, perp)
+        scale = Math.max(scale, Math.abs(pt.x), Math.abs(pt.y))
+      }
+    }
+    return { actual: maxErr, expected: 0, tolerance: distanceTolerance(scale) }
+  }
   if (item.kind === "area") {
     if (numeric === undefined) return null
     if (vertices.length !== 3) return null

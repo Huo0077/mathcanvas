@@ -6,8 +6,8 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)、[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)、[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)、[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`T01` 终审（R4）、`T15` 及 Task 2 生产完整数学证书全链已落盘通过；G3-Math **尚未退出**，正继续推进。
-2. 下一步按 `2026-11-16-g3-completion-plan.md` 立即执行：Task3 平面 18 题确定性构造/核验 → Task4 立体/折叠 18 题及 G3-Math 36/36 → Task6（`T16` 浏览器/桌面完整交互生命周期与 DeepSeek 实测）→ Task7 G3 总验收。
+1. 先读[当前状态](current-status.md)、[Task 3 平面 18 题证据](audit/2026-11-17-g3-planar-18/README.md)、[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)、[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)、[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`T01` 终审（R4）、`T15`、Task 2 证书全链及 Task 3 平面 18 题（`18/18`）已通过；G3-Math **尚未退出**，正继续推进 Task 4。
+2. 下一步按 `2026-11-16-g3-completion-plan.md` 立即执行：Task4 立体/折叠 18 题及 G3-Math 36/36 → Task6（`T16` 浏览器/桌面完整交互生命周期与 DeepSeek 实测）→ Task7 G3 总验收。
 3. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
 4. 仅用户本次明确授权的保存 DeepSeek 可进行真实评测；其他付费 provider、P8、安装包/冷机与正式发布不在本 goal 内。实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。
 

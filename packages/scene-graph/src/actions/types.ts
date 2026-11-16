@@ -523,6 +523,7 @@ export interface PlanarCreateConicAction extends ActionBase {
     focalParameter?: number
     axis?: "x" | "y"
     rotation?: number
+    excludedPoints?: { x: number; y: number }[]
     label?: string
   }
 }

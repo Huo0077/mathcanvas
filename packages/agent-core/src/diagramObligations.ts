@@ -1,5 +1,7 @@
 import {
   canonicalPointName,
+  evaluateExpressionWithDomain,
+  fitOriginConicThroughPoints,
   parseRelationConstraint,
   parseSymbolicConicEquation,
   POINT_NAME_SOURCE,
@@ -182,6 +184,8 @@ export type DiagramObligationKind =
   /** T04：参数定义域不等式（如 `a>b>0` / `m>0`）与欠定符号圆锥曲线。 */
   | "parameterDomain"
   | "symbolicConic"
+  | "collinear"
+  | "pointLineCoord"
 
 /**
  * 题面写下的**直线**（用于 `conicChord`）。
@@ -236,6 +240,7 @@ export interface DiagramObligation {
   conicKind?: "ellipse" | "hyperbola" | "parabola" | "circle"
   /** `conicChord` 专用：题面写下的那条直线。 */
   line?: DiagramStatedLine
+  axisAlignment?: "horizontal" | "vertical"
   /** `conicChord` 专用：题面声称的交点情形（**代数重数**那一套，与 `intersectLineWithConic` 的档位同名）。 */
   expectation?: "secant" | "tangent" | "single" | "none"
   /** 题面写下的函数表达式（**已规范化**：上标转 `^`、隐式乘号补 `*`）。 */
@@ -271,6 +276,7 @@ export interface DiagramObligation {
     operators: string[]
     variables: string[]
     entityLabel?: string
+    conicKind?: "ellipse" | "hyperbola"
   }
   symbolicConic?: {
     kind: "ellipse" | "hyperbola"
@@ -313,7 +319,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint" | "chainIndex" | "entityLabel" | "domain" | "symbolicConic">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "axisAlignment" | "expectation" | "expression" | "expressions" | "splitPoint" | "chainIndex" | "entityLabel" | "domain" | "symbolicConic">
 
 interface Matcher {
   pattern: RegExp
@@ -493,17 +499,22 @@ const ORIGIN_CENTER = /(?:中心|顶点)[^。；;，,\n]{0,6}?原点/
  * 分式的两端各自求值（分子可以是根号），**整条必须被吃干净** —— `√3/2/2` 这种
  * 不是离心率，宁可返回 `null` 让它落进未核验。
  */
+function signedRadicalOrFraction(raw: string): number | null {
+  const cleaned = raw
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/^\+/, "")
+    .replace(/[−–—]/g, "-")
+    .replace(/(\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)/g, "$1*sqrt($2)")
+    .replace(/√(\d+(?:\.\d+)?)/g, "sqrt($1)")
+  if (cleaned.length === 0 || cleaned.includes("√")) return null
+  const evaled = evaluateExpressionWithDomain(cleaned, {})
+  return evaled.ok && Number.isFinite(evaled.value) ? evaled.value : null
+}
+
 function positiveRadicalOrFraction(raw: string): number | null {
-  const compact = raw.replace(/\s+/g, "")
-  const fraction = /^([0-9.√]+)\/([0-9.]+)$/.exec(compact)
-  const value = fraction === null
-    ? radicalValue(compact)
-    : (() => {
-      const numerator = radicalValue(fraction[1]!)
-      const denominator = Number(fraction[2])
-      return numerator === null || !Number.isFinite(denominator) || denominator <= 0 ? null : numerator / denominator
-    })()
-  return value !== null && Number.isFinite(value) && value > 0 ? value : null
+  const value = signedRadicalOrFraction(raw)
+  return value !== null && value > 0 ? value : null
 }
 
 /** 焦点的那个**非零坐标**（到中心的距离）。`(-2√5, 0)` 与 `(2√5, 0)` 说的是同一个距离。 */
@@ -568,7 +579,7 @@ function resolveSymbolicConics(
     const kindHint = match[1]
     const entityLabel = match[2]
     const sentenceEndMatch = /[。；;\n]/.exec(givenText.slice(eqEnd))
-    const windowEnd = Math.min(givenText.length, eqEnd + Math.min(sentenceEndMatch?.index ?? 180, 180))
+    const windowEnd = Math.min(givenText.length, eqEnd + Math.min(sentenceEndMatch?.index ?? 260, 260))
     const windowText = givenText.slice(eqEnd, windowEnd)
 
     const domainStrings: string[] = []
@@ -648,6 +659,50 @@ function resolveSymbolicConics(
         metricSpans.push([eqEnd + m.index, eqEnd + m.index + m[0].length])
       }
     }
+    const focalSegMatch = /\|\s*F[₁1]\s*F[₂2]\s*\|\s*=\s*([0-9.√]+(?:\s*\/\s*[0-9.]+)?)/.exec(windowText)
+    if (focalSegMatch !== null) {
+      const val = positiveRadicalOrFraction(focalSegMatch[1]!)
+      if (val !== null) {
+        metrics.push({ kind: "focalLength", value: val })
+      }
+    }
+    // Extract passing points in window for symbolic ellipse/hyperbola (JT-P05, JT-P06)
+    const extraSymbolicObls: { obligation: ObligationDraft; start: number; end: number }[] = []
+    const namedOnConicRe = new RegExp(`(${POINT_NAME_SOURCE})\\s*\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)\\s*(?:是|为|在)\\s*(?:(?:椭圆|双曲线|曲线)\\s*)?(?:${entityLabel ?? "[A-Z]"}\\s*)?上(?:一点|的点)?`, "g")
+    for (const pm of windowText.matchAll(namedOnConicRe)) {
+      const xVal = signedRadicalOrFraction(pm[2]!)
+      const yVal = signedRadicalOrFraction(pm[3]!)
+      if (xVal !== null && yVal !== null) {
+        metrics.push({ kind: "pointOnCurve", x: xVal, y: yVal })
+        const absStart = eqEnd + (pm.index ?? 0)
+        const absEnd = absStart + pm[0].length
+        metricSpans.push([absStart, absEnd])
+        const ptLabel = canonicalPointName(pm[1]!)
+        extraSymbolicObls.push({
+          obligation: { kind: "pointOnConic", targets: [ptLabel], conicKind: spec.kind, ...(entityLabel ? { entityLabel } : {}) },
+          start: absStart,
+          end: absEnd
+        })
+        extraSymbolicObls.push({
+          obligation: { kind: "pointCoordinate", targets: [ptLabel], coordinate: { x: xVal, y: yVal, z: 0 } },
+          start: absStart,
+          end: absEnd
+        })
+      }
+    }
+    const anonPassRe = /(?:过|经过)\s*(?:点\s*)?\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)(?:\s*(?:和|与)\s*(?:点\s*)?\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\))?/g
+    for (const pm of windowText.matchAll(anonPassRe)) {
+      const x1 = signedRadicalOrFraction(pm[1]!)
+      const y1 = signedRadicalOrFraction(pm[2]!)
+      if (x1 !== null && y1 !== null) metrics.push({ kind: "pointOnCurve", x: x1, y: y1 })
+      if (pm[3] !== undefined && pm[4] !== undefined) {
+        const x2 = signedRadicalOrFraction(pm[3]!)
+        const y2 = signedRadicalOrFraction(pm[4]!)
+        if (x2 !== null && y2 !== null) metrics.push({ kind: "pointOnCurve", x: x2, y: y2 })
+      }
+      const absStart = eqEnd + (pm.index ?? 0)
+      metricSpans.push([absStart, absStart + pm[0].length])
+    }
 
     const tangentCircleMatch = /渐近线[^。；;\n]{0,40}?圆\s*(?:[A-Z]\s*[：:]\s*)?(x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)([^=，。；;\n]*)=\s*(-?\d+(?:\.\d+)?))[^，。；;\n]{0,16}?相切/.exec(windowText)
     if (tangentCircleMatch !== null) {
@@ -697,7 +752,8 @@ function resolveSymbolicConics(
           expression: domainSpan.text,
           operators: domainSpan.operators,
           variables: domainSpan.variables,
-          ...(entityLabel === undefined ? {} : { entityLabel })
+          ...(entityLabel === undefined ? {} : { entityLabel }),
+          conicKind: spec.kind
         }
       })
     }
@@ -722,6 +778,14 @@ function resolveSymbolicConics(
           ...(resolution.independentCheck.tangencyPoints ? { tangencyPoints: resolution.independentCheck.tangencyPoints } : {})
         }
       })
+      for (const extra of extraSymbolicObls) {
+        givens.push({
+          ...extra.obligation,
+          sourceText: givenText.slice(extra.start, extra.end),
+          start: extra.start,
+          end: extra.end
+        })
+      }
     } else {
       givens.push({
         kind: "symbolicConic",
@@ -766,8 +830,47 @@ function resolveFocusEccentricity(
      * 那句里参数是方程的注脚，再从参数推一遍会得到**第二条**同义义务。
      */
     if (givens.some((entry) => (entry.kind === "conicAxes" || entry.kind === "symbolicConic") && (entry.start ?? -1) >= start && (entry.start ?? -1) < end)) continue
-    const focus = FOCUS_COORDINATE.exec(window)
+    if (/(?:[xy](?:\^2|²)[^。；\n=]{0,24}[xy](?:\^2|²)[^。；\n=]{0,16}=\s*[-+*/0-9√.]+|(?:y|x)(?:\^2|²)\s*=\s*[-+*/0-9√.]+\s*[xy])/.test(window)) continue
+    const symmetricFociRe = new RegExp(`左[、,]?右焦点(?:分别)?(?:为|是)\\s*(${POINT_NAME_SOURCE})\\s*\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)[，,、]?\\s*(${POINT_NAME_SOURCE})\\s*\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)`)
+    const symFoci = symmetricFociRe.exec(window)
     const eccentricity = ECCENTRICITY_VALUE.exec(window)
+    if (symFoci !== null && eccentricity !== null) {
+      const x1 = signedRadicalOrFraction(symFoci[2]!)
+      const y1 = signedRadicalOrFraction(symFoci[3]!)
+      const x2 = signedRadicalOrFraction(symFoci[5]!)
+      const y2 = signedRadicalOrFraction(symFoci[6]!)
+      const eccVal = positiveRadicalOrFraction(eccentricity[1]!)
+      if (x1 !== null && y1 !== null && x2 !== null && y2 !== null && eccVal !== null
+        && Math.abs(x1 + x2) < 1e-9 && Math.abs(y1 + y2) < 1e-9) {
+        const dist = Math.hypot(x2 - x1, y2 - y1) / 2
+        const axis: "x" | "y" = Math.abs(y1) < 1e-9 ? "x" : "y"
+        const draft = (() => {
+          if (name === "椭圆" && eccVal > 0 && eccVal < 1) {
+            const a = dist / eccVal
+            const b2 = a * a - dist * dist
+            return b2 > 0 ? (axis === "x" ? ellipseAxes(a * a, b2) : ellipseAxes(b2, a * a)) : null
+          }
+          if (name === "双曲线" && eccVal > 1) {
+            const a = dist / eccVal
+            const b2 = dist * dist - a * a
+            return b2 > 0 ? hyperbolaAxes(a * a, b2, axis) : null
+          }
+          return null
+        })()
+        if (draft !== null) {
+          givens.push({ ...draft, sourceText: window.trim(), start, end })
+          const f1Name = canonicalPointName(symFoci[1]!)
+          const f2Name = canonicalPointName(symFoci[4]!)
+          givens.push({ kind: "pointCoordinate", targets: [f1Name], coordinate: { x: x1, y: y1, z: 0 }, sourceText: symFoci[0], start: start + symFoci.index, end: start + symFoci.index + symFoci[0].length })
+          givens.push({ kind: "pointCoordinate", targets: [f2Name], coordinate: { x: x2, y: y2, z: 0 }, sourceText: symFoci[0], start: start + symFoci.index, end: start + symFoci.index + symFoci[0].length })
+          for (const span of [symFoci, eccentricity]) {
+            for (let offset = span.index; offset < span.index + span[0].length; offset += 1) used.add(start + offset)
+          }
+          continue
+        }
+      }
+    }
+    const focus = FOCUS_COORDINATE.exec(window)
     if (focus === null && eccentricity === null) continue
     const report = (reason: string): void => {
       unverified.push({ sourceText: window.trim(), reason })
@@ -1508,9 +1611,9 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 而是由核验器**自己对该函数数值求导**再比。详见 `diagramVerification` 的 `tangentAt` 分支。
    */
   {
-    pattern: /(?:(?<![A-Za-z0-9_])[fgh]\s*\(\s*x\s*\)\s*(?:在|的)\s*)?x\s*=\s*(-?\d+(?:\.\d+)?)\s*处[^，,。；;\n]{0,4}的?切线/g,
+    pattern: /(?:(?:(?<![A-Za-z0-9_])[fgh]\s*\(\s*x\s*\)\s*(?:在|的)\s*)?x\s*=\s*(-?\d+(?:\.\d+)?)\s*处[^，,。；;\n]{0,4}的?切线|在点\s*\(\s*(-?\d+(?:\.\d+)?)\s*,\s*[fgh]\s*\(\s*-?\d+(?:\.\d+)?\s*\)\s*\)\s*处的?切线)/g,
     read: (m) => {
-      const x = Number(m[1])
+      const x = Number(m[1] ?? m[2])
       return Number.isFinite(x) ? { kind: "tangentAt", targets: [], value: x } : null
     }
   },
@@ -1898,9 +2001,9 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * **不收**代数式 `S△ABC=6` —— 那是另一种记号，硬塞进同一个正则会把
      * "读不懂"变成"读错"，而读错比读不懂更贵（用户看不到自己被误解了）。
      */
-    pattern: /(?:△\s*)?(?:三角形\s*)?([A-Z]{3})\s*的面积\s*(?:为|是|=|：|:)\s*(-?\d+(?:\.\d+)?)/g,
+    pattern: new RegExp(`(?:△\\s*)?(?:三角形\\s*)?([A-Z]{3})\\s*的面积\\s*(?:为|是|=|：|:)\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
     read: (m) => {
-      const value = finitePositive(m[2])
+      const value = radicalValue(m[2])
       if (value === null) return null
       return { kind: "area", targets: names(m[1]), value }
     }
@@ -2566,11 +2669,446 @@ function resolveDirectedVectorRatios(
   }
 }
 
+function parseSimple2DLineEquation(raw: string): DiagramStatedLine | null {
+  const eq = raw.replace(/\s+/g, "").replace(/[−–]/g, "-")
+  if (eq.startsWith("x=")) {
+    const xVal = signedRadicalOrFraction(eq.slice(2))
+    return xVal === null ? null : { kind: "vertical", x: xVal }
+  }
+  if (eq.startsWith("y=")) {
+    const rhs = eq.slice(2)
+    const constOnly = signedRadicalOrFraction(rhs)
+    if (constOnly !== null) return { kind: "slope", slope: 0, intercept: constOnly }
+    const m = /^([+-]?\d*(?:\.\d+)?(?:\*?[x])?)([+-].+)?$/.exec(rhs)
+    const lin = /^([+-]?(?:\d+(?:\.\d+)?(?:\/\d+)?)?)?\*?x([+-].+)?$/.exec(rhs)
+    if (lin) {
+      const rawSlope = lin[1]
+      const slope = rawSlope === undefined || rawSlope === "" || rawSlope === "+"
+        ? 1
+        : rawSlope === "-"
+          ? -1
+          : signedRadicalOrFraction(rawSlope)
+      const intercept = lin[2] ? signedRadicalOrFraction(lin[2]) : 0
+      if (slope !== null && intercept !== null) return { kind: "slope", slope, intercept }
+    }
+    void m
+  }
+  return null
+}
+
+function resolvePlanarConstructions(
+  givens: DiagramObligation[],
+  givenText: string,
+  used: Set<number>
+): void {
+  const pushUsed = (start: number, end: number, items: ObligationDraft[]): void => {
+    for (let at = start; at < end; at += 1) used.add(at)
+    const sourceText = givenText.slice(start, end)
+    for (const draft of items) givens.push({ ...draft, sourceText, start, end })
+  }
+  const hasOverlap = (start: number, end: number): boolean => {
+    for (let at = start; at < end; at += 1) if (used.has(at)) return true
+    return false
+  }
+
+  // 4. Implicit parabola from l: x=c0, OP ⊥ OQ + tangent circle M(mx, my) (GK-P05) — run before origin convention so "顶点为坐标原点 O" isn't pre-consumed!
+  const implicitPara = /抛物线\s*(?:([A-Z])\s*)?的顶点为坐标原点\s*([A-Z])[^；\n]{0,40}?焦点在\s*x\s*轴上[^；\n]{0,60}?直线\s*(?:[a-z]\s*[：:]\s*)?(x\s*=\s*[-+*/0-9.\s]+)\s*交\s*[A-Z]\s*于\s*([A-Z])\s*[，,、]\s*([A-Z])\s*两点[^；\n]{0,60}?([A-Z]{2})\s*⊥\s*([A-Z]{2})/g
+  for (const m of givenText.matchAll(implicitPara)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const line = parseSimple2DLineEquation(m[3]!)
+    if (line?.kind !== "vertical" || !(line.x > 0)) continue
+    const twoP = line.x
+    const p1 = m[4]!
+    const p2 = m[5]!
+    pushUsed(start, end, [
+      { kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: twoP / 2, axis: "x" }, ...(m[1] ? { entityLabel: m[1] } : {}) },
+      { kind: "pointCoordinate", targets: [m[2]!], coordinate: { x: 0, y: 0, z: 0 } },
+      { kind: "conicChord", targets: [p1, p2], line, expectation: "secant" },
+      { kind: "pointLineCoord", targets: [p1, p2], line },
+      { kind: "perpendicular", targets: [...names(m[6]!), ...names(m[7]!)] }
+    ])
+    const afterCircle = givenText.slice(end, Math.min(givenText.length, end + 90))
+    const tangCircle = /已知点\s*([A-Z])\s*\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)\s*[，,]\s*且\s*(?:[⊙○]|\\odot)\s*\1\s*与\s*[a-z]\s*相切/.exec(afterCircle)
+    if (tangCircle) {
+      const mx = signedRadicalOrFraction(tangCircle[2]!)
+      const my = signedRadicalOrFraction(tangCircle[3]!)
+      if (mx !== null && my !== null && Math.abs(mx - line.x) > 1e-9) {
+        const tcStart = end + tangCircle.index
+        pushUsed(tcStart, tcStart + tangCircle[0].length, [
+          { kind: "conicAxes", targets: [], conic: { kind: "circle", centerX: mx, centerY: my, radius: Math.abs(mx - line.x) }, entityLabel: tangCircle[1]! },
+          { kind: "pointCoordinate", targets: [tangCircle[1]!], coordinate: { x: mx, y: my, z: 0 } }
+        ])
+      }
+    }
+  }
+
+  // 1. Origin convention: O为坐标原点 / 顶点为坐标原点 O
+  for (const m of givenText.matchAll(/(?:顶点|中心)?为坐标原点\s*([A-Z])|([A-Z])\s*(?:为|是)坐标原点/g)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    const pt = m[1] ?? m[2]
+    if (!pt || hasOverlap(start, end)) continue
+    pushUsed(start, end, [{ kind: "pointCoordinate", targets: [pt], coordinate: { x: 0, y: 0, z: 0 } }])
+  }
+
+  // 2. Origin conic through two explicit named points (GK-P02, JT-P07)
+  const originTwoPtRe = /(?:(?:中心为坐标原点|对称轴(?:都在|为)坐标轴)[^。；\n]{0,40}?)?(椭圆|双曲线)(?:\s*([A-Z]))?[^。；\n]{0,40}?(?:过|经过)\s*(?:点\s*)?([A-Z])\s*\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)\s*[，,、和与]+\s*(?:点\s*)?([A-Z])\s*\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)(?:\s*两点)?/g
+  for (const m of givenText.matchAll(originTwoPtRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const x1 = signedRadicalOrFraction(m[4]!)
+    const y1 = signedRadicalOrFraction(m[5]!)
+    const x2 = signedRadicalOrFraction(m[7]!)
+    const y2 = signedRadicalOrFraction(m[8]!)
+    if (x1 === null || y1 === null || x2 === null || y2 === null) continue
+    const expectedKind = m[1] === "双曲线" ? "hyperbola" : "ellipse"
+    const fitted = fitOriginConicThroughPoints([{ x: x1, y: y1 }, { x: x2, y: y2 }], undefined, expectedKind)
+    if (!fitted) continue
+    const labelA = m[3]!
+    const labelB = m[6]!
+    const entityLabel = m[2]
+    const conicDraft: ObligationDraft = fitted.kind === "ellipse"
+      ? { kind: "conicAxes", targets: [], conic: { kind: "ellipse", radiusX: fitted.radiusX, radiusY: fitted.radiusY }, ...(entityLabel ? { entityLabel } : {}) }
+      : { kind: "conicAxes", targets: [], conic: { kind: "hyperbola", radiusX: fitted.radiusX, radiusY: fitted.radiusY, axis: fitted.axis }, ...(entityLabel ? { entityLabel } : {}) }
+    pushUsed(start, end, [
+      conicDraft,
+      { kind: "pointCoordinate", targets: [labelA], coordinate: { x: x1, y: y1, z: 0 } },
+      { kind: "pointCoordinate", targets: [labelB], coordinate: { x: x2, y: y2, z: 0 } },
+      { kind: "pointOnConic", targets: [labelA], conicKind: fitted.kind, ...(entityLabel ? { entityLabel } : {}) },
+      { kind: "pointOnConic", targets: [labelB], conicKind: fitted.kind, ...(entityLabel ? { entityLabel } : {}) }
+    ])
+  }
+
+  // 3. Symbolic parabola y²=2px / x²=2py solved by window condition (GK-P03, GK-P07, JT-P04)
+  for (const m of givenText.matchAll(/抛物线\s*(?:([A-ZΓ])\s*[：:]\s*)?(y²\s*=\s*2\s*p\s*x|x²\s*=\s*2\s*p\s*y)\s*(?:[（(]\s*p\s*>\s*0\s*[)）])?/g)) {
+    const start = m.index ?? 0
+    const eqEnd = start + m[0].length
+    if (hasOverlap(start, eqEnd)) continue
+    const rawEntity = m[1]
+    const entityLabel = rawEntity && /^[A-Z]$/.test(rawEntity) ? rawEntity : undefined
+    const axis: "x" | "y" = m[2]!.startsWith("y²") ? "x" : "y"
+    const sentenceStart = Math.max(0, givenText.lastIndexOf("。", start) + 1)
+    const sentenceEndRaw = givenText.indexOf("。", eqEnd)
+    const sentenceEnd = sentenceEndRaw < 0 ? givenText.length : sentenceEndRaw
+    const sentence = givenText.slice(sentenceStart, sentenceEnd)
+
+    // Case 3a: point M(x0, y0) in sentence lies on parabola (JT-P04)
+    const ptMatch = /([A-Z])\s*\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)\s*(?:在|是|为)\s*抛物线/.exec(sentence)
+    if (ptMatch) {
+      const x0 = signedRadicalOrFraction(ptMatch[2]!)
+      const y0 = signedRadicalOrFraction(ptMatch[3]!)
+      if (x0 !== null && y0 !== null) {
+        const twoP = axis === "x" ? (y0 * y0) / x0 : (x0 * x0) / y0
+        if (Number.isFinite(twoP) && twoP > 0) {
+          pushUsed(start, eqEnd, [{ kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: twoP / 2, axis }, ...(entityLabel ? { entityLabel } : {}) }])
+          const pmStart = sentenceStart + ptMatch.index
+          pushUsed(pmStart, pmStart + ptMatch[0].length, [
+            { kind: "pointCoordinate", targets: [ptMatch[1]!], coordinate: { x: x0, y: y0, z: 0 } },
+            { kind: "pointOnConic", targets: [ptMatch[1]!], conicKind: "parabola", ...(entityLabel ? { entityLabel } : {}) }
+          ])
+          continue
+        }
+      }
+    }
+
+    // Case 3b: 当直线 MD 垂直于 x 轴时, |MF|=d with D(p, 0) (GK-P03)
+    const vertChord = /点\s*([A-Z])\s*\(\s*p\s*,\s*0\s*\)[^；\n]{0,120}?当直线\s*([A-Z]{2})\s*垂直于\s*x\s*轴时\s*[，,]\s*\|\s*([A-Z]{2})\s*\|\s*=\s*([0-9√/]+(?:\.[0-9]+)*)/.exec(givenText.slice(start, Math.min(givenText.length, eqEnd + 160)))
+    const focusLbl = /焦点为\s*([A-Z])/.exec(sentence)?.[1]
+    if (vertChord) {
+      const d = positiveRadicalOrFraction(vertChord[4]!)
+      if (d !== null) {
+        const p = (2 * d) / 3
+        pushUsed(start, eqEnd, [{ kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: p, axis }, ...(entityLabel ? { entityLabel } : {}) }])
+        const vcStart = start + vertChord.index
+        const extraItems: ObligationDraft[] = [
+          { kind: "pointCoordinate", targets: [vertChord[1]!], coordinate: { x: p, y: 0, z: 0 } }
+        ]
+        if (focusLbl) extraItems.push({ kind: "pointCoordinate", targets: [focusLbl], coordinate: { x: p / 2, y: 0, z: 0 } })
+        pushUsed(vcStart, vcStart + vertChord[0].length, extraItems)
+        continue
+      }
+    }
+
+    // Case 3c: Focus F minimum distance to circle M (GK-P07)
+    const minWindow = givenText.slice(start, Math.min(givenText.length, eqEnd + 160))
+    const minCircle = /焦点为\s*([A-Z])[^；\n]*?与圆\s*([A-Z])\s*[：:]\s*x²\s*\+\s*\(\s*y\s*([+-]\s*[^()]+)\s*\)²\s*=\s*([0-9√/]+(?:\.[0-9]+)*)[^；\n]*?距离的最小值为\s*([0-9√/]+(?:\.[0-9]+)*)/.exec(minWindow)
+    if (minCircle) {
+      const yShift = signedRadicalOrFraction(minCircle[3]!)
+      const rSq = positiveRadicalOrFraction(minCircle[4]!)
+      const dMin = positiveRadicalOrFraction(minCircle[5]!)
+      if (yShift !== null && rSq !== null && dMin !== null) {
+        const cy = -yShift
+        const r = Math.sqrt(rSq)
+        const p = 2 * (dMin + r + cy)
+        if (Number.isFinite(p) && p > 0) {
+          pushUsed(start, eqEnd, [{ kind: "conicAxes", targets: [], conic: { kind: "parabola", focalParameter: p, axis: "y" }, ...(entityLabel ? { entityLabel } : {}) }])
+          const mcStart = start + minCircle.index
+          pushUsed(mcStart, mcStart + minCircle[0].length, [
+            { kind: "conicAxes", targets: [], conic: { kind: "circle", centerX: 0, centerY: cy, radius: r }, entityLabel: minCircle[2]! },
+            { kind: "pointCoordinate", targets: [minCircle[1]!], coordinate: { x: 0, y: p / 2, z: 0 } }
+          ])
+          continue
+        }
+      }
+    }
+  }
+
+  // 6l. Circle E centered at (cx, cy) tangent to chord AB at midpoint M (GK-P06) — run before explicitPtRe so E(...) isn't pre-consumed!
+  const circleMidRe = /以\s*([A-Z])\s*\(\s*([^(),\n]+?)\s*,\s*([^()\n]+?)\s*\)\s*为圆心的圆与直线\s*([A-Z]{2})\s*相切[，,]?\s*且切点为线段\s*\4\s*的中点/g
+  for (const m of givenText.matchAll(circleMidRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const cx = signedRadicalOrFraction(m[2]!)
+    const cy = signedRadicalOrFraction(m[3]!)
+    const seg = names(m[4]!)
+    if (cx !== null && cy !== null && seg.length === 2) {
+      pushUsed(start, end, [
+        { kind: "pointCoordinate", targets: [m[1]!], coordinate: { x: cx, y: cy, z: 0 } },
+        { kind: "perpendicular", targets: [m[1]!, "M", seg[0]!, seg[1]!] },
+        { kind: "midpoint", targets: ["M", seg[0]!, seg[1]!] }
+      ])
+    }
+  }
+
+  // 5. Explicit 2D point coordinate literals (e.g. P(1,-2), C(0,-1), A(0,√3), E(0,5/2), M(0,1), O(0,0))
+  const explicitPtRe = new RegExp(`(?<!(?:线|向量))(${POINT_NAME_SOURCE})\\s*\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)`, "g")
+  for (const m of givenText.matchAll(explicitPtRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const label = canonicalPointName(m[1]!)
+    if (!/^[A-Z]/.test(label)) continue
+    const x = signedRadicalOrFraction(m[2]!)
+    const y = signedRadicalOrFraction(m[3]!)
+    if (x === null || y === null) continue
+    pushUsed(start, end, [{ kind: "pointCoordinate", targets: [label], coordinate: { x, y, z: 0 } }])
+  }
+
+  // 6. Named-line / point secants & intersections (planar geometry clauses)
+  // 6a. Pair of lines OA, OB / BP, BQ meeting line l: y=x+1 or x=3 at D, E (JT-P03, JT-P07)
+  const pairLineInterRe = new RegExp(`直线\\s*(${SEGMENT_NAME})\\s*[，,、]\\s*(?:直线\\s*)?(${SEGMENT_NAME})\\s*分别(?:与|交)\\s*直线(?:\\s*[a-z]\\s*[：:])?\\s*(x\\s*=\\s*[^，。,；\\s]+|y\\s*=\\s*[^，。,；\\s]+)\\s*(?:相?交)?于点?\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})`, "g")
+  for (const m of givenText.matchAll(pairLineInterRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const l1 = names(m[1]!)
+    const l2 = names(m[2]!)
+    const line = parseSimple2DLineEquation(m[3]!)
+    const o1 = canonicalPointName(m[4]!)
+    const o2 = canonicalPointName(m[5]!)
+    if (l1.length === 2 && l2.length === 2 && line !== null) {
+      pushUsed(start, end, [
+        { kind: "collinear", targets: [l1[0]!, l1[1]!, o1] },
+        { kind: "collinear", targets: [l2[0]!, l2[1]!, o2] },
+        { kind: "pointLineCoord", targets: [o1, o2], line }
+      ])
+    }
+  }
+
+  // 6b. 过点 (x0, y0) 的直线 [l] 与? C 交于 A, B 两点 (GK-P01, JT-P03, JT-P07)
+  const anonChordRe = new RegExp(`过\\s*(?:点\\s*)?\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)\\s*的直线(?:\\s*[a-z])?\\s*(?:与\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:[A-Z]\\s*)?相?交|交\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:[A-Z]\\s*)?)于\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})\\s*两点`, "g")
+  for (const m of givenText.matchAll(anonChordRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const x0 = signedRadicalOrFraction(m[1]!)
+    const y0 = signedRadicalOrFraction(m[2]!)
+    if (x0 === null || y0 === null) continue
+    const p1 = canonicalPointName(m[3]!)
+    const p2 = canonicalPointName(m[4]!)
+    pushUsed(start, end, [
+      { kind: "pointOnConic", targets: [p1] },
+      { kind: "pointOnConic", targets: [p2] },
+      { kind: "collinear", targets: [p1, p2], coordinate: { x: x0, y: y0, z: 0 } }
+    ])
+  }
+
+  // 6c. 过点 P 的直线交 E 于 M, N / 过 F 且与 PQ 平行的直线交双曲线于 A, B (GK-P02, GK-P03, JT-P05, JT-P08)
+  const ptChordRe = new RegExp(`过\\s*(?:(?:椭圆|双曲线|抛物线)?(?:的)?(?:[左右]焦点)\\s*|(?:点\\s*))?(${POINT_NAME_SOURCE})(?:\\s*且与\\s*(${SEGMENT_NAME})\\s*平行)?\\s*的直线(?:与\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:([A-Z])\\s*)?相?交|交\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:([A-Z])\\s*)?)于\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})\\s*两点`, "g")
+  for (const m of givenText.matchAll(ptChordRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const anchor = canonicalPointName(m[1]!)
+    const parSeg = m[2] ? names(m[2]) : null
+    const entityLabel = m[3] ?? m[4]
+    const p1 = canonicalPointName(m[5]!)
+    const p2 = canonicalPointName(m[6]!)
+    const items: ObligationDraft[] = [
+      { kind: "pointOnConic", targets: [p1], ...(entityLabel ? { entityLabel } : {}) },
+      { kind: "pointOnConic", targets: [p2], ...(entityLabel ? { entityLabel } : {}) },
+      { kind: "collinear", targets: [anchor, p1, p2] }
+    ]
+    if (parSeg && parSeg.length === 2) {
+      items.push({ kind: "parallel", targets: [p1, p2, parSeg[0]!, parSeg[1]!] })
+    }
+    pushUsed(start, end, items)
+  }
+
+  // 6d. 直线 MD, ND 与 C 的另一个交点分别为 A, B (GK-P03)
+  const secondInterRe = /设?直线\s*([A-Z])([A-Z])\s*[，,、]\s*([A-Z])([A-Z])\s*与\s*([A-Z])\s*的另一个交点分别为\s*([A-Z])\s*[，,、]\s*([A-Z])/g
+  for (const m of givenText.matchAll(secondInterRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    pushUsed(start, end, [
+      { kind: "pointOnConic", targets: [m[6]!], entityLabel: m[5]! },
+      { kind: "pointOnConic", targets: [m[7]!], entityLabel: m[5]! },
+      { kind: "collinear", targets: [m[1]!, m[2]!, m[6]!] },
+      { kind: "collinear", targets: [m[3]!, m[4]!, m[7]!] }
+    ])
+  }
+
+  // 6e. 直线 PA₁ 与 PA₂ 与双曲线分别交于 M, N 两点 (JT-P02)
+  const twoSecantsRe = new RegExp(`直线\\s*(${SEGMENT_NAME})\\s*(?:与|和)\\s*(?:直线\\s*)?(${SEGMENT_NAME})\\s*与?(椭圆|双曲线|抛物线|[A-Z])\\s*分别交于\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})\\s*两点`, "g")
+  for (const m of givenText.matchAll(twoSecantsRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const s1 = names(m[1]!)
+    const s2 = names(m[2]!)
+    const p1 = canonicalPointName(m[4]!)
+    const p2 = canonicalPointName(m[5]!)
+    const conicKind = m[3] === "椭圆" ? "ellipse" : m[3] === "双曲线" ? "hyperbola" : m[3] === "抛物线" ? "parabola" : undefined
+    if (s1.length === 2 && s2.length === 2) {
+      pushUsed(start, end, [
+        { kind: "pointOnConic", targets: [p1], ...(conicKind ? { conicKind } : {}) },
+        { kind: "pointOnConic", targets: [p2], ...(conicKind ? { conicKind } : {}) },
+        { kind: "collinear", targets: [s1[0]!, s1[1]!, p1] },
+        { kind: "collinear", targets: [s2[0]!, s2[1]!, p2] }
+      ])
+    }
+  }
+
+  // 6f. Horizontal line through M meeting segment AB at T (GK-P02)
+  const horizSegRe = /过\s*([A-Z])\s*且平行于\s*x\s*轴的直线与线段\s*([A-Z])([A-Z])\s*交于\s*点?\s*([A-Z])/g
+  for (const m of givenText.matchAll(horizSegRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    pushUsed(start, end, [
+      { kind: "pointLineCoord", targets: [m[1]!, m[4]!], axisAlignment: "horizontal" },
+      { kind: "pointOnSegment", targets: [m[4]!, m[2]!, m[3]!] }
+    ])
+  }
+
+  // 6g. Point on fixed horizontal/vertical line (GK-P06 D on y=-1/2, JT-P02 P on x=-1)
+  const ptOnFixedLineRe = /点?\s*([A-Z])\s*(?:为|在)(?:定)?直线\s*(x\s*=\s*[-+*/0-9.\s]+|y\s*=\s*[-+*/0-9.\s]+)\s*上(?:的?动?点|运动)?/g
+  for (const m of givenText.matchAll(ptOnFixedLineRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const line = parseSimple2DLineEquation(m[2]!)
+    if (!line) continue
+    pushUsed(start, end, [{ kind: "pointLineCoord", targets: [m[1]!], line }])
+  }
+
+  // 6h. Two tangents from D/P to C with touch points A, B (GK-P06, GK-P07, JT-P04)
+  const twoTangentsRe = /过(?:动点|点)?\s*([A-Z])\s*作\s*([A-Z]|抛物线|椭圆|双曲线)?\s*的两条切线[，,]?\s*切点分别为\s*([A-Z])\s*[，,、]\s*([A-Z])|([A-Z])\s*([A-Z])?\s*[，,、]\s*([A-Z])\s*([A-Z])?\s*是\s*([A-Z])\s*的两条切线[，,]?\s*([A-Z])\s*[，,、]\s*([A-Z])\s*是切点/g
+  for (const m of givenText.matchAll(twoTangentsRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const entityHint = m[2] ?? m[9]
+    const entityLabel = entityHint && /^[A-Z]$/.test(entityHint) ? entityHint : undefined
+    const conicKind = entityHint === "抛物线" ? "parabola" : entityHint === "椭圆" ? "ellipse" : entityHint === "双曲线" ? "hyperbola" : givens.find((g) => g.kind === "conicAxes" && g.conic?.kind !== "circle")?.conic?.kind
+    const a = m[3] ?? m[10]
+    const b = m[4] ?? m[11]
+    if (a && b) {
+      pushUsed(start, end, [
+        { kind: "pointOnConic", targets: [a], ...(conicKind ? { conicKind } : {}), ...(entityLabel ? { entityLabel } : {}) },
+        { kind: "pointOnConic", targets: [b], ...(conicKind ? { conicKind } : {}), ...(entityLabel ? { entityLabel } : {}) }
+      ])
+    }
+  }
+
+  // 6i. Three points on parabola with two tangent chords (GK-P05)
+  const ponceletRe = /设\s*(A[₁1])\s*[，,、]\s*(A[₂2])\s*[，,、]\s*(A[₃3])\s*是\s*([A-Z])\s*上的三个点[，,]\s*直线\s*[A-Z0-9₁₂₃]+\s*[，,、]\s*[A-Z0-9₁₂₃]+\s*均与\s*(?:[⊙○]|\\odot)\s*[A-Z]\s*相切/g
+  for (const m of givenText.matchAll(ponceletRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const a1 = canonicalPointName(m[1]!)
+    const a2 = canonicalPointName(m[2]!)
+    const a3 = canonicalPointName(m[3]!)
+    pushUsed(start, end, [
+      { kind: "pointOnConic", targets: [a1], entityLabel: m[4]! },
+      { kind: "pointOnConic", targets: [a2], entityLabel: m[4]! },
+      { kind: "pointOnConic", targets: [a3], entityLabel: m[4]! }
+    ])
+  }
+
+  // 6j. Directrix feet C, D from A, B (JT-P04)
+  const feetRe = /过\s*([A-Z])\s*[，,、]\s*([A-Z])\s*分别作抛物线准线的垂线[，,]?\s*垂足分别为\s*([A-Z])\s*[，,、]\s*([A-Z])/g
+  for (const m of givenText.matchAll(feetRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const para = givens.find((g) => g.kind === "conicAxes" && g.conic?.kind === "parabola")?.conic
+    const items: ObligationDraft[] = [
+      { kind: "pointLineCoord", targets: [m[1]!, m[3]!], axisAlignment: para?.kind === "parabola" && para.axis === "x" ? "horizontal" : "vertical" },
+      { kind: "pointLineCoord", targets: [m[2]!, m[4]!], axisAlignment: para?.kind === "parabola" && para.axis === "x" ? "horizontal" : "vertical" }
+    ]
+    if (para?.kind === "parabola") {
+      if (para.axis === "y") items.push({ kind: "pointLineCoord", targets: [m[3]!, m[4]!], line: { kind: "slope", slope: 0, intercept: -para.focalParameter / 2 } })
+      else items.push({ kind: "pointLineCoord", targets: [m[3]!, m[4]!], line: { kind: "vertical", x: -para.focalParameter / 2 } })
+    }
+    pushUsed(start, end, items)
+  }
+
+  // 6k. Longest and shortest orthogonal circle chords through interior point O (JT-P09)
+  const circleChordsRe = /过点\s*([A-Z])\s*的最长弦和最短弦分别是\s*([A-Z]{2})\s*和\s*([A-Z]{2})/g
+  for (const m of givenText.matchAll(circleChordsRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const c1 = names(m[2]!)
+    const c2 = names(m[3]!)
+    if (c1.length === 2 && c2.length === 2) {
+      pushUsed(start, end, [
+        { kind: "pointOnConic", targets: [c1[0]!], conicKind: "circle" },
+        { kind: "pointOnConic", targets: [c1[1]!], conicKind: "circle" },
+        { kind: "pointOnConic", targets: [c2[0]!], conicKind: "circle" },
+        { kind: "pointOnConic", targets: [c2[1]!], conicKind: "circle" },
+        { kind: "collinear", targets: [m[1]!, c1[0]!, c1[1]!] },
+        { kind: "collinear", targets: [m[1]!, c2[0]!, c2[1]!] },
+        { kind: "perpendicular", targets: [c1[0]!, c1[1]!, c2[0]!, c2[1]!] }
+      ])
+    }
+  }
+
+  // 6m. Tangency perpendicular-bisector locus property (JT-P01 (3): 且线段 F₁M 的垂直平分线与椭圆 C 恰有一个公共点)
+  const bisectorLocusRe = new RegExp(`且?\\s*线段\\s*(${POINT_NAME_SOURCE})\\s*(${POINT_NAME_SOURCE})\\s*的垂直平分线与(?:椭圆|双曲线|抛物线)?\\s*([A-Z])\\s*恰有一个公共点`, "g")
+  for (const m of givenText.matchAll(bisectorLocusRe)) {
+    const start = m.index ?? 0
+    const end = start + m[0].length
+    if (hasOverlap(start, end)) continue
+    const ellipse = givens.find((g) => g.kind === "conicAxes" && g.conic?.kind === "ellipse")?.conic
+    if (ellipse?.kind === "ellipse") {
+      const a = Math.max(ellipse.radiusX, ellipse.radiusY)
+      const b = Math.min(ellipse.radiusX, ellipse.radiusY)
+      const c = Math.sqrt(Math.max(0, a * a - b * b))
+      const f1Label = canonicalPointName(m[1]!)
+      const locusLabel = canonicalPointName(m[2]!)
+      const f1Coord = givens.find((g) => g.kind === "pointCoordinate" && g.targets[0] === f1Label)?.coordinate
+      const cx = f1Coord !== undefined ? -f1Coord.x : c
+      const cy = f1Coord !== undefined ? -f1Coord.y : 0
+      pushUsed(start, end, [
+        { kind: "conicAxes", targets: [], conic: { kind: "circle", centerX: cx, centerY: cy, radius: 2 * a }, entityLabel: locusLabel }
+      ])
+    }
+  }
+}
+
 function parseDiagramScope(prompt: string, options: DiagramParseOptions, partStart?: number): DiagramObligationSet {
-  const partPattern = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/
+  const partPattern = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
   const boundaryMatch = partStart !== undefined
     ? partPattern.exec(prompt.slice(partStart))
-    : /(?:求证|试?证明)/.exec(prompt)
+    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?)/.exec(prompt)
   const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
   const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
   const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length
@@ -2630,6 +3168,8 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
    */
   resolveExplicitSolidConditions(givens, unverified, givenText, used)
   resolveSymbolicConics(givens, unverified, givenText, used)
+  resolveFocusEccentricity(givens, unverified, givenText, used)
+  resolvePlanarConstructions(givens, givenText, used)
 
   const matchers = options.spatialPointConditions === true ? [POINT_COORDINATE_MATCHER, ...DIAGRAM_OBLIGATION_MATCHERS] : DIAGRAM_OBLIGATION_MATCHERS
   for (const { pattern, read, allowAfterLabelColon, allowOverlap } of matchers) {
@@ -2650,7 +3190,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || result.kind === "collinear" || result.kind === "pointLineCoord" || new Set(result.targets).size >= 2)
       const labelPrefix = allowAfterLabelColon === true
         ? /(?:椭圆|双曲线|抛物线|圆)\s*([A-Z])\s*[：:]$/.exec(givenText.slice(Math.max(0, start - 16), start))
         : null
@@ -2676,16 +3216,6 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
   resolveStatedBasePlane(givens, unverified, givenText)
   /** 单字母角同理：顶点有了、两条边要从形状从句的环上取。 */
   resolveStatedVertexAngle(givens, unverified, givenText)
-  /**
-   * **「焦点 + 离心率」⇒ 曲线**（2026-10-20）：放在残留扫描**之前** —— 数据不全时它要能
-   * 如实变成一条"未核验"（而不是消失），读到的那两段也要先标成"已用"。
-   */
-  resolveFocusEccentricity(givens, unverified, givenText, used)
-  /**
-   * **实体的标量尺寸**（2026-10-20）：`圆锥的底面半径为2，母线长为3`。
-   * 同样排在残留扫描之前 —— 读到的那几段要标成"已用"，否则 `母线` 这个触发词会让
-   * 同一句在报告里出现两次（一次核过、一次"未核验"）。
-   */
   resolveSolidDimensions(givens, givenText, used)
 
   for (const match of givenText.matchAll(UNREAD_CONDITION)) {

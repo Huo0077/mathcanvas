@@ -319,6 +319,8 @@ export type CompileStrategy = (input: {
    * 策略实现必须按 `=== true` 处理；Worker 那条路要把它放进信封。
    */
   witnessSearch?: boolean
+  /** Selected scope/subquestion id (`subquestion:2`, `shared`, etc.) for scoped obligations. */
+  selectedScopeId?: string
 }) => Promise<StagedCompileResult> | StagedCompileResult
 
 /**
@@ -360,6 +362,8 @@ export interface CompileInput {
    * 在模型坐标没通过核验时自己搜一组坐标。同样**必须**原样传下去。
    */
   witnessSearch?: boolean
+  /** Selected scope/subquestion id (`subquestion:2`, `shared`, etc.) for scoped obligations. */
+  selectedScopeId?: string
 }
 
 /**
@@ -376,7 +380,8 @@ export function compileInProcess(input: CompileInput): PlanCompileResult {
     ...(input.allocator === undefined ? {} : { idAllocator: input.allocator }),
     ...(input.userMessage === undefined ? {} : { prompt: input.userMessage }),
     ...(input.obligationIR === undefined ? {} : { diagramObligationIR: input.obligationIR }),
-    ...(input.witnessSearch === undefined ? {} : { diagramWitnessSearch: input.witnessSearch })
+    ...(input.witnessSearch === undefined ? {} : { diagramWitnessSearch: input.witnessSearch }),
+    ...(input.selectedScopeId === undefined ? {} : { selectedScopeId: input.selectedScopeId })
   })
 }
 
@@ -510,7 +515,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         // `compileInProcess` 转交给 `compilePlan`。两条路都**只在显式 true 时**开。
         ...(obligationIR === undefined ? {} : { obligationIR }),
         // **N2 的开关走同一条通道**（R11）。
-        ...(witnessSearch === undefined ? {} : { witnessSearch })
+        ...(witnessSearch === undefined ? {} : { witnessSearch }),
+        ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
@@ -586,10 +592,19 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
       const explicitSolidDeclared = parserPrompt !== undefined && (hasExplicitSolidConditions(parserPrompt) || solidDimensionGate(parserPrompt, materialised.actions))
       const parsed = parserPrompt && (planHasVerifiableFigure(materialised.actions) || explicitSolidDeclared || readFoldTransformations(parserPrompt).length > 0 || namedFoldDeclared)
-        ? parseObligationWithLegacy(parserPrompt, { spatialPointConditions: witnessSearch === true }) : null
+        ? parseObligationWithLegacy(parserPrompt, {
+            spatialPointConditions: witnessSearch === true,
+            ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId })
+          })
+        : null
       const obligations = parsed?.legacy ?? null
       const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
-        ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, { obligationIR: obligationIR === true, prompt: parserPrompt }) : undefined
+        ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
+            obligationIR: obligationIR === true,
+            prompt: parserPrompt,
+            ...(stageOptions?.selectedScopeId === undefined ? {} : { activeScopeId: stageOptions.selectedScopeId })
+          })
+        : undefined
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }

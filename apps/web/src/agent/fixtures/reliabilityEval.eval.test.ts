@@ -37,6 +37,7 @@ import { writeSolidReport, readSolidReport } from "../../../../../scripts/solid-
 
 import {
   evaluateDrawingContract,
+  evaluateDrawingContractBranches,
   summarizeContractReports,
   type ContractEvaluationResult,
   type ContractSuiteFile,
@@ -59,6 +60,8 @@ interface EvalCase {
   knownIssue?: string
   requiredEntityIds?: string[]
   requiredObligations?: DrawingContractCase["requiredObligations"]
+  subquestions?: DrawingContractCase["subquestions"]
+  displayPolicy?: DrawingContractCase["displayPolicy"]
 }
 
 interface CaseFile {
@@ -182,7 +185,17 @@ function countingPlanner(inner: PlannerPort): { planner: PlannerPort; requests: 
   }
 }
 
-function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): { planner: PlannerPort; requests: () => number; rounds: PlanEnvelope[]; notRun: string | null; workspace?: Workspace; diagramPrompt?: string } {
+function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): {
+  planner: PlannerPort
+  requests: () => number
+  rounds: PlanEnvelope[]
+  notRun: string | null
+  workspace?: Workspace
+  diagramPrompt?: string
+  selectedScopeId?: string
+  branchPlans?: Readonly<Record<string, PlanEnvelope>>
+  infeasibleSubquestions?: readonly string[]
+} {
   const route = MODE === "live" ? null : routeDeterministicProblem(entry.prompt)
   const workspace = route?.family === "functions"
     ? "calculus"
@@ -193,11 +206,27 @@ function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): 
     const rounds = recorded[entry.id]
     if (rounds === undefined || rounds.length === 0) return { planner: replayPlanner([]), requests: () => 0, rounds: [], notRun: `replay has no recorded rounds for ${entry.id}`, workspace }
     const wrapped = countingPlanner(replayPlanner(rounds))
-    return { ...wrapped, workspace, diagramPrompt: route?.diagramPrompt, notRun: null }
+    return {
+      ...wrapped,
+      workspace,
+      diagramPrompt: route?.diagramPrompt,
+      selectedScopeId: route?.selectedScopeId,
+      branchPlans: route?.branchPlans,
+      infeasibleSubquestions: route?.infeasibleSubquestions,
+      notRun: null
+    }
   }
   const base = route ? replayPlanner([route.plan]) : MODE === "live" ? createModelPlanner() : createLocalPlanner()
   const wrapped = countingPlanner(base)
-  return { ...wrapped, workspace, diagramPrompt: route?.diagramPrompt, notRun: null }
+  return {
+    ...wrapped,
+    workspace,
+    diagramPrompt: route?.diagramPrompt,
+    selectedScopeId: route?.selectedScopeId,
+    branchPlans: route?.branchPlans,
+    infeasibleSubquestions: route?.infeasibleSubquestions,
+    notRun: null
+  }
 }
 
 function runContext(document: GeometryDocument, runId: string) {
@@ -303,7 +332,7 @@ describe("完整的协调器链路评测（T01）", () => {
     const notRun: string[] = []
 
     for (const entry of runnable) {
-      const { planner, requests, rounds, workspace, diagramPrompt, notRun: missing } = plannerFor(entry, recorded)
+      const { planner, requests, rounds, workspace, diagramPrompt, selectedScopeId, branchPlans, infeasibleSubquestions, notRun: missing } = plannerFor(entry, recorded)
       if (missing !== null) {
         notRun.push(missing)
         if (!enforceAllPass) {
@@ -327,7 +356,11 @@ describe("完整的协调器链路评测（T01）", () => {
       let terminal: ReliabilityCaseReport["terminal"]
       let error: string | null = null
       try {
-        for await (const event of runtime.coordinator.start({ run: runContext(current(), entry.id), userMessage: diagramPrompt ?? entry.prompt })) events.push(event.phase)
+        for await (const event of runtime.coordinator.start({
+          run: runContext(current(), entry.id),
+          userMessage: diagramPrompt ?? entry.prompt,
+          ...(selectedScopeId === undefined ? {} : { selectedScopeId })
+        })) events.push(event.phase)
         terminal = events.at(-1) ?? "none"
       } catch (caught) {
         terminal = "infrastructure"
@@ -370,18 +403,95 @@ describe("完整的协调器链路评测（T01）", () => {
         artifactId: acceptedIndex >= 0 ? `round-${acceptedIndex + 1}` : null,
         contentHash: acceptedPlan === undefined ? null : canonicalContentHash(acceptedPlan)
       })
-      const contractEval: ContractEvaluationResult | null = entry.requiredObligations === undefined
-        ? null
-        : evaluateDrawingContract(entry as DrawingContractCase, candidate, {
+      const answerText = finalArtifact?.text ?? (acceptedPlan && "answer" in acceptedPlan && typeof acceptedPlan.answer === "string" ? acceptedPlan.answer : null)
+      const infeasibleDiagnosedSubquestions = infeasibleSubquestions
+        ? [...infeasibleSubquestions]
+        : (entry.subquestions ?? [])
+            .filter((sq) => sq.feasible === false && /无实数解|不存在|不成立|矛盾|infeasible/i.test(`${answerText ?? ""}\n${(acceptedPlan?.kind === "plan" ? acceptedPlan.assumptions ?? [] : []).join("\n")}`))
+            .map((sq) => sq.id)
+
+      const branchPolicy = entry.displayPolicy?.multiBranchHandling ?? ""
+      let branchCertificatePassed = true
+      let contractEval: ContractEvaluationResult | null = null
+      if (entry.requiredObligations !== undefined) {
+        if (MODE === "local" && branchPolicy.startsWith("enumerate:") && branchPlans !== undefined) {
+          const branches = branchPolicy.slice("enumerate:".length).split(",").map((b) => b.trim()).filter(Boolean)
+          const targetSubq = entry.subquestions?.find((sq) =>
+            entry.requiredObligations!.some((ob) => ob.scope === sq.id && ob.branchId !== undefined)
+          )?.id ?? entry.subquestions?.at(-1)?.id ?? "stem"
+          const branchInputs: Record<string, { candidate: unknown; options: Parameters<typeof evaluateDrawingContract>[2] }> = {}
+          for (const br of branches) {
+            const brPlan = branchPlans[br]
+            if (!brPlan) {
+              branchCertificatePassed = false
+              continue
+            }
+            const brRun = runtimeFor(countingPlanner(replayPlanner([brPlan])).planner, `${entry.id}-${br}`, undefined, workspace)
+            const brEvents: RunPhase[] = []
+            try {
+              for await (const ev of brRun.runtime.coordinator.start({
+                run: runContext(brRun.current(), `${entry.id}-${br}`),
+                userMessage: diagramPrompt ?? entry.prompt,
+                ...(selectedScopeId === undefined ? {} : { selectedScopeId })
+              })) brEvents.push(ev.phase)
+            } catch {
+              branchCertificatePassed = false
+            }
+            const brTerminal = brEvents.at(-1) ?? "none"
+            const brStage = brRun.stages.at(-1)
+            const brVerif = brStage?.ok === true ? brStage.verification : undefined
+            const brDraftId = brRun.runtime.draftId()
+            const brPreview = brDraftId === null ? null : brRun.runtime.host.preview(brDraftId)
+            const brCert = brPreview?.ok ? brPreview.artifact.drawingCertificate ?? null : null
+            const brCand = brDraftId === null ? null : brRun.runtime.drafts.getPreview(brDraftId)?.candidate ?? null
+            if (brRun.written.length !== 0 || brVerif?.status !== "passed" || (brCert !== null && brCert.gate.status !== "not_applicable" && brCert.certificateStatus !== "passed")) {
+              branchCertificatePassed = false
+            }
+            branchInputs[br] = {
+              candidate: brCand,
+              options: {
+                verificationStatus: brVerif?.status ?? null,
+                answerText: "answer" in brPlan && typeof brPlan.answer === "string" ? brPlan.answer : answerText,
+                terminal: brTerminal,
+                error: null,
+                infeasibleDiagnosedSubquestions
+              }
+            }
+          }
+          const scopeEval = evaluateDrawingContractBranches(entry as DrawingContractCase, targetSubq, branchInputs)
+          const perBranch = Object.values(scopeEval.scopeResults)
+          const passedObligationIds = [...new Set(perBranch.flatMap((r) => r.passedObligationIds))]
+          const failedObligationIds = [...new Set(perBranch.flatMap((r) => r.failedObligationIds))]
+          const minObjCov = perBranch.length > 0 ? Math.min(...perBranch.map((r) => r.objectCoverage)) : 0
+          const minOblCov = perBranch.length > 0 ? Math.min(...perBranch.map((r) => r.obligationCoverage)) : 0
+          contractEval = {
+            id: entry.id,
+            passed: scopeEval.passed && branchCertificatePassed,
+            partial: !scopeEval.passed && passedObligationIds.length > 0,
+            status: scopeEval.passed && branchCertificatePassed ? "passed" : scopeEval.status,
+            bucket: scopeEval.passed && branchCertificatePassed ? null : "math",
+            objectCoverage: minObjCov,
+            obligationCoverage: minOblCov,
+            presentEntityIds: perBranch[0]?.presentEntityIds ?? [],
+            missingEntityIds: [...new Set(perBranch.flatMap((r) => r.missingEntityIds))],
+            passedObligationIds,
+            failedObligationIds,
+            obligationResults: perBranch.flatMap((r) => r.obligationResults)
+          }
+        } else {
+          contractEval = evaluateDrawingContract(entry as DrawingContractCase, candidate, {
             verificationStatus: verification?.status ?? null,
-            answerText: finalArtifact?.text ?? (acceptedPlan && "answer" in acceptedPlan && typeof acceptedPlan.answer === "string" ? acceptedPlan.answer : null),
+            answerText,
             terminal,
-            error
+            error,
+            infeasibleDiagnosedSubquestions
           })
+        }
+      }
       const answerMatches = entry.contains === undefined || finalArtifact?.text?.includes(entry.contains) === true
-      const certificatePassed = drawingCertificate === null
+      const certificatePassed = branchCertificatePassed && (drawingCertificate === null
         || drawingCertificate.gate.status === "not_applicable"
-        || drawingCertificate.certificateStatus === "passed"
+        || drawingCertificate.certificateStatus === "passed")
       const legacyPassed = entry.expected === "plan"
         ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && certificatePassed && outputsSatisfied
           && answerMatches && (independent.status === "passed" || independent.status === "not_applicable")

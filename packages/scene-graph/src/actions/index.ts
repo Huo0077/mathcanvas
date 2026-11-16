@@ -1710,9 +1710,12 @@ function compileCreateConic(action: Extract<DraftAction, { actionId: "planar.cre
       return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_radius", `${inputs.kind} semi-axes must be positive finite numbers`)], aliasToId: {} }
     }
     const rotation = inputs.rotation === undefined ? {} : { rotation: inputs.rotation }
+    const excludedPoints = Array.isArray(inputs.excludedPoints) && inputs.excludedPoints.length > 0 && inputs.excludedPoints.every(finitePoint)
+      ? { excludedPoints: inputs.excludedPoints.map((pt) => ({ x: pt.x, y: pt.y })) }
+      : {}
     const primitive = inputs.kind === "ellipse"
-      ? { id, type: "ellipse" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, ...rotation, ...label }
-      : { id, type: "hyperbola" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, axis: inputs.axis ?? "x", ...rotation, ...label }
+      ? { id, type: "ellipse" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, ...rotation, ...excludedPoints, ...label }
+      : { id, type: "hyperbola" as const, center: inputs.center, radiusX: inputs.radiusX, radiusY: inputs.radiusY, axis: inputs.axis ?? "x", ...rotation, ...excludedPoints, ...label }
     return { operations: [{ op: "addPrimitive", primitive: primitive as unknown as PrimitiveSpec }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
   }
 

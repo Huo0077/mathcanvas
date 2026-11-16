@@ -344,6 +344,8 @@ export interface EllipsePrimitive extends PrimitivePresentation {
   rotation?: number
   /** 绕定点旋转（缺省表示不绕任何定点，旧文档行为逐位不变）。 */
   rotationAbout?: CurveRotation
+  /** 轨迹定义域排除的孤立点（如斜率之积轨迹中的顶点）。 */
+  excludedPoints?: Coordinate[]
 }
 
 export interface HyperbolaPrimitive extends PrimitivePresentation {
@@ -776,6 +778,8 @@ export interface CirclePrimitive extends PrimitivePresentation {
   rotation?: number
   /** 绕定点旋转（见 `CurveRotation`）。 */
   rotationAbout?: CurveRotation
+  /** 轨迹定义域排除的孤立点（如斜率之积轨迹中的顶点）。 */
+  excludedPoints?: Coordinate[]
   /**
    * **圆心跟随一个点图元**：用户口径"第二动点作为圆心作圆"。圆心不再是死坐标，点一动圆心就跟着动。
    * 与 `rotationAbout` 是两件事，不要同时用：`rotationAbout` 是"曲线绕定点转"，这里是"圆心就是那个点"。

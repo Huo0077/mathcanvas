@@ -317,6 +317,7 @@ export type SymbolicConicEquation =
 export type SymbolicConicMetricConstraint =
   | { kind: "majorAxisLength" | "minorAxisLength" | "focalLength" | "eccentricity" | "realAxisLength" | "imaginaryAxisLength"; value: number }
   | { kind: "asymptoteTangentCircle"; circle: { centerX: number; centerY: number; radius: number } }
+  | { kind: "pointOnCurve"; x: number; y: number }
 
 export interface SymbolicIndependentCheck {
   passed: boolean
@@ -606,7 +607,7 @@ export function solveSymbolicConicContract(
     let e: number | null = null
 
     for (const metric of metrics) {
-      if (metric.kind === "asymptoteTangentCircle") continue
+      if (metric.kind === "asymptoteTangentCircle" || metric.kind === "pointOnCurve") continue
       if (!Number.isFinite(metric.value) || metric.value <= 0) {
         return { status: "invalid", reason: `Conic metric ${metric.kind} must be positive` }
       }
@@ -618,6 +619,45 @@ export function solveSymbolicConicContract(
           return { status: "invalid", reason: `Ellipse eccentricity must satisfy 0 < e < 1, got ${metric.value}` }
         }
         e = metric.value
+      }
+    }
+
+    const curvePoints = metrics.filter((m): m is Extract<SymbolicConicMetricConstraint, { kind: "pointOnCurve" }> => m.kind === "pointOnCurve")
+    for (const pt of curvePoints) {
+      if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+        return { status: "invalid", reason: "Point on conic must have finite coordinates" }
+      }
+      const u = spec.resolvedAxis === "x" ? pt.x * pt.x : pt.y * pt.y
+      const v = spec.resolvedAxis === "x" ? pt.y * pt.y : pt.x * pt.x
+      if (c !== null && a === null && b === null) {
+        const rootsA2 = solvePositiveQuadratic(1, -(u + v + c * c), u * c * c).filter((a2) => a2 > c! * c! + 1e-12)
+        if (rootsA2.length === 1) {
+          a = Math.sqrt(rootsA2[0]!)
+          b = Math.sqrt(rootsA2[0]! - c * c)
+        }
+      } else if (a !== null && b === null && v > 1e-12) {
+        const denom = 1 - u / (a * a)
+        if (denom > 1e-12) b = Math.sqrt(v / denom)
+      } else if (b !== null && a === null && u > 1e-12) {
+        const denom = 1 - v / (b * b)
+        if (denom > 1e-12) a = Math.sqrt(u / denom)
+      }
+    }
+    if ((a === null || b === null) && curvePoints.length >= 2) {
+      const p1 = curvePoints[0]!
+      const p2 = curvePoints[1]!
+      const u1 = spec.resolvedAxis === "x" ? p1.x * p1.x : p1.y * p1.y
+      const v1 = spec.resolvedAxis === "x" ? p1.y * p1.y : p1.x * p1.x
+      const u2 = spec.resolvedAxis === "x" ? p2.x * p2.x : p2.y * p2.y
+      const v2 = spec.resolvedAxis === "x" ? p2.y * p2.y : p2.x * p2.x
+      const det = u1 * v2 - u2 * v1
+      if (Math.abs(det) > 1e-12) {
+        const invA2 = (v2 - v1) / det
+        const invB2 = (u1 - u2) / det
+        if (invA2 > 1e-12 && invB2 > 1e-12) {
+          a = 1 / Math.sqrt(invA2)
+          b = 1 / Math.sqrt(invB2)
+        }
       }
     }
 
@@ -703,7 +743,7 @@ export function solveSymbolicConicContract(
   let e: number | null = null
 
   for (const metric of metrics) {
-    if (metric.kind === "asymptoteTangentCircle") continue
+    if (metric.kind === "asymptoteTangentCircle" || metric.kind === "pointOnCurve") continue
     if (!Number.isFinite(metric.value) || metric.value <= 0) {
       return { status: "invalid", reason: `Conic metric ${metric.kind} must be positive` }
     }
@@ -738,6 +778,51 @@ export function solveSymbolicConicContract(
     const sq = c * c - ry * ry
     if (!(sq > 0)) return { status: "invalid", reason: "Hyperbola c must exceed semi-axes" }
     rx = Math.sqrt(sq)
+  }
+
+  const hypCurvePoints = metrics.filter((m): m is Extract<SymbolicConicMetricConstraint, { kind: "pointOnCurve" }> => m.kind === "pointOnCurve")
+  for (const pt of hypCurvePoints) {
+    if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+      return { status: "invalid", reason: "Point on conic must have finite coordinates" }
+    }
+    const u = axis === "x" ? pt.x * pt.x : pt.y * pt.y
+    const v = axis === "x" ? pt.y * pt.y : pt.x * pt.x
+    if (c !== null && rx === null && ry === null) {
+      const rootsA2 = solvePositiveQuadratic(1, -(u + v + c * c), u * c * c).filter((a2) => a2 > 1e-12 && a2 < c! * c! - 1e-12)
+      if (rootsA2.length === 1) {
+        const aVal = Math.sqrt(rootsA2[0]!)
+        const bVal = Math.sqrt(c * c - rootsA2[0]!)
+        if (axis === "x") {
+          rx = aVal
+          ry = bVal
+        } else {
+          ry = aVal
+          rx = bVal
+        }
+      }
+    }
+  }
+  if ((rx === null || ry === null) && hypCurvePoints.length >= 2) {
+    const p1 = hypCurvePoints[0]!
+    const p2 = hypCurvePoints[1]!
+    const u1 = axis === "x" ? p1.x * p1.x : p1.y * p1.y
+    const v1 = axis === "x" ? p1.y * p1.y : p1.x * p1.x
+    const u2 = axis === "x" ? p2.x * p2.x : p2.y * p2.y
+    const v2 = axis === "x" ? p2.y * p2.y : p2.x * p2.x
+    const det = u1 * v2 - u2 * v1
+    if (Math.abs(det) > 1e-12) {
+      const invA2 = (v2 - v1) / det
+      const invB2 = (u2 - u1) / det
+      if (invA2 > 1e-12 && invB2 > 1e-12) {
+        if (axis === "x") {
+          rx = 1 / Math.sqrt(invA2)
+          ry = 1 / Math.sqrt(invB2)
+        } else {
+          ry = 1 / Math.sqrt(invA2)
+          rx = 1 / Math.sqrt(invB2)
+        }
+      }
+    }
   }
 
   const tangencyPoints: { x: number; y: number }[] = []

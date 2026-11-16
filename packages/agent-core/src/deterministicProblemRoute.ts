@@ -1,6 +1,7 @@
 import type { PlanEnvelope } from "./contracts"
 import { compileConstructionDag, deriveRequiredDrawingIntent, type CompiledDrawingDagResult } from "./drawingIntent"
 import { deterministicPlanForPrompt } from "./parametricSolidPlan"
+import { tryBuildFunctionDrawingPlan } from "./solver/functionDrawingPlan"
 import { tryBuildPlanarDrawingPlan } from "./solver/planarDrawing"
 import { tryBuildRightPrismMidpointsPlan } from "./rightPrismPlan"
 import { tryBuildScopedPyramidPlan } from "./scopedPyramidPlan"
@@ -11,6 +12,9 @@ export interface DeterministicProblemRoute {
   family: "functions" | "spatial-modeling" | "conics-tangents" | "planar-basics"
   skillIds?: readonly string[]
   diagramPrompt?: string
+  selectedScopeId?: string
+  branchPlans?: Readonly<Record<string, PlanEnvelope>>
+  infeasibleSubquestions?: readonly string[]
 }
 
 export function routeDeterministicProblemWithIntent(prompt: string): (DeterministicProblemRoute & { intentDag: CompiledDrawingDagResult }) | null {
@@ -25,10 +29,22 @@ export function routeDeterministicProblem(prompt: string): DeterministicProblemR
   if (prism) return { ...prism, family: "spatial-modeling" }
   const trig = tryBuildTrigMonotonicityPlan(prompt)
   if (trig) return { plan: trig, family: "functions" }
+  const fnPlan = tryBuildFunctionDrawingPlan(prompt)
+  if (fnPlan) return fnPlan
   const pyramid = tryBuildScopedPyramidPlan(prompt)
   if (pyramid) return { ...pyramid, family: "spatial-modeling" }
   const planar = tryBuildPlanarDrawingPlan(prompt)
-  if (planar && planar.plan.kind === "plan") return { plan: planar.plan, family: planar.family, skillIds: planar.skillIds, diagramPrompt: planar.diagramPrompt }
+  if (planar && planar.plan.kind === "plan") {
+    return {
+      plan: planar.plan,
+      family: planar.family,
+      skillIds: planar.skillIds,
+      diagramPrompt: planar.diagramPrompt,
+      ...(planar.selectedScopeId === undefined ? {} : { selectedScopeId: planar.selectedScopeId }),
+      ...(planar.branchPlans === undefined ? {} : { branchPlans: planar.branchPlans }),
+      ...(planar.infeasibleSubquestions === undefined ? {} : { infeasibleSubquestions: planar.infeasibleSubquestions })
+    }
+  }
   const solid = deterministicPlanForPrompt(prompt)
   return solid ? { plan: solid, family: "spatial-modeling" } : null
 }

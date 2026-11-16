@@ -181,12 +181,13 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
        * **那句话是错的**：草稿层没有自己的开关，它收的就是调用方传进来的这个布尔。
        * 于是"设置里打开形式证明导出"在主路上什么也不会发生（2026-10-10 §3-D 查实）。
        */
-      const stageOptions = (dependencies.enableCompleteCertificate === undefined && dependencies.runId === undefined && dependencies.conversationId === undefined)
+      const stageOptions = (dependencies.enableCompleteCertificate === undefined && dependencies.runId === undefined && dependencies.conversationId === undefined && request.selectedScopeId === undefined)
         ? undefined
         : {
             ...(dependencies.enableCompleteCertificate === undefined ? {} : { enableCompleteCertificate: dependencies.enableCompleteCertificate }),
             ...(dependencies.runId === undefined ? {} : { runId: dependencies.runId }),
-            ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId })
+            ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
+            ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId })
           }
       const staged = await dependencies.drafts.stage(
         draftId,

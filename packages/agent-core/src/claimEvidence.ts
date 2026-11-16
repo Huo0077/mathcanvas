@@ -126,6 +126,7 @@ export interface ObligationGeometry {
   splitPoint?: boolean
   chainIndex?: number
   line?: DiagramObligation["line"]
+  axisAlignment?: DiagramObligation["axisAlignment"]
   expectation?: DiagramObligation["expectation"]
   expressions?: [string, string]
   solid?: DiagramObligation["solid"]

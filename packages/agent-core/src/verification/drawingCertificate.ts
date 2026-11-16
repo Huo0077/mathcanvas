@@ -239,7 +239,8 @@ export function certifyDrawingAgainstContract(input: {
 
   const parserPrompt = normalizeGeometryPrompt(input.prompt)
   const parsedObligations = parseObligationWithLegacy(parserPrompt, {
-    spatialPointConditions: input.witnessSearch === true
+    spatialPointConditions: input.witnessSearch === true,
+    ...(input.selectedScopeId === undefined ? {} : { selectedScopeId: input.selectedScopeId })
   }).legacy
   const neutralPlan: PlanEnvelope = {
     schemaVersion: PLAN_SCHEMA_VERSION,

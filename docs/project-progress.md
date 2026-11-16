@@ -8,6 +8,11 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— Task 3 平面 / 圆锥曲线 / 函数 18 题确定性求解与协调器全链闭环
+
+- **RED → GREEN 整改与验证**：新增并打通 `planar.create_conic.excludedPoints`、`collinear`/`pointLineCoord`、`pointOnCurve` 线性求解、`verifyTangentLine` 拐点切线+防割线容差、`selectedScopeId` 全链（含修复 `draftStore.stage` 漏传导致多问场景报 `not_supported`）及 `evaluateDrawingContractBranches`；新建 `planarContracts18.test.ts` **23/23 passed**（18/18 正例 + 4 项负向篡改反例），并在暴露并修复 `actionSchemas` 缺失 `excludedPoints` 种类、`resolveFocusEccentricity` 显式方程重复提取与切线有限差分容差后全线通过。
+- **验证**：`typecheck`、`lint`（0 errors）、Web 构建、`eval:reliability -- --offline`（冒烟 3/3 + 36 题实测 **18/18 平面全过**，`liveWrites=0`、`drawingCertificateStatus="passed"`；36 题总计 `18 passed / 2 partial / 16 failed`，对象覆盖 `54.17%`、义务覆盖 `52.31%`）与全量 Vitest **542 文件 / 5770 passed | 1 todo** 全部通过；下一步进入 Task 4 立体与折叠 18 题闭环。证据见[Task 3 平面 18 题证据](audit/2026-11-17-g3-planar-18/README.md)。
+
 ## 2026-11-17 —— Task 2 生产完整数学证书接线与统一评测接入
 
 - **RED → GREEN 全链贯通**：新建 `drawingCertificatePipeline.test.ts`（先 RED `2 failed`）并在 `drawingCertificate.ts`、`draftStore.ts`、`committerAdapter.ts`、`hostBridge.ts`、`agentRuntime.ts`、`agentRunner.ts`、`agentStore.ts`、`ConfirmationPanel.tsx` 与 `reliabilityEval.eval.test.ts` 全线接入 `drawingCertificate` 与 `certificateBinding`，阻断部分核验、二阶段过期、会话切换与关闭开关回退，并补充 `ConfirmationPanel.test.tsx` 提交按钮禁用实证。

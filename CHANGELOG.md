@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— Task 3 平面 / 圆锥曲线 / 函数 18 题数学合同与协调器全链闭环
+
+- **平面 / 函数确定性求解、内核与契约加固**：`packages/dsl` / `scene-graph` / `agent-core` 全线打通 `planar.create_conic.excludedPoints`（含 `FIELD_KINDS: "pointList"` schema 校验）；`conic-parameters.ts` 支持 `pointOnCurve` 线性系统求参；`function-evidence.ts`（`verifyTangentLine`）修复拐点偶重根切线并维持斜率校验阻止割线伪切；`diagramObligations.ts` / `diagramVerification.ts` / `claimEvidence.ts` / `obligationIR.ts` 补齐 `collinear` / `pointLineCoord`、`domain.conicKind` 与隐式抛物线/圆解析；`functionDrawingPlan.ts` 与 `planarDrawing.ts` 收口全部 18 道平面题。
+- **作用域与分支全链贯通**：`selectedScopeId`、`evaluateDrawingContractBranches` 与 `infeasibleDiagnosedSubquestions` 打通 `drawingCertificate.ts`、`coordinator.ts`、`committerAdapter.ts`、`apps/web/src/agent/{agentRunner,draftStore}.ts`（修复 `draftStore.stage` 漏传 `selectedScopeId` 导致多问范围报 `not_supported`）与 `reliabilityEval.eval.test.ts`。
+- **验证**：`planarContracts18.test.ts` **23/23 passed**（18/18 正例 + 4 项篡改/缺域反例），`eval:reliability -- --offline` 冒烟（3/3）及 36 题全链路评测实现 **18/18 平面题通过**（`liveWrites=0`、`drawingCertificateStatus="passed"`，`36 题合计 18 passed / 2 partial / 16 failed`，对象覆盖 `54.17%`、义务覆盖 `52.31%`），`typecheck`、`lint`（0 errors）、Web 构建与全量 Vitest **542 文件 / 5770 passed | 1 todo** 全部通过；证据见 [Task 3 平面 18 题证据](docs/audit/2026-11-17-g3-planar-18/README.md)。
+
 ## 2026-11-17 —— Task 2 生产完整数学证书 `DrawingCertificateResult` 全链贯通与统一评测接入
 
 - **完整证书与多维保鲜落盘**：`packages/agent-core/src/verification/drawingCertificate.ts` 导出 `NUMERIC_POLICY_VERSION` 并以 `normalizeGeometryPrompt` + `parseObligationWithLegacy` + 实际 `plan`/`baseDocument` 运行 `verifyDiagramObligations`（新增 `staleEarlierObligations`）；`apps/web/src/agent/draftStore.ts` 在 `stage` 产出生效 `drawingCertificate` 与 `certificateBinding`（关闭 `enableCompleteCertificate: false` 显式标 `"unverified"` 并阻止回退）。

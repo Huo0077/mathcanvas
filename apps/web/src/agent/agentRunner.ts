@@ -435,6 +435,7 @@ export interface PlannerSelection {
   requestedSkillIds: readonly string[]
   textProfileId: string
   diagramPrompt?: string
+  selectedScopeId?: string
 }
 
 /**
@@ -532,6 +533,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     if (deterministic) return {
       planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
       diagramPrompt: deterministic.diagramPrompt,
+      ...(deterministic.selectedScopeId === undefined ? {} : { selectedScopeId: deterministic.selectedScopeId }),
       requestedSkillIds: deterministic.skillIds ? [...deterministic.skillIds] : [deterministic.family], textProfileId: "local-planner"
     }
 
@@ -716,6 +718,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       for await (const event of active.coordinator.start({
         run: runContext,
         userMessage: selection.diagramPrompt ?? prompt,
+        ...(selection.selectedScopeId === undefined ? {} : { selectedScopeId: selection.selectedScopeId }),
         // 计划 N4：把这一轮的开关状态一并交给 trace（开关由应用层持有，协调器只负责记下来）。
         nextPhaseFlags: agentNextPhaseFlags(),
         promptVersion,
