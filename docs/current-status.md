@@ -22,13 +22,13 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前授权目标全部收口，P0–P8与R12未开始；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核），下一步进入 `P1 / T02`；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
 ### 当前执行范围与区块结果
 
-上一目标 **R00 → R01-A → R09-A → R10** 已完成。当前用户明确授权 **G1（R02–R06）与G2（R07、R08、R09-B、R11）**，每块验证、对齐文档并推送；不进入P0–P8、R12或发布。执行分支为 `feature/drawing-reliability-execution`。
+前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；当前用户持续推进下一阶段 **B4（P0–P6，按 DAG 从 T01 依次推进）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。
 
 | 工作包 | 当前状态 | 证据 |
 | --- | --- | --- |
@@ -45,9 +45,10 @@
 | G2 / R08 E2E与生产UI/合同对齐 | **已完成** | [E2E与生产UI对齐证据](audit/2026-11-15-e2e-ui-contract-alignment/README.md)：修复参数化外接球动作/内核披露、`tryBuildRightPrismMidpointsPlan` 分问路由与 `.clean-chrome` `z-index: 100` 遮挡缺陷；新增 `MathCanvasPage` 并对齐 `310px`/网格/工作区Chrome/空状态契约；全量串行E2E 286 passed/0 failed（retries=0），16-worker并发282/286（4项为高并发5s/30s超时），Vitest 524文件/5580通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R09-B Schema与运行时叶子约束同源 | **已完成** | [Schema与运行时同源证据](audit/2026-11-15-schema-runtime-leaf-consistency/README.md)：建立 `LEAF_CONSTRAINTS` / `readStringLeaf` / `planActionToolItemSchema` 单源约束并导出 `PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS` 降级清单；修复 `actionKey` 全空白/零宽放行、`normalisations` 未知字段/超长/trim 漏检及 `buildPlanToolSchema` 漂移；RED 8 fail → 定向 4 文件/169 项通过，`eval:reliability -- --offline` 通过，Vitest 524 文件/5590 通过+1todo，类型/Lint/Web构建通过 |
 | G2 / R11 干净依赖、公告与Rust审计 | **已完成（G2闭环；RustSec显式标为unknown）** | [干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)：最小兼容升级修复全部3项High与可修Moderate公告（`vitest@4.1.12`、`vite@7.3.8`、`eslint@10.15.0`、`typescript-eslint@8.72.2`、`source-map-js@1.2.2`、`zod@4.6.7`）；`--omit=dev` 0公告；仅余 `@typescript-eslint/typescript-estree -> minimatch@10.2.6` 1条上游中危（`GHSA-g3hv-75wg-m249`，已登记例外与 `2026-12-31` 到期）；`cargo audit` 未安装标为 `unknown`；Node `v22.23.5` 隔离 `npm ci`、`npm ls --depth=0`、类型/Lint/Web构建/离线评测、`licences:scan`、全量Rust 317 passed（+4 ignored）及全量串行E2E 286 passed 全部通过；新增 `dependencyLockPolicy.test.ts` |
-| 后续未授权范围 | 未开始 | P0–P8、R12与产品发布未开始；未获新授权不自动推进 |
+| B4 / P0 / T01 36题黄金契约与统一口径 | **已完成（待第二审阅者复核）** | [P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)：冻结 36 题 `drawing-contracts-36.json`（匹配 `manifest.json` SHA-256 与逐字 `sourceSpan`，补齐 `JT-P08` `EC=2CF` 与 `GK-S05(2)`/`JT-P06(2)` 不可行契约，`independentReviewStatus: "pending_second_reviewer"`）；`drawingContracts.test.ts` 8 项、`finalOutcome.test.ts` 4 项、离线/`dev-smoke`回放/36题离线评测（`denominator: 36, passed: 1, partial: 2, failed: 33, incomplete: 0, liveWrites: 0, costKnown: false`）、基线 25/36 & 4/36 & null 重建、全量 Vitest 526 文件/5600 通过+1todo、类型/Lint/Web 构建通过 |
+| 后续阶段范围 | 进行中（下一步 `P1 / T02`） | 按 DAG 推进 `T02 → T03 → T11 → T04 → ... → T14`；`P7–P8`、付费 provider 与发布均未开启 |
 
-R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f`、worktree 忽略提交 `be3f00bf`、R00/R01-A/R09-A提交 `9ca9ff12`/`d8cac823`/`addf4c79`、R10提交 `ce1895e5`、R02提交 `ef13937b`、R03提交 `216fd3a9`、R04提交 `1fe0e9a8`、R05提交 `6f736bbf`、R06提交 `ab91233e`/`4355eeee`、R07提交 `d7b970e6`、R08提交 `957fbc2c`、R09-B提交 `d2917398` 均已推送；R11随本变更提交并核对远端后结束本轮授权目标。
+R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 至 `R11` 提交 `d7e1e3af` 均已推送；`P0 / T01` 随本变更提交并核对远端。
 
 ### 1. 证据分层与发布阻断
 
@@ -91,7 +92,7 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 | 序号 | 阶段 | 状态 | 退出门槛摘要 |
 | --- | --- | --- | --- |
-| 1 | P0 基准与测量 | 未开始 | 36题黄金合同/独立复核/关键回放；前置R09-A正确计分 |
+| 1 | P0 基准与测量 | 进行中（T01 已完成，待第二独立审阅者复核） | 36题黄金合同/统一回放口径已落地；待第二位独立审阅者复核后退出 |
 | 2 | P1 来源与语义合同 | 未开始 | R01-A先止损，T02再完整scope/source/entity/IR无损迁移 |
 | 3 | P2 解析与归一化 | 未开始 | AST/链式关系/别名/小问；必要条件不丢失 |
 | 4 | P3 平面确定性构造 | 未开始 | 平面18/18对象与数学合同；依赖稳定绑定和T11数值策略 |
@@ -103,7 +104,7 @@ P是画图能力验收阶段，R/T是实现工作包，G是跨任务门禁；不
 
 ### 3. 下一步及授权边界
 
-**当前按主计划和新goal执行G1/G2**：R00 → R01-A → R09-A → R10、G1（R02–R06）及G2的首块R07已有关闭证据；下一步继续G2依次完成R08、R09-B、R11后停止，不进入P0–P8、R12或发布。
+**当前按主计划持续推进 B4（P0–P6）**：`R00–R11`（含 G1/G2）与 `P0 / T01` 已有关闭证据（`T01` 第二独立审阅者复核标 `pending_second_reviewer`）；下一步进入 `P1 / T02`（完整 `ProblemContract` / 来源映射 / scope / `ObligationIR` 无损迁移）。
 
 全部实现须RED→GREEN、生产接线、反例/兼容与独立复核；安全补丁回退只能关闭入口，不能重新开放已知漏洞。历史版本和授权不自动继承。付费预算、依赖升级和产品发布不在本次范围内，不自动触发。
 

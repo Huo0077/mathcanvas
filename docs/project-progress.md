@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P0 / T01 36 题黄金作图契约冻结与统一评测口径
+
+- **RED 复现与黄金契约冻结**：依据 [`manifest.json`](audit/2026-11-15-drawing-baseline/manifest.json) 生成 `test-fixtures/reliability/drawing-contracts-36.json`（固定 `denominator = 36`），逐字匹配原文与 UTF-8 SHA-256 `inputHash`/`sourceHash`，并为每条必需义务绑定精确原文下标 `sourceSpan`。显式修正基线 `JT-P08` 仅点在椭圆而未校 `C - E = 2(F - C)` 的判据缺口，同时为 `GK-S05 (2)` 与 `JT-P06 (2)` 标注不可行分支与诚实披露要求，独立审阅状态如实标为 `pending_second_reviewer`。
+- **契约校验器与统一报告接入**：新增 `scripts/reliability-eval/drawingContracts.ts` 与 `scripts/reliability-eval/drawingContracts.test.ts`（先因缺少实现模块与声明 RED，后 GREEN 8/8 通过），验证篡改题干拒收、缩分母 `< 36` 拒收、`GK-S02` 缺 `E/F/P` 失败、`JT-P08` 假反例捕获、`JT-P06` 伪造拒收与诚实披露通过、`incomplete` 不缩分母以及基线保存档案 `25/36` 草稿、`4/36` 旧 host、`null` 完整证书与 `8/36` 局部 exact 重建；更新 `scripts/reliability-eval/runner.mjs`（新增 `runner.d.mts` 与 `scripts/nodeTypes.d.ts` `node:crypto` 声明）与 `reliabilityEval.eval.test.ts`，输出 `reliability-summary.v2`（含固定分母、`objectCoverage`、`obligationCoverage`、失败分桶、`requests`、`tokens`、`costUsd: null`、`costKnown: false`）。
+- **验证**：`drawingContracts.test.ts` + `finalOutcome.test.ts` 12 passed；`eval:reliability -- --offline`（`dev-smoke` 3 passed）、`eval:reliability -- --replay`（3 passed）、`eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`（3 passed，`denominator=36, ran=36, passed=1 (GK-S01), partial=2, failed=33, incomplete=0, requests=36, liveWrites=0, costKnown=false`）；`typecheck`、`lint`（0 errors / 32 既有 warning）、Web 构建（634 modules）与全量 Vitest **526 文件 / 5600 passed | 1 todo** 通过。证据见[P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)；第二位独立审阅者复核待补。
+
 ## 2026-11-16 —— R11 干净依赖、公告处置与 Rust 审计缺口（G2 闭环）
 
 - **基线公告与工具核查**：确认 `--omit=dev` 为 0 漏洞，全量存在 14 个受影响包（3 High / 11 Moderate）；宿主机 `npm.cmd ls vitest` 因混合 `.pnpm` 安装与 `package-lock.json` `vitest@4.1.11` 漂移而报错；`cargo audit --version` 返回 `no such command: audit`，显式按 `unknown` 记录 RustSec 工具缺失。

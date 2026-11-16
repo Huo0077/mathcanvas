@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— P0 / T01 36 题黄金作图契约与统一评测口径
+
+- 新增 `test-fixtures/reliability/drawing-contracts-36.json`：按基线原件 [`docs/audit/2026-11-15-drawing-baseline/manifest.json`](docs/audit/2026-11-15-drawing-baseline/manifest.json) 冻结全部 36 道真题契约（`denominator = 36`），包含 UTF-8 `inputHash`/`sourceHash`、`inputMode`、`sharedScope`、`subquestions`、`requiredEntityIds`、带逐字原文偏移 `sourceSpan` 的 `requiredObligations`、`displayPolicy`、`freeChoices`、`unsupportedReasons` 及 `independentReviewStatus: "pending_second_reviewer"`；修补 `JT-P08` 仅点在椭圆而未校 `EC=2CF` 的漏洞，并登记 `GK-S05 (2)` 与 `JT-P06 (2)` 不可行分支契约。
+- 新增 `scripts/reliability-eval/drawingContracts.ts` 与 `scripts/reliability-eval/drawingContracts.test.ts`：实现契约完整性校验、独立 2D/3D 契约回代（含 `vector-ratio-2d` 与 `infeasible-branch`）、固定分母汇总器与基线档案重建（精确复现 `25/36` 草稿、`4/36` 旧 host、`null` 完整证书与 `8/36` 局部 exact，且不把局部 exact 或跳过题视作通过或缩减分母）。
+- 更新 `scripts/reliability-eval/runner.mjs`（新增 `runner.d.mts` 与 `scripts/nodeTypes.d.ts` `node:crypto` 最小声明）与 `apps/web/src/agent/fixtures/reliabilityEval.eval.test.ts`：输出 `reliability-summary.v2` 统一口径（固定 `denominator`、`objectCoverage`、`obligationCoverage`、`math`/`visual`/`interaction`/`partial`/`unknown`/`incomplete` 失败分桶、`requests`、`tokens`、`costUsd: null`、`costKnown: false`、`liveWrites === 0`）。
+- 定向 `drawingContracts.test.ts` + `finalOutcome.test.ts` 12 项通过，`eval:reliability` 离线/`dev-smoke` 回放/36 题离线均通过（36 题离线：`denominator=36, passed=1, partial=2, failed=33, incomplete=0`），`typecheck`、`lint`（0 errors）、Web 构建（634 modules）与全量 Vitest **526 文件 / 5600 passed | 1 todo** 通过。证据见 [P0 / T01契约与口径证据](docs/audit/2026-11-16-p0-drawing-contracts/README.md)；第二位独立审阅者复核待补，下一步进入 `P1 / T02`。
+
 ## 2026-11-16 —— R11 干净依赖、公告处置与 Rust 审计缺口（G2 闭环）
 
 - 在 `.worktrees/r00-node22`（Node `v22.23.5` + npm `11.16.0`）核查锁文件与公告：按直接包与传递链实施最小兼容更新（不执行 `npm audit fix --force`），将 `package.json` 与 `package-lock.json` 统一更新并对齐为 `vitest@^4.1.12`（`4.1.12`）、`vite@^7.3.8`（`7.3.8`）、`eslint@^10.15.0`（`10.15.0`）、`typescript-eslint@^8.72.2`（`8.72.2`）、`source-map-js@1.2.2` 与 `zod@4.6.7`。

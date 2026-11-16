@@ -35,38 +35,44 @@ import { writeSolidReport, readSolidReport } from "../../../../../scripts/solid-
  * 运行：`npm run eval:reliability -- --offline`（报告目录由 runner 选）。
  */
 
+import {
+  evaluateDrawingContract,
+  summarizeContractReports,
+  type ContractEvaluationResult,
+  type ContractSuiteFile,
+  type DrawingContractCase,
+  type FailureBucket,
+  type UnifiedCaseMetrics
+} from "../../../../../scripts/reliability-eval/drawingContracts"
 import { evaluateOracle, type Oracle, type OracleResult } from "./reliabilityOracle"
 
 interface EvalCase {
   id: string
   prompt: string
   expected: "plan" | "clarification" | "answer"
-  /** `expected: "clarification"` 时，澄清正文必须包含的片段。 */
+  workspace?: Workspace
   contains?: string
-  /** `expected: "plan"` 时，是否要求题设核验整体 `passed`（有题设的用例才要求）。 */
   requireVerification?: "passed"
-  /** 这一条要交付什么（`draft` / `verification_passed` / `clarification`）。 */
   requiredOutputs?: readonly string[]
-  /** 来源与复核状态：自生成题必须如实标 `unreviewed`。 */
   provenance?: { source: string; reviewStatus: string }
-  /** **独立判据**：只读候选几何回代，不经过产品解析/核验。 */
   oracle?: Oracle
-  /**
-   * **已知缺陷、暂不执行的题**：写清原因。它**不算通过**，在 summary 里进 `skipped` 与
-   * `incomplete`（"未执行题保留为未完成"），修好之前不得从分母里悄悄删掉。
-   */
   knownIssue?: string
+  requiredEntityIds?: string[]
+  requiredObligations?: DrawingContractCase["requiredObligations"]
 }
 
 interface CaseFile {
   version: number
+  schemaVersion?: string
   suite: string
+  denominator?: number
+  enforceAllPass?: boolean
   notice?: string
   cases: readonly EvalCase[]
 }
 
 /** 题单由 runner 显式指定（缺省是 `test-fixtures/reliability/dev-smoke.json`）；不存在就拒绝跑。 */
-async function loadCases(): Promise<readonly EvalCase[]> {
+async function loadSuite(): Promise<CaseFile> {
   const file = env.MATHCANVAS_RELIABILITY_CASES
   if (file === undefined || file.trim() === "") throw new Error("MATHCANVAS_RELIABILITY_CASES is required — use npm run eval:reliability")
   const parsed = (await readSolidReport(file)) as CaseFile
@@ -76,7 +82,7 @@ async function loadCases(): Promise<readonly EvalCase[]> {
       throw new Error(`invalid case entry in ${file}: ${JSON.stringify(entry).slice(0, 120)}`)
     }
   }
-  return parsed.cases
+  return parsed
 }
 
 type Mode = "local" | "replay" | "live"
@@ -95,6 +101,10 @@ interface ReliabilityCaseReport {
   draftPresent: boolean
   /** 独立判据（只读候选几何回代）；没有 oracle 的条目为 `not_applicable`。 */
   independent: OracleResult
+  contractEvaluation: ContractEvaluationResult | null
+  objectCoverage: number
+  obligationCoverage: number
+  bucket: FailureBucket | null
   verificationStatus: string | null
   verificationChecks: { kind: string; status: string; sourceText: string }[]
   questions: string[] | null
@@ -102,6 +112,7 @@ interface ReliabilityCaseReport {
   liveWrites: number
   primitivesAfter: number
   requests: number
+  tokens: { input: number; output: number }
   /**
    * **首次尝试是否成功**（T09 口径的近似）：规划轮次恰好 1 次且这一条 passed。
    * live 模式下工具续轮也会增加 requests，届时需要按"修复轮"单独计数（尚未接）。
@@ -170,10 +181,10 @@ function countingPlanner(inner: PlannerPort): { planner: PlannerPort; requests: 
 
 function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): { planner: PlannerPort; requests: () => number; rounds: PlanEnvelope[]; notRun: string | null; workspace?: Workspace; diagramPrompt?: string } {
   const route = MODE === "live" ? null : routeDeterministicProblem(entry.prompt)
-  const workspace = route?.family === "functions" ? "calculus" : undefined
+  const workspace = route?.family === "functions" ? "calculus" : entry.workspace
   if (MODE === "replay") {
     const rounds = recorded[entry.id]
-    if (rounds === undefined || rounds.length === 0) return { planner: replayPlanner([]), requests: () => 0, rounds: [], notRun: `replay has no recorded rounds for ${entry.id}` }
+    if (rounds === undefined || rounds.length === 0) return { planner: replayPlanner([]), requests: () => 0, rounds: [], notRun: `replay has no recorded rounds for ${entry.id}`, workspace }
     const wrapped = countingPlanner(replayPlanner(rounds))
     return { ...wrapped, workspace, diagramPrompt: route?.diagramPrompt, notRun: null }
   }
@@ -262,17 +273,45 @@ describe("完整的协调器链路评测（T01）", () => {
   assertModeConfigured()
 
   it("每条用例都在干净文档 / 干净会话上跑到终态，且从不自动确认", async () => {
-    const cases = await loadCases()
+    const suite = await loadSuite()
+    const cases = suite.cases
+    const enforceAllPass = suite.enforceAllPass ?? suite.schemaVersion !== "drawing-contract.v1"
+    const isContractSuite = suite.schemaVersion === "drawing-contract.v1" || cases.some((entry) => entry.requiredObligations !== undefined)
+    const denominator = suite.denominator ?? cases.length
     const skipped = cases.filter((entry) => entry.knownIssue !== undefined)
     const runnable = cases.filter((entry) => entry.knownIssue === undefined)
     const recorded = await replayRounds()
     const reports: ReliabilityCaseReport[] = []
+    const contractMetrics: UnifiedCaseMetrics[] = skipped.map((entry) => ({
+      id: entry.id,
+      status: "incomplete",
+      bucket: "incomplete",
+      passed: false,
+      partial: false,
+      objectCoverage: 0,
+      obligationCoverage: 0,
+      requests: 0,
+      tokens: { input: 0, output: 0 }
+    }))
     const notRun: string[] = []
 
     for (const entry of runnable) {
       const { planner, requests, rounds, workspace, diagramPrompt, notRun: missing } = plannerFor(entry, recorded)
       if (missing !== null) {
         notRun.push(missing)
+        if (!enforceAllPass) {
+          contractMetrics.push({
+            id: entry.id,
+            status: "incomplete",
+            bucket: "incomplete",
+            passed: false,
+            partial: false,
+            objectCoverage: 0,
+            obligationCoverage: 0,
+            requests: 0,
+            tokens: { input: 0, output: 0 }
+          })
+        }
         continue
       }
       const started = Date.now()
@@ -322,14 +361,40 @@ describe("完整的协调器链路评测（T01）", () => {
         artifactId: acceptedIndex >= 0 ? `round-${acceptedIndex + 1}` : null,
         contentHash: acceptedPlan === undefined ? null : canonicalContentHash(acceptedPlan)
       })
+      const contractEval: ContractEvaluationResult | null = entry.requiredObligations === undefined
+        ? null
+        : evaluateDrawingContract(entry as DrawingContractCase, candidate, {
+            verificationStatus: verification?.status ?? null,
+            answerText: finalArtifact?.text ?? (acceptedPlan && "answer" in acceptedPlan && typeof acceptedPlan.answer === "string" ? acceptedPlan.answer : null),
+            terminal,
+            error
+          })
       const answerMatches = entry.contains === undefined || finalArtifact?.text?.includes(entry.contains) === true
-      const passed = entry.expected === "plan"
+      const legacyPassed = entry.expected === "plan"
         ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
           && answerMatches && (independent.status === "passed" || independent.status === "not_applicable")
         : entry.expected === "answer"
           ? terminal === "completed" && outputsSatisfied && answerMatches
           : terminal === "waiting" && questions !== null && questions.join(" ").includes(entry.contains ?? "") && outputsSatisfied
             && (independent.status === "passed" || independent.status === "not_applicable")
+      const passed = contractEval === null ? legacyPassed : legacyPassed && contractEval.passed
+      const bucket: FailureBucket | null = passed
+        ? null
+        : contractEval?.bucket ?? (terminal === "waiting" ? "interaction" : error !== null ? "unknown" : verification?.status === "failed" ? "math" : "math")
+      const objectCoverage = contractEval?.objectCoverage ?? (passed ? 1 : draftPresent ? 0.5 : 0)
+      const obligationCoverage = contractEval?.obligationCoverage ?? (passed ? 1 : 0)
+
+      contractMetrics.push({
+        id: entry.id,
+        status: passed ? "passed" : contractEval?.partial ? "partial" : "failed",
+        bucket,
+        passed,
+        partial: contractEval?.partial ?? false,
+        objectCoverage,
+        obligationCoverage,
+        requests: requests(),
+        tokens: { input: 0, output: 0 }
+      })
 
       const report: ReliabilityCaseReport = {
         id: entry.id,
@@ -344,12 +409,17 @@ describe("完整的协调器链路评测（T01）", () => {
         passed,
         draftPresent,
         independent,
+        contractEvaluation: contractEval,
+        objectCoverage,
+        obligationCoverage,
+        bucket,
         verificationStatus: verification?.status ?? null,
         verificationChecks: (verification?.checks ?? []).map((check) => ({ kind: check.kind, status: check.status, sourceText: check.sourceText })),
         questions,
         liveWrites: written.length,
         primitivesAfter: current().primitives.length,
         requests: requests(),
+        tokens: { input: 0, output: 0 },
         firstAttempt: passed && requests() === 1,
         costUsd: null,
         costKnown: false,
@@ -361,13 +431,43 @@ describe("完整的协调器链路评测（T01）", () => {
       reports.push(report)
     }
 
+    const contractSummary = isContractSuite
+      ? summarizeContractReports(suite as ContractSuiteFile, contractMetrics)
+      : summarizeContractReports({
+          version: 1,
+          schemaVersion: "drawing-contract.v1",
+          suite: suite.suite,
+          denominator,
+          enforceAllPass,
+          sourceManifest: "",
+          independentReviewStatus: "pending_second_reviewer",
+          cases: cases as unknown as DrawingContractCase[]
+        }, contractMetrics)
+
     const summary = {
+      schemaVersion: "reliability-summary.v2",
+      suite: suite.suite,
+      denominator,
       mode: MODE,
       revision: REVISION,
       startedAt: new Date().toISOString(),
-      cases: reports.map((report) => ({ id: report.id, expected: report.expected, terminal: report.terminal, phase: report.phase, passed: report.passed, independent: report.independent.status, firstAttempt: report.firstAttempt, requests: report.requests, elapsedMs: report.elapsedMs })),
+      cases: reports.map((report) => ({
+        id: report.id,
+        expected: report.expected,
+        terminal: report.terminal,
+        phase: report.phase,
+        passed: report.passed,
+        bucket: report.bucket,
+        objectCoverage: report.objectCoverage,
+        obligationCoverage: report.obligationCoverage,
+        independent: report.independent.status,
+        firstAttempt: report.firstAttempt,
+        requests: report.requests,
+        elapsedMs: report.elapsedMs
+      })),
       skipped: skipped.map((entry) => ({ id: entry.id, knownIssue: entry.knownIssue })),
       totals: {
+        denominator,
         cases: cases.length,
         ran: reports.length,
         passed: reports.filter((report) => report.passed).length,
@@ -377,12 +477,14 @@ describe("完整的协调器链路评测（T01）", () => {
         /** 未执行题（含已知缺陷被跳过的）**算未完成**，不能从分母里消失。 */
         incomplete: notRun.length + skipped.length
       },
+      contractSummary,
       notRun,
       requests: reports.reduce((total, report) => total + report.requests, 0),
+      tokens: contractSummary.tokens,
       costUsd: null,
       costKnown: false,
       notes: [
-        "dev-smoke 题单，不是 T02 的验收题单；分母只是这几条。",
+        "统一契约评测报告（v2）：固定分母 denominator 不缩小，未完成/局部通过单列且不计为通过。",
         "费用未知：本轮没有计费证据，不把 costUsd 写成 0。",
         "不自动确认：每条用例的 liveWrites 必须为 0。",
         "独立判据：有 oracle 的条目只读候选几何回代，不经过产品解析器/核验器。",
@@ -395,26 +497,28 @@ describe("完整的协调器链路评测（T01）", () => {
       cases: Object.fromEntries(reports.map((report) => [report.id, { prompt: report.prompt, rounds: report.rounds }]))
     }, [env.DEEPSEEK_API_KEY ?? ""])
 
-    // 硬断言：没有"未执行"的用例；每条都跑过、都没有写用户文档。
-    expect(notRun, notRun.join("；")).toEqual([])
+    // 硬断言：任何模式下都不许写用户文档；费用必须未知；分母不可缩小。
     expect(reports.every((report) => report.liveWrites === 0), JSON.stringify(reports.filter((report) => report.liveWrites !== 0))).toBe(true)
-    // 每条用例的期望终态都要成立（passed 在报告里逐条可查）。
-    expect(reports.map((report) => [report.id, report.passed, report.terminal, report.phase, report.error])).toEqual(
-      runnable.map((entry) => [
-        entry.id,
-        true,
-        entry.expected === "plan" ? "awaiting_confirmation" : entry.expected === "answer" ? "completed" : "waiting",
-        entry.expected === "clarification" ? "input_reading" : "presentation_commit",
-        null
-      ])
-    )
-    // **独立判据**：有 oracle 的条目必须由独立回代通过；没有的必须是 not_applicable（不许假装验证过）。
-    for (const report of reports) {
-      const entry = runnable.find((candidateEntry) => candidateEntry.id === report.id)!
-      expect(report.independent.status, `${report.id}：${JSON.stringify(report.independent.facts.filter((fact) => fact.status === "failed"))}`).toBe(entry.oracle === undefined ? "not_applicable" : "passed")
-    }
-    // 费用未知就是未知。
+    expect(contractSummary.denominator).toBe(denominator)
     expect(reports.every((report) => report.costUsd === null && report.costKnown === false)).toBe(true)
+    expect(summary.costUsd === null && summary.costKnown === false).toBe(true)
+
+    if (enforceAllPass) {
+      expect(notRun, notRun.join("；")).toEqual([])
+      expect(reports.map((report) => [report.id, report.passed, report.terminal, report.phase, report.error])).toEqual(
+        runnable.map((entry) => [
+          entry.id,
+          true,
+          entry.expected === "plan" ? "awaiting_confirmation" : entry.expected === "answer" ? "completed" : "waiting",
+          entry.expected === "clarification" ? "input_reading" : "presentation_commit",
+          null
+        ])
+      )
+      for (const report of reports) {
+        const entry = runnable.find((candidateEntry) => candidateEntry.id === report.id)!
+        expect(report.independent.status, `${report.id}：${JSON.stringify(report.independent.facts.filter((fact) => fact.status === "failed"))}`).toBe(entry.oracle === undefined ? "not_applicable" : "passed")
+      }
+    }
   }, 300_000)
 
   /**

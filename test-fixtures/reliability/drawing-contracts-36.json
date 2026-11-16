@@ -1,0 +1,6945 @@
+{
+  "version": 1,
+  "schemaVersion": "drawing-contract.v1",
+  "suite": "drawing-contracts-36",
+  "denominator": 36,
+  "enforceAllPass": false,
+  "sourceManifest": "docs/audit/2026-11-15-drawing-baseline/manifest.json",
+  "independentReviewStatus": "pending_second_reviewer",
+  "notice": "Frozen 36-case golden drawing contracts derived strictly from the baseline manifest prompts. Denominator is immutably 36; incomplete or infeasible subquestions remain in the denominator.",
+  "cases": [
+    {
+      "id": "GK-S01",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年新高考I卷 第17题",
+      "prompt": "如图，四棱锥 P-ABCD 中，PA⊥底面 ABCD，PA=AC=2，BC=1，AB=√3。（1）若 AD⊥PB，证明：AD∥平面 PBC；（2）若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD。",
+      "inputHash": "59a8492e114b05000b78c0fac8007cb4f6528abe0826fe71977a825e9e9824de",
+      "sourceHash": "59a8492e114b05000b78c0fac8007cb4f6528abe0826fe71977a825e9e9824de",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "sharedScope": {
+        "entities": [
+          "P",
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "stemConditions": [
+          "PA⊥底面ABCD",
+          "PA=2",
+          "AC=2",
+          "BC=1",
+          "AB=√3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [
+              "AD⊥PB"
+            ],
+            "branchPolicy": "branch_or_parameterized"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "AD⊥DC",
+              "sin(二面角A-CP-D)=√42/7"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "若 AD⊥PB，证明：AD∥平面 PBC",
+          "localAssumptions": [
+            "AD⊥PB"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "若 AD⊥DC，且二面角 A-CP-D 的正弦值为 √42/7，求 AD",
+          "localAssumptions": [
+            "AD⊥DC",
+            "sin(A-CP-D)=√42/7"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "√3"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-pa-ab",
+          "kind": "perpendicular",
+          "description": "PA⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥底面 ABCD",
+            "start": 16,
+            "end": 26
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-pa-ac",
+          "kind": "perpendicular",
+          "description": "PA⊥AC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥底面 ABCD",
+            "start": 16,
+            "end": 26
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-pa-ad",
+          "kind": "perpendicular",
+          "description": "PA⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥底面 ABCD",
+            "start": 16,
+            "end": 26
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-pa",
+          "kind": "length",
+          "description": "PA=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA=AC=2",
+            "start": 27,
+            "end": 34
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "A",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ac",
+          "kind": "length",
+          "description": "AC=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA=AC=2",
+            "start": 27,
+            "end": 34
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BC=1",
+            "start": 35,
+            "end": 39
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=√3",
+            "start": 40,
+            "end": 45
+          },
+          "expectedValue": 1.7320508075688772,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 1.7320508075688772
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "show_base_plus_branch_note",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In stem alone, D direction varies until branch (1) AD⊥PB or (2) AD⊥DC & sin(A-CP-D)=√42/7 fixes it (in (2) AD=√3)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S02",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年新高考II卷 第17题",
+      "prompt": "如图，平面四边形 ABCD 中，AB=8，CD=3，AD=5√3，∠ADC=90°，∠BAD=30°，点 E，F 满足 AE=2/5 AD，AF=1/2 AB，将 △AEF 沿 EF 对折至 △PEF，使得 PC=4√3。（1）证明：EF⊥PD；（2）求面 PCD 与面 PBF 所成的二面角的正弦值。",
+      "inputHash": "812ae131b6b1b3a2e75653474c6bf909d45c352386bcb86176b15fc8f438ad26",
+      "sourceHash": "812ae131b6b1b3a2e75653474c6bf909d45c352386bcb86176b15fc8f438ad26",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "P"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "P"
+        ],
+        "stemConditions": [
+          "AB=8",
+          "CD=3",
+          "AD=5√3",
+          "∠ADC=90°",
+          "∠BAD=30°",
+          "AE=2/5 AD",
+          "AF=1/2 AB",
+          "PE=AE",
+          "PF=AF",
+          "PC=4√3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：EF⊥PD",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求面 PCD 与面 PBF 所成的二面角的正弦值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=8",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=8",
+            "start": 16,
+            "end": 20
+          },
+          "expectedValue": 8,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 8
+          }
+        },
+        {
+          "id": "ob-cd",
+          "kind": "length",
+          "description": "CD=3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "CD=3",
+            "start": 21,
+            "end": 25
+          },
+          "expectedValue": 3,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "D",
+            "value": 3
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=5√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=5√3",
+            "start": 26,
+            "end": 32
+          },
+          "expectedValue": 8.660254037844386,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 8.660254037844386
+          }
+        },
+        {
+          "id": "ob-adc",
+          "kind": "perpendicular",
+          "description": "AD⊥CD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ADC=90°",
+            "start": 33,
+            "end": 41
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "D",
+            "c": "C",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-bad",
+          "kind": "angle",
+          "description": "∠BAD=30°",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠BAD=30°",
+            "start": 42,
+            "end": 50
+          },
+          "expectedValue": 30,
+          "check": {
+            "kind": "angle-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D",
+            "degrees": 30
+          }
+        },
+        {
+          "id": "ob-ae",
+          "kind": "ratio",
+          "description": "AE = 2/5 AD (E on AD)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AE=2/5 AD",
+            "start": 60,
+            "end": 69
+          },
+          "expectedValue": 0.4,
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "E",
+            "a": "A",
+            "b": "D",
+            "t": 0.4
+          }
+        },
+        {
+          "id": "ob-af",
+          "kind": "ratio",
+          "description": "AF = 1/2 AB (F on AB)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AF=1/2 AB",
+            "start": 70,
+            "end": 79
+          },
+          "expectedValue": 0.5,
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "F",
+            "a": "A",
+            "b": "B",
+            "t": 0.5
+          }
+        },
+        {
+          "id": "ob-pe",
+          "kind": "length",
+          "description": "PE = AE = 2√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将 △AEF 沿 EF 对折至 △PEF",
+            "start": 80,
+            "end": 100
+          },
+          "expectedValue": 3.4641016151377544,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "E",
+            "value": 3.4641016151377544
+          }
+        },
+        {
+          "id": "ob-pf",
+          "kind": "length",
+          "description": "PF = AF = 4",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将 △AEF 沿 EF 对折至 △PEF",
+            "start": 80,
+            "end": 100
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "F",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-pc",
+          "kind": "length",
+          "description": "PC=4√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PC=4√3",
+            "start": 104,
+            "end": 110
+          },
+          "expectedValue": 6.928203230275509,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "C",
+            "value": 6.928203230275509
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S03",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年全国甲卷理科 第19题",
+      "prompt": "如图，在以 A，B，C，D，E，F 为顶点的五面体中，四边形 ABCD 与四边形 ADEF 均为等腰梯形，EF∥AD，BC∥AD，AD=4，AB=BC=EF=2，ED=√10，FB=2√3，M 为 AD 的中点。（1）证明：BM∥平面 CDE；（2）求二面角 F-BM-E 的正弦值。",
+      "inputHash": "bf7ec5d0e18351b5a05e7f6ca3a0d8a9b97f5cbbe6a9d4b35ece2e40c112214e",
+      "sourceHash": "bf7ec5d0e18351b5a05e7f6ca3a0d8a9b97f5cbbe6a9d4b35ece2e40c112214e",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "M"
+        ],
+        "stemConditions": [
+          "ABCD isosceles trapezoid",
+          "ADEF isosceles trapezoid",
+          "EF∥AD",
+          "BC∥AD",
+          "AD=4",
+          "AB=BC=CD=EF=2",
+          "ED=FA=√10",
+          "FB=2√3",
+          "M mid AD"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：BM∥平面 CDE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求二面角 F-BM-E 的正弦值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=4",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=4",
+            "start": 65,
+            "end": 69
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=EF=2",
+            "start": 70,
+            "end": 80
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=EF=2",
+            "start": 70,
+            "end": 80
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-cd",
+          "kind": "length",
+          "description": "CD=AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ABCD 与四边形 ADEF 均为等腰梯形",
+            "start": 27,
+            "end": 52
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "D",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ef",
+          "kind": "length",
+          "description": "EF=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=EF=2",
+            "start": 70,
+            "end": 80
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "E",
+            "b": "F",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ed",
+          "kind": "length",
+          "description": "ED=√10",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "ED=√10",
+            "start": 81,
+            "end": 87
+          },
+          "expectedValue": 3.1622776601683795,
+          "check": {
+            "kind": "distance-3d",
+            "a": "E",
+            "b": "D",
+            "value": 3.1622776601683795
+          }
+        },
+        {
+          "id": "ob-fa",
+          "kind": "length",
+          "description": "FA=ED=√10",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ABCD 与四边形 ADEF 均为等腰梯形",
+            "start": 27,
+            "end": 52
+          },
+          "expectedValue": 3.1622776601683795,
+          "check": {
+            "kind": "distance-3d",
+            "a": "F",
+            "b": "A",
+            "value": 3.1622776601683795
+          }
+        },
+        {
+          "id": "ob-fb",
+          "kind": "length",
+          "description": "FB=2√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "FB=2√3",
+            "start": 88,
+            "end": 94
+          },
+          "expectedValue": 3.4641016151377544,
+          "check": {
+            "kind": "distance-3d",
+            "a": "F",
+            "b": "B",
+            "value": 3.4641016151377544
+          }
+        },
+        {
+          "id": "ob-ef-ad",
+          "kind": "parallel",
+          "description": "EF∥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "EF∥AD",
+            "start": 53,
+            "end": 58
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "E",
+            "b": "F",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-bc-ad",
+          "kind": "parallel",
+          "description": "BC∥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BC∥AD",
+            "start": 59,
+            "end": 64
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "B",
+            "b": "C",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-m-mid",
+          "kind": "midpoint",
+          "description": "M mid AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "M 为 AD 的中点",
+            "start": 95,
+            "end": 105
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "M",
+            "a": "A",
+            "b": "D",
+            "t": 0.5
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S04",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年北京卷 第17题",
+      "prompt": "如图，在四棱锥 P-ABCD 中，PA⊥平面 ABCD，AB⊥AD，AC⊥CD，∠ABC=60°，PA=AB=BC，E 是 PC 的中点。（Ⅰ）证明：CD⊥AE；（Ⅱ）证明：PD⊥平面 ABE。",
+      "inputHash": "1b046cf5d8c3519faf280f5089d3cd59ffebc1888314be8348a9339304d52274",
+      "sourceHash": "1b046cf5d8c3519faf280f5089d3cd59ffebc1888314be8348a9339304d52274",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "sharedScope": {
+        "entities": [
+          "P",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "stemConditions": [
+          "PA⊥平面ABCD",
+          "AB⊥AD",
+          "AC⊥CD",
+          "∠ABC=60°",
+          "PA=AB=BC",
+          "E mid PC"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(Ⅰ)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(Ⅱ)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(Ⅰ)",
+          "kind": "proof",
+          "text": "证明：CD⊥AE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(Ⅱ)",
+          "kind": "proof",
+          "text": "证明：PD⊥平面 ABE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-pa-ab",
+          "kind": "perpendicular",
+          "description": "PA⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥平面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-pa-ad",
+          "kind": "perpendicular",
+          "description": "PA⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥平面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ab-ad",
+          "kind": "perpendicular",
+          "description": "AB⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB⊥AD",
+            "start": 28,
+            "end": 33
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ac-cd",
+          "kind": "perpendicular",
+          "description": "AC⊥CD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AC⊥CD",
+            "start": 34,
+            "end": 39
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "C",
+            "c": "C",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-abc",
+          "kind": "angle",
+          "description": "∠ABC=60°",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ABC=60°",
+            "start": 40,
+            "end": 48
+          },
+          "expectedValue": 60,
+          "check": {
+            "kind": "angle-3d",
+            "a": "B",
+            "b": "A",
+            "c": "B",
+            "d": "C",
+            "degrees": 60
+          }
+        },
+        {
+          "id": "ob-pa-eq-ab",
+          "kind": "ratio",
+          "description": "PA = AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA=AB=BC",
+            "start": 49,
+            "end": 57
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "ratio-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-bc-eq-ab",
+          "kind": "ratio",
+          "description": "BC = AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA=AB=BC",
+            "start": 49,
+            "end": 57
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "ratio-3d",
+            "a": "B",
+            "b": "C",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-e-mid",
+          "kind": "midpoint",
+          "description": "E mid PC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "E 是 PC 的中点",
+            "start": 58,
+            "end": 68
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "E",
+            "a": "P",
+            "b": "C",
+            "t": 0.5
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "scale parameter PA = AB = BC = s > 0 (canonical positive scale)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S05",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2023年新高考I卷 第18题",
+      "prompt": "如图，在正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2，AA₁=4。点 A₂，B₂，C₂，D₂ 分别在棱 AA₁，BB₁，CC₁，DD₁ 上，AA₂=1，BB₂=DD₂=2，CC₂=3。（1）证明：B₂C₂∥A₂D₂；（2）点 P 在棱 BB₁ 上，当二面角 P-A₂C₂-D₂ 为 120° 时，求 BP 的长。",
+      "inputHash": "c502ea0f07ab68c3f26a4f38d4e2311f3ace9b06df8d8ccd42b0f49fb77dcd91",
+      "sourceHash": "c502ea0f07ab68c3f26a4f38d4e2311f3ace9b06df8d8ccd42b0f49fb77dcd91",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "A₁",
+        "B₁",
+        "C₁",
+        "D₁",
+        "A₂",
+        "B₂",
+        "C₂",
+        "D₂",
+        "P"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "A₁",
+          "B₁",
+          "C₁",
+          "D₁",
+          "A₂",
+          "B₂",
+          "C₂",
+          "D₂",
+          "P"
+        ],
+        "stemConditions": [
+          "正四棱柱ABCD-A₁B₁C₁D₁",
+          "AB=2",
+          "AA₁=4",
+          "AA₂=1",
+          "BB₂=DD₂=2",
+          "CC₂=3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "P on BB₁",
+              "dihedral P-A₂C₂-D₂ = 120°"
+            ],
+            "branchPolicy": "diagnosis_if_infeasible"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：B₂C₂∥A₂D₂",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "点 P 在棱 BB₁ 上，当二面角 P-A₂C₂-D₂ 为 120° 时，求 BP 的长",
+          "localAssumptions": [
+            "P∈BB₁",
+            "∠=120°"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": false
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=2",
+            "start": 25,
+            "end": 29
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中，AB=2",
+            "start": 3,
+            "end": 29
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-aa1",
+          "kind": "length",
+          "description": "AA₁=4",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AA₁=4",
+            "start": 30,
+            "end": 35
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "A₁",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-ab-ad",
+          "kind": "perpendicular",
+          "description": "AB⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中",
+            "start": 3,
+            "end": 24
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-aa1-ab",
+          "kind": "perpendicular",
+          "description": "AA₁⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在正四棱柱 ABCD-A₁B₁C₁D₁ 中",
+            "start": 3,
+            "end": 24
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-a2",
+          "kind": "ratio",
+          "description": "A₂ at 1/4 of AA₁",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AA₂=1",
+            "start": 73,
+            "end": 78
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "A₂",
+            "a": "A",
+            "b": "A₁",
+            "t": 0.25
+          }
+        },
+        {
+          "id": "ob-b2",
+          "kind": "ratio",
+          "description": "B₂ at 1/2 of BB₁",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BB₂=DD₂=2",
+            "start": 79,
+            "end": 88
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "B₂",
+            "a": "B",
+            "b": "B₁",
+            "t": 0.5
+          }
+        },
+        {
+          "id": "ob-c2",
+          "kind": "ratio",
+          "description": "C₂ at 3/4 of CC₁",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "CC₂=3",
+            "start": 89,
+            "end": 94
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "C₂",
+            "a": "C",
+            "b": "C₁",
+            "t": 0.75
+          }
+        },
+        {
+          "id": "ob-d2",
+          "kind": "ratio",
+          "description": "D₂ at 1/2 of DD₁",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BB₂=DD₂=2",
+            "start": 79,
+            "end": 88
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "D₂",
+            "a": "D",
+            "b": "D₁",
+            "t": 0.5
+          }
+        },
+        {
+          "id": "ob-p-present",
+          "kind": "entity_present",
+          "description": "Point P named on diagram",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 P 在棱 BB₁ 上",
+            "start": 114,
+            "end": 126
+          },
+          "check": {
+            "kind": "entity-present",
+            "entityId": "P",
+            "space": "3d"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "show_base_plus_branch_note",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": [
+        "Note on frozen text: dihedral P-A₂C₂-D₂ in prompt reads 120° whereas |cos(P-A₂C₂-D₂)| >= √(3/7) > 0.5 along segment BB₁ (real 2023 exam value is 150° / BP=1 or 3); stem figure is uniquely determined and P sits on BB₁."
+      ]
+    },
+    {
+      "id": "GK-S06",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2023年新高考II卷 第20题",
+      "prompt": "如图，三棱锥 A-BCD 中，DA=DB=DC，BD⊥CD，∠ADB=∠ADC=60°，E 为 BC 的中点。（1）证明：BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。",
+      "inputHash": "08b21ee2c1423eb55884ee155514f1b37c6c187883fc74f86e46a225f333e705",
+      "sourceHash": "08b21ee2c1423eb55884ee155514f1b37c6c187883fc74f86e46a225f333e705",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "stemConditions": [
+          "DA=DB=DC",
+          "BD⊥CD",
+          "∠ADB=∠ADC=60°",
+          "E mid BC"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "向量EF=DA"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：BC⊥DA",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值",
+          "localAssumptions": [
+            "向量EF=DA"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-db-da",
+          "kind": "ratio",
+          "description": "DB = DA",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "DA=DB=DC",
+            "start": 15,
+            "end": 23
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "D",
+            "b": "B",
+            "c": "D",
+            "d": "A",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-dc-da",
+          "kind": "ratio",
+          "description": "DC = DA",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "DA=DB=DC",
+            "start": 15,
+            "end": 23
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "D",
+            "b": "C",
+            "c": "D",
+            "d": "A",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-bd-cd",
+          "kind": "perpendicular",
+          "description": "BD⊥CD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BD⊥CD",
+            "start": 24,
+            "end": 29
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "B",
+            "b": "D",
+            "c": "C",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-adb",
+          "kind": "angle",
+          "description": "∠ADB=60°",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ADB=∠ADC=60°",
+            "start": 30,
+            "end": 43
+          },
+          "expectedValue": 60,
+          "check": {
+            "kind": "angle-3d",
+            "a": "D",
+            "b": "A",
+            "c": "D",
+            "d": "B",
+            "degrees": 60
+          }
+        },
+        {
+          "id": "ob-adc",
+          "kind": "angle",
+          "description": "∠ADC=60°",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ADB=∠ADC=60°",
+            "start": 30,
+            "end": 43
+          },
+          "expectedValue": 60,
+          "check": {
+            "kind": "angle-3d",
+            "a": "D",
+            "b": "A",
+            "c": "D",
+            "d": "C",
+            "degrees": 60
+          }
+        },
+        {
+          "id": "ob-e-mid",
+          "kind": "midpoint",
+          "description": "E mid BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "E 为 BC 的中点",
+            "start": 44,
+            "end": 54
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "E",
+            "a": "B",
+            "b": "C",
+            "t": 0.5
+          }
+        },
+        {
+          "id": "ob-ef-da",
+          "kind": "vector_equal",
+          "description": "F - E = A - D",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 F 满足向量 EF=DA",
+            "start": 70,
+            "end": 84
+          },
+          "check": {
+            "kind": "vector-equal-3d",
+            "a": "E",
+            "b": "F",
+            "c": "D",
+            "d": "A"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "scale parameter DA = DB = DC = s > 0 (canonical positive scale)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S07",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2022年新高考I卷 第19题",
+      "prompt": "如图，直三棱柱 ABC-A₁B₁C₁ 的体积为 4，△A₁BC 的面积为 2√2。（1）求 A 到平面 A₁BC 的距离；（2）设 D 为 A₁C 的中点，AA₁=AB，平面 A₁BC⊥平面 ABB₁A₁，求二面角 A-BD-C 的正弦值。",
+      "inputHash": "12e31f5a3f752826818d62fedf464c2f92e2cb054a7ccb739d4f1a854c30e91f",
+      "sourceHash": "12e31f5a3f752826818d62fedf464c2f92e2cb054a7ccb739d4f1a854c30e91f",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "A₁",
+        "B₁",
+        "C₁",
+        "D"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "A₁",
+          "B₁",
+          "C₁",
+          "D"
+        ],
+        "stemConditions": [
+          "直三棱柱ABC-A₁B₁C₁",
+          "V=4",
+          "Area(△A₁BC)=2√2"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "D mid A₁C",
+              "AA₁=AB",
+              "平面A₁BC⊥平面ABB₁A₁"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 A 到平面 A₁BC 的距离",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "√2"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "设 D 为 A₁C 的中点，AA₁=AB，平面 A₁BC⊥平面 ABB₁A₁，求二面角 A-BD-C 的正弦值",
+          "localAssumptions": [
+            "D mid A₁C",
+            "AA₁=AB",
+            "平面A₁BC⊥平面ABB₁A₁"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-right-ab",
+          "kind": "perpendicular",
+          "description": "AA₁⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-right-ac",
+          "kind": "perpendicular",
+          "description": "AA₁⊥AC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直三棱柱 ABC-A₁B₁C₁",
+            "start": 3,
+            "end": 18
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "A",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-vol",
+          "kind": "volume",
+          "description": "V(A₁-ABC)=4/3 => prism vol 4",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "体积为 4",
+            "start": 20,
+            "end": 25
+          },
+          "expectedValue": 1.3333333333333333,
+          "check": {
+            "kind": "volume-tetrahedron-3d",
+            "p": "A₁",
+            "a": "A",
+            "b": "B",
+            "c": "C",
+            "value": 1.3333333333333333
+          }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Area(△A₁BC)=2√2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "△A₁BC 的面积为 2√2",
+            "start": 26,
+            "end": 40
+          },
+          "expectedValue": 2.8284271247461903,
+          "check": {
+            "kind": "triangle-area-3d",
+            "a": "A₁",
+            "b": "B",
+            "c": "C",
+            "value": 2.8284271247461903
+          }
+        },
+        {
+          "id": "ob-d-mid",
+          "kind": "midpoint",
+          "description": "D mid A₁C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设 D 为 A₁C 的中点",
+            "start": 64,
+            "end": 77
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "D",
+            "a": "A₁",
+            "b": "C",
+            "t": 0.5
+          }
+        },
+        {
+          "id": "ob-aa1-ab",
+          "kind": "ratio",
+          "description": "AA₁=AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "AA₁=AB",
+            "start": 78,
+            "end": 84
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "A",
+            "b": "A₁",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-planes",
+          "kind": "planes_perpendicular",
+          "description": "平面A₁BC⊥平面ABB₁A₁",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "平面 A₁BC⊥平面 ABB₁A₁",
+            "start": 85,
+            "end": 102
+          },
+          "check": {
+            "kind": "planes-perpendicular-3d",
+            "first": [
+              "A₁",
+              "B",
+              "C"
+            ],
+            "second": [
+              "A",
+              "B",
+              "A₁"
+            ]
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S08",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2022年全国甲卷理科 第18题",
+      "prompt": "如图，在四棱锥 P-ABCD 中，PD⊥底面 ABCD，CD∥AB，AD=DC=CB=1，AB=2，DP=√3。（1）证明：BD⊥PA；（2）求 PD 与平面 PAB 所成的角的正弦值。",
+      "inputHash": "7b06f69f16a8b27f083055f4cc51891ae65565c70d413b09d7fd981ab171b13a",
+      "sourceHash": "7b06f69f16a8b27f083055f4cc51891ae65565c70d413b09d7fd981ab171b13a",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "sharedScope": {
+        "entities": [
+          "P",
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "stemConditions": [
+          "PD⊥底面ABCD",
+          "CD∥AB",
+          "AD=DC=CB=1",
+          "AB=2",
+          "DP=√3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：BD⊥PA",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求 PD 与平面 PAB 所成的角的正弦值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-pd-ad",
+          "kind": "perpendicular",
+          "description": "PD⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PD⊥底面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "D",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-pd-cd",
+          "kind": "perpendicular",
+          "description": "PD⊥CD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PD⊥底面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "D",
+            "c": "C",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-cd-ab",
+          "kind": "parallel",
+          "description": "CD∥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "CD∥AB",
+            "start": 28,
+            "end": 33
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "C",
+            "b": "D",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 34,
+            "end": 44
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-dc",
+          "kind": "length",
+          "description": "DC=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 34,
+            "end": 44
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "D",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-cb",
+          "kind": "length",
+          "description": "CB=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 34,
+            "end": 44
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=2",
+            "start": 45,
+            "end": 49
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-dp",
+          "kind": "length",
+          "description": "DP=√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "DP=√3",
+            "start": 50,
+            "end": 55
+          },
+          "expectedValue": 1.7320508075688772,
+          "check": {
+            "kind": "distance-3d",
+            "a": "D",
+            "b": "P",
+            "value": 1.7320508075688772
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-S09",
+      "examType": "gaokao",
+      "category": "solid",
+      "format": "mcq",
+      "workspace": "geometry3d",
+      "source": "2010年新课标全国卷 第10题 (GAOKAO-Bench text-7)",
+      "prompt": "10. (5 分) 设三棱柱的侧棱垂直于底面, 所有棱长都为 $a$, 顶点都在一个球面 上, 则该球的表面积为（）\nA. $\\pi a^{2}$\nB. $\\frac{7}{3} \\pi a^{2}$\nC. $\\frac{11}{3} \\pi a^{2}$\nD. $5 \\pi a^{2}$\n",
+      "inputHash": "ad432b0c156b5be3be77138df2bab5435b416e8859995a8a10cb98f39281d895",
+      "sourceHash": "ad432b0c156b5be3be77138df2bab5435b416e8859995a8a10cb98f39281d895",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [],
+      "sharedScope": {
+        "entities": [],
+        "stemConditions": [
+          "三棱柱侧棱垂直于底面",
+          "所有棱长都为 a",
+          "顶点都在一个球面上"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "main",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "main",
+          "kind": "mcq",
+          "text": "则该球的表面积为（B. 7/3 π a²）",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "B"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-prism",
+          "kind": "solid_structure",
+          "description": "Regular equilateral right triangular prism in 3D",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "设三棱柱的侧棱垂直于底面, 所有棱长都为 $a$",
+            "start": 10,
+            "end": 34
+          },
+          "check": {
+            "kind": "prism-3d",
+            "hasEqualEdges": true
+          }
+        },
+        {
+          "id": "ob-sphere",
+          "kind": "solid_structure",
+          "description": "Circumsphere passing through prism vertices",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "顶点都在一个球面 上",
+            "start": 36,
+            "end": 46
+          },
+          "check": {
+            "kind": "circumsphere-3d"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "edge length parameter a > 0 (canonical a = 1 or a = 2)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S01",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年八省联考 第17题",
+      "prompt": "在平面四边形 ABCD 中，AB=AC=CD=1，∠ADC=30°，∠DAB=120°。将 △ACD 沿 AC 翻折至 △ACP，其中 P 为动点。（1）设 PC⊥AB，三棱锥 P-ABC 的各个顶点都在球 O 的球面上。（i）证明：平面 PAC⊥平面 ABC；（ii）求球 O 的半径。（2）求二面角 A-CP-B 的余弦值的最小值。",
+      "inputHash": "70afbbdbae54b0bdc1776a025312cf5f97c86e67c3a8a1797e58dc02d1218f7d",
+      "sourceHash": "70afbbdbae54b0bdc1776a025312cf5f97c86e67c3a8a1797e58dc02d1218f7d",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "P"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "P"
+        ],
+        "stemConditions": [
+          "AB=AC=CD=1",
+          "∠ADC=30°",
+          "∠DAB=120°",
+          "PC=1",
+          "PA=√3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [
+              "PC⊥AB",
+              "P,A,B,C on sphere O"
+            ],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "P dynamic around AC"
+            ],
+            "branchPolicy": "branch_or_parameterized"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)(i)",
+          "kind": "proof",
+          "text": "设 PC⊥AB，证明：平面 PAC⊥平面 ABC",
+          "localAssumptions": [
+            "PC⊥AB"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(1)(ii)",
+          "kind": "compute",
+          "text": "求球 O 的半径",
+          "localAssumptions": [
+            "PC⊥AB"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "√5/2"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求二面角 A-CP-B 的余弦值的最小值",
+          "localAssumptions": [
+            "P动点"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=AC=CD=1",
+            "start": 14,
+            "end": 24
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ac",
+          "kind": "length",
+          "description": "AC=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=AC=CD=1",
+            "start": 14,
+            "end": 24
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-cab",
+          "kind": "perpendicular",
+          "description": "∠CAB=90° (AC⊥AB from ∠DAC=30° & ∠DAB=120°)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠DAB=120°",
+            "start": 34,
+            "end": 43
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "C",
+            "b": "A",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-pc",
+          "kind": "length",
+          "description": "PC=CD=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将 △ACD 沿 AC 翻折至 △ACP",
+            "start": 44,
+            "end": 64
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-pa",
+          "kind": "length",
+          "description": "PA=AD=√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ADC=30°",
+            "start": 25,
+            "end": 33
+          },
+          "expectedValue": 1.7320508075688772,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "A",
+            "value": 1.7320508075688772
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "show_base_plus_branch_note",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In stem, fold angle P around AC varies; in (1) PC⊥AB fixes plane PAC⊥plane ABC"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S02",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2024年九省联考 第17题",
+      "prompt": "如图，在三棱柱 ABC-A₁B₁C₁ 中，直线 C₁B⊥平面 ABC，平面 AA₁C₁C⊥平面 BB₁C₁C。（1）求证：AC⊥BB₁；（2）若 AC=BC=BC₁=2，在棱 A₁B₁ 上是否存在一点 P，使二面角 P-BC-C₁ 的余弦值为 √6/3？若存在，求 A₁P/A₁B₁ 的值；若不存在，请说明理由。",
+      "inputHash": "07cee2ddc482b15d9ddbf12d4c0cfbf93177d8f4fb1dc9549076f4d3411b159c",
+      "sourceHash": "07cee2ddc482b15d9ddbf12d4c0cfbf93177d8f4fb1dc9549076f4d3411b159c",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "A₁",
+        "B₁",
+        "C₁",
+        "P"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "A₁",
+          "B₁",
+          "C₁",
+          "P"
+        ],
+        "stemConditions": [
+          "三棱柱ABC-A₁B₁C₁",
+          "C₁B⊥平面ABC",
+          "平面AA₁C₁C⊥平面BB₁C₁C"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "AC=BC=BC₁=2",
+              "P on A₁B₁",
+              "cos(P-BC-C₁)=√6/3"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "求证：AC⊥BB₁",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "若 AC=BC=BC₁=2，求 A₁P/A₁B₁",
+          "localAssumptions": [
+            "AC=BC=BC₁=2",
+            "cos=√6/3"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "1 - √2/2"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c1b-ab",
+          "kind": "perpendicular",
+          "description": "C₁B⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 C₁B⊥平面 ABC",
+            "start": 21,
+            "end": 34
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "C₁",
+            "b": "B",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-c1b-bc",
+          "kind": "perpendicular",
+          "description": "C₁B⊥BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 C₁B⊥平面 ABC",
+            "start": 21,
+            "end": 34
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "C₁",
+            "b": "B",
+            "c": "B",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-ac-bb1",
+          "kind": "perpendicular",
+          "description": "AC⊥BB₁",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "平面 AA₁C₁C⊥平面 BB₁C₁C",
+            "start": 35,
+            "end": 54
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "C",
+            "c": "B",
+            "d": "B₁"
+          }
+        },
+        {
+          "id": "ob-ac",
+          "kind": "length",
+          "description": "AC=2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "若 AC=BC=BC₁=2",
+            "start": 71,
+            "end": 84
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "若 AC=BC=BC₁=2",
+            "start": 71,
+            "end": 84
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc1",
+          "kind": "length",
+          "description": "BC₁=2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "若 AC=BC=BC₁=2",
+            "start": 71,
+            "end": 84
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C₁",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-p",
+          "kind": "entity_present",
+          "description": "P present on A₁B₁",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "在棱 A₁B₁ 上是否存在一点 P",
+            "start": 85,
+            "end": 102
+          },
+          "check": {
+            "kind": "entity-present",
+            "entityId": "P",
+            "space": "3d"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S03",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025届T8联考（12月） 第16题",
+      "prompt": "在四棱锥 P-ABCD 中，底面 ABCD 为直角梯形，AD∥BC，AB⊥AD，PA⊥平面 ABCD，AP=AD=2AB=4BC。（1）求证：平面 PAC⊥平面 PBD；（2）若 AM⊥平面 PCD 于点 M，求二面角 M-AD-P 的余弦值。",
+      "inputHash": "7f4f8a6ab59571f62134dff2bd20c530d3aa35a99f37be44dbbc219524c1326a",
+      "sourceHash": "7f4f8a6ab59571f62134dff2bd20c530d3aa35a99f37be44dbbc219524c1326a",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "P",
+          "A",
+          "B",
+          "C",
+          "D",
+          "M"
+        ],
+        "stemConditions": [
+          "AD∥BC",
+          "AB⊥AD",
+          "PA⊥平面ABCD",
+          "AP=AD=2AB=4BC"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "AM⊥平面PCD于点M"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "求证：平面 PAC⊥平面 PBD",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "若 AM⊥平面 PCD 于点 M，求二面角 M-AD-P 的余弦值",
+          "localAssumptions": [
+            "AM⊥PCD"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ad-bc",
+          "kind": "parallel",
+          "description": "AD∥BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD∥BC",
+            "start": 28,
+            "end": 33
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "A",
+            "b": "D",
+            "c": "B",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-ab-ad",
+          "kind": "perpendicular",
+          "description": "AB⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB⊥AD",
+            "start": 34,
+            "end": 39
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-pa-ab",
+          "kind": "perpendicular",
+          "description": "PA⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥平面 ABCD",
+            "start": 40,
+            "end": 50
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-pa-ad",
+          "kind": "perpendicular",
+          "description": "PA⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "PA⊥平面 ABCD",
+            "start": 40,
+            "end": 50
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "P",
+            "b": "A",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ratio-ab",
+          "kind": "ratio",
+          "description": "AB=2BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AP=AD=2AB=4BC",
+            "start": 51,
+            "end": 64
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "ratio-3d",
+            "a": "A",
+            "b": "B",
+            "c": "B",
+            "d": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ratio-ad",
+          "kind": "ratio",
+          "description": "AD=4BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AP=AD=2AB=4BC",
+            "start": 51,
+            "end": 64
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "ratio-3d",
+            "a": "A",
+            "b": "D",
+            "c": "B",
+            "d": "C",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-ratio-ap",
+          "kind": "ratio",
+          "description": "AP=4BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AP=AD=2AB=4BC",
+            "start": 51,
+            "end": 64
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "ratio-3d",
+            "a": "P",
+            "b": "A",
+            "c": "B",
+            "d": "C",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "perpendicular",
+          "description": "AM⊥CD",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "AM⊥平面 PCD 于点 M",
+            "start": 90,
+            "end": 104
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "M",
+            "c": "C",
+            "d": "D"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "scale parameter BC = s > 0 (canonical positive scale)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S04",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025届武汉市二月调考 第16题",
+      "prompt": "如图，在直角梯形 ABCD 中，BC∥AD，AB⊥AD，BC=8，AD=9，AB=2√3。点 E 为线段 BC（不在端点上）的一点，过 E 作 AB 的平行线交 AD 于 F。将矩形 ABEF 翻折至与梯形 ECDF 垂直，得到六面体 ABCDEF。（1）若 CF⊥BD，求 BE 的长；（2）求异面直线 BC 与 AD 所成角余弦值的最小值。",
+      "inputHash": "2f7ad3cf2095e5d26f2675af590a9e0365ebf558e7e4080b6fb9932b53d4b1a7",
+      "sourceHash": "2f7ad3cf2095e5d26f2675af590a9e0365ebf558e7e4080b6fb9932b53d4b1a7",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F"
+        ],
+        "stemConditions": [
+          "BC∥AD",
+          "AB⊥AD",
+          "BC=8",
+          "AD=9",
+          "AB=2√3",
+          "EF∥AB",
+          "平面ABEF⊥平面ECDF"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [
+              "CF⊥BD"
+            ],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "branch_or_parameterized"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "若 CF⊥BD，求 BE 的长",
+          "localAssumptions": [
+            "CF⊥BD"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "5"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求异面直线 BC 与 AD 所成角余弦值的最小值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=2√3",
+            "start": 38,
+            "end": 44
+          },
+          "expectedValue": 3.4641016151377544,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 3.4641016151377544
+          }
+        },
+        {
+          "id": "ob-ef",
+          "kind": "length",
+          "description": "EF=AB=2√3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
+            "start": 88,
+            "end": 111
+          },
+          "expectedValue": 3.4641016151377544,
+          "check": {
+            "kind": "distance-3d",
+            "a": "E",
+            "b": "F",
+            "value": 3.4641016151377544
+          }
+        },
+        {
+          "id": "ob-be-ec",
+          "kind": "sum",
+          "description": "BE + EC = 8",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BC=8",
+            "start": 28,
+            "end": 32
+          },
+          "expectedValue": 8,
+          "check": {
+            "kind": "sum-distance-3d",
+            "p": "E",
+            "a": "B",
+            "b": "C",
+            "total": 8
+          }
+        },
+        {
+          "id": "ob-af-fd",
+          "kind": "sum",
+          "description": "AF + FD = 9",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=9",
+            "start": 33,
+            "end": 37
+          },
+          "expectedValue": 9,
+          "check": {
+            "kind": "sum-distance-3d",
+            "p": "F",
+            "a": "A",
+            "b": "D",
+            "total": 9
+          }
+        },
+        {
+          "id": "ob-be-ec-perp",
+          "kind": "perpendicular",
+          "description": "BE⊥EC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "将矩形 ABEF 翻折至与梯形 ECDF 垂直",
+            "start": 88,
+            "end": 111
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "B",
+            "b": "E",
+            "c": "E",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-ef-ec-perp",
+          "kind": "perpendicular",
+          "description": "EF⊥EC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 E 作 AB 的平行线交 AD 于 F",
+            "start": 66,
+            "end": 87
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "E",
+            "b": "F",
+            "c": "E",
+            "d": "C"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "show_base_plus_branch_note",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In stem alone BE=x∈(0,8) varies; in (1) CF⊥BD uniquely fixes BE=5"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S05",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年广州市一模 第16题",
+      "prompt": "如图，在四棱锥 P-ABCD 中，底面 ABCD 为矩形，AB=2BC=2，侧面 PCD 是等边三角形，三棱锥 A-PBD 的体积为 √3/3，点 E 是棱 CP 的中点。（1）求证：平面 PBC⊥平面 PCD；（2）求平面 BDE 与平面 ABCD 夹角的余弦值。",
+      "inputHash": "ab432263d7258f9c3f6b3be9a48fba17620edddd0d8dc8155cf82663cecd5337",
+      "sourceHash": "ab432263d7258f9c3f6b3be9a48fba17620edddd0d8dc8155cf82663cecd5337",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "sharedScope": {
+        "entities": [
+          "P",
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "stemConditions": [
+          "底面ABCD为矩形",
+          "AB=2BC=2",
+          "侧面PCD是等边三角形",
+          "V(A-PBD)=√3/3",
+          "E mid CP"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "求证：平面 PBC⊥平面 PCD",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求平面 BDE 与平面 ABCD 夹角的余弦值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=2BC=2",
+            "start": 29,
+            "end": 37
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=2BC=2",
+            "start": 29,
+            "end": 37
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ab-bc",
+          "kind": "perpendicular",
+          "description": "AB⊥BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "底面 ABCD 为矩形",
+            "start": 17,
+            "end": 28
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "B",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-pc",
+          "kind": "length",
+          "description": "PC=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "侧面 PCD 是等边三角形",
+            "start": 38,
+            "end": 51
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-pd",
+          "kind": "length",
+          "description": "PD=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "侧面 PCD 是等边三角形",
+            "start": 38,
+            "end": 51
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "P",
+            "b": "D",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-vol",
+          "kind": "volume",
+          "description": "Vol(A-PBD)=√3/3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "三棱锥 A-PBD 的体积为 √3/3",
+            "start": 52,
+            "end": 71
+          },
+          "expectedValue": 0.5773502691896257,
+          "check": {
+            "kind": "volume-tetrahedron-3d",
+            "p": "A",
+            "a": "P",
+            "b": "B",
+            "c": "D",
+            "value": 0.5773502691896257
+          }
+        },
+        {
+          "id": "ob-e-mid",
+          "kind": "midpoint",
+          "description": "E mid CP",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "点 E 是棱 CP 的中点",
+            "start": 72,
+            "end": 85
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "E",
+            "a": "C",
+            "b": "P",
+            "t": 0.5
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S06",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第17题 (jyeoo)",
+      "prompt": "如图，在多面体 ABCDE 中，△AEB 为等边三角形，AD∥BC，BC⊥AB，CE=2√2，AB=BC=2AD=2。求证：（Ⅰ）BC⊥平面 ABE；（Ⅱ）平面 EBC⊥平面 DCE。",
+      "inputHash": "6252aa1091af673691759b34be8b2f6bd950fb3d43677b99b68006064482ab7f",
+      "sourceHash": "6252aa1091af673691759b34be8b2f6bd950fb3d43677b99b68006064482ab7f",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "stemConditions": [
+          "△AEB等边三角形",
+          "AD∥BC",
+          "BC⊥AB",
+          "CE=2√2",
+          "AB=BC=2AD=2"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(Ⅰ)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(Ⅱ)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(Ⅰ)",
+          "kind": "proof",
+          "text": "求证：BC⊥平面 ABE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(Ⅱ)",
+          "kind": "proof",
+          "text": "求证：平面 EBC⊥平面 DCE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab",
+          "kind": "length",
+          "description": "AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=2AD=2",
+            "start": 47,
+            "end": 58
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-bc",
+          "kind": "length",
+          "description": "BC=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=2AD=2",
+            "start": 47,
+            "end": 58
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "C",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB=BC=2AD=2",
+            "start": 47,
+            "end": 58
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ae",
+          "kind": "length",
+          "description": "AE=AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "△AEB 为等边三角形",
+            "start": 16,
+            "end": 27
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "E",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-be",
+          "kind": "length",
+          "description": "BE=AB=2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "△AEB 为等边三角形",
+            "start": 16,
+            "end": 27
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "distance-3d",
+            "a": "B",
+            "b": "E",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-ce",
+          "kind": "length",
+          "description": "CE=2√2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "CE=2√2",
+            "start": 40,
+            "end": 46
+          },
+          "expectedValue": 2.8284271247461903,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "E",
+            "value": 2.8284271247461903
+          }
+        },
+        {
+          "id": "ob-ad-bc",
+          "kind": "parallel",
+          "description": "AD∥BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD∥BC",
+            "start": 28,
+            "end": 33
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "A",
+            "b": "D",
+            "c": "B",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-bc-ab",
+          "kind": "perpendicular",
+          "description": "BC⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "BC⊥AB",
+            "start": 34,
+            "end": 39
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "B",
+            "b": "C",
+            "c": "A",
+            "d": "B"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S07",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第16题 (jyeoo)",
+      "prompt": "如图，在五面体 ABCDEF 中，FA⊥平面 ABCD，AD∥BC∥FE，AB⊥AD，M 为 EC 的中点，AF=AB=BC=FE=1/2 AD。（1）求异面直线 BF 与 DE 所成角的大小；（2）求二面角 A-CD-E 的余弦值。",
+      "inputHash": "1fd52b5f1c79dfaac5cbcd46d45cd18e0d397001e08506a14c4defb00ab48836",
+      "sourceHash": "1fd52b5f1c79dfaac5cbcd46d45cd18e0d397001e08506a14c4defb00ab48836",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_with_figure_reference",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "M"
+        ],
+        "stemConditions": [
+          "FA⊥平面ABCD",
+          "AD∥BC∥FE",
+          "AB⊥AD",
+          "M mid EC",
+          "AF=AB=BC=FE=1/2 AD"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求异面直线 BF 与 DE 所成角的大小",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求二面角 A-CD-E 的余弦值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-fa-ab",
+          "kind": "perpendicular",
+          "description": "FA⊥AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "FA⊥平面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "F",
+            "b": "A",
+            "c": "A",
+            "d": "B"
+          }
+        },
+        {
+          "id": "ob-fa-ad",
+          "kind": "perpendicular",
+          "description": "FA⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "FA⊥平面 ABCD",
+            "start": 17,
+            "end": 27
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "F",
+            "b": "A",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ab-ad",
+          "kind": "perpendicular",
+          "description": "AB⊥AD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB⊥AD",
+            "start": 37,
+            "end": 42
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "A",
+            "b": "B",
+            "c": "A",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ad-bc",
+          "kind": "parallel",
+          "description": "AD∥BC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD∥BC∥FE",
+            "start": 28,
+            "end": 36
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "A",
+            "b": "D",
+            "c": "B",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-ad-fe",
+          "kind": "parallel",
+          "description": "AD∥FE",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD∥BC∥FE",
+            "start": 28,
+            "end": 36
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "A",
+            "b": "D",
+            "c": "F",
+            "d": "E"
+          }
+        },
+        {
+          "id": "ob-fa-eq",
+          "kind": "ratio",
+          "description": "AF=AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AF=AB=BC=FE=1/2 AD",
+            "start": 54,
+            "end": 72
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "A",
+            "b": "F",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-bc-eq",
+          "kind": "ratio",
+          "description": "BC=AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AF=AB=BC=FE=1/2 AD",
+            "start": 54,
+            "end": 72
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "B",
+            "b": "C",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-fe-eq",
+          "kind": "ratio",
+          "description": "FE=AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AF=AB=BC=FE=1/2 AD",
+            "start": 54,
+            "end": 72
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "F",
+            "b": "E",
+            "c": "A",
+            "d": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ad-2ab",
+          "kind": "ratio",
+          "description": "AD=2AB",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AF=AB=BC=FE=1/2 AD",
+            "start": 54,
+            "end": 72
+          },
+          "check": {
+            "kind": "ratio-3d",
+            "a": "A",
+            "b": "D",
+            "c": "A",
+            "d": "B",
+            "value": 2
+          }
+        },
+        {
+          "id": "ob-m-mid",
+          "kind": "midpoint",
+          "description": "M mid EC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "M 为 EC 的中点",
+            "start": 43,
+            "end": 53
+          },
+          "check": {
+            "kind": "point-on-segment-ratio-3d",
+            "p": "M",
+            "a": "E",
+            "b": "C",
+            "t": 0.5
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "scale parameter AB = s > 0 (canonical positive scale)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S08",
+      "examType": "joint",
+      "category": "solid",
+      "format": "open_ended",
+      "workspace": "geometry3d",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第15题 (jyeoo)",
+      "prompt": "在梯形 ABCD 中，AB∥CD，AD=DC=CB=1，∠ABC=60°，四边形 ACFE 为矩形，平面 ACFE⊥平面 ABCD，CF=1。（1）求证：BC⊥平面 ACFE；（2）若点 M 在线段 EF 上运动，设平面 MAB 与平面 FCB 的夹角为 θ，试求 cosθ 的范围。",
+      "inputHash": "0c4d45964b209cec25c207a9f84b82fd680f9bd5ba639814e17c25d757a4ddc9",
+      "sourceHash": "0c4d45964b209cec25c207a9f84b82fd680f9bd5ba639814e17c25d757a4ddc9",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E",
+          "F",
+          "M"
+        ],
+        "stemConditions": [
+          "AB∥CD",
+          "AD=DC=CB=1",
+          "∠ABC=60°",
+          "ACFE矩形",
+          "平面ACFE⊥平面ABCD",
+          "CF=1"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "M on segment EF"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "求证：BC⊥平面 ACFE",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "若点 M 在线段 EF 上运动，求 cosθ 的范围",
+          "localAssumptions": [
+            "M∈EF"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-ab-cd",
+          "kind": "parallel",
+          "description": "AB∥CD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AB∥CD",
+            "start": 11,
+            "end": 16
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "A",
+            "b": "B",
+            "c": "C",
+            "d": "D"
+          }
+        },
+        {
+          "id": "ob-ad",
+          "kind": "length",
+          "description": "AD=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 17,
+            "end": 27
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "D",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-dc",
+          "kind": "length",
+          "description": "DC=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 17,
+            "end": 27
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "D",
+            "b": "C",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-cb",
+          "kind": "length",
+          "description": "CB=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "AD=DC=CB=1",
+            "start": 17,
+            "end": 27
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "B",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-abc",
+          "kind": "angle",
+          "description": "∠ABC=60°",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "∠ABC=60°",
+            "start": 28,
+            "end": 36
+          },
+          "expectedValue": 60,
+          "check": {
+            "kind": "angle-3d",
+            "a": "B",
+            "b": "A",
+            "c": "B",
+            "d": "C",
+            "degrees": 60
+          }
+        },
+        {
+          "id": "ob-cf",
+          "kind": "length",
+          "description": "CF=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "CF=1",
+            "start": 66,
+            "end": 70
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "C",
+            "b": "F",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-ae",
+          "kind": "length",
+          "description": "AE=CF=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ACFE 为矩形",
+            "start": 37,
+            "end": 49
+          },
+          "expectedValue": 1,
+          "check": {
+            "kind": "distance-3d",
+            "a": "A",
+            "b": "E",
+            "value": 1
+          }
+        },
+        {
+          "id": "ob-acfe-rect",
+          "kind": "perpendicular",
+          "description": "CF⊥AC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ACFE 为矩形",
+            "start": 37,
+            "end": 49
+          },
+          "check": {
+            "kind": "perp-3d",
+            "a": "C",
+            "b": "F",
+            "c": "A",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-ef-ac",
+          "kind": "parallel",
+          "description": "EF∥AC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ACFE 为矩形",
+            "start": 37,
+            "end": 49
+          },
+          "check": {
+            "kind": "parallel-3d",
+            "a": "E",
+            "b": "F",
+            "c": "A",
+            "d": "C"
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "entity_present",
+          "description": "Point M present",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 M 在线段 EF 上运动",
+            "start": 92,
+            "end": 106
+          },
+          "check": {
+            "kind": "entity-present",
+            "entityId": "M",
+            "space": "3d"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (2), M moves on segment EF (any interior point M on EF satisfies representation)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-S09",
+      "examType": "joint",
+      "category": "solid",
+      "format": "mcq",
+      "workspace": "geometry3d",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第4题 (jyeoo)",
+      "prompt": "4. 已知半球内有一个内接正方体，正方体的一个面在半球的底面圆内，若正方体的棱长为 2，则半球的表面积为（　　）\nA. 10π\nB. 12π\nC. 15π\nD. 18π",
+      "inputHash": "00bd85ac3707247dcb46dad0a644230a9f40b01d07e16fd39fd33870a05f26ff",
+      "sourceHash": "00bd85ac3707247dcb46dad0a644230a9f40b01d07e16fd39fd33870a05f26ff",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [],
+      "sharedScope": {
+        "entities": [],
+        "stemConditions": [
+          "正方体棱长2",
+          "正方体一个面在半球底面圆内",
+          "内接于半球"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "main",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "main",
+          "kind": "mcq",
+          "text": "则半球的表面积为（D. 18π）",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "D"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-cube",
+          "kind": "solid_structure",
+          "description": "Cube with edge length 2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "若正方体的棱长为 2",
+            "start": 33,
+            "end": 43
+          },
+          "check": {
+            "kind": "cube-3d",
+            "edgeLength": 2
+          }
+        },
+        {
+          "id": "ob-hemisphere",
+          "kind": "solid_structure",
+          "description": "Hemisphere of radius √6 enclosing the cube",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "已知半球内有一个内接正方体",
+            "start": 3,
+            "end": 16
+          },
+          "check": {
+            "kind": "hemisphere-3d",
+            "radius": 2.449489742783178
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P01",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年新高考II卷 第16题",
+      "prompt": "已知椭圆 C：x²/a²+y²/b²=1（a>b>0）的离心率为√2/2，长轴长为4。（1）求C的方程；（2）过点(0,-2)的直线l交C于A、B两点，O为坐标原点。若△OAB的面积为√2，求|AB|。",
+      "inputHash": "e5b0274208489148cd04c5b89ab0616ba423ace512a260f953625b1ec2466cd4",
+      "sourceHash": "e5b0274208489148cd04c5b89ab0616ba423ace512a260f953625b1ec2466cd4",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "l",
+        "A",
+        "B",
+        "O"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "l",
+          "A",
+          "B",
+          "O"
+        ],
+        "stemConditions": [
+          "椭圆 C: x²/a²+y²/b²=1(a>b>0)",
+          "e=√2/2",
+          "2a=4"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "l过(0,-2)",
+              "Area(△OAB)=√2"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 C 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/4 + y²/2 = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求 |AB|",
+          "localAssumptions": [
+            "l过(0,-2)",
+            "S_OAB=√2"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "√5"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/4 + y²/2 = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "离心率为√2/2，长轴长为4",
+            "start": 28,
+            "end": 42
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.4142135623730951
+          }
+        },
+        {
+          "id": "ob-l-pt",
+          "kind": "line_constraint",
+          "description": "Line l passes through (0,-2)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过点(0,-2)的直线l",
+            "start": 55,
+            "end": 67
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "x": 0,
+            "y": -2
+          }
+        },
+        {
+          "id": "ob-a-on",
+          "kind": "incidence",
+          "description": "A on ellipse C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交C于A、B两点",
+            "start": 67,
+            "end": 75
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "A",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.4142135623730951
+          }
+        },
+        {
+          "id": "ob-b-on",
+          "kind": "incidence",
+          "description": "B on ellipse C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交C于A、B两点",
+            "start": 67,
+            "end": 75
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "B",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.4142135623730951
+          }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Area(△OAB)=√2",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "△OAB的面积为√2",
+            "start": 84,
+            "end": 94
+          },
+          "expectedValue": 1.4142135623730951,
+          "check": {
+            "kind": "triangle-area-2d",
+            "a": "O",
+            "b": "A",
+            "c": "B",
+            "value": 1.4142135623730951
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (2), k = ±√6/2 (either symmetric sign ±√6/2 satisfies Area=√2)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P02",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国乙卷理科 第20题 (GAOKAO-Bench)",
+      "prompt": "20. 已知椭圆 $E$ 的中心为坐标原点, 对称轴为 $x$ 轴、 $y$ 轴, 且过 $A(0,-2), B\\left(\\frac{3}{2},-1\\right)$ 两点.\n\n(1) 求 $E$ 的方程;\n\n(2) 设过点 $P(1,-2)$ 的直线交 $E$ 于 $M, N$ 两点, 过 $M$ 且平行于 $x$ 轴的直线与线段 $A B$ 交于 点 $T$, 点 $H$ 满足 $\\overrightarrow{M T}=\\overrightarrow{T H}$. 证明: 直线 $H N$ 过定点.\n",
+      "inputHash": "158fb91a7d802a46a9430dd8cceb4080da4ce530580a90e1b82e87fd3181be96",
+      "sourceHash": "158fb91a7d802a46a9430dd8cceb4080da4ce530580a90e1b82e87fd3181be96",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "E",
+        "A",
+        "B",
+        "P",
+        "M",
+        "N",
+        "T",
+        "H"
+      ],
+      "sharedScope": {
+        "entities": [
+          "E",
+          "A",
+          "B",
+          "P",
+          "M",
+          "N",
+          "T",
+          "H"
+        ],
+        "stemConditions": [
+          "椭圆 E 中心原点, 对称轴 x,y 轴",
+          "过 A(0,-2), B(3/2,-1)"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "过P(1,-2)直线交E于M,N",
+              "T=horizontal(M)∩AB",
+              "MT=TH"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 E 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "y²/4 + x²/3 = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "proof",
+          "text": "证明：直线 HN 过定点",
+          "localAssumptions": [
+            "过P(1,-2)交E于M,N",
+            "MT=TH"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-e",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/3 + y²/4 = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "且过 $A(0,-2), B\\left(\\frac{3}{2},-1\\right)$ 两点",
+            "start": 42,
+            "end": 87
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 1.7320508075688772,
+            "ry": 2
+          }
+        },
+        {
+          "id": "ob-a",
+          "kind": "point_value",
+          "description": "A(0,-2)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "A(0,-2)",
+            "start": 46,
+            "end": 53
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A",
+            "x": 0,
+            "y": -2
+          }
+        },
+        {
+          "id": "ob-b",
+          "kind": "point_value",
+          "description": "B(1.5,-1)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "B\\left(\\frac{3}{2},-1\\right)$",
+            "start": 55,
+            "end": 84
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "B",
+            "x": 1.5,
+            "y": -1
+          }
+        },
+        {
+          "id": "ob-p",
+          "kind": "point_value",
+          "description": "P(1,-2)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "$P(1,-2)$",
+            "start": 114,
+            "end": 123
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "P",
+            "x": 1,
+            "y": -2
+          }
+        },
+        {
+          "id": "ob-m-on",
+          "kind": "incidence",
+          "description": "M on ellipse E",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交 $E$ 于 $M, N$ 两点",
+            "start": 127,
+            "end": 144
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "M",
+            "cx": 0,
+            "cy": 0,
+            "rx": 1.7320508075688772,
+            "ry": 2
+          }
+        },
+        {
+          "id": "ob-n-on",
+          "kind": "incidence",
+          "description": "N on ellipse E",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "交 $E$ 于 $M, N$ 两点",
+            "start": 127,
+            "end": 144
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "N",
+            "cx": 0,
+            "cy": 0,
+            "rx": 1.7320508075688772,
+            "ry": 2
+          }
+        },
+        {
+          "id": "ob-mt-th",
+          "kind": "vector_ratio",
+          "description": "T midpoint of MH (T - M = H - T)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "$\\overrightarrow{M T}=\\overrightarrow{T H}$",
+            "start": 194,
+            "end": 237
+          },
+          "check": {
+            "kind": "vector-ratio-2d",
+            "a": "M",
+            "b": "T",
+            "c": "T",
+            "d": "H",
+            "k": 1
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Secant line MN through P(1,-2) (any valid secant intersecting E at two distinct points M,N with horizontal MT meeting AB)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P03",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "prompt": "20. 设抛物线 $C: y^{2}=2 p x(p>0)$ 的焦点为 $F$, 点 $D(p, 0)$, 过 $F$ 的直线交 $C$ 于 $M, N$ 两 点. 当直线 $M D$ 垂直于 $x$ 轴时, $|M F|=3$.\n\n(1) 求 $C$ 的方程;\n\n(2) 设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$, 记直线 $M N, A B$ 的倾斜角分别为 $a, \\beta$. 当 $a-\\beta$ 取得最大值时, 求直线 $A B$ 的方程.\n",
+      "inputHash": "c354edd536f5e8a5a93d7d2fd714141f9e54c17207911329e107424a88452d84",
+      "sourceHash": "c354edd536f5e8a5a93d7d2fd714141f9e54c17207911329e107424a88452d84",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "F",
+        "D",
+        "M",
+        "N",
+        "A",
+        "B"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "F",
+          "D",
+          "M",
+          "N",
+          "A",
+          "B"
+        ],
+        "stemConditions": [
+          "C: y²=2px(p>0)",
+          "F焦点",
+          "D(p,0)",
+          "MD⊥x轴时|MF|=3 => p=2"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "MD,ND交C另一点A,B"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 C 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "y² = 4x"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "当 α-β 取得最大值时，求直线 AB 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Parabola y² = 4x (p=2)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "当直线 $M D$ 垂直于 $x$ 轴时, $|M F|=3$",
+            "start": 83,
+            "end": 114
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "x",
+            "focalParameter": 2
+          }
+        },
+        {
+          "id": "ob-f",
+          "kind": "point_value",
+          "description": "F(1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "焦点为 $F$",
+            "start": 32,
+            "end": 39
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F",
+            "x": 1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-d",
+          "kind": "point_value",
+          "description": "D(2,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "点 $D(p, 0)$",
+            "start": 41,
+            "end": 52
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "D",
+            "x": 2,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-col-mnf",
+          "kind": "collinear",
+          "description": "M, N, F collinear",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $F$ 的直线交 $C$ 于 $M, N$ 两 点",
+            "start": 54,
+            "end": 81
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "M",
+            "b": "N",
+            "c": "F"
+          }
+        },
+        {
+          "id": "ob-col-mda",
+          "kind": "collinear",
+          "description": "M, D, A collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "M",
+            "b": "D",
+            "c": "A"
+          }
+        },
+        {
+          "id": "ob-col-ndb",
+          "kind": "collinear",
+          "description": "N, D, B collinear",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "设直线 $M D, N D$ 与 $C$ 的另一个交点分别为 $A, B$",
+            "start": 137,
+            "end": 174
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "N",
+            "b": "D",
+            "c": "B"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Secant line MN through F(1,0) chosen non-vertical"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P04",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
+      "prompt": "20. 已知函数 $f(x)=x^{3}-x, g(x)=x^{2}+a$, 曲线 $y=f(x)$ 在点 $\\left(x_{1}, f\\left(x_{1}\\right)\\right)$ 处的切线也是曲线 $y=g(x)$ 的切线.\n\n(1) 若 $x_{1}=-1$, 求 $a$;\n\n(2) 求 $a$ 的取值范围.\n",
+      "inputHash": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9",
+      "sourceHash": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "f",
+        "g"
+      ],
+      "sharedScope": {
+        "entities": [
+          "f",
+          "g"
+        ],
+        "stemConditions": [
+          "f(x)=x³-x",
+          "g(x)=x²+a",
+          "tangent at x₁ tangent to g"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [
+              "x₁=-1 => a=3"
+            ],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "a range"
+            ],
+            "branchPolicy": "branch_or_parameterized"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "若 x₁=-1，求 a",
+          "localAssumptions": [
+            "x₁=-1"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "a = 3"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求 a 的取值范围",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-f-0",
+          "kind": "function_sample",
+          "description": "f(2) = 6",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "$f(x)=x^{3}-x",
+            "start": 9,
+            "end": 22
+          },
+          "check": {
+            "kind": "function-sample-2d",
+            "x": 2,
+            "value": 6
+          }
+        },
+        {
+          "id": "ob-g-0",
+          "kind": "function_sample",
+          "description": "g(1) = 1 + 3 = 4 in (1)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "若 $x_{1}=-1$, 求 $a$",
+            "start": 124,
+            "end": 143
+          },
+          "check": {
+            "kind": "function-sample-2d",
+            "x": 1,
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-tan",
+          "kind": "line_equation",
+          "description": "Common tangent line through (-1,0) and (1,4)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "在点 $\\left(x_{1}, f\\left(x_{1}\\right)\\right)$ 处的切线也是曲线 $y=g(x)$ 的切线",
+            "start": 51,
+            "end": 117
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "x": -1,
+            "y": 0
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (2), parameter a ∈ (-∞, 4] varies; in (1), x₁=-1 fixes a=3 and tangent y=2x+2"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P05",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "prompt": "20. 抛物线 $C$ 的顶点为坐标原点 $O$. 焦点在 $x$ 轴上, 直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$. 已知 点 $M(2,0)$, 且 $\\odot M$ 与 $l$ 相切.\n\n(1) 求 $C, \\odot M$ 的方程; (2) 设 $A_{1}, A_{2}, A_{3}$ 是 $C$ 上的三个点, 直线 $A_{1} A_{2}, A_{1} A_{3}$ 均与 $\\odot M$ 相切. 判断直线 $A_{2} A_{3}$ 与 $\\odot M$ 的位置关系, 并说明理由.\n",
+      "inputHash": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a",
+      "sourceHash": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "O",
+        "l",
+        "P",
+        "Q",
+        "M",
+        "A₁",
+        "A₂",
+        "A₃"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "O",
+          "l",
+          "P",
+          "Q",
+          "M",
+          "A₁",
+          "A₂",
+          "A₃"
+        ],
+        "stemConditions": [
+          "C vertex O, focus on x-axis",
+          "l:x=1 meets C at P,Q with OP⊥OQ => y²=x",
+          "M(2,0), circle M tangent to l => r=1"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "A₁,A₂,A₃ on C, A₁A₂ & A₁A₃ tangent to ⊙M"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 C, ⊙M 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "C: y²=x, ⊙M: (x-2)²+y²=1"
+        },
+        {
+          "id": "(2)",
+          "kind": "judge",
+          "text": "判断直线 A₂A₃ 与 ⊙M 的位置关系",
+          "localAssumptions": [
+            "A₁A₂, A₁A₃ tangent to ⊙M"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Parabola y² = x (p=0.5)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$ 交 $C$ 于 $P, Q$ 两点, 且 $O P \\perp O Q$",
+            "start": 38,
+            "end": 86
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "x",
+            "focalParameter": 0.5
+          }
+        },
+        {
+          "id": "ob-circle",
+          "kind": "circle_equation",
+          "description": "Circle (x-2)² + y² = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "已知 点 $M(2,0)$, 且 $\\odot M$ 与 $l$ 相切",
+            "start": 88,
+            "end": 123
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "circle",
+            "cx": 2,
+            "cy": 0,
+            "radius": 1
+          }
+        },
+        {
+          "id": "ob-l",
+          "kind": "line_equation",
+          "description": "Line x = 1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 $l: x=1$",
+            "start": 38,
+            "end": 49
+          },
+          "check": {
+            "kind": "line-vertical-2d",
+            "x": 1
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (2), A₁∈C chosen with chords A₁A₂, A₁A₃ tangent to ⊙M"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P06",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2019年新课标III理科 第21题 (GAOKAO-Bench)",
+      "prompt": "21. 已知曲线 $C: y=\\frac{x^{2}}{2}, D$ 为直线 $y=-\\frac{1}{2}$ 上的动点, 过 $D$ 作 $C$ 的两条切线, 切点分别为 $A$, B.\n\n(1) 证明: 直线 $A B$ 过定点:\n\n(2) 若以 $E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆与直线 $A B$ 相切, 且切点为线段 $A B$ 的中点, 求四边形 $A D B E$ 的面积.\n",
+      "inputHash": "765eabaebd3f7f268ab82dc4a7bbe1d5cdaf1095432c549383e1bb284c4fcf42",
+      "sourceHash": "765eabaebd3f7f268ab82dc4a7bbe1d5cdaf1095432c549383e1bb284c4fcf42",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "D",
+        "A",
+        "B",
+        "E"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "D",
+          "A",
+          "B",
+          "E"
+        ],
+        "stemConditions": [
+          "C: y=x²/2",
+          "D on y=-1/2",
+          "DA, DB tangent to C at A, B"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "circle E(0,5/2) tangent to AB at midpoint of AB"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：直线 AB 过定点",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求四边形 ADBE 的面积",
+          "localAssumptions": [
+            "E(0,5/2)圆与AB切于中点"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Parabola x² = 2y (p=1)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "已知曲线 $C: y=\\frac{x^{2}}{2}, D$",
+            "start": 4,
+            "end": 34
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "y",
+            "focalParameter": 1
+          }
+        },
+        {
+          "id": "ob-d",
+          "kind": "incidence",
+          "description": "D lies on y = -0.5",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "D$ 为直线 $y=-\\frac{1}{2}$ 上的动点",
+            "start": 32,
+            "end": 60
+          },
+          "check": {
+            "kind": "point-y-2d",
+            "label": "D",
+            "y": -0.5
+          }
+        },
+        {
+          "id": "ob-e",
+          "kind": "point_value",
+          "description": "E(0, 2.5)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "$E\\left(0, \\frac{5}{2}\\right)$ 为圆心的圆",
+            "start": 126,
+            "end": 162
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "E",
+            "x": 0,
+            "y": 2.5
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (1), D varies on y=-1/2; in (2), tangent circle at E(0,5/2) fixes D"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P07",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2021年新高考I卷 第21题 (GAOKAO-Bench)",
+      "prompt": "21.已知抛物线 $C: x^{2}=2 p y(p>0)$ 的焦点为 $F$, 且 $F$ 与圆 $M: x^{2}+(y+4)^{2}=1$ 上点的 距离的最小值为 4 .\n\n(1) 求 $p$;\n\n(2) 若点 $P$ 在 $M$ 上, $P A, P B$ 是 $C$ 的两条切线, $A, B$ 是切点, 求 $\\triangle P A B$ 面积的最 大值.\n",
+      "inputHash": "6eaa5b742714b6adc166784b6e50313d0046fe34706f5a1e9239ba31a4131464",
+      "sourceHash": "6eaa5b742714b6adc166784b6e50313d0046fe34706f5a1e9239ba31a4131464",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "F",
+        "M",
+        "P",
+        "A",
+        "B"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "F",
+          "M",
+          "P",
+          "A",
+          "B"
+        ],
+        "stemConditions": [
+          "C: x²=2py(p>0)",
+          "F焦点",
+          "M: x²+(y+4)²=1",
+          "min dist(F, M)=4 => p=2"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "P on M",
+              "PA,PB tangent to C"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 p",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "p = 2"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求 △PAB 面积的最大值",
+          "localAssumptions": [
+            "P on M",
+            "PA,PB tangent to C"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Parabola x² = 4y (p=2)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "已知抛物线 $C: x^{2}=2 p y(p>0)$",
+            "start": 3,
+            "end": 30
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "y",
+            "focalParameter": 2
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "circle_equation",
+          "description": "Circle M(0,-4), r=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "圆 $M: x^{2}+(y+4)^{2}=1$",
+            "start": 48,
+            "end": 72
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "circle",
+            "cx": 0,
+            "cy": -4,
+            "radius": 1
+          }
+        },
+        {
+          "id": "ob-f",
+          "kind": "point_value",
+          "description": "F(0, 1)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "焦点为 $F$",
+            "start": 32,
+            "end": 39
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F",
+            "x": 0,
+            "y": 1
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "P chosen on circle M (canonical optimal or representative point)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P08",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "fill_in",
+      "workspace": "conics",
+      "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
+      "prompt": "14. 若双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$ 的渐近线与圆 $x^{2}+y^{2}-4 y+3=0$ 相切, 则\n\n$m=$\n",
+      "inputHash": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4",
+      "sourceHash": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [],
+      "sharedScope": {
+        "entities": [],
+        "stemConditions": [
+          "双曲线 y² - x²/m² = 1 (m>0)",
+          "渐近线与圆 x²+y²-4y+3=0 相切 => m=1/√3"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "main",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "main",
+          "kind": "fill_in",
+          "text": "m = √3/3",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "√3/3"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-circle",
+          "kind": "circle_equation",
+          "description": "Circle (0,2), r=1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "圆 $x^{2}+y^{2}-4 y+3=0$",
+            "start": 49,
+            "end": 72
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "circle",
+            "cx": 0,
+            "cy": 2,
+            "radius": 1
+          }
+        },
+        {
+          "id": "ob-hyp",
+          "kind": "conic_equation",
+          "description": "Hyperbola y² - 3x² = 1 (m=1/√3)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "双曲线 $y^{2}-\\frac{x^{2}}{m^{2}}=1(m>0)$",
+            "start": 5,
+            "end": 43
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "hyperbola",
+            "cx": 0,
+            "cy": 0,
+            "axis": "y",
+            "rx": 0.5773502691896258,
+            "ry": 1
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "GK-P09",
+      "examType": "gaokao",
+      "category": "plane",
+      "format": "mcq",
+      "workspace": "conics",
+      "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
+      "prompt": "6. 函数 $f(x)=x^{4}-2 x^{3}$ 的图像在点 $(1, f(1))$ 处的切线方程为 ()\nA. $y=-2 x-1$\nB. $y=-2 x+1$\nC. $y=2 x-3$\nD. $y=2 x+1$\n",
+      "inputHash": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe",
+      "sourceHash": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "f"
+      ],
+      "sharedScope": {
+        "entities": [
+          "f"
+        ],
+        "stemConditions": [
+          "f(x)=x⁴-2x³",
+          "tangent at (1, f(1)) = (1, -1) is y = -2x + 1"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "main",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "main",
+          "kind": "mcq",
+          "text": "切线方程为（B. y = -2x + 1）",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "B"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-f1",
+          "kind": "function_sample",
+          "description": "f(1) = -1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "函数 $f(x)=x^{4}-2 x^{3}$",
+            "start": 3,
+            "end": 26
+          },
+          "check": {
+            "kind": "function-sample-2d",
+            "x": 1,
+            "value": -1
+          }
+        },
+        {
+          "id": "ob-f2",
+          "kind": "function_sample",
+          "description": "f(2) = 0",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "函数 $f(x)=x^{4}-2 x^{3}$",
+            "start": 3,
+            "end": 26
+          },
+          "check": {
+            "kind": "function-sample-2d",
+            "x": 2,
+            "value": 0
+          }
+        },
+        {
+          "id": "ob-tan",
+          "kind": "line_equation",
+          "description": "Tangent line y = -2x + 1",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在点 $(1, f(1))$ 处的切线方程",
+            "start": 30,
+            "end": 51
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "x": 0,
+            "y": 1
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P01",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年八省联考 第18题",
+      "prompt": "已知椭圆 C 的离心率为 1/2，左、右焦点分别为 F₁(-1,0)，F₂(1,0)。（1）求椭圆 C 的方程；（2）已知点 A(2,0)，证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点；（3）设 M 是坐标平面上的动点，且线段 F₁M 的垂直平分线与椭圆 C 恰有一个公共点，证明 M 的轨迹为圆，并求该圆的方程。",
+      "inputHash": "55a29f4baa3fbe3c4cd52f77624549b89b25ed0f462de80ae28dc271bc6594a7",
+      "sourceHash": "55a29f4baa3fbe3c4cd52f77624549b89b25ed0f462de80ae28dc271bc6594a7",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "F₁",
+        "F₂",
+        "A",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "F₁",
+          "F₂",
+          "A",
+          "M"
+        ],
+        "stemConditions": [
+          "e=1/2",
+          "F₁(-1,0)",
+          "F₂(1,0)"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "A(2,0)"
+            ],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(3)",
+            "localConditions": [
+              "M locus: (x-1)²+y²=16"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求椭圆 C 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/4 + y²/3 = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "proof",
+          "text": "证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点",
+          "localAssumptions": [
+            "A(2,0)"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(3)",
+          "kind": "locus",
+          "text": "证明 M 的轨迹为圆，并求该圆的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "(x-1)² + y² = 16"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/4 + y²/3 = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "离心率为 1/2，左、右焦点分别为 F₁(-1,0)，F₂(1,0)",
+            "start": 8,
+            "end": 42
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-f1",
+          "kind": "point_value",
+          "description": "F₁(-1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "F₁(-1,0)",
+            "start": 26,
+            "end": 34
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F₁",
+            "x": -1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-f2",
+          "kind": "point_value",
+          "description": "F₂(1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "F₂(1,0)",
+            "start": 35,
+            "end": 42
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F₂",
+            "x": 1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-a",
+          "kind": "point_value",
+          "description": "A(2,0)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "已知点 A(2,0)",
+            "start": 59,
+            "end": 69
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A",
+            "x": 2,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-locus",
+          "kind": "circle_equation",
+          "description": "Locus circle (x-1)² + y² = 16",
+          "scope": "(3)",
+          "sourceSpan": {
+            "text": "证明 M 的轨迹为圆，并求该圆的方程",
+            "start": 145,
+            "end": 163
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "circle",
+            "cx": 1,
+            "cy": 0,
+            "radius": 4
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (3), M chosen on locus circle (x-1)²+y²=16"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P02",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第18题 (jyeoo)",
+      "prompt": "已知双曲线 C 的中心为坐标原点，右焦点为 (2√5, 0)，离心率为 √5。（1）求 C 的方程；（2）记 C 的左、右顶点分别为 A₁，A₂，点 P 在定直线 x=-1 上运动，直线 PA₁ 与 PA₂ 与双曲线分别交于 M，N 两点，证明：直线 MN 恒过定点。",
+      "inputHash": "beca519dc97e6c217c05674a24ee7030a1fcbe6fbd1a5bb566dea3dd2be76939",
+      "sourceHash": "beca519dc97e6c217c05674a24ee7030a1fcbe6fbd1a5bb566dea3dd2be76939",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "A₁",
+        "A₂",
+        "P",
+        "M",
+        "N"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "A₁",
+          "A₂",
+          "P",
+          "M",
+          "N"
+        ],
+        "stemConditions": [
+          "双曲线 C 中心原点",
+          "右焦点(2√5,0)",
+          "离心率 √5"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "P on x=-1",
+              "PA₁∩C=M",
+              "PA₂∩C=N"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求 C 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/4 - y²/16 = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "proof",
+          "text": "证明：直线 MN 恒过定点",
+          "localAssumptions": [
+            "P在x=-1上"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Hyperbola x²/4 - y²/16 = 1 (both branches)",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "右焦点为 (2√5, 0)，离心率为 √5",
+            "start": 17,
+            "end": 38
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "hyperbola",
+            "cx": 0,
+            "cy": 0,
+            "axis": "x",
+            "rx": 2,
+            "ry": 4
+          }
+        },
+        {
+          "id": "ob-x-1",
+          "kind": "line_equation",
+          "description": "Line x = -1",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "点 P 在定直线 x=-1 上运动",
+            "start": 73,
+            "end": 90
+          },
+          "check": {
+            "kind": "line-vertical-2d",
+            "x": -1
+          }
+        },
+        {
+          "id": "ob-a1",
+          "kind": "point_value",
+          "description": "A₁(-2,0)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "左、右顶点分别为 A₁，A₂",
+            "start": 58,
+            "end": 72
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A₁",
+            "x": -2,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-a2",
+          "kind": "point_value",
+          "description": "A₂(2,0)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "左、右顶点分别为 A₁，A₂",
+            "start": 58,
+            "end": 72
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A₂",
+            "x": 2,
+            "y": 0
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "P chosen freely on x = -1 with y_P ≠ 0"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P03",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖北省新八校协作体联考（2月） 第18题 (jyeoo)",
+      "prompt": "已知抛物线 C：y²=4x 的顶点为 O，过点 (2, 0) 的直线交 C 于 A，B 两点。（1）判断 向量OA·向量OB 是否为定值，并说明理由；（2）设直线 OA，OB 分别与直线 l：y=x+1 交于点 D，E，求 |DE| 的最小值。",
+      "inputHash": "eae195fceea94036470e20f473d88b119c1a71d1eb2ca022efcda758996301d8",
+      "sourceHash": "eae195fceea94036470e20f473d88b119c1a71d1eb2ca022efcda758996301d8",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "O",
+        "A",
+        "B",
+        "l",
+        "D",
+        "E"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "O",
+          "A",
+          "B",
+          "l",
+          "D",
+          "E"
+        ],
+        "stemConditions": [
+          "C: y²=4x",
+          "O(0,0)",
+          "secant AB through (2,0)"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "l: y=x+1",
+              "D=OA∩l",
+              "E=OB∩l"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "judge",
+          "text": "判断 向量OA·向量OB 是否为定值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "-4"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "求 |DE| 的最小值",
+          "localAssumptions": [
+            "l: y=x+1"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Parabola y² = 4x (p=2)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "抛物线 C：y²=4x",
+            "start": 2,
+            "end": 13
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "x",
+            "focalParameter": 2
+          }
+        },
+        {
+          "id": "ob-l",
+          "kind": "line_equation",
+          "description": "Line y = x + 1 through (0,1)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "直线 l：y=x+1",
+            "start": 91,
+            "end": 101
+          },
+          "check": {
+            "kind": "line-through-2d",
+            "x": 0,
+            "y": 1
+          }
+        },
+        {
+          "id": "ob-o",
+          "kind": "point_value",
+          "description": "O(0,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "顶点为 O",
+            "start": 15,
+            "end": 20
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "O",
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-oa-ob",
+          "kind": "dot",
+          "description": "OA·OB = -4",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "过点 (2, 0) 的直线交 C 于 A，B 两点",
+            "start": 21,
+            "end": 46
+          },
+          "expectedValue": -4,
+          "check": {
+            "kind": "dot-2d",
+            "a": "O",
+            "b": "A",
+            "c": "O",
+            "d": "B",
+            "value": -4
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Secant line AB through (2,0) chosen non-horizontal"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P04",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第17题 (jyeoo)",
+      "prompt": "已知点 M(4, 4) 在抛物线 Γ：x²=2py 上，过动点 P 作抛物线的两条切线，切点分别为 A、B，且直线 PA 与直线 PB 的斜率之积为 -2。（1）证明：直线 AB 过定点；（2）过 A、B 分别作抛物线准线的垂线，垂足分别为 C、D，问：是否存在一点 P 使得 A、C、P、D 四点共圆？若存在，求所有满足条件的 P 点；若不存在，请说明理由。",
+      "inputHash": "1b8106a030ca07ba2d2453fe1e98a1ba3f29b2b0df3754ac8e50659b6424c5e8",
+      "sourceHash": "1b8106a030ca07ba2d2453fe1e98a1ba3f29b2b0df3754ac8e50659b6424c5e8",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "Γ",
+        "M",
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "sharedScope": {
+        "entities": [
+          "Γ",
+          "M",
+          "P",
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "stemConditions": [
+          "M(4,4) on Γ: x²=2py => x²=4y",
+          "PA,PB tangent to Γ",
+          "k_PA·k_PB=-2"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "AC,BD ⊥ directrix y=-1",
+              "A,C,P,D concyclic"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "proof",
+          "text": "证明：直线 AB 过定点",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "问是否存在点 P 使 A,C,P,D 四点共圆",
+          "localAssumptions": [
+            "C,D准线垂足"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-gamma",
+          "kind": "conic_equation",
+          "description": "Parabola x² = 4y (p=2)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "已知点 M(4, 4) 在抛物线 Γ：x²=2py 上",
+            "start": 0,
+            "end": 27
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "parabola",
+            "vx": 0,
+            "vy": 0,
+            "axis": "y",
+            "focalParameter": 2
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "point_value",
+          "description": "M(4,4)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "M(4, 4)",
+            "start": 4,
+            "end": 11
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "M",
+            "x": 4,
+            "y": 4
+          }
+        },
+        {
+          "id": "ob-p-y",
+          "kind": "incidence",
+          "description": "P lies on y = -2",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "且直线 PA 与直线 PB 的斜率之积为 -2",
+            "start": 54,
+            "end": 77
+          },
+          "check": {
+            "kind": "point-y-2d",
+            "label": "P",
+            "y": -2
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "In (1) x_P varies along y=-2; in (2) concyclic fixes P(0,-2)"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P05",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年重庆市金太阳联考（5月） 第16题 (jyeoo)",
+      "prompt": "已知双曲线 x²/a² - y²/b² = 1 过点 (3, 5/2) 和点 (4, √15)。（1）求双曲线的离心率；（2）过 M(0, 1) 的直线与双曲线交于 P，Q 两点，过双曲线的右焦点 F 且与 PQ 平行的直线交双曲线于 A，B 两点，试问 (|MP|·|MQ|)/|AB| 是否为定值？若是定值，求该定值；若不是定值，请说明理由。",
+      "inputHash": "3cc387da6021fbc5b8b2a73f2705ae9e6744fffd76f3c16e1bf5bb3b7042cc8f",
+      "sourceHash": "3cc387da6021fbc5b8b2a73f2705ae9e6744fffd76f3c16e1bf5bb3b7042cc8f",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "M",
+        "P",
+        "Q",
+        "F",
+        "A",
+        "B"
+      ],
+      "sharedScope": {
+        "entities": [
+          "M",
+          "P",
+          "Q",
+          "F",
+          "A",
+          "B"
+        ],
+        "stemConditions": [
+          "双曲线 x²/a²-y²/b²=1 过 (3,5/2),(4,√15) => x²/4-y²/5=1"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "M(0,1), PQ through M, F(3,0), AB∥PQ"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求双曲线的离心率",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "3/2"
+        },
+        {
+          "id": "(2)",
+          "kind": "judge",
+          "text": "试问 (|MP|·|MQ|)/|AB| 是否为定值",
+          "localAssumptions": [
+            "M(0,1), AB∥PQ"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-hyp",
+          "kind": "conic_equation",
+          "description": "Hyperbola x²/4 - y²/5 = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "已知双曲线 x²/a² - y²/b² = 1 过点 (3, 5/2) 和点 (4, √15)",
+            "start": 0,
+            "end": 47
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "hyperbola",
+            "cx": 0,
+            "cy": 0,
+            "axis": "x",
+            "rx": 2,
+            "ry": 2.23606797749979
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "point_value",
+          "description": "M(0,1)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "过 M(0, 1) 的直线",
+            "start": 63,
+            "end": 76
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "M",
+            "x": 0,
+            "y": 1
+          }
+        },
+        {
+          "id": "ob-f",
+          "kind": "point_value",
+          "description": "F(3,0)",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "右焦点 F",
+            "start": 95,
+            "end": 100
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F",
+            "x": 3,
+            "y": 0
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Line slope through M(0,1) chosen arbitrarily non-asymptotic"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P06",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年湖南省一起考大联考（二） 第19题 (jyeoo)",
+      "prompt": "已知 F₁，F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求椭圆 C 的标准方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。",
+      "inputHash": "e80df950984164ecc429db618fc0266cffa87e3817af99041d61c827241042f5",
+      "sourceHash": "e80df950984164ecc429db618fc0266cffa87e3817af99041d61c827241042f5",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "F₁",
+        "F₂",
+        "M"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "F₁",
+          "F₂",
+          "M",
+          "P"
+        ],
+        "stemConditions": [
+          "|F₁F₂|=2",
+          "M(2, 2√5/5) on C => x²/5 + y²/4 = 1"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [
+              "P on C",
+              "PF₁⊥PF₂"
+            ],
+            "branchPolicy": "diagnosis_if_infeasible"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求椭圆 C 的标准方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/5 + y²/4 = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积",
+          "localAssumptions": [
+            "P∈C",
+            "PF₁⊥PF₂"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": false
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/5 + y²/4 = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点",
+            "start": 47,
+            "end": 75
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2.23606797749979,
+            "ry": 2
+          }
+        },
+        {
+          "id": "ob-f1",
+          "kind": "point_value",
+          "description": "F₁(-1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "F₁，F₂ 是椭圆 C",
+            "start": 3,
+            "end": 14
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F₁",
+            "x": -1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-f2",
+          "kind": "point_value",
+          "description": "F₂(1,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "F₁，F₂ 是椭圆 C",
+            "start": 3,
+            "end": 14
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "F₂",
+            "x": 1,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "point_value",
+          "description": "M(2, 2√5/5)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "M(2, 2√5/5)",
+            "start": 56,
+            "end": 67
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "M",
+            "x": 2,
+            "y": 0.894427190999916
+          }
+        },
+        {
+          "id": "ob-infeasible-2",
+          "kind": "infeasible_branch",
+          "description": "Must diagnose infeasibility of PF₁⊥PF₂ on x²/5+y²/4=1 instead of dropping (2) or fabricating P",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积",
+            "start": 94,
+            "end": 128
+          },
+          "check": {
+            "kind": "infeasible-branch",
+            "subquestion": "(2)"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "show_base_plus_branch_note",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": [
+        "Subquestion (2) condition P ∈ C ∧ PF₁ ⊥ PF₂ is mathematically infeasible on x²/5 + y²/4 = 1 because c=1 < b=2 implies max ∠F₁PF₂ = 2 arctan(1/2) < 90°."
+      ]
+    },
+    {
+      "id": "JT-P07",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第19题 (jyeoo)",
+      "prompt": "已知对称轴都在坐标轴上的椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)，过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点，直线 BP，BQ 分别交直线 x=3 于 E，F 两点。（1）求椭圆 C 的标准方程；（2）向量PE·向量QF 是否存在最小值？若存在，求出最小值；若不存在，请说明理由。",
+      "inputHash": "bd9ddc44f99363aec0b706c7ef14861a91e3affda60a4a08b175001fe2246545",
+      "sourceHash": "bd9ddc44f99363aec0b706c7ef14861a91e3affda60a4a08b175001fe2246545",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "C",
+        "A",
+        "B",
+        "l",
+        "P",
+        "Q",
+        "E",
+        "F"
+      ],
+      "sharedScope": {
+        "entities": [
+          "C",
+          "A",
+          "B",
+          "l",
+          "P",
+          "Q",
+          "E",
+          "F"
+        ],
+        "stemConditions": [
+          "椭圆 C 过 A(1/2,√15/4), B(2,0) => x²/4+y²=1",
+          "l过(1,0)交C于P,Q",
+          "BP,BQ交x=3于E,F"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(1)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(2)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(1)",
+          "kind": "compute",
+          "text": "求椭圆 C 的标准方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/4 + y² = 1"
+        },
+        {
+          "id": "(2)",
+          "kind": "compute",
+          "text": "向量PE·向量QF 是否存在最小值",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-c",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/4 + y² = 1",
+          "scope": "(1)",
+          "sourceSpan": {
+            "text": "椭圆 C 过点 A(1/2, √15/4) 与点 B(2, 0)",
+            "start": 12,
+            "end": 44
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1
+          }
+        },
+        {
+          "id": "ob-p-on",
+          "kind": "incidence",
+          "description": "P on ellipse C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点",
+            "start": 45,
+            "end": 76
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "P",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1
+          }
+        },
+        {
+          "id": "ob-q-on",
+          "kind": "incidence",
+          "description": "Q on ellipse C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 (1, 0) 的直线 l 与椭圆 C 交于 P，Q 两点",
+            "start": 45,
+            "end": 76
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "Q",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1
+          }
+        },
+        {
+          "id": "ob-bpe",
+          "kind": "collinear",
+          "description": "B, P, E collinear",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 BP，BQ 分别交直线 x=3 于 E，F 两点",
+            "start": 77,
+            "end": 104
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "B",
+            "b": "P",
+            "c": "E"
+          }
+        },
+        {
+          "id": "ob-bqf",
+          "kind": "collinear",
+          "description": "B, Q, F collinear",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "直线 BP，BQ 分别交直线 x=3 于 E，F 两点",
+            "start": 77,
+            "end": 104
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "B",
+            "b": "Q",
+            "c": "F"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Line l through (1,0) chosen non-horizontal"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P08",
+      "examType": "joint",
+      "category": "plane",
+      "format": "open_ended",
+      "workspace": "conics",
+      "source": "2025年四省天一大联考（二） 第15题 (jyeoo)",
+      "prompt": "已知两点 A(0, √3)，B(0, -√3)。曲线 G 上的动点 P(x, y) 使得直线 PA、PB 的斜率之积为 -3/4。（Ⅰ）求 G 的方程；（Ⅱ）过点 C(0, -1) 的直线与 G 相交于 E、F 两点，且 向量EC=2向量CF，求直线 EF 的方程。",
+      "inputHash": "35a32276c8f869a66c0c313333d76c4bc6a23a0af9a579852564208493926d6c",
+      "sourceHash": "35a32276c8f869a66c0c313333d76c4bc6a23a0af9a579852564208493926d6c",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "A",
+        "B",
+        "C",
+        "G",
+        "E",
+        "F"
+      ],
+      "sharedScope": {
+        "entities": [
+          "A",
+          "B",
+          "C",
+          "G",
+          "E",
+          "F"
+        ],
+        "stemConditions": [
+          "A(0,√3)",
+          "B(0,-√3)",
+          "k_PA·k_PB=-3/4 => G: x²/4+y²/3=1 (x≠0)"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "(Ⅰ)",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          },
+          {
+            "subquestion": "(Ⅱ)",
+            "localConditions": [
+              "C(0,-1)",
+              "E,F on G",
+              "向量EC=2向量CF"
+            ],
+            "branchPolicy": "merge_into_main"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "(Ⅰ)",
+          "kind": "locus",
+          "text": "求 G 的方程",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "x²/4 + y²/3 = 1 (x≠0)"
+        },
+        {
+          "id": "(Ⅱ)",
+          "kind": "compute",
+          "text": "求直线 EF 的方程",
+          "localAssumptions": [
+            "C(0,-1)",
+            "向量EC=2向量CF"
+          ],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "y = ±(1/2)x - 1"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-a",
+          "kind": "point_value",
+          "description": "A(0, √3)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "A(0, √3)",
+            "start": 5,
+            "end": 13
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "A",
+            "x": 0,
+            "y": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-b",
+          "kind": "point_value",
+          "description": "B(0, -√3)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "B(0, -√3)",
+            "start": 14,
+            "end": 23
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "B",
+            "x": 0,
+            "y": -1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-c",
+          "kind": "point_value",
+          "description": "C(0, -1)",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "过点 C(0, -1)",
+            "start": 79,
+            "end": 90
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "C",
+            "x": 0,
+            "y": -1
+          }
+        },
+        {
+          "id": "ob-g",
+          "kind": "conic_equation",
+          "description": "Ellipse x²/4 + y²/3 = 1",
+          "scope": "(Ⅰ)",
+          "sourceSpan": {
+            "text": "使得直线 PA、PB 的斜率之积为 -3/4",
+            "start": 42,
+            "end": 64
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "ellipse",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-e-on",
+          "kind": "incidence",
+          "description": "E lies on G",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "与 G 相交于 E、F 两点",
+            "start": 94,
+            "end": 108
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "E",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-f-on",
+          "kind": "incidence",
+          "description": "F lies on G",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "与 G 相交于 E、F 两点",
+            "start": 94,
+            "end": 108
+          },
+          "check": {
+            "kind": "point-on-ellipse-2d",
+            "label": "F",
+            "cx": 0,
+            "cy": 0,
+            "rx": 2,
+            "ry": 1.7320508075688772
+          }
+        },
+        {
+          "id": "ob-ec-2cf",
+          "kind": "vector_ratio",
+          "description": "Vector C - E = 2(F - C) (EC = 2 CF and E,C,F collinear)",
+          "scope": "(Ⅱ)",
+          "sourceSpan": {
+            "text": "且 向量EC=2向量CF",
+            "start": 109,
+            "end": 121
+          },
+          "expectedValue": 2,
+          "check": {
+            "kind": "vector-ratio-2d",
+            "a": "E",
+            "b": "C",
+            "c": "C",
+            "d": "F",
+            "k": 2
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "merge_into_main",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [
+        "Either symmetric pair (k = 1/2: E(2,0), F(-1,-3/2) or k = -1/2: E(-2,0), F(1,-3/2)) satisfies 向量EC = 2向量CF"
+      ],
+      "unsupportedReasons": []
+    },
+    {
+      "id": "JT-P09",
+      "examType": "joint",
+      "category": "plane",
+      "format": "mcq",
+      "workspace": "conics",
+      "source": "2025年重庆市金太阳联考（5月） 第4题 (jyeoo)",
+      "prompt": "4. 在圆 M：x²+y²-4x+2y-4=0 内，过点 O(0, 0) 的最长弦和最短弦分别是 AC 和 BD，则四边形 ABCD 的面积为（　　）\nA. 24\nB. 12\nC. 10\nD. 8",
+      "inputHash": "dde1a3e824214f45b494f93954e953132989334e540fcaa7135c9d5ae7dca093",
+      "sourceHash": "dde1a3e824214f45b494f93954e953132989334e540fcaa7135c9d5ae7dca093",
+      "expected": "plan",
+      "requireVerification": "passed",
+      "requiredOutputs": [
+        "draft",
+        "verification_passed"
+      ],
+      "inputMode": "text_only",
+      "independentReviewStatus": "pending_second_reviewer",
+      "requiredEntityIds": [
+        "M",
+        "O",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "sharedScope": {
+        "entities": [
+          "M",
+          "O",
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "stemConditions": [
+          "圆 M: x²+y²-4x+2y-4=0 => center (2,-1), r=3",
+          "O(0,0)",
+          "AC最长弦, BD最短弦"
+        ],
+        "subquestionScopes": [
+          {
+            "subquestion": "main",
+            "localConditions": [],
+            "branchPolicy": "single_consistent_figure"
+          }
+        ]
+      },
+      "subquestions": [
+        {
+          "id": "main",
+          "kind": "mcq",
+          "text": "四边形 ABCD 的面积为（B. 12）",
+          "localAssumptions": [],
+          "mustPreserveInDiagram": true,
+          "feasible": true,
+          "expectedResult": "B"
+        }
+      ],
+      "requiredObligations": [
+        {
+          "id": "ob-m-circ",
+          "kind": "circle_equation",
+          "description": "Circle (2,-1), r=3",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在圆 M：x²+y²-4x+2y-4=0 内",
+            "start": 3,
+            "end": 25
+          },
+          "check": {
+            "kind": "conic-2d",
+            "curveType": "circle",
+            "cx": 2,
+            "cy": -1,
+            "radius": 3
+          }
+        },
+        {
+          "id": "ob-o",
+          "kind": "point_value",
+          "description": "O(0,0)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过点 O(0, 0)",
+            "start": 26,
+            "end": 36
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "O",
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "ob-m",
+          "kind": "point_value",
+          "description": "M(2,-1)",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "在圆 M",
+            "start": 3,
+            "end": 7
+          },
+          "check": {
+            "kind": "point-2d",
+            "label": "M",
+            "x": 2,
+            "y": -1
+          }
+        },
+        {
+          "id": "ob-ac",
+          "kind": "length",
+          "description": "|AC| = 6",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "expectedValue": 6,
+          "check": {
+            "kind": "distance-2d",
+            "a": "A",
+            "b": "C",
+            "value": 6
+          }
+        },
+        {
+          "id": "ob-bd",
+          "kind": "length",
+          "description": "|BD| = 4",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "expectedValue": 4,
+          "check": {
+            "kind": "distance-2d",
+            "a": "B",
+            "b": "D",
+            "value": 4
+          }
+        },
+        {
+          "id": "ob-perp",
+          "kind": "perpendicular",
+          "description": "AC⊥BD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "perp-2d",
+            "a": "A",
+            "b": "C",
+            "c": "B",
+            "d": "D"
+          }
+        }
+      ],
+      "displayPolicy": {
+        "requiresDiagram": true,
+        "requiresVisualChecks": true,
+        "allowOmittedSubquestion": false,
+        "multiBranchHandling": "single_consistent_figure",
+        "labelReadabilityRequired": true
+      },
+      "freeChoices": [],
+      "unsupportedReasons": []
+    }
+  ]
+}

@@ -113,6 +113,12 @@ declare module "node:path" {
   export default path
 }
 
+declare module "node:crypto" {
+  export function createHash(algorithm: string): {
+    update(data: string, inputEncoding: "utf8"): { digest(encoding: "hex"): string }
+  }
+}
+
 declare const process: {
   readonly execPath: string
   readonly env: Record<string, string | undefined>

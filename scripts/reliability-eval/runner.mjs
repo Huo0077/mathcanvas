@@ -28,7 +28,7 @@ export function parseReliabilityArgs(args) {
       options.mode = "live"
       continue
     }
-    const field = { "--replay": "replay", "--max-requests": "maxRequests", "--out": "out", "--cases": "cases" }[flag]
+    const field = { "--replay": "replay", "--max-requests": "maxRequests", "--out": "out", "--cases": "cases", "--baseline": "baseline" }[flag]
     if (!field || args[index + 1] === undefined || args[index + 1].startsWith("--")) throw new Error(`Unknown or incomplete option: ${flag}`)
     options[field] = args[++index]
   }
@@ -73,10 +73,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       delete env.MATHCANVAS_RELIABILITY_LIVE
       delete env.MATHCANVAS_RELIABILITY_REPLAY
       delete env.MATHCANVAS_RELIABILITY_MAX_REQUESTS
+      delete env.MATHCANVAS_RELIABILITY_BASELINE
       env.MATHCANVAS_RELIABILITY_REPORT = outDir
       env.MATHCANVAS_RELIABILITY_REVISION = revision.status === 0 ? revision.stdout.trim() : "unknown"
       env.MATHCANVAS_RELIABILITY_CASES = path.resolve(options.cases ?? path.join(root, "test-fixtures", "reliability", "dev-smoke.json"))
-      if (options.mode === "replay") env.MATHCANVAS_RELIABILITY_REPLAY = path.resolve(options.replay)
+      if (options.replay !== undefined) env.MATHCANVAS_RELIABILITY_REPLAY = path.resolve(options.replay)
+      if (options.baseline !== undefined) env.MATHCANVAS_RELIABILITY_BASELINE = path.resolve(options.baseline)
       if (options.mode === "live") Object.assign(env, { MATHCANVAS_RELIABILITY_LIVE: "1", MATHCANVAS_RELIABILITY_MAX_REQUESTS: String(options.maxRequests) })
       const result = spawnSync(process.execPath, [path.join(root, "node_modules/vitest/vitest.mjs"), "run", "--config", "vitest.reliability.config.ts"], { cwd: root, env, stdio: "inherit" })
       console.log(`Report directory: ${outDir}`)

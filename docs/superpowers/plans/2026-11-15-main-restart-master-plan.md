@@ -12,7 +12,7 @@
 
 **Tech Stack / 技术栈**：现有TypeScript/React/Three.js、Vitest/Playwright、Tauri/Rust。外部CAS/SMT/新provider仅经需求证据与独立spike批准后考虑；不把加依赖、加重试作为默认修复。
 
-**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A、R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已全部完成并关闭本轮用户授权范围（见[草稿与CSV证据](../../audit/2026-11-15-draft-and-csv-protection/README.md)、[曲线绑定与题图复核证据](../../audit/2026-11-15-image-review-and-curve-binding/README.md)、[E2E与生产UI对齐证据](../../audit/2026-11-15-e2e-ui-contract-alignment/README.md)、[Schema与运行时同源证据](../../audit/2026-11-15-schema-runtime-leaf-consistency/README.md)与[干净依赖与审计证据](../../audit/2026-11-15-clean-dependencies-and-audit/README.md)；RustSec 因未装 `cargo-audit` 显式标为 `unknown`）。P0–P8、R12与产品发布均未开始；feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
+**状态**：此前main重启已提交为be033b71，父节点59ea3613。R00、R01-A、R09-A、R10、G1（R02–R06）与G2（R07、R08、R09-B、R11）已全部收口，当前正在按 DAG 推进 `B4`（`P0–P6`）：已完成 `P0 / T01`（见[P0 / T01契约与口径证据](../../audit/2026-11-16-p0-drawing-contracts/README.md)，第二位独立审阅者复核标 `pending_second_reviewer`），下一步进入 `P1 / T02`。`P7–P8` 与正式发布均未开始；feature分支未触发远端CI，不执行付费provider或正式发布。实时状态只维护在[当前状态](../../current-status.md)。
 
 ## 0. 执行入口与唯一事实来源
 
