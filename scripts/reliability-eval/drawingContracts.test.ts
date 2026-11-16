@@ -956,6 +956,37 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(evaluateDrawingContract(jts04, { primitives: wrongLength }, { verificationStatus: "passed", scopeId: "(1)", stateId: "after_fold" }).failedObligationIds).toContain("ob-cf-bd")
   })
 
+  it("requires JT-S04(2)'s minimum skew-line cosine on the actual rigid fold", () => {
+    const jts04 = loadContracts().cases.find((c) => c.id === "JT-S04")!
+    const makeFold = (e: number) => {
+      const h = 2 * Math.sqrt(3)
+      const points = {
+        A: { x: 0, y: 0, z: 0 }, B: { x: 0, y: h, z: 0 },
+        E: { x: e, y: h, z: 0 }, F: { x: e, y: 0, z: 0 },
+        C: { x: 8, y: h, z: 0 }, D: { x: 9, y: 0, z: 0 }
+      }
+      const before = Object.entries(points).map(([label, position]) => ({ type: "point3", id: label.toLowerCase(), label, position }))
+      const a = rotatePointAboutHinge(points.A, points.F, points.E, 90), b = rotatePointAboutHinge(points.B, points.F, points.E, 90)
+      if (a.status !== "ok" || b.status !== "ok") throw new Error("valid fold")
+      const after: Record<string, unknown>[] = before.map((primitive) => primitive.id === "a" ? { ...primitive, position: a.point } : primitive.id === "b" ? { ...primitive, position: b.point } : primitive)
+      after.push(
+        { type: "face3", id: "abef", pointIds: ["a", "b", "e", "f"] },
+        { type: "face3", id: "ecdf", pointIds: ["e", "c", "d", "f"] },
+        { type: "polyhedron3", id: "folded", vertexIds: ["a", "b", "e", "f", "c", "d"], edgeIds: [], faceIds: ["abef", "ecdf"] }
+      )
+      return { after, stateCandidates: { before_fold: { primitives: before }, after_fold: { primitives: after } } }
+    }
+    const optimal = makeFold(6)
+    const result = evaluateDrawingContract(jts04, { primitives: optimal.after }, { verificationStatus: "passed", scopeId: "(2)", stateId: "after_fold", stateCandidates: optimal.stateCandidates })
+    expect(result.passed, JSON.stringify(result.obligationResults)).toBe(true)
+    expect(result.passedObligationIds).toContain("ob-2-skew-min-cos")
+    const nonOptimal = makeFold(5)
+    const larger = evaluateDrawingContract(jts04, { primitives: nonOptimal.after }, { verificationStatus: "passed", scopeId: "(2)", stateId: "after_fold", stateCandidates: nonOptimal.stateCandidates })
+    expect(larger.failedObligationIds).toContain("ob-2-skew-min-cos")
+    const missingLineage = evaluateDrawingContract(jts04, { primitives: optimal.after }, { verificationStatus: "passed", scopeId: "(2)", stateId: "after_fold" })
+    expect(missingLineage.failedObligationIds).toContain("ob-2-skew-min-cos")
+  })
+
   it("verifies JT-S08 perpendicular folded planes without inventing manifold topology", () => {
     const suite = loadContracts()
     const jts08 = suite.cases.find((c) => c.id === "JT-S08")!

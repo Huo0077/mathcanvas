@@ -26,6 +26,7 @@ export type ContractCheckSpec =
   | { kind: "sum-distance-3d"; p: string; a: string; b: string; total: number }
   | { kind: "planes-perpendicular-3d"; first: [string, string, string]; second: [string, string, string] }
   | { kind: "fold-transform-3d"; beforeStateId: string; afterStateId: string; hinge: [string, string]; moving: readonly { before: string; after: string }[]; angleDegrees: number }
+  | { kind: "folded-trapezoid-min-skew-cosine-3d"; beforeStateId: string; afterStateId: string; a: string; b: string; c: string; d: string; e: string; f: string; value: number }
   | { kind: "volume-tetrahedron-3d"; p: string; a: string; b: string; c: string; value: number }
   | { kind: "triangle-area-3d"; a: string; b: string; c: string; value: number }
   | { kind: "prism-3d"; hasEqualEdges?: boolean }
@@ -836,6 +837,33 @@ function evaluateCheck(
         if (error > TOL * scale) return { passed: false, detail: `fold transform error for ${mapping.before}→${mapping.after}=${error}, tolerance=${TOL * scale}, before=${JSON.stringify(before)}, expected=${JSON.stringify(rotated.point)}, actual=${JSON.stringify(after)}` }
       }
       return { passed: true, detail: `verified rigid fold about ${check.hinge.join("-")} at ${check.angleDegrees} degrees` }
+    }
+    case "folded-trapezoid-min-skew-cosine-3d": {
+      const beforeCandidate = options.stateCandidates?.[check.beforeStateId]
+      if (options.stateId !== check.afterStateId || beforeCandidate === undefined) return { passed: false, detail: "missing actual before/after fold states for the skew-angle proof" }
+      const beforePoints = points3Of(collectPrimitives(beforeCandidate))
+      const before = (label: string) => beforePoints.get(normalizeLabel(label))
+      const a0 = before(check.a), b0 = before(check.b), c0 = before(check.c), d0 = before(check.d), e0 = before(check.e), f0 = before(check.f)
+      if (!a0 || !b0 || !c0 || !d0 || !e0 || !f0) return { passed: false, detail: "missing pre-fold trapezoid points" }
+      const h = 2 * Math.sqrt(3), x = e0.x
+      const matches = (point: Vec3, expected: Vec3) => near(point.x, expected.x, 1e-6) && near(point.y, expected.y, 1e-6) && near(point.z, expected.z, 1e-6)
+      const baseMatches = matches(a0, { x: 0, y: 0, z: 0 }) && matches(b0, { x: 0, y: h, z: 0 }) &&
+        matches(c0, { x: 8, y: h, z: 0 }) && matches(d0, { x: 9, y: 0, z: 0 }) &&
+        matches(e0, { x, y: h, z: 0 }) && matches(f0, { x, y: 0, z: 0 }) && x > 0 && x < 8
+      if (!baseMatches) return { passed: false, detail: `invalid pre-fold right trapezoid or E outside BC: x=${x}` }
+      const lineage = evaluateCheck({
+        kind: "fold-transform-3d", beforeStateId: check.beforeStateId, afterStateId: check.afterStateId,
+        hinge: [check.f, check.e], moving: [{ before: check.a, after: check.a }, { before: check.b, after: check.b }], angleDegrees: 90
+      }, prims, pts3, pts2, allLabels, options)
+      if (!lineage.passed) return { passed: false, detail: `skew-angle fold lineage failed: ${lineage.detail}` }
+      const a = p3(check.a), b = p3(check.b), c = p3(check.c), d = p3(check.d)
+      if (!a || !b || !c || !d) return { passed: false, detail: "missing folded A/B/C/D points" }
+      const bc = sub3(c, b), ad = sub3(d, a), scale = len3(bc) * len3(ad)
+      if (scale <= 1e-12) return { passed: false, detail: "degenerate skew-line direction" }
+      const cosine = Math.abs(dot3(bc, ad)) / scale
+      const expected = 7 * Math.SQRT2 / 10
+      const passed = near(x, 6, 1e-6) && near(cosine, check.value, 1e-6) && near(check.value, expected, 1e-9)
+      return { passed, detail: `BE=${x}, skew cos=${cosine}; derivative 9/(2x²-18x+81)-8/(2x²-16x+64) changes from negative to positive at x=6, minimum 7√2/10` }
     }
     case "volume-tetrahedron-3d": {
       const p = p3(check.p), a = p3(check.a), b = p3(check.b), c = p3(check.c)

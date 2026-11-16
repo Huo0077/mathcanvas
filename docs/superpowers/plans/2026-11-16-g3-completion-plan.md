@@ -68,6 +68,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - GK-S05(2)不可行证据区块完成：以归一化BB₁参数重算二面角投影，固定 `cos²θ=3/(16t²−16t+7)`，证明120°不可达；错误几何、跨scope关键词和伪造P均拒绝。42项目标测试、全量540文件/5738通过+1todo、类型/Lint/Web构建通过，未新增离线 reliability 读数。其他折叠/范围与生产接线仍待完成；T01仍未批准。证据：`docs/audit/2026-11-16-g3-solid-infeasibility/README.md`。
 
+- JT-S04(2)异面直线最小余弦区块完成：BE=6取得7√2/10，夹角差导数在(0,8)内先负后正；真实折后BC/AD与F→E、+90°谱系绑定，BE=5非最优和缺谱系均拒绝。43项目标测试、全量540文件/5739通过+1todo、类型/Lint/Web构建通过，未新增离线 reliability 读数。JT-S01/JT-S08及其他折叠/范围与生产接线仍待完成；T01仍未批准。证据：`docs/audit/2026-11-16-g3-fold-skew-min/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

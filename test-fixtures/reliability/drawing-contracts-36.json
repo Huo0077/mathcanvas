@@ -3409,7 +3409,8 @@
           "text": "求异面直线 BC 与 AD 所成角余弦值的最小值",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "expectedResult": "7√2/10, attained at BE=6"
         }
       ],
       "requiredObligations": [
@@ -3678,6 +3679,27 @@
             "open": true,
             "expectedVertexIds": ["A", "B", "E", "F", "C", "D"],
             "expectedFaceRings": [["A", "B", "E", "F"], ["E", "C", "D", "F"]]
+          }
+        },
+        {
+          "id": "ob-2-skew-min-cos",
+          "kind": "global_extremum",
+          "description": "Minimum skew-line cosine 7√2/10 on the actual 90° fold at BE=6",
+          "scope": "(2)",
+          "stateId": "after_fold",
+          "sourceSpan": { "text": "所成角余弦值的最小值", "start": 161, "end": 171 },
+          "expectedValue": 0.9899494936611666,
+          "check": {
+            "kind": "folded-trapezoid-min-skew-cosine-3d",
+            "beforeStateId": "before_fold",
+            "afterStateId": "after_fold",
+            "a": "A",
+            "b": "B",
+            "c": "C",
+            "d": "D",
+            "e": "E",
+            "f": "F",
+            "value": 0.9899494936611666
           }
         },
         {
