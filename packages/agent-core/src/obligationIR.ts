@@ -62,8 +62,8 @@ import { SHARED_SCOPE_ID, parseSubquestionScopeId, subquestionScopeId } from "./
 
 /** 有现成判据的题设种类（`diagramVerification.ts` 的 `calculate` 覆盖这些）。 */
 const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
-  "fixedLength", "equilateral", "equalLength", "midpoint", "segmentRatio",
-  "planePerpendicular", "dihedral", "dihedralSine", "planarAngle", "perpendicular", "parallel", "pointCoordinate",
+  "fixedLength", "equilateral", "equalLength", "segmentRatio", "midpoint",
+  "planePerpendicular", "dihedral", "dihedralSine", "planarAngle", "equalAngle", "perpendicular", "parallel", "pointCoordinate",
   "conicAxes", "conicChord", "tangentAt", "functionGraph", "commonTangent",
   "angleBisector", "chordCenterDistance", "arcLength",
   "incenter", "centroid", "orthocenter", "excenter", "circumcenter", "midline",
@@ -93,7 +93,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "dihedral") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   if (kind === "dihedralSine") return { kind: "relative", value: UNITLESS_TOLERANCE }
   // 平面角与二面角同一把尺子（都是"度"，容差不能有两套）；线面角是同一族的第三个数。
-  if (kind === "planarAngle" || kind === "linePlaneAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
+  if (kind === "planarAngle" || kind === "equalAngle" || kind === "linePlaneAngle") return { kind: "angular", value: ANGLE_TOLERANCE_DEGREES }
   /**
    * **角平分线量的也是"度"**（2026-10-20）：残余是"两个角之差"与"内外之和差"，两把都是角度尺，
    * 与平面角同一把 —— 不写这一行它会掉进下面的 `undefined`，而核验器那边给的是角度容差，
@@ -158,6 +158,7 @@ function claimOf(
     ...(item.line === undefined ? {} : { line: { ...item.line } }),
     ...(item.expectation === undefined ? {} : { expectation: item.expectation }),
     ...(item.splitPoint === undefined ? {} : { splitPoint: item.splitPoint }),
+    ...(item.chainIndex === undefined ? {} : { chainIndex: item.chainIndex }),
     ...(item.expression === undefined ? {} : { expression: item.expression }),
     ...(item.expressions === undefined ? {} : { expressions: [...item.expressions] as [string, string] }),
     ...(item.solid === undefined ? {} : { solid: { ...item.solid } }),
@@ -442,6 +443,7 @@ function toLegacyObligation(item: GeometryObligation): DiagramObligation {
     ...(item.geometry?.line === undefined ? {} : { line: { ...item.geometry.line } }),
     ...(item.geometry?.expectation === undefined ? {} : { expectation: item.geometry.expectation }),
     ...(item.geometry?.splitPoint === undefined ? {} : { splitPoint: item.geometry.splitPoint }),
+    ...(item.geometry?.chainIndex === undefined ? {} : { chainIndex: item.geometry.chainIndex }),
     ...(item.geometry?.expression === undefined ? {} : { expression: item.geometry.expression }),
     ...(item.geometry?.expressions === undefined ? {} : { expressions: [...item.geometry.expressions] as [string, string] }),
     ...(item.geometry?.solid === undefined ? {} : { solid: { ...item.geometry.solid } }),

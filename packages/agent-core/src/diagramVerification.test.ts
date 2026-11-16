@@ -211,46 +211,47 @@ describe("verifyDiagramObligations", () => {
   })
 
   /**
-   * **定比分点那条不许被放宽**（§4.7 的"两侧回归"）：`DE=2EA` 的判据是**两件事** ——
-   * 比值对 **且** `E` 在线段 `DA` 上。这条用例里的 `E` 与 `D`、`A` 的距离比**恰好是 2**，
-   * 但 `E` 离开 `DA`（`y = 0.5`）⇒ 必须判 `failed`。
-   *
-   * 若把这条判据放宽成"只比长度比"，它就会变绿 —— 那等于承认"斜着放在旁边"也算 `DE=2EA`。
+   * 纠错记录（T03，2026-11-16）：
+   * 旧测试断言仅凭裸比 `DE=2EA` 就拒绝“比值为 2 但 E 不在 DA 上”的候选（把比例误等价为共线）。
+   * 按领域修正：
+   * 1. `A=(0,0,0), E=(1,0,0), D=(1,2,0)` 满足 `DE=2, EA=1`，对裸比 `DE=2EA` 必须通过；
+   * 2. 加入明示位置“E在DA线段内”时，同一非共线候选必须被 `pointOnSegment` 拒绝；
+   * 3. 当 E=(1/3,2/3,0) 在 DA 线段内且 DE=2EA 时，两者同时通过。
    */
-  it("keeps DE=2EA strict: a point with ratio 2 that leaves DA is failed, not passed", () => {
-    const prompt = "在三棱锥 A-BCD中，DE=2EA，画示意图"
-    // 阿波罗尼斯球面 |PE| = 2|PD|…这里取定 D、A 之后按 |ED| = 2|EA| 解一个**离轴**的点。
-    const D = { x: 1, y: 0, z: 0 }
-    const A = { x: 0, y: 0, z: 1 }
-    // |P−D|² = 4|P−A|² ⇒ 3x² + 3y² + 3z² + 2x − 8z + 3 = 0。取 y = 0.5、x = 1/3 解 z：
-    // 3z² − 8z + 4.75 = 0 ⇒ z = (8 ± √7)/6；取小的那支，E 就**离开** DA（y ≠ 0）。
-    const x = 1 / 3
-    const y = 0.5
-    const a2 = 3
-    const b2 = -8
-    const c2 = 3 * x * x + 3 * y * y + 2 * x + 3
-    const disc = b2 * b2 - 4 * a2 * c2
-    expect(disc).toBeGreaterThan(0)
-    const z = (-b2 - Math.sqrt(disc)) / (2 * a2)
-    const E = { x, y, z }
-    const distance = (p: Vector3, q: Vector3) => Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z)
-    expect(distance(E, D) / distance(E, A)).toBeCloseTo(2, 9)
-
+  it("separates bare DE=2EA ratio from segment incidence, while explicit E在DA线段内 enforces collinearity", () => {
     const plan = {
       schemaVersion: PLAN_SCHEMA_VERSION,
       kind: "plan",
       goal: "画示意图",
       factIds: [],
-      actions: TETRA_ACTIONS
+      actions: []
     } as unknown as PlanEnvelope
-    const candidate = createEmptyDocument("geometry3d")
-    candidate.primitives.push(...TETRA_POSITIONS.map((position, index) => ({ id: `solid-v${index}`, type: "point3" as const, position: { ...position } })))
-    candidate.primitives.push({ id: "solid", type: "polyhedron3", vertexIds: TETRA_POSITIONS.map((_, index) => `solid-v${index}`), edgeIds: [], faceIds: [] })
-    candidate.primitives.push({ id: "point3-e", type: "point3" as const, position: E, label: "E" })
+    const makeDoc = (ePos: Vector3) => {
+      const doc = createEmptyDocument("geometry3d")
+      const pts: [string, Vector3][] = [
+        ["A", { x: 0, y: 0, z: 0 }],
+        ["E", ePos],
+        ["D", { x: 1, y: 2, z: 0 }]
+      ]
+      doc.primitives.push(...pts.map(([label, pos], i) => ({ id: `pt-${i}`, type: "point3" as const, position: pos, label })))
+      return doc
+    }
+    // Non-collinear candidate with DE=2, EA=1
+    const offLineDoc = makeDoc({ x: 1, y: 0, z: 0 })
+    const bareReport = verifyDiagramObligations(parseDiagramObligations("DE=2EA"), plan, offLineDoc)
+    expect(bareReport.checks.find((c) => c.kind === "segmentRatio")?.status).toBe("passed")
+    expect(bareReport.status).toBe("passed")
 
-    const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate)
-    const ratio = report.checks.find((check) => check.kind === "segmentRatio")
-    expect(ratio?.status).toBe("failed")
+    const constrainedPrompt = "E在DA线段内，DE=2EA"
+    const rejectedReport = verifyDiagramObligations(parseDiagramObligations(constrainedPrompt), plan, offLineDoc)
+    expect(rejectedReport.checks.find((c) => c.kind === "segmentRatio")?.status).toBe("passed")
+    expect(rejectedReport.checks.find((c) => c.kind === "pointOnSegment")?.status).toBe("failed")
+    expect(rejectedReport.status).toBe("failed")
+
+    // Collinear candidate E = D + (2/3)(A - D) = (1/3, 2/3, 0): DE = 2/3 * √5, EA = 1/3 * √5
+    const onLineDoc = makeDoc({ x: 1 / 3, y: 2 / 3, z: 0 })
+    const validReport = verifyDiagramObligations(parseDiagramObligations(constrainedPrompt), plan, onLineDoc)
+    expect(validReport.status).toBe("passed")
   })
 
   it("detects the wrong dihedral even when the other six conditions hold", () => {
@@ -925,5 +926,28 @@ describe("Task 15: function-family premises", () => {
     curveG.label = "f(x)"
     const duplicate = verifyDiagramObligations(parseDiagramObligations("直线 y=0.5 与 f(x)=sin x 的图像有三个交点"), plan, candidate)
     expect(checkOf(duplicate, "functionLineIntersections")).toMatchObject({ status: "unverified", code: "function_binding_ambiguous" })
+  })
+
+  it("T03：∠ADB=∠ADC=60° 验证两角均 60° 时全通过，只改 C=(0,-1,0) 时仅对应一角失败", () => {
+    const plan = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "角链核验", factIds: [], actions: [] } as unknown as PlanEnvelope
+    const makeDoc = (cPos: Vector3) => {
+      const doc = createEmptyDocument("geometry3d")
+      const pts: [string, Vector3][] = [
+        ["D", { x: 0, y: 0, z: 0 }],
+        ["A", { x: 1, y: 0, z: 0 }],
+        ["B", { x: 0.5, y: Math.sqrt(3) / 2, z: 0 }],
+        ["C", cPos]
+      ]
+      doc.primitives.push(...pts.map(([label, pos], i) => ({ id: `p-${i}`, type: "point3" as const, position: pos, label })))
+      return doc
+    }
+    const parsed = parseDiagramObligations("三棱锥 A-BCD 中，∠ADB=∠ADC=60°")
+    const bothPass = verifyDiagramObligations(parsed, plan, makeDoc({ x: 0.5, y: -Math.sqrt(3) / 2, z: 0 }))
+    expect(bothPass.status).toBe("passed")
+    expect(bothPass.checks.filter((c) => c.kind === "planarAngle").map((c) => c.status)).toEqual(["passed", "passed"])
+
+    const oneFails = verifyDiagramObligations(parsed, plan, makeDoc({ x: 0, y: -1, z: 0 }))
+    expect(oneFails.status).toBe("failed")
+    expect(oneFails.checks.filter((c) => c.kind === "planarAngle").map((c) => c.status)).toEqual(["passed", "failed"])
   })
 })

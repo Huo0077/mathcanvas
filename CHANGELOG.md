@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P2 / T03 比例/位置语义分离与完整角等式链解析
+
+- **裸比例与位置约束解耦**：`lengthEquality.ts`、`diagramObligations.ts` 与 `diagramVerification.ts` 取消无锚点共享端点比（如 `DE=2EA`、`AB=2BC`）的默认 `splitPoint: true` 共线推断，`segmentRatio` 默认仅核验长度比（`splitPoint: false`，核验分支收紧为 `item.splitPoint === true`）；`diagramObligations.ts` 在保留歧义短语不猜边界的同时补齐 `E在DA线段内` / `E在线段DA内` 的显式 `pointOnSegment` 识别，并在测试中明确记录对旧错误比例假设的纠偏（保留 `A=(0,0,0), E=(1,0,0), D=(1,2,0)` 与线段内正/反例）。
+- **完整角链与类型/单位边界**：新增 `packages/agent-core/src/relationChains.ts`（`parseAngleChains`、`STATED_VERTEX_ANGLE`），在句型匹配前完整消费角等式链并将 `∠ADB=∠ADC=60°` 拆为两条带完整 `sourceSpan` 与 `chainIndex` 的 `planarAngle`（清除 `GK-S06` 中的 `"∠ADB="` 残留）；新增 `equalAngle` 义务并接入 `claimEvidence.ts`、`obligationIR.ts`（含 `chainIndex` 往返）及 `diagramVerification.ts` 单一计算边界 `planarAngleDegrees`。拒绝截断右侧（`∠ADB=`）、长度等于角度（`∠ADB=AB` / `AB=∠ADC=60°` / `AB=60°`）、缺失单位、度/弧度混用及退化角域。
+- **验证**：RED 3 文件 9 项失败 → GREEN 定向 6 文件 / 236 项通过，全量 Vitest **528 文件 / 5620 passed | 1 todo**、`typecheck` / `lint`（0 errors）/ Web 构建（636 modules）/ `eval:reliability -- --offline` 全部通过；证据见 [P2 / T03关系语义与角链证据](docs/audit/2026-11-16-p2-relation-chains/README.md)。
+
 ## 2026-11-16 —— P1 / T02 ProblemContract、来源映射、作用域隔离与无损 ObligationIR
 
 - **来源映射与文本/改写防线**：`latexNormalisation.ts` 新增 `normalizeGeometryPromptWithSourceMap` / `mapNormalizedRangeToOriginal`，`promptNormalization.ts` 新增 `NormalisationApplication.sourceMap` / `mapEditedRangeToOriginal` 并拒绝把目标或自由点混入前提、篡改小问编号的改写，确保重复从句、LaTeX 展开与代理对 Unicode 字符仍能逐字映回原始 UTF-16 区间。

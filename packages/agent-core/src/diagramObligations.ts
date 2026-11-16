@@ -3,6 +3,7 @@ import { canonicalPointName, POINT_NAME_SOURCE, splitPointNames } from "@draw/ge
 import { readExplicitSolidConditions } from "./explicitSolidConditions"
 import { parseShapeClause } from "./solver/shapeGrammar"
 import { parseLengthChains } from "./lengthEquality"
+import { parseAngleChains, STATED_VERTEX_ANGLE } from "./relationChains"
 import { SHARED_SCOPE_ID, parseSubquestionScopeId, splitNumberedProblem, subquestionScopeId, type ProblemPart } from "./numberedProblem"
 
 /** 题设来自用户原话而不是模型的 relations 声明。只读有确定点名的窄句型。 */
@@ -79,6 +80,7 @@ export type DiagramObligationKind =
    * `value` 是度数。它与 `dihedral`（二面角）是两件事：这一档说的是**同一个平面内**两条边的内部角。
    */
   | "planarAngle"
+  | "equalAngle"
   /**
    * **面积**（Task 11，2026-10-12）：`△ABC的面积为6` ⇒ `targets: ["A","B","C"]`、`value` 是面积。
    *
@@ -252,6 +254,7 @@ export interface DiagramObligation {
    * - 缺省 ⇒ 沿用旧形状推断（只为兼容手工构造的旧义务，见 `diagramVerification`）。
    */
   splitPoint?: boolean
+  chainIndex?: number
 }
 
 export interface DiagramSourceSpan {
@@ -273,7 +276,7 @@ export interface DiagramObligationSet {
 }
 
 /** 读取器的产物：一条判据，或**多条**（一个句型蕴含多条判据时用 —— 例如"底面 ABCD 是菱形" ⇒ 三条等长）。 */
-type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint">
+type ObligationDraft = Pick<DiagramObligation, "kind" | "targets" | "value" | "planeLengths" | "coordinate" | "conic" | "conicKind" | "line" | "expectation" | "expression" | "expressions" | "splitPoint" | "chainIndex">
 
 interface Matcher {
   pattern: RegExp
@@ -348,11 +351,6 @@ const PLANE_NAME = `${TRIANGLE_NAME}(?:${POINT_NAME}){0,3}`
  * 落成具体点名。写成一个常量是因为它要跨两个函数用，而"哪个字面量表示占位"不该有第二份。
  */
 const STATED_BASE = "底面"
-/**
- * **单字母角**（`∠A`）留下的占位：它只给了一个点名，**两条边是哪两条**要看形状从句的环。
- * 由 `resolveStatedVertexAngle` 落成 `[前一个点名, 顶点, 后一个点名]`（判据与构造照旧）。
- */
-const STATED_VERTEX_ANGLE = "顶点角"
 const finitePositive = (value: string): number | null => {
   const number = Number(value)
   return Number.isFinite(number) && number > 0 ? number : null
@@ -1177,10 +1175,10 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * **「线段」也算同一个量词**（2026-10-20 续）：`点 D 在线段 AC 上` 与 `点 E 在棱 AB 上`
      * 是同一件事 —— 量词已经把"直线"排除了，所以不需要再靠尾巴消歧。
      */
-    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:在|是|为)\\s*(?:棱|边|线段)\\s*(${SEGMENT_NAME})\\s*上`, "g"),
+    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:在|是|为)\\s*(?:(?:棱|边|线段)\\s*(${SEGMENT_NAME})\\s*(?:上|内)|(${SEGMENT_NAME})\\s*线段内)`, "g"),
     read: (m) => {
       const point = names(m[1])
-      const segment = names(m[2])
+      const segment = names(m[2] ?? m[3])
       if (point.length !== 1 || segment.length !== 2) return null
       return { kind: "pointOnSegment", targets: [...point, ...segment] }
     }
@@ -1717,7 +1715,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
-    read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value, splitPoint: true } }
+    read: (m) => { const value = finitePositive(m[2]); return value === null ? null : { kind: "segmentRatio", targets: [...names(m[1]), ...names(m[3])], value, splitPoint: false } }
   },
   {
     /**
@@ -2132,23 +2130,56 @@ function resolveStatedBasePlane(givens: DiagramObligation[], unverified: Diagram
  * "题面里没有可识别的图形"，那时如实落未核验 —— 猜两条边就是替题面改题。
  */
 function resolveStatedVertexAngle(givens: DiagramObligation[], unverified: DiagramObligationSet["unverified"], prompt: string): void {
-  for (let index = givens.length - 1; index >= 0; index -= 1) {
-    const obligation = givens[index]!
-    if (obligation.kind !== "planarAngle" || obligation.targets[1] !== STATED_VERTEX_ANGLE) continue
-    const vertex = obligation.targets[0]!
-    const ring = parseShapeClause(prompt)?.base ?? null
+  const resolveSingleVertex = (vertex: string, ring: string[] | null): [string, string, string] | null => {
     const at = ring === null ? -1 : ring.indexOf(vertex)
-    if (ring === null || ring.length < 3 || at < 0) {
-      givens.splice(index, 1)
-      unverified.push({
-        sourceText: obligation.sourceText,
-        reason: "这条角只写了一个点名（如 `∠A`），而题面里没有可识别的形状从句（点名环）、或这个顶点不在环上 —— 不知道是哪两条边，未核验。"
-      })
-      continue
-    }
+    if (ring === null || ring.length < 3 || at < 0) return null
     const previous = ring[(at - 1 + ring.length) % ring.length]!
     const next = ring[(at + 1) % ring.length]!
-    obligation.targets = [previous, vertex, next]
+    return [previous, vertex, next]
+  }
+  const ring = parseShapeClause(prompt)?.base ?? null
+  for (let index = givens.length - 1; index >= 0; index -= 1) {
+    const obligation = givens[index]!
+    if (obligation.kind === "planarAngle" && obligation.targets[1] === STATED_VERTEX_ANGLE) {
+      const resolved = resolveSingleVertex(obligation.targets[0]!, ring)
+      if (resolved === null) {
+        givens.splice(index, 1)
+        unverified.push({
+          sourceText: obligation.sourceText,
+          reason: "这条角只写了一个点名（如 `∠A`），而题面里没有可识别的形状从句（点名环）、或这个顶点不在环上 —— 不知道是哪两条边，未核验。"
+        })
+        continue
+      }
+      obligation.targets = resolved
+      continue
+    }
+    if (obligation.kind === "equalAngle" && obligation.targets.includes(STATED_VERTEX_ANGLE)) {
+      const expanded: string[] = []
+      let failed = false
+      for (let offset = 0; offset < obligation.targets.length; ) {
+        if (obligation.targets[offset + 1] === STATED_VERTEX_ANGLE) {
+          const resolved = resolveSingleVertex(obligation.targets[offset]!, ring)
+          if (resolved === null) {
+            failed = true
+            break
+          }
+          expanded.push(...resolved)
+          offset += 2
+        } else {
+          expanded.push(...obligation.targets.slice(offset, offset + 3))
+          offset += 3
+        }
+      }
+      if (failed || expanded.length !== 6) {
+        givens.splice(index, 1)
+        unverified.push({
+          sourceText: obligation.sourceText,
+          reason: "这条角等式只写了一个点名（如 `∠A`），而题面里没有可识别的形状从句（点名环）、或这个顶点不在环上 —— 不知道是哪两条边，未核验。"
+        })
+        continue
+      }
+      obligation.targets = expanded
+    }
   }
 }
 
@@ -2262,6 +2293,21 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
    * 这里只处理"线段的 `=` 链"；单段长度与冒号比例仍走既有读取器。
    */
   for (const chain of parseLengthChains(givenText)) {
+    for (let at = chain.start; at < chain.end; at += 1) used.add(at)
+    if (chain.ok) {
+      for (const draft of chain.drafts) givens.push({ ...draft, sourceText: chain.sourceText, start: chain.start, end: chain.end })
+    } else {
+      unverified.push({ sourceText: chain.sourceText, reason: chain.reason })
+    }
+  }
+
+  /**
+   * **角等式链整条解析**（T03，2026-11-16）：`∠ADB=∠ADC=60°`、`∠ADB=∠ADC` 与
+   * 类型/单位混用（`∠ADB=AB`、`∠ADB=60`、`∠ADB=60°=1rad`）在句型循环前整条消费，
+   * 确保不会只吃一端而残留 `∠ADB=`，也不会把非法单位或长度=角度放行。
+   */
+  for (const chain of parseAngleChains(givenText)) {
+    if (Array.from({ length: chain.end - chain.start }, (_, offset) => chain.start + offset).some((at) => used.has(at))) continue
     for (let at = chain.start; at < chain.end; at += 1) used.add(at)
     if (chain.ok) {
       for (const draft of chain.drafts) givens.push({ ...draft, sourceText: chain.sourceText, start: chain.start, end: chain.end })
@@ -2391,30 +2437,6 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
     const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(leftover.trim())
     if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)/.test(leftover) || unknownPointCondition)) {
       unverified.push({ sourceText: leftover, reason: unverifiedReasonFor(leftover) })
-    }
-  }
-  /**
-   * **两条线段都写出了长度 ⇒ 那条共享端点的比例只是"两段之比"，不是定比分点**（2026-10-27，缺口③）。
-   *
-   * 卷面：`矩形 ABCD 中，AB=4，BC=2，且 AB=2BC` —— 两条边的长度已经写清楚了，那句比例是
-   * **一致性重述**（说"这个比确实是 2"），不可能是"把某个点定位到线段上"的定义。
-   * 旧口径按"中间点名重复"一律当定比分点 ⇒ 要求 `|AB|+|BC|=|AC|` ⇒ 矩形上判 `failed`。
-   *
-   * **只在这一对线段各自都有 `fixedLength` 时生效**（含连等层给出的长度）：`DE=2EA` 那种
-   * 两条分线段没给长度的写法仍然按定比分点读（有反例用例钉住）。
-   * 这是一个**保守**的降级：不引入"读法依赖候选图"的耦合，只用题面自己说了什么。
-   */
-  const segmentKeyOf = (targets: readonly string[]): string =>
-    targets.length < 2 ? "" : [canonicalPointName(targets[0]!), canonicalPointName(targets[1]!)].sort().join("|")
-  const sizedSegments = new Set<string>()
-  for (const given of givens) {
-    if (given.kind !== "fixedLength" || given.value === undefined || given.targets.length !== 2) continue
-    sizedSegments.add(segmentKeyOf(given.targets))
-  }
-  for (const given of givens) {
-    if (given.kind !== "segmentRatio" || given.splitPoint !== true || given.targets.length !== 4) continue
-    if (sizedSegments.has(segmentKeyOf(given.targets.slice(0, 2))) && sizedSegments.has(segmentKeyOf(given.targets.slice(2, 4)))) {
-      given.splitPoint = false
     }
   }
   givens.sort((left, right) => left.start - right.start)

@@ -124,6 +124,7 @@ export interface ObligationGeometry {
    * `false` 只比长度比，`true` 还要求共享点落在外两点之间。
    */
   splitPoint?: boolean
+  chainIndex?: number
   line?: DiagramObligation["line"]
   expectation?: DiagramObligation["expectation"]
   expressions?: [string, string]

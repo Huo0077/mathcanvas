@@ -1795,7 +1795,8 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      *（targets `[A,E,A,D]`）说的是 `AE/AD`，共享点在**两端**，那时永远走比值支。
      */
     const sharedMiddle = e !== undefined && e === eAgain
-    const split = sharedMiddle && item.splitPoint !== false
+    // 裸比例不推断共线：仅当明确标明 splitPoint: true 时才校验共线与线段内；常规位置约束由 pointOnSegment 承担。
+    const split = sharedMiddle && item.splitPoint === true
     if (!split) {
       const numerator = length(d, e)
       const denominator = length(eAgain, a)
@@ -2179,14 +2180,16 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   }
   if (item.kind === "planarAngle") {
     if (numeric === undefined) return null
-    const [first, vertex, third] = vertices as Vector3[]
-    const alongFirst = subtractVector3(first, vertex)
-    const alongThird = subtractVector3(third, vertex)
-    const magnitudes = lengthVector3(alongFirst) * lengthVector3(alongThird)
-    if (!(magnitudes > 1e-12)) return null
-    const cosine = dotVector3(alongFirst, alongThird) / magnitudes
-    const degrees = (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+    const degrees = planarAngleDegrees(at(0), at(1), at(2))
+    if (degrees === null) return null
     return { actual: degrees, expected: numeric, tolerance: ANGLE_TOLERANCE_DEGREES }
+  }
+  if (item.kind === "equalAngle") {
+    if (vertices.length !== 6) return null
+    const firstDegrees = planarAngleDegrees(at(0), at(1), at(2))
+    const secondDegrees = planarAngleDegrees(at(3), at(4), at(5))
+    if (firstDegrees === null || secondDegrees === null) return null
+    return { actual: secondDegrees, expected: firstDegrees, tolerance: ANGLE_TOLERANCE_DEGREES }
   }
   /**
    * **面积**（Task 11，2026-10-12）：三个点名 ⇒ 三角形面积 = ½·|AB × AC|，**从最终坐标自己算**。
@@ -2420,8 +2423,17 @@ interface PreFoldState {
 
 /** 这些条件属于**折前图形**：长度、等长、比例、中点、点在线上、角、垂直、平行。 */
 const PRE_FOLD_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligationKind>([
-  "fixedLength", "equalLength", "segmentRatio", "midpoint", "pointOnSegment", "planarAngle", "perpendicular", "parallel", "rectangle"
+  "fixedLength", "equalLength", "segmentRatio", "midpoint", "pointOnSegment", "planarAngle", "equalAngle", "perpendicular", "parallel", "rectangle"
 ])
+
+function planarAngleDegrees(first: Vector3, vertex: Vector3, third: Vector3): number | null {
+  const alongFirst = subtractVector3(first, vertex)
+  const alongThird = subtractVector3(third, vertex)
+  const magnitudes = lengthVector3(alongFirst) * lengthVector3(alongThird)
+  if (!(magnitudes > 1e-12)) return null
+  const cosine = dotVector3(alongFirst, alongThird) / magnitudes
+  return (Math.acos(Math.min(1, Math.max(-1, cosine))) * 180) / Math.PI
+}
 
 function preFoldStateOf(plan: PlanEnvelope, drawn: Map<string, Vector3>): PreFoldState | null {
   if (plan.kind !== "plan") return null

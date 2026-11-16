@@ -141,9 +141,20 @@ describe("length expression boundaries and fraction coefficients", () => {
     expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(false)
   })
 
-  it("keeps an unanchored part:part ratio DE=2EA as a split point", () => {
+  /**
+   * 纠错记录（T03，2026-11-16）：
+   * 旧测试曾断言无长度锚点的 `DE=2EA` 必须隐含 `splitPoint: true`（E 落在 DA 上）。
+   * 这是已证伪的领域缺陷：仅共享字母的裸比 `DE=2EA` 只约束 |DE|/|EA|=2，
+   * 不推导 D/E/A 共线或 E 在线段 DA 内（例如 A=(0,0), E=(1,0), D=(1,2) 满足 DE=2, EA=1）。
+   */
+  it("a bare ratio DE=2EA does not invent collinearity (splitPoint: false)", () => {
     const ratio = draftsOf("DE=2EA").find((draft) => draft.kind === "segmentRatio")
-    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(true)
+    expect(ratio).toEqual({
+      kind: "segmentRatio",
+      targets: ["D", "E", "E", "A"],
+      value: 2,
+      splitPoint: false
+    })
   })
 
   it("keeps the existing AE=2/5 AD ratio as the same segmentRatio", () => {

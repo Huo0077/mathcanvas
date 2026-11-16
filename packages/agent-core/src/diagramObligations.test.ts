@@ -986,9 +986,95 @@ describe("题设账：长度表达式的边界", () => {
     expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(false)
   })
 
-  it("keeps a shared-endpoint ratio as a split point when the lengths are not stated", () => {
+  /**
+   * 纠错记录（T03，2026-11-16）：
+   * 矩形中 `AB=2BC` 在旧口径下被误标成 `splitPoint: true`（把 B 强行压到对角线 AC 上）。
+   * 裸比例不推断共线/分点位置，`splitPoint` 一律为 `false`；位置约束只来自明示 `pointOnSegment` 题文。
+   */
+  it("does not infer splitPoint collinearity from unanchored shared-endpoint ratio AB=2BC", () => {
     const parsed = parseDiagramObligations("在矩形 ABCD 中，AB=2BC，沿对角线 AC 把 △ABC 折起，使平面 ABC ⊥ 平面 ACD。")
     const ratio = parsed.givens.find((given) => given.kind === "segmentRatio")
-    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(true)
+    expect(ratio?.kind === "segmentRatio" ? ratio.splitPoint : "no-ratio").toBe(false)
+  })
+
+  it("reads explicit segment incidence together with bare ratio without merging them into collinear ratio heuristics", () => {
+    const parsed = parseDiagramObligations("E在DA线段内，DE=2EA")
+    expect(parsed.givens.some((given) => given.kind === "pointOnSegment" && given.targets.join("") === "EDA")).toBe(true)
+    const ratio = parsed.givens.find((given) => given.kind === "segmentRatio")
+    expect(ratio).toMatchObject({ kind: "segmentRatio", targets: ["D", "E", "E", "A"], value: 2, splitPoint: false })
+    expect(parsed.unverified).toEqual([])
+  })
+})
+
+describe("T03 — 角等式链与类型/单位边界", () => {
+  it("将 ∠ADB=∠ADC=60° 完整拆成两条 planarAngle（顶点均为 D）并保留整体 sourceSpan 与子序号", () => {
+    const prompt = "三棱锥 A-BCD 中，∠ADB=∠ADC=60°。"
+    const parsed = parseDiagramObligations(prompt)
+    const angles = parsed.givens.filter((given) => given.kind === "planarAngle")
+    expect(angles).toHaveLength(2)
+    expect(angles.map((item) => item.targets)).toEqual([
+      ["A", "D", "B"],
+      ["A", "D", "C"]
+    ])
+    expect(angles.map((item) => item.value)).toEqual([60, 60])
+    expect(angles.map((item) => item.chainIndex)).toEqual([0, 1])
+    for (const angle of angles) {
+      expect(angle.sourceText).toBe("∠ADB=∠ADC=60°")
+      expect(prompt.slice(angle.start, angle.end)).toBe("∠ADB=∠ADC=60°")
+    }
+    expect(parsed.unverified).toEqual([])
+  })
+
+  it("原题 GK-S06 不再在 unverified 残留 '∠ADB='，两角均被完整读取", () => {
+    const prompt = "如图，三棱锥 A-BCD 中，DA=DB=DC，BD⊥CD，∠ADB=∠ADC=60°，E 为 BC 的中点。（1）证明：BC⊥DA；（2）点 F 满足向量 EF=DA，求二面角 D-AB-F 的正弦值。"
+    const parsed = parseDiagramObligations(prompt)
+    const angles = parsed.givens.filter((given) => given.kind === "planarAngle")
+    expect(angles).toHaveLength(2)
+    expect(angles.map((item) => [item.targets.join(""), item.value])).toEqual([
+      ["ADB", 60],
+      ["ADC", 60]
+    ])
+    expect(parsed.unverified.some((item) => item.sourceText.includes("∠ADB="))).toBe(false)
+    expect(parsed.parts?.[0]?.obligations.unverified).toEqual([])
+    const part1 = parseDiagramObligations(prompt, { selectedPart: 1 })
+    expect(part1.unverified).toEqual([])
+    expect(part1.givens.filter((given) => given.kind === "planarAngle").map((item) => [item.targets.join(""), item.value])).toEqual([
+      ["ADB", 60],
+      ["ADC", 60]
+    ])
+  })
+
+  it("无数值角等式链 ∠ADB=∠ADC 读成 equalAngle，不残留", () => {
+    const parsed = parseDiagramObligations("三棱锥 A-BCD 中，∠ADB=∠ADC。")
+    expect(parsed.givens).toContainEqual(expect.objectContaining({
+      kind: "equalAngle",
+      targets: ["A", "D", "B", "A", "D", "C"]
+    }))
+    expect(parsed.unverified).toEqual([])
+  })
+
+  it("接受合法显式弧度 (0, π) 并按单边界转度，拒绝截断、长度=角度与度/弧度混用", () => {
+    const radParsed = parseDiagramObligations("在△ABC中，∠ABC=π/3 rad")
+    expect(radParsed.givens).toContainEqual(expect.objectContaining({
+      kind: "planarAngle",
+      targets: ["A", "B", "C"],
+      value: 60
+    }))
+    expect(radParsed.unverified).toEqual([])
+
+    for (const bad of [
+      "在三棱锥 A-BCD 中，∠ADB=",
+      "在三棱锥 A-BCD 中，∠ADB=AB",
+      "在三棱锥 A-BCD 中，AB=∠ADC=60°",
+      "在三棱锥 A-BCD 中，∠ADB=60",
+      "在三棱锥 A-BCD 中，∠ADB=60 rad",
+      "在三棱锥 A-BCD 中，∠ADB=60°=1rad",
+      "在三棱锥 A-BCD 中，∠ADB=∠ADC=0°",
+      "在三棱锥 A-BCD 中，∠ADB=∠ADC=180°"
+    ]) {
+      const parsed = parseDiagramObligations(bad)
+      expect(parsed.givens, bad).toEqual([])
+      expect(parsed.unverified.length, bad).toBeGreaterThan(0)
+    }
   })
 })

@@ -127,13 +127,8 @@ function relationsOf(terms: readonly Term[], value: number | null): LengthChainD
       drafts.push({ kind: "equalLength", targets: [...term.segment, ...next.segment] })
     } else {
       // c₁L₁ = c₂L₂ ⇒ L₁ / L₂ = c₂ / c₁
-      /**
-       * **链上有绝对长度锚点 ⇒ 这是尺寸陈述，不是定比分点**（2026-10-27，§4.7）：
-       * `AB=2BC=4` 说的是"两条边分别 4 与 2"，`B` 在不在 `AC` 上题面没说；
-       * 而**没有锚点**的 `DE=2EA` 正是卷面上的定比分点写法（`E` 被这个比定位在 `DA` 上）。
-       * 这个标志只影响判据要不要"同时要求共线"，不影响比值。
-       */
-      drafts.push({ kind: "segmentRatio", targets: [...term.segment, ...next.segment], value: lengthRatio(term, next), splitPoint: value === null })
+      // 裸比例（含无锚点的 `DE=2EA`）只约束长度比，不推导共享点共线；位置由明示 `pointOnSegment` 产生。
+      drafts.push({ kind: "segmentRatio", targets: [...term.segment, ...next.segment], value: lengthRatio(term, next), splitPoint: false })
     }
   }
   return drafts

@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P2 / T03 比例/位置语义分离与完整角等式链解析
+
+- **RED 复现与领域纠偏确认**：在 `lengthEquality.test.ts`、`diagramObligations.test.ts` 与 `diagramVerification.test.ts` 补齐反例与纠错说明，实测 RED `3 files failed | 9 failed | 197 passed (206)`，确认裸 `DE=2EA` 仍误标 `splitPoint: true`、`GK-S06` 仅读右端 `∠ADC=60°` 而残留 `"∠ADB="`、`∠ADB=∠ADC` 与显式弧度 `(0, π)` 缺解析。
+- **比例与位置彻底解耦**：`lengthEquality.ts`（`relationsOf`）与 `diagramObligations.ts`（倍数比读取器及删除末尾 `sizedSegments` `splitPoint` 补丁）将所有解析产生的 `segmentRatio` 统一为 `splitPoint: false`；`diagramVerification.ts` 收紧为仅当显式传入 `item.splitPoint === true` 时核验共线分段，并补齐 `E在DA线段内` / `E在线段DA内` 为明确 `pointOnSegment`（保持 `"E 在 AB 上"` 歧义不猜边界）。
+- **完整角链与单一边界转度**：新增 `packages/agent-core/src/relationChains.ts`（`parseAngleChains`、`STATED_VERTEX_ANGLE`），先于句型匹配消费角等式链，将 `∠ADB=∠ADC=60°` 拆为两条带完整 `sourceSpan` 与 `chainIndex` 的 `planarAngle`、新增 `equalAngle` 支持无数值等角链并打通 `claimEvidence.ts` / `obligationIR.ts` / `diagramVerification.ts`（抽出单一 `planarAngleDegrees` 计算边界），严格拒绝截断右侧（`∠ADB=`）、长度=角度（`∠ADB=AB` / `AB=∠ADC=60°` / `AB=60°`）、缺失单位与度/弧度混用。
+- **验证**：`relationChains.test.ts`（3 passed）、`lengthEquality.test.ts`（27 passed）、`diagramObligations.test.ts`（109 passed）、`diagramVerification.test.ts`（70 passed）、`obligationIR.test.ts`（14 passed）、`planCompiler.offPath.golden.test.ts`（13 passed）合计 6 文件 236 项通过；全量 Vitest **528 文件 / 5620 passed | 1 todo**、`typecheck`（0 errors）、`lint`（0 errors / 32 既有 warning）、Web 构建（636 modules）、`eval:reliability -- --offline`（3 passed）全部通过。证据见[P2 / T03关系语义与角链证据](audit/2026-11-16-p2-relation-chains/README.md)。
+
 ## 2026-11-16 —— P1 / T02 ProblemContract、来源映射、作用域隔离与无损 ObligationIR
 
 - **RED 复现与安全缺口定位**：建立 `problemContract.test.ts` 与 `obligationIR.test.ts` / `promptNormalization.test.ts` RED 用例，实测确认 `toLegacyObligationSet(parsed.ir).parts` 丢失返回 `undefined`、`selectedPart: 2` 选问隔离未打通（遗漏 `AD⊥DC`）、`NormalisationApplication.sourceMap` 缺失，并覆盖第 (1) 问前提漏检与 `"任取一点P"` 未识别等边缘场景。
