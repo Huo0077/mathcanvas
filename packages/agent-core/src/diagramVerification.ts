@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
-import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, commonTangents, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
+import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3, differentiabilityAt, distanceVector3, dotVector3, evaluateExpression, functionGraphEvidence, functionLineRoots, commonTangents, intersectLineWithConic, isPointName, judgeUniversalClaim, lengthVector3, NUMERIC_POLICY_VERSION, ratioParameterFor, subtractVector3, verifyTangentLine, type EvidenceGrade, type PlanarConic, type Vector3 } from "@draw/geometry-kernel"
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
@@ -9,6 +9,7 @@ import { relationResidual } from "./relations"
 import { readFoldTransformations } from "./figureIntent"
 
 export type DiagramCheckStatus = "passed" | "failed" | "unverified"
+export { NUMERIC_POLICY_VERSION as DIAGRAM_NUMERIC_POLICY_VERSION }
 export interface DiagramCheck {
   kind: DiagramObligationKind | "unparsed" | "fold"
   code?: string

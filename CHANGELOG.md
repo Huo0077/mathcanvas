@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P5 / T11 可版本化尺度感知数值策略与退化分类
+
+- **分层无量纲残差策略**：在 `packages/geometry-kernel/src/numeric.ts` 确立 `NUMERIC_POLICY_VERSION = "num-policy-v1"` 与 `topological_sign` / `metric_error` / `solver_residual` 三层接口，新增 `characteristicScale`、`normalizedLengthResidual`、`normalizedPlaneDistanceResidual`、`normalizedPerpendicularResidual`、`normalizedParallelResidual` 及跨阈值返回 `"unknown"` 的 `classifyUncertaintyInterval`；在 `exact-forms.ts` 导出 `EXACT_FORM_POLICY_VERSION = "exact-form-v1"`，在 `diagramVerification.ts` 同步导出 `DIAGRAM_NUMERIC_POLICY_VERSION`。
+- **大尺度切线精度与多面体尺度共面修复**：在 `conic-line.ts` 修复 `scale = 1000` 椭圆单位步长切线因浮点相消误判为 `none` 的真实漏洞（引入 Neumaier 补偿求和、最近原点投影平移与 `conicCharacteristicScale` 锚定 `rootScale`），同时保留单位尺度 `localEvidence` 口径；在 `solid-builders.ts` 将整体顶点共面检验从绝对 `1e-10` 统一为 `span * 1e-9`。
+- **验证**：RED 4 fail（含 `scale=1000` 切线误判）→ 定向 3 文件 22 项与全量 Vitest **533 文件 / 5653 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P5 / T11数值稳健性证据](docs/audit/2026-11-16-p5-numeric-robustness/README.md)。
+
 ## 2026-11-16 —— P3 / T06 必需对象清单与类型化构造意图 DAG
 
 - **类型化构造 DAG 与拓扑/增量传播**：新增 `packages/agent-core/src/drawingIntent.ts`，以 `ACTIONS` 为单源能力表实现 `compileConstructionDag`，拦截未注册算子、重复节点/实体 ID、缺宿主、错宿主类型、跨问引用、折前对象违规引用与循环依赖，并提供确定性拓扑排序与供 `T12` 复用的脏传播接口 `collectDependentSubgraph`。

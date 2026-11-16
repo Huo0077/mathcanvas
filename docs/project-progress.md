@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P5 / T11 可版本化尺度感知数值策略与退化分类
+
+- **RED 复现与大尺度实测漏洞**：新增 `numericRobustness.test.ts`，实现前 RED `4 failed | 1 passed (5)`，除新增版本化无量纲接口待落盘外，实测捕获 `conic-line.ts` 在 `scale = 1000` 时单位步长切线因 `2.5e-7 + 1 - 1` 精度丢失与固定 `rootScale` 下界 `1` 导致误判 `none` 的真实漏洞。
+- **三层无量纲策略与内核修复**：`numeric.ts` 新增 `NUMERIC_POLICY_VERSION = "num-policy-v1"`、无量纲长度/法向平面距/垂直/平行残差、`NaN`/`Infinity`/零向量 `degenerate` 判定与跨阈值返回 `unknown` 的 `classifyUncertaintyInterval`；`exact-forms.ts` 导出 `EXACT_FORM_POLICY_VERSION`，`diagramVerification.ts` 同步导出 `DIAGRAM_NUMERIC_POLICY_VERSION`；`conic-line.ts` 引入 Neumaier 补偿求和、最近原点投影重参数化与 `conicCharacteristicScale`；`solid-builders.ts` 整体共面判断采用 `span * 1e-9`。
+- **验证**：`pointOnConic` + `numericRobustness` + `conic-line` 3 文件 22 项通过，全量 Vitest **533 文件 / 5653 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P5 / T11数值稳健性证据](audit/2026-11-16-p5-numeric-robustness/README.md)。
+
 ## 2026-11-16 —— P3 / T06 必需对象清单与类型化构造意图 DAG
 
 - **RED 复现与契约设计**：编写 `drawingIntent.test.ts`，覆盖 DAG 六类异常拦截、拓扑序与 `T12` 脏传播、`GK-S02` 缺 `E/F/P` 与孤立 `label`/隐藏辅助对象拦截、`JT-P06` 缺焦点 `F₁`/`F₂` 与 `compilePlan` `drawingIntentCheck` 端到端阻断（初始因模块未创建 RED 失败）。

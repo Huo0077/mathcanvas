@@ -124,10 +124,27 @@ function buildLocalForm(conic: PlanarConic): LocalForm | null {
     : { toLocal, toWorld, A: 1, C: 0, D: 0, E: -2 * p, F: 0 }
 }
 
+function conicCharacteristicScale(conic: PlanarConic): number {
+  if (conic.type === "circle") return conic.radius
+  if (conic.type === "parabola") return conic.focalParameter
+  return Math.max(conic.radiusX, conic.radiusY)
+}
+
+function compensatedSum(values: readonly number[]): number {
+  let sum = 0
+  let c = 0
+  for (const x of values) {
+    const t = sum + x
+    c += Math.abs(sum) >= Math.abs(x) ? (sum - t) + x : (x - t) + sum
+    sum = t
+  }
+  return sum + c
+}
+
 /** 局部形式在一点的值与梯度（`∂/∂x = 2Ax + D`、`∂/∂y = 2Cy + E`）。 */
 function evaluate(form: LocalForm, point: Coordinate): { value: number; gradient: Coordinate } {
   return {
-    value: form.A * point.x * point.x + form.C * point.y * point.y + form.D * point.x + form.E * point.y + form.F,
+    value: compensatedSum([form.A * point.x * point.x, form.C * point.y * point.y, form.D * point.x, form.E * point.y, form.F]),
     gradient: { x: 2 * form.A * point.x + form.D, y: 2 * form.C * point.y + form.E }
   }
 }
@@ -197,21 +214,27 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
   if (!finite(line.a) || !finite(line.b)) return { kind: "degenerate", reason: "直线的端点不是有限数" }
   const form = buildLocalForm(conic)
   if (form === null) return { kind: "degenerate", reason: "这条圆锥曲线的参数退化（半轴/半径必须为正的有限数）" }
-  const start = form.toLocal(line.a)
-  const end = form.toLocal(line.b)
-  const direction = { x: end.x - start.x, y: end.y - start.y }
-  if (Math.hypot(direction.x, direction.y) <= EPSILON) return { kind: "degenerate", reason: "直线的两个端点重合（零长直线定不出方向）" }
+  const rawStart = form.toLocal(line.a)
+  const rawEnd = form.toLocal(line.b)
+  const rawDirection = { x: rawEnd.x - rawStart.x, y: rawEnd.y - rawStart.y }
+  const dirLen = Math.hypot(rawDirection.x, rawDirection.y)
+  const conicScale = conicCharacteristicScale(conic)
+  if (!(dirLen > EPSILON * Math.max(1, conicScale))) return { kind: "degenerate", reason: "直线的两个端点重合（零长直线定不出方向）" }
+  // Normalize direction & shift base point to closest point on the line to local origin (cancels scale bias & far-anchor loss).
+  const direction = { x: rawDirection.x / dirLen, y: rawDirection.y / dirLen }
+  const projT = -(rawStart.x * direction.x + rawStart.y * direction.y)
+  const start = { x: rawStart.x + projT * direction.x, y: rawStart.y + projT * direction.y }
 
   const alpha = form.A * direction.x * direction.x + form.C * direction.y * direction.y
   const beta = 2 * form.A * start.x * direction.x + 2 * form.C * start.y * direction.y + form.D * direction.x + form.E * direction.y
-  const gamma = form.A * start.x * start.x + form.C * start.y * start.y + form.D * start.x + form.E * start.y + form.F
+  const gamma = evaluate(form, start).value
   const discriminant = beta * beta - 4 * alpha * gamma
   const at = (parameter: number): Coordinate => ({ x: start.x + parameter * direction.x, y: start.y + parameter * direction.y })
 
   const alphaScale = Math.abs(form.A * direction.x * direction.x) + Math.abs(form.C * direction.y * direction.y)
   if (Math.abs(alpha) <= EPSILON * Math.max(alphaScale, Number.MIN_VALUE)) {
     // 二次项消失：直线与抛物线的对称轴平行（或与锥的渐近方向平行）。
-    if (Math.abs(beta) <= EPSILON * (Math.abs(form.D * direction.x) + Math.abs(form.E * direction.y) + 1)) {
+    if (Math.abs(beta) <= EPSILON * (Math.abs(form.D * direction.x) + Math.abs(form.E * direction.y) + 1 / Math.max(1, conicScale))) {
       return { kind: "degenerate", reason: "整条直线都落在这条曲线的方程上（这是退化情形，解不唯一）" }
     }
     const parameter = -gamma / beta
@@ -221,17 +244,13 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
   }
 
   /**
-   * **相切怎么判**：不看 `Δ` 的绝对值，看**两个根分开多少**（相对根的尺度）。
-   *
-   * 绝对值那条路实测踩过坑：直线恰好经过曲线上一点时 `β²` 与 `4αγ` 都可能是 0，
-   * `|Δ| ≤ 1e-12 · (β² + |4αγ|)` 的阈值于是塌到 0，浮点把 `Δ` 弄成 −1e-32 就判成"无交"。
-   * 换成"根间距 `/ 4α²` 与根的尺度比"之后，阈值不依赖系数怎么归一化，
-   * 而且天然回答了真正要问的那句话：**这两个根是不是同一个**。
+   * **相切怎么判**：不看 `Δ` 的绝对值，看**两个根分开多少**（相对曲线尺度）。
+   * 已将直线单位化并移至距局部原点最近点，因此参数 `s` 与曲线同处世界长度量纲。
    */
   const rootCentre = -beta / (2 * alpha)
   const spreadSquared = discriminant / (4 * alpha * alpha)
   const spread = spreadSquared > 0 ? Math.sqrt(spreadSquared) : 0
-  const rootScale = Math.max(1, Math.abs(rootCentre), spread)
+  const rootScale = Math.max(conicScale, Math.abs(rootCentre), spread, Number.MIN_VALUE)
   /**
    * 容差与 `spreadSquared` **同量纲**（t²）：`1e-12 · rootScale²` 换算成"两根相差多少"是
    * `1e-6 · rootScale`。这个常数不是随手取的：调用方给的切点通常只精确到机器精度，

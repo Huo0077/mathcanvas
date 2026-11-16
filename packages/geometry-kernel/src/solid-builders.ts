@@ -328,7 +328,7 @@ export function buildFromPoints(input: FromPointsInput, context: BuilderContext)
     if (hasSelfIntersectingPolygon(points)) diagnostics.push(diagnostic("self-intersection", `face ring [${face.join(",")}] self-intersects`))
   }
   if (diagnostics.length > 0) return emptyResult(diagnostics)
-  if (areCoplanar(input.vertices)) diagnostics.push(diagnostic("degenerate-volume", "solid vertices must not be coplanar"))
+  if (areCoplanar(input.vertices, span * 1e-9)) diagnostics.push(diagnostic("degenerate-volume", "solid vertices must not be coplanar"))
   const usedVertices = new Set<number>()
   const edgeOwners = new Map<string, number>()
   const edgeDirections = new Map<string, Array<[number, number]>>()

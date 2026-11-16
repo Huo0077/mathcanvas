@@ -18,6 +18,8 @@
  */
 import { rational, rationalToString } from "./polynomial"
 
+export const EXACT_FORM_POLICY_VERSION = "exact-form-v1" as const
+
 export type ExactForm =
   | { kind: "integer"; text: string }
   | { kind: "rational"; text: string }
