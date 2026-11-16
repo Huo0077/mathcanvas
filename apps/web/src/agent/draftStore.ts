@@ -147,7 +147,7 @@ export type StageResult =
  * 没有摆到用户面前过）与"用户动了文档"（必须拒绝）分开。拿 `detail` 的字符串去分辨是脆的：
  * 那句话是给人读的，改一个字判据就失效，而且是**静默**失效。
  */
-export type FreshnessKind = "invalidated" | "epoch" | "generation" | "content"
+export type FreshnessKind = "invalidated" | "epoch" | "generation" | "content" | "prompt"
 
 export type FreshnessResult = { ok: true } | { ok: false; reason: "stale_source"; kind: FreshnessKind; detail: string }
 
@@ -198,8 +198,8 @@ export interface DraftStore {
      */
     normalisations?: PromptNormalisations
   ): Promise<StageResult>
-  /** 基础文档变了（手工编辑、撤销、切工作区）→ 草稿过期，不能再提交。 */
-  assertFresh(draftId: string, liveHandle: DocumentHandle): FreshnessResult
+  /** 基础文档或题文变了（手工编辑、撤销、切工作区、改题）→ 草稿过期，不能再提交。 */
+  assertFresh(draftId: string, liveHandle: DocumentHandle, options?: { promptHash?: string }): FreshnessResult
   /**
    * **这份草稿是对哪一份文档编译出来的**（即 `create` 时记下的那个句柄）。
    *
@@ -648,10 +648,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ok: true, preview: previewOf(record) }
     },
 
-    assertFresh(draftId, liveHandle) {
+    assertFresh(draftId, liveHandle, options) {
       const record = drafts.get(draftId)
       if (!record) return { ok: false, reason: "stale_source", kind: "invalidated", detail: `no draft ${draftId}` }
       if (invalidated.has(draftId)) return { ok: false, reason: "stale_source", kind: "invalidated", detail: `draft was invalidated: ${invalidated.get(draftId)}` }
+      if (options?.promptHash !== undefined && record.promptHash !== undefined && record.promptHash !== options.promptHash) {
+        return { ok: false, reason: "stale_source", kind: "prompt", detail: "the prompt or scope changed since the draft was staged" }
+      }
       if (!record.baseHandle) return { ok: true }
       if (record.baseHandle.epoch !== liveHandle.epoch) return { ok: false, reason: "stale_source", kind: "epoch", detail: "the document was replaced since the draft was created" }
       if (record.baseHandle.generation !== liveHandle.generation) return { ok: false, reason: "stale_source", kind: "generation", detail: "the document changed since the draft was created" }

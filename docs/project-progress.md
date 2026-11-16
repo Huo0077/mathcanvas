@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T14 最终候选绑定、过期检测、仅相机不变性与原子一次确认（B4 收口）
+
+- **RED 复现**：新建 `drawingCertificateStaleness.test.ts` 并扩充 `committerAdapter.test.ts`，实现前 RED `2 failed | 4 failed | 44 passed (48)`。
+- **候选保鲜、仅相机分离与防双击落盘**：`drawingCertificate.ts` 落地 `verifyCertificateFreshness`；`renderEvidence.ts` 区分 `camera_changed`（`mathStale: false, visualStale: true, requiresReplan: false`）；`committerAdapter.ts`、`agentRuntime.ts`、`agentRunner.ts` 与 `draftStore.ts` 落地原子一次确认锁（拦截二次点击写入）与 `promptHash` 过期检查。
+- **验证**：定向 5 文件 103 项通过；最终编辑后全量 Vitest **540 文件 / 5705 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过，至此完成 `B4`（`P0–P6`）并按指令在 `T14` 后暂停；证据见[P4 / T14原子提交与保鲜证据](audit/2026-11-16-p4-atomic-commit-staleness/README.md)。
+
 ## 2026-11-16 —— P4 / T13 完整数学合同独立核验证书与变异拒绝矩阵
 
 - **RED 复现**：新建 `drawingCertificate.test.ts` 与 `drawingMutation.test.ts`，实现前 RED `2 failed (2)`（缺失 `drawingCertificate.ts`）。

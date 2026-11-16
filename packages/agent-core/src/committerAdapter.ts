@@ -72,8 +72,8 @@ export interface DraftStoreLike {
         assumptions?: readonly StructuredAssumption[]
       }
   >
-  /** 基础文档变了（手工编辑 / 撤销 / 切工作区）→ 草稿过期。 */
-  assertFresh?(draftId: string, liveHandle: DocumentHandle): { ok: true } | { ok: false; reason: "stale_source"; kind?: "invalidated" | "epoch" | "generation" | "content"; detail: string }
+  /** 基础文档变了（手工编辑 / 撤销 / 切工作区 / 改题）→ 草稿过期。 */
+  assertFresh?(draftId: string, liveHandle: DocumentHandle, options?: { promptHash?: string }): { ok: true } | { ok: false; reason: "stale_source"; kind?: "invalidated" | "epoch" | "generation" | "content" | "prompt"; detail: string }
 }
 
 /** `HostBridge` 里适配器用到的部分。 */
@@ -118,6 +118,7 @@ function passThroughConsent(consent: ConsentToken): unknown {
 
 export function createCommitterAdapter(dependencies: CommitterAdapterDependencies): CommitterAdapter {
   let draftId: string | null = null
+  const committedDraftIds = new Set<string>()
 
   return {
     draftIdFor: () => draftId,
@@ -256,9 +257,13 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
 
     async commit(request: CommitRequest & { consent: ConsentToken }): Promise<CommitOutcome> {
       if (draftId === null) return { status: "rejected", detail: "no draft was staged for this run" }
+      if (committedDraftIds.has(draftId)) {
+        return { status: "rejected", detail: "this staged draft was already committed once (double-confirm blocked)" }
+      }
 
       const result = dependencies.host.commit(draftId, passThroughConsent(request.consent))
       if (result.ok) {
+        committedDraftIds.add(draftId)
         // `changed: false` 是"没什么需要改"，不是失败 —— 协调器据此走 `no_change` 而不是报错。
         return { status: result.receipt.changed ? "committed" : "no_change" }
       }

@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P4 / T14 最终候选绑定、过期检测、仅相机不变性与原子一次确认（B4 收口）
+
+- **多维证书保鲜与仅相机视觉重算**：`packages/agent-core/src/verification/drawingCertificate.ts` 新增 `verifyCertificateFreshness` 校对 `runId`/`draftId`/`conversationId`/`promptHash`/`scopeId`/`documentHash`/`baseRevision`/`policyVersion`；`renderEvidence.ts` 扩展 `cameraHash` 与 `kind: "camera_changed"`（`mathStale: false, visualStale: true, requiresReplan: false`），使仅相机视角变化绝不失效数学证书或触发重规划。
+- **原子一次性确认与题文过期防护**：`committerAdapter.ts` 增加 `committedDraftIds` 防二次提交；`apps/web/src/agent/agentRuntime.ts` 新增 `committedOnce` 阻断双击确认并配合 `agentRunner.ts` `already_committed` 提示；`draftStore.ts` 扩展 `assertFresh(..., { promptHash })` 校验。
+- **验证**：新建 `apps/web/src/agent/drawingCertificateStaleness.test.ts` 并扩充 `committerAdapter.test.ts`（RED `4 failed` → 定向 5 文件 103 项通过）；最终编辑后全量 Vitest **540 文件 / 5705 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；至此 `B4`（`P0–P6`）收口，证据见 [P4 / T14原子提交与保鲜证据](docs/audit/2026-11-16-p4-atomic-commit-staleness/README.md)。
+
 ## 2026-11-16 —— P4 / T13 完整数学合同独立核验证书与变异拒绝矩阵
 
 - **独立数学证书与门禁收口**：新增 `packages/agent-core/src/verification/drawingCertificate.ts`（经 `index.ts` 导出），实现 `isDrawingRequestContract`（区分作图请求与闲聊）、`evaluateMathGate`（拦截空必检集/重复 ID/重复证据/非有限残差/陈旧候选绑定/源覆盖不全/实体缺失）及 `certifyDrawingAgainstContract`（基于最终图元坐标重算与椭圆残差/函数曲线绑核，严分 `passed` / `partial` / `blocked`，关闭开关显式报 `"未完整核验"`）；`apps/web/src/agent/acceptance.ts` 同步导出 `isDrawingPrompt`。

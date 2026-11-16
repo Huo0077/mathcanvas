@@ -337,3 +337,57 @@ export function certifyDrawingAgainstContract(input: {
         : `数学证书未通过（${certificateStatus}）：${gate.blockers.join(", ")}`
   }
 }
+
+export interface CertificateBinding {
+  runId: string
+  draftId: string
+  draftVersion: number
+  documentHash: string
+  promptHash?: string
+  scopeId?: string
+  conversationId?: string
+  baseRevision?: number
+  policyVersion?: string
+}
+
+export type CertificateFreshnessReason =
+  | "fresh"
+  | "run_changed"
+  | "draft_replaced"
+  | "document_changed"
+  | "prompt_changed"
+  | "scope_changed"
+  | "conversation_changed"
+  | "revision_changed"
+  | "policy_changed"
+
+export function verifyCertificateFreshness(
+  bound: CertificateBinding,
+  current: CertificateBinding
+): { fresh: true; reason: "fresh" } | { fresh: false; reason: Exclude<CertificateFreshnessReason, "fresh">; detail: string } {
+  if (bound.runId !== current.runId) {
+    return { fresh: false, reason: "run_changed", detail: `runId changed from ${bound.runId} to ${current.runId}` }
+  }
+  if (bound.draftId !== current.draftId) {
+    return { fresh: false, reason: "draft_replaced", detail: `draftId changed from ${bound.draftId} to ${current.draftId}` }
+  }
+  if (bound.conversationId !== undefined && current.conversationId !== undefined && bound.conversationId !== current.conversationId) {
+    return { fresh: false, reason: "conversation_changed", detail: `conversation changed from ${bound.conversationId} to ${current.conversationId}` }
+  }
+  if (bound.promptHash !== undefined && current.promptHash !== undefined && bound.promptHash !== current.promptHash) {
+    return { fresh: false, reason: "prompt_changed", detail: `prompt changed (${bound.promptHash} vs ${current.promptHash})` }
+  }
+  if (bound.scopeId !== undefined && current.scopeId !== undefined && bound.scopeId !== current.scopeId) {
+    return { fresh: false, reason: "scope_changed", detail: `scope changed from ${bound.scopeId} to ${current.scopeId}` }
+  }
+  if (bound.documentHash !== current.documentHash) {
+    return { fresh: false, reason: "document_changed", detail: `documentHash changed (${bound.documentHash} vs ${current.documentHash})` }
+  }
+  if (bound.baseRevision !== undefined && current.baseRevision !== undefined && bound.baseRevision !== current.baseRevision) {
+    return { fresh: false, reason: "revision_changed", detail: `baseRevision changed from ${bound.baseRevision} to ${current.baseRevision}` }
+  }
+  if (bound.policyVersion !== undefined && current.policyVersion !== undefined && bound.policyVersion !== current.policyVersion) {
+    return { fresh: false, reason: "policy_changed", detail: `policyVersion changed from ${bound.policyVersion} to ${current.policyVersion}` }
+  }
+  return { fresh: true, reason: "fresh" }
+}

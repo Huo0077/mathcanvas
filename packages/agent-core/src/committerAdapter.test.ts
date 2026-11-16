@@ -399,4 +399,20 @@ describe("handle helper", () => {
 
     expect(handleFor(value).contentHash).toBe(contentFingerprint(value))
   })
+
+  it("P4 / T14 refuses double commit on the same staged run without calling host.commit twice", async () => {
+    const drafts = makeDrafts()
+    const host = makeHost()
+    const adapter = createCommitterAdapter({ drafts, host, live: () => ({ handle: handleFor(document()), document: document() }) })
+
+    const staged = await adapter.stage({ run: run(), actionCount: 1, actions, signal })
+    expect(staged.ok).toBe(true)
+
+    const firstCommit = await adapter.commit({ run: run(), actionCount: 1, actions, signal, consent })
+    expect(firstCommit.status).toBe("committed")
+
+    const secondCommit = await adapter.commit({ run: run(), actionCount: 1, actions, signal, consent })
+    expect(secondCommit.status).toBe("rejected")
+    expect(host.commit).toHaveBeenCalledTimes(1)
+  })
 })

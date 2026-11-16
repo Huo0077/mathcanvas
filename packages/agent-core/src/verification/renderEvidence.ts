@@ -91,6 +91,7 @@ export interface RenderEvidence {
   runId: string
   draftId: string
   draftVersion: number
+  cameraHash?: string
   /**
    * **被渲染文档的内容哈希**（`canonicalContentHash`，64 位小写十六进制）。**必填**（Task 16）。
    *
@@ -299,47 +300,47 @@ export function evidenceIdentityProblem(evidence: Pick<RenderEvidence, "runId" |
 
 /** 旧图证据相对**当前文档**的过期结论。 */
 export type RenderEvidenceStaleness =
-  | { stale: false; kind: "fresh" }
-  | { stale: true; kind: "draft_replaced" | "document_changed"; detail: string }
+  | { stale: false; kind: "fresh"; mathStale: false; visualStale: false; requiresReplan: false }
+  | { stale: true; kind: "draft_replaced" | "document_changed"; detail: string; mathStale: true; visualStale: true; requiresReplan: false }
+  | { stale: true; kind: "camera_changed"; detail: string; mathStale: false; visualStale: true; requiresReplan: false }
 
-/**
- * **这份旧图证据还算不算数**（Task 16；计划退出条件："改题或撤销后旧图证据 stale"）。
- *
- * ## 判据看内容哈希，不看版本号
- *
- * 版本号只说明"暂存过几次"，内容哈希才说明"是不是同一份图"。两个方向都会错：
- * 拿版本号当判据 ⇒ 暂存了同一份内容也报过期（噪声，用户会学会忽略这条提示）；
- * 只看版本号不看哈希 ⇒ 撤销一次又画回原样的两份图分不出来。
- *
- * ## 两种 stale 分开说
- *
- * `document_changed`（同一份草稿、内容变了 —— **改题**与**撤销**都走这条）与
- * `draft_replaced`（台上换成了另一份草稿 —— **切文档**）要做的事不一样：
- * 前者重新画一遍就新了，后者那份证据属于别的文档、不该拿来参与这一份的判断。
- *
- * ## 截图不改变结论
- *
- * 截图是"当时看过的样子"，不是"现在的内容" —— 所以这条判据**只读身份与哈希**，
- * 一条都不读 `screenshot`（与"截图不能替代条件回代"是同一条纪律。
- * 用例："stays stale even when the old evidence carries a screenshot"）。
- */
 export function renderEvidenceStaleness(
-  evidence: Pick<RenderEvidence, "draftId" | "draftVersion" | "documentHash">,
-  current: { draftId: string; documentHash: string }
+  evidence: Pick<RenderEvidence, "draftId" | "draftVersion" | "documentHash" | "cameraHash">,
+  current: { draftId: string; documentHash: string; cameraHash?: string }
 ): RenderEvidenceStaleness {
   if (evidence.draftId !== current.draftId) {
     return {
       stale: true,
       kind: "draft_replaced",
-      detail: `这份证据属于草稿 ${evidence.draftId}（第 ${evidence.draftVersion} 版），现在台上是 ${current.draftId} —— 它是另一份文档的证据。`
+      detail: `这份证据属于草稿 ${evidence.draftId}（第 ${evidence.draftVersion} 版），现在台上是 ${current.draftId} —— 它是另一份文档的证据。`,
+      mathStale: true,
+      visualStale: true,
+      requiresReplan: false
     }
   }
   if (evidence.documentHash !== current.documentHash) {
     return {
       stale: true,
       kind: "document_changed",
-      detail: `证据绑在内容 ${evidence.documentHash.slice(0, 12)}…（第 ${evidence.draftVersion} 版），当前内容是 ${current.documentHash.slice(0, 12)}… —— 改题或撤销之后，旧图证据已经过期。`
+      detail: `证据绑在内容 ${evidence.documentHash.slice(0, 12)}…（第 ${evidence.draftVersion} 版），当前内容是 ${current.documentHash.slice(0, 12)}… —— 改题或撤销之后，旧图证据已经过期。`,
+      mathStale: true,
+      visualStale: true,
+      requiresReplan: false
     }
   }
-  return { stale: false, kind: "fresh" }
+  if (
+    evidence.cameraHash !== undefined &&
+    current.cameraHash !== undefined &&
+    evidence.cameraHash !== current.cameraHash
+  ) {
+    return {
+      stale: true,
+      kind: "camera_changed",
+      detail: "相机视角仅改变视觉渲染状态，数学证书仍有效，无需重新提问模型。",
+      mathStale: false,
+      visualStale: true,
+      requiresReplan: false
+    }
+  }
+  return { stale: false, kind: "fresh", mathStale: false, visualStale: false, requiresReplan: false }
 }

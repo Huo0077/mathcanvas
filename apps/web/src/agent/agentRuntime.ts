@@ -410,6 +410,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
   /** 规划器要问用户的问题（同上，一条路径）。 */
   let declaredQuestions: string[] | undefined
   let declaredAnswer: string | undefined
+  let committedOnce = false
 
   const coordinator = createCoordinator({
     planner: dependencies.planner,
@@ -476,6 +477,9 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     questions: () => declaredQuestions,
     answer: () => declaredAnswer,
     confirmDraft(): ConfirmOutcome {
+      if (committedOnce) {
+        return { status: "rejected" as const, detail: "already_committed: 该草稿已确认并提交过一次，不重复写入场景。" }
+      }
       const id = committer.draftIdFor()
       /**
        * **拒绝时说出运行时知道的事实**（2026-09-21）。
@@ -494,6 +498,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       }
       const result = host.commit(id, consent.record)
       if (result.ok) {
+        committedOnce = true
         const status = result.receipt.changed ? "committed" as const : "no_change" as const
         /**
          * **确认之后把账本走完**（外部审查 A4）。

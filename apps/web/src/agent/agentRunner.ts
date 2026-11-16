@@ -133,6 +133,7 @@ function commitFailureText(outcome: { status: string; detail?: string }): string
     wrong_run: "同意凭据属于另一次运行，已拒绝。",
     unverified_diagram: "题设尚未核验，不能提交。",
     unknown_draft: "找不到这份草稿（可能已经被丢弃）。",
+    already_committed: "该草稿已确认并提交过一次，不重复写入。",
     commit_rejected: "这次提交被文档校验挡下了。"
   }
   const text = known[reason]
