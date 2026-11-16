@@ -78,6 +78,7 @@ export type ContractCheckSpec =
   }
 
 export type ContractInfeasibleEvidence =
+  | { kind: "segment-dihedral-infeasible-3d"; hinge: [string, string]; fixedPoint: string; host: [string, string]; parameterDomain: readonly [number, number]; targetDegrees: number; sign: "positive" | "negative"; numerator: readonly [number, number, number]; denominator: readonly [number, number, number] }
   | { kind: "line-conic-intersections-2d"; lineId: string; conicId: string; bisectorOf: [string, string]; points: readonly [Vec2, Vec2] }
   | { kind: "ellipse-focal-right-angle-infeasible-2d"; conicId: string; focusA: string; focusB: string }
   | { kind: "parabola-directrix-cyclic-infeasible-2d"; conicId: string; tangentLineIds: [string, string]; tangentPointIds: [string, string]; footPointIds: [string, string]; intersectionPointId: string; slopeProduct: number }
@@ -590,9 +591,49 @@ function distancePointToLine2(point: Vec2, a: Vec2, b: Vec2): number {
 function evaluateInfeasibleEvidence(
   evidence: ContractInfeasibleEvidence,
   prims: readonly Record<string, unknown>[],
-  pts2: Map<string, Vec2>
+  pts2: Map<string, Vec2>,
+  pts3: Map<string, Vec3>
 ): { passed: boolean; detail: string } {
   const point = (label: string) => pts2.get(normalizeLabel(label))
+  if (evidence.kind === "segment-dihedral-infeasible-3d") {
+    const hingeStart = pts3.get(normalizeLabel(evidence.hinge[0])), hingeEnd = pts3.get(normalizeLabel(evidence.hinge[1]))
+    const fixedPoint = pts3.get(normalizeLabel(evidence.fixedPoint)), hostStart = pts3.get(normalizeLabel(evidence.host[0])), hostEnd = pts3.get(normalizeLabel(evidence.host[1]))
+    if (!hingeStart || !hingeEnd || !fixedPoint || !hostStart || !hostEnd) return { passed: false, detail: "missing hinge, fixed point or segment host" }
+    const hinge = sub3(hingeEnd, hingeStart), hingeLengthSquared = dot3(hinge, hinge)
+    if (hingeLengthSquared <= 1e-18) return { passed: false, detail: "degenerate dihedral hinge" }
+    const project = (vector: Vec3): Vec3 => {
+      const scale = dot3(vector, hinge) / hingeLengthSquared
+      return { x: vector.x - scale * hinge.x, y: vector.y - scale * hinge.y, z: vector.z - scale * hinge.z }
+    }
+    const fixed = project(sub3(fixedPoint, hingeStart)), start = project(sub3(hostStart, hingeStart)), direction = project(sub3(hostEnd, hostStart))
+    const dot0 = dot3(start, fixed), dot1 = dot3(direction, fixed)
+    const numerator: [number, number, number] = [dot0 * dot0, 2 * dot0 * dot1, dot1 * dot1]
+    const fixedLengthSquared = dot3(fixed, fixed), startLengthSquared = dot3(start, start), directionLengthSquared = dot3(direction, direction)
+    const denominator: [number, number, number] = [fixedLengthSquared * startLengthSquared, 2 * fixedLengthSquared * dot3(start, direction), fixedLengthSquared * directionLengthSquared]
+    const scale = evidence.denominator[0] / denominator[0]
+    const coefficientsMatch = Number.isFinite(scale) && scale > 0 && [0, 1, 2].every((index) =>
+      near(numerator[index]! * scale, evidence.numerator[index]!, 1e-9) && near(denominator[index]! * scale, evidence.denominator[index]!, 1e-9)
+    )
+    const [parameterMin, parameterMax] = evidence.parameterDomain
+    if (!Number.isFinite(parameterMin) || !Number.isFinite(parameterMax) || parameterMax <= parameterMin) return { passed: false, detail: "invalid segment parameter domain" }
+    const dotAt = (t: number) => dot0 + dot1 * t
+    const signMatches = evidence.sign === "negative" ? dotAt(parameterMin) < 0 && dotAt(parameterMax) < 0 : dotAt(parameterMin) > 0 && dotAt(parameterMax) > 0
+    const constantNumerator = numerator[0] > 0 && Math.abs(numerator[1]) <= 1e-9 && Math.abs(numerator[2]) <= 1e-9
+    if (!coefficientsMatch || !signMatches || !constantNumerator || denominator[2] <= 1e-12 || evidence.denominator[2] <= 0) {
+      return { passed: false, detail: `unsupported or mismatched dihedral polynomial; numerator=${JSON.stringify(numerator)}, denominator=${JSON.stringify(denominator)}` }
+    }
+    const denominatorAt = (t: number) => denominator[0] + denominator[1] * t + denominator[2] * t * t
+    const vertexT = -denominator[1] / (2 * denominator[2])
+    const denominatorValues = [denominatorAt(parameterMin), denominatorAt(parameterMax), ...(vertexT >= parameterMin && vertexT <= parameterMax ? [denominatorAt(vertexT)] : [])]
+    const denominatorMin = Math.min(...denominatorValues), denominatorMax = Math.max(...denominatorValues)
+    if (!(denominatorMin > 1e-12) || !Number.isFinite(denominatorMax)) return { passed: false, detail: "dihedral projection degenerates on the segment" }
+    const minimumCosSquared = numerator[0] / denominatorMax, maximumCosSquared = numerator[0] / denominatorMin
+    const minimumCos = evidence.sign === "negative" ? -Math.sqrt(maximumCosSquared) : Math.sqrt(minimumCosSquared)
+    const maximumCos = evidence.sign === "negative" ? -Math.sqrt(minimumCosSquared) : Math.sqrt(maximumCosSquared)
+    const targetCos = Math.cos(evidence.targetDegrees * Math.PI / 180)
+    const passed = targetCos < minimumCos || targetCos > maximumCos
+    return { passed, detail: `cos²=${JSON.stringify(evidence.numerator)}/${JSON.stringify(evidence.denominator)}, cos∈[${minimumCos},${maximumCos}], target cos=${targetCos} is ${passed ? "unreachable" : "reachable"}` }
+  }
   if (evidence.kind === "line-conic-intersections-2d") {
     const line = uniqueEntity(prims, evidence.lineId, "line")
     const conic = uniqueConic(prims, evidence.conicId)
@@ -1200,7 +1241,7 @@ function evaluateCheck(
         const key = normalizeLabel(label)
         return pts2.has(key) || pts3.has(key) || allLabels.has(key)
       })
-      const evidence = check.evidence === undefined ? { passed: true, detail: "legacy disclosure without specialized evidence" } : evaluateInfeasibleEvidence(check.evidence, prims, pts2)
+      const evidence = check.evidence === undefined ? { passed: true, detail: "legacy disclosure without specialized evidence" } : evaluateInfeasibleEvidence(check.evidence, prims, pts2, pts3)
       const diagnosed = check.evidence === undefined ? explicitFlag || textDiagnosed : explicitFlag
       const ok = diagnosed && fabricatedEntity === undefined && evidence.passed
       return {

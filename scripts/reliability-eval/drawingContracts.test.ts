@@ -1130,6 +1130,14 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     })
     expect(honest.passed, JSON.stringify(honest.obligationResults)).toBe(true)
     expect(honest.passedObligationIds).toEqual(expect.arrayContaining(["ob-ad", "ob-aa1-ad", "ob-base-ab-dc", "ob-base-ad-bc", "ob-aa1-bb1", "ob-aa1-cc1", "ob-aa1-dd1", "ob-top-a1b1-d1c1", "ob-top-a1d1-b1c1", "ob-1-b2c2-a2d2"]))
+    const wrongDomain = evaluateDrawingContract(gks05, {
+      primitives: basePrims.map((primitive) => primitive.type === "point3" && primitive.id === "d2" ? { ...primitive, position: { x: 0, y: 3, z: 2 } } : primitive)
+    }, { verificationStatus: "passed", scopeId: "(2)", answerText: "第(2)问不存在满足120°的点P。", infeasibleDiagnosedSubquestions: ["(2)"] })
+    expect(wrongDomain.failedObligationIds).toContain("ob-infeasible-2")
+    const unrelatedDiagnosis = evaluateDrawingContract(gks05, { primitives: basePrims }, {
+      verificationStatus: "passed", scopeId: "(2)", answerText: "另一小问无解。", infeasibleDiagnosedSubquestions: ["(1)"]
+    })
+    expect(unrelatedDiagnosis.failedObligationIds).toContain("ob-infeasible-2")
     const oblique = evaluateDrawingContract(gks05, {
       primitives: basePrims.map((primitive) => {
         if (!("position" in primitive)) return primitive

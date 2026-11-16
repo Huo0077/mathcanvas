@@ -1535,7 +1535,18 @@
           "check": {
             "kind": "infeasible-branch",
             "subquestion": "(2)",
-            "forbiddenEntityIds": ["P"]
+            "forbiddenEntityIds": ["P"],
+            "evidence": {
+              "kind": "segment-dihedral-infeasible-3d",
+              "hinge": ["A₂", "C₂"],
+              "fixedPoint": "D₂",
+              "host": ["B", "B₁"],
+              "parameterDomain": [0, 1],
+              "targetDegrees": 120,
+              "sign": "negative",
+              "numerator": [3, 0, 0],
+              "denominator": [7, -16, 16]
+            }
           }
         },
         {
