@@ -1056,4 +1056,64 @@ describe("planning failure contract", () => {
     expect(harness.planner.plan).toHaveBeenCalledTimes(2)
     expect(harness.committer.stage).not.toHaveBeenCalled()
   })
+
+  it("P4 / T12 stops compile repair immediately on repeated stagnant candidate + failure signature", async () => {
+    const badDiag = {
+      stage: "geometry_validation" as const,
+      code: "residual_failed",
+      path: "envelope.actions[0].inputs.size.x",
+      detail: "constraint residual exceeds tolerance",
+      severity: "error" as const
+    }
+    const repeatedPlan = planEnvelope()
+    const harness = makeHarness({
+      plan: () => ({ plan: repeatedPlan, requestId: "req-rep", attemptId: "att-rep" }),
+      stage: async () => ({
+        ok: false as const,
+        reason: "compile_failed" as const,
+        detail: "geometry_validation/residual_failed@envelope.actions[0].inputs.size.x: constraint residual exceeds tolerance",
+        planDiagnostics: [badDiag],
+        repair: {
+          reason: "residual_failed",
+          errors: [{ code: "residual_failed", path: "envelope.actions[0].inputs.size.x", detail: "constraint residual exceeds tolerance" }],
+          allowedChanges: ["envelope.actions[0].inputs.size.x"],
+          attempt: 1
+        }
+      })
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a constrained cube" })
+    expect(harness.coordinator.phase()).toBe("failed")
+    // First attempt fails -> 1st repair allowed; 2nd attempt produces identical candidate + signature -> stops instead of asking again
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(events.some((e) => e.detail.includes("stagnant"))).toBe(true)
+  })
+
+  it("P4 / T12 refuses to re-ask planner when compile fails due to missing engine capability", async () => {
+    const harness = makeHarness({
+      stage: async () => ({
+        ok: false as const,
+        reason: "compile_failed" as const,
+        detail: "capability missing: helix_3d not supported",
+        planDiagnostics: [{
+          stage: "transport" as const,
+          code: "not_supported",
+          path: "envelope.actions[0].actionId",
+          detail: "capability missing: helix_3d not supported",
+          severity: "error" as const
+        }],
+        repair: {
+          reason: "not_supported",
+          errors: [{ code: "not_supported", path: "envelope.actions[0].actionId", detail: "not supported" }],
+          allowedChanges: ["envelope.actions[0].actionId"],
+          attempt: 1
+        }
+      })
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "draw a 3D helix" })
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(harness.planner.plan).toHaveBeenCalledTimes(1)
+    expect(events.at(-1)?.detail).toMatch(/not_supported|capability_missing/i)
+  })
 })

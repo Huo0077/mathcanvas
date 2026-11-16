@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T12 有界局部修复、停滞拦截、原子账本与 Worker 取消
+
+- **RED 复现**：新建 `reliabilityDiagnostics.test.ts` 并扩充 `budget.test.ts`、`coordinator.test.ts` 与 `geometryWorkerClient.test.ts`，实现前 RED `4 failed (4) | 4 failed | 70 passed (74)`，涵盖停滞候选/非改进残差/缺失能力反复提问、跨账本部分扣减及 Worker 取消超时。
+- **停滞拦截与原子取消落盘**：新增 `reliabilityDiagnostics.ts`（强制 `provenUnsat: false` 与 `createRepairStagnationTracker`）；`budget.ts` 实现 `consumeAll` 并对齐 `modelPlanner.ts`、`examRequestBudget.ts`、`examRunCoordinated.ts`；`coordinator.ts` 接入缺失能力及残差停滞立即终止；`geometryWorkerClient.ts` / `geometryCompileStrategy.ts` 接入 `AbortSignal` 与迟到消息丢弃。
+- **验证**：定向 4 文件 76 项与 `examRunCoordinated.test.ts` 15 项通过；最终编辑后全量 Vitest **537 文件 / 5695 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建（639 modules）与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T12有界修复证据](audit/2026-11-16-p4-bounded-repair/README.md)。
+
 ## 2026-11-16 —— P4 / T10 折叠状态谱系、对称分支见证与耦合折角顺序约束
 
 - **RED 复现**：扩充 `foldHinges.test.ts`、`planCompiler.foldBranches.test.ts` 与 `planCompiler.coupledFolds.test.ts`，覆盖铰链重合/漂移/边长突变/`dp_identity_conflation`、正负双分支与 `120°`/`60°` 内二面角/面面锐角隔离、逆序缺依赖点与 `> 3` 折越界拒绝；实现前 RED `3 failed | 5 failed | 11 passed (16)`。

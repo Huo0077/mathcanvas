@@ -782,9 +782,10 @@ function recoveryErrorOf(failure: { failure: string; message: string }): Recover
 
 /** 花掉这次重试的预算。**先问再扣**：策略表已经确认能负担，这里只是执行与兜底。 */
 function spend(budget: Budget, decision: RetryDecision): boolean {
-  const network = budget.consume("network", decision.budgetCost.network)
-  if (!network.ok) return false
-  return budget.consume("generation", decision.budgetCost.generation).ok
+  return budget.consumeAll([
+    { kind: "network", amount: decision.budgetCost.network },
+    { kind: "generation", amount: decision.budgetCost.generation }
+  ]).ok
 }
 
 /** 供界面显示"Agent 会用哪一份"：与 `resolveActiveProvider` 同一批判据。 */

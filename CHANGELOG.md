@@ -8,6 +8,13 @@
 
 
 
+## 2026-11-16 —— P4 / T12 有界局部修复、停滞拦截、原子账本与 Worker 取消
+
+- **结构化故障诊断与非无解语义保护**：新增 `packages/agent-core/src/reliabilityDiagnostics.ts`（经 `index.ts` 导出），确立 10 类结构化故障编码与优先动作、`normalizeSolveOutcome`（强制 `provenUnsat: false`，绝不将 `not-found`/`timeout`/`budget_exhausted` 映成无解）以及 `createRepairStagnationTracker`（识别 `stagnant_candidate`、`no_progress` 与 `capability_missing`）。
+- **跨账本原子预算与协调器停滞阻断**：`packages/agent-core/src/budget.ts` 新增 `consumeAll` 原子扣减并在 `modelPlanner.ts`、`examRequestBudget.ts` 与 `examRunCoordinated.ts` 对齐计费；`coordinator.ts` 接入 `createRepairStagnationTracker` 与 `consumeAll`，在缺失能力与无进展残差循环时立即收敛并零写入主场景。
+- **Worker `AbortSignal` 取消边界**：`apps/web/src/agent/geometryWorkerClient.ts` 与 `geometryCompileStrategy.ts` 透传 `signal?: AbortSignal`，拦截派发前中止、在途立即结算 `code: "cancelled"` 并安全丢弃迟到回包。
+- **验证**：RED 4 fail → 定向 4 文件 76 项与 `examRunCoordinated.test.ts` 15 项通过；最终编辑后全量 Vitest **537 文件 / 5695 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建（639 modules）与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T12有界修复证据](docs/audit/2026-11-16-p4-bounded-repair/README.md)。
+
 ## 2026-11-16 —— P4 / T10 折叠状态谱系、对称分支见证与耦合折角顺序约束
 
 - **内核旋转双分支与角口径隔离**：`packages/geometry-kernel/src/rotation3d.ts` 新增 `rotatePointAboutHinge` 与 `foldBranchesForTargetDistance`（枚举 `positive`/`negative` 对称分支并输出距离残差）；`foldSystem.ts` 新增 `classifyFoldSystemResult`（保持 `provenUnsat: false`，不将 `not-found` 误报为无解）；`solidGoalMeasurements.ts` 新增 `verifyTargetAngleContract`（严格区分 `interior_dihedral` `[0°,180°]` 与 `plane_acute_angle` `[0°,90°]`）。

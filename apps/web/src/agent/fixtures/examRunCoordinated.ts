@@ -32,11 +32,19 @@ export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCas
     const capped = outer === undefined ? undefined : budgetWithProviderRequestCap(createBudget(), outer)
     const inner = capped ?? createBudget()
     let budgetDenied = false
-    const budget: Budget = { ...inner, consume(kind, amount) {
-      const decision = inner.consume(kind, amount)
-      if (!decision.ok) budgetDenied = true
-      return decision
-    } }
+    const budget: Budget = {
+      ...inner,
+      consume(kind, amount) {
+        const decision = inner.consume(kind, amount)
+        if (!decision.ok) budgetDenied = true
+        return decision
+      },
+      consumeAll(items) {
+        const decision = inner.consumeAll(items)
+        if (!decision.ok) budgetDenied = true
+        return decision
+      }
+    }
     const attempts: PlanOutcome[] = []
     let plannerError: unknown = null
     let lastStage: StageOutcome | undefined

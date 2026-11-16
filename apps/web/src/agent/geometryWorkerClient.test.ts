@@ -276,4 +276,33 @@ describe("geometry worker client", () => {
     expect(fake.posted[1]).not.toHaveProperty("prompt")
     client.dispose()
   })
+
+  it("P4 / T12 honors AbortSignal cancellation before dispatch and discards late worker replies after abort", async () => {
+    const fake = fakeWorker()
+    const client = createGeometryWorkerClient(fake.worker)
+
+    const preAborted = new AbortController()
+    preAborted.abort()
+    const preOutcome = await client.compile([], document(), { ...envelope, signal: preAborted.signal })
+    expect(preOutcome.ok).toBe(false)
+    if (!preOutcome.ok) expect(preOutcome.code).toBe("cancelled")
+    expect(fake.posted).toHaveLength(0)
+    expect(client.pendingCount()).toBe(0)
+
+    const inFlightController = new AbortController()
+    const pendingPromise = client.compile([], document(), { ...envelope, signal: inFlightController.signal })
+    expect(client.pendingCount()).toBe(1)
+    expect(fake.posted).toHaveLength(1)
+
+    inFlightController.abort()
+    const abortedOutcome = await pendingPromise
+    expect(abortedOutcome.ok).toBe(false)
+    if (!abortedOutcome.ok) expect(abortedOutcome.code).toBe("cancelled")
+    expect(client.pendingCount()).toBe(0)
+
+    // Late message for the cancelled request must be ignored without throwing or resurrecting pending state
+    fake.emitMessage(successResponse(fake.requestAt(0).requestId, envelope))
+    expect(client.pendingCount()).toBe(0)
+    client.dispose()
+  })
 })

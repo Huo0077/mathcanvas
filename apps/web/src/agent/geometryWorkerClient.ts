@@ -46,6 +46,7 @@ export interface GeometryWorkerRequestEnvelope {
   draftId: string
   draftVersion: number
   prompt?: string
+  signal?: AbortSignal
   /**
    * **Phase N1 的统一 IR 开关**（R6）：Worker 读不到主线程的 `agentNextPhaseFlags`，
    * 所以这个布尔必须随请求过去。缺省 = 关。
@@ -95,6 +96,7 @@ export function createGeometryWorkerClient(worker: WorkerLike, options: Geometry
     expected: GeometryWorkerRequestEnvelope
     resolve: (outcome: GeometryWorkerOutcome) => void
     timer: ReturnType<typeof setTimeout>
+    cleanupAbort?: () => void
   }>()
 
   const settle = (requestId: string, outcome: GeometryWorkerOutcome) => {
@@ -102,6 +104,7 @@ export function createGeometryWorkerClient(worker: WorkerLike, options: Geometry
     if (!entry) return
     pending.delete(requestId)
     clearTimeout(entry.timer)
+    entry.cleanupAbort?.()
     entry.resolve(outcome)
   }
 
@@ -178,13 +181,27 @@ export function createGeometryWorkerClient(worker: WorkerLike, options: Geometry
     envelope: GeometryWorkerRequestEnvelope
   ): Promise<GeometryWorkerOutcome> => {
     if (disposed) return Promise.resolve({ ok: false, code: "disposed", detail: "the geometry worker client was disposed" })
+    if (envelope.signal?.aborted) {
+      return Promise.resolve({ ok: false, code: "cancelled", detail: "geometry worker request was cancelled before dispatch" })
+    }
     sequence += 1
     const requestId = `gw-${sequence}`
     return new Promise<GeometryWorkerOutcome>((resolve) => {
       const timer = setTimeout(() => {
         settle(requestId, { ok: false, code: "timeout", detail: `no response within ${timeoutMs} ms` })
       }, timeoutMs)
-      pending.set(requestId, { expected: envelope, resolve, timer })
+      const onAbort = () => {
+        settle(requestId, { ok: false, code: "cancelled", detail: "geometry worker request was cancelled" })
+      }
+      if (envelope.signal) {
+        envelope.signal.addEventListener("abort", onAbort, { once: true })
+      }
+      pending.set(requestId, {
+        expected: envelope,
+        resolve,
+        timer,
+        ...(envelope.signal ? { cleanupAbort: () => envelope.signal!.removeEventListener("abort", onAbort) } : {})
+      })
       try {
         worker.postMessage(createWorkerRequest(kind, { runId: envelope.runId, requestId, draftId: envelope.draftId, draftVersion: envelope.draftVersion }, payload as never))
       } catch (error) {

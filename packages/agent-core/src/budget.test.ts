@@ -176,4 +176,20 @@ describe("budget snapshot and exhaustion", () => {
     budget.consume("tool", 24)
     expect(budget.exhausted()).toBe(true)
   })
+
+  it("consumes combined resource ledgers atomically without partial spend when any budget fails", () => {
+    const budget = createBudget({ network: 3, generation: 2 })
+    expect(budget.consume("network", 1).ok).toBe(true)
+
+    // generation only has 2 remaining, request needs 2 network + 3 generation -> must refuse BOTH atomically!
+    const refused = budget.consumeAll([
+      { kind: "network", amount: 2 },
+      { kind: "generation", amount: 3 }
+    ])
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) expect(refused.kind).toBe("generation")
+    // Zero partial deduction from network!
+    expect(budget.remaining("network")).toBe(2)
+    expect(budget.remaining("generation")).toBe(2)
+  })
 })

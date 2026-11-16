@@ -108,6 +108,8 @@ export type BudgetDecision = { ok: true; snapshot: BudgetSnapshot } | BudgetReje
 export interface Budget {
   /** 先判后扣：不够就拒绝，且拒绝时不扣任何额度。 */
   consume(kind: BudgetKind, amount?: number): BudgetDecision
+  /** 跨多个资源账本原子扣减：先全部验明不越限且数量合法，再一起扣减；任一项不足时全都不扣。 */
+  consumeAll(items: ReadonlyArray<{ kind: BudgetKind; amount?: number }>): BudgetDecision
   /** 进入下一次暂存：重置 `actions_per_stage`（整次运行的名额不重置）。 */
   beginStage(): void
   remaining(kind: BudgetKind): number
@@ -139,6 +141,29 @@ export function createBudget(overrides: Partial<BudgetLimits> = {}): Budget {
       // 先判后扣：`amount > left` 时直接拒绝，`used` 一个单位都不动。
       if (amount > left) return { ok: false, kind, requested: amount, remaining: left, reason: "exceeds_limit" }
       used[kind] += amount
+      return { ok: true, snapshot: snapshot() }
+    },
+
+    consumeAll(items) {
+      const totals = zeroLimits()
+      for (const item of items) {
+        const amount = item.amount ?? 1
+        if (!Number.isInteger(amount) || amount < 0) {
+          return { ok: false, kind: item.kind, requested: amount, remaining: limits[item.kind] - used[item.kind], reason: "invalid_amount" }
+        }
+        totals[item.kind] += amount
+      }
+      for (const item of items) {
+        const req = totals[item.kind]
+        if (req <= 0) continue
+        const left = limits[item.kind] - used[item.kind]
+        if (req > left) {
+          return { ok: false, kind: item.kind, requested: req, remaining: left, reason: "exceeds_limit" }
+        }
+      }
+      for (const kind of Object.keys(totals) as BudgetKind[]) {
+        used[kind] += totals[kind]
+      }
       return { ok: true, snapshot: snapshot() }
     },
 

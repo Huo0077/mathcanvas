@@ -10,6 +10,7 @@ import { createRunLedger, boundTrace, type RunEvent, type RunLedger, type RunNex
 import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { verificationGate } from "./verification/completionGate"
 import type { AcceptanceCheck } from "./verification/taskAcceptance"
+import { classifyPlanDiagnostics, createRepairStagnationTracker } from "./reliabilityDiagnostics"
 
 /**
  * **协调器**（Task 2.1）。
@@ -427,6 +428,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       let schemaRepairs = 0
       let compileRepairs = 0
+      const repairTracker = createRepairStagnationTracker()
 
       /**
        * **一次原始尝试 + 每类各一次可见修复**的循环。
@@ -441,10 +443,15 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       for (let attempt = 1; attempt <= MAX_PLAN_ATTEMPTS && stagedPlan === null; attempt += 1) {
         if (attempt > 1) {
-          // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额。
-          if (!spend(budget, "generation") || !spend(budget, "network")) {
+          // 第二次尝试是**可见的修复**：它花掉的是同一份预算的另一个名额（先验全部再原子扣减）。
+          const repairBudget = budget.consumeAll([
+            { kind: "generation", amount: 1 },
+            { kind: "network", amount: 1 }
+          ])
+          if (!repairBudget.ok) {
             return yield* stop("budget_repair", lastDetail, { generation: budget.remaining("generation"), network: budget.remaining("network") })
           }
+          ledger.record("budget: repair consumed generation=1, network=1")
           /**
            * 上一次失败发生在**编译阶段**时账本现在停在 `compiling`，而这一次是重新提问 ——
            * 所以先回到 `planning`（`compiling → planning` 这条边只由这条路径用到，
@@ -701,6 +708,19 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
          */
         const compileRepair = stagedResult.repair
         if (stagedResult.reason === "compile_failed" && compileRepair !== undefined && compileRepair.attempt <= MAX_COMPILE_REPAIR_ATTEMPTS && compileRepairs < MAX_COMPILE_REPAIR_ATTEMPTS) {
+          const candidateHash = JSON.stringify(plan.actions)
+          const classified = classifyPlanDiagnostics(stagedResult.planDiagnostics ?? [], { candidateHash })
+          const stagnation = repairTracker.record({
+            candidateHash,
+            diagnostics: classified,
+            allowIdenticalWithoutResidual: true
+          })
+          if (stagnation.shouldStop) {
+            lastDetail = `${detail} (${stagnation.stopReason}: ${stagnation.detail})`
+            const failed = ledger.transition("failed", lastDetail)
+            if (failed.ok) yield failed.event
+            return
+          }
           compileRepairs += 1
           repair = {
             ...compileRepair,

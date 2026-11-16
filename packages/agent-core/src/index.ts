@@ -178,6 +178,7 @@ export * from "./parametricSolidPlan"
 export * from "./scopedPyramidPlan"
 export * from "./trigMonotonicityPlan"
 export * from "./deterministicProblemRoute"
+export * from "./reliabilityDiagnostics"
 /**
  * **多边形（梯形）沿对角线翻折**（T6）：题面 → 计划 / 一次澄清。
  *
