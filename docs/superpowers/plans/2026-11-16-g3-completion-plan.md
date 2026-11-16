@@ -48,6 +48,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - 第二轮独立 reviewer 逐题复核36/36，结论为4题可批准、32题需整改；T01仍未关闭。已针对 GK-P03 最优直线、GK-P06 三分支、JT-S04 真实旋转夹具和 JT-S09 闭合拓扑实施修正，仍须复审。最新离线结果为0 passed/12 partial/24 failed，生产未路由失败不能由合同GREEN抵销。证据：`docs/audit/2026-11-16-g3-contract-review-r2/README.md`。
 
+- scope/实体试点已完成：JT-P05/P08 显式继承并绑定实际曲线，JT-S01 父条件与局部球O分离，函数切线拒绝退化；四类反例 RED→GREEN。其余合同推广、指定拓扑和折叠谱系仍在 Task 1，最新离线0/12/24不变。证据：`docs/audit/2026-11-16-g3-scope-entities/README.md`。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

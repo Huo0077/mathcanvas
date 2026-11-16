@@ -10,7 +10,7 @@
 
 本页定义“满足哪些条件才可发布”，不复制完成读数。是否已满足、未解决问题和测试时点只看[当前状态](../current-status.md)；首批任务及依赖只看[实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)。
 
-当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)一致。
+当前 G3-Math 仍被 T01 独立复核阻断，合同修正与局部测试通过不构成发布许可；T15/T16 所需同候选真实渲染、人工可读性签收和 Windows 桌面证据尚不得用浏览器 mock 或 AI 看图替代。最新执行状态与[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)及[scope与实体绑定试点](../audit/2026-11-16-g3-scope-entities/README.md)一致；试点合同通过不改变阻断结论。
 
 | 门禁 | 必须提交的证据 | 不能替代的条件 |
 | --- | --- | --- |

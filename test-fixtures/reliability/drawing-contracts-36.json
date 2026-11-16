@@ -2392,16 +2392,14 @@
         "A",
         "B",
         "C",
-        "P",
-        "O"
+        "P"
       ],
       "sharedScope": {
         "entities": [
           "A",
           "B",
           "C",
-          "P",
-          "O"
+          "P"
         ],
         "stemConditions": [
           "AB=AC=CD=1",
@@ -2414,7 +2412,18 @@
           {
             "subquestion": "(1)",
             "localConditions": [
-              "PC⊥AB",
+              "PC⊥AB"
+            ],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(1)(i)",
+            "localConditions": [],
+            "branchPolicy": "merge_into_main"
+          },
+          {
+            "subquestion": "(1)(ii)",
+            "localConditions": [
               "P,A,B,C on sphere O"
             ],
             "branchPolicy": "merge_into_main"
@@ -2437,7 +2446,8 @@
             "PC⊥AB"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "dependsOn": ["(1)"]
         },
         {
           "id": "(1)(ii)",
@@ -2448,7 +2458,8 @@
           ],
           "mustPreserveInDiagram": true,
           "feasible": true,
-          "expectedResult": "√5/2"
+          "expectedResult": "√5/2",
+          "dependsOn": ["(1)"]
         },
         {
           "id": "(2)",
@@ -2555,8 +2566,8 @@
         {
           "id": "ob-pc-ab",
           "kind": "perpendicular",
-          "description": "PC⊥AB in subquestion (1)(i)",
-          "scope": "(1)(i)",
+          "description": "PC⊥AB is shared by subquestions (1)(i) and (1)(ii)",
+          "scope": "(1)",
           "sourceSpan": {
             "text": "设 PC⊥AB",
             "start": 77,
@@ -2568,6 +2579,23 @@
             "b": "C",
             "c": "A",
             "d": "B"
+          }
+        },
+        {
+          "id": "ob-sphere-present",
+          "kind": "entity",
+          "description": "Sphere O is required only for subquestion (1)(ii)",
+          "scope": "(1)(ii)",
+          "sourceSpan": {
+            "text": "三棱锥 P-ABC 的各个顶点都在球 O 的球面上",
+            "start": 85,
+            "end": 110
+          },
+          "check": {
+            "kind": "entity-present",
+            "entityId": "O",
+            "space": "3d",
+            "primitiveType": "sphere"
           }
         },
         {
@@ -7941,7 +7969,8 @@
             "M(0,1), AB∥PQ"
           ],
           "mustPreserveInDiagram": true,
-          "feasible": true
+          "feasible": true,
+          "dependsOn": ["(1)"]
         }
       ],
       "requiredObligations": [
@@ -7958,6 +7987,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "hyperbola",
+            "entityId": "C",
             "cx": 0,
             "cy": 0,
             "axis": "x",
@@ -8698,7 +8728,8 @@
           ],
           "mustPreserveInDiagram": true,
           "feasible": true,
-          "expectedResult": "y = ±(1/2)x - 1"
+          "expectedResult": "y = ±(1/2)x - 1",
+          "dependsOn": ["(Ⅰ)"]
         }
       ],
       "requiredObligations": [
@@ -8766,6 +8797,7 @@
           "check": {
             "kind": "conic-2d",
             "curveType": "ellipse",
+            "entityId": "G",
             "cx": 0,
             "cy": 0,
             "rx": 2,

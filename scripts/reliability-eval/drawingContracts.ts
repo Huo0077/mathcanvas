@@ -13,7 +13,7 @@ export type ConicSpec2D =
   | { kind: "circle"; cx: number; cy: number; radius: number }
 
 export type ContractCheckSpec =
-  | { kind: "entity-present"; entityId: string; space: "3d" | "2d" | "any" }
+  | { kind: "entity-present"; entityId: string; space: "3d" | "2d" | "any"; primitiveType?: string }
   | { kind: "distance-3d"; a: string; b: string; value: number }
   | { kind: "perp-3d"; a: string; b: string; c: string; d: string }
   | { kind: "parallel-3d"; a: string; b: string; c: string; d: string }
@@ -39,10 +39,10 @@ export type ContractCheckSpec =
   | { kind: "point-on-ellipse-2d"; label: string; cx: number; cy: number; rx: number; ry: number }
   | { kind: "point-on-conic-2d"; label: string; conic: ConicSpec2D }
   | { kind: "conic-domain-2d"; conicId: string; conic: ConicSpec2D; excludePoints: readonly { x: number; y: number }[] }
-  | { kind: "conic-2d"; curveType: "ellipse"; cx: number; cy: number; rx: number; ry: number }
-  | { kind: "conic-2d"; curveType: "hyperbola"; cx: number; cy: number; axis: "x" | "y"; rx: number; ry: number }
-  | { kind: "conic-2d"; curveType: "parabola"; vx: number; vy: number; axis: "x" | "y"; focalParameter: number }
-  | { kind: "conic-2d"; curveType: "circle"; cx: number; cy: number; radius: number }
+  | { kind: "conic-2d"; curveType: "ellipse"; entityId?: string; cx: number; cy: number; rx: number; ry: number }
+  | { kind: "conic-2d"; curveType: "hyperbola"; entityId?: string; cx: number; cy: number; axis: "x" | "y"; rx: number; ry: number }
+  | { kind: "conic-2d"; curveType: "parabola"; entityId?: string; vx: number; vy: number; axis: "x" | "y"; focalParameter: number }
+  | { kind: "conic-2d"; curveType: "circle"; entityId?: string; cx: number; cy: number; radius: number }
   | { kind: "point-on-line-2d"; point: string; lineId: string }
   | { kind: "point-on-segment-2d"; p: string; a: string; b: string }
   | { kind: "horizontal-2d"; a: string; b: string }
@@ -85,6 +85,7 @@ export interface ContractSubquestion {
   mustPreserveInDiagram: boolean
   feasible: boolean
   expectedResult?: string
+  dependsOn?: readonly string[]
 }
 
 export interface ContractSharedScope {
@@ -454,6 +455,20 @@ function uniqueConic(prims: readonly Record<string, unknown>[], conicId: string)
   return matches.length === 1 ? matches[0]! : null
 }
 
+function conicParametersMatch(primitive: Record<string, unknown>, spec: ConicSpec2D): boolean {
+  if (primitive.type !== spec.kind) return false
+  if (spec.kind === "parabola") {
+    const vertex = primitive.vertex as Vec2 | undefined
+    return !!vertex && near(vertex.x, spec.vx) && near(vertex.y, spec.vy) && primitive.axis === spec.axis && near(Number(primitive.focalParameter), spec.focalParameter, 1e-2)
+  }
+  const center = primitive.center as Vec2 | undefined
+  if (!center || !near(center.x, spec.cx) || !near(center.y, spec.cy)) return false
+  if (spec.kind === "circle") return near(Number(primitive.radius), spec.radius)
+  const axisMatches = spec.kind === "ellipse" || primitive.axis === spec.axis
+  const tolerance = spec.kind === "hyperbola" ? 1e-2 : TOL
+  return axisMatches && near(Number(primitive.radiusX), spec.rx, tolerance) && near(Number(primitive.radiusY), spec.ry, tolerance)
+}
+
 function conicResidual2d(spec: ConicSpec2D, point: Vec2): number | null {
   if (spec.kind === "circle") {
     return Math.abs(Math.hypot(point.x - spec.cx, point.y - spec.cy) / spec.radius - 1)
@@ -526,8 +541,10 @@ function evaluateCheck(
   switch (check.kind) {
     case "entity-present": {
       const key = normalizeLabel(check.entityId)
-      const ok = check.space === "3d" ? pts3.has(key) || allLabels.has(key) : check.space === "2d" ? pts2.has(key) || allLabels.has(key) : allLabels.has(key)
-      return { passed: ok, detail: ok ? `entity ${check.entityId} present` : `missing entity ${check.entityId}` }
+      const ok = check.primitiveType !== undefined
+        ? uniqueEntity(prims, check.entityId, check.primitiveType) !== null
+        : check.space === "3d" ? pts3.has(key) || allLabels.has(key) : check.space === "2d" ? pts2.has(key) || allLabels.has(key) : allLabels.has(key)
+      return { passed: ok, detail: ok ? `entity ${check.entityId} present with required type` : `missing, ambiguous or wrongly typed entity ${check.entityId}` }
     }
     case "distance-3d": {
       const a = p3(check.a), b = p3(check.b)
@@ -725,7 +742,7 @@ function evaluateCheck(
     }
     case "conic-domain-2d": {
       const curve = uniqueEntity(prims, check.conicId, check.conic.kind)
-      if (!curve) return { passed: false, detail: `missing or ambiguous conic ${check.conicId}` }
+      if (!curve || !conicParametersMatch(curve, check.conic)) return { passed: false, detail: `missing, ambiguous or mismatched conic ${check.conicId}` }
       if (!Array.isArray(curve.excludedPoints) || curve.excludedPoints.length !== check.excludePoints.length) {
         return { passed: false, detail: `conic ${check.conicId} must explicitly exclude ${check.excludePoints.length} points` }
       }
@@ -740,36 +757,18 @@ function evaluateCheck(
       return { passed: valid, detail: valid ? `conic ${check.conicId} exclusions verified` : `invalid exclusions for ${check.conicId}` }
     }
     case "conic-2d": {
-      if (check.curveType === "ellipse") {
-        const ok = prims.some((p) => {
-          if (p.type !== "ellipse") return false
-          const center = p.center as Vec2 | undefined
-          return !!center && near(center.x, check.cx) && near(center.y, check.cy) && near(Number(p.radiusX), check.rx) && near(Number(p.radiusY), check.ry)
-        })
-        return { passed: ok, detail: ok ? "ellipse matches" : "missing/mismatched ellipse" }
-      }
-      if (check.curveType === "circle") {
-        const ok = prims.some((p) => {
-          if (p.type !== "circle") return false
-          const center = p.center as Vec2 | undefined
-          return !!center && near(center.x, check.cx) && near(center.y, check.cy) && near(Number(p.radius), check.radius)
-        })
-        return { passed: ok, detail: ok ? "circle matches" : "missing/mismatched circle" }
-      }
-      if (check.curveType === "hyperbola") {
-        const ok = prims.some((p) => {
-          if (p.type !== "hyperbola") return false
-          const center = p.center as Vec2 | undefined
-          return !!center && near(center.x, check.cx) && near(center.y, check.cy) && p.axis === check.axis && near(Number(p.radiusX), check.rx, 1e-2) && near(Number(p.radiusY), check.ry, 1e-2)
-        })
-        return { passed: ok, detail: ok ? "hyperbola matches" : "missing/mismatched hyperbola" }
-      }
-      const ok = prims.some((p) => {
-        if (p.type !== "parabola") return false
-        const v = p.vertex as Vec2 | undefined
-        return !!v && near(v.x, check.vx) && near(v.y, check.vy) && p.axis === check.axis && near(Number(p.focalParameter), check.focalParameter, 1e-2)
-      })
-      return { passed: ok, detail: ok ? "parabola matches" : "missing/mismatched parabola" }
+      const spec: ConicSpec2D = check.curveType === "ellipse"
+        ? { kind: "ellipse", cx: check.cx, cy: check.cy, rx: check.rx, ry: check.ry }
+        : check.curveType === "circle"
+          ? { kind: "circle", cx: check.cx, cy: check.cy, radius: check.radius }
+          : check.curveType === "hyperbola"
+            ? { kind: "hyperbola", cx: check.cx, cy: check.cy, axis: check.axis, rx: check.rx, ry: check.ry }
+            : { kind: "parabola", vx: check.vx, vy: check.vy, axis: check.axis, focalParameter: check.focalParameter }
+      const candidates = prims.filter((primitive) => primitive.type === check.curveType &&
+        (check.entityId === undefined || primitive.id === check.entityId || primitive.label === check.entityId))
+      const bound = check.entityId === undefined || candidates.length === 1
+      const ok = bound && candidates.some((primitive) => conicParametersMatch(primitive, spec))
+      return { passed: ok, detail: ok ? `${check.curveType} ${check.entityId ?? "candidate"} matches` : `missing, ambiguous or mismatched ${check.curveType} ${check.entityId ?? "candidate"}` }
     }
     case "horizontal-2d": {
       const a = p2(check.a), b = p2(check.b)
@@ -838,6 +837,7 @@ function evaluateCheck(
       if (!derivative.ok) return { passed: false, detail: `function derivative error: ${derivative.reason}` }
       const start = line.a as Vec2 | undefined, end = line.b as Vec2 | undefined
       if (!start || !end) return { passed: false, detail: `line ${check.lineId} has invalid endpoints` }
+      if (Math.hypot(end.x - start.x, end.y - start.y) <= 1e-9) return { passed: false, detail: `degenerate function tangent ${check.lineId}` }
       const slope = derivative.value
       const error = (point: Vec2) => Math.abs(slope * (point.x - check.x) - (point.y - base.value)) / Math.hypot(slope, 1)
       const residual = Math.max(error(start), error(end))
@@ -1004,8 +1004,16 @@ export function evaluateDrawingContract(
 
   const objectCoverage = contract.requiredEntityIds.length === 0 ? 1 : presentEntityIds.length / contract.requiredEntityIds.length
 
+  const inheritedScopeIds = new Set<string>(["stem"])
+  const inheritScope = (scopeId: string) => {
+    if (inheritedScopeIds.has(scopeId)) return
+    inheritedScopeIds.add(scopeId)
+    const subquestion = contract.subquestions.find((item) => item.id === scopeId)
+    for (const dependency of subquestion?.dependsOn ?? []) inheritScope(dependency)
+  }
+  if (options.scopeId !== undefined) inheritScope(options.scopeId)
   const scopedObligations = contract.requiredObligations.filter((ob) =>
-    (options.scopeId === undefined || ob.scope === "stem" || ob.scope === options.scopeId) &&
+    (options.scopeId === undefined || inheritedScopeIds.has(ob.scope)) &&
     (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId) &&
     (options.stateId === undefined || ob.stateId === undefined || ob.stateId === options.stateId)
   )

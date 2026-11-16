@@ -37,6 +37,8 @@
 
 - **第二轮独立复核与针对性整改已入档**：agent-0 复核36/36，仅 GK-P08、GK-S09、JT-S09、JT-P09 的作图数学合同可批准，32题需整改；T01仍未关闭。GK-P03最优直线、GK-P06三分支、JT-S04真实旋转夹具与JT-S09闭合拓扑已修正并加入反例，仍须下一轮独立复核。定向39项、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过。最新36题为 **0 passed / 12 partial / 24 failed**，义务覆盖约22.38%，未路由和生产未接线仍导致24题失败。证据：[第二轮独立复核与整改](audit/2026-11-16-g3-contract-review-r2/README.md)。
 
+- **scope 与实体绑定试点已整改**：JT-P05 显式继承前问 C，JT-P08 绑定实际 G 参数，JT-S01 两个子问继承 PC⊥AB 且 O 仅在 (1)(ii) 必需；函数切线拒绝零长度端点。跨问错曲线、错误轨迹、缺球/缺父条件均有 RED→GREEN。定向39项、全量540文件/5735通过+1todo、类型/Lint（0 errors/33既有warnings）/Web构建（640 modules）通过；最新离线仍为 **0 passed / 12 partial / 24 failed**，不代表生产提分。证据：[scope与实体绑定试点](audit/2026-11-16-g3-scope-entities/README.md)。其余合同推广、指定拓扑和折叠谱系仍未完成。
+
 ### 当前执行范围与区块结果
 
 前期授权阶段 **R00 → R01-A → R09-A → R10**、**G1（R02–R06）** 与 **G2（R07、R08、R09-B、R11）** 已全部收口；`B4` 各实现工作包已有提交，但其退出证据须按 G3 实核重新闭环。当前按用户 goal 持续推进 **G3（先 G3-Math，再 B5/G3-UX）**，每完成一个区块核验测试、更新进度文档并推送至远端 `feature/drawing-reliability-execution`。

@@ -205,6 +205,18 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       primitives: primitives.map((primitive) => primitive.id === "a" ? { ...primitive, y: 1 } : primitive)
     }, { verificationStatus: "passed", scopeId: "(2)" })
     expect(invalid.failedObligationIds).toContain("ob-a-on-c")
+
+    const scoped = evaluateDrawingContractScopes(jtp05, {
+      "(1)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives }, options: { verificationStatus: "passed" } }
+    })
+    expect(scoped.passed, JSON.stringify(scoped.scopeResults)).toBe(true)
+    expect(scoped.scopeResults["(2)"]?.passedObligationIds).toContain("ob-hyp")
+    const wrongSecondCurve = evaluateDrawingContractScopes(jtp05, {
+      "(1)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(2)": { candidate: { primitives: primitives.map((primitive) => primitive.id === "c" ? { ...primitive, radiusX: 3 } : primitive) }, options: { verificationStatus: "passed" } }
+    })
+    expect(wrongSecondCurve.scopeResults["(2)"]?.failedObligationIds).toContain("ob-hyp")
   })
 
   it("verifies JT-P04 tangent/directrix dependencies and honest infeasibility", () => {
@@ -333,6 +345,13 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       ]
     }, { verificationStatus: "passed" })
     expect(wrongSlope.failedObligationIds).toContain("ob-tan-derivative")
+    const degenerate = evaluateDrawingContract(gkp09, {
+      primitives: [
+        { type: "function", id: "f", label: "f", expression: "x^4-2*x^3", domain: [-5, 5] },
+        { type: "line", id: "tangent", label: "tangent", a: { x: 1, y: -1 }, b: { x: 1, y: -1 } }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(degenerate.failedObligationIds).toContain("ob-tan-derivative")
 
     const gkp07 = suite.cases.find((c) => c.id === "GK-P07")!
     const circle = { type: "circle", id: "m", label: "M", center: { x: 0, y: -4 }, radius: 1 }
@@ -378,13 +397,13 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
   it("requires JT-P08 excluded locus points and both independently verified EF branches", () => {
     const suite = loadContracts()
     const jtp08 = suite.cases.find((c) => c.id === "JT-P08")!
-    const makeBranch = (sign: 1 | -1, includeExclusions = true) => ({
+    const makeBranch = (sign: 1 | -1, includeExclusions = true, radiusX = 2) => ({
       primitives: [
         { type: "point", id: "a", label: "A", x: 0, y: Math.sqrt(3) },
         { type: "point", id: "b", label: "B", x: 0, y: -Math.sqrt(3) },
         { type: "point", id: "c", label: "C", x: 0, y: -1 },
         {
-          type: "ellipse", id: "g", label: "G", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3),
+          type: "ellipse", id: "g", label: "G", center: { x: 0, y: 0 }, radiusX, radiusY: Math.sqrt(3),
           ...(includeExclusions ? { excludedPoints: [{ x: 0, y: Math.sqrt(3) }, { x: 0, y: -Math.sqrt(3) }] } : {})
         },
         { type: "point", id: "e", label: "E", x: 2 * sign, y: 0 },
@@ -411,6 +430,11 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       negative: { candidate: makeBranch(-1), options: { verificationStatus: "passed" } }
     })
     expect(fullEllipse.scopeResults.positive?.failedObligationIds).toContain("ob-g-domain")
+    const wrongGeometry = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
+      positive: { candidate: makeBranch(1, true, 3), options: { verificationStatus: "passed" } },
+      negative: { candidate: makeBranch(-1), options: { verificationStatus: "passed" } }
+    })
+    expect(wrongGeometry.scopeResults.positive?.failedObligationIds).toContain("ob-g-domain")
   })
 
   it("verifies JT-P07 point values, secant identity and x=3 intersections", () => {
@@ -789,14 +813,20 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       ...tetrahedronTopology(["a", "b", "c", "p"]),
       { type: "sphere", id: "o", label: "O", center: { x: 0.5, y: 0.5, z: Math.sqrt(3) / 2 }, radius: Math.sqrt(5) / 2 }
     ]
+    const withoutSphere = primitives.filter((primitive) => primitive.id !== "o")
     const result = evaluateDrawingContractScopes(jts01, {
-      "(1)(i)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
+      "(1)(i)": { candidate: { primitives: withoutSphere }, options: { verificationStatus: "passed" } },
       "(1)(ii)": { candidate: { primitives }, options: { verificationStatus: "passed" } },
-      "(2)": { candidate: { primitives }, options: { verificationStatus: "passed" } }
+      "(2)": { candidate: { primitives: withoutSphere }, options: { verificationStatus: "passed" } }
     })
     expect(result.passed, JSON.stringify(result.scopeResults)).toBe(true)
     expect(result.scopeResults["(1)(i)"]?.passedObligationIds).toContain("ob-pc-ab")
-    expect(result.scopeResults["(1)(ii)"]?.passedObligationIds).toContain("ob-circumsphere")
+    expect(result.scopeResults["(1)(ii)"]?.passedObligationIds).toEqual(expect.arrayContaining(["ob-pc-ab", "ob-circumsphere", "ob-sphere-present"]))
+    expect(jts01.requiredEntityIds).not.toContain("O")
+    expect(jts01.sharedScope.subquestionScopes.map((scope) => scope.subquestion)).toEqual(expect.arrayContaining(["(1)(i)", "(1)(ii)"]))
+    expect(evaluateDrawingContract(jts01, { primitives: withoutSphere }, { verificationStatus: "passed", scopeId: "(1)(ii)" }).failedObligationIds).toContain("ob-sphere-present")
+    const wrongFold = primitives.map((primitive) => primitive.id === "p" && "position" in primitive ? { ...primitive, position: { ...primitive.position, y: 0.25 } } : primitive)
+    expect(evaluateDrawingContract(jts01, { primitives: wrongFold }, { verificationStatus: "passed", scopeId: "(1)(ii)" }).failedObligationIds).toContain("ob-pc-ab")
   })
 
   it("freezes the independently recomputed GK-P04 range and JT-P04 infeasibility instead of known wrong values", () => {
