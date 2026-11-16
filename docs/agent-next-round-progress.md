@@ -6,8 +6,8 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)、[G3实核基线与第二独立审题](audit/2026-11-16-g3-truth-baseline/README.md)、[第一批合同安全整改](audit/2026-11-16-g3-contract-safety/README.md)、[第二批拓扑与宿主整改](audit/2026-11-16-g3-host-topology/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`R00–R11` 与 `T01–T14` 工作包已有提交，但G3-Math **尚未退出**；当前36题为1 passed/10 partial/25 failed。
-2. 第一批修复不可行伪造、双scope、目标/题设、结构谓词、数学错误与函数/直线绑定；第二批补闭合/开放拓扑、共面、线段域、棱柱对应向量及GK-P01/P02、JT-P02/P07关联义务。下一步处理 **JT-P08定义域/分支、其余平面/立体合同、显示策略和统一scope入口**，不得把 suite/case 自签为 `approved`。
+1. 先读[当前状态](current-status.md)、[G3实核基线与第二独立审题](audit/2026-11-16-g3-truth-baseline/README.md)、[第一批合同安全整改](audit/2026-11-16-g3-contract-safety/README.md)、[第二批拓扑与宿主整改](audit/2026-11-16-g3-host-topology/README.md)、[第三批定义域与切线整改](audit/2026-11-16-g3-domain-tangent/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。G3-Math **尚未退出**；当前36题为0 passed/11 partial/25 failed。
+2. 前三批已修复不可行伪造、双scope、目标/题设、结构谓词、数学错误、函数/直线绑定、拓扑宿主、平面关联、JT-P08定义域/分支及函数/圆锥切线。下一步处理 **其余平面/立体合同、显示策略、统一scope/branch入口和生产支持**，不得把 suite/case 自签为 `approved`。
 3. 合同复核关闭后依次执行：生产完整证书与统一评测入口 → 平面18题 → 立体/折叠18题及 G3-Math → `B5`（`T15 → T16`）真实渲染与交互生命周期 → G3 总验收。
 4. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
 5. 真实 provider 付费评测、P8、安装包/冷机与正式发布不在本 goal 内；实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。

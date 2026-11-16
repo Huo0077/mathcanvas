@@ -8,6 +8,13 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— G3 / T01 第三批定义域、分支与切线整改
+
+- **定义域/分支**：新增 `conic-domain-2d`、`evaluateDrawingContractBranches`、`line-equation-2d`；JT-P08排除 `(0,±√3)`，positive/negative双EF分别验证，缺支或漏排除点不通过。
+- **切线/面积**：函数切线用符号导数、圆锥切线用真实代数交点；GK-P09错误斜率拒绝，GK-P07补P在圆M和两条抛物线切线，GK-P06补双切线/中点圆相切/面积，JT-P09补圆上/共线/四边形面积。
+- **验证**：定向29项通过；全量540文件/5725通过+1todo，typecheck、lint（0 errors/33既有warnings）、Web构建（640 modules）通过。
+- **边界**：最新36题为 **0 passed / 11 partial / 25 failed**，旧JT-P08因缺 `excludedPoints` 不再通过；生产DSL/渲染支持仍需后续接线。选择题子问文本保持中性。证据见[第三批定义域与切线整改](audit/2026-11-16-g3-domain-tangent/README.md)。
+
 ## 2026-11-16 —— G3 / T01 第二批拓扑、宿主与平面关联整改
 
 - **立体**：新增 `topology-3d`（闭合/开放分开）、`coplanar-3d`、`point-on-segment-3d`；GK-S03/S02补拓扑与题图边界，JT-S03补垂足平面与第二方向，JT-S08补M线段域，GK-S07补棱柱对应向量与闭合拓扑。

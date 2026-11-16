@@ -2206,7 +2206,7 @@
         {
           "id": "main",
           "kind": "mcq",
-          "text": "则该球的表面积为（B. 7/3 π a²）",
+          "text": "则该球的表面积为（　　）",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
           "feasible": true,
@@ -4190,7 +4190,7 @@
         {
           "id": "main",
           "kind": "mcq",
-          "text": "则半球的表面积为（D. 18π）",
+          "text": "则半球的表面积为（　　）",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
           "feasible": true,
@@ -5248,7 +5248,8 @@
         "D",
         "A",
         "B",
-        "E"
+        "E",
+        "M"
       ],
       "sharedScope": {
         "entities": [
@@ -5256,7 +5257,8 @@
           "D",
           "A",
           "B",
-          "E"
+          "E",
+          "M"
         ],
         "stemConditions": [
           "C: y=x²/2",
@@ -5349,6 +5351,91 @@
             "label": "E",
             "x": 0,
             "y": 2.5
+          }
+        },
+        {
+          "id": "ob-da-tangent",
+          "kind": "tangent",
+          "description": "DA is tangent to parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $D$ 作 $C$ 的两条切线",
+            "start": 62,
+            "end": 79
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "DA",
+            "conicId": "C"
+          }
+        },
+        {
+          "id": "ob-db-tangent",
+          "kind": "tangent",
+          "description": "DB is tangent to parabola C",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "过 $D$ 作 $C$ 的两条切线",
+            "start": 62,
+            "end": 79
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "DB",
+            "conicId": "C"
+          }
+        },
+        {
+          "id": "ob-ab-midpoint",
+          "kind": "midpoint",
+          "description": "M is the midpoint of AB",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": {
+            "kind": "vector-ratio-2d",
+            "a": "A",
+            "b": "M",
+            "c": "M",
+            "d": "B",
+            "k": 1
+          }
+        },
+        {
+          "id": "ob-e-tangent",
+          "kind": "tangent",
+          "description": "Circle E touches AB at its midpoint M",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "且切点为线段 $A B$ 的中点",
+            "start": 176,
+            "end": 192
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "AB",
+            "conicId": "E",
+            "touchPoint": { "x": 0, "y": 0.5 }
+          }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Quadrilateral ADBE area is 3",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "求四边形 $A D B E$ 的面积",
+            "start": 194,
+            "end": 212
+          },
+          "expectedValue": 3,
+          "check": {
+            "kind": "quadrilateral-area-2d",
+            "points": ["A", "D", "B", "E"],
+            "value": 3
           }
         }
       ],
@@ -5496,6 +5583,54 @@
             "label": "F",
             "x": 0,
             "y": 1
+          }
+        },
+        {
+          "id": "ob-p-on-m",
+          "kind": "incidence",
+          "description": "P lies on circle M",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "若点 $P$ 在 $M$ 上",
+            "start": 106,
+            "end": 120
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "P",
+            "conic": { "kind": "circle", "cx": 0, "cy": -4, "radius": 1 }
+          }
+        },
+        {
+          "id": "ob-pa-tangent",
+          "kind": "tangent",
+          "description": "PA is tangent to parabola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "$P A, P B$ 是 $C$ 的两条切线",
+            "start": 122,
+            "end": 144
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "PA",
+            "conicId": "C"
+          }
+        },
+        {
+          "id": "ob-pb-tangent",
+          "kind": "tangent",
+          "description": "PB is tangent to parabola C",
+          "scope": "(2)",
+          "sourceSpan": {
+            "text": "$P A, P B$ 是 $C$ 的两条切线",
+            "start": 122,
+            "end": 144
+          },
+          "check": {
+            "kind": "tangent-to-conic-2d",
+            "lineId": "PB",
+            "conicId": "C"
           }
         }
       ],
@@ -5646,7 +5781,7 @@
         {
           "id": "main",
           "kind": "mcq",
-          "text": "切线方程为（B. y = -2x + 1）",
+          "text": "切线方程为（　　）",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
           "feasible": true,
@@ -5689,9 +5824,9 @@
           }
         },
         {
-          "id": "ob-tan",
-          "kind": "line_equation",
-          "description": "Tangent line y = -2x + 1",
+          "id": "ob-tan-derivative",
+          "kind": "tangent",
+          "description": "Symbolic-derivative tangent to f at x=1: y=-2x+1",
           "scope": "stem",
           "sourceSpan": {
             "text": "在点 $(1, f(1))$ 处的切线方程",
@@ -5699,10 +5834,10 @@
             "end": 51
           },
           "check": {
-            "kind": "line-through-2d",
-            "entityId": "tangent",
-            "x": 0,
-            "y": 1
+            "kind": "tangent-to-function-2d",
+            "lineId": "tangent",
+            "functionId": "f",
+            "x": 1
           }
         }
       ],
@@ -7115,6 +7250,7 @@
         "B",
         "C",
         "G",
+        "EF",
         "E",
         "F"
       ],
@@ -7124,6 +7260,7 @@
           "B",
           "C",
           "G",
+          "EF",
           "E",
           "F"
         ],
@@ -7300,13 +7437,77 @@
             "d": "F",
             "k": 2
           }
+        },
+        {
+          "id": "ob-g-domain",
+          "kind": "domain",
+          "description": "Locus G explicitly excludes (0,√3) and (0,-√3) because both slopes are undefined there",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "使得直线 PA、PB 的斜率之积为 -3/4",
+            "start": 42,
+            "end": 64
+          },
+          "check": {
+            "kind": "conic-domain-2d",
+            "conicId": "G",
+            "conic": {
+              "kind": "ellipse",
+              "cx": 0,
+              "cy": 0,
+              "rx": 2,
+              "ry": 1.7320508075688772
+            },
+            "excludePoints": [
+              { "x": 0, "y": 1.7320508075688772 },
+              { "x": 0, "y": -1.7320508075688772 }
+            ]
+          }
+        },
+        {
+          "id": "ob-ef-positive",
+          "kind": "line_equation",
+          "description": "Positive-slope branch EF: y=x/2-1",
+          "scope": "(Ⅱ)",
+          "branchId": "positive",
+          "sourceSpan": {
+            "text": "求直线 EF 的方程",
+            "start": 122,
+            "end": 132
+          },
+          "check": {
+            "kind": "line-equation-2d",
+            "entityId": "EF",
+            "a": 0.5,
+            "b": -1,
+            "c": -1
+          }
+        },
+        {
+          "id": "ob-ef-negative",
+          "kind": "line_equation",
+          "description": "Negative-slope branch EF: y=-x/2-1",
+          "scope": "(Ⅱ)",
+          "branchId": "negative",
+          "sourceSpan": {
+            "text": "求直线 EF 的方程",
+            "start": 122,
+            "end": 132
+          },
+          "check": {
+            "kind": "line-equation-2d",
+            "entityId": "EF",
+            "a": -0.5,
+            "b": -1,
+            "c": -1
+          }
         }
       ],
       "displayPolicy": {
         "requiresDiagram": true,
         "requiresVisualChecks": true,
         "allowOmittedSubquestion": false,
-        "multiBranchHandling": "merge_into_main",
+        "multiBranchHandling": "enumerate:positive,negative",
         "labelReadabilityRequired": true
       },
       "freeChoices": [
@@ -7366,7 +7567,7 @@
         {
           "id": "main",
           "kind": "mcq",
-          "text": "四边形 ABCD 的面积为（B. 12）",
+          "text": "四边形 ABCD 的面积为（　　）",
           "localAssumptions": [],
           "mustPreserveInDiagram": true,
           "feasible": true,
@@ -7478,6 +7679,121 @@
             "b": "C",
             "c": "B",
             "d": "D"
+          }
+        },
+        {
+          "id": "ob-a-on-m",
+          "kind": "incidence",
+          "description": "A lies on circle M",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "A",
+            "conic": { "kind": "circle", "cx": 2, "cy": -1, "radius": 3 }
+          }
+        },
+        {
+          "id": "ob-b-on-m",
+          "kind": "incidence",
+          "description": "B lies on circle M",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "B",
+            "conic": { "kind": "circle", "cx": 2, "cy": -1, "radius": 3 }
+          }
+        },
+        {
+          "id": "ob-c-on-m",
+          "kind": "incidence",
+          "description": "C lies on circle M",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "C",
+            "conic": { "kind": "circle", "cx": 2, "cy": -1, "radius": 3 }
+          }
+        },
+        {
+          "id": "ob-d-on-m",
+          "kind": "incidence",
+          "description": "D lies on circle M",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "point-on-conic-2d",
+            "label": "D",
+            "conic": { "kind": "circle", "cx": 2, "cy": -1, "radius": 3 }
+          }
+        },
+        {
+          "id": "ob-oac",
+          "kind": "collinearity",
+          "description": "O lies on chord AC",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "O",
+            "b": "A",
+            "c": "C"
+          }
+        },
+        {
+          "id": "ob-obd",
+          "kind": "collinearity",
+          "description": "O lies on chord BD",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "最长弦和最短弦分别是 AC 和 BD",
+            "start": 38,
+            "end": 56
+          },
+          "check": {
+            "kind": "collinear-2d",
+            "a": "O",
+            "b": "B",
+            "c": "D"
+          }
+        },
+        {
+          "id": "ob-area",
+          "kind": "area",
+          "description": "Quadrilateral ABCD area is 12",
+          "scope": "stem",
+          "sourceSpan": {
+            "text": "四边形 ABCD 的面积为",
+            "start": 58,
+            "end": 71
+          },
+          "expectedValue": 12,
+          "check": {
+            "kind": "quadrilateral-area-2d",
+            "points": ["A", "B", "C", "D"],
+            "value": 12
           }
         }
       ],

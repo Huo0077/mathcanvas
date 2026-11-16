@@ -1,4 +1,4 @@
-import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression } from "@draw/geometry-kernel"
+import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact } from "@draw/geometry-kernel"
 
 export interface ContractSourceSpan {
   text: string
@@ -38,6 +38,7 @@ export type ContractCheckSpec =
   | { kind: "point-x-2d"; label: string; x: number }
   | { kind: "point-on-ellipse-2d"; label: string; cx: number; cy: number; rx: number; ry: number }
   | { kind: "point-on-conic-2d"; label: string; conic: ConicSpec2D }
+  | { kind: "conic-domain-2d"; conicId: string; conic: ConicSpec2D; excludePoints: readonly { x: number; y: number }[] }
   | { kind: "conic-2d"; curveType: "ellipse"; cx: number; cy: number; rx: number; ry: number }
   | { kind: "conic-2d"; curveType: "hyperbola"; cx: number; cy: number; axis: "x" | "y"; rx: number; ry: number }
   | { kind: "conic-2d"; curveType: "parabola"; vx: number; vy: number; axis: "x" | "y"; focalParameter: number }
@@ -46,12 +47,16 @@ export type ContractCheckSpec =
   | { kind: "point-on-segment-2d"; p: string; a: string; b: string }
   | { kind: "horizontal-2d"; a: string; b: string }
   | { kind: "line-through-2d"; entityId: string; x: number; y: number }
+  | { kind: "line-equation-2d"; entityId: string; a: number; b: number; c: number }
+  | { kind: "tangent-to-function-2d"; lineId: string; functionId: string; x: number }
+  | { kind: "tangent-to-conic-2d"; lineId: string; conicId: string; touchPoint?: { x: number; y: number } }
   | { kind: "line-vertical-2d"; entityId: string; x: number }
   | { kind: "collinear-2d"; a: string; b: string; c: string }
   | { kind: "vector-ratio-2d"; a: string; b: string; c: string; d: string; k: number }
   | { kind: "distance-2d"; a: string; b: string; value: number }
   | { kind: "perp-2d"; a: string; b: string; c: string; d: string }
   | { kind: "triangle-area-2d"; a: string; b: string; c: string; value: number }
+  | { kind: "quadrilateral-area-2d"; points: [string, string, string, string]; value: number }
   | { kind: "dot-2d"; a: string; b: string; c: string; d: string; value: number }
   | { kind: "function-sample-2d"; entityId: string; x: number; value: number }
   | { kind: "infeasible-branch"; subquestion: string; forbiddenEntityIds: readonly string[] }
@@ -61,6 +66,7 @@ export interface ContractObligation {
   kind: string
   description: string
   scope: string
+  branchId?: string
   sourceSpan: ContractSourceSpan
   expectedValue?: number | string
   check: ContractCheckSpec
@@ -163,6 +169,7 @@ export interface ContractEvaluationOptions {
   terminal?: string
   error?: string | null
   scopeId?: string
+  branchId?: string
 }
 
 export interface ContractEvaluationResult {
@@ -429,6 +436,14 @@ function spheres(prims: readonly Record<string, unknown>[]): { center: Vec3; rad
 
 function uniqueEntity(prims: readonly Record<string, unknown>[], entityId: string, type: string): Record<string, unknown> | null {
   const matches = prims.filter((primitive) => primitive.type === type && (primitive.id === entityId || primitive.label === entityId))
+  return matches.length === 1 ? matches[0]! : null
+}
+
+function uniqueConic(prims: readonly Record<string, unknown>[], conicId: string): Record<string, unknown> | null {
+  const matches = prims.filter((primitive) =>
+    ["circle", "ellipse", "hyperbola", "parabola"].includes(primitive.type as string) &&
+    (primitive.id === conicId || primitive.label === conicId)
+  )
   return matches.length === 1 ? matches[0]! : null
 }
 
@@ -701,6 +716,22 @@ function evaluateCheck(
       const ok = residual !== null && Number.isFinite(residual) && residual <= 1e-2
       return { passed: ok, detail: `${check.label} conic residual=${residual}` }
     }
+    case "conic-domain-2d": {
+      const curve = uniqueEntity(prims, check.conicId, check.conic.kind)
+      if (!curve) return { passed: false, detail: `missing or ambiguous conic ${check.conicId}` }
+      if (!Array.isArray(curve.excludedPoints) || curve.excludedPoints.length !== check.excludePoints.length) {
+        return { passed: false, detail: `conic ${check.conicId} must explicitly exclude ${check.excludePoints.length} points` }
+      }
+      const declared = curve.excludedPoints as { x?: unknown; y?: unknown }[]
+      const valid = check.excludePoints.every((expected) => declared.some((actual) =>
+        typeof actual.x === "number" && typeof actual.y === "number" && near(actual.x, expected.x, 1e-6) && near(actual.y, expected.y, 1e-6) &&
+        (conicResidual2d(check.conic, expected) ?? Number.POSITIVE_INFINITY) <= 1e-2
+      )) && declared.every((point) =>
+        typeof point.x === "number" && typeof point.y === "number" &&
+        (conicResidual2d(check.conic, { x: point.x, y: point.y }) ?? Number.POSITIVE_INFINITY) <= 1e-2
+      )
+      return { passed: valid, detail: valid ? `conic ${check.conicId} exclusions verified` : `invalid exclusions for ${check.conicId}` }
+    }
     case "conic-2d": {
       if (check.curveType === "ellipse") {
         const ok = prims.some((p) => {
@@ -760,6 +791,22 @@ function evaluateCheck(
       const distance = Math.abs(dx * (point.y - a.y) - dy * (point.x - a.x)) / length
       return { passed: distance <= 1e-2, detail: `${check.point} to ${check.lineId} distance=${distance}` }
     }
+    case "line-equation-2d": {
+      const line = uniqueEntity(prims, check.entityId, "line")
+      if (!line) return { passed: false, detail: `missing or ambiguous line entity ${check.entityId}` }
+      const start = line.a as Vec2 | undefined, end = line.b as Vec2 | undefined
+      if (!start || !end) return { passed: false, detail: `line ${check.entityId} has invalid endpoints` }
+      const actual = { a: end.y - start.y, b: start.x - end.x, c: (end.x - start.x) * start.y - (end.y - start.y) * start.x }
+      const actualNorm = Math.hypot(actual.a, actual.b), expectedNorm = Math.hypot(check.a, check.b)
+      if (actualNorm <= 1e-12 || expectedNorm <= 1e-12) return { passed: false, detail: `degenerate line equation for ${check.entityId}` }
+      const sign = actual.a * check.a + actual.b * check.b < 0 ? -1 : 1
+      const error = Math.max(
+        Math.abs(actual.a / actualNorm - sign * check.a / expectedNorm),
+        Math.abs(actual.b / actualNorm - sign * check.b / expectedNorm),
+        Math.abs(actual.c / actualNorm - sign * check.c / expectedNorm)
+      )
+      return { passed: error <= 1e-6, detail: `${check.entityId} normalized equation error=${error}` }
+    }
     case "line-through-2d": {
       const line = uniqueEntity(prims, check.entityId, "line")
       if (!line) return { passed: false, detail: `missing or ambiguous line entity ${check.entityId}` }
@@ -768,6 +815,30 @@ function evaluateCheck(
       const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy)
       const ok = len > 1e-9 && Math.abs(dx * (check.y - a.y) - dy * (check.x - a.x)) / len <= 1e-2
       return { passed: ok, detail: ok ? `line ${check.entityId} passes point` : `line ${check.entityId} does not pass (${check.x},${check.y})` }
+    }
+    case "tangent-to-function-2d": {
+      const fn = uniqueEntity(prims, check.functionId, "function"), line = uniqueEntity(prims, check.lineId, "line")
+      if (!fn || typeof fn.expression !== "string" || !line) return { passed: false, detail: `missing function ${check.functionId} or line ${check.lineId}` }
+      const base = evaluateFunctionWithDomain(fn.expression, check.x)
+      if (!base.ok) return { passed: false, detail: `function domain error: ${base.error}` }
+      const derivative = evaluateSymbolicDerivative(fn.expression, check.x)
+      if (!derivative.ok) return { passed: false, detail: `function derivative error: ${derivative.reason}` }
+      const start = line.a as Vec2 | undefined, end = line.b as Vec2 | undefined
+      if (!start || !end) return { passed: false, detail: `line ${check.lineId} has invalid endpoints` }
+      const slope = derivative.value
+      const error = (point: Vec2) => Math.abs(slope * (point.x - check.x) - (point.y - base.value)) / Math.hypot(slope, 1)
+      const residual = Math.max(error(start), error(end))
+      return { passed: residual <= 1e-2, detail: `function tangent residual=${residual}, derivative=${slope}` }
+    }
+    case "tangent-to-conic-2d": {
+      const curve = uniqueConic(prims, check.conicId), line = uniqueEntity(prims, check.lineId, "line")
+      if (!curve || !line) return { passed: false, detail: `missing conic ${check.conicId} or line ${check.lineId}` }
+      const start = line.a as Vec2 | undefined, end = line.b as Vec2 | undefined
+      if (!start || !end) return { passed: false, detail: `line ${check.lineId} has invalid endpoints` }
+      const result = intersectPlanarLineAndConicExact({ type: "line", a: start, b: end } as never, curve as never)
+      const touchMatches = check.touchPoint === undefined || result.points.some((point) => near(point.x, check.touchPoint!.x, 1e-5) && near(point.y, check.touchPoint!.y, 1e-5))
+      const ok = result.kind === "tangent" && touchMatches
+      return { passed: ok, detail: `conic intersection=${result.kind}, points=${result.points.length}` }
     }
     case "line-vertical-2d": {
       const line = uniqueEntity(prims, check.entityId, "line")
@@ -813,6 +884,15 @@ function evaluateCheck(
       if (!a || !b || !c) return { passed: false, detail: `missing 2d points for triangle area` }
       const area = 0.5 * Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x))
       return { passed: near(area, check.value, 1e-2), detail: `area=${area} vs ${check.value}` }
+    }
+    case "quadrilateral-area-2d": {
+      const points = check.points.map(p2)
+      if (points.some((point) => point === undefined)) return { passed: false, detail: `missing 2d points for quadrilateral ${check.points.join(",")}` }
+      const area = Math.abs(points.reduce((sum, point, index) => {
+        const next = points[(index + 1) % points.length]!
+        return sum + point!.x * next.y - next.x * point!.y
+      }, 0)) / 2
+      return { passed: near(area, check.value, 1e-2), detail: `quadrilateral area=${area} vs ${check.value}` }
     }
     case "dot-2d": {
       const a = p2(check.a), b = p2(check.b), c = p2(check.c), d = p2(check.d)
@@ -889,9 +969,10 @@ export function evaluateDrawingContract(
 
   const objectCoverage = contract.requiredEntityIds.length === 0 ? 1 : presentEntityIds.length / contract.requiredEntityIds.length
 
-  const scopedObligations = options.scopeId === undefined
-    ? contract.requiredObligations
-    : contract.requiredObligations.filter((ob) => ob.scope === "stem" || ob.scope === options.scopeId)
+  const scopedObligations = contract.requiredObligations.filter((ob) =>
+    (options.scopeId === undefined || ob.scope === "stem" || ob.scope === options.scopeId) &&
+    (options.branchId === undefined || ob.branchId === undefined || ob.branchId === options.branchId)
+  )
   const obligationResults: ObligationEvaluation[] = scopedObligations.map((ob) => {
     const outcome = evaluateCheck(ob.check, prims, pts3, pts2, allLabels, options)
     return { id: ob.id, kind: ob.kind, passed: outcome.passed, detail: outcome.detail }
@@ -928,6 +1009,31 @@ export function evaluateDrawingContract(
     passedObligationIds,
     failedObligationIds,
     obligationResults
+  }
+}
+
+export function evaluateDrawingContractBranches(
+  contract: DrawingContractCase,
+  scopeId: string,
+  inputs: Readonly<Record<string, { candidate: unknown; options?: ContractEvaluationOptions }>>
+): ContractScopeEvaluationResult {
+  const enumerated = contract.displayPolicy.multiBranchHandling.startsWith("enumerate:")
+    ? contract.displayPolicy.multiBranchHandling.slice("enumerate:".length).split(",").map((branchId) => branchId.trim()).filter(Boolean)
+    : Object.keys(inputs)
+  const missingScopeIds = enumerated.filter((branchId) => inputs[branchId] === undefined)
+  const scopeResults: Record<string, ContractEvaluationResult> = {}
+  for (const branchId of enumerated) {
+    const input = inputs[branchId]
+    if (input === undefined) continue
+    scopeResults[branchId] = evaluateDrawingContract(contract, input.candidate, { ...input.options, scopeId, branchId })
+  }
+  const passed = missingScopeIds.length === 0 && enumerated.length > 0 && enumerated.every((branchId) => scopeResults[branchId]?.passed === true)
+  const partial = !passed && Object.values(scopeResults).some((result) => result.passed || result.partial)
+  return {
+    passed,
+    status: passed ? "passed" : missingScopeIds.length > 0 ? "incomplete" : partial ? "partial" : "failed",
+    missingScopeIds,
+    scopeResults
   }
 }
 

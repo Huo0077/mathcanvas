@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   evaluateDrawingContract,
+  evaluateDrawingContractBranches,
   evaluateDrawingContractScopes,
   reconstructBaselineContractSummary,
   summarizeContractReports,
@@ -84,6 +85,123 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     const shrunkCheck = validateContractSuite(shrunk, manifest, sha256Fn)
     expect(shrunkCheck.valid).toBe(false)
     expect(shrunkCheck.errors.join("\n")).toMatch(/denominator|36|missing/i)
+  })
+
+  it("verifies GK-P06 both tangents, midpoint circle contact and quadrilateral area", () => {
+    const suite = loadContracts()
+    const gkp06 = suite.cases.find((c) => c.id === "GK-P06")!
+    const D = { x: 0, y: -0.5 }, A = { x: 1, y: 0.5 }, B = { x: -1, y: 0.5 }, M = { x: 0, y: 0.5 }
+    const primitives = [
+      { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 1 },
+      { type: "point", id: "d", label: "D", ...D }, { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+      { type: "point", id: "m", label: "M", ...M },
+      { type: "point", id: "e-point", label: "E", x: 0, y: 2.5 },
+      { type: "circle", id: "e", label: "E", center: { x: 0, y: 2.5 }, radius: 2 },
+      { type: "line", id: "da", label: "DA", a: D, b: A }, { type: "line", id: "db", label: "DB", a: D, b: B },
+      { type: "line", id: "ab", label: "AB", a: A, b: B }
+    ]
+    const valid = evaluateDrawingContract(gkp06, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-da-tangent", "ob-db-tangent", "ob-ab-midpoint", "ob-e-tangent", "ob-area"]))
+  })
+
+  it("verifies GK-P09 tangent by symbolic derivative and GK-P07 circle tangencies by exact intersection", () => {
+    const suite = loadContracts()
+    const gkp09 = suite.cases.find((c) => c.id === "GK-P09")!
+    const valid = evaluateDrawingContract(gkp09, {
+      primitives: [
+        { type: "function", id: "f", label: "f", expression: "x^4-2*x^3", domain: [-5, 5] },
+        { type: "line", id: "tangent", label: "tangent", a: { x: 0, y: 1 }, b: { x: 1, y: -1 } }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(valid.passed).toBe(true)
+    expect(valid.passedObligationIds).toContain("ob-tan-derivative")
+
+    const wrongSlope = evaluateDrawingContract(gkp09, {
+      primitives: [
+        { type: "function", id: "f", label: "f", expression: "x^4-2*x^3", domain: [-5, 5] },
+        { type: "line", id: "tangent", label: "tangent", a: { x: 0, y: 1 }, b: { x: 2, y: 0 } }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(wrongSlope.failedObligationIds).toContain("ob-tan-derivative")
+
+    const gkp07 = suite.cases.find((c) => c.id === "GK-P07")!
+    const circle = { type: "circle", id: "m", label: "M", center: { x: 0, y: -4 }, radius: 1 }
+    const parabola = { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 2 }
+    const A = { x: 2 * Math.sqrt(5), y: 5 }, B = { x: -2 * Math.sqrt(5), y: 5 }, P = { x: 0, y: -5 }
+    const validCircle = evaluateDrawingContract(gkp07, {
+      primitives: [
+        circle, parabola,
+        { type: "point", id: "p", label: "P", ...P },
+        { type: "point", id: "f", label: "F", x: 0, y: 1 },
+        { type: "point", id: "a", label: "A", ...A },
+        { type: "point", id: "b", label: "B", ...B },
+        { type: "line", id: "pa", label: "PA", a: P, b: A },
+        { type: "line", id: "pb", label: "PB", a: P, b: B }
+      ]
+    }, { verificationStatus: "passed" })
+    expect(validCircle.passed, JSON.stringify(validCircle.obligationResults)).toBe(true)
+    expect(validCircle.passedObligationIds).toEqual(expect.arrayContaining(["ob-p-on-m", "ob-pa-tangent", "ob-pb-tangent"]))
+  })
+
+  it("verifies JT-P09 circle incidences, chord hosts and quadrilateral area", () => {
+    const suite = loadContracts()
+    const jtp09 = suite.cases.find((c) => c.id === "JT-P09")!
+    const u = { x: 2 / Math.sqrt(5), y: -1 / Math.sqrt(5) }, v = { x: 1 / Math.sqrt(5), y: 2 / Math.sqrt(5) }
+    const primitives = [
+      { type: "circle", id: "m-circle", label: "M", center: { x: 2, y: -1 }, radius: 3 },
+      { type: "point", id: "m", label: "M", x: 2, y: -1 }, { type: "point", id: "o", label: "O", x: 0, y: 0 },
+      { type: "point", id: "a", label: "A", x: 2 + 3 * u.x, y: -1 + 3 * u.y },
+      { type: "point", id: "c", label: "C", x: 2 - 3 * u.x, y: -1 - 3 * u.y },
+      { type: "point", id: "b", label: "B", x: 2 * v.x, y: 2 * v.y },
+      { type: "point", id: "d", label: "D", x: -2 * v.x, y: -2 * v.y }
+    ]
+    const valid = evaluateDrawingContract(jtp09, { primitives }, { verificationStatus: "passed" })
+    expect(valid.passed, JSON.stringify(valid.obligationResults)).toBe(true)
+    expect(valid.passedObligationIds).toEqual(expect.arrayContaining(["ob-a-on-m", "ob-b-on-m", "ob-c-on-m", "ob-d-on-m", "ob-oac", "ob-obd", "ob-area"]))
+
+    const invalid = evaluateDrawingContract(jtp09, {
+      primitives: primitives.map((primitive) => primitive.id === "b" ? { ...primitive, x: 0, y: 0 } : primitive)
+    }, { verificationStatus: "passed" })
+    expect(invalid.failedObligationIds).toContain("ob-b-on-m")
+  })
+
+  it("requires JT-P08 excluded locus points and both independently verified EF branches", () => {
+    const suite = loadContracts()
+    const jtp08 = suite.cases.find((c) => c.id === "JT-P08")!
+    const makeBranch = (sign: 1 | -1, includeExclusions = true) => ({
+      primitives: [
+        { type: "point", id: "a", label: "A", x: 0, y: Math.sqrt(3) },
+        { type: "point", id: "b", label: "B", x: 0, y: -Math.sqrt(3) },
+        { type: "point", id: "c", label: "C", x: 0, y: -1 },
+        {
+          type: "ellipse", id: "g", label: "G", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3),
+          ...(includeExclusions ? { excludedPoints: [{ x: 0, y: Math.sqrt(3) }, { x: 0, y: -Math.sqrt(3) }] } : {})
+        },
+        { type: "point", id: "e", label: "E", x: 2 * sign, y: 0 },
+        { type: "point", id: "f", label: "F", x: -sign, y: -1.5 },
+        { type: "line", id: "ef", label: "EF", a: { x: 2 * sign, y: 0 }, b: { x: -sign, y: -1.5 } }
+      ]
+    })
+    const valid = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
+      positive: { candidate: makeBranch(1), options: { verificationStatus: "passed" } },
+      negative: { candidate: makeBranch(-1), options: { verificationStatus: "passed" } }
+    })
+    expect(valid.passed, JSON.stringify(valid.scopeResults)).toBe(true)
+    expect(valid.scopeResults.positive?.passedObligationIds).toContain("ob-ef-positive")
+    expect(valid.scopeResults.negative?.passedObligationIds).toContain("ob-ef-negative")
+
+    const missingBranch = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
+      positive: { candidate: makeBranch(1), options: { verificationStatus: "passed" } }
+    })
+    expect(missingBranch.passed).toBe(false)
+    expect(missingBranch.missingScopeIds).toEqual(["negative"])
+
+    const fullEllipse = evaluateDrawingContractBranches(jtp08, "(Ⅱ)", {
+      positive: { candidate: makeBranch(1, false), options: { verificationStatus: "passed" } },
+      negative: { candidate: makeBranch(-1), options: { verificationStatus: "passed" } }
+    })
+    expect(fullEllipse.scopeResults.positive?.failedObligationIds).toContain("ob-g-domain")
   })
 
   it("verifies JT-P07 point values, secant identity and x=3 intersections", () => {
@@ -498,7 +616,11 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
       { type: "point", id: "pt-a", label: "A", x: 0, y: Math.sqrt(3) },
       { type: "point", id: "pt-b", label: "B", x: 0, y: -Math.sqrt(3) },
       { type: "point", id: "pt-c", label: "C", x: 0, y: -1 },
-      { type: "ellipse", id: "ell-g", label: "G", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3) }
+      {
+        type: "ellipse", id: "ell-g", label: "G", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3),
+        excludedPoints: [{ x: 0, y: Math.sqrt(3) }, { x: 0, y: -Math.sqrt(3) }]
+      },
+      { type: "line", id: "ef", label: "EF", a: { x: 2, y: 0 }, b: { x: -1, y: -1.5 } }
     ]
 
     // Positive valid figure: E(2,0), F(-1,-1.5) satisfies E,F on G and C-E = 2(F-C)
@@ -511,7 +633,7 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
           { type: "point", id: "pt-f", label: "F", x: -1, y: -1.5 }
         ]
       },
-      { verificationStatus: "passed" }
+      { verificationStatus: "passed", branchId: "positive" }
     )
     expect(valid.passed).toBe(true)
     expect(valid.objectCoverage).toBe(1)
@@ -528,7 +650,7 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
           { type: "point", id: "pt-f", label: "F", x: 0, y: Math.sqrt(3) }
         ]
       },
-      { verificationStatus: "passed" }
+      { verificationStatus: "passed", branchId: "positive" }
     )
     expect(fake.passed).toBe(false)
     expect(fake.failedObligationIds).toContain("ob-ec-2cf")
