@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P4 / T10 折叠状态谱系、对称分支见证与耦合折角顺序约束
+
+- **内核旋转双分支与角口径隔离**：`packages/geometry-kernel/src/rotation3d.ts` 新增 `rotatePointAboutHinge` 与 `foldBranchesForTargetDistance`（枚举 `positive`/`negative` 对称分支并输出距离残差）；`foldSystem.ts` 新增 `classifyFoldSystemResult`（保持 `provenUnsat: false`，不将 `not-found` 误报为无解）；`solidGoalMeasurements.ts` 新增 `verifyTargetAngleContract`（严格区分 `interior_dihedral` `[0°,180°]` 与 `plane_acute_angle` `[0°,90°]`）。
+- **状态谱系检验与耦合序求解**：`packages/agent-core/src/solver/foldHinges.ts` 新增 `validateFoldLineageStep` 与 `buildFoldLineage`（追踪 `parentStateId -> stateId` 与 `fixedEntities`/`movingFaceIds`/`pointMapping`，拦截 `zero_length_hinge`、`hinge_point_drift`、`edge_length_changed`、`dp_identity_conflation` 与 `degenerate_fold_angle`）；`coupledFolds.ts` 在保留 `solvePlanFoldSystem` 基础上新增 `solveCoupledFoldSequence`（校验顺序依赖 `invalid_order`、拒绝 `>3` 折 `unsupported`、导出多分支见证 `candidateSolutions` 并标记 `complete: false`）。
+- **验证**：RED 5 fail → 定向 5 文件 26 项与全量 Vitest **536 文件 / 5689 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T10折叠谱系证据](docs/audit/2026-11-16-p4-fold-lineage/README.md)。
+
 ## 2026-11-16 —— P4 / T09 参数化立体构造、拓扑拒收与开放曲面隔离
 
 - **闭合拓扑与开放曲面隔离**：`packages/geometry-kernel/src/solid-builders.ts` 导出 `signedPolyhedronVolume` 并新增 `buildOpenSurface`（逐环检验共面、面积、自交、连通与反向绕向，不以闭合流形边条件误杀开放折纸片，也不放松 `buildFromPoints` 闭合检查）；覆盖 `GK-S03` 正有符号体积五面体与 7 类损坏（非共面/自交/反绕向/重复面/孤立顶点/断连/共面零体积）拒收。

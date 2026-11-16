@@ -3,6 +3,7 @@ import { commitTransaction } from "@draw/scene-graph"
 import { describe, expect, it } from "vitest"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { compilePlan } from "./planCompiler"
+import { solveCoupledFoldSequence } from "./solver/coupledFolds"
 
 function plan(): Extract<PlanEnvelope, { kind: "plan" }> {
   return { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "coupled folds", factIds: [], actions: [
@@ -117,5 +118,69 @@ describe("joint fold angles in the real compiler", () => {
     const result = compile(CHAIN + END, { shouldStop: () => true })
     expect(result.ok).toBe(false)
     expect(result.diagnostics.some(d => d.code === "fold_system_cancelled")).toBe(true)
+  })
+})
+
+describe("P4 / T10 coupled fold ordering, side-switch & unsupported >3 folds rollback", () => {
+  it("tracks sequential coupled fold order and rejects swapped order with missing moved hinge vertex", () => {
+    const seq = solveCoupledFoldSequence({
+      points: {
+        A: { x: 0, y: 1, z: 0 },
+        E: { x: 0, y: 0, z: 0 },
+        F: { x: 1, y: 0, z: 0 },
+        B: { x: 0, y: 0, z: 2 },
+        C: { x: 0, y: 2, z: 0 }
+      },
+      folds: [
+        { stepId: "f1", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P", movingFaceIds: ["face-aef"], initialDegrees: 15 },
+        { stepId: "f2", hingeFrom: "P", hingeTo: "F", apex: "E", apexAs: "Q", movingFaceIds: ["face-pef"], initialDegrees: 20 }
+      ],
+      distanceTargets: [
+        { point: "Q", target: "B", distance: qb },
+        { point: "Q", target: "C", distance: qc }
+      ]
+    })
+    expect(seq.status).toBe("solved")
+    expect(seq.complete).toBe(false)
+    if (seq.status !== "solved") return
+    const q = seq.points.Q!
+    expect(Math.hypot(q.x, q.y, q.z - 2)).toBeCloseTo(qb, 4)
+    expect(Math.hypot(q.x, q.y - 2, q.z)).toBeCloseTo(qc, 4)
+    expect(seq.candidateSolutions.some((sol) => Math.abs(sol[0]! - 60) < 0.01 && Math.abs(sol[1]! - 70) < 0.01)).toBe(true)
+    expect(seq.lineage).toHaveLength(2)
+    expect(seq.lineage[1]!.parentStateId).toBe(seq.lineage[0]!.stateId)
+
+    // Swapping fold order puts f2 (requiring P from f1) BEFORE f1 -> must reject explicitly, never fold wrong schematic
+    const swapped = solveCoupledFoldSequence({
+      points: {
+        A: { x: 0, y: 1, z: 0 },
+        E: { x: 0, y: 0, z: 0 },
+        F: { x: 1, y: 0, z: 0 },
+        B: { x: 0, y: 0, z: 2 },
+        C: { x: 0, y: 2, z: 0 }
+      },
+      folds: [
+        { stepId: "f2", hingeFrom: "P", hingeTo: "F", apex: "E", apexAs: "Q", movingFaceIds: ["face-pef"], initialDegrees: 20 },
+        { stepId: "f1", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P", movingFaceIds: ["face-aef"], initialDegrees: 15 }
+      ],
+      distanceTargets: [
+        { point: "Q", target: "B", distance: qb },
+        { point: "Q", target: "C", distance: qc }
+      ]
+    })
+    expect(swapped.status).toBe("invalid_order")
+
+    // More than 3 coupled folds must explicitly refuse as unsupported rather than faking a partial schematic
+    const tooMany = solveCoupledFoldSequence({
+      points: { A: { x: 0, y: 1, z: 0 }, E: { x: 0, y: 0, z: 0 }, F: { x: 1, y: 0, z: 0 } },
+      folds: [
+        { stepId: "f1", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P1", movingFaceIds: ["f1"] },
+        { stepId: "f2", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P2", movingFaceIds: ["f2"] },
+        { stepId: "f3", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P3", movingFaceIds: ["f3"] },
+        { stepId: "f4", hingeFrom: "E", hingeTo: "F", apex: "A", apexAs: "P4", movingFaceIds: ["f4"] }
+      ],
+      distanceTargets: []
+    })
+    expect(tooMany.status).toBe("unsupported")
   })
 })

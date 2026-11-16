@@ -22,7 +22,7 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02`、`P2`（`T03`、`T04`）、`P3`（`T05`、`T06`）、`T11`、`T07`、`T08` 与 `T09`，下一步进入 `T10`；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；当前正在持续推进 `B4`（`P0–P6`），已完成 `P0 / T01`（待第二位审阅者复核）、`P1 / T02`、`P2`（`T03`、`T04`）、`P3`（`T05`、`T06`）、`T11`、`T07`、`T08`、`T09` 与 `T10`，下一步进入 `T12`；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
 
@@ -55,7 +55,8 @@
 | B4 / P4 / T07 平面与圆锥曲线确定性构造 | **已完成** | [P4 / T07平面作图证据](audit/2026-11-16-p4-planar-drawing/README.md)：内核新增旋转/平移 `conicFoci`、`tangentLineToConicAt`、`fitOriginConicThroughPoints`、参数化直线定义域筛选 `intersectParametricLineWithConic`（区分 `single` 与 `tangent`）及 `intersectPlanarLineAndConicExact`；`agent-core` 新增 `planarDrawing.ts` 覆盖 `GK-P01`/`GK-P08`/`JT-P03`/`JT-P06`（含 `b > c` 时 `PF₁⊥PF₂` 诚实诊断无解及 `c ≥ b` 正交构建）/`JT-P07`/`JT-P08`（`x≠0` 与 `EC=2CF`）及 `"示意图"` `free_choice` 披露并接入 `deterministicProblemRoute`、`agentRunner` 与 `reliabilityEval`；RED → `conic-line` 16 + `planarDrawing` 9 通过，全量 Vitest 534 文件/5665 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T08 函数、符号导数与竖直宿主依赖 | **已完成** | [P4 / T08函数作图证据](audit/2026-11-16-p4-function-drawing/README.md)：`expression.ts` 新增精确符号求导 `differentiateExpressionAst` / `evaluateSymbolicDerivative` 与 `evaluateFunctionWithDomain`（`abs` 明确报 `unsupported_derivative`、不取消 `x/x`）；`calculus.ts` / `function-evidence.ts` / `diagramVerification.ts` 加密间断探针、强制可导性与域核验（拒收 `abs(x)` 尖点伪水平切线并记录 `searchInterval` 及域变更 `stale` 失效）；`planar-constraints.ts` 新增 `verticalLineConstraint` 分离 `mathDomain` 与 `displayRange`（实测 `JT-P02` `P(t)=(-1,t)` 10 次跨窗拖动通过 `createReactiveGraph` 保持 `M, N` 与定点 `(-4,0)` 零漂移）；RED 8 fail → 定向 3 文件 98 通过，全量 Vitest 535 文件/5674 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
 | B4 / P4 / T09 参数化立体构造与拓扑证据 | **已完成** | [P4 / T09立体作图证据](audit/2026-11-16-p4-solid-drawing/README.md)：`solid-builders.ts` 导出 `signedPolyhedronVolume` 并新增开放曲面构造校验 `buildOpenSurface`（与闭合流形校验严格分离），实测 `GK-S03` 正体积闭合五面体与 7 类拓扑损坏拒收；`prism.ts` 新增 `constructParameterizedPrism`（严分直棱柱/斜棱柱）；`pyramid.ts` 新增 `constructPyramidFromFoot` 与 `describePyramidApexDomain`（未知垂足不默认底面中心）；`tetrahedron.ts` 新增正/负镜像分支枚举与筛选 `constructTetrahedronBranches`；`witnessSearch.ts` 与 `solverContracts.ts` 接入 `validateAuxiliaryHosts` 拦截缺失顶点宿主；RED 9 fail → 定向 4 文件 55 通过，全量 Vitest 536 文件/5684 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
-| 后续阶段范围 | 进行中（下一步 `T10`） | 按 DAG 推进 `T10 → T12 → T13 → T14 → T15 → T16`；`P8`、付费 provider 与发布均未开启 |
+| B4 / P4 / T10 折叠状态谱系与分支见证 | **已完成** | [P4 / T10折叠谱系证据](audit/2026-11-16-p4-fold-lineage/README.md)：`rotation3d.ts` 新增 `rotatePointAboutHinge` 与 `foldBranchesForTargetDistance` 枚举正负对称分支；`foldSystem.ts` 新增 `classifyFoldSystemResult`（保持 `provenUnsat: false`）；`solidGoalMeasurements.ts` 新增 `verifyTargetAngleContract` 严分 `interior_dihedral` 与 `plane_acute_angle`；`foldHinges.ts` 新增 `validateFoldLineageStep` / `buildFoldLineage` 拦截零长铰链/漂移/边长变化与 `dp_identity_conflation`；`coupledFolds.ts` 在保留 `solvePlanFoldSystem` 下新增 `solveCoupledFoldSequence` 校验逆序 `invalid_order` 与 `>3` 折 `unsupported` 并导出多分支 `candidateSolutions`（`complete: false`）；RED 5 fail → 定向 5 文件 26 通过，全量 Vitest 536 文件/5689 通过+1todo，类型/Lint/Web 构建/离线评测通过 |
+| 后续阶段范围 | 进行中（下一步 `T12`） | 按 DAG 推进 `T12 → T13 → T14 → T15 → T16`；`P8`、付费 provider 与发布均未开启 |
 
 R00 留交的依赖公告已由 R11 逐项处置并记录 RustSec 工具缺口，仍不包含付费 provider、安装/冷机或发布验收。文档对齐提交 `3856263f` 至 `R11` 提交 `d7e1e3af` 均已推送；`P0 / T01` 随本变更提交并核对远端。
 

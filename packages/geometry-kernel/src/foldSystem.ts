@@ -151,3 +151,26 @@ export function solveFoldSystem(residual: (degrees: readonly number[]) => readon
   if (deficient) { state.termination = "rank-deficient"; return result("underdetermined") }
   return result("not-found")
 }
+
+export interface FoldSystemClassification {
+  status: FoldSystemOutcome["status"]
+  provenUnsat: false
+  complete: false
+  reason: string
+}
+
+export function classifyFoldSystemResult(outcome: FoldSystemOutcome): FoldSystemClassification {
+  if (outcome.status === "solved") {
+    return { status: "solved", provenUnsat: false, complete: false, reason: "有限数值搜索已找到满足容差的折叠见证，未宣称枚举全部分支。" }
+  }
+  if (outcome.status === "not-found") {
+    return { status: "not-found", provenUnsat: false, complete: false, reason: "有限数值搜索在预算内未找到解，不构成无解证明。" }
+  }
+  if (outcome.status === "underdetermined") {
+    return { status: "underdetermined", provenUnsat: false, complete: false, reason: "独立约束少于折叠自由度，欠定（not-proven-unsat）。" }
+  }
+  if (outcome.status === "cancelled") {
+    return { status: "cancelled", provenUnsat: false, complete: false, reason: "数值折叠搜索已被取消。" }
+  }
+  return { status: "invalid-input", provenUnsat: false, complete: false, reason: "数值折叠系统输入非法。" }
+}

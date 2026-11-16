@@ -136,3 +136,46 @@ export function planeAngleCosine(firstNormal: Vector3, secondNormal: Vector3): M
   if (!(first > TOLERANCE) || !(second > TOLERANCE)) return rejected("degenerate-plane", "平面的法向为零向量。")
   return { status: "ok", value: Math.min(1, Math.abs(dotVector3(firstNormal, secondNormal)) / (first * second)) }
 }
+
+export type TargetAngleConvention = "interior_dihedral" | "plane_acute_angle" | "line_plane_angle"
+
+export function verifyTargetAngleContract(input: {
+  kind: TargetAngleConvention
+  hingeStart: Vector3
+  hingeEnd: Vector3
+  firstPoint: Vector3
+  secondPoint: Vector3
+  expectedDegrees: number
+  toleranceDegrees?: number
+}): { ok: boolean; measuredDegrees?: number; reason: string } {
+  const tol = input.toleranceDegrees ?? 1e-4
+  if (!Number.isFinite(input.expectedDegrees)) return { ok: false, reason: "目标角非有限数值。" }
+  if (input.kind === "interior_dihedral") {
+    const cos = dihedralCosine({
+      hingeStart: input.hingeStart,
+      hingeEnd: input.hingeEnd,
+      firstPoint: input.firstPoint,
+      secondPoint: input.secondPoint
+    })
+    if (cos.status !== "ok") return { ok: false, reason: cos.message }
+    const measured = dihedralDegrees(cos.value)
+    const diff = Math.abs(measured - input.expectedDegrees)
+    return diff <= tol
+      ? { ok: true, measuredDegrees: measured, reason: `内二面角实测 ${measured.toFixed(6)}°，与要求一致。` }
+      : { ok: false, measuredDegrees: measured, reason: `内二面角口径为 [0°,180°]，实测 ${measured.toFixed(6)}°，与 ${input.expectedDegrees}° 不符（不取绝对值混淆锐/钝二面角）。` }
+  }
+  if (input.kind === "plane_acute_angle") {
+    const cos = dihedralCosine({
+      hingeStart: input.hingeStart,
+      hingeEnd: input.hingeEnd,
+      firstPoint: input.firstPoint,
+      secondPoint: input.secondPoint
+    })
+    if (cos.status !== "ok") return { ok: false, reason: cos.message }
+    const measured = dihedralDegrees(Math.abs(cos.value))
+    return Math.abs(measured - input.expectedDegrees) <= tol
+      ? { ok: true, measuredDegrees: measured, reason: `两平面锐角实测 ${measured.toFixed(6)}°。` }
+      : { ok: false, measuredDegrees: measured, reason: `两平面锐角实测 ${measured.toFixed(6)}°，与 ${input.expectedDegrees}° 不符。` }
+  }
+  return { ok: false, reason: "line_plane_angle 需传入方向与法向，请使用 linePlaneSine。" }
+}

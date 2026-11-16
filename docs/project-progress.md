@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T10 折叠状态谱系、对称分支见证与耦合折角顺序约束
+
+- **RED 复现**：扩充 `foldHinges.test.ts`、`planCompiler.foldBranches.test.ts` 与 `planCompiler.coupledFolds.test.ts`，覆盖铰链重合/漂移/边长突变/`dp_identity_conflation`、正负双分支与 `120°`/`60°` 内二面角/面面锐角隔离、逆序缺依赖点与 `> 3` 折越界拒绝；实现前 RED `3 failed | 5 failed | 11 passed (16)`。
+- **状态谱系与多分支求解落盘**：`rotation3d.ts` 新增 `rotatePointAboutHinge` 与 `foldBranchesForTargetDistance`；`foldSystem.ts` 新增 `classifyFoldSystemResult`；`solidGoalMeasurements.ts` 新增 `verifyTargetAngleContract`；`foldHinges.ts` 新增 `validateFoldLineageStep` / `buildFoldLineage`；`coupledFolds.ts` 在保留 `solvePlanFoldSystem` 下新增 `solveCoupledFoldSequence` 追踪序贯谱系与多分支候选解 `candidateSolutions`（`complete: false`）。
+- **验证**：定向 5 文件 26 项与全量 Vitest **536 文件 / 5689 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T10折叠谱系证据](audit/2026-11-16-p4-fold-lineage/README.md)。
+
 ## 2026-11-16 —— P4 / T09 参数化立体构造、拓扑拒收与开放曲面隔离
 
 - **RED 复现与拓扑缺口验证**：扩充 `solid-builders.test.ts`、`prism.test.ts`、`pyramid.test.ts` 并新建 `solidDrawingContracts.test.ts`，实现前 RED `4 files failed | 9 failed | 46 passed (55)`。

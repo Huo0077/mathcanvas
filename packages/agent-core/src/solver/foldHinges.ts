@@ -1,3 +1,5 @@
+import { rotatePointAboutHinge, type Vector3 } from "@draw/geometry-kernel"
+
 import type { PlanEnvelope } from "../contracts"
 
 /**
@@ -130,4 +132,174 @@ export function materialiseFoldHinges(plan: Plan): Plan {
     actions.push(action)
   }
   return { ...cleaned, actions }
+}
+
+export interface FoldLineageStepInput {
+  stepId: string
+  parentStateId: string
+  stateId: string
+  hingeEntityId: string
+  hingeFrom: { name: string; position: Vector3 }
+  hingeTo: { name: string; position: Vector3 }
+  hingeFromAfter?: Vector3
+  hingeToAfter?: Vector3
+  apexFrom: { name: string; position: Vector3 }
+  apexAs: string
+  postApexOverride?: Vector3
+  movingFaceIds: readonly string[]
+  fixedEntities: readonly string[]
+  angleDegrees: number
+  side: "positive" | "negative"
+}
+
+export interface FoldLineageDiagnostic {
+  code:
+    | "zero_length_hinge"
+    | "hinge_point_drift"
+    | "edge_length_changed"
+    | "dp_identity_conflation"
+    | "degenerate_fold_angle"
+    | "invalid_fold_rotation"
+  stepId: string
+  reason: string
+}
+
+export interface FoldLineageStep {
+  stepId: string
+  parentStateId: string
+  stateId: string
+  hingeEntityId: string
+  movingFaceIds: readonly string[]
+  fixedEntities: readonly string[]
+  angleDegrees: number
+  side: "positive" | "negative"
+  pointMapping: Record<string, string>
+  postApexPosition: Vector3
+}
+
+function vecDist(a: Vector3, b: Vector3): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+}
+
+export function validateFoldLineageStep(
+  input: FoldLineageStepInput
+): { ok: true; step: FoldLineageStep } | { ok: false; diagnostics: FoldLineageDiagnostic[] } {
+  const diagnostics: FoldLineageDiagnostic[] = []
+  const hingeLen = vecDist(input.hingeFrom.position, input.hingeTo.position)
+  const scale = Math.max(
+    1,
+    hingeLen,
+    vecDist(input.apexFrom.position, input.hingeFrom.position),
+    vecDist(input.apexFrom.position, input.hingeTo.position)
+  )
+  const tol = scale * 1e-9
+
+  if (!Number.isFinite(hingeLen) || hingeLen <= tol) {
+    diagnostics.push({
+      code: "zero_length_hinge",
+      stepId: input.stepId,
+      reason: `折痕 "${input.hingeEntityId}" 长度为零或退化（|${input.hingeFrom.name}${input.hingeTo.name}|=${hingeLen}）。`
+    })
+  }
+  if (input.apexFrom.name === input.apexAs || input.apexAs.trim() === "") {
+    diagnostics.push({
+      code: "dp_identity_conflation",
+      stepId: input.stepId,
+      reason: `折前点 "${input.apexFrom.name}" 与折后点 "${input.apexAs}" 不可混同为同一身份。`
+    })
+  }
+  if (
+    !Number.isFinite(input.angleDegrees) ||
+    Math.abs(input.angleDegrees) <= 1e-6 ||
+    Math.abs(Math.abs(input.angleDegrees) - 180) <= 1e-6
+  ) {
+    diagnostics.push({
+      code: "degenerate_fold_angle",
+      stepId: input.stepId,
+      reason: `折角 ${input.angleDegrees}° 处于 0°/±180° 平铺退化状态。`
+    })
+  }
+  if (input.hingeFromAfter && vecDist(input.hingeFrom.position, input.hingeFromAfter) > tol) {
+    diagnostics.push({
+      code: "hinge_point_drift",
+      stepId: input.stepId,
+      reason: `铰链点 "${input.hingeFrom.name}" 在折叠后发生坐标漂移。`
+    })
+  }
+  if (input.hingeToAfter && vecDist(input.hingeTo.position, input.hingeToAfter) > tol) {
+    diagnostics.push({
+      code: "hinge_point_drift",
+      stepId: input.stepId,
+      reason: `铰链点 "${input.hingeTo.name}" 在折叠后发生坐标漂移。`
+    })
+  }
+
+  let postApex = input.postApexOverride
+  if (!postApex && diagnostics.length === 0) {
+    const signedDeg = input.side === "negative" ? -Math.abs(input.angleDegrees) : input.angleDegrees
+    const rotated = rotatePointAboutHinge(
+      input.apexFrom.position,
+      input.hingeFrom.position,
+      input.hingeTo.position,
+      signedDeg
+    )
+    if (rotated.status !== "ok") {
+      diagnostics.push({
+        code: "invalid_fold_rotation",
+        stepId: input.stepId,
+        reason: rotated.detail
+      })
+    } else {
+      postApex = rotated.point
+    }
+  }
+
+  if (postApex) {
+    const preLenFrom = vecDist(input.apexFrom.position, input.hingeFrom.position)
+    const preLenTo = vecDist(input.apexFrom.position, input.hingeTo.position)
+    const hFromAfter = input.hingeFromAfter ?? input.hingeFrom.position
+    const hToAfter = input.hingeToAfter ?? input.hingeTo.position
+    const postLenFrom = vecDist(postApex, hFromAfter)
+    const postLenTo = vecDist(postApex, hToAfter)
+    if (Math.abs(postLenFrom - preLenFrom) > tol || Math.abs(postLenTo - preLenTo) > tol) {
+      diagnostics.push({
+        code: "edge_length_changed",
+        stepId: input.stepId,
+        reason: `刚体折叠必须保持到铰链两端点距离不变（Δ=${Math.max(Math.abs(postLenFrom - preLenFrom), Math.abs(postLenTo - preLenTo)).toExponential(3)}）。`
+      })
+    }
+  }
+
+  if (diagnostics.length > 0 || !postApex) {
+    return { ok: false, diagnostics }
+  }
+
+  return {
+    ok: true,
+    step: {
+      stepId: input.stepId,
+      parentStateId: input.parentStateId,
+      stateId: input.stateId,
+      hingeEntityId: input.hingeEntityId,
+      movingFaceIds: [...input.movingFaceIds],
+      fixedEntities: [...input.fixedEntities],
+      angleDegrees: input.angleDegrees,
+      side: input.side,
+      pointMapping: { [input.apexFrom.name]: input.apexAs },
+      postApexPosition: postApex
+    }
+  }
+}
+
+export function buildFoldLineage(
+  inputs: readonly FoldLineageStepInput[]
+): { ok: true; steps: FoldLineageStep[] } | { ok: false; diagnostics: FoldLineageDiagnostic[] } {
+  const steps: FoldLineageStep[] = []
+  const diagnostics: FoldLineageDiagnostic[] = []
+  for (const input of inputs) {
+    const verdict = validateFoldLineageStep(input)
+    if (!verdict.ok) diagnostics.push(...verdict.diagnostics)
+    else steps.push(verdict.step)
+  }
+  return diagnostics.length > 0 ? { ok: false, diagnostics } : { ok: true, steps }
 }

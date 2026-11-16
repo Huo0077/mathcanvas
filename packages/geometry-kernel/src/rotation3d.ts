@@ -296,3 +296,95 @@ export function searchFoldAngles(residual: (degrees: number) => number, options:
   return { status: degrees.length > 0 ? "solved" : "not-found", degrees: degrees.sort((a, b) => a - b),
     evaluations, complete: false, termination: exhausted ? "budget-exhausted" : "sampled" }
 }
+
+export function rotatePointAboutHinge(
+  point: Vector3,
+  hingeStart: Vector3,
+  hingeEnd: Vector3,
+  angleDegrees: number
+): { status: "ok"; point: Vector3 } | { status: "degenerate"; detail: string } {
+  if (![point, hingeStart, hingeEnd].every((v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)) || !Number.isFinite(angleDegrees)) {
+    return { status: "degenerate", detail: "折叠输入含非有限数值。" }
+  }
+  const axis = { x: hingeEnd.x - hingeStart.x, y: hingeEnd.y - hingeStart.y, z: hingeEnd.z - hingeStart.z }
+  const axisLen = Math.hypot(axis.x, axis.y, axis.z)
+  if (!(axisLen > 1e-12)) {
+    return { status: "degenerate", detail: "零长铰链：铰链两端点重合。" }
+  }
+  const u = { x: axis.x / axisLen, y: axis.y / axisLen, z: axis.z / axisLen }
+  const v = { x: point.x - hingeStart.x, y: point.y - hingeStart.y, z: point.z - hingeStart.z }
+  const along = v.x * u.x + v.y * u.y + v.z * u.z
+  const vPar = { x: u.x * along, y: u.y * along, z: u.z * along }
+  const vPerp = { x: v.x - vPar.x, y: v.y - vPar.y, z: v.z - vPar.z }
+  if (!(Math.hypot(vPerp.x, vPerp.y, vPerp.z) > 1e-12)) {
+    return { status: "degenerate", detail: "被折叠顶点落在铰链直线上，旋转不产生位移。" }
+  }
+  const rad = (angleDegrees * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const cross = {
+    x: u.y * vPerp.z - u.z * vPerp.y,
+    y: u.z * vPerp.x - u.x * vPerp.z,
+    z: u.x * vPerp.y - u.y * vPerp.x
+  }
+  return {
+    status: "ok",
+    point: {
+      x: hingeStart.x + vPar.x + cos * vPerp.x + sin * cross.x,
+      y: hingeStart.y + vPar.y + cos * vPerp.y + sin * cross.y,
+      z: hingeStart.z + vPar.z + cos * vPerp.z + sin * cross.z
+    }
+  }
+}
+
+export interface FoldBranchWitness {
+  side: "positive" | "negative"
+  angleDegrees: number
+  signedDegrees: number
+  apexPosition: Vector3
+  distanceResidual: number
+}
+
+export type FoldBranchesOutcome =
+  | { status: "solved"; exhaustive: true; branches: FoldBranchWitness[] }
+  | { status: "unreachable"; exhaustive: true; minimum: number; maximum: number }
+  | { status: "degenerate"; exhaustive: true; detail: string }
+
+export function foldBranchesForTargetDistance(
+  moving: Vector3,
+  pivot: Vector3,
+  axis: Vector3,
+  target: Vector3,
+  distance: number
+): FoldBranchesOutcome {
+  const solved = foldAnglesForTargetDistance(moving, pivot, axis, target, distance, {
+    minimumDegrees: -360,
+    maximumDegrees: 360
+  })
+  if (solved.status === "degenerate") return { status: "degenerate", exhaustive: true, detail: solved.detail }
+  if (solved.status === "unreachable") {
+    return { status: "unreachable", exhaustive: true, minimum: solved.minimum, maximum: solved.maximum }
+  }
+  const hingeEnd = { x: pivot.x + axis.x, y: pivot.y + axis.y, z: pivot.z + axis.z }
+  const branches: FoldBranchWitness[] = []
+  for (const deg of solved.degrees) {
+    if (deg <= 1e-9 || deg >= 360 - 1e-9) continue
+    const side: "positive" | "negative" = deg <= 180 + 1e-9 ? "positive" : "negative"
+    const signedDegrees = side === "positive" ? deg : deg - 360
+    const rotated = rotatePointAboutHinge(moving, pivot, hingeEnd, deg)
+    if (rotated.status !== "ok") continue
+    const measured = Math.hypot(rotated.point.x - target.x, rotated.point.y - target.y, rotated.point.z - target.z)
+    branches.push({
+      side,
+      angleDegrees: deg,
+      signedDegrees,
+      apexPosition: rotated.point,
+      distanceResidual: Math.abs(measured - distance)
+    })
+  }
+  if (branches.length === 0) {
+    return { status: "degenerate", exhaustive: true, detail: "方程的根全部退化为 0°/360° 平放态。" }
+  }
+  branches.sort((a, b) => (a.side === b.side ? a.angleDegrees - b.angleDegrees : a.side === "positive" ? -1 : 1))
+  return { status: "solved", exhaustive: true, branches }
+}

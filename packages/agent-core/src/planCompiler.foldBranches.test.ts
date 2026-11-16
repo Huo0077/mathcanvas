@@ -1,5 +1,5 @@
 import { createEmptyDocument } from "@draw/dsl"
-import { foldAnglesForTargetDistance, type Vector3 } from "@draw/geometry-kernel"
+import { classifyFoldSystemResult, foldAnglesForTargetDistance, foldBranchesForTargetDistance, rotatePointAboutHinge, verifyTargetAngleContract, type Vector3 } from "@draw/geometry-kernel"
 import { describe, expect, it } from "vitest"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
@@ -82,5 +82,56 @@ describe("Task 12 — 折角：没取的那一支也要披露", () => {
     expect(text, `假设文案：${text}`).toContain(String(undisclosed[0]))
     expect(text, `假设文案：${text}`).toMatch(/朝折痕另一侧折/)
     expect(text, `假设文案：${text}`).toMatch(/系统没有取它们/)
+  })
+})
+
+describe("P4 / T10 signed fold branches, target angle conventions & not-found vs unsat separation", () => {
+  it("enumerates signed ±θ branches with rotatePointAboutHinge and distinguishes interior dihedral 120° from acute plane angle 60°", () => {
+    const branches = foldBranchesForTargetDistance(A, E, subtract(F, E), C, TARGET)
+    expect(branches.status).toBe("solved")
+    if (branches.status !== "solved") return
+    expect(branches.exhaustive).toBe(true)
+    expect(branches.branches.map((b) => b.side)).toEqual(["positive", "negative"])
+    expect(branches.branches[0]!.distanceResidual).toBeLessThan(1e-9)
+    expect(branches.branches[1]!.distanceResidual).toBeLessThan(1e-9)
+    // Opposite sides of z=0 plane
+    expect(branches.branches[0]!.apexPosition.z * branches.branches[1]!.apexPosition.z).toBeLessThan(0)
+
+    const rot = rotatePointAboutHinge({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, 120)
+    expect(rot.status).toBe("ok")
+    if (rot.status !== "ok") return
+    const obtuseCheck = verifyTargetAngleContract({
+      kind: "interior_dihedral",
+      hingeStart: { x: 0, y: 0, z: 0 },
+      hingeEnd: { x: 2, y: 0, z: 0 },
+      firstPoint: { x: 0, y: 1, z: 0 },
+      secondPoint: rot.point,
+      expectedDegrees: 120
+    })
+    expect(obtuseCheck.ok).toBe(true)
+
+    // Confusing 60° acute plane angle for 120° interior dihedral must FAIL instead of abs() passing both sides!
+    const wrongAcuteCheck = verifyTargetAngleContract({
+      kind: "interior_dihedral",
+      hingeStart: { x: 0, y: 0, z: 0 },
+      hingeEnd: { x: 2, y: 0, z: 0 },
+      firstPoint: { x: 0, y: 1, z: 0 },
+      secondPoint: rot.point,
+      expectedDegrees: 60
+    })
+    expect(wrongAcuteCheck.ok).toBe(false)
+  })
+
+  it("never maps bounded foldSystem not-found to mathematical unsat", () => {
+    const classified = classifyFoldSystemResult({
+      status: "not-found",
+      degrees: [],
+      evaluations: 40,
+      complete: false,
+      termination: "budget-exhausted"
+    })
+    expect(classified.provenUnsat).toBe(false)
+    expect(classified.complete).toBe(false)
+    expect(classified.reason).toContain("不构成无解证明")
   })
 })
