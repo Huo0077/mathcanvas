@@ -1,5 +1,6 @@
-import type { Coordinate, PrimitiveSpec, SampledPrimitiveType } from "@draw/dsl"
+import type { Coordinate, LinePrimitive, PrimitiveSpec, RayPrimitive, SampledPrimitiveType, SegmentPrimitive } from "@draw/dsl"
 
+import { intersectParametricLineWithConic, type ParametricConicIntersectionDomain, type PlanarConic } from "./conic-line"
 import { sampleEllipse, sampleHyperbolaBranches, sampleParabola } from "./conics"
 import { adaptiveSampleFunctionSegments } from "./calculus"
 import { evaluateParameterExpression } from "./parameters"
@@ -150,4 +151,29 @@ export function intersectSampledPrimitives(first: SampledPrimitive, second: Samp
   if (unique.length === 0) return { kind: "none", reason: "curves are disjoint" }
   if (unique.length === 1) return { kind: "point", point: unique[0] }
   return { kind: "points", points: unique.slice(0, MAX_CURVE_INTERSECTIONS) }
+}
+
+export interface ExactPlanarConicIntersectionResult {
+  kind: "none" | "tangent" | "secant" | "single" | "degenerate"
+  points: Coordinate[]
+  filteredOutCount: number
+  method: "algebraic_exact"
+}
+
+export function intersectPlanarLineAndConicExact(
+  line: Pick<LinePrimitive | SegmentPrimitive | RayPrimitive, "type" | "a" | "b"> & { id?: string },
+  conic: PlanarConic,
+  domain?: ParametricConicIntersectionDomain
+): ExactPlanarConicIntersectionResult {
+  const result = intersectParametricLineWithConic(
+    {
+      origin: line.a,
+      direction: { x: line.b.x - line.a.x, y: line.b.y - line.a.y },
+      ...(line.type === "segment" || line.type === "ray" ? { tMin: 0 } : {}),
+      ...(line.type === "segment" ? { tMax: 1 } : {})
+    },
+    conic,
+    domain
+  )
+  return { ...result, method: "algebraic_exact" }
 }

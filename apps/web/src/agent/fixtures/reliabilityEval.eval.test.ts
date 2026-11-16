@@ -181,7 +181,11 @@ function countingPlanner(inner: PlannerPort): { planner: PlannerPort; requests: 
 
 function plannerFor(entry: EvalCase, recorded: Record<string, PlanEnvelope[]>): { planner: PlannerPort; requests: () => number; rounds: PlanEnvelope[]; notRun: string | null; workspace?: Workspace; diagramPrompt?: string } {
   const route = MODE === "live" ? null : routeDeterministicProblem(entry.prompt)
-  const workspace = route?.family === "functions" ? "calculus" : entry.workspace
+  const workspace = route?.family === "functions"
+    ? "calculus"
+    : route?.family === "conics-tangents" || route?.family === "planar-basics"
+      ? "conics"
+      : entry.workspace
   if (MODE === "replay") {
     const rounds = recorded[entry.id]
     if (rounds === undefined || rounds.length === 0) return { planner: replayPlanner([]), requests: () => 0, rounds: [], notRun: `replay has no recorded rounds for ${entry.id}`, workspace }

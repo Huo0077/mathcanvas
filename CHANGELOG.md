@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-16 —— P4 / T07 平面与圆锥曲线确定性构造与定义域裁剪相交
+
+- **几何内核精确平面与圆锥接口**：`packages/geometry-kernel/src/conics.ts` 新增带旋转/平移变换的 `conicFoci` 与 `tangentLineToConicAt`；`conic-line.ts` 新增参数化直线与定义域筛选接口 `intersectParametricLineWithConic`（支持垂直线、线段/射线 `t` 界与 `x ≠ 0` 排除并严格区分 `single` 与二重切根 `tangent`）；`conic-parameters.ts` 新增 `fitOriginConicThroughPoints`（两点反求中心在原点圆锥系数并附残差校验）；`curve-intersections.ts` 新增 `intersectPlanarLineAndConicExact`，将直线/线段/射线与圆锥曲线直接路由至代数求交。
+- **Solver-First 平面/圆锥构图与路由接线**：新增 `packages/agent-core/src/solver/planarDrawing.ts`（`tryBuildPlanarDrawingPlan`），复用现有 `parseDiagramObligations` / `solveSymbolicConicContract` / 焦点准线反求 / `evaluateExpressionWithDomain`（零硬编码答案与题号，不拦截 1D 函数微积分题 `T08`），覆盖 `GK-P01`、`GK-P08`、`JT-P03`、`JT-P06`（含 `b > c` 诚实诊断 `PF₁⊥PF₂` 无解及 `c ≥ b` 可行构建）、`JT-P07`、`JT-P08`（`x ≠ 0` 域排除与 `EC=2CF`）、旋转椭圆切线与 `"示意图"` `free_choice` 假设披露；接入 `deterministicProblemRoute.ts`、`index.ts`、`apps/web/src/agent/agentRunner.ts` 与 `reliabilityEval.eval.test.ts`。
+- **验证**：RED 失败 → `conic-line.test.ts`（16 passed）+ `planarDrawing.test.ts`（9 passed）与全量 Vitest **534 文件 / 5665 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P4 / T07平面作图证据](docs/audit/2026-11-16-p4-planar-drawing/README.md)。
+
 ## 2026-11-16 —— P5 / T11 可版本化尺度感知数值策略与退化分类
 
 - **分层无量纲残差策略**：在 `packages/geometry-kernel/src/numeric.ts` 确立 `NUMERIC_POLICY_VERSION = "num-policy-v1"` 与 `topological_sign` / `metric_error` / `solver_residual` 三层接口，新增 `characteristicScale`、`normalizedLengthResidual`、`normalizedPlaneDistanceResidual`、`normalizedPerpendicularResidual`、`normalizedParallelResidual` 及跨阈值返回 `"unknown"` 的 `classifyUncertaintyInterval`；在 `exact-forms.ts` 导出 `EXACT_FORM_POLICY_VERSION = "exact-form-v1"`，在 `diagramVerification.ts` 同步导出 `DIAGRAM_NUMERIC_POLICY_VERSION`。

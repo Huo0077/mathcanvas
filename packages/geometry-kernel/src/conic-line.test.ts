@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import type { CirclePrimitive, Coordinate, EllipsePrimitive, HyperbolaPrimitive, ParabolaPrimitive } from "@draw/dsl"
 
-import { conicResidualAt, intersectLineWithConic } from "./conic-line"
+import { conicResidualAt, intersectLineWithConic, intersectParametricLineWithConic } from "./conic-line"
+import { fitOriginConicThroughPoints } from "./conic-parameters"
+import { conicFoci, tangentLineToConicAt } from "./conics"
+import { intersectPlanarLineAndConicExact } from "./curve-intersections"
 
 /**
  * **代数**直线 ∩ 圆锥曲线（Task 14）。
@@ -266,3 +269,125 @@ describe("点在圆锥曲线上：残差只算一处", () => {
 
 /** 上面那张表里三类曲线的联合类型（与 `conicResidualAt` 的入参同一份定义）。 */
 type PlanarConicSample = Parameters<typeof conicResidualAt>[0]
+
+describe("P4 / T07 参数化直线、旋转圆锥焦点、切线与定义域裁剪相交", () => {
+  it("旋转/平移圆锥曲线焦点与精确切线：梯度正交且与局部坐标系严格一致", () => {
+    const theta = Math.PI / 4
+    const ellipse: EllipsePrimitive = {
+      id: "rot-e",
+      type: "ellipse",
+      center: { x: 2, y: -1 },
+      radiusX: 5,
+      radiusY: 3,
+      rotation: theta
+    }
+    const foci = conicFoci(ellipse)
+    expect(foci).toHaveLength(2)
+    // c = sqrt(25 - 9) = 4 along rotated x-axis
+    const c = 4
+    const cos = Math.cos(theta)
+    const sin = Math.sin(theta)
+    const expectedF1 = { x: 2 - c * cos, y: -1 - c * sin }
+    const expectedF2 = { x: 2 + c * cos, y: -1 + c * sin }
+    expect(foci[0].x).toBeCloseTo(expectedF1.x, 9)
+    expect(foci[0].y).toBeCloseTo(expectedF1.y, 9)
+    expect(foci[1].x).toBeCloseTo(expectedF2.x, 9)
+    expect(foci[1].y).toBeCloseTo(expectedF2.y, 9)
+
+    const angle = 0.6
+    const localPoint = { x: 5 * Math.cos(angle), y: 3 * Math.sin(angle) }
+    const worldPoint = {
+      x: ellipse.center.x + localPoint.x * cos - localPoint.y * sin,
+      y: ellipse.center.y + localPoint.x * sin + localPoint.y * cos
+    }
+    const tangent = tangentLineToConicAt(ellipse, worldPoint)
+    expect(tangent).not.toBeNull()
+    if (!tangent) throw new Error("expected tangent")
+    const localGrad = conicResidualAt(ellipse, worldPoint)!.gradient
+    const worldGrad = { x: localGrad.x * cos - localGrad.y * sin, y: localGrad.x * sin + localGrad.y * cos }
+    // World gradient must be orthogonal to tangent direction
+    expect(worldGrad.x * tangent.direction.x + worldGrad.y * tangent.direction.y).toBeCloseTo(0, 10)
+    expect(Math.hypot(tangent.direction.x, tangent.direction.y)).toBeCloseTo(1, 10)
+    expect(intersectLineWithConic(tangent.line, ellipse).kind).toBe("tangent")
+
+    // Hyperbola & parabola shifted/rotated foci
+    const hyperbola: HyperbolaPrimitive = { id: "rot-h", type: "hyperbola", center: { x: 1, y: 2 }, radiusX: 3, radiusY: 4, axis: "y", rotation: Math.PI / 2 }
+    const hFoci = conicFoci(hyperbola)
+    expect(hFoci).toHaveLength(2)
+    // axis "y" local foci (0, ±5); rotated +90 deg -> (∓5, 0) + (1, 2)
+    expect(hFoci[0].x).toBeCloseTo(6, 9)
+    expect(hFoci[0].y).toBeCloseTo(2, 9)
+    expect(hFoci[1].x).toBeCloseTo(-4, 9)
+    expect(hFoci[1].y).toBeCloseTo(2, 9)
+
+    const parabola: ParabolaPrimitive = { id: "shift-p", type: "parabola", vertex: { x: 3, y: -2 }, focalParameter: 4, axis: "x" }
+    expect(conicFoci(parabola)).toEqual([{ x: 5, y: -2 }])
+  })
+
+  it("JT-P07 两点反求中心在原点的标准椭圆：独立残差与系数均准确", () => {
+    const fitted = fitOriginConicThroughPoints(
+      [{ x: 0.5, y: Math.sqrt(15) / 4 }, { x: 2, y: 0 }],
+      "x",
+      "ellipse"
+    )
+    expect(fitted).not.toBeNull()
+    if (!fitted || fitted.kind !== "ellipse") throw new Error("expected ellipse fit")
+    expect(fitted.radiusX).toBeCloseTo(2, 9)
+    expect(fitted.radiusY).toBeCloseTo(1, 9)
+    expect(conicResidualAt({ id: "fit", type: "ellipse", center: { x: 0, y: 0 }, radiusX: fitted.radiusX, radiusY: fitted.radiusY }, { x: 0.5, y: Math.sqrt(15) / 4 })?.residual).toBeLessThan(1e-12)
+  })
+
+  it("参数化直线 P(t)=P₀+t·d 覆盖垂直线、相切、相离及定义域 x≠0 排除后的 single/tangent 区分", () => {
+    const ellipse: EllipsePrimitive = { id: "e-fit", type: "ellipse", center: { x: 0, y: 0 }, radiusX: 2, radiusY: 1 }
+    // Vertical line x = 0 via parametric origin (0, 0) + t*(0, 1) -> secant (0, ±1)
+    const verticalSecant = intersectParametricLineWithConic({ origin: { x: 0, y: 0 }, direction: { x: 0, y: 1 } }, ellipse)
+    expect(verticalSecant.kind).toBe("secant")
+    expect(verticalSecant.points).toHaveLength(2)
+
+    // Exclude x = 0 domain (as in JT-P08): both roots lie on x = 0, so filteredOutCount = 2, kind = "none"
+    const excluded = intersectParametricLineWithConic(
+      { origin: { x: 0, y: 0 }, direction: { x: 0, y: 1 } },
+      ellipse,
+      { excludeXZero: true }
+    )
+    expect(excluded.kind).toBe("none")
+    expect(excluded.points).toHaveLength(0)
+    expect(excluded.filteredOutCount).toBe(2)
+
+    // Horizontal secant y = 0 through (0,0) with x > 0 ray: raw is secant (-2,0) & (2,0), ray t >= 0 filters (-2,0) -> single (NOT tangent!)
+    const rayFiltered = intersectParametricLineWithConic(
+      { origin: { x: 0, y: 0 }, direction: { x: 1, y: 0 }, tMin: 0 },
+      ellipse
+    )
+    expect(rayFiltered.kind).toBe("single")
+    expect(rayFiltered.filteredOutCount).toBe(1)
+    expect(rayFiltered.points[0].x).toBeCloseTo(2, 9)
+
+    // Tangent vs out-of-ellipse
+    const horizontalTangent = intersectParametricLineWithConic({ origin: { x: 0, y: 1 }, direction: { x: 1, y: 0 } }, ellipse)
+    expect(horizontalTangent.kind).toBe("tangent")
+    expect(horizontalTangent.points[0].y).toBeCloseTo(1, 9)
+
+    const verticalTangent = intersectParametricLineWithConic({ origin: { x: 2, y: 0 }, direction: { x: 0, y: 1 } }, ellipse)
+    expect(verticalTangent.kind).toBe("tangent")
+    expect(verticalTangent.points[0].x).toBeCloseTo(2, 9)
+
+    const disjoint = intersectParametricLineWithConic({ origin: { x: 0, y: 2 }, direction: { x: 1, y: 0 } }, ellipse)
+    expect(disjoint.kind).toBe("none")
+
+    // Parabola y = x² (axis: "y", 2p = 1 -> focalParameter = 0.5) with vertical line x = 1 -> transverse single intersection, never tangent
+    const parabolaUp: ParabolaPrimitive = { id: "p-up", type: "parabola", vertex: { x: 0, y: 0 }, focalParameter: 0.5, axis: "y" }
+    const singleRoot = intersectParametricLineWithConic({ origin: { x: 1, y: 0 }, direction: { x: 0, y: 1 } }, parabolaUp)
+    expect(singleRoot.kind).toBe("single")
+    expect(singleRoot.points).toEqual([{ x: 1, y: 1 }])
+
+    // Exact line/segment/ray + conic entry in curve-intersections
+    const exactSeg = intersectPlanarLineAndConicExact(
+      { id: "seg1", type: "segment", a: { x: 0, y: 1 }, b: { x: 1.5, y: 1 } },
+      ellipse
+    )
+    expect(exactSeg.kind).toBe("tangent")
+    expect(exactSeg.method).toBe("algebraic_exact")
+    expect(exactSeg.points).toHaveLength(1)
+  })
+})

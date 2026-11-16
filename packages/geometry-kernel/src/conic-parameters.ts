@@ -879,3 +879,74 @@ export function solveSymbolicConicContract(
     }
   }
 }
+
+export type OriginConicFitResult =
+  | {
+    kind: "ellipse"
+    radiusX: number
+    radiusY: number
+    residuals: [number, number]
+  }
+  | {
+    kind: "hyperbola"
+    radiusX: number
+    radiusY: number
+    axis: "x" | "y"
+    residuals: [number, number]
+  }
+
+/**
+ * Fits a centered axis-aligned conic (`A*x^2 + B*y^2 = 1`) through two linearly
+ * independent non-symmetric points `(p1, p2)` with independent equation residuals.
+ */
+export function fitOriginConicThroughPoints(
+  points: readonly [Coordinate, Coordinate],
+  axisHint?: "x" | "y",
+  expectedKind?: "ellipse" | "hyperbola"
+): OriginConicFitResult | null {
+  const [p1, p2] = points
+  if (
+    !Number.isFinite(p1.x) || !Number.isFinite(p1.y) ||
+    !Number.isFinite(p2.x) || !Number.isFinite(p2.y)
+  ) {
+    return null
+  }
+  const x1Sq = p1.x * p1.x
+  const y1Sq = p1.y * p1.y
+  const x2Sq = p2.x * p2.x
+  const y2Sq = p2.y * p2.y
+  const det = x1Sq * y2Sq - x2Sq * y1Sq
+  if (!Number.isFinite(det) || Math.abs(det) <= 1e-12) return null
+
+  const A = (y2Sq - y1Sq) / det
+  const B = (x1Sq - x2Sq) / det
+  if (!Number.isFinite(A) || !Number.isFinite(B)) return null
+
+  const residualAt = (p: Coordinate): number => Math.abs(A * p.x * p.x + B * p.y * p.y - 1)
+  const r1 = residualAt(p1)
+  const r2 = residualAt(p2)
+  if (r1 > 1e-7 || r2 > 1e-7) return null
+
+  if (A > 1e-12 && B > 1e-12) {
+    if (expectedKind === "hyperbola") return null
+    return {
+      kind: "ellipse",
+      radiusX: Math.sqrt(1 / A),
+      radiusY: Math.sqrt(1 / B),
+      residuals: [r1, r2]
+    }
+  }
+  if (A * B < -1e-24) {
+    if (expectedKind === "ellipse") return null
+    const axis: "x" | "y" = A > 0 ? "x" : "y"
+    if (axisHint !== undefined && axisHint !== axis) return null
+    return {
+      kind: "hyperbola",
+      axis,
+      radiusX: Math.sqrt(1 / Math.abs(A)),
+      radiusY: Math.sqrt(1 / Math.abs(B)),
+      residuals: [r1, r2]
+    }
+  }
+  return null
+}

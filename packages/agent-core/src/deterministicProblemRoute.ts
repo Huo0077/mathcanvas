@@ -1,13 +1,15 @@
 import type { PlanEnvelope } from "./contracts"
 import { compileConstructionDag, deriveRequiredDrawingIntent, type CompiledDrawingDagResult } from "./drawingIntent"
 import { deterministicPlanForPrompt } from "./parametricSolidPlan"
+import { tryBuildPlanarDrawingPlan } from "./solver/planarDrawing"
 import { tryBuildRightPrismMidpointsPlan } from "./rightPrismPlan"
 import { tryBuildScopedPyramidPlan } from "./scopedPyramidPlan"
 import { tryBuildTrigMonotonicityPlan } from "./trigMonotonicityPlan"
 
 export interface DeterministicProblemRoute {
   plan: PlanEnvelope
-  family: "functions" | "spatial-modeling"
+  family: "functions" | "spatial-modeling" | "conics-tangents" | "planar-basics"
+  skillIds?: readonly string[]
   diagramPrompt?: string
 }
 
@@ -25,6 +27,8 @@ export function routeDeterministicProblem(prompt: string): DeterministicProblemR
   if (trig) return { plan: trig, family: "functions" }
   const pyramid = tryBuildScopedPyramidPlan(prompt)
   if (pyramid) return { ...pyramid, family: "spatial-modeling" }
+  const planar = tryBuildPlanarDrawingPlan(prompt)
+  if (planar && planar.plan.kind === "plan") return { plan: planar.plan, family: planar.family, skillIds: planar.skillIds, diagramPrompt: planar.diagramPrompt }
   const solid = deterministicPlanForPrompt(prompt)
   return solid ? { plan: solid, family: "spatial-modeling" } : null
 }

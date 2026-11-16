@@ -530,7 +530,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     if (deterministic) return {
       planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
       diagramPrompt: deterministic.diagramPrompt,
-      requestedSkillIds: [deterministic.family], textProfileId: "local-planner"
+      requestedSkillIds: deterministic.skillIds ? [...deterministic.skillIds] : [deterministic.family], textProfileId: "local-planner"
     }
 
     const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()

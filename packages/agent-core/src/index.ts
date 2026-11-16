@@ -167,6 +167,7 @@ export * from "./solver/solverContracts"
  */
 export * from "./solver/shapeGrammar"
 export * from "./solver/witnessSearch"
+export * from "./solver/planarDrawing"
 /**
  * **参数化立体的确定性计划适配**（T5）：题面 → spec → 见证候选 → 动作链（含辅助点）。
  *

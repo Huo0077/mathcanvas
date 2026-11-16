@@ -281,3 +281,87 @@ export function intersectLineWithConic(line: ConicLine, conic: PlanarConic): Lin
     tangency: Math.max(firstEvidence.tangency, secondEvidence.tangency)
   }
 }
+
+export interface ParametricLine {
+  origin: Coordinate
+  direction: Coordinate
+  tMin?: number
+  tMax?: number
+}
+
+export interface ParametricConicIntersectionDomain {
+  excludeXZero?: boolean
+  excludeYZero?: boolean
+  predicate?: (point: Coordinate) => boolean
+}
+
+export interface ParametricConicIntersectionResult {
+  kind: "none" | "tangent" | "secant" | "single" | "degenerate"
+  points: Coordinate[]
+  filteredOutCount: number
+}
+
+export function intersectParametricLineWithConic(
+  line: ParametricLine,
+  conic: PlanarConic,
+  domain?: ParametricConicIntersectionDomain
+): ParametricConicIntersectionResult {
+  const { origin, direction, tMin, tMax } = line
+  if (
+    !Number.isFinite(origin.x) || !Number.isFinite(origin.y) ||
+    !Number.isFinite(direction.x) || !Number.isFinite(direction.y)
+  ) {
+    return { kind: "degenerate", points: [], filteredOutCount: 0 }
+  }
+  const dirSq = direction.x * direction.x + direction.y * direction.y
+  if (!(dirSq > EPSILON * EPSILON)) {
+    return { kind: "degenerate", points: [], filteredOutCount: 0 }
+  }
+  const raw = intersectLineWithConic(
+    { a: origin, b: { x: origin.x + direction.x, y: origin.y + direction.y } },
+    conic
+  )
+  if (raw.kind === "degenerate") return { kind: "degenerate", points: [], filteredOutCount: 0 }
+  if (raw.kind === "none") return { kind: "none", points: [], filteredOutCount: 0 }
+
+  const rawPoints = raw.kind === "secant" ? [...raw.points] : [raw.point]
+  const surviving: Coordinate[] = []
+  let filteredOutCount = 0
+  const dirLen = Math.sqrt(dirSq)
+  const paramTol = 1e-9 / dirLen
+
+  for (const point of rawPoints) {
+    const t = ((point.x - origin.x) * direction.x + (point.y - origin.y) * direction.y) / dirSq
+    if (tMin !== undefined && t < tMin - paramTol) {
+      filteredOutCount += 1
+      continue
+    }
+    if (tMax !== undefined && t > tMax + paramTol) {
+      filteredOutCount += 1
+      continue
+    }
+    if (domain?.excludeXZero && Math.abs(point.x) <= 1e-9) {
+      filteredOutCount += 1
+      continue
+    }
+    if (domain?.excludeYZero && Math.abs(point.y) <= 1e-9) {
+      filteredOutCount += 1
+      continue
+    }
+    if (domain?.predicate && !domain.predicate(point)) {
+      filteredOutCount += 1
+      continue
+    }
+    surviving.push(point)
+  }
+
+  if (surviving.length === 0) return { kind: "none", points: [], filteredOutCount }
+  if (raw.kind === "tangent") return { kind: "tangent", points: surviving, filteredOutCount }
+  if (raw.kind === "single") return { kind: "single", points: surviving, filteredOutCount }
+  // raw.kind === "secant": 2 surviving => secant, 1 surviving (other filtered out) => transverse single (never tangent)
+  return {
+    kind: surviving.length >= 2 ? "secant" : "single",
+    points: surviving,
+    filteredOutCount
+  }
+}

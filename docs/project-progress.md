@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-16 —— P4 / T07 平面与圆锥曲线确定性构造与定义域裁剪相交
+
+- **RED 复现与内核扩展**：扩充 `conic-line.test.ts` 并新建 `planarDrawing.test.ts` 复现 RED 缺失；在 `@draw/geometry-kernel` 落盘旋转/平移 `conicFoci`、`tangentLineToConicAt`、`fitOriginConicThroughPoints`、参数化直线定义域排除 `intersectParametricLineWithConic`（区分截面截断 `single` 与二重切根 `tangent`）及 `intersectPlanarLineAndConicExact`。
+- **代数优先平面/圆锥求解器与诚实诊断**：新增 `packages/agent-core/src/solver/planarDrawing.ts` 覆盖 `GK-P01`、`GK-P08`、`JT-P03`、`JT-P06`（实测发现 `c=1 < b=2` 时 `PF₁⊥PF₂` 实数域无解，改为记录 `infeasibleConstraints` 而非伪造 `P`；同时验证 `c ≥ b` 可行正交构造）、`JT-P07`、`JT-P08`（含 `x ≠ 0` 排除与 `EC=2CF` 线性消元）及 `"示意图"` `free_choice` 披露，接通 `deterministicProblemRoute.ts`、`agentRunner.ts` 与 `reliabilityEval.eval.test.ts`（同时保障 1D 函数题留给 `T08`）。
+- **验证**：`conic-line.test.ts` 16 项 + `planarDrawing.test.ts` 9 项通过，全量 Vitest **534 文件 / 5665 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过。证据见[P4 / T07平面作图证据](audit/2026-11-16-p4-planar-drawing/README.md)。
+
 ## 2026-11-16 —— P5 / T11 可版本化尺度感知数值策略与退化分类
 
 - **RED 复现与大尺度实测漏洞**：新增 `numericRobustness.test.ts`，实现前 RED `4 failed | 1 passed (5)`，除新增版本化无量纲接口待落盘外，实测捕获 `conic-line.ts` 在 `scale = 1000` 时单位步长切线因 `2.5e-7 + 1 - 1` 精度丢失与固定 `rootScale` 下界 `1` 导致误判 `none` 的真实漏洞。

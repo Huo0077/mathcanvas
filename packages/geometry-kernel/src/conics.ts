@@ -1,5 +1,7 @@
 import type { CirclePrimitive, Coordinate, EllipsePrimitive, HyperbolaPrimitive, ParabolaPrimitive } from "@draw/dsl"
 
+import { conicResidualAt, type PlanarConic } from "./conic-line"
+
 function rotateAround(point: Coordinate, center: Coordinate, rotation: number): Coordinate {
   const cos = Math.cos(rotation)
   const sin = Math.sin(rotation)
@@ -225,4 +227,68 @@ export function sampleHyperbolaBranches(hyperbola: HyperbolaPrimitive, domain: [
     y: 2 * hyperbola.center.y - point.y
   }))
   return [first, second]
+}
+
+export function conicFoci(conic: PlanarConic): Coordinate[] {
+  if (conic.type === "circle") {
+    if (!Number.isFinite(conic.center.x) || !Number.isFinite(conic.center.y) || !(conic.radius > 0)) return []
+    return [{ ...conic.center }]
+  }
+  if (conic.type === "parabola") {
+    const p = conic.focalParameter
+    if (!Number.isFinite(conic.vertex.x) || !Number.isFinite(conic.vertex.y) || !(p > 0)) return []
+    const rotation = conic.rotation ?? 0
+    const localFocus: Coordinate = conic.axis === "x"
+      ? { x: conic.vertex.x + p / 2, y: conic.vertex.y }
+      : { x: conic.vertex.x, y: conic.vertex.y + p / 2 }
+    return [rotateAround(localFocus, conic.vertex, rotation)]
+  }
+  if (conic.type === "ellipse") {
+    const rx = conic.radiusX
+    const ry = conic.radiusY
+    if (!Number.isFinite(conic.center.x) || !Number.isFinite(conic.center.y) || !(rx > 0) || !(ry > 0)) return []
+    const c = Math.sqrt(Math.abs(rx * rx - ry * ry))
+    if (c <= 1e-12) return [{ ...conic.center }]
+    const rotation = conic.rotation ?? 0
+    const locals: [Coordinate, Coordinate] = rx >= ry
+      ? [{ x: conic.center.x - c, y: conic.center.y }, { x: conic.center.x + c, y: conic.center.y }]
+      : [{ x: conic.center.x, y: conic.center.y - c }, { x: conic.center.x, y: conic.center.y + c }]
+    return locals.map((point) => rotateAround(point, conic.center, rotation))
+  }
+  const rx = conic.radiusX
+  const ry = conic.radiusY
+  if (!Number.isFinite(conic.center.x) || !Number.isFinite(conic.center.y) || !(rx > 0) || !(ry > 0)) return []
+  const c = Math.hypot(rx, ry)
+  const rotation = conic.rotation ?? 0
+  const locals: [Coordinate, Coordinate] = conic.axis === "x"
+    ? [{ x: conic.center.x - c, y: conic.center.y }, { x: conic.center.x + c, y: conic.center.y }]
+    : [{ x: conic.center.x, y: conic.center.y - c }, { x: conic.center.x, y: conic.center.y + c }]
+  return locals.map((point) => rotateAround(point, conic.center, rotation))
+}
+
+export interface ConicTangentLine {
+  point: Coordinate
+  direction: Coordinate
+  line: { a: Coordinate; b: Coordinate }
+}
+
+export function tangentLineToConicAt(conic: PlanarConic, point: Coordinate, span = 10): ConicTangentLine | null {
+  if (!Number.isFinite(span) || !(span > 0)) return null
+  const evidence = conicResidualAt(conic, point)
+  if (evidence === null || evidence.residual > 1e-6) return null
+  const gradLen = Math.hypot(evidence.gradient.x, evidence.gradient.y)
+  if (!(gradLen > 1e-12)) return null
+  const rotation = "rotation" in conic && typeof conic.rotation === "number" ? conic.rotation : 0
+  const localDir = { x: -evidence.gradient.y / gradLen, y: evidence.gradient.x / gradLen }
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  const direction = { x: localDir.x * cos - localDir.y * sin, y: localDir.x * sin + localDir.y * cos }
+  return {
+    point: { ...point },
+    direction,
+    line: {
+      a: { x: point.x - direction.x * span, y: point.y - direction.y * span },
+      b: { x: point.x + direction.x * span, y: point.y + direction.y * span }
+    }
+  }
 }
