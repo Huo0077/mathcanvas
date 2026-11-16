@@ -1,21 +1,21 @@
 # 下一轮工作导航
 
-最后更新：2026-11-16（仅导航对齐）。
+最后更新：2026-11-16（G3 实核与第二独立审题后）。
 
-**实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
+**实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)和[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)：`R00–R11`（含 G1/G2）及整个 `B4`（`P0–P6`：`T01–T14`）已完成，见[干净依赖与审计证据](audit/2026-11-15-clean-dependencies-and-audit/README.md)、[P0 / T01契约与口径证据](audit/2026-11-16-p0-drawing-contracts/README.md)、[P1 / T02契约证据](audit/2026-11-16-p1-problem-contract/README.md)、[P2 / T03关系语义与角链证据](audit/2026-11-16-p2-relation-chains/README.md)、[P2 / T04符号圆锥曲线与AST证据](audit/2026-11-16-p2-symbolic-conic-ast/README.md)、[P3 / T05实体绑定与诊断证据](audit/2026-11-16-p3-entity-binding-diagnostics/README.md)、[P3 / T06构造DAG证据](audit/2026-11-16-p3-drawing-intent-dag/README.md)、[P5 / T11数值稳健性证据](audit/2026-11-16-p5-numeric-robustness/README.md)、[P4 / T07平面作图证据](audit/2026-11-16-p4-planar-drawing/README.md)、[P4 / T08函数作图证据](audit/2026-11-16-p4-function-drawing/README.md)、[P4 / T09立体作图证据](audit/2026-11-16-p4-solid-drawing/README.md)、[P4 / T10折叠谱系证据](audit/2026-11-16-p4-fold-lineage/README.md)、[P4 / T12有界修复证据](audit/2026-11-16-p4-bounded-repair/README.md)、[P4 / T13数学证书证据](audit/2026-11-16-p4-math-certificate/README.md)与[P4 / T14原子提交与保鲜证据](audit/2026-11-16-p4-atomic-commit-staleness/README.md)；RustSec因未装 `cargo-audit` 留为 `unknown`，`T01` 仍待第二位独立审阅者复核。
-2. 按用户指令于 **`T14` 完成后暂停**：下一阶段按 `implementation-task-ledger.json` DAG 从 **`B5`（`P7`：`T15 → T16`）**继续（实际渲染可见性与交互生命周期 Playwright 闭环）。
-3. 真实 provider 付费评测、安装与正式发布均仍未开启，等待显式预算批准后再执行。
-4. [R审查修复技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)、[T画图技术附录](superpowers/plans/2026-11-15-drawing-reliability-execution-handbook.md)及[P阶段验收合同](superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md)保留为技术参考，不把计划当成完成证据。
-5. 真实provider、费用与产品发布需另行批准；本轮不重复强推main。
+1. 先读[当前状态](current-status.md)、[G3实核基线与第二独立审题](audit/2026-11-16-g3-truth-baseline/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`R00–R11` 与 `T01–T14` 工作包已有提交，但冻结36题实测仅2 passed/10 partial/24 failed，G3-Math **尚未退出**。
+2. T01 第二独立 reviewer 已完成36/36逐题复核，结论为 `changes_required`：仅 GK-P08 作图数学合同可批准，其余35题存在未解决合同问题。当前区块是 **合同及评测语义整改**，不得把 suite/case 自签为 `approved`。
+3. 合同复核关闭后依次执行：生产完整证书与统一评测入口 → 平面18题 → 立体/折叠18题及 G3-Math → `B5`（`T15 → T16`）真实渲染与交互生命周期 → G3 总验收。
+4. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
+5. 真实 provider 付费评测、P8、安装包/冷机与正式发布不在本 goal 内；实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。
 
 ## 历史和证据边界
 
 [版本决定](audit/2026-11-15-main-restart/README.md)固定59ea3613代码基线，be033b71为已完成的重启提交；旧线47提交已舍弃且有备份。正文带历史标记的N/V/W/Task计划只用于追溯，不计本轮已完成。
 
-[项目审查报告](audit/2026-11-15-project-review/README.md)、[36题原始证据](audit/2026-11-15-drawing-baseline/README.md)和[原件归档](audit/2026-11-15-pre-reset/README.md)保持原样。报告的E2E/基线读数、只读探针和本次文档测试不是同一类证据；以当前状态中的分层说明为准。
+[项目审查报告](audit/2026-11-15-project-review/README.md)、[36题原始证据](audit/2026-11-15-drawing-baseline/README.md)和[原件归档](audit/2026-11-15-pre-reset/README.md)保持原样。历史E2E/基线读数、只读探针、工作包GREEN和本次G3实核不是同一类证据；以当前状态中的分层说明为准。
 
-[本次对齐清单](audit/2026-11-15-progress-alignment/README.md)列出活动文件与历史导航处理范围。
+[本次对齐清单](audit/2026-11-15-progress-alignment/README.md)列出活动文件与历史导航处理范围。RustSec因未装 `cargo-audit` 留为 `unknown`；本次安装出现的新公告只作环境信号，未授权在本区块升级依赖。

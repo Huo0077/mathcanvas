@@ -6,7 +6,7 @@
 
 日期：2026-11-15；基线：59ea36133c47971f4252e71f7a0f5ba003dd1028；产品版号：v4.3.0。
 
-**设计状态：待批准；本文件不代表功能已实施。** 实时进度只在[当前状态](../../current-status.md)，执行步骤见[实施计划](../plans/2026-11-15-drawing-reliability-repair-plan.md)，逐题依据见[基线审计](../../audit/2026-11-15-drawing-baseline/README.md)。本轮仅重置文档、保存证据和制定方案；不修改画图功能、不新增付费模型调用、不推送。
+**设计状态：作为G3实施与验收依据沿用；不代表功能或验收已完成。** 实时进度只在[当前状态](../../current-status.md)，执行步骤见[实施主计划](../plans/2026-11-15-main-restart-master-plan.md)与[G3续作计划](../plans/2026-11-16-g3-completion-plan.md)，逐题历史依据见[基线审计](../../audit/2026-11-15-drawing-baseline/README.md)，当前实核与第二独立审题见[G3真相基线](../../audit/2026-11-16-g3-truth-baseline/README.md)。不新增付费模型调用，不发布。
 
 **实施细化补充**：[18个工作包实施手册](../plans/2026-11-15-drawing-reliability-execution-handbook.md)增加具体代码定位、算法、最小反例、36题任务映射、数值/统计门槛与官方参考。新增探针只用于诊断，未实施功能。
 

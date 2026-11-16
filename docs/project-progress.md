@@ -8,7 +8,15 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
-## 2026-11-16 —— P4 / T14 最终候选绑定、过期检测、仅相机不变性与原子一次确认（B4 收口）
+## 2026-11-16 —— G3 实核、T01 第二独立审题与整改重启
+
+- **用户 goal**：按最新主计划完成 G3，每个区块验证、对齐活动文档并推送 GitHub；续作计划见[G3完成计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。
+- **真实基线**：在 `8c26544c` 重跑冻结36题，结果为 **2 passed / 10 partial / 24 failed / 0 incomplete**，对象/义务覆盖约28.0%/25.7%，不是此前工作包提交记录可替代的 G3 退出证据。
+- **第二独立 reviewer**：36/36逐题复核，结论 `changes_required`；仅 GK-P08 作图数学合同可批准，其余35题须整改。发现 GK-S01 局部条件未入义务、GK-S05/JT-P06 不可行点伪造、JT-S02 目标当题设、GK-P04 值域错误、JT-P04 伪解及立体拓扑/稳定实体绑定等系统性问题。
+- **处置**：T01/P0 保持未退出；先提交否定性审计 checkpoint，再以 RED 反例整改合同和评测语义，之后进入生产证书接线、平面/立体数学闭环、T15/T16。全量工程基线复跑为540文件/5705通过+1todo；不进入P8、付费provider或发布。
+- **证据**：[G3实核基线与第二独立审题](audit/2026-11-16-g3-truth-baseline/README.md)。
+
+## 2026-11-16 —— P4 / T14 最终候选绑定、过期检测、仅相机不变性与原子一次确认（B4 工作包收口记录）
 
 - **RED 复现**：新建 `drawingCertificateStaleness.test.ts` 并扩充 `committerAdapter.test.ts`，实现前 RED `2 failed | 4 failed | 44 passed (48)`。
 - **候选保鲜、仅相机分离与防双击落盘**：`drawingCertificate.ts` 落地 `verifyCertificateFreshness`；`renderEvidence.ts` 区分 `camera_changed`（`mathStale: false, visualStale: true, requiresReplan: false`）；`committerAdapter.ts`、`agentRuntime.ts`、`agentRunner.ts` 与 `draftStore.ts` 落地原子一次确认锁（拦截二次点击写入）与 `promptHash` 过期检查。
