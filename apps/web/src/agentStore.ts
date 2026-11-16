@@ -93,6 +93,8 @@ export interface AgentDraftView {
   assumptions?: string[]
   /** 只含题设文字和结果；候选文档仍留在宿主。 */
   diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
+  drawingCertificate?: import("@draw/agent-core").DrawingCertificateResult
+  certificateBinding?: import("@draw/agent-core").CertificateBinding
   /**
    * **题面改写（原件 → 我这样读）**（2026-10-10 第二件）。
    *

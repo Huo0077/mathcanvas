@@ -22,9 +22,11 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）及 `T15` 已完成，且 `T01 / P0` 第四轮（终审 R4）36 题合同复核已通过并更新为 `"approved"`，但 **G3-Math 尚未退出**（当前 36 题离线基线 **0 passed / 11 partial / 25 failed / 0 incomplete**，正继续推进 Task 2 生产证书接线、Task 3–4 平面/立体 36 题及 `T16` 生命周期闭环）；产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）、`T15`、`T01` 终审（R4）及 Task 2 生产完整数学证书接线已完成，但 **G3-Math 尚未退出**（正推进 Task 3–4 平面/立体 36 题确定性求解/构造与 `T16` 生命周期闭环）；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
+
+- **Task 2 生产完整 `DrawingCertificateResult` 接线与统一评测接入已落地**：`drawingCertificate` 与 `certificateBinding` 已贯通 `DraftStore.stage` → `CommitterAdapter` → `HostBridge`（`preview`/`requestConsent`/`commit` 双向核验 `verifyCertificateFreshness`）→ `AgentRuntime`/`AgentRunner`/`agentStore` → `ConfirmationPanel`（阻断 `blocked`/`partial`/`unverified` 与关闭开关时静默通过）及 `reliabilityEval.eval.test.ts`。定向 10 文件 183 项、`typecheck`、`lint`（0 errors）、Web 构建、离线/36 题 `eval:reliability`、Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`）与全量 Vitest **541 文件 / 5747 passed + 1 todo** 全部通过。证据：[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)。下一步进入 Task 3（18 题平面几何与函数确定性构造/核验）。
 
 - **T01 / P0 终审（R4）已通过，36 题契约 suite 获 `approved`**：针对 R3 五项阻断（`GK-P06` AB 弦宿主与三分支、`JT-P02` `y_P≠0` 与互异交点、`JT-S04` 闭合六面体与 `±90°` 镜像、`GK-S09/JT-S01/JT-S09` 命名立体防匿名替身、`points3Of/points2Of` 重复归一化标签/别名/错维点拦截）完成 RED→GREEN 修复；只读独立 reviewer 复核 `PASS`，`GK-S02/GK-S03/JT-S06/JT-S07` 保持 `text_with_figure_reference` 诚实未知边界。`drawingContracts.test.ts` 45/45、全量 Vitest **540 文件 / 5743 passed + 1 todo**、`typecheck` 与 `lint`（0 errors）通过；36 题离线 `eval:reliability` 基线为 **0 passed / 11 partial / 25 failed / 0 incomplete**（对象覆盖 **23.5%**、义务覆盖 **18.9%**）。证据：[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)。下一步进入 Task 2（生产完整 `DrawingCertificateResult` 接线与统一评测入口）。
 

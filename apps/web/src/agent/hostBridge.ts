@@ -4,8 +4,12 @@ import {
   countDraftObjects,
   diagnoseLayout,
   evidenceIdentityProblem,
+  NUMERIC_POLICY_VERSION,
   renderEvidenceStaleness,
+  verifyCertificateFreshness,
+  type CertificateBinding,
   type DraftObjectCounts,
+  type DrawingCertificateResult,
   type LayoutDiagnostic,
   type RenderEvidence,
   type RenderEvidenceMode
@@ -63,6 +67,7 @@ export interface ConsentRecord {
     documentHash: string
     mode: RenderEvidenceMode
   }
+  certificateBinding?: CertificateBinding
 }
 
 export type PreviewArtifact = {
@@ -72,6 +77,8 @@ export type PreviewArtifact = {
   candidate: GeometryDocument
   stageCount: number
   diagramVerification?: import("@draw/agent-core").DiagramVerificationReport
+  drawingCertificate?: DrawingCertificateResult
+  certificateBinding?: CertificateBinding
   /** **题面改写（原件 → 我这样读）**：改写要看得见，所以它随预览一起回带给界面。 */
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /**
@@ -243,6 +250,8 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           candidate: artifact.candidate,
           stageCount: artifact.stageCount,
           ...(artifact.diagramVerification === undefined ? {} : { diagramVerification: artifact.diagramVerification }),
+          ...(artifact.drawingCertificate === undefined ? {} : { drawingCertificate: artifact.drawingCertificate }),
+          ...(artifact.certificateBinding === undefined ? {} : { certificateBinding: artifact.certificateBinding }),
           ...(artifact.promptNormalisation === undefined ? {} : { promptNormalisation: artifact.promptNormalisation }),
           ...(artifact.proofAttempt === undefined ? {} : { proofAttempt: artifact.proofAttempt }),
           counts: countDraftObjects(artifact.candidate),
@@ -265,6 +274,29 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
       if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
+      if (
+        artifact.drawingCertificate !== undefined &&
+        artifact.drawingCertificate.gate.status !== "not_applicable" &&
+        (artifact.drawingCertificate.certificateStatus !== "passed" || artifact.drawingCertificate.gate.status !== "passed")
+      ) {
+        return { ok: false, reason: "unverified_diagram", detail: artifact.drawingCertificate.summary }
+      }
+      if (artifact.certificateBinding !== undefined) {
+        const currentDocHash = canonicalContentHash(artifact.candidate)
+        const expectedBase = drafts.baseHandleOf(draftId) ?? current.handle
+        const freshness = verifyCertificateFreshness(artifact.certificateBinding, {
+          runId: artifact.certificateBinding.runId,
+          draftId: artifact.draftId,
+          draftVersion: artifact.draftVersion,
+          documentHash: currentDocHash,
+          ...(artifact.certificateBinding.promptHash === undefined ? {} : { promptHash: artifact.certificateBinding.promptHash }),
+          ...(artifact.certificateBinding.scopeId === undefined ? {} : { scopeId: artifact.certificateBinding.scopeId }),
+          ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
+          baseRevision: expectedBase.generation,
+          policyVersion: NUMERIC_POLICY_VERSION
+        })
+        if (!freshness.fresh) return { ok: false, reason: "unverified_diagram", detail: freshness.detail }
+      }
       const renderVerification = artifact.stageCount === 0
         ? { status: "passed", diagnostics: [] } satisfies CandidateRenderVerification
         : verifyCandidateRender(dependencies, {
@@ -310,7 +342,8 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
           ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
           expiresAt: now() + ttl,
           nonce,
-          ...(renderVerification.binding === undefined ? {} : { renderEvidenceBinding: renderVerification.binding })
+          ...(renderVerification.binding === undefined ? {} : { renderEvidenceBinding: renderVerification.binding }),
+          ...(artifact.certificateBinding === undefined ? {} : { certificateBinding: artifact.certificateBinding })
         }
       }
     },
@@ -342,6 +375,28 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       }
 
       if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
+      if (
+        artifact.drawingCertificate !== undefined &&
+        artifact.drawingCertificate.gate.status !== "not_applicable" &&
+        (artifact.drawingCertificate.certificateStatus !== "passed" || artifact.drawingCertificate.gate.status !== "passed")
+      ) {
+        return { ok: false, reason: "unverified_diagram", detail: artifact.drawingCertificate.summary }
+      }
+      if (consent.certificateBinding !== undefined) {
+        const expectedBase = drafts.baseHandleOf(draftId) ?? dependencies.live()?.handle
+        const freshness = verifyCertificateFreshness(consent.certificateBinding, {
+          runId: consent.certificateBinding.runId,
+          draftId: artifact.draftId,
+          draftVersion: artifact.draftVersion,
+          documentHash: canonicalContentHash(artifact.candidate),
+          ...(artifact.certificateBinding?.promptHash === undefined ? {} : { promptHash: artifact.certificateBinding.promptHash }),
+          ...(artifact.certificateBinding?.scopeId === undefined ? {} : { scopeId: artifact.certificateBinding.scopeId }),
+          ...(liveConversation === null ? {} : { conversationId: liveConversation }),
+          ...(expectedBase === undefined ? {} : { baseRevision: expectedBase.generation }),
+          policyVersion: NUMERIC_POLICY_VERSION
+        })
+        if (!freshness.fresh) return { ok: false, reason: "unverified_diagram", detail: freshness.detail }
+      }
 
       // 仍要走 Compare-and-Swap：授权是"用户同意过"，不等于"文档没被动过"。
       if (artifact.stageCount > 0) {

@@ -84,12 +84,22 @@ export interface ConfirmationPanelProps {
 export function ConfirmationPanel({ draft, assumptions = [], approximationNotes = [], omittedExports = [], targetDocumentId, sourceDocumentIds = [], proofBackends, proofReviewedCount, onConfirm, onDiscard }: ConfirmationPanelProps) {
   const deltas = countDeltas(draft)
   const removing = removedObjectCount(draft)
+  const certificateBlocked = draft.drawingCertificate !== undefined
+    && draft.drawingCertificate.gate.status !== "not_applicable"
+    && (draft.drawingCertificate.certificateStatus !== "passed" || draft.drawingCertificate.gate.status !== "passed")
 
   return <section className="agent-confirmation" role="region" aria-label="确认改动">
     <header className="agent-confirmation-head">
       <h3>确认之后会发生什么</h3>
       <p className="agent-confirmation-summary">{summarizeDraftScale(draft.counts, draft.baseCounts)}</p>
     </header>
+    {draft.drawingCertificate && draft.drawingCertificate.gate.status !== "not_applicable" && <p
+      className="agent-certificate-status"
+      data-certificate-status={draft.drawingCertificate.certificateStatus}
+      data-certificate-policy={draft.drawingCertificate.numericPolicyVersion}
+    >
+      数学证书：{draft.drawingCertificate.summary}
+    </p>}
 
     {/* 目标与来源：平台有两份文档，不说清改的是哪一份，用户没法核对。 */}
     {(targetDocumentId || sourceDocumentIds.length > 0) && <dl className="agent-confirmation-targets">
@@ -266,7 +276,7 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
     </p>
 
     <div className="agent-confirmation-actions">
-      {onConfirm && (draft.diagramVerification === undefined || draft.diagramVerification.status === "passed") && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
+      {onConfirm && !certificateBlocked && (draft.diagramVerification === undefined || draft.diagramVerification.status === "passed") && <button type="button" className="agent-draft-confirm" onClick={onConfirm}>确认并提交</button>}
       {onDiscard && <button type="button" className="agent-draft-discard" onClick={onDiscard}>丢弃草稿</button>}
     </div>
   </section>

@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— Task 2 生产完整数学证书 `DrawingCertificateResult` 全链贯通与统一评测接入
+
+- **完整证书与多维保鲜落盘**：`packages/agent-core/src/verification/drawingCertificate.ts` 导出 `NUMERIC_POLICY_VERSION` 并以 `normalizeGeometryPrompt` + `parseObligationWithLegacy` + 实际 `plan`/`baseDocument` 运行 `verifyDiagramObligations`（新增 `staleEarlierObligations`）；`apps/web/src/agent/draftStore.ts` 在 `stage` 产出生效 `drawingCertificate` 与 `certificateBinding`（关闭 `enableCompleteCertificate: false` 显式标 `"unverified"` 并阻止回退）。
+- **门禁与 UI 联防**：`packages/agent-core/src/committerAdapter.ts`、`apps/web/src/agent/hostBridge.ts`（`preview` / `requestConsent` / `commit` 校验 `drawingCertificate` 与 `verifyCertificateFreshness`）、`agentRuntime.ts`、`agentRunner.ts`、`agentStore.ts` 与 `ConfirmationPanel.tsx`（隐藏未通过证书草稿的提交按钮并显示摘要）及 `reliabilityEval.eval.test.ts` 全线打通。
+- **验证**：新建 `drawingCertificatePipeline.test.ts`（RED `2 failed` → 定向 10 文件 183 passed）、`typecheck`、`lint`（0 errors）、Web 构建、`eval:reliability -- --offline`（冒烟 + 36 题）、Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`）与全量 Vitest **541 文件 / 5747 passed | 1 todo** 全部通过；证据见 [Task 2 证书接线证据](docs/audit/2026-11-17-g3-certificate-wiring/README.md)。
+
 ## 2026-11-17 —— P0 / T01 终审（R4）收口与 R3 五项合同阻断整改
 
 - **合同及判据安全加固**：`scripts/reliability-eval/drawingContracts.ts` 与 `test-fixtures/reliability/drawing-contracts-36.json` 完成 R3 五项阻断整改：`GK-P06` 全分支绑定 `A,B,M` 至弦 `AB` 及 `touchPointLabel: "M"`；`JT-P02` 新增 `noncollinear-2d` 与 `distinct-2d` 强制 `y_P ≠ 0` 且 `M≠A₁, N≠A₂, M≠N`；`JT-S04` 改为闭合 6 面六面体 `ABCDEF` 并全链开启 `±90°` 对称镜像；`GK-S09 / JT-S01 / JT-S09` 通过 `resolveNamedPolyhedronVertexSets` 严格绑定命名立体与唯一球体、拒绝匿名替身立体；`inspectPointAndPrimitiveIntegrity` 全面拦截归一化重复点标/别名与 2D/3D 类型错配，`evaluateDrawingContractStates` 隔离跨状态实体检查。

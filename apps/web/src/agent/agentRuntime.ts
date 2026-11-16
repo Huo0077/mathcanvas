@@ -95,6 +95,7 @@ export interface AgentRuntimeDependencies {
    * 一个只在生产路径上生效、测试里永远读不到的开关，与没有开关无法区分。
    */
   agentNextPhaseFlags?: AgentNextPhaseFlags
+  enableCompleteCertificate?: boolean
   /**
    * **这一轮钉住的那条会话**（Fix round 1 / C2；规格 §5.4）。
    *
@@ -383,7 +384,10 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
      * 无法区分（正是 R6/R11 要消灭的形态）。两个开关都是 `=== true` 才开，全 false 时
      * 与改动之前逐字相同。
      */
-    nextPhaseFlags: { obligationIR: nextPhase.obligationIR, witnessSearch: nextPhase.witnessSearch, proofExport: nextPhase.proofExport }
+    nextPhaseFlags: { obligationIR: nextPhase.obligationIR, witnessSearch: nextPhase.witnessSearch, proofExport: nextPhase.proofExport },
+    ...(dependencies.enableCompleteCertificate === undefined ? {} : { enableCompleteCertificate: dependencies.enableCompleteCertificate }),
+    runId: dependencies.runId,
+    ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId })
   })
 
   /**

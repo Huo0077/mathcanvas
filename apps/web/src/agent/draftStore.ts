@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -54,6 +54,8 @@ export interface DraftRecord {
   /** 编译期补全出来的假设（跨 `stage` 累积，随预览回带）。 */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  drawingCertificate?: DrawingCertificateResult
+  certificateBinding?: CertificateBinding
   /**
    * **题面改写（原件 → 我这样读）**（2026-10-10 第二件）。
    *
@@ -104,6 +106,8 @@ export interface DraftPreview {
    */
   completionAssumptions: StructuredAssumption[]
   diagramVerification?: DiagramVerificationReport
+  drawingCertificate?: DrawingCertificateResult
+  certificateBinding?: CertificateBinding
   /** 同 `DraftRecord`：改写要看得见，所以随预览一起回带。 */
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /** 同 `DraftRecord`：预览是给界面看的，所以那一次证明尝试也跟着走。 */
@@ -196,7 +200,14 @@ export interface DraftStore {
      * 而编译器那边已经在用它了。两处必须读**同一份题面** —— 否则编译器说"读懂了"、草稿层说
      * "没读懂"，两句话打架，门禁反而不放行（与上面 `relations` 那条注释同源）。
      */
-    normalisations?: PromptNormalisations
+    normalisations?: PromptNormalisations,
+    options?: {
+      enableCompleteCertificate?: boolean
+      runId?: string
+      conversationId?: string
+      requiredEntityLabels?: readonly string[]
+      selectedScopeId?: string
+    }
   ): Promise<StageResult>
   /** 基础文档或题文变了（手工编辑、撤销、切工作区、改题）→ 草稿过期，不能再提交。 */
   assertFresh(draftId: string, liveHandle: DocumentHandle, options?: { promptHash?: string }): FreshnessResult
@@ -217,6 +228,16 @@ let draftCounter = 0
 function cloneDocument(document: GeometryDocument): GeometryDocument {
   // 结构化克隆：草稿与真文档之间不能共享任何可变对象。
   return structuredClone(document) as GeometryDocument
+}
+
+function hasNonFiniteValue(value: unknown, seen = new Set<unknown>()): boolean {
+  if (typeof value === "number") return !Number.isFinite(value)
+  if (typeof value !== "object" || value === null || seen.has(value)) return false
+  seen.add(value)
+  if (Array.isArray(value)) return value.some((item) => hasNonFiniteValue(item, seen))
+  return Object.entries(value as Record<string, unknown>).some(([key, entry]) =>
+    key !== "updatedAt" && key !== "revision" && hasNonFiniteValue(entry, seen)
+  )
 }
 
 /**
@@ -413,6 +434,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     operations: [...record.compiledOperations],
     completionAssumptions: [...record.completionAssumptions],
     ...(record.diagramVerification === undefined ? {} : { diagramVerification: structuredClone(record.diagramVerification) }),
+    ...(record.drawingCertificate === undefined ? {} : { drawingCertificate: structuredClone(record.drawingCertificate) }),
+    ...(record.certificateBinding === undefined ? {} : { certificateBinding: structuredClone(record.certificateBinding) }),
     ...(record.promptNormalisation === undefined ? {} : { promptNormalisation: structuredClone(record.promptNormalisation) }),
     ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(proofAttemptFor(record) ?? record.proofAttempt) })
   })
@@ -436,7 +459,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       return { ...record, candidate: cloneDocument(record.candidate) }
     },
 
-    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport, normalisations) {
+    async stage(draftId, actions, expectedDraftVersion, userMessage, relations, obligationIR, witnessSearch, proofExport, normalisations, stageOptions) {
       const source = drafts.get(draftId)
       if (!source) return { ok: false, reason: "unknown_draft", detail: `no draft ${draftId}` }
       if (source.draftVersion !== expectedDraftVersion) {
@@ -584,6 +607,68 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         // 证据范围与全称状态**只从 `proofScopeOf` 来**：这条路拼出来的报告与核验器那份
         // 必须是同一个口径，否则用户在两条路径上看到两种范围说法。
         ...proofScopeOf(record.candidate.parameters)
+      }
+      const nextDocumentHash = canonicalContentHash(compiled.draftDocument)
+      if (userMessage !== undefined || stageOptions?.enableCompleteCertificate === false || stageOptions?.requiredEntityLabels !== undefined) {
+        const sourceHash = record.rawPromptHash ?? canonicalContentHash({ prompt: userMessage ?? "" })
+        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined
+        if (stageOptions?.enableCompleteCertificate === false) {
+          record.drawingCertificate = certifyDrawingAgainstContract({
+            prompt: effectivePrompt ?? "",
+            document: compiled.draftDocument,
+            candidateHash: nextDocumentHash,
+            sourceHash,
+            enableCompleteCertificate: false
+          })
+        } else if (earlier !== undefined) {
+          record.drawingCertificate = certifyDrawingAgainstContract({
+            prompt: effectivePrompt ?? "",
+            document: compiled.draftDocument,
+            candidateHash: nextDocumentHash,
+            sourceHash,
+            staleEarlierObligations: true
+          })
+        } else if (hasRelationalContract) {
+          record.drawingCertificate = certifyDrawingAgainstContract({
+            prompt: effectivePrompt ?? "",
+            document: compiled.draftDocument,
+            baseDocument: record.candidate,
+            plan: materialised,
+            candidateHash: nextDocumentHash,
+            sourceHash,
+            obligationIR: obligationIR === true,
+            witnessSearch: witnessSearch === true,
+            ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId }),
+            ...(stageOptions?.requiredEntityLabels === undefined ? {} : { requiredEntityLabels: stageOptions.requiredEntityLabels })
+          })
+        } else {
+          const baseCert = certifyDrawingAgainstContract({
+            prompt: "",
+            document: compiled.draftDocument,
+            candidateHash: nextDocumentHash,
+            sourceHash
+          })
+          const hasNonFinite = hasNonFiniteValue(compiled.draftDocument.primitives)
+          record.drawingCertificate = hasNonFinite
+            ? {
+                ...baseCert,
+                certificateStatus: "blocked",
+                gate: { status: "blocked", blockers: ["non_finite_geometry"], binding: baseCert.gate.binding },
+                summary: "数学证书未通过（blocked）：non_finite_geometry"
+              }
+            : baseCert
+        }
+        record.certificateBinding = {
+          runId: stageOptions?.runId ?? record.draftId,
+          draftId: record.draftId,
+          draftVersion: record.draftVersion + 1,
+          documentHash: nextDocumentHash,
+          ...(record.promptHash === undefined ? {} : { promptHash: record.promptHash }),
+          ...(stageOptions?.selectedScopeId === undefined ? {} : { scopeId: stageOptions.selectedScopeId }),
+          ...(stageOptions?.conversationId === undefined ? {} : { conversationId: stageOptions.conversationId }),
+          baseRevision: source.baseHandle?.generation ?? record.candidate.revision,
+          policyVersion: NUMERIC_POLICY_VERSION
+        }
       }
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]

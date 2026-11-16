@@ -314,4 +314,21 @@ describe("题设核验的失败文案（裁决 A：面板侧改）", () => {
 
     expect(container.textContent).toContain("已按候选图坐标核验。")
   })
+
+  it("hides confirm button and displays certificate blocker when drawingCertificate is unverified or blocked", () => {
+    const blockedDraft = draft({
+      diagramVerification: { status: "passed", sampleValues: [], checks: [{ kind: "parallel", sourceText: "BC ∥ AD", status: "passed", reason: "一致" }], ...proofScopeOf({}) },
+      drawingCertificate: {
+        certificateStatus: "unverified",
+        gate: { status: "blocked", blockers: ["certificate_disabled"], binding: { candidateHash: "h", sourceHash: "s", policyVersion: "num-policy-v1" } },
+        report: null,
+        numericPolicyVersion: "num-policy-v1",
+        ignoredUntrustedSelfReport: true,
+        summary: "完整数学证书开关已关闭：未完整核验（不回退为旧 passed）。"
+      }
+    })
+    const { container } = render(<ConfirmationPanel draft={blockedDraft} onConfirm={() => undefined} onDiscard={() => undefined} />)
+    expect(container.querySelector('[data-certificate-status="unverified"]')?.textContent).toContain("未完整核验")
+    expect(screen.queryByRole("button", { name: "确认并提交" })).toBeNull()
+  })
 })

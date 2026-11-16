@@ -8,6 +8,11 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— Task 2 生产完整数学证书接线与统一评测接入
+
+- **RED → GREEN 全链贯通**：新建 `drawingCertificatePipeline.test.ts`（先 RED `2 failed`）并在 `drawingCertificate.ts`、`draftStore.ts`、`committerAdapter.ts`、`hostBridge.ts`、`agentRuntime.ts`、`agentRunner.ts`、`agentStore.ts`、`ConfirmationPanel.tsx` 与 `reliabilityEval.eval.test.ts` 全线接入 `drawingCertificate` 与 `certificateBinding`，阻断部分核验、二阶段过期、会话切换与关闭开关回退，并补充 `ConfirmationPanel.test.tsx` 提交按钮禁用实证。
+- **验证**：定向 10 文件 183 项、`typecheck`、`lint`（0 errors）、Web 构建、离线与 36 题 `eval:reliability`、Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`）与全量 Vitest **541 文件 / 5747 passed | 1 todo** 全部通过；下一步进入 Task 3 平面 18 题闭环。证据见[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)。
+
 ## 2026-11-17 —— P0 / T01 R4 终审签收与 R3 五项合同阻断整改（G3-Math 基线锁定）
 
 - **RED → GREEN 整改**：围绕 R3 五项阻断在 `drawingContracts.test.ts` 新增反例测试后，完成 `GK-P06` AB 弦全分支绑定与 `touchPointLabel: "M"`、`JT-P02` `noncollinear-2d`（`y_P ≠ 0`）与互异交点、`JT-S04` 6 面闭合六面体与 `±90°` 对称镜像、`GK-S09 / JT-S01 / JT-S09` `resolveNamedPolyhedronVertexSets` 命名立体唯一绑定（拒绝匿名替身）以及 `inspectPointAndPrimitiveIntegrity` 全局重复归一化标签/别名/错维点拦截与跨状态谱系隔离。

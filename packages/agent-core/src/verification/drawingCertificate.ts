@@ -1,8 +1,10 @@
 import type { GeometryDocument, PrimitiveSpec } from "@draw/dsl"
 import { conicResidualAt, NUMERIC_POLICY_VERSION } from "@draw/geometry-kernel"
+export { NUMERIC_POLICY_VERSION }
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
-import { parseDiagramObligations } from "../diagramObligations"
 import { verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
+import { normalizeGeometryPrompt } from "../latexNormalisation"
+import { parseObligationWithLegacy } from "../obligationIR"
 
 export type ObligationGateStatus = "passed" | "failed" | "unknown" | "approximate" | "not_supported"
 
@@ -177,6 +179,13 @@ export function certifyDrawingAgainstContract(input: {
   document: GeometryDocument
   candidateHash: string
   sourceHash: string
+  baseDocument?: GeometryDocument
+  plan?: PlanEnvelope
+  entityBindings?: Readonly<Record<string, string>>
+  obligationIR?: boolean
+  witnessSearch?: boolean
+  selectedScopeId?: string
+  staleEarlierObligations?: boolean
   requiredEntityLabels?: readonly string[]
   expectedFunctions?: Readonly<Record<string, string>>
   untrustedSelfReportedChecks?: readonly unknown[]
@@ -199,6 +208,17 @@ export function certifyDrawingAgainstContract(input: {
     }
   }
 
+  if (input.staleEarlierObligations === true) {
+    return {
+      certificateStatus: "unverified",
+      gate: { status: "blocked", blockers: ["stale_earlier_obligations"], binding },
+      report: null,
+      numericPolicyVersion: NUMERIC_POLICY_VERSION,
+      ignoredUntrustedSelfReport: true,
+      summary: "草稿已追加/变更操作，早期题设需在新候选图上重新完整核验（不沿用旧通过状态）。"
+    }
+  }
+
   const isDrawing = isDrawingRequestContract(input.prompt)
   if (!isDrawing) {
     return {
@@ -217,7 +237,10 @@ export function certifyDrawingAgainstContract(input: {
     (label) => !presentLabels.has(label.trim()) && !presentLabels.has(normalizedLabel(label))
   )
 
-  const parsedObligations = parseDiagramObligations(input.prompt)
+  const parserPrompt = normalizeGeometryPrompt(input.prompt)
+  const parsedObligations = parseObligationWithLegacy(parserPrompt, {
+    spatialPointConditions: input.witnessSearch === true
+  }).legacy
   const neutralPlan: PlanEnvelope = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -225,13 +248,18 @@ export function certifyDrawingAgainstContract(input: {
     factIds: [],
     actions: []
   }
-  const entityBindings: Record<string, string> = {}
+  const entityBindings: Record<string, string> = { ...(input.entityBindings ?? {}) }
   for (const p of input.document.primitives) {
     if (typeof p.label === "string" && p.label.trim().length > 0 && !(p.label.trim() in entityBindings)) {
       entityBindings[p.label.trim()] = p.id
     }
   }
-  const report = verifyDiagramObligations(parsedObligations, neutralPlan, input.document, undefined, { entityBindings })
+  const report = verifyDiagramObligations(parsedObligations, input.plan ?? neutralPlan, input.document, input.baseDocument, {
+    obligationIR: input.obligationIR === true,
+    prompt: parserPrompt,
+    entityBindings,
+    ...(input.selectedScopeId === undefined ? {} : { activeScopeId: input.selectedScopeId })
+  })
   const evidence: ObligationEvidence[] = []
   const requiredIds: string[] = []
   const checkedIds: string[] = []
@@ -247,9 +275,7 @@ export function certifyDrawingAgainstContract(input: {
       checkedIds.push(id)
       evidence.push({ obligationId: id, status: "failed", candidateHash: input.candidateHash, detail: check.reason })
     } else {
-      if (check.kind === "unparsed") {
-        unresolvedSource.push(check.sourceText)
-      }
+      unresolvedSource.push(check.sourceText)
       checkedIds.push(id)
       evidence.push({ obligationId: id, status: "unknown", candidateHash: input.candidateHash, detail: check.reason })
     }

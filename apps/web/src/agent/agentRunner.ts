@@ -863,6 +863,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
           counts: preview.ok ? preview.artifact.counts : undefined,
           baseCounts: preview.ok ? preview.artifact.baseCounts : undefined,
           diagramVerification: preview.ok ? preview.artifact.diagramVerification : undefined,
+          ...(preview.ok && preview.artifact.drawingCertificate !== undefined ? { drawingCertificate: preview.artifact.drawingCertificate } : {}),
+          ...(preview.ok && preview.artifact.certificateBinding !== undefined ? { certificateBinding: preview.artifact.certificateBinding } : {}),
           promptNormalisation: preview.ok ? preview.artifact.promptNormalisation : undefined,
           // **形式证明那一次尝试**（§3-D）：关着时**连这个键都不写**（不是"值是 undefined"）——
           // 与草稿记录里那条口径一致，免得"默认路径逐字不变"在视图这一层被一个空键破坏。

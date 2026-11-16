@@ -3,6 +3,7 @@ import { createDocumentHandle, type DocumentHandle } from "@draw/scene-graph"
 import type { CommitOutcome, CommitRequest, CommitterPort, ConsentToken } from "./coordinatorPorts"
 import type { PlanDiagnostic, PlanRelations, PromptNormalisations, RepairRequest, StructuredAssumption, VerificationReport } from "./contracts"
 import type { DiagramVerificationReport } from "./diagramVerification"
+import type { CertificateBinding, DrawingCertificateResult } from "./verification/drawingCertificate"
 import { runAcceptance, type AcceptanceDocument } from "./verification/taskAcceptance"
 
 /**
@@ -35,22 +36,16 @@ export interface DraftStoreLike {
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean, proofExport?: boolean, normalisations?: PromptNormalisations): Promise<
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean, proofExport?: boolean, normalisations?: PromptNormalisations, options?: { enableCompleteCertificate?: boolean; runId?: string; conversationId?: string }): Promise<
     | {
         ok: true
         preview: {
           draftVersion: number
           previewHash: string
-          /**
-           * **候选文档**。适配器只把它交给验收判定（`runAcceptance`），
-           * **不往协调器传** —— 报告才是回程载荷（见 `CommitterPort.stage` 的 `verification`）。
-           *
-           * 类型是 `unknown` 而不是 `GeometryDocument`：agent-core 不该为了这一步
-           * 依赖 DSL 的图元形状，而验收判定只读它需要的字段（`primitives` 上的 id / type /
-           * label / 坐标），读不出来就是 `unknown` 而不是猜。
-           */
           candidate?: unknown
           diagramVerification?: DiagramVerificationReport
+          drawingCertificate?: DrawingCertificateResult
+          certificateBinding?: CertificateBinding
         }
       }
     | {
@@ -101,6 +96,9 @@ export interface CommitterAdapterDependencies {
    * 而这一层真正要的也只是"把开关原样传下去"。可选；不给 = 都不传 = 全关。
    */
   nextPhaseFlags?: { obligationIR?: boolean; witnessSearch?: boolean; proofExport?: boolean }
+  enableCompleteCertificate?: boolean
+  runId?: string
+  conversationId?: string
 }
 
 export interface CommitterAdapter extends CommitterPort {
@@ -183,6 +181,13 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
        * **那句话是错的**：草稿层没有自己的开关，它收的就是调用方传进来的这个布尔。
        * 于是"设置里打开形式证明导出"在主路上什么也不会发生（2026-10-10 §3-D 查实）。
        */
+      const stageOptions = (dependencies.enableCompleteCertificate === undefined && dependencies.runId === undefined && dependencies.conversationId === undefined)
+        ? undefined
+        : {
+            ...(dependencies.enableCompleteCertificate === undefined ? {} : { enableCompleteCertificate: dependencies.enableCompleteCertificate }),
+            ...(dependencies.runId === undefined ? {} : { runId: dependencies.runId }),
+            ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId })
+          }
       const staged = await dependencies.drafts.stage(
         draftId,
         request.actions,
@@ -192,11 +197,8 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         dependencies.nextPhaseFlags?.obligationIR,
         dependencies.nextPhaseFlags?.witnessSearch,
         dependencies.nextPhaseFlags?.proofExport,
-        /**
-         * **题面改写随暂存一起下去**（2026-10-10 第二件）：草稿层会自己重算一遍题设核验，
-         * 它必须读**与编译器同一份题面**，否则两句话打架（见 `DraftStore.stage` 的签名注释）。
-         */
-        request.normalisations
+        request.normalisations,
+        stageOptions
       )
       if (!staged.ok) {
         const detail = staged.detail ?? staged.diagnostics?.map((entry) => `${entry.code}: ${entry.message}`).join("; ")
@@ -237,15 +239,35 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         ? undefined
         : runAcceptance((staged.preview as { candidate?: unknown }).candidate as AcceptanceDocument | null ?? null, request.acceptance)
       const diagram = staged.preview.diagramVerification
+      const certificate = staged.preview.drawingCertificate
       const diagramReport: VerificationReport | undefined = diagram === undefined ? undefined : {
         status: diagram.status === "unverified" ? "not_supported" : diagram.status,
         checks: diagram.checks.map((check, index) => ({ id: `diagram:${index}`, status: check.status === "unverified" ? "not_supported" : check.status, detail: `${check.sourceText}：${check.reason}` })),
         next_actions: diagram.checks.filter((check) => check.status !== "passed").map((check) => `${check.sourceText}：${check.reason}`)
       }
-      const checks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? [])]
-      const verification: VerificationReport | undefined = checks.length === 0 && acceptanceReport === undefined && diagramReport === undefined
+      const firstDiagramIssue = diagramReport?.checks.find((check) => check.status !== "passed")?.detail
+      const certificateReport: VerificationReport | undefined =
+        certificate === undefined || certificate.gate.status === "not_applicable"
+          ? undefined
+          : certificate.certificateStatus === "passed"
+            ? {
+                status: "passed",
+                checks: [{ id: "drawingCertificate", status: "passed", detail: certificate.summary }],
+                next_actions: []
+              }
+            : {
+                status: certificate.certificateStatus === "blocked" ? "failed" : "not_supported",
+                checks: [{
+                  id: "drawingCertificate",
+                  status: certificate.certificateStatus === "blocked" ? "failed" : "not_supported",
+                  detail: firstDiagramIssue ? `${firstDiagramIssue}；${certificate.summary}` : certificate.summary
+                }],
+                next_actions: [firstDiagramIssue ? `${firstDiagramIssue}；${certificate.summary}` : certificate.summary]
+              }
+      const checks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? []), ...(certificateReport?.checks ?? [])]
+      const verification: VerificationReport | undefined = checks.length === 0 && acceptanceReport === undefined && diagramReport === undefined && certificateReport === undefined
         ? undefined
-        : { status: checks.some((check) => check.status === "failed") ? "failed" : checks.some((check) => check.status === "not_supported") ? "not_supported" : checks.some((check) => check.status === "unknown") ? "unknown" : "passed", checks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? [])] }
+        : { status: checks.some((check) => check.status === "failed") ? "failed" : checks.some((check) => check.status === "not_supported") ? "not_supported" : checks.some((check) => check.status === "unknown") ? "unknown" : "passed", checks, next_actions: [...(acceptanceReport?.next_actions ?? []), ...(diagramReport?.next_actions ?? []), ...(certificateReport?.next_actions ?? [])] }
 
       return {
         ok: true,

@@ -106,6 +106,9 @@ interface ReliabilityCaseReport {
   obligationCoverage: number
   bucket: FailureBucket | null
   verificationStatus: string | null
+  drawingCertificateStatus: string | null
+  certificateBlockers: readonly string[]
+  numericPolicyVersion: string | null
   verificationChecks: { kind: string; status: string; sourceText: string }[]
   questions: string[] | null
   /** 整轮运行里 `writeDocument` 的调用次数（**必须为 0**：不自动确认用户文档）。 */
@@ -336,6 +339,8 @@ describe("完整的协调器链路评测（T01）", () => {
       const questions = runtime.questions() ?? null
       const draftPresent = terminal === "awaiting_confirmation" && stage?.ok === true
       const draftId = runtime.draftId()
+      const preview = draftId === null ? null : runtime.host.preview(draftId)
+      const drawingCertificate = preview?.ok ? preview.artifact.drawingCertificate ?? null : null
       const candidate = draftId === null ? null : runtime.drafts.getPreview(draftId)?.candidate ?? null
       const independent: OracleResult = entry.oracle === undefined
         ? { status: "not_applicable", facts: [] }
@@ -374,8 +379,11 @@ describe("完整的协调器链路评测（T01）", () => {
             error
           })
       const answerMatches = entry.contains === undefined || finalArtifact?.text?.includes(entry.contains) === true
+      const certificatePassed = drawingCertificate === null
+        || drawingCertificate.gate.status === "not_applicable"
+        || drawingCertificate.certificateStatus === "passed"
       const legacyPassed = entry.expected === "plan"
-        ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && outputsSatisfied
+        ? draftPresent && (entry.requireVerification === undefined || verification?.status === entry.requireVerification) && certificatePassed && outputsSatisfied
           && answerMatches && (independent.status === "passed" || independent.status === "not_applicable")
         : entry.expected === "answer"
           ? terminal === "completed" && outputsSatisfied && answerMatches
@@ -418,6 +426,9 @@ describe("完整的协调器链路评测（T01）", () => {
         obligationCoverage,
         bucket,
         verificationStatus: verification?.status ?? null,
+        drawingCertificateStatus: drawingCertificate?.certificateStatus ?? null,
+        certificateBlockers: drawingCertificate?.gate.blockers ?? [],
+        numericPolicyVersion: drawingCertificate?.numericPolicyVersion ?? null,
         verificationChecks: (verification?.checks ?? []).map((check) => ({ kind: check.kind, status: check.status, sourceText: check.sourceText })),
         questions,
         liveWrites: written.length,
