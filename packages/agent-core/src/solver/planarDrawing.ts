@@ -679,6 +679,59 @@ export function tryBuildPlanarDrawingPlan(prompt: string): PlanarDrawingPlanResu
         }
       }
     }
+  } else if (
+    conic &&
+    /与直线(?:\s*[a-z]\s*[：:])?\s*(x\s*=\s*[^，。,；\s]+|y\s*=\s*[^，。,；\s]+)\s*相?交于(?:点)?\s*([A-Z])\s*[，,、]\s*([A-Z])\s*两点/.test(normalized)
+  ) {
+    const match = normalized.match(/与直线(?:\s*[a-z]\s*[：:])?\s*(x\s*=\s*[^，。,；\s]+|y\s*=\s*[^，。,；\s]+)\s*相?交于(?:点)?\s*([A-Z])\s*[，,、]\s*([A-Z])\s*两点/)!
+    const eq = match[1]!.replace(/\s+/g, "")
+    const p1Label = match[2]!
+    const p2Label = match[3]!
+    let lineOrigin: Coordinate | null = null
+    let lineDir: Coordinate | null = null
+    const lineLbl = eq
+    if (eq.startsWith("y=")) {
+      const rhs = eq.slice(2)
+      const scalar = evalScalar(rhs)
+      if (scalar !== null) {
+        lineOrigin = { x: 0, y: scalar }
+        lineDir = { x: 1, y: 0 }
+      } else {
+        const slopeIntercept = rhs.match(/^([+-]?(?:\d+(?:\.\d+)?)?)?\*?x([+-].+)?$/)
+        if (slopeIntercept) {
+          const m = slopeIntercept[1] === undefined || slopeIntercept[1] === "" || slopeIntercept[1] === "+"
+            ? 1
+            : slopeIntercept[1] === "-"
+              ? -1
+              : evalScalar(slopeIntercept[1])
+          const b = slopeIntercept[2] ? evalScalar(slopeIntercept[2]) : 0
+          if (m !== null && b !== null) {
+            lineOrigin = { x: 0, y: b }
+            lineDir = { x: 1, y: m }
+          }
+        }
+      }
+    } else if (eq.startsWith("x=")) {
+      const scalar = evalScalar(eq.slice(2))
+      if (scalar !== null) {
+        lineOrigin = { x: scalar, y: 0 }
+        lineDir = { x: 0, y: 1 }
+      }
+    }
+    if (lineOrigin && lineDir) {
+      const res = intersectParametricLineWithConic({ origin: lineOrigin, direction: lineDir }, conic, domainOpt)
+      if (res.kind === "secant" && res.points.length === 2) {
+        addPoint(p1Label, res.points[0]!)
+        addPoint(p2Label, res.points[1]!)
+        linesToCreate.push({ label: lineLbl, a: res.points[0]!, b: res.points[1]! })
+      } else if (res.kind === "tangent" || res.kind === "single") {
+        linesToCreate.push({
+          label: lineLbl,
+          a: lineOrigin,
+          b: { x: lineOrigin.x + lineDir.x * 4, y: lineOrigin.y + lineDir.y * 4 }
+        })
+      }
+    }
   } else if (conic && anonymousPoints.length > 0 && /交于\s*([A-Z])\s*[，,、]\s*([A-Z])\s*两点/.test(normalized)) {
     // Fallback secant if wording varies slightly
     const ptsMatch = normalized.match(/交于\s*([A-Z])\s*[，,、]\s*([A-Z])\s*两点/)!

@@ -85,13 +85,21 @@ export type RenderEvidenceMode =
   /** 结构化读数 + 截图，且 provider 的 vision 能力已验证。 */
   | "vision_verified"
 
+export type VisualEvidenceTier = "structuredOnly" | "rendered" | "humanReviewed"
+
 export interface RenderEvidence {
   mode: RenderEvidenceMode
+  evidenceTier?: VisualEvidenceTier
   /** 证据绑定的草稿身份。**必填**（见文件头纪律 3）。 */
   runId: string
   draftId: string
   draftVersion: number
   cameraHash?: string
+  humanReview?: {
+    reviewerId: string
+    reviewedAt: string
+    documentHash: string
+  }
   /**
    * **被渲染文档的内容哈希**（`canonicalContentHash`，64 位小写十六进制）。**必填**（Task 16）。
    *
@@ -343,4 +351,111 @@ export function renderEvidenceStaleness(
     }
   }
   return { stale: false, kind: "fresh", mathStale: false, visualStale: false, requiresReplan: false }
+}
+
+const TIER_RANK: Record<VisualEvidenceTier, number> = {
+  structuredOnly: 0,
+  rendered: 1,
+  humanReviewed: 2
+}
+
+export function classifyVisualEvidenceTier(
+  evidence: Pick<RenderEvidence, "mode" | "evidenceTier" | "documentHash" | "humanReview"> & Partial<RenderEvidence>
+): VisualEvidenceTier {
+  if (
+    evidence.evidenceTier === "humanReviewed" &&
+    evidence.humanReview !== undefined &&
+    evidence.humanReview.documentHash === evidence.documentHash &&
+    evidence.humanReview.reviewerId.trim().length > 0
+  ) {
+    return "humanReviewed"
+  }
+  if (evidence.mode === "structured_only") {
+    return "structuredOnly"
+  }
+  if (evidence.evidenceTier === "rendered") {
+    return "rendered"
+  }
+  return evidence.mode === "vision_verified" ? "rendered" : "structuredOnly"
+}
+
+export function assertNoVisualTierUpgrade(
+  actualTier: VisualEvidenceTier,
+  claimedTier: VisualEvidenceTier,
+  options: { enableRenderLayoutVerification?: boolean } = {}
+): { allowed: true; tier: VisualEvidenceTier } | { allowed: false; visualStatus: "unverified"; reason: string } {
+  if (options.enableRenderLayoutVerification === false) {
+    return {
+      allowed: false,
+      visualStatus: "unverified",
+      reason: "新布局/渲染验证已关闭：视觉状态回退为未验（unverified），禁止保留旧通过状态。"
+    }
+  }
+  if (TIER_RANK[claimedTier] > TIER_RANK[actualTier]) {
+    return {
+      allowed: false,
+      visualStatus: "unverified",
+      reason: `禁止将视觉证据从 ${actualTier} 静默升级为 ${claimedTier}。`
+    }
+  }
+  return { allowed: true, tier: actualTier }
+}
+
+export function adjustLayoutWithoutMutatingMath(
+  viewport: Viewport,
+  boxes: readonly LayoutBox[],
+  thresholds: LayoutThresholds = DEFAULT_LAYOUT_THRESHOLDS
+): { status: "resolved" | "needs_human_review"; boxes: LayoutBox[] } {
+  if (!hasFiniteViewport(viewport) || !(viewport.width > 0) || !(viewport.height > 0)) {
+    return { status: "needs_human_review", boxes: boxes.map((b) => ({ ...b })) }
+  }
+  const objectBoxes = boxes.filter((b) => b.kind === "object").map((b) => ({ ...b }))
+  const labelBoxes = boxes.filter((b) => b.kind === "label")
+
+  if (objectBoxes.some((obj) => visibleRatio(obj, viewport) < 1)) {
+    return { status: "needs_human_review", boxes: boxes.map((b) => ({ ...b })) }
+  }
+
+  const candidateOffsets: readonly [number, number][] = [
+    [0, 0], [0, -16], [0, 16], [32, 0], [-32, 0],
+    [32, -16], [-32, -16], [32, 16], [-32, 16],
+    [0, -34], [0, 34], [64, 0], [-64, 0]
+  ]
+  const placedLabels: LayoutBox[] = []
+  let unresolved = false
+
+  for (const label of labelBoxes) {
+    let chosen: LayoutBox | null = null
+    for (const [dx, dy] of candidateOffsets) {
+      const candidate: LayoutBox = {
+        ...label,
+        x: label.x + dx,
+        y: label.y + dy
+      }
+      const inBounds =
+        candidate.x >= 0 &&
+        candidate.y >= 0 &&
+        candidate.x + candidate.width <= viewport.width &&
+        candidate.y + candidate.height <= viewport.height
+      if (!inBounds) continue
+      const overlaps = placedLabels.some(
+        (prev) => overlapRatio(candidate, prev) >= thresholds.labelOverlapRatio
+      )
+      if (!overlaps) {
+        chosen = candidate
+        break
+      }
+    }
+    if (chosen) {
+      placedLabels.push(chosen)
+    } else {
+      unresolved = true
+      placedLabels.push({ ...label })
+    }
+  }
+
+  return {
+    status: unresolved ? "needs_human_review" : "resolved",
+    boxes: [...objectBoxes, ...placedLabels]
+  }
 }

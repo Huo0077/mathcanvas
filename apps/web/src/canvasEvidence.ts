@@ -293,6 +293,7 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
   return {
     "data-canvas-evidence-status": status,
     "data-canvas-evidence-accepted": status === "passed" ? "true" : "false",
+    "data-render-evidence-tier": "rendered",
     "data-document-hash": evidence.documentHash,
     "data-document-revision": String(evidence.revision),
     "data-canvas-boxes": String(evidence.boxes.filter((box) => box.kind === "object").length),

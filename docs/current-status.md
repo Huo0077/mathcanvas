@@ -22,9 +22,11 @@
 | 舍弃旧线 | 59ea3613..d8743a32的47提交已保存在本地/远端archive/abandoned-post-59ea3613-20261115，不继承旧实现/成绩/进度；v4.4.0只作历史 |
 | 已完成 | 原件归档、清理记录、审查阅读、方案/31任务合同与版本治理；均不等于产品修复 |
 | 本次操作 | 仅对齐活动进度/能力合同/技术附录，给历史计划增加边界和导航；原审查、旧评测和发行证据不改 |
-| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`P0–P6`：`T01–T14`）已有实现提交，但 **G3-Math 尚未退出**。用户已创建持续 goal，但按最新要求已停止；T01 合同与生产验收及 `B5`（`T15 → T16`）均留作待办，产品仍禁止发布 |
+| 功能实施 | R00/R01-A/R09-A/R10、G1（R02–R06）及G2（R07、R08、R09-B、R11）已完成；`B4`（`T01–T14`）及 `T15` 渲染可见性框架与四族 DOM/E2E 检查已完成，但 **G3-Math 尚未退出**（T01 第三轮复核余 5 项合同阻断、生产证书与 18 平面/18 立体端到端及 `T16` 生命周期闭环正在持续推进中）；产品仍禁止发布 |
 
 版本治理详见[main重启记录](audit/2026-11-15-main-restart/README.md)。前一轮探针仅确认缺陷，不是修复GREEN。
+
+- **T15 真实画布渲染证据、分层视觉校验与标签布局已落地**：`renderEvidence.ts` 新增 `VisualEvidenceTier`（`structuredOnly` / `rendered` / `humanReviewed`）防升级与 `adjustLayoutWithoutMutatingMath`（标签避让不改数学坐标、开关关停落 `unverified`）；`renderLayoutInput.ts`、`canvasEvidence.ts`、`agentRunner.ts` 对齐 `rendered` / `structuredOnly` 口径；`planarDrawing.ts` 补齐显式直线与圆锥曲线求交；`renderEvidence.test.ts`+`planarDrawing.test.ts`+`canvasEvidence.test.ts`（47 项）与 Playwright `e2e/drawing-reliability-render.spec.ts`（`2 passed`，四族渲染与反例通过，AI 已抽检 `t15-conic-rendered.png` 与 `t15-solid-fold-rendered.png`，记为 `agent_visual_review`），全量 Vitest 540 文件/5742 通过+1todo、类型/Lint（0 errors）/Web 构建/离线评测通过。证据：[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)。当前按 `2026-11-16-g3-completion-plan.md` 持续推进 G3（下一步先关闭 r3 合同剩余 5 项阻断与 T01 复核）。
 
 ### 2026-11-16 —— G3 实核与第二独立审题（否定性基线）
 

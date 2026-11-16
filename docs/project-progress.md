@@ -8,6 +8,12 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— P7 / T15 真实画布渲染证据、分层视觉校验与标签不改数学避让
+
+- **RED 复现**：扩展 `renderEvidence.test.ts`（`2 fail`）并新建 `e2e/drawing-reliability-render.spec.ts`，实测曝光 `planarDrawing.ts` 显式直线∩圆锥交点缺失与 2D/3D DOM 选择口径问题。
+- **三层视觉隔离与真画布闭环落盘**：`renderEvidence.ts` 新增 `VisualEvidenceTier`（`structuredOnly` / `rendered` / `humanReviewed`）、`assertNoVisualTierUpgrade` 与 `adjustLayoutWithoutMutatingMath`；`renderLayoutInput.ts`、`canvasEvidence.ts`、`agentRunner.ts` 对齐 `rendered` / `structuredOnly` 标识；`planarDrawing.ts` 补齐显式直线与圆锥曲线求交。
+- **验证**：定向 3 文件 47 项 + Playwright `e2e/drawing-reliability-render.spec.ts` `2 passed`（四族真渲染与反例通过，AI 已抽检渲染截图并单列 `agent_visual_review`）；最终编辑后全量 Vitest **540 文件 / 5742 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过，下一步按 `2026-11-16-g3-completion-plan.md` 闭环 r3 剩余合同与 G3 全链路。证据见[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)。
+
 ## 2026-11-17 —— 按用户要求停止 goal 与待办封存
 
 - **停止决定**：用户明确要求不继续整改、停止goal和当前工作。第三轮复核之后的宿主/退化、重复标签、指定实体、镜像与闭合六面体整改均未开始，不把它们写成已完成。

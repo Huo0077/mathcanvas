@@ -1,4 +1,10 @@
-import type { LayoutBox, LayoutModel, Viewport } from "@draw/agent-core"
+import {
+  adjustLayoutWithoutMutatingMath,
+  type LayoutBox,
+  type LayoutModel,
+  type Viewport,
+  type VisualEvidenceTier
+} from "@draw/agent-core"
 
 /**
  * **已投影的点标签 → 布局盒子**（Phase 4 / Task 4.2，「标签叠加」这半条）。
@@ -49,4 +55,42 @@ export function layoutFromLabelAnchors(anchors: readonly LabelAnchor[], viewport
       height: labelSize.height
     }))
   return { viewport, boxes }
+}
+
+export interface RenderedLayoutInputResult {
+  tier: VisualEvidenceTier
+  viewport: Viewport
+  boxes: LayoutBox[]
+  missingRequiredLabels: string[]
+  layoutStatus: "resolved" | "needs_human_review"
+  documentHash: string
+  cameraHash?: string
+  hiddenEdges?: { shown: boolean; segments: number }
+}
+
+export function collectRenderLayoutEvidenceInput(input: {
+  anchors: readonly LabelAnchor[]
+  requiredLabels?: readonly string[]
+  objects?: readonly LayoutBox[]
+  viewport: Viewport
+  labelSize?: { width: number; height: number }
+  documentHash: string
+  cameraHash?: string
+  hiddenEdges?: { shown: boolean; segments: number }
+}): RenderedLayoutInputResult {
+  const labelModel = layoutFromLabelAnchors(input.anchors, input.viewport, input.labelSize)
+  const visibleKeys = new Set(input.anchors.filter((a) => a.visible).map((a) => a.key))
+  const missingRequiredLabels = (input.requiredLabels ?? []).filter((lbl) => !visibleKeys.has(lbl))
+  const combined: LayoutBox[] = [...(input.objects ?? []), ...labelModel.boxes]
+  const adjusted = adjustLayoutWithoutMutatingMath(input.viewport, combined)
+  return {
+    tier: "rendered",
+    viewport: input.viewport,
+    boxes: adjusted.boxes,
+    missingRequiredLabels,
+    layoutStatus: missingRequiredLabels.length > 0 ? "needs_human_review" : adjusted.status,
+    documentHash: input.documentHash,
+    ...(input.cameraHash === undefined ? {} : { cameraHash: input.cameraHash }),
+    ...(input.hiddenEdges === undefined ? {} : { hiddenEdges: input.hiddenEdges })
+  }
 }

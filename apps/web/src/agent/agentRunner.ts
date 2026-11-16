@@ -459,6 +459,7 @@ function buildStructuredCandidateRenderEvidence(input: {
 }): RenderEvidence {
   return {
     mode: "structured_only",
+    evidenceTier: "structuredOnly",
     runId: input.runId,
     draftId: input.draftId,
     draftVersion: input.draftVersion,

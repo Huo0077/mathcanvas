@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— P7 / T15 真实画布渲染证据、分层视觉校验与标签不改数学避让
+
+- **三层视觉证据隔离与标签避让**：`packages/agent-core/src/verification/renderEvidence.ts` 新增 `VisualEvidenceTier`（`structuredOnly` / `rendered` / `humanReviewed`）、`classifyVisualEvidenceTier`、`assertNoVisualTierUpgrade`（关停渲染校验开关退回 `visualStatus: "unverified"`）与 `adjustLayoutWithoutMutatingMath`（只允许偏移标签位置而不改动数学对象坐标，无解降级 `needs_human_review`）；`apps/web/src/agent/renderLayoutInput.ts`、`canvasEvidence.ts` 与 `agentRunner.ts` 同步打通 `tier: "rendered"` 与 `tier: "structuredOnly"` 标识。
+- **显式直线∩圆锥求交补全**：`packages/agent-core/src/solver/planarDrawing.ts` 补齐显式直线方程（`y=c` / `x=c` / `y=kx+b`）与圆锥曲线代数求交及交点物化（通过 Playwright 真 E2E 曝光并修复）。
+- **验证**：新建 `e2e/drawing-reliability-render.spec.ts` 与扩展 `renderEvidence.test.ts`（RED `2 fail + E2E 2 fail` → 定向 3 文件 47 项 + Playwright `e2e/drawing-reliability-render.spec.ts` `2 passed` 并抽检渲染截图）；最终编辑后全量 Vitest **540 文件 / 5742 passed | 1 todo**、`typecheck`、`lint`（0 errors）、Web 构建与 `eval:reliability -- --offline` 全部通过；证据见 [P7 / T15渲染可见性证据](docs/audit/2026-11-17-p7-render-visibility/README.md)。
+
 ## 2026-11-16 —— P4 / T14 最终候选绑定、过期检测、仅相机不变性与原子一次确认（B4 收口）
 
 - **多维证书保鲜与仅相机视觉重算**：`packages/agent-core/src/verification/drawingCertificate.ts` 新增 `verifyCertificateFreshness` 校对 `runId`/`draftId`/`conversationId`/`promptHash`/`scopeId`/`documentHash`/`baseRevision`/`policyVersion`；`renderEvidence.ts` 扩展 `cameraHash` 与 `kind: "camera_changed"`（`mathStale: false, visualStale: true, requiresReplan: false`），使仅相机视角变化绝不失效数学证书或触发重规划。

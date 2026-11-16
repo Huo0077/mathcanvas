@@ -252,3 +252,52 @@ describe("render evidence staleness", () => {
     expect(renderEvidenceStaleness(withShot, { draftId: "draft_1", documentHash: HASH_B }).stale).toBe(true)
   })
 })
+
+import { adjustLayoutWithoutMutatingMath, assertNoVisualTierUpgrade, classifyVisualEvidenceTier } from "./renderEvidence"
+
+describe("P7 / T15 visual evidence tiers & math-preserving label layout", () => {
+  it("never upgrades structuredOnly to rendered or humanReviewed and respects rollback toggle", () => {
+    expect(classifyVisualEvidenceTier({
+      mode: "structured_only",
+      runId: "r1",
+      draftId: "d1",
+      draftVersion: 1,
+      documentHash: HASH_A,
+      viewport: { width: 800, height: 600 },
+      boxes: [{ id: "pt1", kind: "object", shape: "marker", x: 100, y: 100, width: 4, height: 4 }]
+    })).toBe("structuredOnly")
+
+    expect(assertNoVisualTierUpgrade("structuredOnly", "rendered").allowed).toBe(false)
+    expect(assertNoVisualTierUpgrade("rendered", "humanReviewed").allowed).toBe(false)
+    expect(assertNoVisualTierUpgrade("rendered", "rendered", { enableRenderLayoutVerification: false })).toMatchObject({
+      allowed: false,
+      visualStatus: "unverified"
+    })
+  })
+
+  it("relocates overlapping labels cleanly without ever mutating mathematical object boxes", () => {
+    const viewport = { width: 800, height: 600 }
+    const boxes = [
+      { id: "pA", kind: "object" as const, shape: "marker" as const, x: 200, y: 200, width: 4, height: 4 },
+      { id: "pA#label", kind: "label" as const, x: 200, y: 186, width: 28, height: 14 },
+      { id: "pB#label", kind: "label" as const, x: 202, y: 186, width: 28, height: 14 }
+    ]
+    const adjusted = adjustLayoutWithoutMutatingMath(viewport, boxes)
+    expect(adjusted.status).toBe("resolved")
+    // Math object coordinate must stay bit-for-bit identical!
+    expect(adjusted.boxes.find((b) => b.id === "pA")).toEqual(boxes[0])
+    const la = adjusted.boxes.find((b) => b.id === "pA#label")!
+    const lb = adjusted.boxes.find((b) => b.id === "pB#label")!
+    expect(Math.max(la.x, lb.x) >= Math.min(la.x + la.width, lb.x + lb.width) || Math.max(la.y, lb.y) >= Math.min(la.y + la.height, lb.y + lb.height)).toBe(true)
+
+    // Unplaceable tiny clipped viewport downgrades to needs_human_review rather than shrinking/moving math objects
+    const impossible = adjustLayoutWithoutMutatingMath(
+      { width: 28, height: 14 },
+      [
+        { id: "pA#label", kind: "label" as const, x: 0, y: 0, width: 28, height: 14 },
+        { id: "pB#label", kind: "label" as const, x: 0, y: 0, width: 28, height: 14 }
+      ]
+    )
+    expect(impossible.status).toBe("needs_human_review")
+  })
+})
