@@ -1,6 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-> **2026-11-17 G3-DS 门禁重排（Task 0–Task 2 已完成，零付费，不是新 DS 成绩）**：[失败驱动设计](../superpowers/specs/2026-11-17-g3-ds-failure-driven-design.md)与[实施计划](../superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)明确按阶段统计“模型调用/候选/完整合同/生产证书/同候选渲染/隔离交付”，分母固定36；Task 0–2 已完成 [Task 0 审计](../audit/g3-ds-failure-driven-t0/README.md)、[Task 1 审计](../audit/g3-ds-failure-driven-t1/README.md) 与 [Task 2 审计](../audit/g3-ds-failure-driven-t2/README.md)，最新真实DS完整合同仍0/36，DS候选渲染与交付未测，不能用离线36/36或回放顶替。首次失败归因与复杂题计分分叉必须单列。
+> **2026-11-17 G3-DS 门禁重排（Task 0–Task 3 已完成，零付费，不是新 DS 成绩）**：[失败驱动设计](../superpowers/specs/2026-11-17-g3-ds-failure-driven-design.md)与[实施计划](../superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)明确按阶段统计“模型调用/候选/完整合同/生产证书/同候选渲染/隔离交付”，分母固定36；Task 0–3 已完成 [Task 0](../audit/g3-ds-failure-driven-t0/README.md)、[Task 1](../audit/g3-ds-failure-driven-t1/README.md)、[Task 2](../audit/g3-ds-failure-driven-t2/README.md) 与 [Task 3](../audit/g3-ds-failure-driven-t3/README.md)，最新真实DS完整合同仍0/36，DS候选渲染与交付未测，不能用离线36/36或回放顶替。首次失败归因与复杂题计分分叉必须单列。
 > **2026-11-17 真实DS冻结36题**：强制 `ds_intent` 原生规划93次请求，数学合同 **0/36**、3 partial、33 failed、10题非空候选；93次中91次有usage，真实账单金额未知。DS候选渲染/受控交付未运行，不能将此前离线36/36或独立浏览器回归写为本次DS端到端成绩。[脱敏逐题审计](../audit/2026-11-17-g3-ds5-live-36/README.md)。
 > **2026-11-17 DS5 真实模型预检**：4题各1次真实请求、合同通过0/4、均无候选；至少3题首轮返回 `tool_calls` 而没有后续请求额度。这是有限请求预检，不是完整36题、默认产品路线或端到端渲染交付成绩；真实账单费用未知。[脱敏证据](../audit/2026-11-17-g3-ds5-live-preflight/README.md)。
 

@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— G3-DS 失败驱动 Task 3：失败签名能力族（圆锥方程/割线异交点/棱比与标签桥接）及 `GK-P08` 负例（0 付费）
+
+- 在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 新增 `resolveConicFromEquation`、`conic_vertex`、`other_line_conic_intersection`、实体 `id/label` 全注册与立体 `vertexNames` 作用域预登记；在 [dsDrawingIntent.test.ts](packages/agent-core/src/dsDrawingIntent.test.ts) 覆盖 `GK-S05` / `GK-P03` / `JT-P02` 改名变体，在 [drawingCertificate.test.ts](packages/agent-core/src/verification/drawingCertificate.test.ts) 增加 `GK-P08` `objCov=1, obCov=0` 表面齐全反例，并跑通 `5` 文件 **`111 passed`**、`typecheck`、`lint`、`test:docs`。入档 [Task 3 审计](audit/g3-ds-failure-driven-t3/README.md)；真实 DS 仍 `0/36`，下一步进入 Task 4（零付费）。
+
 ## 2026-11-17 —— G3-DS 失败驱动 Task 2：数学必要参数来源校验与 DAG fail-closed（0 付费调用）
 
 - 在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 新增 `validateRequiredParameters` 与全策略必填参数表，禁止缺失 `expression`/`x0`/`domain` 等时偷偷代用 `"x"`/`0`/`[-5,5]`；`compileDsDrawingIntentToPlan` 遇到 `!dag.ok` 或参数未证实直接 fail-closed，不再退回原始步骤顺序，同步收紧 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts) 提示策略并在 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 与 [dsDrawingIntent.test.ts](packages/agent-core/src/dsDrawingIntent.test.ts) 完成 RED→GREEN 与 `GK-P08` 等回归（`4` 文件 **`110 passed`** + `systemPrompt.test.ts` `31 passed`、`typecheck`、`lint`、`test:docs` 全过）。入档 [Task 2 审计](audit/g3-ds-failure-driven-t2/README.md)；真实 DS 仍 `0/36`，下一步进入 Task 3（零付费）。

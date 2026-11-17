@@ -264,4 +264,25 @@ describe("P4 / T13 drawingCertificate gate & full contract certification", () =>
     expect(cert.certificateStatus).toBe("blocked")
     expect(cert.failedObligations?.length).toBeGreaterThan(0)
   })
+
+  it("Task 3 GK-P08 surface-complete negative check: 2/2 matching entity labels with wrong conic equation must NOT pass certificate", () => {
+    const base = createEmptyDocument("conics")
+    const gkP08SurfaceCompleteButWrong: GeometryDocument = {
+      ...base,
+      primitives: [
+        { id: "circ-1", type: "circle", label: "C_1", center: { x: 0, y: 0 }, radius: 1 },
+        { id: "hyp-1", type: "hyperbola", label: "C_2", center: { x: 0, y: 0 }, axis: "x", radiusX: 2, radiusY: 3 }
+      ]
+    }
+    const cert = certifyDrawingAgainstContract({
+      prompt: "已知双曲线 x² - y²/4 = 1，作满足题设条件的圆与双曲线",
+      document: gkP08SurfaceCompleteButWrong,
+      candidateHash: "hash-gkp08-bad",
+      sourceHash: "src-gkp08",
+      requiredEntityLabels: ["C_1", "C_2"]
+    })
+    expect(cert.missingEntities).toEqual([])
+    expect(cert.certificateStatus).not.toBe("passed")
+    expect(cert.failedObligations?.length ?? 0).toBeGreaterThan(0)
+  })
 })

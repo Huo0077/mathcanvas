@@ -895,3 +895,233 @@ describe("Task 2 required mathematical parameter provenance and DAG fail-closed"
     }
   })
 })
+
+describe("Task 3 failure-driven capability families (non-case-ID parameterized & negative checks)", () => {
+  it("constructs secant other-intersection and conic equation + vertices (GK-P03 & JT-P02 families, renamed)", () => {
+    const intent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Construct ellipse Gamma, focus H, vertices V1/V2, external point D, and distinct secant intersections J, K",
+      entities: [
+        { id: "Gamma", kind: "conic", label: "Γ", scopeId: "shared", stateId: "shared" },
+        { id: "V1", kind: "point", label: "V₁", scopeId: "shared", stateId: "shared", hostEntityId: "Gamma" },
+        { id: "V2", kind: "point", label: "V₂", scopeId: "shared", stateId: "shared", hostEntityId: "Gamma" },
+        { id: "H", kind: "focus", label: "H", scopeId: "shared", stateId: "shared", hostEntityId: "Gamma" },
+        { id: "U", kind: "point", label: "U", scopeId: "shared", stateId: "shared", hostEntityId: "Gamma" },
+        { id: "D", kind: "point", label: "D", scopeId: "(1)", stateId: "(1)" },
+        { id: "J", kind: "point", label: "J", scopeId: "(1)", stateId: "(1)", hostEntityId: "Gamma" },
+        { id: "DJ", kind: "line", label: "DJ", scopeId: "(1)", stateId: "(1)" }
+      ],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "(1)", relations: ["collinear", "on_conic"] }],
+      constructionStrategies: [
+        {
+          nodeId: "n-gamma",
+          outputEntityId: "Gamma",
+          outputKind: "conic",
+          strategy: "conic_from_equation_or_properties",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { conicType: "ellipse", equation: "x^2/4 + y^2/3 = 1" },
+          sourceSpan: { text: "椭圆 Γ: x²/4 + y²/3 = 1" }
+        },
+        {
+          nodeId: "n-v1",
+          outputEntityId: "V1",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Gamma",
+          dependencyIds: ["n-gamma"],
+          params: { mode: "conic_vertex", conicId: "Gamma", index: 0 },
+          sourceSpan: { text: "左顶点 V₁" }
+        },
+        {
+          nodeId: "n-v2",
+          outputEntityId: "V2",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Gamma",
+          dependencyIds: ["n-gamma"],
+          params: { mode: "conic_vertex", conicId: "Gamma", index: 1 },
+          sourceSpan: { text: "右顶点 V₂" }
+        },
+        {
+          nodeId: "n-h",
+          outputEntityId: "H",
+          outputKind: "focus",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Gamma",
+          dependencyIds: ["n-gamma"],
+          params: { mode: "focus", conicId: "Gamma", index: 1 },
+          sourceSpan: { text: "右焦点 H" }
+        },
+        {
+          nodeId: "n-u",
+          outputEntityId: "U",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Gamma",
+          dependencyIds: ["n-gamma"],
+          params: { mode: "on_conic", conicId: "Gamma", parameter: Math.PI / 3 },
+          assumptions: ["取参数 θ=π/3"]
+        },
+        {
+          nodeId: "n-d",
+          outputEntityId: "D",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(1)",
+          stateId: "(1)",
+          dependencyIds: [],
+          params: { mode: "explicit_coords", x: 1, y: 0 },
+          sourceSpan: { text: "D(1,0)" }
+        },
+        {
+          nodeId: "n-j",
+          outputEntityId: "J",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(1)",
+          stateId: "(1)",
+          hostEntityId: "Gamma",
+          dependencyIds: ["n-gamma", "n-u", "n-d"],
+          params: { mode: "other_line_conic_intersection", conicId: "Gamma", from: "D", through: "U", excludePointId: "U" },
+          sourceSpan: { text: "DU 交 Γ 于另一点 J" }
+        },
+        {
+          nodeId: "n-dj",
+          outputEntityId: "DJ",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "(1)",
+          stateId: "(1)",
+          dependencyIds: ["n-d", "n-j"],
+          params: { mode: "through_points", from: "D", to: "J" },
+          sourceSpan: { text: "直线 DJ" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const parsed = parseAndValidateDsDrawingIntent(intent)
+    expect(parsed.ok, parsed.ok ? "" : JSON.stringify(parsed.diagnostics)).toBe(true)
+    if (!parsed.ok) return
+    const plan = compileDsDrawingIntentToPlan(parsed.value)
+    expect(plan.kind).toBe("plan")
+    if (plan.kind !== "plan") return
+
+    const compiled = compilePlan(plan, {
+      document: createEmptyDocument("conics"),
+      conversationId: "t3-secant-1",
+      documentGeneration: 0,
+      workspace: "conics"
+    })
+    expect(compiled.ok).toBe(true)
+    const ptU = compiled.draftDocument!.primitives.find((p) => p.type === "point" && p.label === "U") as { x: number; y: number } | undefined
+    const ptJ = compiled.draftDocument!.primitives.find((p) => p.type === "point" && p.label === "J") as { x: number; y: number } | undefined
+    const ptV1 = compiled.draftDocument!.primitives.find((p) => p.type === "point" && p.label === "V₁") as { x: number; y: number } | undefined
+    expect(ptU).toBeDefined()
+    expect(ptJ).toBeDefined()
+    expect(ptV1).toEqual({ id: expect.any(String), type: "point", label: "V₁", x: -2, y: 0 })
+    // J must satisfy x^2/4 + y^2/3 = 1, be collinear with U and D(1,0), and be distinct from U
+    expect(Math.hypot(ptJ!.x - ptU!.x, ptJ!.y - ptU!.y)).toBeGreaterThan(0.5)
+    expect(Math.abs((ptJ!.x * ptJ!.x) / 4 + (ptJ!.y * ptJ!.y) / 3 - 1)).toBeLessThan(1e-5)
+    const cross = (ptU!.x - 1) * ptJ!.y - ptU!.y * (ptJ!.x - 1)
+    expect(Math.abs(cross)).toBeLessThan(1e-5)
+  })
+
+  it("materializes cuboid edge-ratio points via givenRelations or edge_ratio on renamed prism (GK-S05 family)", () => {
+    const intent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Construct right prism MNPQ-M1N1P1Q1 and derived ratio points M2, N2 on lateral edges",
+      entities: [
+        { id: "Prism", kind: "solid", label: "Prism", scopeId: "shared", stateId: "shared" },
+        { id: "M2", kind: "point", label: "M₂", scopeId: "shared", stateId: "shared", hostEntityId: "Prism" },
+        { id: "N2", kind: "point", label: "N₂", scopeId: "shared", stateId: "shared", hostEntityId: "Prism" },
+        { id: "Seg", kind: "segment", label: "M₂N₂", scopeId: "shared", stateId: "shared" }
+      ],
+      givenRelations: [
+        { kind: "ratio", targets: ["M2", "M", "M₁"], value: 0.25, scopeId: "shared", stateId: "shared", sourceSpan: { text: "MM₂ = 1/4 MM₁" } }
+      ],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["ratio", "parallel"] }],
+      constructionStrategies: [
+        {
+          nodeId: "n-prism",
+          outputEntityId: "Prism",
+          outputKind: "solid",
+          strategy: "solid_base_and_prism_or_pyramid",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { shape: "prism_box", width: 4, depth: 3, height: 8, vertexNames: ["M", "N", "P", "Q", "M₁", "N₁", "P₁", "Q₁"] },
+          sourceSpan: { text: "长方体 MNPQ-M₁N₁P₁Q₁，宽4深3高8" }
+        },
+        {
+          nodeId: "n-m2",
+          outputEntityId: "M2",
+          outputKind: "point",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Prism",
+          dependencyIds: ["n-prism"],
+          params: { mode: "edge_ratio", from: "M", to: "M₁", ratioFromFirst: 0.25 },
+          sourceSpan: { text: "MM₂ = 1/4 MM₁" }
+        },
+        {
+          nodeId: "n-n2",
+          outputEntityId: "N2",
+          outputKind: "point",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "Prism",
+          dependencyIds: ["n-prism"],
+          params: { mode: "edge_ratio", from: "N", to: "N₁", ratioFromFirst: 0.25 },
+          sourceSpan: { text: "NN₂ = 1/4 NN₁" }
+        },
+        {
+          nodeId: "n-seg",
+          outputEntityId: "Seg",
+          outputKind: "segment",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: ["n-m2", "n-n2"],
+          params: { mode: "segment", from: "M2", to: "N2" },
+          sourceSpan: { text: "连线 M₂N₂" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const parsed = parseAndValidateDsDrawingIntent(intent)
+    expect(parsed.ok, parsed.ok ? "" : JSON.stringify(parsed.diagnostics)).toBe(true)
+    if (!parsed.ok) return
+    const plan = compileDsDrawingIntentToPlan(parsed.value)
+    expect(plan.kind).toBe("plan")
+    if (plan.kind !== "plan") return
+
+    const compiled = compilePlan(plan, {
+      document: createEmptyDocument("geometry3d"),
+      conversationId: "t3-s05-1",
+      documentGeneration: 0,
+      workspace: "geometry3d"
+    })
+    expect(compiled.ok).toBe(true)
+    const ptM2 = compiled.draftDocument!.primitives.find((p) => p.type === "point3" && p.label === "M₂") as { position: { x: number; y: number; z: number } } | undefined
+    const ptN2 = compiled.draftDocument!.primitives.find((p) => p.type === "point3" && p.label === "N₂") as { position: { x: number; y: number; z: number } } | undefined
+    expect(ptM2?.position).toEqual({ x: 0, y: 0, z: 2 })
+    expect(ptN2?.position).toEqual({ x: 4, y: 0, z: 2 })
+    // Cross-id segment resolution must also succeed when using outputEntityId "M2"/"N2" instead of display label "M₂"/"N₂"
+    expect(compiled.draftDocument!.primitives.some((p) => p.type === "segment3" && p.label === "M₂N₂")).toBe(true)
+  })
+})

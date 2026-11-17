@@ -179,6 +179,106 @@ function isFiniteDomain(v: unknown): v is [number, number] {
   return Array.isArray(v) && v.length === 2 && isFiniteNum(v[0]) && isFiniteNum(v[1]) && v[0] < v[1]
 }
 
+interface ParsedConicEquation {
+  readonly kind: "circle" | "ellipse" | "hyperbola" | "parabola"
+  readonly center?: { x: number; y: number }
+  readonly radius?: number
+  readonly radiusX?: number
+  readonly radiusY?: number
+  readonly axis?: "x" | "y"
+  readonly vertex?: { x: number; y: number }
+  readonly focalParameter?: number
+}
+
+function parsePositiveNumberOrFraction(raw: string | undefined): number | null {
+  if (!raw) return 1
+  const clean = raw.replace(/[()]/g, "").trim()
+  if (clean.includes("/")) {
+    const parts = clean.split("/")
+    if (parts.length !== 2) return null
+    const a = Number(parts[0])
+    const b = Number(parts[1])
+    return Number.isFinite(a) && Number.isFinite(b) && Math.abs(b) > 1e-12 ? a / b : null
+  }
+  const n = Number(clean)
+  return Number.isFinite(n) ? n : null
+}
+
+function resolveConicFromEquation(equation: unknown, expectedType?: unknown): ParsedConicEquation | null {
+  if (typeof equation !== "string") return null
+  const normalized = equation
+    .replace(/\s+/g, "")
+    .replace(/²/g, "^2")
+    .replace(/−/g, "-")
+  if (!normalized.includes("=")) return null
+
+  // Circle: x^2+y^2=R or (x-h)^2+(y-k)^2=R
+  const circleMatch = normalized.match(
+    /^\(?(?:x([+-]\d+(?:\.\d+)?)\)?)\^2\+\(?(?:y([+-]\d+(?:\.\d+)?)\)?)\^2=(\d+(?:\.\d+)?)$/i
+  ) ?? normalized.match(/^x\^2\+y\^2=(\d+(?:\.\d+)?)$/i)
+  if (circleMatch) {
+    if (circleMatch.length === 2) {
+      const rSq = Number(circleMatch[1])
+      if (Number.isFinite(rSq) && rSq > 0 && (expectedType === undefined || expectedType === "circle")) {
+        return { kind: "circle", center: { x: 0, y: 0 }, radius: Math.sqrt(rSq) }
+      }
+    } else if (circleMatch.length === 4) {
+      const h = -Number(circleMatch[1] ?? 0)
+      const k = -Number(circleMatch[2] ?? 0)
+      const rSq = Number(circleMatch[3])
+      if (Number.isFinite(h) && Number.isFinite(k) && Number.isFinite(rSq) && rSq > 0 && (expectedType === undefined || expectedType === "circle")) {
+        return { kind: "circle", center: { x: h, y: k }, radius: Math.sqrt(rSq) }
+      }
+    }
+  }
+
+  // Parabola: y^2 = kx or x^2 = ky
+  const paraY = normalized.match(/^y\^2=([+-]?\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)x$/i)
+  if (paraY && (expectedType === undefined || expectedType === "parabola")) {
+    const k = parsePositiveNumberOrFraction(paraY[1])
+    if (k !== null && Math.abs(k) > 1e-12) {
+      return { kind: "parabola", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: k / 2 }
+    }
+  }
+  const paraX = normalized.match(/^x\^2=([+-]?\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?)y$/i)
+  if (paraX && (expectedType === undefined || expectedType === "parabola")) {
+    const k = parsePositiveNumberOrFraction(paraX[1])
+    if (k !== null && Math.abs(k) > 1e-12) {
+      return { kind: "parabola", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: k / 2 }
+    }
+  }
+
+  // Standard ellipse/hyperbola: x^2(/A)? (+|-) y^2(/B)? = 1 or y^2(/A)? - x^2(/B)? = 1
+  const stdConic = normalized.match(
+    /^x\^2(?:\/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?))?([+-])y\^2(?:\/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?))?=1$/i
+  )
+  if (stdConic) {
+    const aSq = parsePositiveNumberOrFraction(stdConic[1])
+    const sign = stdConic[2]
+    const bSq = parsePositiveNumberOrFraction(stdConic[3])
+    if (aSq !== null && bSq !== null && aSq > 0 && bSq > 0) {
+      if (sign === "+" && (expectedType === undefined || expectedType === "ellipse")) {
+        return { kind: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(aSq), radiusY: Math.sqrt(bSq) }
+      }
+      if (sign === "-" && (expectedType === undefined || expectedType === "hyperbola")) {
+        return { kind: "hyperbola", center: { x: 0, y: 0 }, axis: "x", radiusX: Math.sqrt(aSq), radiusY: Math.sqrt(bSq) }
+      }
+    }
+  }
+  const stdYHyp = normalized.match(
+    /^y\^2(?:\/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?))?-x\^2(?:\/(\d+(?:\.\d+)?(?:\/\d+(?:\.\d+)?)?))?=1$/i
+  )
+  if (stdYHyp && (expectedType === undefined || expectedType === "hyperbola")) {
+    const aSq = parsePositiveNumberOrFraction(stdYHyp[1])
+    const bSq = parsePositiveNumberOrFraction(stdYHyp[2])
+    if (aSq !== null && bSq !== null && aSq > 0 && bSq > 0) {
+      return { kind: "hyperbola", center: { x: 0, y: 0 }, axis: "y", radiusX: Math.sqrt(bSq), radiusY: Math.sqrt(aSq) }
+    }
+  }
+
+  return null
+}
+
 const SOLID_SHAPE_REQUIRED_FIELDS: Record<string, readonly string[]> = {
   regular_pyramid: ["baseSide", "height"],
   perpendicular_pyramid: ["ab", "bc", "angleABC", "pa"],
@@ -251,28 +351,31 @@ function validateStrategyParameters(
         return { ok: false, code: "unsupported_construction", path: `${prefix}.params.conicType` }
       }
       if (ct === "circle") {
-        if (!isPosNum(p.radius)) {
+        const parsedEq = resolveConicFromEquation(p.equation, "circle")
+        if (!isPosNum(p.radius) && !parsedEq) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.radius` }
         }
         return null
       }
       if (ct === "parabola") {
-        if (!isPosNum(p.focalParameter)) {
+        const parsedEq = resolveConicFromEquation(p.equation, "parabola")
+        if (!isPosNum(p.focalParameter) && !parsedEq) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.focalParameter` }
         }
         return null
       }
+      const parsedEq = resolveConicFromEquation(p.equation, ct)
       const hasAxes = isPosNum(p.radiusX) && isPosNum(p.radiusY)
       const hasFoci = Array.isArray(p.foci) && p.foci.length === 2 && asVec2(p.foci[0]) !== null && asVec2(p.foci[1]) !== null && asVec2(p.throughPoint) !== null
       const hasEcc = isPosNum(p.majorSemiAxis) && isPosNum(p.eccentricity)
-      if (!hasAxes && !hasFoci && !hasEcc) {
+      if (!parsedEq && !hasAxes && !hasFoci && !hasEcc) {
         return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
       }
       return null
     }
     case "planar_point_on_host": {
       const mode = p.mode === undefined ? "explicit_coords" : p.mode
-      if (mode === "focus") {
+      if (mode === "focus" || mode === "conic_vertex") {
         if (!asNonEmptyStr(p.conicId ?? step.hostEntityId)) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.conicId` }
         }
@@ -287,8 +390,9 @@ function validateStrategyParameters(
         }
         return null
       }
-      if (mode === "line_conic_intersection") {
-        if (!asNonEmptyStr(p.lineId)) {
+      if (mode === "line_conic_intersection" || mode === "other_line_conic_intersection") {
+        const hasLine = asNonEmptyStr(p.lineId) !== null || (asNonEmptyStr(p.from) !== null && asNonEmptyStr(p.through) !== null)
+        if (!hasLine) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.lineId` }
         }
         if (!asNonEmptyStr(p.conicId ?? step.hostEntityId)) {
@@ -504,6 +608,23 @@ export function parseAndValidateDsDrawingIntent(
       ...(isPlainObj(raw.sourceSpan) && typeof raw.sourceSpan.text === "string" ? { sourceSpan: { text: raw.sourceSpan.text } } : {}),
       ...(isPlainObj(raw.params) ? { params: raw.params } : {})
     })
+  }
+
+  // Register named vertices explicitly owned by solid/fold construction strategies in their owning scope.
+  for (const rawStrat of input.constructionStrategies) {
+    if (!isPlainObj(rawStrat) || typeof rawStrat.scopeId !== "string" || !isPlainObj(rawStrat.params)) continue
+    const stratScope = rawStrat.scopeId.trim()
+    if (!stratScope) continue
+    const vertexArrays = [rawStrat.params.vertexNames, rawStrat.params.afterVertexNames]
+    for (const arr of vertexArrays) {
+      if (!Array.isArray(arr)) continue
+      for (const vName of arr) {
+        if (typeof vName === "string" && vName.trim().length > 0 && !declaredIds.has(vName.trim())) {
+          declaredIds.add(vName.trim())
+          entityScope.set(vName.trim(), stratScope)
+        }
+      }
+    }
   }
 
   for (let i = 0; i < entities.length; i += 1) {
@@ -786,6 +907,10 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
   const line2Registry = new Map<string, { a: Coordinate; b: Coordinate }>()
   const conicRegistry = new Map<string, PlanarConic>()
   const point3Registry = new Map<string, { x: number; y: number; z: number }>()
+  const point3LabelRegistry = new Map<string, string>()
+  const entityById = new Map(intent.entities.map((e) => [e.id, e]))
+  const resolveLabel = (step: DsConstructionStrategy, p: Record<string, unknown>) =>
+    asNonEmptyStr(p.label) ?? asNonEmptyStr(entityById.get(step.outputEntityId)?.label) ?? step.outputEntityId
   let keySeq = 0
   const nextKey = (prefix: string) => `${prefix}-${++keySeq}`
 
@@ -941,11 +1066,15 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
       const conicType = p.conicType === "ellipse" || p.conicType === "hyperbola" || p.conicType === "parabola" || p.conicType === "circle"
         ? p.conicType
         : "ellipse"
-      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const label = resolveLabel(step, p)
+      const parsedEq = resolveConicFromEquation(p.equation, conicType)
       if (conicType === "circle") {
-        const center = { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
-        const radius = Math.max(0.1, asNum(p.radius, 1))
-        conicRegistry.set(step.outputEntityId, { id: step.outputEntityId, type: "circle", center, radius })
+        const center = parsedEq?.center ?? { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
+        const radius = parsedEq?.radius ?? (isPosNum(p.radius) ? p.radius : 0)
+        if (!(radius > 0)) continue
+        const circ: PlanarConic = { id: step.outputEntityId, type: "circle", center, radius }
+        conicRegistry.set(step.outputEntityId, circ)
+        conicRegistry.set(label, circ)
         actions.push({
           actionId: "planar.create_circle",
           actionKey: nextKey("ds-circ"),
@@ -953,10 +1082,13 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           inputs: { alias: step.outputEntityId, label, center, radius }
         } as DraftAction)
       } else if (conicType === "parabola") {
-        const vertex = { x: asNum(p.vx, 0), y: asNum(p.vy, 0) }
-        const axis: "x" | "y" = p.axis === "y" ? "y" : "x"
-        const focalParameter = Math.max(0.1, asNum(p.focalParameter, 2))
-        conicRegistry.set(step.outputEntityId, { id: step.outputEntityId, type: "parabola", vertex, axis, focalParameter })
+        const vertex = parsedEq?.vertex ?? { x: asNum(p.vx, 0), y: asNum(p.vy, 0) }
+        const axis: "x" | "y" = parsedEq?.axis ?? (p.axis === "y" ? "y" : "x")
+        const focalParameter = parsedEq?.focalParameter ?? (isPosNum(p.focalParameter) ? p.focalParameter : 0)
+        if (!(focalParameter > 0)) continue
+        const para: PlanarConic = { id: step.outputEntityId, type: "parabola", vertex, axis, focalParameter }
+        conicRegistry.set(step.outputEntityId, para)
+        conicRegistry.set(label, para)
         actions.push({
           actionId: "planar.create_conic",
           actionKey: nextKey("ds-conic"),
@@ -964,10 +1096,10 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           inputs: { alias: step.outputEntityId, label, kind: "parabola", vertex, axis, focalParameter }
         } as DraftAction)
       } else {
-        let center = { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
-        let axis: "x" | "y" = p.axis === "y" ? "y" : "x"
-        let rx = asNum(p.radiusX, 0)
-        let ry = asNum(p.radiusY, 0)
+        let center = parsedEq?.center ?? { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
+        let axis: "x" | "y" = parsedEq?.axis ?? (p.axis === "y" ? "y" : "x")
+        let rx = parsedEq?.radiusX ?? asNum(p.radiusX, 0)
+        let ry = parsedEq?.radiusY ?? asNum(p.radiusY, 0)
 
         const fociRaw = Array.isArray(p.foci) && p.foci.length === 2 ? [asVec2(p.foci[0]), asVec2(p.foci[1])] : null
         const throughPt = asVec2(p.throughPoint)
@@ -994,12 +1126,12 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             ry = axis === "y" ? a : b
           }
         }
-        rx = Math.max(0.1, rx || 2)
-        ry = Math.max(0.1, ry || 1)
+        if (!(rx > 0 && ry > 0)) continue
         const conic: PlanarConic = conicType === "ellipse"
           ? { id: step.outputEntityId, type: "ellipse", center, radiusX: rx, radiusY: ry }
           : { id: step.outputEntityId, type: "hyperbola", center, axis, radiusX: rx, radiusY: ry }
         conicRegistry.set(step.outputEntityId, conic)
+        conicRegistry.set(label, conic)
         const excludedPoints = Array.isArray(p.excludedPoints)
           ? p.excludedPoints.map(asVec2).filter((pt): pt is Coordinate => pt !== null)
           : undefined
@@ -1023,7 +1155,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     }
 
     if (step.strategy === "planar_point_on_host") {
-      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const label = resolveLabel(step, p)
       const mode = typeof p.mode === "string" ? p.mode : "explicit_coords"
       let solvedPt: Coordinate | null = null
 
@@ -1034,10 +1166,31 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           const idx = Math.max(0, Math.min(foci.length - 1, Math.trunc(asNum(p.index, 0))))
           solvedPt = foci[idx] ?? null
         }
+      } else if (mode === "conic_vertex") {
+        const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
+        if (conic) {
+          const idx = Math.max(0, Math.trunc(asNum(p.index, 0)))
+          if (conic.type === "ellipse") {
+            const verts: Coordinate[] = [
+              { x: conic.center.x - conic.radiusX, y: conic.center.y },
+              { x: conic.center.x + conic.radiusX, y: conic.center.y },
+              { x: conic.center.x, y: conic.center.y - conic.radiusY },
+              { x: conic.center.x, y: conic.center.y + conic.radiusY }
+            ]
+            solvedPt = verts[idx % verts.length] ?? null
+          } else if (conic.type === "hyperbola") {
+            const verts: Coordinate[] = conic.axis === "y"
+              ? [{ x: conic.center.x, y: conic.center.y - conic.radiusY }, { x: conic.center.x, y: conic.center.y + conic.radiusY }]
+              : [{ x: conic.center.x - conic.radiusX, y: conic.center.y }, { x: conic.center.x + conic.radiusX, y: conic.center.y }]
+            solvedPt = verts[idx % verts.length] ?? null
+          } else if (conic.type === "parabola") {
+            solvedPt = conic.vertex
+          }
+        }
       } else if (mode === "on_conic") {
         const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
-        const param = asNum(p.parameter, Math.PI / 4)
-        if (conic) {
+        if (conic && isFiniteNum(p.parameter)) {
+          const param = p.parameter
           if (conic.type === "ellipse") {
             solvedPt = { x: conic.center.x + conic.radiusX * Math.cos(param), y: conic.center.y + conic.radiusY * Math.sin(param) }
           } else if (conic.type === "circle") {
@@ -1057,14 +1210,27 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             }
           }
         }
-      } else if (mode === "line_conic_intersection") {
-        const line = line2Registry.get(String(p.lineId ?? ""))
+      } else if (mode === "line_conic_intersection" || mode === "other_line_conic_intersection") {
+        const explicitLine = p.lineId ? line2Registry.get(String(p.lineId)) : undefined
+        const fromPt = typeof p.from === "string" ? point2Registry.get(p.from) : undefined
+        const throughPt = typeof p.through === "string" ? point2Registry.get(p.through) : undefined
+        const line = explicitLine ?? (fromPt && throughPt ? { a: fromPt, b: throughPt } : undefined)
         const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
         if (line && conic) {
           const res = intersectPlanarLineAndConicExact({ type: "line", a: line.a, b: line.b }, conic)
-          if (res.points.length > 0) {
-            const idx = Math.max(0, Math.min(res.points.length - 1, Math.trunc(asNum(p.index, 0))))
-            solvedPt = res.points[idx] ?? null
+          const excludeIds = [
+            ...(typeof p.excludePointId === "string" ? [p.excludePointId] : []),
+            ...(Array.isArray(p.excludePointIds) ? p.excludePointIds.filter((x): x is string => typeof x === "string") : [])
+          ]
+          const excludedCoords = excludeIds
+            .map((id) => point2Registry.get(id))
+            .filter((pt): pt is Coordinate => pt !== undefined)
+          const candidates = excludedCoords.length > 0
+            ? res.points.filter((pt) => excludedCoords.every((ex) => Math.hypot(pt.x - ex.x, pt.y - ex.y) > 1e-4))
+            : res.points
+          if (candidates.length > 0) {
+            const idx = Math.max(0, Math.min(candidates.length - 1, Math.trunc(asNum(p.index, 0))))
+            solvedPt = candidates[idx] ?? null
           }
         }
       } else if (mode === "midpoint" || mode === "segment_ratio") {
@@ -1105,7 +1271,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     }
 
     if (step.strategy === "planar_line_or_segment") {
-      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const label = resolveLabel(step, p)
       const mode = typeof p.mode === "string" ? p.mode : ""
       let endpoints: [Coordinate, Coordinate] | null = null
 
@@ -1320,11 +1486,13 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
 
     if (step.strategy === "solid_point_on_edge_or_face") {
       const mode = typeof p.mode === "string" ? p.mode : "edge_ratio"
-      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const label = resolveLabel(step, p)
       if (mode === "segment") {
-        const fromName = typeof p.from === "string" ? p.from : ""
-        const toName = typeof p.to === "string" ? p.to : ""
-        if (point3Registry.has(fromName) && point3Registry.has(toName)) {
+        const rawFrom = typeof p.from === "string" ? p.from : ""
+        const rawTo = typeof p.to === "string" ? p.to : ""
+        const fromName = point3LabelRegistry.get(rawFrom) ?? rawFrom
+        const toName = point3LabelRegistry.get(rawTo) ?? rawTo
+        if (point3Registry.has(rawFrom) && point3Registry.has(rawTo)) {
           actions.push({
             actionId: "solid.create_segment",
             actionKey: nextKey("ds-seg3"),
@@ -1348,7 +1516,10 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           if (nSq > 1e-12) {
             const d = ((src.x - p1.x) * nx + (src.y - p1.y) * ny + (src.z - p1.z) * nz) / nSq
             const pos = vec3(src.x - d * nx, src.y - d * ny, src.z - d * nz)
+            point3Registry.set(step.outputEntityId, pos)
             point3Registry.set(label, pos)
+            point3LabelRegistry.set(step.outputEntityId, label)
+            point3LabelRegistry.set(label, label)
             actions.push({
               actionId: "solid.create_point",
               actionKey: nextKey("ds-pt3"),
@@ -1367,7 +1538,10 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           if (abSq > 1e-12) {
             const t = ((src.x - a.x) * abx + (src.y - a.y) * aby + (src.z - a.z) * abz) / abSq
             const pos = vec3(a.x + t * abx, a.y + t * aby, a.z + t * abz)
+            point3Registry.set(step.outputEntityId, pos)
             point3Registry.set(label, pos)
+            point3LabelRegistry.set(step.outputEntityId, label)
+            point3LabelRegistry.set(label, label)
             actions.push({
               actionId: "solid.create_point",
               actionKey: nextKey("ds-pt3"),
@@ -1379,12 +1553,16 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
       } else {
         const fromName = typeof p.from === "string" ? p.from : ""
         const toName = typeof p.to === "string" ? p.to : ""
-        const t = Math.min(1, Math.max(0, asNum(p.ratioFromFirst, 0.5)))
+        if (!isFiniteNum(p.ratioFromFirst)) continue
+        const t = Math.min(1, Math.max(0, p.ratioFromFirst))
         const a = point3Registry.get(fromName)
         const b = point3Registry.get(toName)
         if (a && b) {
           const pos = vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
+          point3Registry.set(step.outputEntityId, pos)
           point3Registry.set(label, pos)
+          point3LabelRegistry.set(step.outputEntityId, label)
+          point3LabelRegistry.set(label, label)
           actions.push({
             actionId: "solid.create_point",
             actionKey: nextKey("ds-pt3"),
