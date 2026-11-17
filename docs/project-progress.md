@@ -6,6 +6,9 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-16（America/Los_Angeles）—— G3-DS 真实模型升级方案入档
+
+用户指定以DS参与的冻结36题端到端36/36为新目标。[G3-DS独立实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)及[设计增补](superpowers/specs/2026-11-15-drawing-reliability-design.md)已记录DS0–DS5、历史强制DS 2/36、未见题独立计分与新付费授权边界；此轮仅文档，无新DS请求或代码修复。历史主画布0写入不能用作DS零出图结论。
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
 

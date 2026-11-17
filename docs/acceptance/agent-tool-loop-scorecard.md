@@ -1,5 +1,7 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-16（America/Los_Angeles）真实 DS 口径更新**：强制 DS 规划冻结36题完整合同2/36，21 partial、13 failed、23非空候选、80请求，费用未知；未逐题做DS同候选真实浏览器/受控提交，故 `DS首轮端到端通过率` 仍**未测**，不能以2/36合同通过冒充端到端。DS0–DS5 新门禁和各分项见[实施计划](../superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)，实时状态见[当前状态](../current-status.md)。下文旧“Real drawing pass@1/pass@3 Not measured”仅是记录时点。
+
 > **2026-11-17 G3区块更新**：[G3渲染证据](../audit/2026-11-17-g3-render-exit/README.md)：同候选浏览器渲染36/36与全量E2E 327/327，是工程门禁，不是DS真实模型pass@1或人工可读性通过；25题warning另报，费用/真实模型样本仍未测。
 
 <!-- progress-scope: active-reference -->

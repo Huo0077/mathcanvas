@@ -1,5 +1,7 @@
 # MathCanvas 从59ea3613重启的完整实施主计划
 
+> **2026-11-16（America/Los_Angeles）新 G3 主线**：用户新增[DS参与真实作图实施计划](2026-11-16-g3-ds-live-upgrade-plan.md)，DS0–DS5 是旧 G3-Math 36/36 之外的新增门禁。强制 DS 规划历史实测2/36，并非下文确定性36/36；DS受控提交与人工签收亦不得用旧浏览器成绩代替。新付费实测须重新确认预算。实时状态只看[当前状态](../../current-status.md)。
+
 > **2026-11-17 G3区块更新**：[T15自动化渲染技术证据](../../audit/2026-11-17-g3-render-exit/README.md)已有36题真实浏览器截图、同候选hash与全量E2E 327/327；然而25题仍有warning，humanReviewed及Windows桌面实机窗口未签，故G3-UX不因机器通过而整体完成。此前321/327首轮失败及对应修复原样记录。
 
 <!-- progress-scope: active-reference -->
