@@ -44,7 +44,12 @@ export function createCoordinatedExamRunCase(deps: CoordinatedExamRunDeps): (exa
       if (!document) { document = createEmptyDocument(workspace); documents.set(workspace, document) }
       return document
     }
-    const initial = planRequestFor(examCase.prompt, workspace, runId, current())
+    const publicInput = {
+      id: examCase.id,
+      prompt: examCase.prompt,
+      workspace
+    }
+    const initial = planRequestFor(publicInput.prompt, publicInput.workspace, runId, current())
     const capped = outer === undefined ? undefined : budgetWithProviderRequestCap(createBudget(), outer)
     const inner = capped ?? createBudget()
     let budgetDenied = false

@@ -68,9 +68,9 @@
 
 **Interfaces:** `runFrozenDsCase(publicCaseInput, provider, budget)` 输出 `{candidateSet:{scopeId,stateId?,branchId?,candidateHash,certificateStatus}[], modelInvoked, contractStatus, renderStatus:"pending"|"passed"|"failed", commitStatus:"pending"|"passed"|"failed"}`。按 `displayPolicy` 将 `enumerate:before_fold,after_fold` 等需要多候选的题分别验证；使用既有 `evaluateDrawingContractScopes`, `evaluateDrawingContractStates`, `evaluateDrawingContractBranches`；不再仅因 `MODE === "local"` 才看子计划。只投影 `{id,prompt,confirmedFigureRefs,workspace}` 给 `createModelPlanner`，黄金合同/标准坐标只传给独立裁判，断言任何 `requiredObligations`/`expected` 不得出现在请求中。多分支中只生成一个合法结果也不得算整题通过。
 
-- [ ] **RED**：用 GK-S02/JT-S04 前后折叠状态、JT-S08 两参数分支、GK-P06 三支切线设计正负输入；删除一支、交换 stateId、只画公共主图、修改 candidateHash 必须失败。旧单候选路径的 0/36 原始报告不变。Run: `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts scripts/reliability-eval/drawingContracts.test.ts --testTimeout=30000`；新用例先失败。
-- [ ] **最小实现**：从同一次合法施工单按 scope/state/branch 生成隔离候选集合，逐份完整证书，然后按原合同聚合；不要向模型回填题库标准构造。若一个候选数学正确但生产证书未过或绑定旧 hash，整题仍失败。
-- [ ] **GREEN及对照**：同上，`npm.cmd run typecheck`，再跑零付费 replay 中新旧入口分歧清单；人工复核差异以防错放，绝不“重新解释”历史0/36。同步文档、提交推送。
+- [x] **RED**：用 GK-S02/JT-S04 前后折叠状态、JT-S08 两参数分支、GK-P06 三支切线设计正负输入；删除一支、交换 stateId、只画公共主图、修改 candidateHash 必须失败。旧单候选路径的 0/36 原始报告不变。Run: `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts scripts/reliability-eval/drawingContracts.test.ts --testTimeout=30000`；新用例先失败。
+- [x] **最小实现**：从同一次合法施工单按 scope/state/branch 生成隔离候选集合，逐份完整证书，然后按原合同聚合；不要向模型回填题库标准构造。若一个候选数学正确但生产证书未过或绑定旧 hash，整题仍失败。
+- [x] **GREEN及对照**：同上，`npm.cmd run typecheck`，再跑零付费 replay 中新旧入口分歧清单；人工复核差异以防错放，绝不“重新解释”历史0/36。同步文档、提交推送。
 
 ## Task 5 — 同一真实DS候选的浏览器和隔离交付门禁（零付费桥接，真实调用另授权）
 

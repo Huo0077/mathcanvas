@@ -11,6 +11,7 @@ import {
   evaluateDrawingContract,
   evaluateDrawingContractBranches,
   evaluateDrawingContractScopes,
+  evaluateDrawingContractSetByPolicy,
   evaluateDrawingContractStates,
   formatContractFailureBoundarySummary,
   reconstructBaselineContractSummary,
@@ -1712,5 +1713,40 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
     expect(ledger.verificationSplitCaseIds).toEqual(["JT-S07", "JT-S09"])
     expect(ledger.zeroCandidateWaitingCaseIds).toEqual(["JT-S04"])
     expect(() => assertSanitizedDsLiveLedger(ledger)).not.toThrow()
+  })
+
+  it("Task 4 unifies policy-based evaluation across branches/states without MODE === 'local' gating", () => {
+    const suite = loadContracts()
+    const gkp06 = suite.cases.find((c) => c.id === "GK-P06")!
+    const candidateAtD = (d: number) => {
+      const aX = d + Math.sqrt(d * d + 1), bX = d - Math.sqrt(d * d + 1)
+      const D = { x: d, y: -0.5 }, A = { x: aX, y: (aX * aX) / 2 }, B = { x: bX, y: (bX * bX) / 2 }, M = { x: d, y: d * d + 0.5 }
+      return {
+        primitives: [
+          { type: "parabola", id: "c", label: "C", vertex: { x: 0, y: 0 }, axis: "y", focalParameter: 1 },
+          { type: "point", id: "d", label: "D", ...D }, { type: "point", id: "a", label: "A", ...A }, { type: "point", id: "b", label: "B", ...B },
+          { type: "point", id: "m", label: "M", ...M }, { type: "point", id: "e-pt", label: "E", x: 0, y: 2.5 },
+          { type: "circle", id: "e", label: "E", center: { x: 0, y: 2.5 }, radius: Math.hypot(d, 2 - d * d) },
+          { type: "line", id: "da", label: "DA", a: D, b: A }, { type: "line", id: "db", label: "DB", a: D, b: B },
+          { type: "line", id: "ab", label: "AB", a: A, b: B }
+        ]
+      }
+    }
+
+    const full = evaluateDrawingContractSetByPolicy(gkp06, [
+      { scopeId: "(2)", branchId: "zero", candidate: candidateAtD(0) },
+      { scopeId: "(2)", branchId: "positive", candidate: candidateAtD(1) },
+      { scopeId: "(2)", branchId: "negative", candidate: candidateAtD(-1) }
+    ])
+    expect(full.mode).toBe("branches")
+    expect(full.passed).toBe(true)
+    expect(full.status).toBe("passed")
+
+    const truncated = evaluateDrawingContractSetByPolicy(gkp06, [
+      { scopeId: "(2)", branchId: "zero", candidate: candidateAtD(0) }
+    ])
+    expect(truncated.passed).toBe(false)
+    expect(truncated.status).toBe("incomplete")
+    expect(truncated.missingIds).toEqual(["positive", "negative"])
   })
 })

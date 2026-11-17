@@ -1704,6 +1704,108 @@ export function evaluateDrawingContractScopes(
   }
 }
 
+export interface PolicyCandidateSlice {
+  scopeId: string
+  stateId?: string
+  branchId?: string
+  candidate: unknown
+  options?: ContractEvaluationOptions
+}
+
+export interface PolicyEvaluationSummary {
+  passed: boolean
+  status: "passed" | "partial" | "failed" | "incomplete"
+  mode: "states" | "branches" | "scopes" | "single"
+  missingIds: string[]
+}
+
+/**
+ * Evaluates a multi-state/multi-branch/multi-scope candidate set strictly by `contract.displayPolicy`
+ * with zero `MODE === "local"` gating and unchanged mathematical tolerances.
+ */
+export function evaluateDrawingContractSetByPolicy(
+  contract: DrawingContractCase,
+  slices: readonly PolicyCandidateSlice[]
+): PolicyEvaluationSummary {
+  if (slices.length === 0) {
+    return { passed: false, status: "failed", mode: "single", missingIds: [] }
+  }
+
+  const statePolicy = contract.displayPolicy.multiStateHandling ?? ""
+  if (statePolicy.startsWith("enumerate:")) {
+    const stateInputs: Record<string, { candidate: unknown; options?: ContractEvaluationOptions }> = {}
+    for (const slice of slices) {
+      if (slice.stateId) {
+        stateInputs[slice.stateId] = {
+          candidate: slice.candidate,
+          options: { verificationStatus: "passed", scopeId: slice.scopeId, ...slice.options }
+        }
+      }
+    }
+    const res = evaluateDrawingContractStates(contract, stateInputs)
+    return {
+      passed: res.passed,
+      status: res.status,
+      mode: "states",
+      missingIds: res.missingScopeIds
+    }
+  }
+
+  const branchPolicy = contract.displayPolicy.multiBranchHandling ?? ""
+  if (branchPolicy.startsWith("enumerate:")) {
+    const targetSubq =
+      contract.requiredObligations.find((ob) => ob.branchId !== undefined)?.scope
+      ?? contract.subquestions.at(-1)?.id
+      ?? "stem"
+    const branchInputs: Record<string, { candidate: unknown; options?: ContractEvaluationOptions }> = {}
+    for (const slice of slices) {
+      if (slice.branchId) {
+        branchInputs[slice.branchId] = {
+          candidate: slice.candidate,
+          options: { verificationStatus: "passed", scopeId: targetSubq, ...slice.options }
+        }
+      }
+    }
+    const res = evaluateDrawingContractBranches(contract, targetSubq, branchInputs)
+    return {
+      passed: res.passed,
+      status: res.status,
+      mode: "branches",
+      missingIds: res.missingScopeIds
+    }
+  }
+
+  const distinctScopes = new Set(slices.map((s) => s.scopeId).filter(Boolean))
+  if (contract.subquestions.length > 1 && (distinctScopes.size > 1 || (distinctScopes.size === 1 && !distinctScopes.has("shared")))) {
+    const scopeInputs: Record<string, { candidate: unknown; options?: ContractEvaluationOptions }> = {}
+    for (const slice of slices) {
+      scopeInputs[slice.scopeId] = {
+        candidate: slice.candidate,
+        options: { verificationStatus: "passed", scopeId: slice.scopeId, ...slice.options }
+      }
+    }
+    const res = evaluateDrawingContractScopes(contract, scopeInputs)
+    return {
+      passed: res.passed,
+      status: res.status,
+      mode: "scopes",
+      missingIds: res.missingScopeIds
+    }
+  }
+
+  const single = slices[0]!
+  const res = evaluateDrawingContract(contract, single.candidate, {
+    verificationStatus: "passed",
+    ...single.options
+  })
+  return {
+    passed: res.passed,
+    status: res.status,
+    mode: "single",
+    missingIds: res.missingEntityIds
+  }
+}
+
 export function summarizeContractReports(suite: ContractSuiteFile, items: readonly UnifiedCaseMetrics[]): UnifiedContractSummary {
   const byId = new Map(items.map((item) => [item.id, item]))
   const buckets: Record<FailureBucket, number> = {
