@@ -276,6 +276,34 @@ function resolveConicFromEquation(equation: unknown, expectedType?: unknown): Pa
     }
   }
 
+  // Scaled conic equation: Ax^2 (+|-) By^2 = C or Ay^2 - Bx^2 = C
+  const scaledXY = normalized.match(/^(\d+(?:\.\d+)?)?\*?x\^2([+-])(\d+(?:\.\d+)?)?\*?y\^2=(\d+(?:\.\d+)?)$/i)
+  if (scaledXY) {
+    const coefX = scaledXY[1] ? Number(scaledXY[1]) : 1
+    const sign = scaledXY[2]
+    const coefY = scaledXY[3] ? Number(scaledXY[3]) : 1
+    const rhs = Number(scaledXY[4])
+    if (Number.isFinite(coefX) && Number.isFinite(coefY) && Number.isFinite(rhs) && coefX > 0 && coefY > 0 && rhs > 0) {
+      const aSq = rhs / coefX
+      const bSq = rhs / coefY
+      if (sign === "+" && (expectedType === undefined || expectedType === "ellipse")) {
+        return { kind: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(aSq), radiusY: Math.sqrt(bSq) }
+      }
+      if (sign === "-" && (expectedType === undefined || expectedType === "hyperbola")) {
+        return { kind: "hyperbola", center: { x: 0, y: 0 }, axis: "x", radiusX: Math.sqrt(aSq), radiusY: Math.sqrt(bSq) }
+      }
+    }
+  }
+  const scaledYX = normalized.match(/^(\d+(?:\.\d+)?)?\*?y\^2-(\d+(?:\.\d+)?)?\*?x\^2=(\d+(?:\.\d+)?)$/i)
+  if (scaledYX && (expectedType === undefined || expectedType === "hyperbola")) {
+    const coefY = scaledYX[1] ? Number(scaledYX[1]) : 1
+    const coefX = scaledYX[2] ? Number(scaledYX[2]) : 1
+    const rhs = Number(scaledYX[3])
+    if (Number.isFinite(coefX) && Number.isFinite(coefY) && Number.isFinite(rhs) && coefX > 0 && coefY > 0 && rhs > 0) {
+      return { kind: "hyperbola", center: { x: 0, y: 0 }, axis: "y", radiusX: Math.sqrt(rhs / coefX), radiusY: Math.sqrt(rhs / coefY) }
+    }
+  }
+
   return null
 }
 
@@ -319,14 +347,26 @@ function validateStrategyParameters(
 
   switch (step.strategy) {
     case "function_curve_and_tangent": {
-      if (!asNonEmptyStr(p.expression)) {
-        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.expression` }
+      if (p.mode === "common_tangent") {
+        if (!asNonEmptyStr(p.sourceEntityId ?? step.hostEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.sourceEntityId` }
+        }
+        if (!asNonEmptyStr(p.otherEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.otherEntityId` }
+        }
+        return null
       }
       if (p.mode === "tangent_at_x") {
+        if (!asNonEmptyStr(p.expression) && !asNonEmptyStr(p.sourceEntityId ?? step.hostEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.expression` }
+        }
         if (!isFiniteNum(p.x0)) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.x0` }
         }
         return null
+      }
+      if (!asNonEmptyStr(p.expression)) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.expression` }
       }
       if (p.mode === "tangent_from_external_point") {
         if (!asVec2(p.externalPoint) && !(isFiniteNum(p.px) && isFiniteNum(p.py))) {
@@ -443,6 +483,16 @@ function validateStrategyParameters(
       if (mode === "through_points" || mode === "perpendicular_bisector") {
         if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
           return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "perpendicular_through_point" || mode === "parallel_through_point") {
+        if (!asNonEmptyStr(p.throughPointId) && asVec2(p.throughPoint) === null) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.throughPoint` }
+        }
+        const hasLine = asNonEmptyStr(p.lineId) !== null || (asNonEmptyStr(p.from) !== null && asNonEmptyStr(p.to) !== null)
+        if (!hasLine) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.lineId` }
         }
         return null
       }
@@ -908,6 +958,8 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
   const conicRegistry = new Map<string, PlanarConic>()
   const point3Registry = new Map<string, { x: number; y: number; z: number }>()
   const point3LabelRegistry = new Map<string, string>()
+  const functionRegistry = new Map<string, { alias: string; expression: string }>()
+  const unresolvedDiagnostics: string[] = []
   const entityById = new Map(intent.entities.map((e) => [e.id, e]))
   const resolveLabel = (step: DsConstructionStrategy, p: Record<string, unknown>) =>
     asNonEmptyStr(p.label) ?? asNonEmptyStr(entityById.get(step.outputEntityId)?.label) ?? step.outputEntityId
@@ -915,6 +967,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
   const nextKey = (prefix: string) => `${prefix}-${++keySeq}`
 
   const strategyByNodeId = new Map(intent.constructionStrategies.map((s) => [s.nodeId, s]))
+  const indexByNodeId = new Map(intent.constructionStrategies.map((s, idx) => [s.nodeId, idx]))
   const nodes: DrawingIntentNode[] = intent.constructionStrategies.map((s) => ({
     nodeId: s.nodeId,
     outputEntityId: s.outputEntityId,
@@ -950,107 +1003,157 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
   const orderedStrategies = dag.executionOrder.map((n) => strategyByNodeId.get(n.nodeId)!).filter(Boolean)
 
   for (const step of orderedStrategies) {
+    const actionsBefore = actions.length
+    const disclosuresBefore = disclosures.length
+    const stepIndex = indexByNodeId.get(step.nodeId) ?? 0
     for (const a of step.assumptions ?? []) {
       if (assumptions.length < 4 && !assumptions.includes(a)) assumptions.push(a)
     }
     const p = step.params ?? {}
 
     if (step.strategy === "function_curve_and_tangent") {
-      const expr = asNonEmptyStr(p.expression)
-      if (!expr) continue
-      if (p.mode === "tangent_at_x") {
-        if (!isFiniteNum(p.x0)) continue
-        const x0 = p.x0
-        const y0 = evaluateFunctionWithDomain(expr, x0)
-        const slope = evaluateSymbolicDerivative(expr, x0)
-        if (y0.ok && slope.ok) {
-          const xL = x0 - 1
-          const xR = x0 + 1
+      if (p.mode === "common_tangent") {
+        const srcId = asNonEmptyStr(p.sourceEntityId ?? step.hostEntityId)
+        const otherId = asNonEmptyStr(p.otherEntityId)
+        const srcFn = srcId ? functionRegistry.get(srcId) : undefined
+        const otherFn = otherId ? functionRegistry.get(otherId) : undefined
+        if (srcFn && otherFn) {
           actions.push({
-            actionId: "planar.create_line",
-            actionKey: nextKey("ds-tan"),
+            actionId: "function.create_tangent",
+            actionKey: nextKey("ds-ctan"),
             factIds: [],
             inputs: {
               alias: step.outputEntityId,
-              label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
-              points: [
-                { x: xL, y: y0.value + slope.value * (xL - x0) },
-                { x: xR, y: y0.value + slope.value * (xR - x0) }
-              ]
+              sourceId: `draft:${srcFn.alias}`,
+              anchor: {
+                kind: "common",
+                otherSourceId: `draft:${otherFn.alias}`,
+                branch: p.branch === 1 ? 1 : 0
+              }
             }
           } as DraftAction)
         }
-      } else if (p.mode === "tangent_from_external_point") {
-        const ext = asVec2(p.externalPoint) ?? (isFiniteNum(p.px) && isFiniteNum(p.py) ? { x: p.px, y: p.py } : null)
-        if (!ext || !isFiniteDomain(p.domain)) continue
-        const domain = p.domain
-        const targetIndex = Math.max(0, Math.trunc(asNum(p.index, 0)))
-        const residual = (t: number): number | null => {
-          const ft = evaluateFunctionWithDomain(expr, t)
-          const dt = evaluateSymbolicDerivative(expr, t)
-          if (!ft.ok || !dt.ok) return null
-          return ft.value + dt.value * (ext.x - t) - ext.y
-        }
-        const roots: number[] = []
-        const steps = 120
-        const dx = (domain[1] - domain[0]) / steps
-        let prevT = domain[0]
-        let prevR = residual(prevT)
-        for (let i = 1; i <= steps; i += 1) {
-          const curT = domain[0] + dx * i
-          const curR = residual(curT)
-          if (prevR !== null && curR !== null && prevR * curR <= 0) {
-            let lo = prevT, hi = curT, rLo = prevR
-            for (let b = 0; b < 30; b += 1) {
-              const mid = 0.5 * (lo + hi)
-              const rMid = residual(mid)
-              if (rMid === null) break
-              if (rLo * rMid <= 0) {
-                hi = mid
-              } else {
-                lo = mid
-                rLo = rMid
-              }
-            }
-            const root = 0.5 * (lo + hi)
-            if (!roots.some((r) => Math.abs(r - root) < 1e-4)) roots.push(root)
-          }
-          prevT = curT
-          prevR = curR
-        }
-        const tStar = roots[Math.min(targetIndex, Math.max(0, roots.length - 1))]
-        if (tStar !== undefined) {
-          const yStar = evaluateFunctionWithDomain(expr, tStar)
-          const slope = evaluateSymbolicDerivative(expr, tStar)
-          if (yStar.ok && slope.ok) {
+      } else if (p.mode === "tangent_at_x") {
+        if (isFiniteNum(p.x0)) {
+          const x0 = p.x0
+          const srcId = asNonEmptyStr(p.sourceEntityId ?? step.hostEntityId)
+          const srcFn = srcId ? functionRegistry.get(srcId) : undefined
+          if (srcFn) {
             actions.push({
-              actionId: "planar.create_line",
-              actionKey: nextKey("ds-tan-ext"),
+              actionId: "function.create_tangent",
+              actionKey: nextKey("ds-tan"),
               factIds: [],
               inputs: {
                 alias: step.outputEntityId,
-                label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
-                points: [
-                  { x: ext.x - 1, y: yStar.value + slope.value * (ext.x - 1 - tStar) },
-                  { x: ext.x + 1, y: yStar.value + slope.value * (ext.x + 1 - tStar) }
-                ]
+                sourceId: `draft:${srcFn.alias}`,
+                x: x0
               }
             } as DraftAction)
+          } else {
+            const expr = asNonEmptyStr(p.expression)
+            const y0 = expr ? evaluateFunctionWithDomain(expr, x0) : null
+            const slope = expr ? evaluateSymbolicDerivative(expr, x0) : null
+            if (y0?.ok && slope?.ok) {
+              const xL = x0 - 1
+              const xR = x0 + 1
+              actions.push({
+                actionId: "planar.create_line",
+                actionKey: nextKey("ds-tan"),
+                factIds: [],
+                inputs: {
+                  alias: step.outputEntityId,
+                  label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
+                  points: [
+                    { x: xL, y: y0.value + slope.value * (xL - x0) },
+                    { x: xR, y: y0.value + slope.value * (xR - x0) }
+                  ]
+                }
+              } as DraftAction)
+            }
+          }
+        }
+      } else if (p.mode === "tangent_from_external_point") {
+        const expr = asNonEmptyStr(p.expression)
+        const ext = asVec2(p.externalPoint) ?? (isFiniteNum(p.px) && isFiniteNum(p.py) ? { x: p.px, y: p.py } : null)
+        if (expr && ext && isFiniteDomain(p.domain)) {
+          const domain = p.domain
+          const targetIndex = Math.max(0, Math.trunc(asNum(p.index, 0)))
+          const residual = (t: number): number | null => {
+            const ft = evaluateFunctionWithDomain(expr, t)
+            const dt = evaluateSymbolicDerivative(expr, t)
+            if (!ft.ok || !dt.ok) return null
+            return ft.value + dt.value * (ext.x - t) - ext.y
+          }
+          const roots: number[] = []
+          const steps = 120
+          const dx = (domain[1] - domain[0]) / steps
+          let prevT = domain[0]
+          let prevR = residual(prevT)
+          for (let i = 1; i <= steps; i += 1) {
+            const curT = domain[0] + dx * i
+            const curR = residual(curT)
+            if (prevR !== null && curR !== null && prevR * curR <= 0) {
+              let lo = prevT, hi = curT, rLo = prevR
+              for (let b = 0; b < 30; b += 1) {
+                const mid = 0.5 * (lo + hi)
+                const rMid = residual(mid)
+                if (rMid === null) break
+                if (rLo * rMid <= 0) {
+                  hi = mid
+                } else {
+                  lo = mid
+                  rLo = rMid
+                }
+              }
+              const root = 0.5 * (lo + hi)
+              if (!roots.some((r) => Math.abs(r - root) < 1e-4)) roots.push(root)
+            }
+            prevT = curT
+            prevR = curR
+          }
+          const tStar = roots[Math.min(targetIndex, Math.max(0, roots.length - 1))]
+          if (tStar !== undefined) {
+            const yStar = evaluateFunctionWithDomain(expr, tStar)
+            const slope = evaluateSymbolicDerivative(expr, tStar)
+            if (yStar.ok && slope.ok) {
+              actions.push({
+                actionId: "planar.create_line",
+                actionKey: nextKey("ds-tan-ext"),
+                factIds: [],
+                inputs: {
+                  alias: step.outputEntityId,
+                  label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
+                  points: [
+                    { x: ext.x - 1, y: yStar.value + slope.value * (ext.x - 1 - tStar) },
+                    { x: ext.x + 1, y: yStar.value + slope.value * (ext.x + 1 - tStar) }
+                  ]
+                }
+              } as DraftAction)
+            }
           }
         }
       } else {
-        if (!isFiniteDomain(p.domain)) continue
-        actions.push({
-          actionId: "function.create_graph",
-          actionKey: nextKey("ds-fn"),
-          factIds: [],
-          inputs: {
-            alias: step.outputEntityId,
-            label: typeof p.label === "string" ? p.label : step.outputEntityId,
-            expression: expr,
-            domain: p.domain
-          }
-        } as DraftAction)
+        const expr = asNonEmptyStr(p.expression)
+        if (expr && isFiniteDomain(p.domain)) {
+          const fnLabel = typeof p.label === "string" ? p.label : step.outputEntityId
+          const fnEntry = { alias: step.outputEntityId, expression: expr }
+          functionRegistry.set(step.outputEntityId, fnEntry)
+          functionRegistry.set(fnLabel, fnEntry)
+          actions.push({
+            actionId: "function.create_graph",
+            actionKey: nextKey("ds-fn"),
+            factIds: [],
+            inputs: {
+              alias: step.outputEntityId,
+              label: fnLabel,
+              expression: expr,
+              domain: p.domain
+            }
+          } as DraftAction)
+        }
+      }
+      if (actions.length === actionsBefore) {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造实体 ${step.outputEntityId}`)
       }
       continue
     }
@@ -1150,6 +1253,9 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             ...(excludedPoints && excludedPoints.length > 0 ? { excludedPoints } : {})
           }
         } as DraftAction)
+      }
+      if (actions.length === actionsBefore) {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造圆锥曲线 ${step.outputEntityId}`)
       }
       continue
     }
@@ -1266,6 +1372,8 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           factIds: [],
           inputs: { alias: step.outputEntityId, label, points: [solvedPt] }
         } as DraftAction)
+      } else {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造平面点 ${step.outputEntityId}`)
       }
       continue
     }
@@ -1294,6 +1402,29 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           const dx = p2.x - p1.x, dy = p2.y - p1.y
           endpoints = [{ x: mid.x - dy, y: mid.y + dx }, { x: mid.x + dy, y: mid.y - dx }]
         }
+      } else if (mode === "perpendicular_through_point" || mode === "parallel_through_point") {
+        const throughPt =
+          (typeof p.throughPointId === "string" ? point2Registry.get(p.throughPointId) : undefined) ??
+          asVec2(p.throughPoint)
+        const explicitLine = p.lineId ? line2Registry.get(String(p.lineId)) : undefined
+        const fromPt = typeof p.from === "string" ? point2Registry.get(p.from) : undefined
+        const toPt = typeof p.to === "string" ? point2Registry.get(p.to) : undefined
+        const refLine = explicitLine ?? (fromPt && toPt ? { a: fromPt, b: toPt } : undefined)
+        if (throughPt && refLine) {
+          const dx = refLine.b.x - refLine.a.x
+          const dy = refLine.b.y - refLine.a.y
+          const len = Math.hypot(dx, dy)
+          if (len > 1e-12) {
+            const ux = dx / len
+            const uy = dy / len
+            const dirX = mode === "perpendicular_through_point" ? -uy : ux
+            const dirY = mode === "perpendicular_through_point" ? ux : uy
+            endpoints = [
+              { x: throughPt.x - dirX * 5, y: throughPt.y - dirY * 5 },
+              { x: throughPt.x + dirX * 5, y: throughPt.y + dirY * 5 }
+            ]
+          }
+        }
       } else if (mode === "tangent_to_conic") {
         const conic = conicRegistry.get(String(p.conicId ?? ""))
         const touchPt = (typeof p.touchPointId === "string" ? point2Registry.get(p.touchPointId) : undefined) ?? asVec2(p.touchPoint)
@@ -1320,6 +1451,8 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           factIds: [],
           inputs: { alias: step.outputEntityId, label, points: endpoints }
         } as DraftAction)
+      } else {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造线或线段 ${step.outputEntityId}`)
       }
       continue
     }
@@ -1481,6 +1614,9 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           inputs: { alias: step.outputEntityId, basePolygon: base, vector: vec3(0, 0, h), vertexNames: names }
         } as DraftAction)
       }
+      if (actions.length === actionsBefore) {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造立体基础图形 ${step.outputEntityId}`)
+      }
       continue
     }
 
@@ -1571,6 +1707,9 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           } as DraftAction)
         }
       }
+      if (actions.length === actionsBefore) {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造空间衍生点或线段 ${step.outputEntityId}`)
+      }
       continue
     }
 
@@ -1598,9 +1737,23 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
         const deg = asNum(p.angleDegrees, 90)
         if (h0 && h1 && apexBefore) {
           const sign = p.direction === "negative" ? -1 : 1
-          const rotated = rotatePointAboutHinge(apexBefore, h0, h1, sign * deg)
-          if (rotated.status === "ok") {
-            point3Registry.set(afterNames[0]!, rotated.point)
+          let allRotatedOk = true
+          for (let m = 0; m < movingNames.length; m += 1) {
+            const beforePt = point3Registry.get(movingNames[m]!)
+            if (!beforePt) {
+              allRotatedOk = false
+              break
+            }
+            const rotatedPt = rotatePointAboutHinge(beforePt, h0, h1, sign * deg)
+            if (rotatedPt.status !== "ok") {
+              allRotatedOk = false
+              break
+            }
+            const afterName = afterNames[m]!
+            point3Registry.set(afterName, rotatedPt.point)
+            point3LabelRegistry.set(afterName, afterName)
+          }
+          if (allRotatedOk) {
             actions.push({
               actionId: "solid.fold",
               actionKey: nextKey("ds-fold"),
@@ -1618,7 +1771,23 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           }
         }
       }
+      if (actions.length === actionsBefore) {
+        unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法执行折叠步骤 ${step.outputEntityId}`)
+      }
       continue
+    }
+    if (step.strategy !== "infeasible_disclosure" && actions.length === actionsBefore && disclosures.length === disclosuresBefore) {
+      unresolvedDiagnostics.push(`[unresolved_construction@intent.constructionStrategies[${stepIndex}]] 无法构造实体 ${step.outputEntityId}`)
+    }
+  }
+
+  if (unresolvedDiagnostics.length > 0) {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: intent.goal,
+      factIds: [],
+      questions: unresolvedDiagnostics.slice(0, 4)
     }
   }
 

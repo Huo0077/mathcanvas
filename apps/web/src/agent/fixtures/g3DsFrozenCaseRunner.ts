@@ -2,10 +2,14 @@ import {
   canonicalContentHash,
   certifyDrawingAgainstContract,
   compilePlan,
+  createBudget,
+  createToolRegistry,
+  TOOL_REGISTRY_REVISION,
   type Budget,
   type DrawingCertificateResult,
   type ExamRunBudget,
   type PlanEnvelope,
+  type PlanRequest,
   type PlannerPort
 } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
@@ -15,6 +19,7 @@ import {
   type DrawingContractCase,
   type PolicyCandidateSlice
 } from "../../../../../scripts/reliability-eval/drawingContracts"
+import type { G3Boundary } from "./g3DsCaseTrace"
 
 export interface PublicFrozenCaseInput {
   readonly id: string
@@ -109,13 +114,20 @@ function materializeSliceDocument(
   return null
 }
 
-function buildPlanRequestForPublicInput(pub: PublicFrozenCaseInput) {
+function buildPlanRequestForPublicInput(pub: PublicFrozenCaseInput, rawBudget: Budget | ExamRunBudget, signal: AbortSignal): PlanRequest {
+  const registry = createToolRegistry()
+  const planningTools = registry.forModelPhase("planning", {
+    workspace: pub.workspace,
+    confirmed: false,
+    capabilityRevision: TOOL_REGISTRY_REVISION,
+    readToolsAvailable: false
+  })
+  const budget: Budget = "consume" in rawBudget ? rawBudget : createBudget()
   return {
     run: {
       runId: `frozen-${pub.id}`,
       conversationId: `frozen-${pub.id}`,
-      projectId: "local",
-      phase: "planning" as const,
+      promptMessageId: `prompt-${pub.id}`,
       target: {
         projectId: "local",
         documentId: `frozen-doc-${pub.id}`,
@@ -123,12 +135,27 @@ function buildPlanRequestForPublicInput(pub: PublicFrozenCaseInput) {
         epoch: `epoch:${pub.id}`,
         generation: 0,
         contentHash: "empty"
-      }
+      },
+      sources: [],
+      textProfileId: "frozen-ds-profile",
+      capabilityRevision: TOOL_REGISTRY_REVISION,
+      policyRevision: "frozen-ds-policy.v1"
     },
     userMessage: pub.prompt,
+    budget,
+    signal,
+    beforeProviderRequest: (amount = 1) => budget.consume("network", amount).ok,
+    conversation: {
+      binding: { conversationId: `frozen-${pub.id}`, projectId: "local", documentId: `frozen-doc-${pub.id}`, workspace: pub.workspace, generation: 0 },
+      summary: "",
+      facts: [],
+      messages: [],
+      observation: { facts: [], summary: "" },
+      warnings: [],
+      estimatedCharacters: 0
+    },
     model: {
-      channel: "native_tools" as const,
-      tools: [],
+      tools: planningTools,
       context: {
         preamble: "MathCanvas",
         handles: {
@@ -156,6 +183,162 @@ function buildPlanRequestForPublicInput(pub: PublicFrozenCaseInput) {
   }
 }
 
+export interface Task6LivePreflightConfig {
+  readonly revision: string
+  readonly suiteHash: string
+  readonly modelId: string
+  readonly profileRevision: number
+  readonly selectedCaseIds: readonly string[]
+  readonly maxRequests: number
+  readonly maxPerCase: number
+  readonly maxInputBytes: number
+  readonly maxOutputTokens: number
+  readonly maxUsd: number
+  readonly pricingSource: string
+  readonly failureStopThreshold: number
+  readonly estimatedMaxCostUsd?: number
+}
+
+export type Task6LivePreflightVerdict =
+  | { readonly authorized: true; readonly normalizedMaxRequests: number }
+  | { readonly authorized: false; readonly reason: string }
+
+/** Fail-closed authorization gate before any live DeepSeek API call in Task 6. */
+export function evaluateTask6LivePreflight(config: Task6LivePreflightConfig): Task6LivePreflightVerdict {
+  if (!config.revision.trim()) return { authorized: false, reason: "missing_revision" }
+  if (!config.suiteHash.trim()) return { authorized: false, reason: "missing_suite_hash" }
+  if (!config.modelId.trim() || !Number.isFinite(config.profileRevision) || config.profileRevision < 1) {
+    return { authorized: false, reason: "missing_model_or_profile" }
+  }
+  if (config.selectedCaseIds.length === 0) return { authorized: false, reason: "empty_case_selection" }
+  if (!(config.maxRequests > 0) || !(config.maxPerCase > 0)) {
+    return { authorized: false, reason: "invalid_request_limits" }
+  }
+  if (!(config.maxInputBytes > 0) || !(config.maxOutputTokens > 0)) {
+    return { authorized: false, reason: "invalid_token_or_byte_limits" }
+  }
+  if (!(config.maxUsd > 0) || !Number.isFinite(config.maxUsd)) {
+    return { authorized: false, reason: "missing_max_usd_cap" }
+  }
+  if (!config.pricingSource.trim()) {
+    return { authorized: false, reason: "missing_pricing_source" }
+  }
+  if (!(config.failureStopThreshold > 0)) {
+    return { authorized: false, reason: "invalid_failure_stop_threshold" }
+  }
+  if (
+    config.estimatedMaxCostUsd !== undefined &&
+    (!Number.isFinite(config.estimatedMaxCostUsd) || config.estimatedMaxCostUsd > config.maxUsd)
+  ) {
+    return { authorized: false, reason: "estimated_cost_exceeds_cap" }
+  }
+  return {
+    authorized: true,
+    normalizedMaxRequests: Math.min(config.maxRequests, config.selectedCaseIds.length * config.maxPerCase)
+  }
+}
+
+export interface Task6CaseFunnelEntry {
+  readonly caseId: string
+  readonly modelInvoked: boolean
+  readonly firstAttemptPassed: boolean
+  readonly contractStatus: "passed" | "partial" | "failed" | "incomplete"
+  readonly certificateStatus: "passed" | "partial" | "blocked" | "unverified"
+  readonly renderStatus: "pending" | "dsLiveRendered" | "bridge_replay_passed" | "blocked"
+  readonly commitStatus: "pending" | "passed" | "failed"
+  readonly requestsUsed: number
+  readonly usageEventsReported: number
+  readonly inputBytes: number
+  readonly inputTokens: number
+  readonly outputTokens: number
+  readonly firstBoundary?: G3Boundary | "unknown"
+  readonly firstCode?: string
+}
+
+export interface Task6FunnelReport {
+  readonly denominator: number
+  readonly modelInvokedCount: number
+  readonly firstAttemptPassedCount: number
+  readonly contractPassedCount: number
+  readonly certificatePassedCount: number
+  readonly liveRenderedCount: number
+  readonly committedCount: number
+  readonly totalRequests: number
+  readonly totalUsageEvents: number
+  readonly totalInputBytes: number
+  readonly totalInputTokens: number
+  readonly totalOutputTokens: number
+  readonly costKnown: false
+  readonly costUsd: null
+  readonly shouldStopBatch: boolean
+  readonly stopReason?: "mixed_read_plan_recurrence" | "consecutive_failures"
+}
+
+export function aggregateTask6FunnelReport(
+  entries: readonly Task6CaseFunnelEntry[],
+  options: { readonly failureStopThreshold: number }
+): Task6FunnelReport {
+  let modelInvokedCount = 0
+  let firstAttemptPassedCount = 0
+  let contractPassedCount = 0
+  let certificatePassedCount = 0
+  let liveRenderedCount = 0
+  let committedCount = 0
+  let totalRequests = 0
+  let totalUsageEvents = 0
+  let totalInputBytes = 0
+  let totalInputTokens = 0
+  let totalOutputTokens = 0
+  let consecutiveFailures = 0
+  let stopReason: Task6FunnelReport["stopReason"]
+
+  for (const e of entries) {
+    if (e.modelInvoked) modelInvokedCount += 1
+    if (e.firstAttemptPassed) firstAttemptPassedCount += 1
+    if (e.contractStatus === "passed") contractPassedCount += 1
+    if (e.certificateStatus === "passed") certificatePassedCount += 1
+    if (e.renderStatus === "dsLiveRendered") liveRenderedCount += 1
+    if (e.commitStatus === "passed") committedCount += 1
+    totalRequests += e.requestsUsed
+    totalUsageEvents += e.usageEventsReported
+    totalInputBytes += e.inputBytes
+    totalInputTokens += e.inputTokens
+    totalOutputTokens += e.outputTokens
+
+    if (e.firstBoundary === "tool_protocol" && e.firstCode === "mixed_read_plan") {
+      stopReason = stopReason ?? "mixed_read_plan_recurrence"
+    }
+    if (e.contractStatus === "passed" && e.certificateStatus === "passed") {
+      consecutiveFailures = 0
+    } else {
+      consecutiveFailures += 1
+      if (consecutiveFailures >= options.failureStopThreshold) {
+        stopReason = stopReason ?? "consecutive_failures"
+      }
+    }
+  }
+
+  return {
+    denominator: entries.length,
+    modelInvokedCount,
+    firstAttemptPassedCount,
+    contractPassedCount,
+    certificatePassedCount,
+    liveRenderedCount,
+    committedCount,
+    totalRequests,
+    totalUsageEvents,
+    totalInputBytes,
+    totalInputTokens,
+    totalOutputTokens,
+    // Even if all usage events report tokens, provider billing is never inferred inside app code.
+    costKnown: false,
+    costUsd: null,
+    shouldStopBatch: stopReason !== undefined,
+    ...(stopReason === undefined ? {} : { stopReason })
+  }
+}
+
 export async function runFrozenDsCase(
   rawPublicInput: {
     readonly id: string
@@ -170,11 +353,12 @@ export async function runFrozenDsCase(
   // Always strip any extra non-public fields before calling the model provider or planner.
   const publicCase = projectPublicFrozenCaseInput(rawPublicInput)
 
+  const controller = new AbortController()
   const response: FrozenDsCaseRunnerResponse =
     typeof provider === "function"
       ? await provider(publicCase, budget)
       : await (async () => {
-          const outcome = await provider.plan(buildPlanRequestForPublicInput(publicCase) as never)
+          const outcome = await provider.plan(buildPlanRequestForPublicInput(publicCase, budget, controller.signal))
           if ("plan" in outcome && outcome.plan.kind === "plan") {
             return {
               modelInvoked: true,

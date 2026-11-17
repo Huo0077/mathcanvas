@@ -1526,4 +1526,35 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
       expect(outcome.failure.errors.some((e) => e.path.endsWith(".params.x0"))).toBe(true)
     }
   })
+
+  it("exposes structured strategy fields and params in buildDsIntentToolSchema instead of bare empty strategy object", async () => {
+    const capturedTools: unknown[][] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_intent",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async (req) => {
+        capturedTools.push(req.tools)
+        return {
+          ok: true,
+          events: [{ kind: "delta", requestId: "r-schema", attemptId: "a-schema", text: JSON.stringify({ schemaVersion: "mathcanvas.plan.v1", kind: "clarification", goal: "stop", factIds: [], questions: ["need"] }) }]
+        }
+      }
+    })
+    await planner.plan(request({ userMessage: "在正四棱锥 S-ABCD 中，底面边长为 2，高为 3" }))
+    const planTool = capturedTools[0]?.[0] as { function?: { parameters?: { properties?: { constructionStrategies?: { items?: { properties?: Record<string, unknown> } } } } } } | undefined
+    const stratProps = planTool?.function?.parameters?.properties?.constructionStrategies?.items?.properties
+    expect(stratProps).toBeDefined()
+    expect(Object.keys(stratProps ?? {})).toEqual(
+      expect.arrayContaining(["nodeId", "outputEntityId", "outputKind", "strategy", "scopeId", "stateId", "dependencyIds", "params", "sourceSpan"])
+    )
+  })
 })

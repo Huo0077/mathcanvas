@@ -152,7 +152,7 @@ describe("DS1 DsDrawingIntent structural compiler & invariants", () => {
     expect(compiledFn.kind).toBe("plan")
     if (compiledFn.kind !== "plan") return
     expect(compiledFn.actions.filter((a) => a.actionId === "function.create_graph")).toHaveLength(2)
-    expect(compiledFn.actions.some((a) => a.actionId === "planar.create_line")).toBe(true)
+    expect(compiledFn.actions.some((a) => a.actionId === "function.create_tangent")).toBe(true)
 
     const conicIntent: DsDrawingIntent = {
       schemaVersion: "mathcanvas.ds_intent.v1",
@@ -1123,5 +1123,287 @@ describe("Task 3 failure-driven capability families (non-case-ID parameterized &
     expect(ptN2?.position).toEqual({ x: 4, y: 0, z: 2 })
     // Cross-id segment resolution must also succeed when using outputEntityId "M2"/"N2" instead of display label "M₂"/"N₂"
     expect(compiled.draftDocument!.primitives.some((p) => p.type === "segment3" && p.label === "M₂N₂")).toBe(true)
+  })
+
+  it("compiles common_tangent / source-bound tangent_at_x to function.create_tangent, supports perp/parallel lines & scaled conics, rotates all fold vertices, and fails closed on unresolved steps", () => {
+    // 1. Common tangent between two polynomial curves -> real function.create_tangent actions
+    const commonTangentIntent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Draw f(x)=x^2, g(x)=-(x-2)^2+1 and their two common tangents",
+      entities: [
+        { id: "f", kind: "function", label: "f", scopeId: "shared", stateId: "shared" },
+        { id: "g", kind: "function", label: "g", scopeId: "shared", stateId: "shared" },
+        { id: "ct0", kind: "tangent", label: "ct0", scopeId: "(1)", stateId: "shared", hostEntityId: "f" },
+        { id: "ct1", kind: "tangent", label: "ct1", scopeId: "(1)", stateId: "shared", hostEntityId: "f" }
+      ],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["common_tangent"] }],
+      constructionStrategies: [
+        {
+          nodeId: "n-f",
+          outputEntityId: "f",
+          outputKind: "function",
+          strategy: "function_curve_and_tangent",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { mode: "curve", expression: "x*x", domain: [-3, 3] },
+          sourceSpan: { text: "f(x)=x^2" }
+        },
+        {
+          nodeId: "n-g",
+          outputEntityId: "g",
+          outputKind: "function",
+          strategy: "function_curve_and_tangent",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { mode: "curve", expression: "-(x-2)*(x-2)+1", domain: [-2, 3] },
+          sourceSpan: { text: "g(x)=-(x-2)^2+1" }
+        },
+        {
+          nodeId: "n-ct0",
+          outputEntityId: "ct0",
+          outputKind: "tangent",
+          strategy: "function_curve_and_tangent",
+          scopeId: "(1)",
+          stateId: "shared",
+          hostEntityId: "f",
+          dependencyIds: ["n-f", "n-g"],
+          params: { mode: "common_tangent", sourceEntityId: "f", otherEntityId: "g", branch: 0 },
+          sourceSpan: { text: "公切线1" }
+        },
+        {
+          nodeId: "n-ct1",
+          outputEntityId: "ct1",
+          outputKind: "tangent",
+          strategy: "function_curve_and_tangent",
+          scopeId: "(1)",
+          stateId: "shared",
+          hostEntityId: "f",
+          dependencyIds: ["n-f", "n-g"],
+          params: { mode: "common_tangent", sourceEntityId: "f", otherEntityId: "g", branch: 1 },
+          sourceSpan: { text: "公切线2" }
+        }
+      ],
+      unknowns: []
+    }
+    const parsedCt = parseAndValidateDsDrawingIntent(commonTangentIntent)
+    expect(parsedCt.ok, parsedCt.ok ? "" : JSON.stringify(parsedCt.diagnostics)).toBe(true)
+    if (!parsedCt.ok) return
+    const planCt = compileDsDrawingIntentToPlan(parsedCt.value)
+    expect(planCt.kind).toBe("plan")
+    if (planCt.kind !== "plan") return
+    expect(planCt.actions.filter((a) => a.actionId === "function.create_tangent")).toHaveLength(2)
+
+    const compiledCt = compilePlan(planCt, {
+      document: createEmptyDocument("conics"),
+      conversationId: "r2-ct",
+      documentGeneration: 0,
+      workspace: "conics"
+    })
+    expect(compiledCt.ok).toBe(true)
+    const ctPrims = compiledCt.draftDocument!.primitives.filter((p) => p.type === "tangent")
+    expect(ctPrims).toHaveLength(2)
+
+    // 2. Scaled ellipse 4x^2 + 9y^2 = 36 + perpendicular/parallel lines through a point
+    const planarOrthoIntent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Draw ellipse 4x^2+9y^2=36, chord AB and perpendicular chord through focus",
+      entities: [
+        { id: "E", kind: "conic", label: "E", scopeId: "shared", stateId: "shared" },
+        { id: "F2", kind: "point", label: "F2", scopeId: "shared", stateId: "shared", hostEntityId: "E" },
+        { id: "O", kind: "point", label: "O", scopeId: "shared", stateId: "shared" },
+        { id: "L1", kind: "line", label: "L1", scopeId: "shared", stateId: "shared" },
+        { id: "Lperp", kind: "line", label: "Lperp", scopeId: "shared", stateId: "shared" },
+        { id: "Lpar", kind: "line", label: "Lpar", scopeId: "shared", stateId: "shared" }
+      ],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["perpendicular", "parallel"] }],
+      constructionStrategies: [
+        {
+          nodeId: "n-e",
+          outputEntityId: "E",
+          outputKind: "conic",
+          strategy: "conic_from_equation_or_properties",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { conicType: "ellipse", equation: "4x^2+9y^2=36" },
+          sourceSpan: { text: "4x^2+9y^2=36" }
+        },
+        {
+          nodeId: "n-f2",
+          outputEntityId: "F2",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "E",
+          dependencyIds: ["n-e"],
+          params: { mode: "focus", conicId: "E", index: 1 },
+          sourceSpan: { text: "右焦点 F2" }
+        },
+        {
+          nodeId: "n-o",
+          outputEntityId: "O",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { mode: "explicit_coords", x: 0, y: 0 },
+          sourceSpan: { text: "原点 O" }
+        },
+        {
+          nodeId: "n-l1",
+          outputEntityId: "L1",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: ["n-o", "n-f2"],
+          params: { mode: "equation", a: 1, b: -1, c: 0 },
+          sourceSpan: { text: "x-y=0" }
+        },
+        {
+          nodeId: "n-lperp",
+          outputEntityId: "Lperp",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: ["n-l1", "n-f2"],
+          params: { mode: "perpendicular_through_point", throughPointId: "F2", lineId: "L1" },
+          sourceSpan: { text: "过 F2 垂直于 L1" }
+        },
+        {
+          nodeId: "n-lpar",
+          outputEntityId: "Lpar",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: ["n-l1", "n-f2"],
+          params: { mode: "parallel_through_point", throughPointId: "F2", lineId: "L1" },
+          sourceSpan: { text: "过 F2 平行于 L1" }
+        }
+      ],
+      unknowns: []
+    }
+    const parsedOrtho = parseAndValidateDsDrawingIntent(planarOrthoIntent)
+    expect(parsedOrtho.ok, parsedOrtho.ok ? "" : JSON.stringify(parsedOrtho.diagnostics)).toBe(true)
+    if (!parsedOrtho.ok) return
+    const planOrtho = compileDsDrawingIntentToPlan(parsedOrtho.value)
+    expect(planOrtho.kind).toBe("plan")
+    if (planOrtho.kind !== "plan") return
+    const compiledOrtho = compilePlan(planOrtho, {
+      document: createEmptyDocument("conics"),
+      conversationId: "r2-ortho",
+      documentGeneration: 0,
+      workspace: "conics"
+    })
+    expect(compiledOrtho.ok).toBe(true)
+    expect(compiledOrtho.draftDocument!.primitives.some((p) => p.type === "ellipse" && Math.abs(p.radiusX - 3) < 1e-6 && Math.abs(p.radiusY - 2) < 1e-6)).toBe(true)
+    expect(compiledOrtho.draftDocument!.primitives.filter((p) => p.type === "line")).toHaveLength(3)
+
+    // 3. Multi-vertex fold rotates every movingVertexNames[i] -> afterVertexNames[i]
+    const foldIntent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Fold both moving vertices around hinge B-C and connect after-fold edge",
+      entities: [
+        { id: "Base", kind: "polygon", label: "Base", scopeId: "shared", stateId: "pre_fold" },
+        { id: "Folded", kind: "solid", label: "Folded", scopeId: "(1)", stateId: "post_fold" },
+        { id: "SegAfter", kind: "segment", label: "A₁D₁", scopeId: "(1)", stateId: "post_fold" }
+      ],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "post_fold", relations: ["fold"] }],
+      constructionStrategies: [
+        {
+          nodeId: "n-base",
+          outputEntityId: "Base",
+          outputKind: "polygon",
+          strategy: "solid_base_and_prism_or_pyramid",
+          scopeId: "shared",
+          stateId: "pre_fold",
+          dependencyIds: [],
+          params: { shape: "right_trapezoid_open_base", bottomLength: 4, topLength: 2, height: 2, vertexNames: ["B", "C", "D", "A"] },
+          sourceSpan: { text: "直角梯形 ABCD" }
+        },
+        {
+          nodeId: "n-fold",
+          outputEntityId: "Folded",
+          outputKind: "solid",
+          strategy: "solid_fold_along_hinge",
+          scopeId: "(1)",
+          stateId: "post_fold",
+          dependencyIds: ["n-base"],
+          foldPhase: "post_fold",
+          params: { hinge: ["B", "C"], movingVertexNames: ["A", "D"], afterVertexNames: ["A₁", "D₁"], angleDegrees: 90 },
+          sourceSpan: { text: "沿 BC 折起 90°" }
+        },
+        {
+          nodeId: "n-seg-after",
+          outputEntityId: "SegAfter",
+          outputKind: "segment",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "(1)",
+          stateId: "post_fold",
+          dependencyIds: ["n-fold"],
+          params: { mode: "segment", from: "A₁", to: "D₁" },
+          sourceSpan: { text: "连线 A₁D₁" }
+        }
+      ],
+      unknowns: []
+    }
+    const parsedFold = parseAndValidateDsDrawingIntent(foldIntent)
+    expect(parsedFold.ok, parsedFold.ok ? "" : JSON.stringify(parsedFold.diagnostics)).toBe(true)
+    if (!parsedFold.ok) return
+    const planFold = compileDsDrawingIntentToPlan(parsedFold.value)
+    expect(planFold.kind).toBe("plan")
+    if (planFold.kind !== "plan") return
+    expect(planFold.actions.some((a) => a.actionId === "solid.create_segment")).toBe(true)
+
+    // 4. Unresolved step dependency must fail closed (clarification), never silently drop action
+    const unresolvedIntent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Fail closed when line misses host point",
+      entities: [
+        { id: "O", kind: "point", scopeId: "shared", stateId: "shared" },
+        { id: "L", kind: "line", scopeId: "shared", stateId: "shared" }
+      ],
+      givenRelations: [],
+      subquestions: [],
+      constructionStrategies: [
+        {
+          nodeId: "n-o",
+          outputEntityId: "O",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { mode: "explicit_coords", x: 0, y: 0 },
+          sourceSpan: { text: "O(0,0)" }
+        },
+        {
+          nodeId: "n-l",
+          outputEntityId: "L",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: ["n-o"],
+          params: { mode: "through_points", from: "O", to: "MissingPt" },
+          sourceSpan: { text: "过 O 与 MissingPt" }
+        }
+      ],
+      unknowns: []
+    }
+    const compiledUnresolved = compileDsDrawingIntentToPlan(unresolvedIntent)
+    expect(compiledUnresolved.kind).toBe("clarification")
+    if (compiledUnresolved.kind === "clarification") {
+      expect(compiledUnresolved.questions.join(" ")).toContain("unresolved_construction")
+    }
   })
 })

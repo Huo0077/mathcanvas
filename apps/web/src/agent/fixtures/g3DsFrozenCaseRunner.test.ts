@@ -3,8 +3,11 @@ import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 import drawingContracts36 from "../../../../../test-fixtures/reliability/drawing-contracts-36.json"
 import type { DrawingContractCase } from "../../../../../scripts/reliability-eval/drawingContracts"
+import { createModelPlanner } from "../modelPlanner"
 import {
+  aggregateTask6FunnelReport,
   compareLegacySingleVsMultiSliceReplay,
+  evaluateTask6LivePreflight,
   projectPublicFrozenCaseInput,
   runFrozenDsCase,
   type CandidateSliceArtifact
@@ -184,5 +187,129 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
       ]
     )
     expect(replayDiv.multiSliceStatus).toBe("passed")
+  })
+
+  it("wires plan.set_plan in PlannerPort requests and enforces fail-closed Task 6 live preflight & funnel accounting", async () => {
+    const jts01 = getCase("JT-S01")
+    const observedToolIds: string[] = []
+    const capturedToolsInModel: string[][] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_intent",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async (req) => {
+        capturedToolsInModel.push(
+          req.tools.map((t) => (t as { function?: { name?: string } }).function?.name ?? "unknown")
+        )
+        return {
+          ok: true,
+          events: [
+            {
+              kind: "tool_call",
+              requestId: "r-planner",
+              attemptId: "a-planner",
+              toolCallId: "tc-planner",
+              toolId: "plan_set_plan",
+              input: {
+                schemaVersion: "mathcanvas.ds_intent.v1",
+                goal: "clarify",
+                entities: [],
+                givenRelations: [],
+                subquestions: [],
+                constructionStrategies: [],
+                unknowns: [{ kind: "underdetermined", scopeId: "shared", detail: "need details", blocking: true }]
+              }
+            }
+          ]
+        }
+      }
+    })
+
+    const wrappedPlanner = {
+      async plan(req: Parameters<typeof planner.plan>[0]) {
+        for (const t of req.model.tools) observedToolIds.push(t.id)
+        return planner.plan(req)
+      }
+    }
+
+    await runFrozenDsCase(projectPublicFrozenCaseInput(jts01), wrappedPlanner, createBudget())
+    expect(observedToolIds).toContain("plan.set_plan")
+    expect(capturedToolsInModel[0]).toEqual(["plan_set_plan"])
+
+    // Missing pricingSource or maxUsd MUST refuse Task 6 live execution (0 paid calls allowed).
+    const unauthPreflight = evaluateTask6LivePreflight({
+      revision: "b776d609",
+      suiteHash: "c3671cc8",
+      modelId: "deepseek-v4-flash",
+      profileRevision: 2,
+      selectedCaseIds: ["GK-S08", "GK-S05", "GK-P03"],
+      maxRequests: 12,
+      maxPerCase: 3,
+      maxInputBytes: 80000,
+      maxOutputTokens: 4096,
+      maxUsd: 2.0,
+      pricingSource: "",
+      failureStopThreshold: 2,
+      estimatedMaxCostUsd: 0.45
+    })
+    expect(unauthPreflight.authorized).toBe(false)
+    if (!unauthPreflight.authorized) {
+      expect(unauthPreflight.reason).toBe("missing_pricing_source")
+    }
+
+    const overCapPreflight = evaluateTask6LivePreflight({
+      revision: "b776d609",
+      suiteHash: "c3671cc8",
+      modelId: "deepseek-v4-flash",
+      profileRevision: 2,
+      selectedCaseIds: ["GK-S08", "GK-S05", "GK-P03"],
+      maxRequests: 12,
+      maxPerCase: 3,
+      maxInputBytes: 80000,
+      maxOutputTokens: 4096,
+      maxUsd: 1.0,
+      pricingSource: "https://api-docs.deepseek.com/quick_start/pricing (2026-11-17)",
+      failureStopThreshold: 2,
+      estimatedMaxCostUsd: 1.25
+    })
+    expect(overCapPreflight.authorized).toBe(false)
+    if (!overCapPreflight.authorized) {
+      expect(overCapPreflight.reason).toBe("estimated_cost_exceeds_cap")
+    }
+
+    // Funnel report marks costKnown=false when usageEvents < requestsCount and trips circuit breaker on mixed protocol recurrence.
+    const report = aggregateTask6FunnelReport(
+      [
+        {
+          caseId: "GK-S08",
+          modelInvoked: true,
+          firstAttemptPassed: false,
+          contractStatus: "failed",
+          certificateStatus: "blocked",
+          renderStatus: "pending",
+          commitStatus: "pending",
+          requestsUsed: 1,
+          usageEventsReported: 0,
+          inputBytes: 1200,
+          inputTokens: 0,
+          outputTokens: 0,
+          firstBoundary: "tool_protocol",
+          firstCode: "mixed_read_plan"
+        }
+      ],
+      { failureStopThreshold: 2 }
+    )
+    expect(report.costKnown).toBe(false)
+    expect(report.costUsd).toBeNull()
+    expect(report.shouldStopBatch).toBe(true)
+    expect(report.stopReason).toBe("mixed_read_plan_recurrence")
   })
 })

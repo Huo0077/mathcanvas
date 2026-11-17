@@ -349,8 +349,23 @@ export function buildDsIntentToolSchema() {
             items: {
               type: "object",
               properties: {
-                strategy: { type: "string", enum: [...DS_CONSTRUCTION_STRATEGIES] }
-              }
+                nodeId: { type: "string" },
+                outputEntityId: { type: "string" },
+                outputKind: { type: "string" },
+                strategy: { type: "string", enum: [...DS_CONSTRUCTION_STRATEGIES] },
+                scopeId: { type: "string" },
+                stateId: { type: "string" },
+                hostEntityId: { type: "string" },
+                dependencyIds: { type: "array", items: { type: "string" } },
+                foldPhase: { type: "string", enum: ["pre_fold", "post_fold"] },
+                params: { type: "object" },
+                assumptions: { type: "array", items: { type: "string" } },
+                sourceSpan: {
+                  type: "object",
+                  properties: { text: { type: "string" }, start: { type: "number" }, end: { type: "number" } }
+                }
+              },
+              required: ["nodeId", "outputEntityId", "outputKind", "strategy", "scopeId", "stateId", "dependencyIds"]
             }
           },
           unknowns: { type: "array", items: { type: "object" } },

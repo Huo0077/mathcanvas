@@ -25,7 +25,7 @@ import { DS_CONSTRUCTION_STRATEGIES, DS_INTENT_SCHEMA_VERSION, MAX_CONVERSATION_
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
 export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
-export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v1"
+export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v2"
 
 export type PromptIntentMode = "legacy_actions" | "ds_intent"
 
@@ -199,6 +199,13 @@ function repairDetailSections(repair: NonNullable<SystemPromptPolicyInput["repai
   return sections
 }
 
+function dsIntentChannelAdvice(channel: ModelChannel): string {
+  if (channel === "native_tools") {
+    return "调用 `plan_set_plan`，在工具参数顶层提供 `schemaVersion: \"mathcanvas.ds_intent.v1\"` 与 `goal`/`entities`/`givenRelations`/`subquestions`/`constructionStrategies`/`unknowns`（仅无法构图澄清/只读作答时改传 `schemaVersion: \"mathcanvas.plan.v1\"` + `kind`）。本轮**不要**用普通文本回答。"
+  }
+  return channelAdvice(channel)
+}
+
 /** 紧凑型 DS 结构化施工单策略文本：大幅裁剪低层动作 schema，禁止模型手算立体顶点与无理数坐标。 */
 function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
   const sections: string[] = [
@@ -207,7 +214,7 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
     "**禁止手算立体顶点或无理数坐标**：几何点坐标、交点、切点、折叠旋转坐标与圆锥参数均由内核求解器计算；在 `solid_base_and_prism_or_pyramid` / `solid_fold_along_hinge` 中严禁在 `params` 传入 `vertices` 坐标数组，只描述结构、边角参数与关系。",
     "所有关系目标、依赖与 `hostEntityId` 必须指向 `entities` 中已声明实体；不同小问（`subquestions`）须通过 `dependsOn` 显式隔离作用域，禁止跨问污染；数学必要参数（`expression` / `x0` / `domain` / 边长 / 半径 / 焦准距 / 折角等）须附 `sourceSpan`、前序推导或显式 `assumptions`，严禁用 `0`、`\"x\"`、`[-5,5]` 默认值充数。",
     "若缺失题图、缺数学必要参数或条件无法同时满足，必须先指明缺失参数与来源或标出 `unknowns`（`blocking: true`）转为澄清，不要编造坐标或数值。",
-    channelAdvice(input.channel),
+    dsIntentChannelAdvice(input.channel),
     input.canPlan
       ? `施工单形状（${DS_INTENT_SCHEMA_VERSION}）：${JSON.stringify({
           schemaVersion: DS_INTENT_SCHEMA_VERSION,
@@ -220,6 +227,19 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
         })}`
       : `这一阶段**不允许返回施工单/计划**：只能返回 \`clarification\` 或 \`answer\`（${PLAN_SCHEMA_VERSION}）。`
   ]
+  if (input.canPlan) {
+    sections.push(
+      "策略 `params` 字段速查（按策略选键）：",
+      "- `conic_from_equation_or_properties`: `{ conicType:\"ellipse\"|\"hyperbola\"|\"parabola\"|\"circle\", equation?, radius?, focalParameter?, radiusX?, radiusY?, foci?:[[x,y],[x,y]], throughPoint?, majorSemiAxis?, eccentricity?, axis?:\"x\"|\"y\" }`",
+      "- `function_curve_and_tangent`: `{ mode:\"curve\"|\"tangent_at_x\"|\"tangent_from_external_point\"|\"common_tangent\", expression?, domain?:[min,max], x0?, externalPoint?:[x,y], sourceEntityId?, otherEntityId?, branch?:0|1 }`",
+      "- `planar_point_on_host`: `{ mode:\"focus\"|\"conic_vertex\"|\"on_conic\"|\"line_conic_intersection\"|\"other_line_conic_intersection\"|\"midpoint\"|\"segment_ratio\"|\"line_intersection\"|\"explicit_coords\", conicId?, lineId?, from?, through?, to?, excludePointId?, parameter?, ratioFromFirst?, x?, y? }`",
+      "- `planar_line_or_segment`: `{ mode:\"through_points\"|\"equation\"|\"perpendicular_bisector\"|\"perpendicular_through_point\"|\"parallel_through_point\"|\"tangent_to_conic\", from?, to?, throughPointId?, throughPoint?, lineId?, segment?:boolean, a?, b?, c?, conicId?, touchPointId?|touchPoint? }`",
+      "- `solid_base_and_prism_or_pyramid`: `{ shape:\"regular_pyramid\"(baseSide,height)|\"perpendicular_pyramid\"(ab,bc,angleABC,pa)|\"right_triangular_prism\"(lateralLength,apexToPlane,lateralLineDistance)|\"tetrahedron\"(ab,bc,ac,pa,pb,pc)|\"pyramid_perp_base_quad\"(pa,ab,ad,bc,requireAdPerpDc?,dc?)|\"right_trapezoid_open_base\"(bottomLength,topLength,height)|\"prism_box\"(width,depth,height), vertexNames?:string[] }`",
+      "- `solid_point_on_edge_or_face`: `{ mode:\"edge_ratio\"|\"segment\"|\"perpendicular_foot_on_plane\"|\"perpendicular_foot_on_line\", from?, to?, ratioFromFirst?, sourcePoint?, planePoints?:string[], lineFrom?, lineTo? }`",
+      "- `solid_fold_along_hinge`: `{ hinge:[h0,h1], movingVertexNames:string[], afterVertexNames:string[], angleDegrees, direction?:\"positive\"|\"negative\" }`",
+      "- `infeasible_disclosure`: `{ summary }`（配对应 `unknowns`）"
+    )
+  }
   if (input.repair) {
     sections.push("", "## 上一轮的输出没有被接受", input.repair.hint, ...repairDetailSections(input.repair))
   }

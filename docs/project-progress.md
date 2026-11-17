@@ -1,6 +1,11 @@
 # MathCanvas 项目过程日志
 
-## 2026-11-17 —— G3-DS 失败驱动 Task 0–Task 5 完结：同版渲染门禁与受控交付闭环（0 付费；等待 Task 6 授权）
+## 2026-11-17 —— G3-DS 失败驱动：Task 0–Task 5 完结 + Task 6 前置零付费加固（等待 Task 6 授权）
+
+- **零付费加固轮（[加固审计](audit/g3-ds-failure-driven-hardening/README.md)）**：修正 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts) `mathcanvas.ds_intent.prompt.v2` 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 工具参数契约冲突；修复 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) `PlannerPort` 工具/信号接线并接入 `evaluateTask6LivePreflight` 与 `aggregateTask6FunnelReport`；在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 补齐 `function.create_tangent`（含 `common_tangent`）、`perpendicular_through_point`/`parallel_through_point`、一般缩放圆锥方程、多顶点折叠旋转与 `unresolved_construction` fail-closed；全仓 `npm test` `550` 文件 **`5850 passed | 1 todo`**、`typecheck`、`lint` 全过。
+- **`Task 5`（[Task 5 审计](audit/g3-ds-failure-driven-t5/README.md)，`b776d609`）**：落地 `dsCandidateBundle.ts` `traceCandidateHash` 与 `bridge_replay_passed`/`dsLiveRendered` 分类、3D 轨道拖拽 `cameraHash` 刷新及隔离提交撤销/重做闭环；Playwright `--workers=1 --retries=0` **`41 passed`**、`test:rust` exit `0`。
+
+## 2026-11-17 —— G3-DS 失败驱动 Task 4：多问/多状态/多分支同版评测入口 `g3DsFrozenCaseRunner`（`332d8e47`，0 付费）
 
 - 在 [drawingContracts.ts](scripts/reliability-eval/drawingContracts.ts) 新增 `evaluateDrawingContractSetByPolicy`，新建 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts)，并在 [drawingContracts.test.ts](scripts/reliability-eval/drawingContracts.test.ts) 与 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) 对齐公有输入白名单投影；验证 `GK-P06` 三分支、`JT-S04` 状态交换、`JT-S08` 缺支与篡改 `candidateHash` 全数 fail-closed（`3` 文件 **`65 passed`**、`typecheck`、`lint`、`test:docs` 全过）。入档 [Task 4 审计](audit/g3-ds-failure-driven-t4/README.md)；真实 DS 仍 `0/36`，下一步进入 Task 5（零付费桥接）。
 
