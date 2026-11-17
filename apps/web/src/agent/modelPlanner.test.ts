@@ -1470,4 +1470,60 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
       expect(badOutcome.failure.errors.some((e) => e.code === "hand_computed_vertices_forbidden")).toBe(true)
     }
   })
+
+  it("propagates missing_required_parameter from ds_intent instead of substituting default 'x'/0/[-5,5]", async () => {
+    const missingParamPlanner = createModelPlanner({
+      intentMode: "ds_intent",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async () => ({
+        ok: true,
+        events: [{
+          kind: "tool_call",
+          requestId: "r-missing-param",
+          attemptId: "a-missing-param",
+          toolCallId: "call-missing",
+          toolId: PLAN_TOOL_NAME,
+          input: {
+            schemaVersion: DS_INTENT_SCHEMA_VERSION,
+            goal: "Plot tangent at x0",
+            entities: [
+              { id: "f", kind: "function", label: "f", scopeId: "shared", stateId: "shared" },
+              { id: "l", kind: "tangent", label: "l", scopeId: "(1)", stateId: "(1)", hostEntityId: "f" }
+            ],
+            givenRelations: [],
+            subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "(1)", relations: ["tangent"] }],
+            constructionStrategies: [{
+              nodeId: "tan-1",
+              outputEntityId: "l",
+              outputKind: "tangent",
+              strategy: "function_curve_and_tangent",
+              scopeId: "(1)",
+              stateId: "(1)",
+              hostEntityId: "f",
+              dependencyIds: [],
+              params: { mode: "tangent_at_x", expression: "x^2" },
+              sourceSpan: { text: "作切线" }
+            }],
+            unknowns: []
+          }
+        }]
+      })
+    })
+
+    const outcome = await missingParamPlanner.plan(request({ userMessage: "过 f(x)=x² 上一点作切线" }))
+    expect("failure" in outcome).toBe(true)
+    if ("failure" in outcome) {
+      expect(outcome.failure.errors.some((e) => e.code === "missing_required_parameter")).toBe(true)
+      expect(outcome.failure.errors.some((e) => e.path.endsWith(".params.x0"))).toBe(true)
+    }
+  })
 })

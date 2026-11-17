@@ -48,9 +48,9 @@
 
 **Interfaces:** `validateRequiredParameters(intent): {ok:true}|{ok:false,code:"missing_required_parameter"|"unsupported_construction"|"unproven_parameter",path:string}`；每个数学必要参数有题设 sourceSpan/合法推导/显式可审查假设，缺失不得以默认 `"x"`, `0`, `[-5,5]` 替换。显示宽高/相机仍可合理默认但不能影响合同数学语义。`compileConstructionDag` 失败直接返回带 `cyclic_dependency/missing_host/cross_scope_violation` 的拒绝，不能退回原始顺序。
 
-- [ ] **RED**：分别对 `function_curve_and_tangent` 缺 `expression`、`x0`、`domain` 写负例，必须拒绝或澄清，不可生成看似有效直线；对有合法原文参数的切线作正例；DAG环/错宿主/跨问引用必须失败。Run: `npm.cmd exec -- vitest run packages/agent-core/src/dsDrawingIntent.test.ts --testTimeout=30000`；先观察负例失败。
-- [ ] **最小实现**：建立每种 `DS_CONSTRUCTION_STRATEGIES` 所需参数表与来源规则，沿现有 `DsSourceSpan`/`givenRelations` 验证；编译遇缺参返回结构化拒绝并保留已有安全澄清语义。对应提示从“请猜坐标”改为“缺参先指出来源”，不新建外部CAS。
-- [ ] **GREEN及反例**：同上、`packages/agent-core/src/planCompiler.subquestionCoverage.test.ts`、`apps/web/src/agent/modelPlanner.test.ts` 与 `npm.cmd run typecheck`；复核 GK-P08 `objCov=1, obCov=0` 的有图不正确负例。同步文档、提交推送。此阶段可能使有候选题减少：**不能把减少候选误报为能力退化或改善，必须按正确率分项披露**。
+- [x] **RED**：分别对 `function_curve_and_tangent` 缺 `expression`、`x0`、`domain` 写负例，必须拒绝或澄清，不可生成看似有效直线；对有合法原文参数的切线作正例；DAG环/错宿主/跨问引用必须失败。Run: `npm.cmd exec -- vitest run packages/agent-core/src/dsDrawingIntent.test.ts --testTimeout=30000`；先观察负例失败。
+- [x] **最小实现**：建立每种 `DS_CONSTRUCTION_STRATEGIES` 所需参数表与来源规则，沿现有 `DsSourceSpan`/`givenRelations` 验证；编译遇缺参返回结构化拒绝并保留已有安全澄清语义。对应提示从“请猜坐标”改为“缺参先指出来源”，不新建外部CAS。
+- [x] **GREEN及反例**：同上、`packages/agent-core/src/planCompiler.subquestionCoverage.test.ts`、`apps/web/src/agent/modelPlanner.test.ts` 与 `npm.cmd run typecheck`；复核 GK-P08 `objCov=1, obCov=0` 的有图不正确负例。同步文档、提交推送。此阶段可能使有候选题减少：**不能把减少候选误报为能力退化或改善，必须按正确率分项披露**。
 
 ## Task 3 — 用26题零候选与10题错误候选驱动能力族（零付费回放，付费另授权）
 

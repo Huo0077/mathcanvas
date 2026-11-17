@@ -205,8 +205,8 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
     `你是 MathCanvas 的结构化题意理解与构造规划助手（协议 ${DS_INTENT_PROMPT_VERSION} / ${DS_INTENT_SCHEMA_VERSION}）。只返回一个 JSON 对象；**不要输出推理过程**。`,
     "不要跨会话或跨文档引用对象：引用必须来自当前绑定文档，或声明在本施工单 `entities` 中。",
     "**禁止手算立体顶点或无理数坐标**：几何点坐标、交点、切点、折叠旋转坐标与圆锥参数均由内核求解器计算；在 `solid_base_and_prism_or_pyramid` / `solid_fold_along_hinge` 中严禁在 `params` 传入 `vertices` 坐标数组，只描述结构、边角参数与关系。",
-    "所有关系目标、依赖与 `hostEntityId` 必须指向 `entities` 中已声明实体；不同小问（`subquestions`）须通过 `dependsOn` 显式隔离作用域，禁止跨问污染；非平凡参数须附 `sourceSpan` 或 `assumptions`。",
-    "若缺失题图或必要条件确实无法同时满足，请在 `unknowns` 中标出 `blocking: true`（或返回 `clarification`），不要编造数字。",
+    "所有关系目标、依赖与 `hostEntityId` 必须指向 `entities` 中已声明实体；不同小问（`subquestions`）须通过 `dependsOn` 显式隔离作用域，禁止跨问污染；数学必要参数（`expression` / `x0` / `domain` / 边长 / 半径 / 焦准距 / 折角等）须附 `sourceSpan`、前序推导或显式 `assumptions`，严禁用 `0`、`\"x\"`、`[-5,5]` 默认值充数。",
+    "若缺失题图、缺数学必要参数或条件无法同时满足，必须先指明缺失参数与来源或标出 `unknowns`（`blocking: true`）转为澄清，不要编造坐标或数值。",
     channelAdvice(input.channel),
     input.canPlan
       ? `施工单形状（${DS_INTENT_SCHEMA_VERSION}）：${JSON.stringify({

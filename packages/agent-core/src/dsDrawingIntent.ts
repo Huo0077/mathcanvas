@@ -106,6 +106,9 @@ export interface DsDrawingIntent {
 export type DsIntentDiagnosticCode =
   | "invalid_schema"
   | "unsupported_strategy"
+  | "unsupported_construction"
+  | "missing_required_parameter"
+  | "unproven_parameter"
   | "undeclared_entity_ref"
   | "cross_scope_violation"
   | "unsourced_constant"
@@ -162,6 +165,272 @@ function canReferenceScope(
   if (dependentScope === targetScope || targetScope === "shared") return true
   const depSub = subqById.get(dependentScope)
   return depSub !== undefined && depSub.dependsOn.includes(targetScope)
+}
+
+function isFiniteNum(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v)
+}
+
+function isPosNum(v: unknown): v is number {
+  return isFiniteNum(v) && v > 0
+}
+
+function isFiniteDomain(v: unknown): v is [number, number] {
+  return Array.isArray(v) && v.length === 2 && isFiniteNum(v[0]) && isFiniteNum(v[1]) && v[0] < v[1]
+}
+
+const SOLID_SHAPE_REQUIRED_FIELDS: Record<string, readonly string[]> = {
+  regular_pyramid: ["baseSide", "height"],
+  perpendicular_pyramid: ["ab", "bc", "angleABC", "pa"],
+  right_triangular_prism: ["lateralLength", "apexToPlane", "lateralLineDistance"],
+  tetrahedron: ["ab", "bc", "ac", "pa", "pb", "pc"],
+  pyramid_perp_base_quad: ["pa", "ab", "ad", "bc"],
+  right_trapezoid_open_base: ["bottomLength", "topLength", "height"],
+  prism_box: ["width", "depth", "height"],
+  prism: ["width", "depth", "height"]
+}
+
+export type RequiredParameterValidationResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false
+      readonly code: "missing_required_parameter" | "unsupported_construction" | "unproven_parameter"
+      readonly path: string
+    }
+
+function validateStrategyParameters(
+  step: DsConstructionStrategy,
+  index: number
+): Exclude<RequiredParameterValidationResult, { ok: true }> | null {
+  const prefix = `intent.constructionStrategies[${index}]`
+  const p = step.params ?? {}
+
+  if (step.strategy === "infeasible_disclosure") {
+    if (!asNonEmptyStr(p.summary)) {
+      return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.summary` }
+    }
+    return null
+  }
+
+  const hasProvenance = hasValidSourceOrAssumption(step.sourceSpan, step.assumptions)
+  if (!hasProvenance && (step.dependencyIds.length === 0 || containsNonTrivialScalar(step.params))) {
+    return { ok: false, code: "unproven_parameter", path: prefix }
+  }
+
+  switch (step.strategy) {
+    case "function_curve_and_tangent": {
+      if (!asNonEmptyStr(p.expression)) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.expression` }
+      }
+      if (p.mode === "tangent_at_x") {
+        if (!isFiniteNum(p.x0)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.x0` }
+        }
+        return null
+      }
+      if (p.mode === "tangent_from_external_point") {
+        if (!asVec2(p.externalPoint) && !(isFiniteNum(p.px) && isFiniteNum(p.py))) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.externalPoint` }
+        }
+        if (!isFiniteDomain(p.domain)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.domain` }
+        }
+        return null
+      }
+      if (p.mode !== undefined && p.mode !== "curve") {
+        return { ok: false, code: "unsupported_construction", path: `${prefix}.params.mode` }
+      }
+      if (!isFiniteDomain(p.domain)) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.domain` }
+      }
+      return null
+    }
+    case "conic_from_equation_or_properties": {
+      const ct = p.conicType
+      if (ct !== "ellipse" && ct !== "hyperbola" && ct !== "parabola" && ct !== "circle") {
+        return { ok: false, code: "unsupported_construction", path: `${prefix}.params.conicType` }
+      }
+      if (ct === "circle") {
+        if (!isPosNum(p.radius)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.radius` }
+        }
+        return null
+      }
+      if (ct === "parabola") {
+        if (!isPosNum(p.focalParameter)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.focalParameter` }
+        }
+        return null
+      }
+      const hasAxes = isPosNum(p.radiusX) && isPosNum(p.radiusY)
+      const hasFoci = Array.isArray(p.foci) && p.foci.length === 2 && asVec2(p.foci[0]) !== null && asVec2(p.foci[1]) !== null && asVec2(p.throughPoint) !== null
+      const hasEcc = isPosNum(p.majorSemiAxis) && isPosNum(p.eccentricity)
+      if (!hasAxes && !hasFoci && !hasEcc) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+      }
+      return null
+    }
+    case "planar_point_on_host": {
+      const mode = p.mode === undefined ? "explicit_coords" : p.mode
+      if (mode === "focus") {
+        if (!asNonEmptyStr(p.conicId ?? step.hostEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.conicId` }
+        }
+        return null
+      }
+      if (mode === "on_conic") {
+        if (!asNonEmptyStr(p.conicId ?? step.hostEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.conicId` }
+        }
+        if (!isFiniteNum(p.parameter)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.parameter` }
+        }
+        return null
+      }
+      if (mode === "line_conic_intersection") {
+        if (!asNonEmptyStr(p.lineId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.lineId` }
+        }
+        if (!asNonEmptyStr(p.conicId ?? step.hostEntityId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.conicId` }
+        }
+        return null
+      }
+      if (mode === "midpoint") {
+        if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "segment_ratio") {
+        if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        if (!isFiniteNum(p.ratioFromFirst)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.ratioFromFirst` }
+        }
+        return null
+      }
+      if (mode === "line_intersection") {
+        if (!asNonEmptyStr(p.firstLineId) || !asNonEmptyStr(p.secondLineId)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "explicit_coords") {
+        if (!isFiniteNum(p.x)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.x` }
+        }
+        if (!isFiniteNum(p.y)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.y` }
+        }
+        return null
+      }
+      return { ok: false, code: "unsupported_construction", path: `${prefix}.params.mode` }
+    }
+    case "planar_line_or_segment": {
+      const mode = p.mode
+      if (mode === "equation") {
+        if (!isFiniteNum(p.a) || !isFiniteNum(p.b) || !isFiniteNum(p.c) || (Math.abs(p.a) <= 1e-12 && Math.abs(p.b) <= 1e-12)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "through_points" || mode === "perpendicular_bisector") {
+        if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "tangent_to_conic") {
+        const hasConic = asNonEmptyStr(p.conicId) !== null || (p.conicType === "parabola" && isPosNum(p.focalParameter))
+        if (!hasConic) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.conicId` }
+        }
+        if (!asNonEmptyStr(p.touchPointId) && asVec2(p.touchPoint) === null) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.touchPoint` }
+        }
+        return null
+      }
+      if (mode === undefined && Array.isArray(p.points) && p.points.length >= 2 && asVec2(p.points[0]) && asVec2(p.points[1])) {
+        return null
+      }
+      return { ok: false, code: "unsupported_construction", path: `${prefix}.params.mode` }
+    }
+    case "solid_base_and_prism_or_pyramid": {
+      const shape = typeof p.shape === "string" ? p.shape : ""
+      const reqFields = SOLID_SHAPE_REQUIRED_FIELDS[shape]
+      if (!reqFields) {
+        return { ok: false, code: "unsupported_construction", path: `${prefix}.params.shape` }
+      }
+      for (const field of reqFields) {
+        if (!isPosNum(p[field])) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.${field}` }
+        }
+      }
+      return null
+    }
+    case "solid_point_on_edge_or_face": {
+      const mode = p.mode === undefined ? "edge_ratio" : p.mode
+      if (mode === "segment") {
+        if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "perpendicular_foot_on_plane") {
+        if (!asNonEmptyStr(p.sourcePoint)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.sourcePoint` }
+        }
+        if (!Array.isArray(p.planePoints) || p.planePoints.length < 3) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.planePoints` }
+        }
+        return null
+      }
+      if (mode === "perpendicular_foot_on_line") {
+        if (!asNonEmptyStr(p.sourcePoint) || !asNonEmptyStr(p.lineFrom ?? p.from) || !asNonEmptyStr(p.lineTo ?? p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        return null
+      }
+      if (mode === "edge_ratio") {
+        if (!asNonEmptyStr(p.from) || !asNonEmptyStr(p.to)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params` }
+        }
+        if (!isFiniteNum(p.ratioFromFirst)) {
+          return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.ratioFromFirst` }
+        }
+        return null
+      }
+      return { ok: false, code: "unsupported_construction", path: `${prefix}.params.mode` }
+    }
+    case "solid_fold_along_hinge": {
+      if (!Array.isArray(p.hinge) || p.hinge.length !== 2) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.hinge` }
+      }
+      if (!Array.isArray(p.movingVertexNames) || p.movingVertexNames.length === 0) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.movingVertexNames` }
+      }
+      if (!Array.isArray(p.afterVertexNames) || p.afterVertexNames.length !== p.movingVertexNames.length) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.afterVertexNames` }
+      }
+      if (!isFiniteNum(p.angleDegrees)) {
+        return { ok: false, code: "missing_required_parameter", path: `${prefix}.params.angleDegrees` }
+      }
+      return null
+    }
+  }
+}
+
+export function validateRequiredParameters(intent: DsDrawingIntent): RequiredParameterValidationResult {
+  if (intent.unknowns.some((u) => u.blocking) && intent.constructionStrategies.length === 0) {
+    return { ok: true }
+  }
+  for (let i = 0; i < intent.constructionStrategies.length; i += 1) {
+    const err = validateStrategyParameters(intent.constructionStrategies[i]!, i)
+    if (err) return err
+  }
+  return { ok: true }
 }
 
 /** Strictly parses and validates a DS structured construction intent before DAG compilation. */
@@ -364,6 +633,29 @@ export function parseAndValidateDsDrawingIntent(
   }
 
   if (dagNodes.length > 0 && diagnostics.length === 0) {
+    const candidateIntent: DsDrawingIntent = {
+      schemaVersion: DS_INTENT_SCHEMA_VERSION,
+      goal: goal!,
+      ...(input.workspaceHint === "plane" || input.workspaceHint === "conics" || input.workspaceHint === "geometry3d"
+        ? { workspaceHint: input.workspaceHint }
+        : {}),
+      entities,
+      givenRelations,
+      subquestions,
+      constructionStrategies: strategies,
+      unknowns
+    }
+    if (!hasBlockingUnknown) {
+      const paramValidation = validateRequiredParameters(candidateIntent)
+      if (!paramValidation.ok) {
+        diagnostics.push({
+          code: paramValidation.code,
+          path: paramValidation.path,
+          detail: `required parameter validation failed (${paramValidation.code}) at ${paramValidation.path}`
+        })
+        return { ok: false, diagnostics }
+      }
+    }
     const dag = compileConstructionDag(dagNodes)
     if (!dag.ok) {
       for (const diag of dag.diagnostics) {
@@ -381,19 +673,7 @@ export function parseAndValidateDsDrawingIntent(
       }
       return { ok: false, diagnostics }
     }
-    const value: DsDrawingIntent = {
-      schemaVersion: DS_INTENT_SCHEMA_VERSION,
-      goal: goal!,
-      ...(input.workspaceHint === "plane" || input.workspaceHint === "conics" || input.workspaceHint === "geometry3d"
-        ? { workspaceHint: input.workspaceHint }
-        : {}),
-      entities,
-      givenRelations,
-      subquestions,
-      constructionStrategies: strategies,
-      unknowns
-    }
-    return { ok: true, value, executionOrder: dag.executionOrder, irSummary: prompt ? irClauseSummaryForPrompt(prompt) : null }
+    return { ok: true, value: candidateIntent, executionOrder: dag.executionOrder, irSummary: prompt ? irClauseSummaryForPrompt(prompt) : null }
   }
 
   if (diagnostics.length > 0) return { ok: false, diagnostics }
@@ -523,9 +803,26 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     sourceRefs: []
   }))
   const dag = compileConstructionDag(nodes)
-  const orderedStrategies = dag.ok
-    ? dag.executionOrder.map((n) => strategyByNodeId.get(n.nodeId)!).filter(Boolean)
-    : intent.constructionStrategies
+  if (!dag.ok) {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: intent.goal,
+      factIds: [],
+      questions: dag.diagnostics.slice(0, 4).map((diag) => `[${diag.code}@${diag.nodeId ?? "graph"}] ${diag.reason}`)
+    }
+  }
+  const paramValidation = validateRequiredParameters(intent)
+  if (!paramValidation.ok) {
+    return {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "clarification",
+      goal: intent.goal,
+      factIds: [],
+      questions: [`[${paramValidation.code}@${paramValidation.path}] 缺少或未证实必要数学参数，请先指明原文依据或补全参数。`]
+    }
+  }
+  const orderedStrategies = dag.executionOrder.map((n) => strategyByNodeId.get(n.nodeId)!).filter(Boolean)
 
   for (const step of orderedStrategies) {
     for (const a of step.assumptions ?? []) {
@@ -534,9 +831,11 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     const p = step.params ?? {}
 
     if (step.strategy === "function_curve_and_tangent") {
+      const expr = asNonEmptyStr(p.expression)
+      if (!expr) continue
       if (p.mode === "tangent_at_x") {
-        const expr = typeof p.expression === "string" ? p.expression : "x"
-        const x0 = asNum(p.x0, 0)
+        if (!isFiniteNum(p.x0)) continue
+        const x0 = p.x0
         const y0 = evaluateFunctionWithDomain(expr, x0)
         const slope = evaluateSymbolicDerivative(expr, x0)
         if (y0.ok && slope.ok) {
@@ -557,11 +856,9 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           } as DraftAction)
         }
       } else if (p.mode === "tangent_from_external_point") {
-        const expr = typeof p.expression === "string" ? p.expression : "x"
-        const ext = asVec2(p.externalPoint) ?? { x: asNum(p.px, 0), y: asNum(p.py, 0) }
-        const domain = Array.isArray(p.domain) && p.domain.length === 2 && typeof p.domain[0] === "number" && typeof p.domain[1] === "number"
-          ? [p.domain[0], p.domain[1]] as [number, number]
-          : [-5, 5] as [number, number]
+        const ext = asVec2(p.externalPoint) ?? (isFiniteNum(p.px) && isFiniteNum(p.py) ? { x: p.px, y: p.py } : null)
+        if (!ext || !isFiniteDomain(p.domain)) continue
+        const domain = p.domain
         const targetIndex = Math.max(0, Math.trunc(asNum(p.index, 0)))
         const residual = (t: number): number | null => {
           const ft = evaluateFunctionWithDomain(expr, t)
@@ -617,10 +914,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
           }
         }
       } else {
-        const expr = typeof p.expression === "string" ? p.expression : "x"
-        const domain = Array.isArray(p.domain) && p.domain.length === 2 && typeof p.domain[0] === "number" && typeof p.domain[1] === "number"
-          ? [p.domain[0], p.domain[1]] as [number, number]
-          : [-3, 3] as [number, number]
+        if (!isFiniteDomain(p.domain)) continue
         actions.push({
           actionId: "function.create_graph",
           actionKey: nextKey("ds-fn"),
@@ -629,7 +923,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             alias: step.outputEntityId,
             label: typeof p.label === "string" ? p.label : step.outputEntityId,
             expression: expr,
-            domain
+            domain: p.domain
           }
         } as DraftAction)
       }

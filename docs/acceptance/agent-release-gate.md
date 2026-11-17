@@ -1,6 +1,6 @@
 # Agent 发布前门禁
 
-> **2026-11-17 新G3-DS发布阻断（Task 0–Task 1 已完成，零付费）**：[失败驱动G3方案](../superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)已推进至 **Task 1 完结**（[Task 0 审计](../audit/g3-ds-failure-driven-t0/README.md)、[Task 1 审计](../audit/g3-ds-failure-driven-t1/README.md)），但 Task 2–6 尚未完成；当前真实DS冻结36题完整数学合同0/36、端到端未验，且用户/教师可读性与Windows桌面实机仍待签。下文“DeepSeek保留后续执行”仅是旧时点记录，已被[本轮实测](../audit/2026-11-17-g3-ds5-live-36/README.md)取代。任何离线/浏览器回归全绿均不能放开发布。 另有4题在R4仍标 `text_with_figure_reference` 未知（Task 0 已核实 `GK-S02/GK-S03/JT-S06/JT-S07` 为 `input_figure_missing`），图像输入与用户核对须独立记录，不能用模型猜图或题号答案顶替。
+> **2026-11-17 新G3-DS发布阻断（Task 0–Task 2 已完成，零付费）**：[失败驱动G3方案](../superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)已推进至 **Task 2 完结**（[Task 0 审计](../audit/g3-ds-failure-driven-t0/README.md)、[Task 1 审计](../audit/g3-ds-failure-driven-t1/README.md)、[Task 2 审计](../audit/g3-ds-failure-driven-t2/README.md)），Task 3–6 尚未完成；当前真实DS冻结36题完整数学合同0/36、端到端未验，且用户/教师可读性与Windows桌面实机仍待签。下文“DeepSeek保留后续执行”仅是旧时点记录，已被[本轮实测](../audit/2026-11-17-g3-ds5-live-36/README.md)取代。任何离线/浏览器回归全绿均不能放开发布。 另有4题在R4仍标 `text_with_figure_reference` 未知（Task 0 已核实 `GK-S02/GK-S03/JT-S06/JT-S07` 为 `input_figure_missing`），图像输入与用户核对须独立记录，不能用模型猜图或题号答案顶替。
 
 > **2026-11-17 G3区块更新**：[G3渲染工程收尾](../audit/2026-11-17-g3-render-exit/README.md)：36/36自动化浏览器渲染、327/327全量E2E零重试、同版桌面no-bundle构建退出0；25题有视觉警告（27 clipped、26 tiny）。这不关闭humanReviewed/桌面原生窗口/真实DS/P8门禁；状态只以[当前状态](../current-status.md)为准。
 

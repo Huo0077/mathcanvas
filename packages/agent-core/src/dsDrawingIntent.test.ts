@@ -7,6 +7,7 @@ import {
   compileDsDrawingIntentByScope,
   compileDsDrawingIntentToPlan,
   parseAndValidateDsDrawingIntent,
+  validateRequiredParameters,
   type DsDrawingIntent
 } from "./dsDrawingIntent"
 import { compilePlan } from "./planCompiler"
@@ -740,6 +741,157 @@ describe("DS1 DsDrawingIntent structural compiler & invariants", () => {
     expect(fullPlan.kind).toBe("plan")
     if (fullPlan.kind === "plan") {
       expect(fullPlan.answer).toContain("第(2)问对应点不存在")
+    }
+  })
+})
+
+describe("Task 2 required mathematical parameter provenance and DAG fail-closed", () => {
+  const validFunctionTangentIntent: DsDrawingIntent = {
+    schemaVersion: "mathcanvas.ds_intent.v1",
+    goal: "Plot f(x)=x^2 and tangent at x0=1",
+    entities: [
+      { id: "f", kind: "function", label: "f", scopeId: "shared", stateId: "shared" },
+      { id: "l", kind: "tangent", label: "l", scopeId: "(1)", stateId: "(1)", hostEntityId: "f" }
+    ],
+    givenRelations: [
+      { kind: "function_expression", targets: ["f"], value: "x^2", scopeId: "shared", stateId: "shared", sourceSpan: { text: "f(x)=x^2" } }
+    ],
+    subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "(1)", relations: ["tangent"] }],
+    constructionStrategies: [
+      {
+        nodeId: "fn-f",
+        outputEntityId: "f",
+        outputKind: "function",
+        strategy: "function_curve_and_tangent",
+        scopeId: "shared",
+        stateId: "shared",
+        dependencyIds: [],
+        params: { label: "f", expression: "x^2", domain: [-2, 4] },
+        sourceSpan: { text: "f(x)=x^2, x in [-2,4]" }
+      },
+      {
+        nodeId: "tan-l",
+        outputEntityId: "l",
+        outputKind: "tangent",
+        strategy: "function_curve_and_tangent",
+        scopeId: "(1)",
+        stateId: "(1)",
+        hostEntityId: "f",
+        dependencyIds: ["fn-f"],
+        params: { mode: "tangent_at_x", expression: "x^2", x0: 1, tangentLabel: "l" },
+        sourceSpan: { text: "x0=1" }
+      }
+    ],
+    unknowns: []
+  }
+
+  it("rejects missing expression, missing x0, and missing domain instead of substituting 'x', 0, or [-5, 5]", () => {
+    expect(validateRequiredParameters(validFunctionTangentIntent)).toEqual({ ok: true })
+
+    // 1. Missing expression
+    const missingExpr = structuredClone(validFunctionTangentIntent)
+    delete missingExpr.constructionStrategies[0]!.params!.expression
+    expect(validateRequiredParameters(missingExpr)).toEqual({
+      ok: false,
+      code: "missing_required_parameter",
+      path: "intent.constructionStrategies[0].params.expression"
+    })
+    expect(parseAndValidateDsDrawingIntent(missingExpr).ok).toBe(false)
+    expect(compileDsDrawingIntentToPlan(missingExpr).kind).not.toBe("plan")
+
+    // 2. Missing x0 on tangent_at_x
+    const missingX0 = structuredClone(validFunctionTangentIntent)
+    delete missingX0.constructionStrategies[1]!.params!.x0
+    expect(validateRequiredParameters(missingX0)).toEqual({
+      ok: false,
+      code: "missing_required_parameter",
+      path: "intent.constructionStrategies[1].params.x0"
+    })
+    expect(compileDsDrawingIntentToPlan(missingX0).kind).not.toBe("plan")
+
+    // 3. Missing domain on curve & tangent_from_external_point
+    const missingDomain = structuredClone(validFunctionTangentIntent)
+    delete missingDomain.constructionStrategies[0]!.params!.domain
+    expect(validateRequiredParameters(missingDomain)).toEqual({
+      ok: false,
+      code: "missing_required_parameter",
+      path: "intent.constructionStrategies[0].params.domain"
+    })
+
+    // 4. Rejects unproven parameters lacking sourceSpan, assumptions, or derived dependency
+    const unproven = structuredClone(validFunctionTangentIntent)
+    delete unproven.constructionStrategies[0]!.sourceSpan
+    expect(validateRequiredParameters(unproven)).toEqual({
+      ok: false,
+      code: "unproven_parameter",
+      path: "intent.constructionStrategies[0]"
+    })
+  })
+
+  it("fails closed on cyclic_dependency, missing_host, and cross_scope_violation without falling back to raw step order", () => {
+    // 1. Cyclic dependency
+    const cyclic = structuredClone(validFunctionTangentIntent)
+    cyclic.constructionStrategies[0]!.dependencyIds = ["tan-l"]
+    const rCyclic = parseAndValidateDsDrawingIntent(cyclic)
+    expect(rCyclic.ok).toBe(false)
+    if (!rCyclic.ok) {
+      expect(rCyclic.diagnostics.some((d) => d.code === "cyclic_dependency")).toBe(true)
+    }
+    const envCyclic = compileDsDrawingIntentToPlan(cyclic)
+    expect(envCyclic.kind).toBe("clarification")
+    if (envCyclic.kind === "clarification") {
+      expect(envCyclic.questions.join(" ")).toContain("cyclic_dependency")
+    }
+
+    // 2. Missing host
+    const missingHost = structuredClone(validFunctionTangentIntent)
+    missingHost.entities[1]!.hostEntityId = "MissingCurve"
+    missingHost.constructionStrategies[1]!.hostEntityId = "MissingCurve"
+    const rHost = parseAndValidateDsDrawingIntent(missingHost)
+    expect(rHost.ok).toBe(false)
+    const envHost = compileDsDrawingIntentToPlan(missingHost)
+    expect(envHost.kind).toBe("clarification")
+    if (envHost.kind === "clarification") {
+      expect(envHost.questions.join(" ")).toContain("missing_host")
+    }
+
+    // 3. Cross scope violation
+    const crossScope = structuredClone(validFunctionTangentIntent)
+    crossScope.subquestions.push({ id: "(2)", dependsOn: ["shared"], stateId: "(2)", relations: [] })
+    crossScope.entities.push({ id: "g", kind: "function", label: "g", scopeId: "(1)", stateId: "(1)" })
+    crossScope.entities.push({ id: "l2", kind: "tangent", label: "l2", scopeId: "(2)", stateId: "(2)", hostEntityId: "g" })
+    crossScope.constructionStrategies.push({
+      nodeId: "fn-g",
+      outputEntityId: "g",
+      outputKind: "function",
+      strategy: "function_curve_and_tangent",
+      scopeId: "(1)",
+      stateId: "(1)",
+      dependencyIds: [],
+      params: { label: "g", expression: "x", domain: [-1, 1] },
+      sourceSpan: { text: "g(x)=x" }
+    })
+    crossScope.constructionStrategies.push({
+      nodeId: "tan-l2",
+      outputEntityId: "l2",
+      outputKind: "tangent",
+      strategy: "function_curve_and_tangent",
+      scopeId: "(2)",
+      stateId: "(2)",
+      hostEntityId: "g",
+      dependencyIds: ["fn-g"],
+      params: { mode: "tangent_at_x", expression: "x", x0: 0, tangentLabel: "l2" },
+      sourceSpan: { text: "x0=0" }
+    })
+    const rCross = parseAndValidateDsDrawingIntent(crossScope)
+    expect(rCross.ok).toBe(false)
+    if (!rCross.ok) {
+      expect(rCross.diagnostics.some((d) => d.code === "cross_scope_violation")).toBe(true)
+    }
+    const envCross = compileDsDrawingIntentToPlan(crossScope)
+    expect(envCross.kind).toBe("clarification")
+    if (envCross.kind === "clarification") {
+      expect(envCross.questions.join(" ")).toContain("cross_scope_violation")
     }
   })
 })
