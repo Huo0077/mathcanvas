@@ -1,4 +1,5 @@
 # 下一轮工作导航
+> **2026-11-17 DS5 预检更新**：已按用户额度真实请求4次，4题均未生成候选（完整合同0/4），受单题1请求限制；至少3题首轮出现 `tool_calls`，须先查工具环与预算诊断。证据见[DS5否定性预检](audit/2026-11-17-g3-ds5-live-preflight/README.md)。本次请求额度耗尽，新的2–3次/题或36题整批需重新授权；不继承旧的“DS未测”导航。
 
 > **2026-11-17 DS4 收口更新**：已完成 `DS0`（[DS0 基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md)）、`DS1`（[DS1 结构化施工单与紧凑协议](audit/2026-11-17-g3-ds1-intent/README.md)）、`DS2`（[DS2 义务族求解与作用域隔离](audit/2026-11-17-g3-ds2-partial-families/README.md)）、`DS3`（[DS3 生产证书双向闭环与有界修复](audit/2026-11-17-g3-ds3-certificate-repair/README.md)）与 `DS4`（[DS4 同候选浏览器渲染与受控交付](audit/2026-11-17-g3-ds4-render-delivery/README.md)，0 付费调用，全量 Vitest `547/5824`、Playwright `40/40`、desktop 构建过）。**当前停在 `DS5` 付费实测授权门禁前**：需先由用户明确授权目标模型/题集、预检批量、最大请求数与 token/费用上限及停机条件，同时另行安排教师人工可读性与实机桌面窗口 UIA 签收。实时分数只看[当前状态](current-status.md)。
 

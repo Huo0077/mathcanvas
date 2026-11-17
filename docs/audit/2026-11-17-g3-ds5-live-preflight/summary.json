@@ -1,0 +1,220 @@
+{
+  "schemaVersion": "g3-ds5-preflight.v1",
+  "revision": "453821af32aa5ce4a785caad748df3642d2fc72f",
+  "mode": "forced DS intent, coordinator, one provider request per case; no browser render/commit",
+  "selected": [
+    "GK-S08",
+    "GK-S02",
+    "GK-S01",
+    "JT-S07"
+  ],
+  "modelId": "deepseek-v4-flash",
+  "limits": {
+    "maxRequests": 4,
+    "maxPerCase": 1,
+    "maxInputBytesPerRequest": 200000,
+    "maxOutputTokensPerRequest": 4096,
+    "approvedMaxUsd": 5
+  },
+  "usage": {
+    "calls": 4,
+    "bytes": 25780,
+    "inputTokens": 7793,
+    "outputTokens": 395,
+    "usageEvents": 4
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "results": [
+    {
+      "id": "GK-S08",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "failedObligationIds": [
+        "ob-pd-ad",
+        "ob-pd-cd",
+        "ob-cd-ab",
+        "ob-ad",
+        "ob-dc",
+        "ob-cb",
+        "ob-ab",
+        "ob-dp",
+        "ob-base-coplanar",
+        "ob-topology"
+      ],
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "error": null,
+      "transport": null
+    },
+    {
+      "id": "GK-S02",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-cd",
+        "ob-ad",
+        "ob-adc",
+        "ob-bad",
+        "ob-ae",
+        "ob-af",
+        "ob-pe",
+        "ob-pf",
+        "ob-pc",
+        "ob-base-coplanar",
+        "ob-open-topology",
+        "ob-fold-transform",
+        "ob-ef-pd",
+        "ob-plane-sine"
+      ],
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "P"
+      ],
+      "error": null,
+      "transport": [
+        {
+          "kind": "usage",
+          "stopReason": null
+        },
+        {
+          "kind": "completed",
+          "stopReason": "tool_calls"
+        },
+        {
+          "kind": "tool_call",
+          "stopReason": null
+        },
+        {
+          "kind": "tool_call",
+          "stopReason": null
+        }
+      ]
+    },
+    {
+      "id": "GK-S01",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "failedObligationIds": [
+        "ob-pa-ab",
+        "ob-pa-ac",
+        "ob-pa-ad",
+        "ob-pa",
+        "ob-ac",
+        "ob-bc",
+        "ob-ab",
+        "ob-1-ad-pb",
+        "ob-2-ad-dc",
+        "ob-2-dihedral-sine",
+        "ob-topology"
+      ],
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "error": null,
+      "transport": [
+        {
+          "kind": "usage",
+          "stopReason": null
+        },
+        {
+          "kind": "completed",
+          "stopReason": "tool_calls"
+        },
+        {
+          "kind": "tool_call",
+          "stopReason": null
+        },
+        {
+          "kind": "tool_call",
+          "stopReason": null
+        }
+      ]
+    },
+    {
+      "id": "JT-S07",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "failedObligationIds": [
+        "ob-fa-ab",
+        "ob-fa-ad",
+        "ob-ab-ad",
+        "ob-ad-bc",
+        "ob-ad-fe",
+        "ob-fa-eq",
+        "ob-bc-eq",
+        "ob-fe-eq",
+        "ob-ad-2ab",
+        "ob-m-mid",
+        "ob-topology"
+      ],
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "error": null,
+      "transport": [
+        {
+          "kind": "usage",
+          "stopReason": null
+        },
+        {
+          "kind": "completed",
+          "stopReason": "tool_calls"
+        },
+        {
+          "kind": "tool_call",
+          "stopReason": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,7 @@
 # MathCanvas 项目过程日志
+## 2026-11-17 —— DS5 四题真实模型预检：否定性检查点
+
+用户授权费用最多5美元；本次仅在原生通道做最多4请求、每题1请求的串行预检，累计4请求、输入7793/输出395 tokens，实际费用未知。四道代表题均无候选，完整合同0/4；至少3题以 `tool_calls` 完成首轮，单请求额度不足以验收后续工具环，不外推36题成功率。脱敏证据见[审计记录](audit/2026-11-17-g3-ds5-live-preflight/README.md)。本轮额度耗尽，未修改生产功能，未进行36题整批或用户确认提交。
 
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：过程日志；有日期的操作/测试记录是历史事实，不自动等于当前状态。实时状态仅维护在[当前状态](current-status.md)；执行总顺序以[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。

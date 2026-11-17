@@ -81,6 +81,7 @@ DS1–DS4 的单测与录制/脱敏回放仅检验实现，不计“DS live pass
 - [x] 出口：在已授权真实 DS 候选基础上能独立证明每题各闸通过；未获模型复测授权时只能完成桥接/回放，标为待实测。定向 E2E `--workers=1 --retries=0` 和必要回归后同步文档、提交推送。
 
 ### DS5：受控付费复测、未见题与最终门禁
+> **2026-11-17 否定性预检检查点**：用户最多5美元授权，本轮4题各1次真实请求，四题均无候选、合同0/4；至少3题首轮以 `tool_calls` 完成但单题没有后续请求额度。用量见[DS5预检审计](../../audit/2026-11-17-g3-ds5-live-preflight/README.md)。此检查点**不勾选**下方DS5预检退出或36题退出项；4次请求用尽。先查零费用诊断，再重新申请多步工具环测试额度。
 
 **Files:** Modify `apps/web/src/agent/fixtures/examRunCoordinated.ts`、相关测试及 `scripts/reliability-eval/finalOutcome.ts`（以实核现有 runner 为准，保持单一评测入口）；Create `docs/audit/g3-ds-live-exit/README.md`、脱敏逐题结果与证据索引；Update `docs/current-status.md`, `docs/agent-next-round-progress.md`, `docs/project-progress.md`, `docs/acceptance/agent-tool-loop-scorecard.md`, `docs/acceptance/agent-release-gate.md` 以及主计划中的门禁引用。
 
