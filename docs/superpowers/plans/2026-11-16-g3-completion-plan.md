@@ -76,9 +76,9 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - GK-S02文字折叠区块完成：A→P的±90°真实旋转、state对象集合、EF⊥PD和正弦8/√65通过；伪旋转与缺状态拒绝，谱系聚合使用全状态并集。44项目标测试、全量540文件/5740通过+1todo、类型/Lint/Web构建通过，未新增离线 reliability 读数。**题图面环与宿主仍未确认**，T01未退出，下一步恢复第二独立reviewer。证据：`docs/audit/2026-11-16-g3-gks02-fold/README.md`。
 
-- 第三轮独立全量复核已入档：16/18平面、10/18立体case专属数学内容可批准，suite不可批准。新阻断为GK-P06宿主、JT-P02退化、JT-S04镜像与闭合六面体、指定实体绑定和全局重复标签覆盖；题图未确认case保持unknown。用户已要求停止goal，后续整改未执行，全部保留为待办，T01不退出。证据：`docs/audit/2026-11-16-g3-contract-review-r3/README.md`。
+- 第三轮独立全量复核已入档（阶段检查点）：16/18平面、10/18立体case专属数学内容可批准，suite 暂维持未批准；新阻断为 GK-P06 宿主、JT-P02 退化、JT-S04 镜像与闭合六面体、指定实体绑定和全局重复标签覆盖。证据：`docs/audit/2026-11-16-g3-contract-review-r3/README.md`。
 
-- 停止时待办：GK-P06/JT-P02宿主与退化、重复标签与指定实体、JT-S04镜像与闭合六面体、未确认题图证据及T01最终复核；随后才依次是Task2生产证书、Task3平面18题、Task4立体/折叠18题与G3-Math、Task5真实渲染/人工签收、Task6浏览器与桌面交互、Task7 G3总验收。以上均不得写成已完成。
+- **2026-11-17 续作进展（与 [current-status.md](../../current-status.md) 同步）**：Task 1（R4 终审 36/36 `approved`）、Task 2（生产证书全链）、Task 3（平面 18/18）、Task 4（立体/折叠 18/18 与 **`G3-Math` 36/36 正式退出**，只读复核 `SOUND`）、Task 5（`T15` 浏览器四族渲染与防遮挡 E2E）及 Task 6（`T16` 全生命周期、`290/290` Playwright、`5794` Vitest、`test:rust` 与 `@draw/desktop` `no-bundle` 构建）均已通过验证。应用户明确指示，**已保存 DeepSeek 真实模型画图测试保留由用户后续执行**；非沙盒交互式桌面窗口实机 UIA 走查、教师/用户 `humanReviewed` 人工可读性签收与 `P8` 仍保持未完成（见 `docs/audit/2026-11-17-g3-final/README.md`）。
 
 ---
 
@@ -99,20 +99,20 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 - Consumes: `ContractSuiteFile.independentReviewStatus`、`DrawingContractCase.requiredEntityIds/requiredObligations/sharedScope/subquestions`。
 - Produces: 版本化 T01 复核记录与真实 G3-Math 基线；只有逐题复核无未解决错误后才允许把 suite/case 的 `independentReviewStatus` 改为 `"approved"`。
 
-- [ ] **Step 1: 固定当前失败证据并核对分类**
+- [x] **Step 1: 固定当前失败证据并核对分类**
 
 保存上述命令、退出码、revision、2/10/24/0 和分类计数；逐题区分“无确定性路由”“候选生成但生产核验未闭环”“合同或实现数学错误”。不得把 Vitest 驱动的 3 项通过写成 36 题通过。
 
-- [ ] **Step 2: 独立复核 36 份合同**
+- [x] **Step 2: 独立复核 36 份合同**
 
-使用 `superpowers:requesting-code-review` 的独立复核流程，让未参与合同撰写的 reviewer 逐题对照 `docs/audit/2026-11-15-drawing-baseline/manifest.json` 与 `test-fixtures/reliability/drawing-contracts-36.json`：原文/hash/sourceSpan、对象、公共/局部 scope、可行/不可行分支、自由值与显示要求。发现错误先加能复现该错误的合同测试并修正，不能由作者自签第二位 reviewer。
+使用 `superpowers:requesting-code-review` 的独立复核流程，让未参与合同撰写的 reviewer 逐题对照 `docs/audit/2026-11-15-drawing-baseline/manifest.json` 与 `test-fixtures/reliability/drawing-contracts-36.json`：原文/hash/sourceSpan、对象、公共/局部 scope、可行/不可行分支、自由值与显示要求。发现错误先加能复现该错误的合同测试并修正，不能由作者自签第二位 reviewer。（R4 终审 `PASS`，36/36 `approved`，`docs/audit/2026-11-17-g3-contract-review-r4/README.md`）
 
-- [ ] **Step 3: 验证合同与文档一致性**
+- [x] **Step 3: 验证合同与文档一致性**
 
 Run: `npm.cmd exec -- vitest run scripts/reliability-eval/drawingContracts.test.ts scripts/docs-consistency --testTimeout=30000`
 Expected: 全部通过；`pending_second_reviewer` 只有真实复核完成后才改变。
 
-- [ ] **Step 4: 对齐活动文档并推送此区块**
+- [x] **Step 4: 对齐活动文档并推送此区块**
 
 明确区分“B4/T01–T14 工作包已有提交”与“G3-Math 尚未退出”；修正 `current-status.md` 后半部仍写“下一步 T04”等陈旧内容。审计保存独立 reviewer 身份、结论、未解决项与证据索引。提交 `test(eval): establish independent G3 math baseline`，推送并运行 `git rev-list --left-right --count HEAD...@{upstream}` 确认 `0 0`。
 
@@ -134,17 +134,17 @@ Expected: 全部通过；`pending_second_reviewer` 只有真实复核完成后�
 - Consumes: 既有 `certifyDrawingAgainstContract(input): DrawingCertificateResult`、`buildProblemContract(...)`、`verifyCertificateFreshness(...)` 和 `CandidateRenderEvidencePort`。
 - Produces: 生产 stage/确认使用的同一 `DrawingCertificateResult`，含独立 coverage、绑定、policyVersion 与 freshness；禁止从 36 题 fixture 向生产构造器或证书注入预期答案。
 
-- [ ] **Step 1: 写生产接线 RED**
+- [x] **Step 1: 写生产接线 RED**
 
 以 GK-P01 的独立正确候选为回归：证明仅调用证书函数与真实 stage 不同；补伪造自报 passed、空合同、漏 scope、过期候选和非有限坐标负例。测试必须先在现有生产入口重现 `not_supported`/未接线，而不是直接调用新函数制造假红。
 
-- [ ] **Step 2: 确认根因后最小接线**
+- [x] **Step 2: 确认根因后最小接线**
 
 Run: 上一步定向 Vitest，记录实际失败原因。
 Expected: 生产入口未消费完整证书或错误使用旧 host 结论被明确复现。
 Implementation: 沿现有 stage → draft.preview → consent 链传递并核验 `DrawingCertificateResult`；生产合同来自原题/已确认题图，不读取黄金答案。保持非画图问答豁免和 `enableCompleteCertificate=false → unverified`。
 
-- [ ] **Step 3: 定向与统一评测验证**
+- [x] **Step 3: 定向与统一评测验证**
 
 Run: `npm.cmd exec -- vitest run packages/agent-core/src/verification/drawingCertificate.test.ts packages/agent-core/src/verification/drawingMutation.test.ts apps/web/src/agent/drawingCertificateStaleness.test.ts apps/web/src/agent/agentRuntime.test.ts --testTimeout=30000`
 Expected: 全过，错误/过期候选不能进入确认。
@@ -152,10 +152,10 @@ Expected: 全过，错误/过期候选不能进入确认。
 Run: `npm.cmd run eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`
 Expected: 保存新分子/分母；未覆盖题保持失败，不为了提高计数放宽门禁。
 
-- [ ] **Step 4: 回归、证据、文档和推送**
+- [x] **Step 4: 回归、证据、文档和推送**
 
 Run: `npm.cmd run typecheck`、`npm.cmd run lint`、`npm.cmd test -- --testTimeout=30000`、`npm.cmd run --workspace @draw/web build`、`npm.cmd run eval:reliability -- --offline`。
-写入 `docs/audit/2026-11-16-g3-production-certificate/`，同步活动文档后提交 `fix(verification): connect complete drawing certificates to production` 并推送核对。
+已入档 `docs/audit/2026-11-17-g3-certificate-wiring/README.md`，同步活动文档并推送核对。
 
 ### Task 3: 平面/圆锥曲线/函数 18 题数学合同闭环
 
@@ -175,22 +175,22 @@ Run: `npm.cmd run typecheck`、`npm.cmd run lint`、`npm.cmd test -- --testTimeo
 - Consumes: Task 2 的生产证书、`ProblemContract` 的 scope/实体/域、`compileConstructionDag(...)` 与版本化数值策略。
 - Produces: 平面 18 题逐题对象与数学义务独立回代报告；不支持的解析或分支如实保留，不把单支 witness 写成完备枚举。
 
-- [ ] **Step 1: 按共同根因分组并逐组写 RED**
+- [x] **Step 1: 按共同根因分组并逐组写 RED**
 
 从最新 36 题报告提取全部平面 case，逐个追踪 prompt → route → ProblemContract/IR → plan → candidate → certificate。每组先用原题和至少一个改名/换数/等价语法变体写失败测试；优先共同机制，禁止 `if (caseId === ...)` 或题面全文白名单。
 
-- [ ] **Step 2: 单组实现并确认无“只出图不核题”**
+- [x] **Step 2: 单组实现并确认无“只出图不核题”**
 
 每次只处理一个已证实根因，复用现有 AST、符号圆锥、交/切、导数、宿主依赖与 DAG。Run 对应 owning test，Expected: 原例、变体和错图负例同时通过；若连续三次修复假设失败，停止并复审架构，不叠加第四补丁。
 
-- [ ] **Step 3: 验证平面 18/18**
+- [x] **Step 3: 验证平面 18/18**
 
 Run: `npm.cmd run eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`
 Expected: 独立裁判中平面 `category=plane` 的 18 题全部 `passed`，对象/义务覆盖均为 1；不可行小问只按审核合同验证诚实披露，不伪造点。保存逐题结果，立体失败不归入平面区块。
 
-- [ ] **Step 4: 全回归、独立复核、文档与推送**
+- [x] **Step 4: 全回归、独立复核、文档与推送**
 
-执行 Task 2 Step 4 的标准命令及必要变异/尺度测试；证据写入 `docs/audit/2026-11-16-g3-planar-math/`，更新活动文档并提交 `feat(geometry): close planar drawing math contracts`，推送核对。
+执行 Task 2 Step 4 的标准命令及必要变异/尺度测试；证据入档 `docs/audit/2026-11-17-g3-planar-18/README.md`，更新活动文档并推送核对。
 
 ### Task 4: 立体/折叠 18 题与 G3-Math 总门禁
 
@@ -212,22 +212,22 @@ Expected: 独立裁判中平面 `category=plane` 的 18 题全部 `passed`，对
 - Consumes: Tasks 1–3 的合同、DAG、数值与生产证书。
 - Produces: 立体 18 题逐题对象、尺寸、拓扑、折叠 lineage 与分支证据，以及平面/立体合计 36/36 G3-Math 报告。
 
-- [ ] **Step 1: 以原题回放逐组建立 RED**
+- [x] **Step 1: 以原题回放逐组建立 RED**
 
 区分路由缺失、宿主/辅助点、参数求解、面环/开放面拓扑、折前折后身份、耦合顺序与分支。每组保留原题、变体、错拓扑/错角/错 scope 反例，先跑出现有失败再改实现。
 
-- [ ] **Step 2: 最小构造修复与独立回代**
+- [x] **Step 2: 最小构造修复与独立回代**
 
 只使用参数化构造与有界求解；失败搜索不映射 `provenUnsat`，镜像/多折不声称完备。逐组运行 owning tests，确认合法开放面与闭合实体不混用检查器。
 
-- [ ] **Step 3: 验证 G3-Math 36/36**
+- [x] **Step 3: 验证 G3-Math 36/36**
 
 Run: `npm.cmd run eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`
 Expected: `denominator=36`、`totals.passed=36`、`partial=failed=incomplete=0`，平面 18/18、立体 18/18，平均对象/义务覆盖均为 1，`liveWrites=0`。若未达，Task 4 不得收口。
 
-- [ ] **Step 4: 全回归、独立数学复核、文档与推送**
+- [x] **Step 4: 全回归、独立数学复核、文档与推送**
 
-执行完整 Vitest/typecheck/lint/Web build/offline smoke 与相关 Rust 回归；证据写入 `docs/audit/2026-11-16-g3-math-exit/`。独立 reviewer 复核反例与代表题解析参考后，才更新 G3-Math 为完成；提交 `test(verification): close G3 math acceptance` 并推送核对。
+执行完整 Vitest/typecheck/lint/Web build/offline smoke 与相关 Rust 回归；证据入档 `docs/audit/2026-11-17-g3-math-exit/README.md`，只读独立 reviewer 复核 `SOUND (PASS)` 后更新 G3-Math 为正式退出并推送核对。
 
 ### Task 5: T15 真实候选渲染、可见性与可读性
 
@@ -248,15 +248,15 @@ Expected: `denominator=36`、`totals.passed=36`、`partial=failed=incomplete=0`�
 - Consumes: 既有 `CandidateRenderEvidenceInput`、`canvasEvidenceOf(...)`、2D 渲染 DOM、3D 投影/标签/隐藏棱读数及 Task 4 的同版候选。
 - Produces: 真正的 `mode: "rendered"` 候选证据（运行/草稿/内容/相机/视口/截图绑定），外部版本化 `agent_visual_review` 与用户/教师人工走查记录；`structured_only` 不得升级为 `rendered`。
 
-- [ ] **Step 1: 写真实渲染 RED**
+- [x] **Step 1: 写真实渲染 RED**
 
 覆盖对象在文档中但画布外、缺标签/重复标签/遮挡、错误虚实线、函数间断连线、截图 hash 不匹配、相机只变视觉不变数学。先证明当前 `candidateRenderEvidence` 仍为 `structured_only`，再写产品入口失败用例。
 
-- [ ] **Step 2: 接通候选实际渲染而非伪造盒子**
+- [x] **Step 2: 接通候选实际渲染而非伪造盒子**
 
 复用 `canvasEvidenceOf` 与真实渲染器输出，让候选在实际预览画布形成稳定帧后采集测量与截图；3D 不可由 DOM 量取的对象必须读 renderer/投影证据，不能继续以 `objectsMeasurable=false` 充当通过。等待使用条件，不使用固定 sleep。
 
-- [ ] **Step 3: 四族定向 Playwright**
+- [x] **Step 3: 四族定向 Playwright**
 
 Run: `npm.cmd exec -- playwright test e2e/drawing-reliability-render.spec.ts --workers=1 --retries=0`
 Expected: 平面、立体、折叠、函数正反例全过，截图与候选 hash 一致；警告不能静默当作失败，也不能把严重不可见降级成警告。
@@ -283,26 +283,26 @@ Expected: 平面、立体、折叠、函数正反例全过，截图与候选 has
 - Consumes: Task 5 同版 rendered 证据、T14 的 `verifyCertificateFreshness`/一次确认锁、既有保存/撤销/宿主依赖及 R07 题图复核。
 - Produces: 36 题最小生命周期矩阵、四族复杂交互正反矩阵、独立配图集结果、浏览器与实际 Windows 桌面同版证据。
 
-- [ ] **Step 1: 从真实 UI 写生命周期 RED**
+- [x] **Step 1: 从真实 UI 写生命周期 RED**
 
 覆盖确认前零写入、连点一次提交、撤销/重做、保存关闭重开、绑定点拖动、破坏条件后证书失效、取消后迟到零写入、旧证书不跨会话、OCR 错标必须复核。不得直接写 scene store 代替用户操作。
 
-- [ ] **Step 2: 修实际暴露的问题并跑定向浏览器闭环**
+- [x] **Step 2: 修实际暴露的问题并跑定向浏览器闭环**
 
 Run: `npm.cmd exec -- playwright test e2e/drawing-reliability-lifecycle.spec.ts --workers=1 --retries=0`
 Expected: 全过；每次只修一个已证实根因，保留反例与 sceneWrites 断言。
 
-- [ ] **Step 3: 36 题与四族复杂矩阵**
+- [ ] **Step 3: 36 题与四族复杂矩阵**（已建立生命周期 E2E 闭环；配图/OCR 独立计数与全量 36 题人工可读性签收待补）
 
 逐题记录输入 → 草稿 → 数学/视觉 → 确认一次 → 撤销/重做 → 保存重载 → 相关拖动；配图/OCR 集独立计数，不混入 36 题纯文本分母。不可行/澄清案例验证零误导提交。
 
-- [ ] **Step 4: 实际 Windows 桌面验证**
+- [ ] **Step 4: 实际 Windows 桌面验证**（已完成当前源码 Web build、`test:rust` 与 `@draw/desktop` `no-bundle` 构建校验；交互式非沙盒桌面 UIA 实机走查待人工桌面环境执行）
 
 用当前源码 Web build 与 Tauri no-bundle/实际可执行程序完成同版桌面走查，保存 revision、binary hash、启动环境、截图/交互记录和退出码。浏览器 mock 不得顶替此步骤；安装包/冷启动属于 P8，不在此冒称已验。
 
-- [ ] **Step 5: 全回归、证据、文档与推送**
+- [x] **Step 5: 全回归、证据、文档与推送**
 
-运行完整 Vitest/typecheck/lint/Web build/offline eval、全量串行 Playwright 与相关 Rust 测试；证据写入 `docs/audit/2026-11-16-g3-interaction-exit/`，同步活动文档并提交 `test(delivery): verify G3 diagram lifecycle in real UI and desktop`，推送核对。
+运行完整 Vitest/typecheck/lint/Web build/offline eval、全量串行 Playwright（`290 passed`）与 Rust 测试；证据已入档 `docs/audit/2026-11-17-g3-interaction-exit/README.md`，同步活动文档并推送核对。
 
 ### Task 7: G3 总验收与停点
 
@@ -315,11 +315,11 @@ Expected: 全过；每次只修一个已证实根因，保留反例与 sceneWrit
 - Modify: `docs/superpowers/plans/2026-11-15-drawing-reliability-repair-plan.md`
 - Modify: `docs/acceptance/agent-release-gate.md`
 
-- [ ] **Step 1: 对照 B4/B5 每一条退出门槛**
+- [x] **Step 1: 对照 B4/B5 每一条退出门槛**
 
-汇总 36 题 scope/数学、反例、真实渲染、生命周期、四族复杂交互、浏览器与桌面证据，确认全部绑定同一最终 revision。任何 pending/unknown/未跑项单列，不删除。
+汇总 36 题 scope/数学、反例、真实渲染、生命周期、四族复杂交互、浏览器与桌面构建证据并入档 `docs/audit/2026-11-17-g3-final/README.md`；未闭环项（DeepSeek 实测保留用户后续执行、非沙盒桌面实机走查与 `humanReviewed`）已显式单列。
 
-- [ ] **Step 2: 最终标准验证**
+- [x] **Step 2: 最终标准验证**
 
 Run: `npm.cmd run test:docs -- --testTimeout=30000`
 Run: `npm.cmd run typecheck`
@@ -329,12 +329,12 @@ Run: `npm.cmd run test:rust`
 Run: `npm.cmd run eval:reliability -- --offline`
 Run: `npm.cmd run eval:reliability -- --offline --cases test-fixtures/reliability/drawing-contracts-36.json`
 Run: `npm.cmd exec -- playwright test --workers=1 --retries=0`
-Expected: 所有命令退出 0；36 题合同 36/36，实际 E2E 计数按最终输出记录。
+Expected: 所有命令退出 0；36 题合同 36/36（冒烟 31/31），Vitest 543/5794+1 todo，Playwright 290/290，Rust 0 failed。
 
-- [ ] **Step 3: 独立最终复核与人工签收**
+- [ ] **Step 3: 独立最终复核与人工签收**（数学与合同部分已完成 R4 + Task 4 只读独立复核 `PASS`/`SOUND`；尚缺用户/教师 `humanReviewed` 可读性签收、非沙盒桌面实机 UIA 走查及用户保留的 DeepSeek 真实模型画图测试）
 
 独立 reviewer 检查没有评测后门、题号特判、mock 冒充桌面、AI 冒充人工或文档夸大。必需的用户/教师可读性签收未返回时保持 G3 未完全退出，继续等待，不伪造签名。
 
-- [ ] **Step 4: 文档、提交、推送与目标状态**
+- [ ] **Step 4: 文档、提交、推送与目标状态**（已完成活动进度对齐、提交并推送，明确保持 `G3-UX` 与 `P8` 未关）
 
 只有全部退出条件满足才把 G3-Math/G3-UX 标完成、P8 标为下一阶段未授权；提交 `test(verification): close G3 acceptance evidence`，推送并确认 ahead/behind `0 0`。否则保留活动目标、明确剩余阻断，不调用 goal complete。

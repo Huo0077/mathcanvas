@@ -8,7 +8,7 @@
     "GOVERNANCE": "restart_commit_and_old_history_archive_confirmed"
   },
   "notes": [
-    "All product implementation remains unstarted; live status is only docs/current-status.md.",
+    "Execution contract only; do not infer live implementation status here — read docs/current-status.md for current completion and open gates.",
     "R01 is the immediate safety guard; full scope semantics close under T02.",
     "R09-A is first-batch final-output scoring; R09-B finishes schema alignment in B3.",
     "T11 numerical contract precedes dependent constructors to avoid circular dependencies.",

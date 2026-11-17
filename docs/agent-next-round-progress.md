@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-最后更新：2026-11-17（用户要求停止goal后）。
+最后更新：2026-11-17（G3-Math 36/36 与 Task 6/T16 浏览器及桌面构建闭环；DeepSeek 实测按用户指示保留后继）。
 
 **实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 

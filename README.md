@@ -4,7 +4,7 @@
 > **文档角色（2026-11-15 对齐）**：项目首页与导航；不保存第二份实时进度。实时状态仅维护在[当前状态](docs/current-status.md)；执行总顺序以[完整实施主计划](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](docs/superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->
 
-> **2026-11-15 主线重启声明**：本轮从 `59ea3613` 重新开发；旧后续线 `59ea3613..d8743a32` 的47个提交（含历史v4.4.0）已备份并标记为本轮舍弃，不继承其实现、成绩或发布结论。见[版本决定](docs/audit/2026-11-15-main-restart/README.md)、[完整实施主计划](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)与[当前状态](docs/current-status.md)。当前基线存在审查阻断，文档提交不代表产品发布。
+> **2026-11-15 主线重启声明（2026-11-17 进度对齐）**：本轮从 `59ea3613` 重新开发；旧后续线 `59ea3613..d8743a32` 的47个提交（含历史v4.4.0）已备份并标记为本轮舍弃，不继承其实现、成绩或发布结论。见[版本决定](docs/audit/2026-11-15-main-restart/README.md)、[完整实施主计划](docs/superpowers/plans/2026-11-15-main-restart-master-plan.md)与[当前状态](docs/current-status.md)。截至 2026-11-17，`G0/G1/G2`、`B4` 及 `G3-Math`（36/36）与浏览器端 `T15/T16`（Playwright 290/290、`no-bundle` 桌面构建）均已通过；应用户指示保留 DeepSeek 真实模型画图测试由其本人后续执行，非沙盒桌面实机走查、人工可读性签收与 `P8` 仍未开启，发布继续阻断。
 
 > 旧阶段测试和发行数字保留为历史；最新读数、功能是否开始与发布阻断只看上面的当前状态入口，不由本页的使用说明推定。
 
@@ -68,13 +68,18 @@ npm run dev
 
 传统编辑遵循“界面操作 → 几何/场景计算 → 文档事务 → 画布重绘”的路径。Agent 路径会先观察场景、生成计划并编译为**隔离草稿**；只有草稿通过相应校验且用户明确确认后，宿主才会提交到文档。模型不能直接绕过确认修改现场。关于设计取舍，参见 [增量几何与多会话 Agent 设计](docs/superpowers/specs/2026-09-21-incremental-geometry-agent-and-conversations-design.md) 和 [Agent tool-loop 设计](docs/superpowers/specs/2026-09-28-agent-tool-loop-design.md)。
 
-## 下一步：补齐剩余验收并跟踪 CI
+## 当前进展与下一步导航
 
-按[四家族执行计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)和[功能补完记录](docs/superpowers/plans/2026-10-16-functional-completion.md)继续，不能沿用此前“Task 1–19 全部完成”的判断。
+实时进度、阶段通过情况与发布阻断仅以 [当前状态](docs/current-status.md) 为准，下一步入口见 [下一轮工作导航](docs/agent-next-round-progress.md) 与 [项目进度日志](docs/project-progress.md)，发布门禁见 [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)。
 
-**2026-10-20 的位置**（细节与读数见 [当前状态](docs/current-status.md) 顶部的「现状总览」）：**v4.0.1 已发布**（在 v4.0 之上补的是能力，不改契约）；三十轮维护批次把**题面读入与核验判据**大幅补齐（方程、标量尺寸、三角形的心、弦心距与弧长、派生球与内切球、中位线等，每批都有"读得到 / 说得出"的用例与门禁读数）。
+- **2026-11-17 本轮收口位置**：`G0`、`G1`、`G2` 与 `B4 / G3-Math`（36 题冻结合同 `36/36 passed`、只读独立复核 `PASS`/`SOUND`）已正式退出；`T15` 渲染 E2E 与 `T16` 全生命周期（全量 Playwright 290/290、Vitest 543 文件 / 5794 passed + 1 todo、`test:rust` 与 `@draw/desktop` `no-bundle` 构建）均已通过。
+- **仍留待后续关闭的门禁**：① 用户明确要求**保留已保存 DeepSeek 真实模型画图测试由用户本人后续执行**；② 非沙盒交互式 Windows 桌面窗口实机 UIA 走查；③ 36 题同候选渲染人工可读性签收（`humanReviewed`，AI 抽检仅计 `agent_visual_review`）；④ `P8` 盲测/成本/安装包/冷启动与发布审批（当前仍未开启）。
 
-**仍然缺的、且卡在人或钱上的**：① **真实 provider 复跑**（Task 20 与 30 题）—— 本机没有 API key，冻结授权 36 次请求 / $12 未动用；② **MSI 的"装 → 启动 → 卸载"** —— per-machine，需管理员，本机 `Error 1925`；③ **Task 21 的干净机器 / 断网发行 / 教师学生走查** —— 需要干净机器与真人。这三块用户已在 2026-10-20 明确「先不做」，因此**冻结在此，不自行推进**。
+历史参考（`2026-10-20` 早期阶段说明，非本轮 `59ea3613` 重启后的当前位置）：原[四家族执行计划](docs/superpowers/plans/2026-10-11-four-family-agent-upgrade-progress.md)与[功能补完记录](docs/superpowers/plans/2026-10-16-functional-completion.md)及旧发布记录仅作历史追溯。
+
+
+
+
 
 
 ## 项目进度与能力边界
@@ -104,7 +109,7 @@ npm run eval:reliability -- --offline
 npm run eval:explicit-solid -- --offline
 ```
 
-`test:docs` 运行文档与版本一致性门禁（8 个测试文件 / 22 项检查）；`test:e2e` 运行 Playwright 浏览器测试；`test:rust` 需要桌面端 Rust 工具链。`eval:agent`、`eval:reliability -- --offline`（29 题可靠性冒烟与独立 oracle）与 `eval:explicit-solid -- --offline`（54 题明确球体/棱柱离线验收）均为**离线确定性**评估，不代表真实模型通过率。按改动范围选择相关检查；提交前至少运行对应的类型检查、测试与构建。最新读数请以当次命令结果为准，不沿用历史文档中的用例总数。CI 配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
+`test:docs` 运行文档与版本一致性门禁（8 个测试文件 / 22 项检查）；`test:e2e` 运行 Playwright 浏览器测试；`test:rust` 需要桌面端 Rust 工具链。`eval:agent`、`eval:reliability -- --offline`（31 条开发冒烟；加 `--cases test-fixtures/reliability/drawing-contracts-36.json` 为 36 题黄金合同独立评测）与 `eval:explicit-solid -- --offline`（54 题明确球体/棱柱离线验收）均为**离线确定性**评估，不代表真实模型通过率。按改动范围选择相关检查；提交前至少运行对应的类型检查、测试与构建。最新读数请以当次命令结果为准，不沿用历史文档中的用例总数。CI 配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
 
 ### 当前开发重点
 

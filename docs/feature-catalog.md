@@ -8,7 +8,7 @@
 
 当前已有源码能力与“本轮已通过完整验收”是两回事。重启后的下一步只按[主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)的R/T合同推进，发布条件看[发布门禁](acceptance/agent-release-gate.md)，实时阶段与证据看[当前状态](current-status.md)。
 
-**已知限制不得被功能目录掩盖**：项目审查已确认C1漏小问条件错误放行、M2题图关系/精确坐标复核绕过，以及原生安全/数据保护与E2E阻断。下述功能存在不意味着这些缺陷已修；对应整改见[审查驱动技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)。
+**已知限制不得被功能目录掩盖**：早期审查发现的 C1 漏小问条件错误放行、M2 题图复核绕过、原生安全与 E2E 问题已分别按 [主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md) 的 `G0/G1/G2` 及 `G3-Math`（36/36）收口，[审查驱动技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)保留技术参考；DeepSeek 真实模型画图测试（按用户指示保留由其本人后续执行）、非沙盒桌面交互走查、人工可读性签收与 `P8` 发布门禁仍未关闭，真实状态仅以[当前状态](current-status.md)为准。
 
 ## 桌面题图识别（开发版）
 
