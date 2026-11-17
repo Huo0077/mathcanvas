@@ -38,9 +38,9 @@
 
 **Interfaces:** `selectToolPhase(input:{intentMode:"ds_intent"|"legacy_actions", hasExistingGeometry:boolean, hasSelectedRefs:boolean, requiresSceneObservation:boolean, observationCompleted:boolean}):"construct"|"observe"`。DS空白文档且无外部引用时 `construct` 仅发布 `plan_set_plan`；已有画布需读取则 `observe` 只发布只读工具，回传后单独 `construct`。`legacy_actions` 原路由必须兼容；非法工具或混合批仍由旧原子拒绝规则拦截。
 
-- [ ] **RED**：新单测先用冻结 GK-S08 同型的空文档（不是题号判断）断言首请求 `tools.map(t=>t.function.name)` **只有** `plan_set_plan`，而有已选实体的文档首轮只能读；已有 `modelPlanner.test.ts` 的混合批次 `executeTool` 零调用断言保持。Run: `npm.cmd exec -- vitest run apps/web/src/agent/modelToolPolicy.test.ts apps/web/src/agent/modelPlanner.test.ts --testTimeout=30000`；新用例先失败。
-- [ ] **最小实现**：`agentRunner` 从真实 `DocumentHandle`、当前文档图元/选区计算场景上下文并传到 planner，不用 `case.id`/关键词；`modelPlanner` 在每次请求前选互斥工具集，不把 `scene_inspect` 与 `plan_set_plan` 同时发给DS。仅在观察真的完成且预算足够后进入构造阶段。空场景不扣无意义场景读取请求。
-- [ ] **GREEN及负例**：同上再跑 `apps/web/src/agent/agentRunner.test.ts`；复播7个已知混合题的工具批次，区分“旧批次仍应拒绝”和“新工具表不诱导旧批次”；断言用户取消、无预算、重复callId和已有场景中只读工具在观察阶段都 fail-closed。同步文档、提交推送；此项**不能仅凭回放声称DS live7题获救**。
+- [x] **RED**：新单测先用冻结 GK-S08 同型的空文档（不是题号判断）断言首请求 `tools.map(t=>t.function.name)` **只有** `plan_set_plan`，而有已选实体的文档首轮只能读；已有 `modelPlanner.test.ts` 的混合批次 `executeTool` 零调用断言保持。Run: `npm.cmd exec -- vitest run apps/web/src/agent/modelToolPolicy.test.ts apps/web/src/agent/modelPlanner.test.ts --testTimeout=30000`；新用例先失败。
+- [x] **最小实现**：`agentRunner` 从真实 `DocumentHandle`、当前文档图元/选区计算场景上下文并传到 planner，不用 `case.id`/关键词；`modelPlanner` 在每次请求前选互斥工具集，不把 `scene_inspect` 与 `plan_set_plan` 同时发给DS。仅在观察真的完成且预算足够后进入构造阶段。空场景不扣无意义场景读取请求。
+- [x] **GREEN及负例**：同上再跑 `apps/web/src/agent/agentRunner.test.ts`；复播7个已知混合题的工具批次，区分“旧批次仍应拒绝”和“新工具表不诱导旧批次”；断言用户取消、无预算、重复callId和已有场景中只读工具在观察阶段都 fail-closed。同步文档、提交推送；此项**不能仅凭回放声称DS live7题获救**。
 
 ## Task 2 — 施工单数学参数来源与编译 fail-closed（零付费）
 

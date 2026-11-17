@@ -1794,6 +1794,7 @@ describe("a committed run leaves long-term memory behind", () => {
       }],
       unknowns: []
     }
+    const seenTools: string[][] = []
     const runner = createAgentRunner({
       modelPlanner: {
         intentMode: "ds_intent",
@@ -1807,13 +1808,17 @@ describe("a committed run leaves long-term memory behind", () => {
             capabilities: { tools: "verified", json: "verified", vision: "unknown" }
           }
         }),
-        runModel: async () => ({
-          ok: true,
-          events: [{ kind: "tool_call", requestId: "r-ds", attemptId: "a-ds", toolCallId: "tc-1", toolId: "plan_set_plan", input: dsIntentPayload }]
-        })
+        runModel: async (req) => {
+          seenTools.push((req.tools as Array<{ function: { name: string } }>).map((t) => t.function.name))
+          return {
+            ok: true,
+            events: [{ kind: "tool_call", requestId: "r-ds", attemptId: "a-ds", toolCallId: "tc-1", toolId: "plan_set_plan", input: dsIntentPayload }]
+          }
+        }
       }
     })
     const result = await runner.run("构造一个辅助演示棱锥体，底边取 2", "msg-ds-runner")
+    expect(seenTools).toEqual([["plan_set_plan"]])
     expect(result.phase).toBe("awaiting_confirmation")
     expect(result.draftId).toBeTruthy()
     // Zero main-scene writes before explicit user confirmation

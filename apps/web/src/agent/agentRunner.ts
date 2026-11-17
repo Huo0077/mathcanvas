@@ -14,6 +14,7 @@ import { deriveAcceptance } from "./acceptance"
 import { SYSTEM_PROMPT_VERSION } from "./systemPrompt"
 import { createLocalPlanner, localIntentSkillIds } from "./localPlanner"
 import { createModelPlanner, resolveActiveProvider, type ModelPlannerDependencies } from "./modelPlanner"
+import { deriveSceneToolContextFromRequest } from "./modelToolPolicy"
 import { splitImagePrompt } from "../services/problemImagePrompt"
 
 /**
@@ -533,6 +534,12 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         ...dependencies.modelPlanner,
         imageNotes,
         resolveProvider: async () => resolution,
+        sceneContext: dependencies.modelPlanner?.sceneContext ?? ((planReq) =>
+          deriveSceneToolContextFromRequest(
+            planReq,
+            planReq.executeTool !== undefined && planReq.model.tools.length > 1,
+            useSceneStore.getState().document
+          )),
         /**
          * **模型原话留在本机诊断里**（2026-09-22，用户现场）：界面上那句失败文案只说得出"形状不对"，
          * 而"模型到底回了什么"是排查的唯一证据 —— 以前它被整个丢掉，只能靠猜。
