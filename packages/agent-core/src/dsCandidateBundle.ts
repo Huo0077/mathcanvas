@@ -189,9 +189,12 @@ export function parseAndValidateDsCandidateBundle(raw: unknown): DsBundleValidat
 
 export interface BundleRenderDeliveryObservation {
   runId: string
+  traceCandidateHash?: string
   candidateHash: string
   documentHash: string
   cameraHash?: string
+  previousCameraHash?: string
+  cameraMoved?: boolean
   viewportHash: string
   evidenceStatus: string
   renderTier: string
@@ -204,10 +207,14 @@ export interface BundleRenderDeliveryObservation {
   committedDocumentHash?: string
   commitCount: number
   cancelledLateWrite?: boolean
+  mainCanvasWritesBeforeConfirm?: number
 }
+
+export type DsRenderDeliveryClassification = "dsLiveRendered" | "bridge_replay_passed" | "blocked"
 
 export interface BundleRenderDeliveryVerdict {
   passed: boolean
+  classification: DsRenderDeliveryClassification
   blockers: string[]
   warnings: string[]
   humanReviewed: DsBundleReviewStatus["humanReviewed"]
@@ -221,11 +228,25 @@ export function verifyBundleRenderAndDelivery(
   const blockers: string[] = []
   if (bundle.certificateStatus !== "passed") blockers.push(`certificate_not_passed:${bundle.certificateStatus}`)
   if (observed.runId !== bundle.evidenceChain.runId) blockers.push("run_id_mismatch")
+  if (
+    observed.traceCandidateHash !== undefined &&
+    (observed.traceCandidateHash !== bundle.evidenceChain.candidateHash ||
+      observed.traceCandidateHash !== observed.candidateHash)
+  ) {
+    blockers.push("trace_candidate_hash_mismatch")
+  }
   if (observed.candidateHash !== bundle.evidenceChain.candidateHash) blockers.push("candidate_hash_mismatch")
   if (observed.documentHash !== bundle.evidenceChain.documentHash) blockers.push("document_hash_mismatch")
   if (observed.viewportHash !== bundle.evidenceChain.viewportHash) blockers.push("viewport_hash_mismatch")
   if (bundle.evidenceChain.cameraHash !== undefined && observed.cameraHash !== bundle.evidenceChain.cameraHash) {
     blockers.push("camera_hash_mismatch")
+  }
+  if (
+    observed.cameraMoved === true &&
+    observed.previousCameraHash !== undefined &&
+    observed.cameraHash === observed.previousCameraHash
+  ) {
+    blockers.push("stale_camera_hash_after_orbit")
   }
   if (observed.renderTier !== "rendered") blockers.push(`unexpected_render_tier:${observed.renderTier}`)
   if (observed.evidenceStatus !== "passed") blockers.push(`canvas_evidence_${observed.evidenceStatus}`)
@@ -234,14 +255,25 @@ export function verifyBundleRenderAndDelivery(
   if (observed.hiddenLabels.length > 0) blockers.push(`hidden_labels:${observed.hiddenLabels.join(",")}`)
   for (const err of observed.diagnosticErrors) blockers.push(`diagnostic_error:${err}`)
   if (observed.diagnosticWarnings.includes("label_overlap")) blockers.push("label_overlap")
+  if ((observed.mainCanvasWritesBeforeConfirm ?? 0) > 0) blockers.push("unconfirmed_write_to_main_canvas")
   if (observed.commitCount > 1) blockers.push("duplicate_commit")
   if (observed.cancelledLateWrite === true) blockers.push("late_write_after_cancel")
   if (observed.committedDocumentHash !== undefined && observed.committedDocumentHash !== bundle.documentHash) {
     blockers.push("committed_document_hash_mismatch")
   }
 
+  const passed = blockers.length === 0
+  const isGenuineLiveDs =
+    bundle.bundleKind === "live_authorized" && bundle.provenance.dsInvoked && bundle.provenance.isLiveAuthorized
+  const classification: DsRenderDeliveryClassification = !passed
+    ? "blocked"
+    : isGenuineLiveDs
+      ? "dsLiveRendered"
+      : "bridge_replay_passed"
+
   return {
-    passed: blockers.length === 0,
+    passed,
+    classification,
     blockers,
     warnings: [...observed.diagnosticWarnings],
     // Automated engineering checks never forge human/teacher readability sign-off.

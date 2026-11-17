@@ -245,11 +245,20 @@ test("DS4 controlled delivery: enforces unified hash chain across preview/confir
   expect(afterDiscard?.primitives.length).toBe(committedCount)
   expect(await computeSha256(page, afterDiscard!)).toBe(committedSha)
 
-  // Return to canvas and confirm live canvas carries the identical candidate/document/viewport hashes, then reload cleanly.
+  // Return to canvas and confirm live canvas carries the identical candidate/document/viewport hashes, verify Undo/Redo lifecycle, then reload cleanly.
   await page.getByRole("button", { name: "返回画布" }).click()
   const mainCanvas = page.locator("svg[data-canvas-evidence-status]")
   await expect(mainCanvas).toHaveAttribute("data-document-hash", candidateHash!)
   await expect(mainCanvas).toHaveAttribute("data-viewport-hash", viewportHash!)
+
+  await page.getByRole("button", { name: "撤销", exact: true }).click()
+  await expect(page.locator("svg[data-canvas-evidence-status]")).toHaveAttribute("data-canvas-evidence-status", "failed")
+  const afterUndo = await readCommittedDoc(page, "conics")
+  expect(afterUndo?.primitives.length ?? 0).toBe(0)
+
+  await page.getByRole("button", { name: "重做", exact: true }).click()
+  await expect(page.locator("svg[data-canvas-evidence-status]")).toHaveAttribute("data-canvas-evidence-status", "passed")
+  await expect(page.locator("svg[data-canvas-evidence-status]")).toHaveAttribute("data-document-hash", candidateHash!)
 
   await page.reload()
   await page.getByRole("button", { name: "平面几何" }).click()

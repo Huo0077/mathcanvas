@@ -78,9 +78,9 @@
 
 **Interfaces:** 延用 `mathcanvas.ds_candidate_bundle.v1` 的 `{runId,candidateHash,documentHash,cameraHash,viewportHash}`；证书与浏览器截图同版；隔离临时工作区模拟用户明确确认、撤销、重开。没有 DS 真实候选时只能标 `bridge_replay_passed` 而非 `dsLiveRendered`。`humanReviewed` 默认 pending，AI审阅与用户/教师签收分列。
 
-- [ ] **RED**：混入旧离线36题截图/旧证书、缺图元、可见但条件未过、换相机不更新 hash、未确认仍写主画布必须失败；Run: `npm.cmd exec -- playwright test e2e/drawing-reliability-36-render.spec.ts e2e/drawing-reliability-lifecycle.spec.ts --workers=1 --retries=0`，目标新增反例先失败。
-- [ ] **最小实现**：让 `G3CaseTrace` 的候选版本与 DOM `data-candidate-hash` 绑定，真实 DS 同一候选数学/生产证书双过后才进入浏览器；隔离工作区单次提交+撤销/重开通过后单列交付率。禁止批量替真实用户确认正式文档。
-- [ ] **GREEN及证据**：目标 Playwright 0重试，全量关键浏览器回归；36题人工可读性还没签时显示 `pending`，警告逐题保留。同步文档、提交推送。
+- [x] **RED**：混入旧离线36题截图/旧证书、缺图元、可见但条件未过、换相机不更新 hash、未确认仍写主画布必须失败；Run: `npm.cmd exec -- playwright test e2e/drawing-reliability-36-render.spec.ts e2e/drawing-reliability-lifecycle.spec.ts --workers=1 --retries=0`，目标新增反例先失败。（已完成先红校验：`dsCandidateBundle.test.ts` 新增 `classification` / `trace_candidate_hash_mismatch` / `stale_camera_hash_after_orbit` / `unconfirmed_write_to_main_canvas` 反例先红，`e2e` 新增 3D 相机拖动校验未配 `geometry3d` 与 `[data-3d-scene="true"] canvas` 前先失败。）
+- [x] **最小实现**：让 `G3CaseTrace` 的候选版本与 DOM `data-candidate-hash` 绑定，真实 DS 同一候选数学/生产证书双过后才进入浏览器；隔离工作区单次提交+撤销/重开通过后单列交付率。禁止批量替真实用户确认正式文档。（已实现 `dsCandidateBundle.ts` 的 `traceCandidateHash`、`DsRenderDeliveryClassification` (`bridge_replay_passed` vs `dsLiveRendered`)、相机滞后与未确认写入主画布拦截，`drawing-reliability-36-render.spec.ts` `3D` 相机拖拽与 `manifest.json` 保守标注，`drawing-reliability-lifecycle.spec.ts` 撤销/重做/重载闭环。）
+- [x] **GREEN及证据**：目标 Playwright 0重试，全量关键浏览器回归；36题人工可读性还没签时显示 `pending`，警告逐题保留。同步文档、提交推送。（`dsCandidateBundle.test.ts` `3 passed`；Playwright `--workers=1 --retries=0` `41 passed`；`manifest.json` 已标 `dsRenderGateStatus: "bridge_replay_passed"` 与 `humanReviewed.status: "pending"`；全仓 `npm test` `550 files / 5847 passed | 1 todo`、`typecheck`、`lint`、`test:rust` 与 [Task 5 审计](../../audit/g3-ds-failure-driven-t5/README.md) 全部通过。）
 
 ## Task 6 — 分层真实DS复测和最终退出（需要新的独立付费授权）
 

@@ -212,7 +212,11 @@ test.describe("frozen 36-case rendered evidence packet", () => {
       cases: allResults,
       agent_visual_review: { status: "pending", contactSheets: Object.values(contacts).map((entry) => entry.file) },
       humanReviewed: { status: "pending", reviewerId: null, reviewedAt: null },
-      dsLiveAuthorizedRun: { status: "pending_authorization", note: "Zero paid DS calls executed in DS4 replay bridge." }
+      dsRenderGateStatus: "bridge_replay_passed",
+      dsLiveAuthorizedRun: {
+        status: "pending_authorization",
+        note: "Zero paid DS calls executed; classified as bridge_replay_passed (never dsLiveRendered) until live authorized DS invocation."
+      }
     }
     await writeFile(path.join(OUTPUT, "manifest.json"), JSON.stringify(manifest, null, 2))
     const cards = allResults.map((result) => `<section id="${result.id}"><h2>${escapeHtml(result.id)} · ${escapeHtml(result.source)}</h2><p>状态：${result.status}；族：${result.family}；候选 hash：${result.documentHash ?? "不可用"}</p>${result.screenshot ? `<a href="${result.screenshot}"><img src="${result.screenshot}" alt="${escapeHtml(result.id)}"></a>` : `<pre>${escapeHtml(result.error ?? "无截图")}</pre>`}</section>`).join("")
@@ -260,4 +264,34 @@ test("DS4 browser negative & hash-chain guard: verifies runId/candidateHash/docu
   await expect(mainCanvas).toHaveAttribute("data-canvas-evidence-status", "failed")
   await expect(mainCanvas).toHaveAttribute("data-canvas-diagnostics", /empty_canvas/)
   expect(await mainCanvas.getAttribute("data-document-hash")).not.toBe(candidateHash)
+})
+
+test("Task 5 3D camera movement updates cameraHash and prevents reusing stale pre-orbit camera/screenshot hashes", async ({ page }) => {
+  await page.goto("/")
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  const solidCase = suite.cases.find((item) => item.workspace === "geometry3d")!
+  await openAgent(page, solidCase.workspace)
+  await page.getByRole("textbox", { name: "对话输入" }).fill(solidCase.prompt)
+  await page.getByRole("button", { name: "发送" }).click()
+
+  const panel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(panel).toBeVisible({ timeout: 30000 })
+  await panel.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交").last()).toBeVisible()
+  await page.getByRole("button", { name: "返回画布" }).click()
+
+  const canvas3d = page.locator('[data-3d-scene="true"]').first()
+  await expect(canvas3d).toHaveAttribute("data-canvas-evidence-status", "passed")
+  const initialCamHash = await canvas3d.getAttribute("data-camera-hash")
+  expect(initialCamHash).toMatch(/^[0-9a-f]{64}$/)
+
+  const box = await page.locator('[data-3d-scene="true"] canvas').first().boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.move(box!.x + box!.width * 0.25, box!.y + box!.height * 0.25)
+  await page.mouse.down()
+  await page.mouse.move(box!.x + box!.width * 0.65, box!.y + box!.height * 0.38, { steps: 10 })
+  await page.mouse.up()
+
+  await expect.poll(async () => await canvas3d.getAttribute("data-camera-hash")).not.toBe(initialCamHash)
 })

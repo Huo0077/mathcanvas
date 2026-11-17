@@ -1,6 +1,6 @@
 # MathCanvas 项目过程日志
 
-## 2026-11-17 —— G3-DS 失败驱动 Task 4：多问/多状态/多分支同版评测入口 `g3DsFrozenCaseRunner`（0 付费）
+## 2026-11-17 —— G3-DS 失败驱动 Task 0–Task 5 完结：同版渲染门禁与受控交付闭环（0 付费；等待 Task 6 授权）
 
 - 在 [drawingContracts.ts](scripts/reliability-eval/drawingContracts.ts) 新增 `evaluateDrawingContractSetByPolicy`，新建 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts)，并在 [drawingContracts.test.ts](scripts/reliability-eval/drawingContracts.test.ts) 与 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) 对齐公有输入白名单投影；验证 `GK-P06` 三分支、`JT-S04` 状态交换、`JT-S08` 缺支与篡改 `candidateHash` 全数 fail-closed（`3` 文件 **`65 passed`**、`typecheck`、`lint`、`test:docs` 全过）。入档 [Task 4 审计](audit/g3-ds-failure-driven-t4/README.md)；真实 DS 仍 `0/36`，下一步进入 Task 5（零付费桥接）。
 
