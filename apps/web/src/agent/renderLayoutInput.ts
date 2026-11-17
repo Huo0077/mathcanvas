@@ -2,9 +2,12 @@ import {
   adjustLayoutWithoutMutatingMath,
   type LayoutBox,
   type LayoutModel,
+  type RenderEvidence,
+  type ScreenshotArtifact,
   type Viewport,
   type VisualEvidenceTier
 } from "@draw/agent-core"
+import type { CandidateRenderEvidenceInput } from "./hostBridge"
 
 /**
  * **已投影的点标签 → 布局盒子**（Phase 4 / Task 4.2，「标签叠加」这半条）。
@@ -92,5 +95,97 @@ export function collectRenderLayoutEvidenceInput(input: {
     documentHash: input.documentHash,
     ...(input.cameraHash === undefined ? {} : { cameraHash: input.cameraHash }),
     ...(input.hiddenEdges === undefined ? {} : { hiddenEdges: input.hiddenEdges })
+  }
+}
+
+function utf8Base64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ""
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  }
+  return globalThis.btoa(binary)
+}
+
+function screenshotForCanvas(canvas: Element, viewport: Viewport): ScreenshotArtifact | null {
+  try {
+    if (canvas.tagName.toLowerCase() === "svg") {
+      return {
+        mimeType: "image/svg+xml",
+        base64: utf8Base64(new XMLSerializer().serializeToString(canvas)),
+        width: viewport.width,
+        height: viewport.height
+      }
+    }
+    const renderedCanvas = canvas.tagName.toLowerCase() === "div" ? canvas.querySelector("canvas") : canvas
+    if (!(renderedCanvas instanceof HTMLCanvasElement)) return null
+    const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(renderedCanvas.toDataURL("image/png"))
+    if (!match) return null
+    return { mimeType: match[1], base64: match[2], width: renderedCanvas.width, height: renderedCanvas.height }
+  } catch {
+    return null
+  }
+}
+
+function viewportAttribute(raw: string | null): Viewport | null {
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as { width?: unknown; height?: unknown }
+    if (typeof value.width !== "number" || typeof value.height !== "number") return null
+    if (![value.width, value.height].every((entry) => Number.isFinite(entry) && entry > 0)) return null
+    return { width: value.width, height: value.height }
+  } catch {
+    return null
+  }
+}
+
+function layoutBoxesAttribute(raw: string | null): LayoutBox[] | null {
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as unknown
+    if (!Array.isArray(value)) return null
+    if (!value.every((box) => {
+      if (typeof box !== "object" || box === null) return false
+      const candidate = box as Record<string, unknown>
+      return typeof candidate.id === "string" && (candidate.kind === "object" || candidate.kind === "label") &&
+        [candidate.x, candidate.y, candidate.width, candidate.height].every((entry) => typeof entry === "number" && Number.isFinite(entry)) &&
+        (candidate.width as number) >= 0 && (candidate.height as number) >= 0
+    })) return null
+    return value as LayoutBox[]
+  } catch {
+    return null
+  }
+}
+
+export function candidateRenderEvidenceFromCanvas(
+  input: CandidateRenderEvidenceInput,
+  root: ParentNode = globalThis.document
+): RenderEvidence | null {
+  const selector = input.candidate.workspace === "geometry3d" ? '[data-3d-scene="true"]' : "svg[data-canvas-evidence-status]"
+  const canvas = root.querySelector(selector)
+  if (!canvas) return null
+  if (canvas.getAttribute("data-document-hash") !== input.documentHash) return null
+  if (canvas.getAttribute("data-render-evidence-tier") !== "rendered") return null
+  if (canvas.getAttribute("data-canvas-evidence-status") !== "passed") return null
+  if (canvas.getAttribute("data-canvas-evidence-accepted") !== "true") return null
+  if (canvas.getAttribute("data-canvas-diagnostic-errors")) return null
+  if (canvas.getAttribute("data-canvas-hidden-labels")) return null
+  const viewport = viewportAttribute(canvas.getAttribute("data-canvas-viewport"))
+  const boxes = layoutBoxesAttribute(canvas.getAttribute("data-canvas-layout-boxes"))
+  if (!viewport || !boxes) return null
+  const screenshot = screenshotForCanvas(canvas, viewport)
+  if (!screenshot) return null
+  const cameraHash = canvas.getAttribute("data-camera-hash")
+  return {
+    mode: "rendered",
+    evidenceTier: "rendered",
+    runId: input.runId,
+    draftId: input.draftId,
+    draftVersion: input.draftVersion,
+    documentHash: input.documentHash,
+    viewport,
+    boxes,
+    screenshot,
+    ...(cameraHash === null ? {} : { cameraHash })
   }
 }

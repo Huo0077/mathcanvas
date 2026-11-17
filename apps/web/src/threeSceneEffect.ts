@@ -254,7 +254,7 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
 
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })
     } catch {
       setWebglAvailable(false)
       return
@@ -345,7 +345,7 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
      * 视口高度，以及仍定义在本函数里的网格落位。**曲线细分档位与手柄缩放也归它**（它们都是"每帧
      * 先做的一点点显示同步"），所以它交回 `syncPointHandleScales` 给下面的首次同步用。
      */
-    const { render, syncPointHandleScales } = createThreeSceneRender({ renderer, scene, camera, cameraStateRef, sceneShell, autoFitRef, selectedIdsRef, measurementOverlayRef, pointLabelOverlayRef, measurementVisuals, visiblePointLabels, objectIndex, pointHandles, viewport, curveToleranceBucketRef, setCurveToleranceBucket, applyGridPlacement })
+    const { render, syncPointHandleScales } = createThreeSceneRender({ renderer, scene, camera, cameraStateRef, sceneShell, autoFitRef, selectedIdsRef, measurementOverlayRef, pointLabelOverlayRef, measurementVisuals, visiblePointLabels, objectIndex, pointHandles, viewport, curveToleranceBucketRef, setCurveToleranceBucket, applyGridPlacement, documentRef })
     /**
      * **内容同步**已切到 `./threeSceneContent`：按内容签名增量重建场景对象，并把这一轮的重建 / 沿用 /
      * 释放计数写进 `data-scene-*`；正式文档与拖动临时文档共用同一张记录表。

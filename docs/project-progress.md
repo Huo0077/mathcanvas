@@ -8,6 +8,11 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— 真实候选渲染与确认链子区块
+
+- **RED → GREEN**：2D 确认前椭圆缺失、3D `partial / objectsMeasurable=false`、真实候选取证函数缺失分别复现；随后补齐完整候选渲染、Three.js 实际对象投影与同版 `rendered` 盒子/截图/相机绑定。Agent 页在草稿期间并排显示真实候选，不以结构化估算或隐藏 mock 替代。
+- **回归修复**：完整 Vitest 初跑暴露 32 项无画布测试边界失败，改用测试端口后 76 项真实 runner/提交测试通过；生命周期实核定位 remembered camera 初始出界，补一次取景后双击、撤销/重做/保存重载均恢复。最终 **544 文件 / 5796 passed + 1 todo**、目标 Playwright **5/5**、类型检查、Lint（0 errors）和 Web 构建通过。证据见[真实候选渲染与确认链](audit/2026-11-17-g3-candidate-render/README.md)。36 题审阅包、桌面 UIA、人工签收与最终复核继续保留。
+
 ## 2026-11-17 —— Task 6（T16）生命周期闭环与 G3 阶段总验收边界收口
 
 - **RED → GREEN 与全量回归**：新增 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)（确认前 0 写入、双击原子一次提交、撤销/重做、刷新与 `.mgeo` 导入导出哈希一致、丢弃 0 写入、跨对话隔离、矛盾拒绝、`GK-S05` 动点 `B₂` 拖动与一步撤销），实测曝光并修复 `AgentMessageList.tsx` 丢弃/提交后确认面板仍保留可点击按钮的缺陷，随后通过全量 Playwright `290/290` 发现并修复 `planarDrawing.ts` 拦截符号不变量题与 `functionDrawingPlan.ts` 丢失 `f(x)=x³−3x` 原文的回归。

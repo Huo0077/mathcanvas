@@ -11,6 +11,8 @@
 > **状态同步（2026-11-17）**：本文件为 `P0–P8` 阶段验收合同与原始设计，实时进度仅以[当前状态](../../current-status.md)为准，原始基线见[基线审计](../../audit/2026-11-15-drawing-baseline/README.md)。
 >
 > **现况摘要**：经 R1–R3 逐轮合同整改与[P0 / T01 R4 终审](../../audit/2026-11-17-g3-contract-review-r4/README.md)（36/36 全部获 `approved`）、[Task 2 证书接线](../../audit/2026-11-17-g3-certificate-wiring/README.md)、[Task 3 平面 18 题](../../audit/2026-11-17-g3-planar-18/README.md)及[Task 4 `G3-Math` 36/36 退出](../../audit/2026-11-17-g3-math-exit/README.md)，**`G3-Math` 已正式退出**；[`T15` 渲染可见性](../../audit/2026-11-17-p7-render-visibility/README.md)与[Task 6 `T16` 生命周期/全量回归](../../audit/2026-11-17-g3-interaction-exit/README.md)、[G3 总验收汇总](../../audit/2026-11-17-g3-final/README.md)已完成浏览器端与桌面构建验证（Playwright 290/290、Vitest 543 文件 / 5794 passed、`test:rust` 与 `@draw/desktop` `no-bundle` 构建全通过）。按用户指示，**DeepSeek 真实模型画图测试保留由用户后续执行**；非沙盒交互式桌面窗口走查、人工可读性签收（`humanReviewed`）与 `P8` 仍未开启，发布继续阻断。早期 R2/R3 阶段过程审计均保留于各自 `docs/audit/` 目录。
+>
+> **候选渲染续作**：[真实候选渲染与确认链](../../audit/2026-11-17-g3-candidate-render/README.md)已验证 2D 完整候选、3D 实际对象测量及生产 consent/commit `rendered` 取证（全量 544 文件 / 5796 passed + 1 todo、目标 Playwright 5/5）；36 题审阅包、桌面 UIA、人工签收与最终独立复核仍待完成。
 
 **Goal:** 在已审核、冻结的画图合同上实现 36/36 端到端通过，再用未见题验证泛化，不承诺任意题 100%。
 

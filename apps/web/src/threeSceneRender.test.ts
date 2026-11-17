@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 
 import { applyCameraState, createCameraState } from "./threeCamera"
-import { createThreeSceneRender } from "./threeSceneRender"
+import { createThreeSceneRender, projectObjectLayoutBoxes } from "./threeSceneRender"
 import { canvasEvidenceOf, type CanvasEvidence } from "./canvasEvidence"
 import { createEmptyDocument } from "@draw/dsl"
 
@@ -89,4 +89,25 @@ it("publishes evidence after the final camera frame without a React render", () 
   render()
   expect(snapshots[2].hiddenLabels).toEqual([])
   expect(snapshots[2].boxes).toHaveLength(1)
+})
+
+it("measures object boxes from the rendered Three.js geometry rather than document coordinates", () => {
+  const geometry = createEmptyDocument("geometry3d")
+  geometry.primitives.push({ id: "moved", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" })
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial())
+  mesh.position.set(2, 1, 0)
+  mesh.updateMatrixWorld(true)
+  const camera = new THREE.PerspectiveCamera(42, 800 / 600, 0.1, 1000)
+  camera.position.set(0, 0, 10)
+  camera.lookAt(0, 0, 0)
+  camera.updateMatrixWorld(true)
+
+  const boxes = projectObjectLayoutBoxes(geometry, new Map([["moved", mesh]]), camera, { width: 800, height: 600 })
+
+  expect(boxes).toHaveLength(1)
+  expect(boxes[0]).toMatchObject({ id: "object:moved", kind: "object", shape: "marker" })
+  expect(boxes[0].x).toBeGreaterThan(400)
+  expect(boxes[0].y).toBeLessThan(300)
+  expect(boxes[0].width).toBeGreaterThan(0)
+  expect(boxes[0].height).toBeGreaterThan(0)
 })

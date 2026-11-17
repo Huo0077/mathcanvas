@@ -86,6 +86,9 @@ test("enforces zero-write pre-confirmation, atomic one-time commit, undo/redo, a
 
   // 1. Certificate must be passed and zero scene primitives may be committed before explicit confirmation.
   await expect(panel.locator("[data-certificate-status]")).toHaveAttribute("data-certificate-status", "passed")
+  const candidatePreview = page.getByRole("region", { name: "草稿画布预览" })
+  await expect(candidatePreview).toBeVisible()
+  await expect(candidatePreview.locator('[data-3d-scene="true"]')).toHaveAttribute("data-canvas-evidence-status", "passed")
   const beforeConfirmDoc = await readCommittedDoc(page, "geometry3d")
   expect(beforeConfirmDoc?.primitives ?? []).toHaveLength(0)
 

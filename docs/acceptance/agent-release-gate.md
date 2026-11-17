@@ -12,6 +12,8 @@
 
 截至 2026-11-17，**`G3-Math`（36/36 全闭环）已通过独立复核退出**（[Task 4 G3-Math 退出证据](../audit/2026-11-17-g3-math-exit/README.md)），**`T15` / `T16` 浏览器端真画布渲染、交互生命周期、全量回归（Vitest 543 文件 / 5794 passed、Playwright 290/290、Rust `test:rust` 与 desktop `no-bundle` 构建）均已通过**（[Task 6 交互回归证据](../audit/2026-11-17-g3-interaction-exit/README.md)、[G3 总验收汇总](../audit/2026-11-17-g3-final/README.md)）；**产品仍禁止发布**：用户明确要求保留已保存 DeepSeek 真实模型画图测试由其本人后续执行，且非沙盒 Windows 桌面窗口实机 UIA 走查、教师/用户人工可读性签收与 `P8` 安装包/冷启动门禁尚未完成，不得以浏览器 E2E、离线确定性规划或 AI 抽检冒充人工或正式发布许可。下文保留前期排查时点记录以备追溯：
 
+**候选渲染续作（2026-11-17）**：[真实候选渲染与确认链](../audit/2026-11-17-g3-candidate-render/README.md)已闭环（全量 544 文件 / 5796 passed + 1 todo、目标 Playwright 5/5），但 36 题审阅包、桌面 UIA、人工 `humanReviewed` 与最终独立复核尚未完成，发布阻断不变。
+
 > **历史过程说明（已被上方 2026-11-17 R4 终审与 Task 2–6 实核结果取代）**：此前在 R2/R3 阶段（2026-11-16）`T01` 曾经历第二/三轮复核与分段合同整改（[第二轮独立复核](../audit/2026-11-16-g3-contract-review-r2/README.md)、[第三轮独立复核](../audit/2026-11-16-g3-contract-review-r3/README.md)、[DeepSeek 最小连通评测](../audit/2026-11-16-g3-deepseek-provider/README.md) 及各分段整改归档于 `docs/audit/2026-11-16-g3-*`）；上述前期阻断均已在 R4 终审及 Task 2–4 中全数闭环。
 
 | 门禁 | 必须提交的证据 | 不能替代的条件 |

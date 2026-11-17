@@ -54,6 +54,7 @@ export interface CanvasEvidence {
    *（`threeSceneContent` 的同步）写到场景容器上，这一层只读着转述 —— 不在这里重算"哪几条棱算隐藏"。
    */
   hiddenEdges: { shown: boolean; segments: number }
+  cameraHash?: string
 }
 
 interface Rect {
@@ -241,18 +242,19 @@ export function hiddenPointLabels(document: GeometryDocument, renderedLabels: re
 /**
  * 量一份**真实画布**的证据。
  *
- * `document` 是画布**这一刻正在渲染**的那一份（不是草稿里的候选）—— 两者的内容哈希相等，
+ * `document` 是画布**这一刻正在渲染**的那一份（正式文档或候选）—— 两者的内容哈希相等，
  * 才叫"画布与草稿同版本"。
  *
- * `objectsMeasurable = false` 是给 **3D 画布**用的：它的图形画在 WebGL 里，DOM 里量不到，
- * 只有点标注覆盖层是 DOM。那时**不报 `empty_canvas`**（场景是满的，报"空的"是假报警 ——
- * 一个乱报警的检查器会被学会忽略），只在 `data-canvas-objects-measurable="false"` 上说清
- * "这一份没有对象盒子"，标签那几条判据照常跑。
+ * 3D 对象盒子由 Three.js 渲染层通过 `renderedObjects` 提供；尚未提供时
+ * `objectsMeasurable = false` 只保留标签判据并如实报 `partial`，不把空盒子冒充通过。
  */
-export function canvasEvidenceOf(input: { document: GeometryDocument; root: ParentNode; viewport: Viewport; labelSize?: { width: number; height: number }; objectsMeasurable?: boolean; hiddenEdges?: { shown: boolean; segments: number } }): CanvasEvidence {
+export function canvasEvidenceOf(input: { document: GeometryDocument; root: ParentNode; viewport: Viewport; labelSize?: { width: number; height: number }; objectsMeasurable?: boolean; hiddenEdges?: { shown: boolean; segments: number }; renderedObjects?: readonly LayoutBox[]; cameraHash?: string }): CanvasEvidence {
   const objectsMeasurable = input.objectsMeasurable ?? true
   const measured = measureRenderedCanvas(input.root, input.labelSize ?? LABEL_BOX_SIZE)
-  const judged = objectsMeasurable ? measured.boxes : measured.boxes.filter((box) => box.kind === "label")
+  const objectBoxes = input.renderedObjects ?? measured.boxes.filter((box) => box.kind === "object")
+  const labelBoxes = measured.boxes.filter((box) => box.kind === "label")
+  const boxes = [...objectBoxes, ...labelBoxes]
+  const judged = objectsMeasurable ? boxes : labelBoxes
   const diagnostics = diagnoseLayout(input.viewport, judged).filter((entry) => objectsMeasurable || entry.code !== "empty_canvas")
   return {
     workspace: input.document.workspace,
@@ -260,11 +262,12 @@ export function canvasEvidenceOf(input: { document: GeometryDocument; root: Pare
     documentHash: canonicalContentHash(input.document),
     revision: input.document.revision,
     viewport: input.viewport,
-    boxes: measured.boxes,
+    boxes,
     diagnostics,
     hiddenLabels: hiddenPointLabels(input.document, measured.renderedLabels),
     // 缺省（2D 画布、或调用方没给）如实记"没画、0 段"，不编一个数。
-    hiddenEdges: input.hiddenEdges ?? { shown: false, segments: 0 }
+    hiddenEdges: input.hiddenEdges ?? { shown: false, segments: 0 },
+    ...(input.cameraHash === undefined ? {} : { cameraHash: input.cameraHash })
   }
 }
 
@@ -312,6 +315,9 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
      */
     "data-canvas-hidden-edges-shown": evidence.hiddenEdges.shown ? "true" : "false",
     "data-canvas-hidden-edges": String(evidence.hiddenEdges.segments),
-    "data-canvas-objects-measurable": measurable ? "true" : "false"
+    "data-canvas-objects-measurable": measurable ? "true" : "false",
+    "data-canvas-viewport": JSON.stringify(evidence.viewport),
+    "data-canvas-layout-boxes": JSON.stringify(evidence.boxes),
+    ...(evidence.cameraHash === undefined ? {} : { "data-camera-hash": evidence.cameraHash })
   }
 }

@@ -2,7 +2,7 @@ import type { RefObject } from "react"
 import * as THREE from "three"
 
 import { loadRememberedCamera } from "./cameraMemory"
-import { applyCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, resetCameraState, type CameraState } from "./threeCamera"
+import { applyCameraState, FIT_ANIMATION_MS, fitCameraState, interpolateCameraState, isContentOutOfView, resetCameraState, type CameraState } from "./threeCamera"
 import { prefersReducedMotion } from "./threePrimitives"
 import type { ThreeSceneViewProps } from "./threeScene"
 
@@ -106,10 +106,10 @@ export function createThreeSceneCamera({ camera, cameraStateRef, render, sceneBo
   // re-framing while the user is working would fight their own camera moves.
   contentKeyRef.current = currentContentKey()
   const fittedId = documentRef.current.metadata.id
-  // 从别的视角回来的同一份文档不算"新文档"：记着视角就别再取景，否则用户转过的角度与缩放会被覆盖。
+  // 记住的视角仍然保留；只有当前内容已经出界时才在初次挂载补一次取景。
   const remembered = loadRememberedCamera(fittedId) ? fittedId : null
   if (remembered) fittedDocumentRef.current = remembered
-  if (fittedDocumentRef.current !== fittedId) {
+  if (fittedDocumentRef.current !== fittedId || isContentOutOfView(cameraStateRef.current, sceneBounds, camera)) {
     fittedDocumentRef.current = fittedId
     fitToContent()
   }

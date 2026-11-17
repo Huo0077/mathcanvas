@@ -1,11 +1,19 @@
 import { createEmptyDocument } from "@draw/dsl"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope, type PlannerPort } from "@draw/agent-core"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useAgentStore } from "../agentStore"
 import { isUserVisiblePrimitive } from "../primitiveVisibility"
 import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
+
+vi.mock("./renderLayoutInput", async (importOriginal) => {
+  const { renderedCandidateEvidence } = await import("./renderEvidenceTestUtils")
+  return {
+    ...await importOriginal<typeof import("./renderLayoutInput")>(),
+    candidateRenderEvidenceFromCanvas: renderedCandidateEvidence
+  }
+})
 
 /**
  * **系统补建的点，提交之后到底落在哪里**（2026-10-10 用户现场）。

@@ -1,7 +1,8 @@
 import type { Dispatch, RefObject, SetStateAction } from "react"
 import * as THREE from "three"
 
-import type { Point3Primitive } from "@draw/dsl"
+import type { GeometryDocument, Point3Primitive } from "@draw/dsl"
+import { canonicalContentHash, type LayoutBox } from "@draw/agent-core"
 
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { pointLabelPlacements } from "./pointLabels"
@@ -59,9 +60,59 @@ export interface ThreeSceneRenderDeps {
   /** 网格与坐标轴的落位仍定义在运行时模块里，按依赖传进来（本模块只负责调用顺序）。 */
   applyGridPlacement: () => void
   onPreviewHoverChange?: ThreeSceneViewProps["onPreviewHover"]
+  documentRef?: RefObject<GeometryDocument>
 }
 
-export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef, sceneShell, autoFitRef, selectedIdsRef, measurementOverlayRef, pointLabelOverlayRef, measurementVisuals, visiblePointLabels, objectIndex, pointHandles, viewport, curveToleranceBucketRef, setCurveToleranceBucket, applyGridPlacement }: ThreeSceneRenderDeps) {
+export function projectObjectLayoutBoxes(
+  document: GeometryDocument,
+  objectIndex: ReadonlyMap<string, THREE.Object3D>,
+  camera: THREE.Camera,
+  size: { width: number; height: number }
+): LayoutBox[] {
+  const boxes: LayoutBox[] = []
+  for (const primitive of document.primitives) {
+    if (primitive.visible === false) continue
+    const object = objectIndex.get(primitive.id)
+    if (!object || !object.visible) continue
+    object.updateWorldMatrix(true, true)
+    const bounds = new THREE.Box3().setFromObject(object)
+    if (bounds.isEmpty()) continue
+
+    let minX = Number.POSITIVE_INFINITY
+    let minY = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let maxY = Number.NEGATIVE_INFINITY
+    for (const x of [bounds.min.x, bounds.max.x]) {
+      for (const y of [bounds.min.y, bounds.max.y]) {
+        for (const z of [bounds.min.z, bounds.max.z]) {
+          const projected = new THREE.Vector3(x, y, z).project(camera)
+          if (![projected.x, projected.y, projected.z].every(Number.isFinite)) continue
+          minX = Math.min(minX, projected.x)
+          minY = Math.min(minY, projected.y)
+          maxX = Math.max(maxX, projected.x)
+          maxY = Math.max(maxY, projected.y)
+        }
+      }
+    }
+    if (![minX, minY, maxX, maxY].every(Number.isFinite)) continue
+    const left = (minX * 0.5 + 0.5) * size.width
+    const right = (maxX * 0.5 + 0.5) * size.width
+    const top = (-maxY * 0.5 + 0.5) * size.height
+    const bottom = (-minY * 0.5 + 0.5) * size.height
+    boxes.push({
+      id: `object:${primitive.id}`,
+      kind: "object",
+      shape: primitive.type === "point3" ? "marker" : "shape",
+      x: left,
+      y: top,
+      width: Math.max(1, right - left),
+      height: Math.max(1, bottom - top)
+    })
+  }
+  return boxes
+}
+
+export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef, sceneShell, autoFitRef, selectedIdsRef, measurementOverlayRef, pointLabelOverlayRef, measurementVisuals, visiblePointLabels, objectIndex, pointHandles, viewport, curveToleranceBucketRef, setCurveToleranceBucket, applyGridPlacement, documentRef }: ThreeSceneRenderDeps) {
   const syncCurveToleranceBucket = () => {
     const bucket = toleranceBucket(curveToleranceFor(camera, cameraStateRef.current.distance, viewport.height))
     curveToleranceBucketRef.current = bucket
@@ -144,6 +195,16 @@ export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef
       // 视角角度的读数：旋转不改变视点中心，所以"有没有转"只能从这里看出来。
       sceneShell.dataset.cameraAzimuth = cameraStateRef.current.azimuth.toFixed(2)
       sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
+      const renderedDocument = documentRef?.current
+      sceneShell.dataset.renderObjectsReady = renderedDocument ? "true" : "false"
+      if (renderedDocument) {
+        const objects = projectObjectLayoutBoxes(renderedDocument, objectIndex, camera, bounds)
+        sceneShell.dataset.renderObjectBoxes = JSON.stringify(objects)
+        sceneShell.dataset.cameraHash = canonicalContentHash({
+          matrixWorld: camera.matrixWorld.elements,
+          viewport: { width: bounds.width, height: bounds.height }
+        })
+      }
     }
     renderer.render(scene, camera)
     // Camera/drag frames live outside React. Notify evidence consumers only after

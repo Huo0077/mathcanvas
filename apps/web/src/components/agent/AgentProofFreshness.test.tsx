@@ -1,9 +1,17 @@
 import { act, render, screen } from "@testing-library/react"
 import { createEmptyDocument } from "@draw/dsl"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useAgentStore } from "../../agentStore"
 import { createAgentRunner } from "../../agent/agentRunner"
+
+vi.mock("../../agent/renderLayoutInput", async (importOriginal) => {
+  const { renderedCandidateEvidence } = await import("../../agent/renderEvidenceTestUtils")
+  return {
+    ...await importOriginal<typeof import("../../agent/renderLayoutInput")>(),
+    candidateRenderEvidenceFromCanvas: renderedCandidateEvidence
+  }
+})
 import { saveProofExportEnabled } from "../../persistence/nextPhasePreferences"
 import { useSceneStore } from "../../store"
 import { AgentMessageList } from "./AgentMessageList"

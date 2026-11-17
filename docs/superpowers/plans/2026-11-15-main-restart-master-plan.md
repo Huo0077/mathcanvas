@@ -14,6 +14,8 @@
 
 **G3 现况（2026-11-17 同步）**：经过 R1–R3 逐轮合同整改与[R4 终审](../../audit/2026-11-17-g3-contract-review-r4/README.md)（36/36 全部获 `approved`，`GK-S02/GK-S03/JT-S06/JT-S07` 保持 `text_with_figure_reference` 诚实未知边界）、[Task 2 证书接线](../../audit/2026-11-17-g3-certificate-wiring/README.md)、[Task 3 平面 18 题](../../audit/2026-11-17-g3-planar-18/README.md)与[Task 4 `G3-Math` 36/36 退出](../../audit/2026-11-17-g3-math-exit/README.md)，**`G3-Math` 已正式退出**（`36 passed / 0 partial / 0 failed`，平均对象/义务覆盖率 `100%`，只读独立复核 `SOUND (PASS)`）；同时[`T15` 渲染可见性](../../audit/2026-11-17-p7-render-visibility/README.md)、[Task 6 `T16` 生命周期与全量回归](../../audit/2026-11-17-g3-interaction-exit/README.md)及[G3 总验收汇总](../../audit/2026-11-17-g3-final/README.md)已闭环浏览器端及编译验证（Vitest **543 文件 / 5794 passed + 1 todo**、Playwright 全量 **290/290 passed**、`eval:reliability` 冒烟 **31/31** + 合同 **36/36**、`typecheck`、`lint`、`test:rust` 与 `@draw/desktop` `no-bundle` 构建全通过）。按用户指示，**已保存 DeepSeek 真实模型画图测试保留由用户后续执行**；非沙盒交互式桌面窗口实机 UIA 走查、教师/用户人工可读性签收（`humanReviewed`）与 `P8` 仍保持未关闭，禁止发布。早期阶段整改审计与 R2/R3 历史检查点原件均保留于各自 `docs/audit/` 目录。
 
+**G3 候选渲染续作（2026-11-17）**：[真实候选渲染与确认链](../../audit/2026-11-17-g3-candidate-render/README.md)已补齐 2D 完整预览、3D 实际对象测量及 consent/commit 同版 `rendered` 证据；最新全量为 **544 文件 / 5796 passed + 1 todo**、目标 Playwright **5/5**。36 题审阅包、桌面 UIA、人工签收与最终独立复核仍未关闭。
+
 **状态**：此前 `main` 重启提交 `be033b71`（父节点 `59ea3613`）。`R00`、`R01-A`、`R09-A`、`R10`、`G1（R02–R06）`、`G2（R07、R08、R09-B、R11）` 及 `B4`（`P0–P6`：`T01–T14` + R4 + Task 2–4 `G3-Math` 36/36）均已闭环；`B5` 已完成 `T15` 渲染 E2E 与 `T16` 浏览器全生命周期 / Playwright 290/290 / `@draw/desktop` `no-bundle` 构建，仅余非沙盒交互式桌面 UIA 与人工可读性签收；已保存 DeepSeek 真实模型画图测试按用户要求留待用户后续执行；`P8`、其他付费 provider 与正式发布仍未开启。实时状态只维护在[当前状态](../../current-status.md)。
 
 ## 0. 执行入口与唯一事实来源

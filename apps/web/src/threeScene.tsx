@@ -339,13 +339,8 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
 
   /**
    * **真实画布证据（3D 那一份）**（Task 16）。
-   *
-   * 与 2D 同一条纪律：量的是**已经渲染出来的 DOM**。3D 的图形在 WebGL 里、DOM 量不到，
-   * 所以这里只量**点标注覆盖层**，并且明确写上 `objectsMeasurable=false` ——
-   * 不许把"量不到对象"说成"画布是空的"（那会让诊断变成噪声）。
-   *
-   * 视图口取容器的实际像素尺寸；还没排版（0×0）时**如实**走 `degenerate_viewport`
-   * 那条判据，而不是编一个尺寸出来。
+   * 对象盒子来自同一帧的 Three.js 投影，点标签来自实际 DOM 覆盖层；
+   * 相机或文档变化后只在新的绘制帧到达时更新证据。
    */
   const [canvasEvidence, setCanvasEvidence] = useState<CanvasEvidence | null>(null)
   // Subscribe to actual renderer frames, not only React updates. Rebinding after
@@ -358,7 +353,24 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
       const viewport = { width: shell.clientWidth, height: shell.clientHeight }
       const segments = Number(shell.dataset.hiddenEdgeSegments ?? "")
       const hiddenEdges = { shown: shell.dataset.hiddenEdgesShown === "true", segments: Number.isFinite(segments) && segments > 0 ? segments : 0 }
-      const measured = canvasEvidenceOf({ document, root, viewport, objectsMeasurable: false, hiddenEdges })
+      let renderedObjects: CanvasEvidence["boxes"]
+      let objectsMeasurable = false
+      try {
+        const parsed = JSON.parse(shell.dataset.renderObjectBoxes ?? "[]") as CanvasEvidence["boxes"]
+        renderedObjects = Array.isArray(parsed) ? parsed : []
+        objectsMeasurable = shell.dataset.renderObjectsReady === "true" && Array.isArray(parsed)
+      } catch {
+        renderedObjects = []
+      }
+      const measured = canvasEvidenceOf({
+        document,
+        root,
+        viewport,
+        objectsMeasurable,
+        hiddenEdges,
+        renderedObjects,
+        ...(shell.dataset.cameraHash === undefined ? {} : { cameraHash: shell.dataset.cameraHash })
+      })
       setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
     }
     shell.addEventListener("mathcanvas:three-frame", measure)
@@ -381,7 +393,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
-  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} data-ghost-active={ghostActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, false, document))} aria-label="3D 几何场景"
+  return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} data-ghost-active={ghostActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, document))} aria-label="3D 几何场景"
     onContextMenu={(event) => {
       if (!isCreationCanvasTarget(event.target)) return
       event.preventDefault()

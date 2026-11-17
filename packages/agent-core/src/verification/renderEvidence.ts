@@ -82,6 +82,8 @@ export interface ScreenshotArtifact {
 export type RenderEvidenceMode =
   /** 只有结构化的包围盒与布局读数 —— **不需要 provider 有视觉能力**。 */
   | "structured_only"
+  /** 来自同版真实画布的测量与截图，不要求 provider 看图。 */
+  | "rendered"
   /** 结构化读数 + 截图，且 provider 的 vision 能力已验证。 */
   | "vision_verified"
 
@@ -376,7 +378,7 @@ export function classifyVisualEvidenceTier(
   if (evidence.evidenceTier === "rendered") {
     return "rendered"
   }
-  return evidence.mode === "vision_verified" ? "rendered" : "structuredOnly"
+  return evidence.mode === "vision_verified" || evidence.mode === "rendered" ? "rendered" : "structuredOnly"
 }
 
 export function assertNoVisualTierUpgrade(

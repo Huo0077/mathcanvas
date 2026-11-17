@@ -12,6 +12,14 @@ import { useSceneStore } from "../store"
 import { createAgentRunner } from "./agentRunner"
 import { FUNCTION_TANGENT_PROMPT, functionTangentPlan, PYRAMID_PROMPT, pyramidPlan } from "./representativeFixtures"
 
+vi.mock("./renderLayoutInput", async (importOriginal) => {
+  const { renderedCandidateEvidence } = await import("./renderEvidenceTestUtils")
+  return {
+    ...await importOriginal<typeof import("./renderLayoutInput")>(),
+    candidateRenderEvidenceFromCanvas: renderedCandidateEvidence
+  }
+})
+
 /**
  * **确认提交这条链路**（Task 2.5 Step 4，计划 G2 Gate 的"preview → confirm → commit → undo"）。
  *

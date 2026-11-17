@@ -80,6 +80,8 @@ Vitest 驱动本身 `1 file / 3 tests passed`，但冻结合同结果为 **2 pas
 
 - **2026-11-17 续作进展（与 [current-status.md](../../current-status.md) 同步）**：Task 1（R4 终审 36/36 `approved`）、Task 2（生产证书全链）、Task 3（平面 18/18）、Task 4（立体/折叠 18/18 与 **`G3-Math` 36/36 正式退出**，只读复核 `SOUND`）、Task 5（`T15` 浏览器四族渲染与防遮挡 E2E）及 Task 6（`T16` 全生命周期、`290/290` Playwright、`5794` Vitest、`test:rust` 与 `@draw/desktop` `no-bundle` 构建）均已通过验证。应用户明确指示，**已保存 DeepSeek 真实模型画图测试保留由用户后续执行**；非沙盒交互式桌面窗口实机 UIA 走查、教师/用户 `humanReviewed` 人工可读性签收与 `P8` 仍保持未完成（见 `docs/audit/2026-11-17-g3-final/README.md`）。
 
+- **2026-11-17 真实候选渲染续作**：确认前 2D 完整候选、3D Three.js 实际对象测量、Agent 页同候选预览及 consent/commit `rendered` 截图/盒子/相机绑定已闭环；修复 remembered camera 初始出界。全量 **544 文件 / 5796 passed + 1 todo**，目标 Playwright **5/5**，类型/Lint（0 errors）/Web 构建通过。证据：`docs/audit/2026-11-17-g3-candidate-render/README.md`。Task 5 Step 4 的 36 题审阅包、Task 6 全量矩阵/桌面 UIA、人工签收与 Task 7 最终复核仍未关闭。
+
 ---
 
 ### Task 1: G3 真相基线、T01 第二独立审题与文档纠偏

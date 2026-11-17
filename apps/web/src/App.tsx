@@ -822,6 +822,9 @@ export function App() {
    */
 
   const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onCanvasContextMenu={handleCanvasContextMenu} onDoubleClickPrimitive={handleDoubleClickPrimitive} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
+  const threeCanvas = <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
+    applyBatch(hostPointDragOperations(document, id, parameter))
+  }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -1041,9 +1044,7 @@ export function App() {
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
         </div>
         {algebraPanel}
-        {document.workspace === "geometry3d" ? <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
-          applyBatch(hostPointDragOperations(document, id, parameter))
-        }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} /> : planarCanvas}
+        {document.workspace === "geometry3d" ? threeCanvas : planarCanvas}
         {inspectorPanel}
         {rightDockOpen && <InspectorResizeHandle controls="properties-dock" width={inspectorWidth} onResize={resizeInspector} />}
         <CopilotDrawer
@@ -1143,18 +1144,24 @@ export function App() {
       />}
     </div> : activeModule === "agent" ? <div className="app-module" data-module="agent">
       <WorkspaceHeader title="Agent 工作区" />
-      {/* 模块 B 不含任何从几何文档派生的 UI（Ribbon / 画布 / 检查器），所以文档一步都不订阅，
-          切进 Agent 区不会因为画布重渲染而卡一下。 */}
-      <AgentWorkspace
-        onBackToWorkspace={() => { setOpenImageReader(false); setActiveModule(DEFAULT_APP_MODULE) }}
-        initialImageReaderOpen={openImageReader}
-        onRun={runAgentPrompt}
-        // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
-        onConfirm={(runId) => { agentRunner.confirm(runId) }}
-        onDiscard={(runId) => { agentRunner.discard(runId) }}
-        onStop={(runId) => { agentRunner.stop(runId) }}
-        onRetry={retryLastPrompt}
-      />
+      <div className="agent-run-layout">
+        <AgentWorkspace
+          onBackToWorkspace={() => { setOpenImageReader(false); setActiveModule(DEFAULT_APP_MODULE) }}
+          initialImageReaderOpen={openImageReader}
+          onRun={runAgentPrompt}
+          // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
+          onConfirm={(runId) => { agentRunner.confirm(runId) }}
+          onDiscard={(runId) => { agentRunner.discard(runId) }}
+          onStop={(runId) => { agentRunner.stop(runId) }}
+          onRetry={retryLastPrompt}
+        />
+        {activeGhostDraft && <aside className="agent-candidate-preview" role="region" aria-label="草稿画布预览">
+          <h2>当前草稿画布</h2>
+          <div className="agent-candidate-preview-frame">
+            {activeGhostDraft.candidate.workspace === "geometry3d" ? threeCanvas : planarCanvas}
+          </div>
+        </aside>}
+      </div>
       {(fileError || operationError) && <div role="alert" className="footer-note">
         <span>{fileError ?? operationError}</span>
         {draftRecovery && <span className="draft-recovery-actions">

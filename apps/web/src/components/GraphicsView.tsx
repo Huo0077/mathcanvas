@@ -263,7 +263,8 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     }
     return result.document
   }, [document, dragCurrent, dragState])
-  const displayPrimitives = previewDocument.primitives
+  const displayDocument = ghostCandidate ?? previewDocument
+  const displayPrimitives = displayDocument.primitives
   const ghostPrimitives = useMemo(() => {
     if (!ghostCandidate) return []
     const existingIds = new Set(document.primitives.map((p) => p.id))
@@ -278,9 +279,9 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
    * 这正是"动点拖起来不流畅"的根源；拖动时那一步现在只重算与改动相关的对。
    */
   const previewResult = useMemo(() => {
-    const affected = dragState ? getAffectedPrimitiveIds(previewDocument, [dragState.id]) : null
-    return computeIntersectionPreviews(previewDocument, affected ? { recomputeFor: affected, previous: previousPreviewsRef.current } : {})
-  }, [previewDocument, dragState])
+    const affected = dragState ? getAffectedPrimitiveIds(displayDocument, [dragState.id]) : null
+    return computeIntersectionPreviews(displayDocument, affected ? { recomputeFor: affected, previous: previousPreviewsRef.current } : {})
+  }, [displayDocument, dragState])
   // 缓存要在渲染之后写入：useMemo 里写 ref 在并发渲染下可能被丢弃。
   useEffect(() => {
     previousPreviewsRef.current = previewResult.previews
@@ -556,10 +557,10 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    const measured = canvasEvidenceOf({ document, root: svg, viewport: { width: VIEWBOX.width, height: VIEWBOX.height } })
+    const measured = canvasEvidenceOf({ document: displayDocument, root: svg, viewport: { width: VIEWBOX.width, height: VIEWBOX.height } })
     setCanvasEvidence((current) => (JSON.stringify(current) === JSON.stringify(measured) ? current : measured))
     // 这三样就是"画出来的东西"的全部输入：内容、视野变换、选中态（影响描边宽度）。
-  }, [document, viewport, selectedIds])
+  }, [displayDocument, viewport, selectedIds])
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => { if (event.code === "Space" && !isTextEditingTarget(event.target)) { event.preventDefault(); setSpacePressed(true) } }
     const handleKeyUp = (event: KeyboardEvent) => { if (event.code === "Space") setSpacePressed(false) }
@@ -616,7 +617,7 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
       <line x1={x} y1={y - 8} x2={x} y2={y + 8} stroke="#d94a4a" strokeWidth="1.5" />
     </g>]
   })
-  const renderAnnotations = () => previewDocument.annotations.filter((annotation) => annotation.visible !== false).map((annotation) => {
+  const renderAnnotations = () => displayDocument.annotations.filter((annotation) => annotation.visible !== false).map((annotation) => {
     const point = resolveAnnotationPoint(annotation, displayPrimitives)
     if (!point) return null
     const offset = annotation.offset ?? { x: 0.25, y: 0.25 }
@@ -666,10 +667,10 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
    */
   const graphPaper = workspace === "conics" || workspace === "calculus"
   /** 常驻的测量数字：纯函数算位置与文本（`pointer-events: none`，不参与拾取）。 */
-  const measurementLabels = planarMeasurementVisuals(document, selectedIds)
+  const measurementLabels = planarMeasurementVisuals(displayDocument, selectedIds)
   const gridStroke = { minor: "var(--color-graph-grid-minor)", major: "var(--color-graph-grid-major)", axis: "var(--color-graph-axis)" }
   return <main className="graphics" data-canvas-surface={graphPaper ? "graph-paper" : "workbench"}><div className="canvas-card">{hoverCoordinate && <div className="coordinate-readout" data-coordinate-readout="true" role="presentation">{hoverPrimitiveType ? `${hoverPrimitiveType} · ` : ""}({hoverCoordinate.x.toFixed(2)}, {hoverCoordinate.y.toFixed(2)})</div>}
-<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-creation-mode={creationMode ?? undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, document))} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onContextMenu={(event) => {
+<div className="canvas-viewport-controls" role="group" aria-label="画布缩放"><button type="button" aria-label="缩小画布" title="缩小画布（滚轮向下）" onClick={() => setViewport((current) => zoomViewport(current, 1 / 1.25))}>−</button><span className="zoom-readout" data-zoom-readout="true" aria-live="polite">{zoomPercentage}</span><button type="button" aria-label="放大画布" title="放大画布（滚轮向上）" onClick={() => setViewport((current) => zoomViewport(current, 1.25))}>＋</button><button type="button" aria-label="重置视图" title="重置视图（居中并恢复默认缩放）" onClick={() => setViewport(DEFAULT_VIEWPORT)}>重置</button></div><svg ref={svgRef} className={panState ? "is-panning" : dragState ? "is-dragging" : undefined} data-creation-mode={creationMode ?? undefined} data-ghost-active={ghostCandidate ? "true" : "false"} pointerEvents={ghostCandidate ? "none" : undefined} data-viewport-center={`${viewport.center.x},${viewport.center.y}`} data-viewport-scale={viewport.scale} data-grid-cell={GRID_CELL} data-grid-major={GRID_MAJOR_EVERY} data-measurement-labels={measurementLabels.length} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, displayDocument))} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="img" aria-label="几何画布" onContextMenu={(event) => {
   event.preventDefault()
   if (creationMode) {
     onCancelCreation?.()
