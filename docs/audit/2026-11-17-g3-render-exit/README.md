@@ -9,6 +9,10 @@
 - 全量浏览器回归首轮 **321/327**，复现6项：3条旧“3D不可测/partial”测试与新真实投影合同冲突，2条球体确认被 empty_canvas 拒绝，一条棱柱拖动测试命中点手柄。新增先失败再通过的球体对象索引单测；更新旧E2E为正向检查真实对象盒及哈希；棱柱测试改瞄实体面内而非点手柄。最终在相同代码上串行 **327/327**（含36题）、零重试，失败历史保留在ignored测试日志与trace。
 - 定向：三维内容同步14/14、三维证据E2E 7/7、球体 E2E 13/13；全量Vitest **544文件 / 5799 passed + 1 todo / 0 failed**；类型检查、文档22项、Lint 0 error（仍有34个历史未用警告，包含隔离worktree重复扫描）。测试日志位于 ignored eval-results/g3-render-36/。
 
+## 同版桌面无安装包构建（不是窗口验收）
+
+在已推送的渲染区块 fe46fbff 上运行 `npm.cmd run build --workspace @draw/desktop`，Web产物与 Tauri release no-bundle 构建均退出0；本机可执行文件 `apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe` SHA-256：`1cc02c296ec7fa0cf58e5cf943035e9d6fcf47396839427850fcdff003e7e983`。构建日志在忽略目录 `eval-results/g3-render-36/desktop-build-after-render.log`。构建不是安装包发布、Windows窗口UIA、真实用户交互或可读性人工签收。
+
 ## 不能据此声称什么
 
 **自动化通过不等于教师/用户可读性签收，也不等于G3-UX全部关闭**。[manifest.json](manifest.json) 中 `humanReviewed.status=pending`，AI审阅只能记录建议。25/36题仍有视觉警告，共27次 clipped_object、26次 tiny_object（同一题可多次）；长直线/曲线越过视窗与小特征需要人工判断是否影响题意。自动测试允许warning，只拒绝 error、缺必要标签、空对象/错候选等；不得把36/36写成“没有任何视觉问题”。
