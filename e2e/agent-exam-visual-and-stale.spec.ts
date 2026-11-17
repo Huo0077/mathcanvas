@@ -238,10 +238,11 @@ test("the 3D canvas reports its version and its point labels, and says which rea
   // ① 同版本：画布报的哈希 == 测试自己算的那份 3D 文档。
   expect(evidence.hash).toMatch(/^[0-9a-f]{64}$/)
   expect(evidence.hash).toBe(await contentHash(page, await committedDocument(page, "geometry3d")))
-  // ② 3D 的图形在 WebGL 里，DOM 量不到 —— 画布**如实标注**，而不是把"量不到"说成"画布是空的"。
-  expect(evidence.measurable).toBe("false")
-  expect(evidence.status).toBe("partial")
-  expect(evidence.accepted).toBe("false")
+  // ② Three.js now projects the real 3D object bounds for canvas evidence.
+  expect(evidence.measurable).toBe("true")
+  expect(Number(evidence.boxes)).toBeGreaterThan(0)
+  expect(evidence.status).toBe("passed")
+  expect(evidence.accepted).toBe("true")
   expect(evidence.errors).not.toContain("empty_canvas")
 
   /**
@@ -279,7 +280,9 @@ test("the triangle family draws on the canvas the same version that was committe
   await expect(page.locator('[data-3d-scene="true"]')).toBeVisible()
   const evidence = await canvasEvidence(page)
   expect(evidence.hash).toBe(await contentHash(page, await committedDocument(page, "geometry3d")))
-  expect(evidence.measurable).toBe("false")
+  expect(evidence.measurable).toBe("true")
+  expect(Number(evidence.boxes)).toBeGreaterThan(0)
+  expect(evidence.status).toBe("passed")
   expect(evidence.errors).toBe("")
   // 三个点名都在画布上（三角形那一族：A、B、C）。
   const labels = await page.evaluate(() => [...document.querySelectorAll('[data-3d-scene="true"] [data-point-id]')].map((element) => (element.textContent ?? "").trim()).filter(Boolean))
@@ -328,6 +331,9 @@ test("3D camera evidence excludes retained hidden labels and recovers after fit"
   await page.getByRole("button", { name: "适应视图", exact: true }).click()
   await expect.poll(() => scene.locator("[data-point-id][hidden]").count()).toBe(0)
   await expect.poll(async () => (await canvasEvidence(page)).hidden).toBe("")
-  expect((await canvasEvidence(page)).status).toBe("partial")
-  expect((await canvasEvidence(page)).hash).toBe(originalHash)
+  const restored = await canvasEvidence(page)
+  expect(restored.measurable).toBe("true")
+  expect(Number(restored.boxes)).toBeGreaterThan(0)
+  expect(restored.status).toBe("passed")
+  expect(restored.hash).toBe(originalHash)
 })

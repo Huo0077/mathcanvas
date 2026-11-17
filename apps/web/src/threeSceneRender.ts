@@ -2,7 +2,8 @@ import type { Dispatch, RefObject, SetStateAction } from "react"
 import * as THREE from "three"
 
 import type { GeometryDocument, Point3Primitive } from "@draw/dsl"
-import { canonicalContentHash, type LayoutBox } from "@draw/agent-core"
+import { adjustLayoutWithoutMutatingMath, canonicalContentHash, type LayoutBox } from "@draw/agent-core"
+import { LABEL_BOX_SIZE } from "./canvasEvidence"
 
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { pointLabelPlacements } from "./pointLabels"
@@ -165,21 +166,26 @@ export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef
     }
     const labelOverlay = pointLabelOverlayRef.current
     if (labelOverlay) {
+      const placements = pointLabelPlacements(
+        visiblePointLabels.filter((point) => typeof point.label === "string" && point.label.length > 0),
+        (id) => objectIndex.get(id),
+        camera,
+        bounds
+      )
+      const adjusted = adjustLayoutWithoutMutatingMath(bounds, placements.filter((placement) => placement.visible).map((placement) => ({
+        id: `point:${placement.key}`,
+        kind: "label" as const,
+        x: placement.left,
+        y: placement.top,
+        ...LABEL_BOX_SIZE
+      })))
+      const adjustedByKey = new Map(adjusted.boxes.map((box) => [box.id, box]))
       syncOverlay(
         labelOverlay,
-        /**
-         * **没有名字的点不画标注**（2026-10-12，Task 16 的画布读数）。
-         *
-         * `pointLabelPlacements` 对没有 `label` 的点会退回**图元 id**（`point3-7`、`face-2:v1` 这种）——
-         * 那是排查用的内部编号，不是题面里的点名。翻折题里折片折痕两端是另建的副本，
-         * 画布上因此真出现过 `face-2:v1` 这样的"字母"。点仍然画出来（它还参与几何），只是不写字。
-         */
-        pointLabelPlacements(
-          visiblePointLabels.filter((point) => typeof point.label === "string" && point.label.length > 0),
-          (id) => objectIndex.get(id),
-          camera,
-          bounds
-        ),
+        placements.map((placement) => {
+          const adjustedBox = adjustedByKey.get(`point:${placement.key}`)
+          return adjustedBox ? { ...placement, left: adjustedBox.x, top: adjustedBox.y } : placement
+        }),
         () => {
           const label = globalThis.document.createElement("span")
           label.className = "three-point-label"

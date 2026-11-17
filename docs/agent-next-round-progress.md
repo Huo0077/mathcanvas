@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
+
 最后更新：2026-11-17（真实候选渲染与确认链已闭环；下一区块为 36 题审阅包、桌面 UIA 与最终复核；DeepSeek 实测按用户指示保留后继）。
 
 **实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。

@@ -1,0 +1,59 @@
+{
+  "id": "GK-P09",
+  "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
+  "category": "plane",
+  "family": "function",
+  "promptHash": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe",
+  "status": "passed",
+  "diagnostics": [
+    "clipped_object",
+    "clipped_object"
+  ],
+  "documentHash": "2ac6601022fd5893198c63b0a6d1b00c021fde91499b9422c04b9e0684f07b01",
+  "documentRevision": "3",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 3,
+  "labels": 1,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -533.3333333333334,
+      "width": 720,
+      "height": 1440
+    },
+    {
+      "id": "function#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 359.03132569398485,
+      "y": 20,
+      "width": 121.7008320511028,
+      "height": 256.2128682931264
+    },
+    {
+      "id": "tangent#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": -148637.8651731535,
+      "y": -297889.0636633883,
+      "width": 298142.39701297367,
+      "height": 596284.7939934433
+    },
+    {
+      "id": "label:f",
+      "kind": "label",
+      "x": 488.73215774508765,
+      "y": 12,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/GK-P09.png",
+  "screenshotSha256": "a9ebd3cd5403c3194070f2b8d70625b131f7a531be35d36f38e96031eee6e7a8"
+}

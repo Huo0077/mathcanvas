@@ -240,3 +240,19 @@ it("does not count a retained hidden 3D overlay label as visible", () => {
   label.hidden = false
   expect(canvasEvidenceOf({ document: geometry, root, viewport: { width: 800, height: 600 }, objectsMeasurable: false }).hiddenLabels).toEqual([])
 })
+
+it("measures named function labels from the rendered curve", () => {
+  const svg = svgElement("svg", { viewBox: "0 0 400 300" })
+  const group = svgElement("g", { "data-primitive-type": "function" })
+  group.append(svgElement("polyline", { points: "40,200 160,80" }))
+  const label = svgElement("text", { "data-curve-label": "f", x: 168, y: 76 })
+  label.textContent = "f"
+  group.append(label)
+  svg.append(group)
+
+  const measured = measureRenderedCanvas(svg)
+
+  expect(measured.renderedLabels).toEqual(["f"])
+  expect(measured.boxes.filter((box) => box.kind === "object")).toHaveLength(1)
+  expect(measured.boxes.filter((box) => box.kind === "label")).toHaveLength(1)
+})

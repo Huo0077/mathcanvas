@@ -1,0 +1,39 @@
+{
+  "id": "GK-P08",
+  "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4",
+  "status": "passed",
+  "diagnostics": [],
+  "documentHash": "e8280e2c7d7d539e377c5a68a6a0aec79e888716746bff6488d5c2ede351a715",
+  "documentRevision": "2",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 2,
+  "labels": 0,
+  "layoutBoxes": [
+    {
+      "id": "hyperbola#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 286.1449914893378,
+      "y": 20,
+      "width": 227.71001702132435,
+      "height": 400
+    },
+    {
+      "id": "circle#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 366.6666666666667,
+      "y": 119.99999999999997,
+      "width": 66.66666666666669,
+      "height": 66.66666666666666
+    }
+  ],
+  "screenshot": "cases/GK-P08.png",
+  "screenshotSha256": "4ba7198419114b685ce5673851f541c86d94519349273d47533dbdb1ad8228ea"
+}

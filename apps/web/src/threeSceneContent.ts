@@ -246,6 +246,9 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       const selected = selectedIds.includes(primitive.id)
       const flags = `sel:${selected};hidden:${showHiddenEdges};normals:${showNormals};transparent:${transparentFaces};unfold:${unfoldProgress > 0.001 ? unfoldProgress.toFixed(4) : "0"}`
       const group = keepContent(`solid:${primitive.id}`, signer.of(primitive.id, flags), () => createSolidGroup(primitive, selected, { showHiddenEdges, showNormals, transparentFaces, unfoldProgress }), alive, order)
+      // Analytic solids have no point handles. Index their actual WebGL groups so
+      // rendered evidence can measure them before authorizing a commit.
+      if (group) objectIndex.set(primitive.id, group)
       hiddenEdgeSegments += hiddenEdgeSegmentsOf(group)
     })
     /**

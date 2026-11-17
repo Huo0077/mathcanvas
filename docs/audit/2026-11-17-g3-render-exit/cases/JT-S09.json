@@ -1,0 +1,334 @@
+{
+  "id": "JT-S09",
+  "source": "2025年浙江省天域全国名校协作体联考（3月） 第4题 (jyeoo)",
+  "category": "solid",
+  "family": "solid",
+  "promptHash": "00bd85ac3707247dcb46dad0a644230a9f40b01d07e16fd39fd33870a05f26ff",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object",
+    "tiny_object",
+    "tiny_object",
+    "tiny_object"
+  ],
+  "documentHash": "428c18d22db11ba958c9b41b531f6a82c820fa39b362f2c79622c8836c930f40",
+  "documentRevision": "2",
+  "viewport": {
+    "width": 485,
+    "height": 704
+  },
+  "objects": 27,
+  "labels": 8,
+  "layoutBoxes": [
+    {
+      "id": "object:solid-1:v0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.74516344573104,
+      "y": 310.0643865526189,
+      "width": 7.900298108537811,
+      "height": 8.601881175310098
+    },
+    {
+      "id": "object:solid-1:v1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 157.1927609484727,
+      "y": 347.29176691281344,
+      "width": 8.757517568259487,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.089132839223,
+      "y": 390.6750174283692,
+      "width": 9.21235932155389,
+      "height": 10.446616040116965
+    },
+    {
+      "id": "object:solid-1:v3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 319.44034648326766,
+      "y": 347.29176691281344,
+      "width": 8.757517568259516,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.50130559360872,
+      "y": 209.82192641886965,
+      "width": 8.388013812782447,
+      "height": 8.663419985349037
+    },
+    {
+      "id": "object:solid-1:v5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 151.48262759581328,
+      "y": 241.36075658122132,
+      "width": 9.360226941930819,
+      "height": 9.532514450537036
+    },
+    {
+      "id": "object:solid-1:v6",
+      "kind": "object",
+      "shape": "marker",
+      "x": 237.75411560198415,
+      "y": 278.4923593018371,
+      "width": 9.882393796031579,
+      "height": 10.587466312028198
+    },
+    {
+      "id": "object:solid-1:v7",
+      "kind": "object",
+      "shape": "marker",
+      "x": 324.54777046225576,
+      "y": 241.36075658122132,
+      "width": 9.360226941930819,
+      "height": 9.532514450537036
+    },
+    {
+      "id": "object:solid-1:e0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 351.99999999999994,
+      "width": 81.11663006278667,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 161.5786824372132,
+      "y": 351.99999999999994,
+      "width": 81.11663006278675,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 161.5786824372132,
+      "y": 314.35585448366277,
+      "width": 81.11663006278675,
+      "height": 37.644145516337176
+    },
+    {
+      "id": "object:solid-1:e3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 314.35585448366277,
+      "width": 81.11663006278667,
+      "height": 37.644145516337176
+    },
+    {
+      "id": "object:solid-1:e4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 214.14350796954602,
+      "width": 86.52440540030585,
+      "height": 31.97145138787417
+    },
+    {
+      "id": "object:solid-1:e5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 246.1149593574202,
+      "width": 86.52440540030585,
+      "height": 37.65655424116707
+    },
+    {
+      "id": "object:solid-1:e6",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 86.5244054003058,
+      "height": 37.65655424116707
+    },
+    {
+      "id": "object:solid-1:e7",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 214.14350796954602,
+      "width": 86.5244054003058,
+      "height": 31.97145138787417
+    },
+    {
+      "id": "object:solid-1:e8",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 246.1149593574202,
+      "width": 5.407775337519098,
+      "height": 105.88504064257975
+    },
+    {
+      "id": "object:solid-1:e9",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 214.14350796954602,
+      "width": 1,
+      "height": 100.21234651411675
+    },
+    {
+      "id": "object:solid-1:e10",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 283.77151359858726,
+      "width": 1,
+      "height": 112.11340052143828
+    },
+    {
+      "id": "object:solid-1:e11",
+      "kind": "object",
+      "shape": "shape",
+      "x": 323.8119425627866,
+      "y": 246.1149593574202,
+      "width": 5.407775337519126,
+      "height": 105.88504064257975
+    },
+    {
+      "id": "object:solid-1:f0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 161.5786824372132,
+      "y": 314.35585448366277,
+      "width": 162.23326012557342,
+      "height": 81.52905963636277
+    },
+    {
+      "id": "object:solid-1:f1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 214.14350796954602,
+      "width": 173.04881080061165,
+      "height": 69.62800562904124
+    },
+    {
+      "id": "object:solid-1:f2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 214.14350796954602,
+      "width": 86.52440540030585,
+      "height": 137.85649203045392
+    },
+    {
+      "id": "object:solid-1:f3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.1709070996941,
+      "y": 246.1149593574202,
+      "width": 86.52440540030585,
+      "height": 149.76995476260535
+    },
+    {
+      "id": "object:solid-1:f4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 86.5244054003058,
+      "height": 149.76995476260535
+    },
+    {
+      "id": "object:solid-1:f5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 214.14350796954602,
+      "width": 86.5244054003058,
+      "height": 137.85649203045392
+    },
+    {
+      "id": "object:sphere-1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 27.530853373005954,
+      "y": 153.2119597112846,
+      "width": 430.32891825398804,
+      "height": 447.19377223581716
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 252.695,
+      "y": 304.356,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 171.579,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 252.695,
+      "y": 385.885,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D",
+      "kind": "label",
+      "x": 333.812,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₁",
+      "kind": "label",
+      "x": 252.695,
+      "y": 204.144,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B₁",
+      "kind": "label",
+      "x": 166.171,
+      "y": 236.115,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C₁",
+      "kind": "label",
+      "x": 252.695,
+      "y": 273.772,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D₁",
+      "kind": "label",
+      "x": 339.22,
+      "y": 236.115,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "cameraHash": "e1042ba25815d62df9dd7620dd97aca3344221fdc2662b52e56a8881898138f2",
+  "screenshot": "cases/JT-S09.png",
+  "screenshotSha256": "c772c40328b61a89d27d04f90d30f1b777e7e2a540cd6b3e8d816fb63b377e53"
+}

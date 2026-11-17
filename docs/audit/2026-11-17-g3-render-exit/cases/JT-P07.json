@@ -1,0 +1,171 @@
+{
+  "id": "JT-P07",
+  "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第19题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "bd9ddc44f99363aec0b706c7ef14861a91e3affda60a4a08b175001fe2246545",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object",
+    "tiny_object"
+  ],
+  "documentHash": "3eb714d4138eced040f8dc0eee7ae6a3f2ccebefe5411810ce8b682723e42a13",
+  "documentRevision": "11",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 11,
+  "labels": 6,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 375,
+      "y": 20,
+      "width": 1,
+      "height": 400
+    },
+    {
+      "id": "line#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 441.6666666666667,
+      "y": 20,
+      "width": 1,
+      "height": 400
+    },
+    {
+      "id": "segment#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 408.3333333333333,
+      "y": 192.83616041997564,
+      "width": 33.33333333333337,
+      "height": 28.867513459481273
+    },
+    {
+      "id": "segment#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 408.3333333333333,
+      "y": 221.70367387945691,
+      "width": 33.33333333333337,
+      "height": 28.8675134594813
+    },
+    {
+      "id": "ellipse#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 275,
+      "y": 188.3703405461236,
+      "width": 133.33333333333331,
+      "height": 66.66666666666666
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 355.8333333333333,
+      "y": 186.92881266106178,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 405.8333333333333,
+      "y": 219.20367387945691,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 372.5,
+      "y": 248.07118733893822,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 372.5,
+      "y": 190.33616041997564,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 439.1666666666667,
+      "y": 190.33616041997564,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 439.1666666666667,
+      "y": 248.07118733893822,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 368.3333333333333,
+      "y": 193.42881266106178,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 418.3333333333333,
+      "y": 225.70367387945691,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 385,
+      "y": 254.57118733893822,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:Q",
+      "kind": "label",
+      "x": 385,
+      "y": 180.83616041997564,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:E",
+      "kind": "label",
+      "x": 451.6666666666667,
+      "y": 196.83616041997564,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F",
+      "kind": "label",
+      "x": 451.6666666666667,
+      "y": 254.57118733893822,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P07.png",
+  "screenshotSha256": "1ae60e6683325338571758efb8031a6c887e73eb02e7b60bfe9ac125d5a10672"
+}

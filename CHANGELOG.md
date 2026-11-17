@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— G3真实画布证据与兼容回归修复（开发版）
+
+- 36题真实浏览器预览和同候选渲染证据36/36；补3D解析球体的真实对象索引，修复因empty_canvas导致的确认拒绝。
+- 对齐3D实际投影测试和棱柱实体拖动测试，完整Playwright首轮321/327、修后327/327（零重试），首轮失败原样留证。
+- 25题仍有clipped/tiny视觉警告；人工可读性、Windows桌面窗口、真实DS模型和P8未验收，产品未发布。
+
 ## 2026-11-17 —— Task 6（T16）全生命周期与全量端到端收口及 G3 阶段总结
 
 - **UI 生命周期与路由兼容修复**：新建 [`e2e/drawing-reliability-lifecycle.spec.ts`](e2e/drawing-reliability-lifecycle.spec.ts)（确认前 0 写入、双击原子提交、一步撤销/重做、刷新与 `.mgeo` 导入导出哈希一致、丢弃草稿 0 写入、跨对话隔离、矛盾拒绝、棱上动点 `B₂` 拖动与一步撤销），暴露并修复 [`AgentMessageList.tsx`](apps/web/src/components/agent/AgentMessageList.tsx) 在已提交或已丢弃后确认面板仍保留操作按钮的缺陷（附 `AgentPieces.test.tsx` 9/9 单测回归）；[`planarDrawing.ts`](packages/agent-core/src/solver/planarDrawing.ts) 放行含符号参数不变量的轨迹题并明确“唯一确定”曲线参数说明，[`functionDrawingPlan.ts`](packages/agent-core/src/solver/functionDrawingPlan.ts) 保留非 LaTeX 原文函数式。

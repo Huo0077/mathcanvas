@@ -1,5 +1,7 @@
 # Agent 发布前门禁
 
+> **2026-11-17 G3区块更新**：[G3渲染工程收尾](../audit/2026-11-17-g3-render-exit/README.md)：36/36自动化浏览器渲染、327/327全量E2E零重试；25题有视觉警告（27 clipped、26 tiny）。这不关闭humanReviewed/桌面原生窗口/真实DS/P8门禁；状态只以[当前状态](../current-status.md)为准。
+
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：发布验收合同；不是第二份实时进度。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->

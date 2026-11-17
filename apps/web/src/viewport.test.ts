@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_VIEWPORT, MAX_GRID_LINES, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
+import { DEFAULT_VIEWPORT, MAX_GRID_LINES, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, fitViewportToPoints, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
 import { GRID_CELL } from "./sceneGrid"
 
 describe("shared viewport mapping", () => {
@@ -106,4 +106,21 @@ describe("canvas zoom", () => {
     expect(gridLinePositions(Number.NaN, 1)).toEqual([])
     expect(gridLinePositions(0, MAX_GRID_LINES * 2)).toEqual([])
   })
+})
+
+it("fits every named point inside the initial candidate viewport without moving the points", () => {
+  const points = [{ x: 0, y: 0 }, { x: 50, y: 30 }, { x: -5, y: 2 }]
+
+  const fitted = fitViewportToPoints(points)
+  const projected = points.map((point) => worldToSvg(point, fitted))
+
+  expect(fitted.center).toEqual({ x: 22.5, y: 15 })
+  expect(fitted.scale).toBeLessThan(DEFAULT_VIEWPORT.scale)
+  for (const point of projected) {
+    expect(point.x).toBeGreaterThanOrEqual(40)
+    expect(point.x).toBeLessThanOrEqual(760)
+    expect(point.y).toBeGreaterThanOrEqual(20)
+    expect(point.y).toBeLessThanOrEqual(420)
+  }
+  expect(points).toEqual([{ x: 0, y: 0 }, { x: 50, y: 30 }, { x: -5, y: 2 }])
 })

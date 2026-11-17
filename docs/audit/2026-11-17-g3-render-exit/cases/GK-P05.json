@@ -1,0 +1,216 @@
+{
+  "id": "GK-P05",
+  "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a",
+  "status": "passed",
+  "diagnostics": [
+    "clipped_object",
+    "clipped_object",
+    "tiny_object",
+    "clipped_object"
+  ],
+  "documentHash": "8c4dd66d5be71d9dd14d98b635f86a34d20d62407bad29a62c8bcdac3eee90dc",
+  "documentRevision": "14",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 14,
+  "labels": 8,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -61.752980496052714,
+      "width": 720,
+      "height": 836.3138208260265
+    },
+    {
+      "id": "line#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": 77.5867131713392,
+      "width": 720,
+      "height": 225.4047299169355
+    },
+    {
+      "id": "line#2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -26.848680723879312,
+      "width": 720,
+      "height": 540.0000000000006
+    },
+    {
+      "id": "line#3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 312.3499071829763,
+      "y": 20,
+      "width": 1,
+      "height": 400
+    },
+    {
+      "id": "parabola#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 279.24619177560885,
+      "y": -238.76120392813488,
+      "width": 6940.122069014112,
+      "height": 720
+    },
+    {
+      "id": "circle#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 312.3499071829763,
+      "y": 208.8888888888888,
+      "width": 66.66666666666669,
+      "height": 66.66666666666669
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 343.18324051630964,
+      "y": 239.72222222222214,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 276.516573849643,
+      "y": 239.72222222222214,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 284.8499071829763,
+      "y": 239.72222222222214,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 284.8499071829763,
+      "y": 223.0555555555555,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 338.2534252526323,
+      "y": 285.08625033664686,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 518.483426150357,
+      "y": 149.91374966335314,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#6",
+      "kind": "object",
+      "shape": "marker",
+      "x": 309.8499071829763,
+      "y": 273.0555555555555,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#7",
+      "kind": "object",
+      "shape": "marker",
+      "x": 309.8499071829763,
+      "y": 206.38888888888883,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 355.68324051630964,
+      "y": 246.22222222222214,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:O",
+      "kind": "label",
+      "x": 289.016573849643,
+      "y": 246.22222222222214,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F",
+      "kind": "label",
+      "x": 297.3499071829763,
+      "y": 230.22222222222214,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₁",
+      "kind": "label",
+      "x": 297.3499071829763,
+      "y": 213.5555555555555,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₂",
+      "kind": "label",
+      "x": 350.7534252526323,
+      "y": 291.58625033664686,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₃",
+      "kind": "label",
+      "x": 530.983426150357,
+      "y": 156.41374966335314,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 322.3499071829763,
+      "y": 279.5555555555555,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:Q",
+      "kind": "label",
+      "x": 322.3499071829763,
+      "y": 212.88888888888883,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/GK-P05.png",
+  "screenshotSha256": "91c19f340e50f549b85505dba3fefa9485c0ee1185efd58d5de573e54ff60f27"
+}

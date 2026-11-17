@@ -1,0 +1,180 @@
+{
+  "id": "JT-S01",
+  "source": "2025年八省联考 第17题",
+  "category": "solid",
+  "family": "fold",
+  "promptHash": "70afbbdbae54b0bdc1776a025312cf5f97c86e67c3a8a1797e58dc02d1218f7d",
+  "status": "passed",
+  "diagnostics": [],
+  "documentHash": "53a1a6fa86212c3d33f15626c8702cd21fd3e9f6277932d4cd4aba881a20bbb4",
+  "documentRevision": "1",
+  "viewport": {
+    "width": 485,
+    "height": 704
+  },
+  "objects": 14,
+  "labels": 4,
+  "layoutBoxes": [
+    {
+      "id": "object:solid-1:v0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.44229772303945,
+      "y": 347.29176691281344,
+      "width": 8.506029553920996,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 280.3885557026138,
+      "y": 368.12226624706216,
+      "width": 8.973557821947736,
+      "height": 9.91837217743688
+    },
+    {
+      "id": "object:solid-1:v2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 196.02851147543836,
+      "y": 368.12226624706216,
+      "width": 8.97355782194765,
+      "height": 9.91837217743688
+    },
+    {
+      "id": "object:solid-1:v3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 151.68971829693493,
+      "y": 331.2433026770221,
+      "width": 9.338329413460258,
+      "height": 9.96561977476938
+    },
+    {
+      "id": "object:solid-1:e0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 200.52292187055224,
+      "y": 351.99999999999994,
+      "width": 42.172390629447705,
+      "height": 21.06922589953416
+    },
+    {
+      "id": "object:solid-1:e1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 200.52292187055224,
+      "y": 351.99999999999994,
+      "width": 84.34478125889541,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 351.99999999999994,
+      "width": 42.172390629447705,
+      "height": 21.06922589953416
+    },
+    {
+      "id": "object:solid-1:e3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 306.6380258644002,
+      "width": 129.4924514957884,
+      "height": 101.37895131806295
+    },
+    {
+      "id": "object:solid-1:e4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 306.6380258644002,
+      "width": 86.32830099719226,
+      "height": 77.60743997959241
+    },
+    {
+      "id": "object:solid-1:e5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 325.9614904561112,
+      "width": 44.15591036774455,
+      "height": 58.28397538788141
+    },
+    {
+      "id": "object:solid-1:f0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 200.52292187055224,
+      "y": 351.99999999999994,
+      "width": 84.34478125889541,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:f1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 306.6380258644002,
+      "width": 129.4924514957884,
+      "height": 101.37895131806295
+    },
+    {
+      "id": "object:solid-1:f2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 306.6380258644002,
+      "width": 86.32830099719226,
+      "height": 77.60743997959241
+    },
+    {
+      "id": "object:solid-1:f3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 156.36701150280769,
+      "y": 306.6380258644002,
+      "width": 129.4924514957884,
+      "height": 101.37895131806295
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 252.695,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 294.868,
+      "y": 363.069,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 210.523,
+      "y": 363.069,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 166.367,
+      "y": 326.214,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "cameraHash": "e1042ba25815d62df9dd7620dd97aca3344221fdc2662b52e56a8881898138f2",
+  "screenshot": "cases/JT-S01.png",
+  "screenshotSha256": "457b98446f406b61b75478da9b8ab1819617b73f77fb4b2918fec20212d5d57a"
+}

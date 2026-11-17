@@ -1,0 +1,150 @@
+{
+  "id": "JT-P09",
+  "source": "2025年重庆市金太阳联考（5月） 第4题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "dde1a3e824214f45b494f93954e953132989334e540fcaa7135c9d5ae7dca093",
+  "status": "passed",
+  "diagnostics": [],
+  "documentHash": "ac0daa960034a44dda0c6f806bb150292bd84d1fa6ad415b0c1a546cb0fcc33b",
+  "documentRevision": "9",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 9,
+  "labels": 6,
+  "layoutBoxes": [
+    {
+      "id": "segment#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 314.0763745333445,
+      "y": 199.39886704167017,
+      "width": 178.88543819998324,
+      "height": 89.44271909999159
+    },
+    {
+      "id": "segment#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 307.03818726667225,
+      "y": 151.15841385833824,
+      "width": 59.628479399994376,
+      "height": 119.25695879998875
+    },
+    {
+      "id": "circle#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 303.5190936333361,
+      "y": 144.12022659166595,
+      "width": 200,
+      "height": 200.00000000000003
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 334.35242696666944,
+      "y": 208.2868932583326,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 401.0190936333361,
+      "y": 241.62022659166595,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 490.46181273332775,
+      "y": 286.34158614166176,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 311.5763745333445,
+      "y": 196.89886704167017,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 304.53818726667225,
+      "y": 267.915372658327,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 364.16666666666663,
+      "y": 148.65841385833824,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:O",
+      "kind": "label",
+      "x": 346.85242696666944,
+      "y": 214.7868932583326,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 413.5190936333361,
+      "y": 248.12022659166595,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 502.96181273332775,
+      "y": 292.84158614166176,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 324.0763745333445,
+      "y": 203.39886704167017,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 317.03818726667225,
+      "y": 274.415372658327,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D",
+      "kind": "label",
+      "x": 376.66666666666663,
+      "y": 155.15841385833824,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P09.png",
+  "screenshotSha256": "4dd29e7e2e0b3f3e826f6b7c80ed56f3afe37151878a5490ed1d82c34e55bd16"
+}

@@ -1,0 +1,197 @@
+{
+  "id": "JT-P02",
+  "source": "2025年湖北省T8联盟考前模拟（一） 第18题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "beca519dc97e6c217c05674a24ee7030a1fcbe6fbd1a5bb566dea3dd2be76939",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object",
+    "clipped_object",
+    "clipped_object"
+  ],
+  "documentHash": "5cd30cb84ab425863024bc9a8b3730a82b1f2d880e4e17e4709041597436d3ce",
+  "documentRevision": "12",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 12,
+  "labels": 8,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 366.6666666666667,
+      "y": 20,
+      "width": 1,
+      "height": 400
+    },
+    {
+      "id": "line#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -117.77777777777771,
+      "width": 720,
+      "height": 719.9999999999999
+    },
+    {
+      "id": "line#2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": 166.66666666666674,
+      "width": 720,
+      "height": 239.99999999999994
+    },
+    {
+      "id": "hyperbola#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -398.6577330535964,
+      "width": 720,
+      "height": 1415.0932438849707
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 397.5,
+      "y": 306.3888888888889,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 248.428801500014,
+      "y": 306.3888888888889,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 546.5711984999859,
+      "y": 306.3888888888889,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 330.8333333333333,
+      "y": 306.3888888888889,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 464.1666666666667,
+      "y": 306.3888888888889,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 364.1666666666667,
+      "y": 273.0555555555556,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#6",
+      "kind": "object",
+      "shape": "marker",
+      "x": 508.6111111111112,
+      "y": 128.6111111111111,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#7",
+      "kind": "object",
+      "shape": "marker",
+      "x": 327.0238095238095,
+      "y": 260.67460317460325,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:O",
+      "kind": "label",
+      "x": 410,
+      "y": 312.8888888888889,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₁",
+      "kind": "label",
+      "x": 260.928801500014,
+      "y": 312.8888888888889,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₂",
+      "kind": "label",
+      "x": 559.0711984999859,
+      "y": 312.8888888888889,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₁",
+      "kind": "label",
+      "x": 343.3333333333333,
+      "y": 312.8888888888889,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₂",
+      "kind": "label",
+      "x": 476.6666666666667,
+      "y": 312.8888888888889,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 376.6666666666667,
+      "y": 279.5555555555556,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 521.1111111111112,
+      "y": 135.1111111111111,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:N",
+      "kind": "label",
+      "x": 339.5238095238095,
+      "y": 267.17460317460325,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P02.png",
+  "screenshotSha256": "e30226c08bb1087deffd3142be507321a920d38da354df8052fcba93f2e6d203"
+}

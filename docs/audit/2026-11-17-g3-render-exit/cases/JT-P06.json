@@ -1,0 +1,81 @@
+{
+  "id": "JT-P06",
+  "source": "2025年湖南省一起考大联考（二） 第19题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "e80df950984164ecc429db618fc0266cffa87e3817af99041d61c827241042f5",
+  "status": "passed",
+  "diagnostics": [],
+  "documentHash": "1025cb287dd252b436b5b4873e7161b14cf11991830939be714575cbc349e670",
+  "documentRevision": "4",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 4,
+  "labels": 3,
+  "layoutBoxes": [
+    {
+      "id": "ellipse#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 308.79773408334034,
+      "y": 168.2404531833319,
+      "width": 149.071198499986,
+      "height": 133.33333333333337
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 447.5,
+      "y": 202.5928801500014,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 347.5,
+      "y": 232.4071198499986,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 414.1666666666667,
+      "y": 232.4071198499986,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 460,
+      "y": 209.0928801500014,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₁",
+      "kind": "label",
+      "x": 360,
+      "y": 238.9071198499986,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₂",
+      "kind": "label",
+      "x": 426.6666666666667,
+      "y": 238.9071198499986,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P06.png",
+  "screenshotSha256": "5be25d4cb27ee3d45cc09c846acd145c57895851985dfe4ccfe928d5cc52133d"
+}

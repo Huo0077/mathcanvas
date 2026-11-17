@@ -1,0 +1,76 @@
+{
+  "id": "GK-P04",
+  "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
+  "category": "plane",
+  "family": "function",
+  "promptHash": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9",
+  "status": "passed",
+  "diagnostics": [
+    "clipped_object",
+    "clipped_object"
+  ],
+  "documentHash": "45e5538f8ddf28bc2c5d95f5214f3204c8a828d17fa19db4d9109c3ca156b237",
+  "documentRevision": "4",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 4,
+  "labels": 2,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -566.6666666666666,
+      "width": 720,
+      "height": 1440
+    },
+    {
+      "id": "function#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 333.3422635702294,
+      "y": 20,
+      "width": 133.31547285954116,
+      "height": 400
+    },
+    {
+      "id": "function#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 342.2659817351598,
+      "y": 20,
+      "width": 115.46803652968038,
+      "height": 100
+    },
+    {
+      "id": "tangent#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": -148704.53183651008,
+      "y": -297922.3969983765,
+      "width": 298142.3970063535,
+      "height": 596284.793996753
+    },
+    {
+      "id": "label:f",
+      "kind": "label",
+      "x": 474.6577364297706,
+      "y": 12,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:g",
+      "kind": "label",
+      "x": 465.7340182648402,
+      "y": 28,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/GK-P04.png",
+  "screenshotSha256": "0095a25a994df7f95b3c4c47c307fb2d80c5da2a532dae380ed5c599044dcc24"
+}

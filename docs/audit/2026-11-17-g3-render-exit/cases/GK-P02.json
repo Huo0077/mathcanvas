@@ -1,0 +1,186 @@
+{
+  "id": "GK-P02",
+  "source": "2022年全国乙卷理科 第20题 (GAOKAO-Bench)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "158fb91a7d802a46a9430dd8cceb4080da4ce530580a90e1b82e87fd3181be96",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object"
+  ],
+  "documentHash": "94ae8d0e9829646f15a288d60f8cc1448c1825a1fdf0b29d15351463f27d1d04",
+  "documentRevision": "11",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 11,
+  "labels": 8,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": 145.734338240696,
+      "width": 720,
+      "height": 215.99999999999983
+    },
+    {
+      "id": "segment#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 321.6188361801797,
+      "y": 230.21998909474985,
+      "width": 156.7623276396406,
+      "height": 1
+    },
+    {
+      "id": "ellipse#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 307.59495672316217,
+      "y": 120,
+      "width": 115.47005383792515,
+      "height": 133.33333333333334
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 362.8299836421248,
+      "y": 250.83333333333334,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 412.8299836421248,
+      "y": 217.5,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 396.1633169754581,
+      "y": 250.83333333333334,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 362.8299836421248,
+      "y": 184.16666666666666,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 319.1188361801797,
+      "y": 227.71998909474985,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 382.65354328205575,
+      "y": 246.78040122531263,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#6",
+      "kind": "object",
+      "shape": "marker",
+      "x": 397.5,
+      "y": 227.71998909474985,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#7",
+      "kind": "object",
+      "shape": "marker",
+      "x": 475.8811638198203,
+      "y": 227.71998909474985,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 375.3299836421248,
+      "y": 257.33333333333337,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 425.3299836421248,
+      "y": 224,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 408.6633169754581,
+      "y": 257.33333333333337,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:O",
+      "kind": "label",
+      "x": 375.3299836421248,
+      "y": 190.66666666666666,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 331.6188361801797,
+      "y": 234.21998909474985,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:N",
+      "kind": "label",
+      "x": 395.15354328205575,
+      "y": 237.28040122531263,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:T",
+      "kind": "label",
+      "x": 442,
+      "y": 234.21998909474985,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:H",
+      "kind": "label",
+      "x": 488.3811638198203,
+      "y": 234.21998909474985,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/GK-P02.png",
+  "screenshotSha256": "4861c5dbf77d5d1ffdb0ef7dc903fc29161ebc88cd2ffa5d8a50900db4b6dab2"
+}

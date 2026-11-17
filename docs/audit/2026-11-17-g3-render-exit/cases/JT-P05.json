@@ -1,0 +1,188 @@
+{
+  "id": "JT-P05",
+  "source": "2025年重庆市金太阳联考（5月） 第16题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "3cc387da6021fbc5b8b2a73f2705ae9e6744fffd76f3c16e1bf5bb3b7042cc8f",
+  "status": "passed",
+  "diagnostics": [
+    "clipped_object",
+    "clipped_object",
+    "clipped_object"
+  ],
+  "documentHash": "902e4a9cda2c72e3d89dbbc32bb30cc5c8919f861ca5471fac9f6854dcdef6ab",
+  "documentRevision": "11",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 11,
+  "labels": 8,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -1.6666666666666288,
+      "width": 720,
+      "height": 360
+    },
+    {
+      "id": "line#1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": 81.66666666666677,
+      "width": 720,
+      "height": 359.9999999999999
+    },
+    {
+      "id": "hyperbola#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -198.737611786802,
+      "width": 738.1694990624912,
+      "height": 811.7238073756919
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 406.5847495312456,
+      "y": 171.29095856771056,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 306.5847495312455,
+      "y": 204.6242919010439,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 506.5847495312456,
+      "y": 204.6242919010439,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 506.5847495312456,
+      "y": 204.6242919010439,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 339.9180828645789,
+      "y": 204.6242919010439,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 506.5847495312456,
+      "y": 121.29095856771052,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#6",
+      "kind": "object",
+      "shape": "marker",
+      "x": 474.75424859373686,
+      "y": 220.53954236979826,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#7",
+      "kind": "object",
+      "shape": "marker",
+      "x": 288.4152504687544,
+      "y": 313.7090414322895,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 419.0847495312456,
+      "y": 177.79095856771056,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₁",
+      "kind": "label",
+      "x": 319.0847495312455,
+      "y": 211.1242919010439,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F₂",
+      "kind": "label",
+      "x": 519.0847495312456,
+      "y": 211.1242919010439,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F",
+      "kind": "label",
+      "x": 519.0847495312456,
+      "y": 195.1242919010439,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 352.4180828645789,
+      "y": 211.1242919010439,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:Q",
+      "kind": "label",
+      "x": 519.0847495312456,
+      "y": 127.79095856771052,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 487.25424859373686,
+      "y": 227.03954236979826,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 300.9152504687544,
+      "y": 320.2090414322895,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P05.png",
+  "screenshotSha256": "42ff171aeec9275f02b26878656ab3452834860604edd7b6ef0049dd2951bb9b"
+}

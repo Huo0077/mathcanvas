@@ -24,6 +24,28 @@ export interface WorldBounds {
 
 export const DEFAULT_VIEWPORT: Viewport = { center: { x: 0, y: 0 }, scale }
 
+export function fitViewportToPoints(points: readonly Coordinate[]): Viewport {
+  const finite = points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y))
+  if (finite.length === 0) return DEFAULT_VIEWPORT
+  const xs = finite.map((point) => point.x)
+  const ys = finite.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const rangeX = Math.max(2, maxX - minX + 2)
+  const rangeY = Math.max(2, maxY - minY + 2)
+  const fittedScale = Math.min(
+    DEFAULT_VIEWPORT.scale,
+    (VIEWBOX.right - VIEWBOX.left - 80) / rangeX,
+    (VIEWBOX.bottom - VIEWBOX.top - 80) / rangeY
+  )
+  return {
+    center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
+    scale: Math.max(Number.MIN_VALUE, fittedScale)
+  }
+}
+
 export function worldToSvg(point: Coordinate, viewport: Viewport = DEFAULT_VIEWPORT): Coordinate {
   return { x: svgCenter.x + (point.x - viewport.center.x) * viewport.scale, y: svgCenter.y - (point.y - viewport.center.y) * viewport.scale }
 }

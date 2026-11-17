@@ -1,0 +1,234 @@
+{
+  "id": "JT-S08",
+  "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第15题 (jyeoo)",
+  "category": "solid",
+  "family": "solid",
+  "promptHash": "0c4d45964b209cec25c207a9f84b82fd680f9bd5ba639814e17c25d757a4ddc9",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object",
+    "tiny_object"
+  ],
+  "documentHash": "2a42dc9f04821a9ae642a1705006f5748ad028d7fcfb090ad7fde371476e863b",
+  "documentRevision": "2",
+  "viewport": {
+    "width": 485,
+    "height": 704
+  },
+  "objects": 17,
+  "labels": 7,
+  "layoutBoxes": [
+    {
+      "id": "object:solid-1:v0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.44229772303945,
+      "y": 347.29176691281344,
+      "width": 8.506029553920996,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 150.09273890098643,
+      "y": 390.6750174283692,
+      "width": 9.50726795071455,
+      "height": 10.446616040116965
+    },
+    {
+      "id": "object:solid-1:v2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 209.6938660909946,
+      "y": 399.4032209420885,
+      "width": 9.43943426469977,
+      "height": 10.653585635753188
+    },
+    {
+      "id": "object:solid-1:v3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 253.8600848460553,
+      "y": 376.1663250056813,
+      "width": 9.014696740795074,
+      "height": 10.105702570564006
+    },
+    {
+      "id": "object:solid-1:v4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.30487164697294,
+      "y": 296.03065486279667,
+      "width": 8.780881706054032,
+      "height": 9.492529431059609
+    },
+    {
+      "id": "object:solid-1:v5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 208.5173387961171,
+      "y": 344.7198818783983,
+      "width": 9.779080934558209,
+      "height": 10.737632736878652
+    },
+    {
+      "id": "object:solid-1:e0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 222.02050873622974,
+      "y": 351.99999999999994,
+      "width": 57.00347083409318,
+      "height": 29.206534438331687
+    },
+    {
+      "id": "object:solid-1:e1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 214.42207173000136,
+      "y": 381.20653443833163,
+      "width": 43.93758101666586,
+      "height": 23.509591225912118
+    },
+    {
+      "id": "object:solid-1:e2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 384.24546584399263,
+      "width": 59.56727837552941,
+      "height": 32.98344251922708
+    },
+    {
+      "id": "object:solid-1:e3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 87.84051914552799,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 178.15243901780715,
+      "y": 351.99999999999994,
+      "width": 100.87154055251577,
+      "height": 52.716125664243805
+    },
+    {
+      "id": "object:solid-1:e5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 213.41598615333268,
+      "y": 350.07420252882275,
+      "width": 1.0060855766686814,
+      "height": 54.641923135420996
+    },
+    {
+      "id": "object:solid-1:e6",
+      "kind": "object",
+      "shape": "shape",
+      "x": 175.93925336802644,
+      "y": 300.7653029148807,
+      "width": 104.29813529066192,
+      "height": 49.30889961394206
+    },
+    {
+      "id": "object:solid-1:e7",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 300.7653029148807,
+      "width": 1,
+      "height": 51.23469708511925
+    },
+    {
+      "id": "object:solid-1:f0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 124.16918621585097,
+      "height": 65.22890836321977
+    },
+    {
+      "id": "object:solid-1:f1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 175.93925336802644,
+      "y": 300.7653029148807,
+      "width": 104.29813529066192,
+      "height": 103.95082274936306
+    },
+    {
+      "id": "object:point3-1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 224.1426412573555,
+      "y": 319.1847106257264,
+      "width": 9.245203539877394,
+      "height": 10.078349503107972
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 252.695,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 164.855,
+      "y": 385.885,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 224.422,
+      "y": 394.716,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D",
+      "kind": "label",
+      "x": 268.36,
+      "y": 371.207,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:E",
+      "kind": "label",
+      "x": 252.695,
+      "y": 290.765,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F",
+      "kind": "label",
+      "x": 223.416,
+      "y": 340.074,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:M",
+      "kind": "label",
+      "x": 238.773,
+      "y": 314.211,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "cameraHash": "e1042ba25815d62df9dd7620dd97aca3344221fdc2662b52e56a8881898138f2",
+  "screenshot": "cases/JT-S08.png",
+  "screenshotSha256": "576ec24e01e84294970d2159a048b72c36cc6c4b07fdf87842d017338d362e11"
+}

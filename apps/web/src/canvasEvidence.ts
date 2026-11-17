@@ -13,8 +13,8 @@ import { canonicalContentHash, diagnoseLayout, renderEvidenceStaleness, type Lay
  *
  * - **盒子**来自 `[data-primitive-type]` 组里那些真实图元元素的几何属性
  *   （`circle` 的 `cx/cy/r`、`line` 的 `x1/y1/x2/y2`、`polyline`/`polygon` 的 `points`…）；
- * - **标签**只收**点名标签**（2D 是点组里的 `<text>`，3D 是点标注覆盖层 `[data-point-id]`）——
- *   把测量读数、交点说明那些文字也算进"点名遮挡"会凭空造出一堆假报警；
+ * - **标签**收点名与命名曲线标签（2D 点组 `<text>`、`[data-curve-label]`，3D 覆盖层 `[data-point-id]`）——
+ *   测量读数、交点说明不纳入，避免凭空造出遮挡假报警；
  * - **诊断**交给 `@draw/agent-core` 的 `diagnoseLayout`（判据只有一处，这里不重写）：
  *   `label_overlap` 就是"点名遮挡"，`clipped_object` 就是"出画布"。
  * - **相机看不见**读的是**集合差**：文档里有名字的点，画布上没画出标签的那些
@@ -172,6 +172,7 @@ export function measureRenderedCanvas(root: ParentNode, labelSize: { width: numb
    */
   const labelElements: Element[] = [
     ...root.querySelectorAll('[data-primitive-type="point"] text'),
+    ...root.querySelectorAll("[data-curve-label]"),
     ...root.querySelectorAll("[data-point-id]")
   ]
   const seen = new Map<string, number>()

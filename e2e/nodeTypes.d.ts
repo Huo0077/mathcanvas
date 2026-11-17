@@ -26,19 +26,32 @@ declare module "node:fs" {
 declare module "node:fs/promises" {
   /** 下载落盘后的 SVG 文本（`engineering-workbench.spec.ts` / `workbench.spec.ts`）。 */
   export function readFile(path: string, encoding: "utf8"): Promise<string>
+  export function readFile(path: string): Promise<NodeBytes>
+  export function mkdir(path: string, options?: { recursive?: boolean }): Promise<string | undefined>
+  export function rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void>
+  export function writeFile(path: string, data: string): Promise<void>
+  export function readdir(path: string): Promise<string[]>
 }
 
 declare module "node:path" {
   export function join(...parts: string[]): string
   export function basename(path: string): string
+  const path: { resolve(...parts: string[]): string; join(...parts: string[]): string }
+  export default path
 }
 
-declare const process: { cwd(): string }
+declare module "node:crypto" {
+  export function createHash(algorithm: string): {
+    update(data: string | Uint8Array): { digest(encoding: "hex"): string }
+  }
+}
 
-/**
- * 只声明 `Buffer.from` 这一面：用例用它把 JSON / PNG 字节喂给 `setInputFiles({ buffer })`。
- * 返回 `Uint8Array` 而不是自称 node 的 `Buffer` —— 我们**没有**那个类型，也不假装有。
- */
+declare const process: { cwd(): string; readonly env: Record<string, string | undefined> }
+
+/** 用例实际消费的最小字节面：二进制读取与 base64 编码。 */
+declare type NodeBytes = Uint8Array & { toString(encoding?: string): string }
+
+/** 只声明 `Buffer.from` 这一面：用例把 JSON / PNG 字节交给上传或 base64 编码。 */
 declare const Buffer: {
-  from(input: string | readonly number[], encoding?: string): Uint8Array
+  from(input: string | readonly number[], encoding?: string): NodeBytes
 }

@@ -1,0 +1,243 @@
+{
+  "id": "GK-S04",
+  "source": "2024年北京卷 第17题",
+  "category": "solid",
+  "family": "solid",
+  "promptHash": "1b046cf5d8c3519faf280f5089d3cd59ffebc1888314be8348a9339304d52274",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object"
+  ],
+  "documentHash": "64403d6ea1286df28b7ea5ea5173460362b85cbcbcc32a64d67165cd2de1cf45",
+  "documentRevision": "2",
+  "viewport": {
+    "width": 485,
+    "height": 704
+  },
+  "objects": 19,
+  "labels": 6,
+  "layoutBoxes": [
+    {
+      "id": "object:solid-1:v0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.15826781882495,
+      "y": 241.36075658122132,
+      "width": 9.074089362349952,
+      "height": 9.532514450537036
+    },
+    {
+      "id": "object:solid-1:v1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.44229772303945,
+      "y": 347.29176691281344,
+      "width": 8.506029553920996,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 150.09273890098643,
+      "y": 390.6750174283692,
+      "width": 9.50726795071455,
+      "height": 10.446616040116965
+    },
+    {
+      "id": "object:solid-1:v3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 271.0594916169467,
+      "y": 408.40380682119013,
+      "width": 9.604960812252841,
+      "height": 10.868494789169688
+    },
+    {
+      "id": "object:solid-1:v4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 340.6089283063535,
+      "y": 398.0354688749937,
+      "width": 9.684264091963769,
+      "height": 10.621059086262846
+    },
+    {
+      "id": "object:solid-1:e0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 351.99999999999994,
+      "width": 102.74705716985306,
+      "height": 51.332185008083684
+    },
+    {
+      "id": "object:solid-1:e1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 275.85319738504114,
+      "y": 389.5880207992459,
+      "width": 69.58917228481187,
+      "height": 39.19533996860872
+    },
+    {
+      "id": "object:solid-1:e2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 373.0692258995341,
+      "width": 120.99840403056919,
+      "height": 67.15437978881323
+    },
+    {
+      "id": "object:solid-1:e3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 87.84051914552799,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 1,
+      "height": 105.88504064257975
+    },
+    {
+      "id": "object:solid-1:e5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 94.21720823951804,
+      "height": 149.76995476260535
+    },
+    {
+      "id": "object:solid-1:e6",
+      "kind": "object",
+      "shape": "shape",
+      "x": 197.59176519159584,
+      "y": 246.1149593574202,
+      "width": 125.73756505980779,
+      "height": 167.7087045535596
+    },
+    {
+      "id": "object:solid-1:e7",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 110.30989186106547,
+      "height": 157.21722565066344
+    },
+    {
+      "id": "object:solid-1:f0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 190.58757631538106,
+      "height": 104.5675280664156
+    },
+    {
+      "id": "object:solid-1:f1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 94.21720823951804,
+      "height": 149.76995476260535
+    },
+    {
+      "id": "object:solid-1:f2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 174.85122599092173,
+      "height": 194.10864633092714
+    },
+    {
+      "id": "object:solid-1:f3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 197.59176519159584,
+      "y": 246.1149593574202,
+      "width": 155.41343916946957,
+      "height": 182.66840141043443
+    },
+    {
+      "id": "object:solid-1:f4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 110.30989186106547,
+      "height": 157.21722565066344
+    },
+    {
+      "id": "object:point3-1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 254.24010641226909,
+      "y": 322.9704695163029,
+      "width": 9.323991295630947,
+      "height": 10.1752169632
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 252.695,
+      "y": 236.115,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 252.695,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 164.855,
+      "y": 385.885,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 285.853,
+      "y": 403.824,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D",
+      "kind": "label",
+      "x": 355.442,
+      "y": 393.332,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:E",
+      "kind": "label",
+      "x": 268.894,
+      "y": 318.045,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "cameraHash": "e1042ba25815d62df9dd7620dd97aca3344221fdc2662b52e56a8881898138f2",
+  "screenshot": "cases/GK-S04.png",
+  "screenshotSha256": "f050e9d8b03e007073b9afeff9763256392e70418bf6ac5049e3e0f1398a8111"
+}

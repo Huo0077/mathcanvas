@@ -1,5 +1,7 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-17 G3区块更新**：[G3渲染证据](../audit/2026-11-17-g3-render-exit/README.md)：同候选浏览器渲染36/36与全量E2E 327/327，是工程门禁，不是DS真实模型pass@1或人工可读性通过；25题warning另报，费用/真实模型样本仍未测。
+
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：计分定义与历史读数索引；不复制最新成绩。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->

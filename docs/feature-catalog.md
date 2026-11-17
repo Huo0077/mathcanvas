@@ -1,5 +1,7 @@
 # MathCanvas 功能目录
 
+> **2026-11-17 G3区块更新**：[G3开发版渲染收尾](audit/2026-11-17-g3-render-exit/README.md)：真实浏览器36题对象可测、无错误级渲染诊断；25题仍有clipped/tiny警告，人工/桌面窗口签收未完成。功能存在不等于任意真题已达到完整可读性或产品放行。
+
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：基线既有功能说明与限制；不是本轮完成清单。实时状态仅维护在[当前状态](current-status.md)；执行总顺序以[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->

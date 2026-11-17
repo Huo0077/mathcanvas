@@ -125,7 +125,9 @@ test("moves the whole prism when it is dragged", async ({ page }) => {
 
   // 从**实体包围盒中心**那个世界点按下：它落在棱柱自己身上，于是这一次拖动属于它。
   const before = parseBounds(await scene.getAttribute("data-content-bounds"))
-  const start = await projectWorldPoint(page, { x: before[0], y: before[1], z: before[2] })
+  // Pick the interior of the base face rather than the projected bounds centre:
+  // auto-fit can place a draggable vertex handle within 18 px of the latter.
+  const start = await projectWorldPoint(page, { x: 2, y: 2, z: 0 })
   await page.mouse.move(start.x, start.y)
   await page.mouse.down()
   /**

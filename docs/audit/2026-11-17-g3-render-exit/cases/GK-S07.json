@@ -1,0 +1,270 @@
+{
+  "id": "GK-S07",
+  "source": "2022年新高考I卷 第19题",
+  "category": "solid",
+  "family": "solid",
+  "promptHash": "12e31f5a3f752826818d62fedf464c2f92e2cb054a7ccb739d4f1a854c30e91f",
+  "status": "passed",
+  "diagnostics": [
+    "tiny_object",
+    "tiny_object"
+  ],
+  "documentHash": "9be4b5c6ee77beedff8250043b8224189f3dc68555a9c624bb7864bd04465675",
+  "documentRevision": "2",
+  "viewport": {
+    "width": 485,
+    "height": 704
+  },
+  "objects": 21,
+  "labels": 7,
+  "layoutBoxes": [
+    {
+      "id": "object:solid-1:v0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.44229772303945,
+      "y": 347.29176691281344,
+      "width": 8.506029553920996,
+      "height": 9.438846173979414
+    },
+    {
+      "id": "object:solid-1:v1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 150.09273890098643,
+      "y": 390.6750174283692,
+      "width": 9.50726795071455,
+      "height": 10.446616040116965
+    },
+    {
+      "id": "object:solid-1:v2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 237.6720037318705,
+      "y": 441.8786484766656,
+      "width": 10.046617536258907,
+      "height": 11.680981011419078
+    },
+    {
+      "id": "object:solid-1:v3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 238.15826781882495,
+      "y": 241.36075658122132,
+      "width": 9.074089362349952,
+      "height": 9.532514450537036
+    },
+    {
+      "id": "object:solid-1:v4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 143.35755689483832,
+      "y": 278.4923593018371,
+      "width": 10.22167387511874,
+      "height": 10.587466312028198
+    },
+    {
+      "id": "object:solid-1:v5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 237.2709199472669,
+      "y": 322.8491169043404,
+      "width": 10.848785105466135,
+      "height": 11.89274979944446
+    },
+    {
+      "id": "object:solid-1:e0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 395.88491412002554,
+      "width": 87.84051914552799,
+      "height": 51.81787346690129
+    },
+    {
+      "id": "object:solid-1:e1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 87.84051914552799,
+      "height": 43.8849141200256
+    },
+    {
+      "id": "object:solid-1:e2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 175.68103829105598,
+      "height": 95.70278758692689
+    },
+    {
+      "id": "object:solid-1:e3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 94.21720823951804,
+      "height": 37.65655424116707
+    },
+    {
+      "id": "object:solid-1:e4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 283.77151359858726,
+      "width": 94.21720823951804,
+      "height": 45.00600390272632
+    },
+    {
+      "id": "object:solid-1:e5",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 188.43441647903612,
+      "height": 82.66255814389339
+    },
+    {
+      "id": "object:solid-1:e6",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 283.77151359858726,
+      "width": 6.376689093990052,
+      "height": 112.11340052143828
+    },
+    {
+      "id": "object:solid-1:e7",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 246.1149593574202,
+      "width": 1,
+      "height": 105.88504064257975
+    },
+    {
+      "id": "object:solid-1:e8",
+      "kind": "object",
+      "shape": "shape",
+      "x": 242.69531249999994,
+      "y": 328.7775175013136,
+      "width": 1,
+      "height": 118.92527008561325
+    },
+    {
+      "id": "object:solid-1:f0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 154.85479335447195,
+      "y": 351.99999999999994,
+      "width": 175.68103829105598,
+      "height": 95.70278758692689
+    },
+    {
+      "id": "object:solid-1:f1",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 188.43441647903612,
+      "height": 82.66255814389339
+    },
+    {
+      "id": "object:solid-1:f2",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 94.21720823951804,
+      "height": 149.76995476260535
+    },
+    {
+      "id": "object:solid-1:f3",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 283.77151359858726,
+      "width": 94.21720823951804,
+      "height": 163.93127398833957
+    },
+    {
+      "id": "object:solid-1:f4",
+      "kind": "object",
+      "shape": "shape",
+      "x": 148.4781042604819,
+      "y": 246.1149593574202,
+      "width": 188.43441647903612,
+      "height": 201.58782822950664
+    },
+    {
+      "id": "object:point-1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 237.927502094413,
+      "y": 336.5431160450955,
+      "width": 9.535620811173857,
+      "height": 10.525010121985645
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 252.695,
+      "y": 342,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 164.855,
+      "y": 385.885,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 252.695,
+      "y": 437.703,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A₁",
+      "kind": "label",
+      "x": 252.695,
+      "y": 236.115,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B₁",
+      "kind": "label",
+      "x": 158.478,
+      "y": 273.772,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C₁",
+      "kind": "label",
+      "x": 252.695,
+      "y": 318.778,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:D",
+      "kind": "label",
+      "x": 284.695,
+      "y": 331.792,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "cameraHash": "e1042ba25815d62df9dd7620dd97aca3344221fdc2662b52e56a8881898138f2",
+  "screenshot": "cases/GK-S07.png",
+  "screenshotSha256": "8ef03380fc7f8ed608766cb5500b656b2ba3b45e5da5f321b09667654a40a4bf"
+}

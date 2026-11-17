@@ -219,7 +219,7 @@ describe("MathCanvas workbench", () => {
 
     // Compatibility promise: it opens, its objects are listed (so they can be inspected and deleted),
     // and the retired workspace is still not offered as a destination.
-    expect(screen.getByText("旧函数")).toBeTruthy()
+    expect(screen.getByText("旧函数", { selector: ".object-name" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "微积分" })).toBeNull()
   })
 

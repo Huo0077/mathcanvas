@@ -122,6 +122,19 @@ describe("persisted unfold rendering", () => {
   })
 })
 
+describe("rendered solid evidence index", () => {
+  it("indexes a visible sphere mesh for rendered object bounds, and drops it when removed", () => {
+    const sphere: PrimitiveSpec = { id: "sphere-a", type: "sphere", center: { x: 1, y: 2, z: 3 }, radius: 5 }
+    const { syncContent, deps, objectsOf } = harness([sphere])
+    syncContent()
+    expect(objectsOf("sphere-a").length).toBeGreaterThan(0)
+    expect(deps.objectIndex.get("sphere-a")).toBeDefined()
+    deps.documentRef.current = documentWith([])
+    syncContent()
+    expect(deps.objectIndex.has("sphere-a")).toBe(false)
+  })
+})
+
 describe("incremental scene content sync", () => {
   it("draws a primitive on the first sync and records what it created", () => {
     const { syncContent, sceneShell, deps, objectsOf } = harness()

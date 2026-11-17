@@ -1,5 +1,7 @@
 # MathCanvas 从59ea3613重启的完整实施主计划
 
+> **2026-11-17 G3区块更新**：[T15自动化渲染技术证据](../../audit/2026-11-17-g3-render-exit/README.md)已有36题真实浏览器截图、同候选hash与全量E2E 327/327；然而25题仍有warning，humanReviewed及Windows桌面实机窗口未签，故G3-UX不因机器通过而整体完成。此前321/327首轮失败及对应修复原样记录。
+
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：唯一实施主入口和执行合同；实时进度仍以current-status.md为准。实时状态仅维护在[当前状态](../../current-status.md)；执行总顺序以[完整实施主计划](2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->

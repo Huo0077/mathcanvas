@@ -1,0 +1,141 @@
+{
+  "id": "JT-P08",
+  "source": "2025年四省天一大联考（二） 第15题 (jyeoo)",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "35a32276c8f869a66c0c313333d76c4bc6a23a0af9a579852564208493926d6c",
+  "status": "passed",
+  "diagnostics": [],
+  "documentHash": "63f27ca185f153eaa935fe860c44fa9a5133f29f67ae23c44a07938a48fc457d",
+  "documentRevision": "8",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 8,
+  "labels": 6,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": 64.99999999999991,
+      "width": 720,
+      "height": 360.0000000000002
+    },
+    {
+      "id": "ellipse#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 316.66666666666663,
+      "y": 162.26497308103743,
+      "width": 133.33333333333337,
+      "height": 115.47005383792518
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 380.8333333333333,
+      "y": 159.76497308103743,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 380.8333333333333,
+      "y": 275.2350269189626,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 380.8333333333333,
+      "y": 250.83333333333334,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#3",
+      "kind": "object",
+      "shape": "marker",
+      "x": 427.9737854124365,
+      "y": 176.6751709536137,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#4",
+      "kind": "object",
+      "shape": "marker",
+      "x": 447.5,
+      "y": 217.5,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#5",
+      "kind": "object",
+      "shape": "marker",
+      "x": 347.5,
+      "y": 267.5,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 393.3333333333333,
+      "y": 166.26497308103743,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 393.3333333333333,
+      "y": 281.7350269189626,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:C",
+      "kind": "label",
+      "x": 393.3333333333333,
+      "y": 257.33333333333337,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:P",
+      "kind": "label",
+      "x": 440.4737854124365,
+      "y": 183.1751709536137,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:E",
+      "kind": "label",
+      "x": 460,
+      "y": 224,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:F",
+      "kind": "label",
+      "x": 360,
+      "y": 274,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/JT-P08.png",
+  "screenshotSha256": "651c5d8695265844013cec025f8f37bd92c4082f30cb4cce110dcb50fc6f1c8e"
+}

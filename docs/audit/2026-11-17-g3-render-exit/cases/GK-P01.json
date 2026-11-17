@@ -1,0 +1,92 @@
+{
+  "id": "GK-P01",
+  "source": "2025年新高考II卷 第16题",
+  "category": "plane",
+  "family": "plane",
+  "promptHash": "e5b0274208489148cd04c5b89ab0616ba423ace512a260f953625b1ec2466cd4",
+  "status": "passed",
+  "diagnostics": [
+    "clipped_object"
+  ],
+  "documentHash": "63940f219a09b7e4694ec6290ce1001f2598813df02da47aec425bfae009d69b",
+  "documentRevision": "5",
+  "viewport": {
+    "width": 800,
+    "height": 440
+  },
+  "objects": 5,
+  "labels": 3,
+  "layoutBoxes": [
+    {
+      "id": "line#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 40,
+      "y": -210.34191043071263,
+      "width": 720,
+      "height": 881.816307401944
+    },
+    {
+      "id": "ellipse#0",
+      "kind": "object",
+      "shape": "shape",
+      "x": 301.1358057903644,
+      "y": 156.19288125423014,
+      "width": 133.33333333333337,
+      "height": 94.28090415820634
+    },
+    {
+      "id": "point#0",
+      "kind": "object",
+      "shape": "marker",
+      "x": 365.30247245703106,
+      "y": 200.83333333333331,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#1",
+      "kind": "object",
+      "shape": "marker",
+      "x": 382.5570754638658,
+      "y": 246.36751345948127,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "point#2",
+      "kind": "object",
+      "shape": "marker",
+      "x": 429.69752754296894,
+      "y": 188.63248654051873,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "label:O",
+      "kind": "label",
+      "x": 377.80247245703106,
+      "y": 207.33333333333331,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:A",
+      "kind": "label",
+      "x": 395.0570754638658,
+      "y": 252.86751345948127,
+      "width": 28,
+      "height": 14
+    },
+    {
+      "id": "label:B",
+      "kind": "label",
+      "x": 442.19752754296894,
+      "y": 195.13248654051873,
+      "width": 28,
+      "height": 14
+    }
+  ],
+  "screenshot": "cases/GK-P01.png",
+  "screenshotSha256": "93a1073b298b4b9e4824d938ddea49f7e4a209f044d7352fb5d7a25267912abe"
+}
