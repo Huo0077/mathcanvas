@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— G3-DS 失败驱动 Task 0：脱敏追踪 `G3CaseTrace`、结构化诊断与 R4 题图输入审计（0 付费调用）
+
+- 新增 [g3DsCaseTrace.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 与 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts)，在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 新增 `onStructuredDiagnostic` 并保留 `onDiagnostic` 兼容，在 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) 增加可选脱敏 `onTrace` 出口；核验 `GK-S02/GK-S03/JT-S06/JT-S07` 为 `input_figure_missing` 且不改分母 `36`，并对旧 36 条记录给出 `7 tool_protocol / 10 verification / 19 unknown` 覆盖表。`3` 文件 **`90 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过，入档 [Task 0 审计](audit/g3-ds-failure-driven-t0/README.md)；最新真实 DS 仍保持 `0/36`，下一步进入 Task 1（零付费）。
+
 ## 2026-11-17 —— G3-DS失败驱动升级方案入档（仅文档）
 
 依据已保存[真实DS冻结36题0/36](audit/2026-11-17-g3-ds5-live-36/README.md)，写出[问题分层设计](superpowers/specs/2026-11-17-g3-ds-failure-driven-design.md)与[逐任务实施计划](superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)，把26题零候选、7题混合工具、10题不完整候选和多状态验收口径列为不同根因/待证问题；GitHub参考只借机制，不引入新引擎。本轮未改作图代码、未调用DS；方案通过文档检查后提交推送，不宣称性能改善。

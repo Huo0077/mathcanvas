@@ -11,16 +11,32 @@ import { MODEL_PLANNER_SKILL_IDS, planWorkspaceFor } from "../agentRunner"
 import { planRequestFor } from "./benchmarkPlanningEval"
 import { budgetWithProviderRequestCap } from "./examRequestBudget"
 import { workspaceForFamily, type ExamRunAdapterDeps } from "./examRunContracts"
+import {
+  createG3CaseTrace,
+  recordBoundary,
+  withCandidateHash,
+  type G3CaseTrace
+} from "./g3DsCaseTrace"
 import { planOf } from "@draw/agent-core"
 
 type StageOutcome = Awaited<ReturnType<CommitterPort["stage"]>>
 
+export interface CoordinatedExamRunDeps extends ExamRunAdapterDeps {
+  readonly revision?: string
+  readonly onTrace?: (trace: G3CaseTrace) => void
+}
+
 /** Runs the real product runtime on isolated documents. Never grants consent or commits. */
-export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCase: ExamCase, trial: number, budget?: ExamRunBudget) => Promise<ExamRunCaseResult> {
+export function createCoordinatedExamRunCase(deps: CoordinatedExamRunDeps): (examCase: ExamCase, trial: number, budget?: ExamRunBudget) => Promise<ExamRunCaseResult> {
   const now = deps.now ?? (() => Date.now())
   return async (examCase, trial, outer?: ExamRunBudget): Promise<ExamRunCaseResult> => {
     const started = now()
     const runId = `exam-${examCase.id}-${trial}`
+    let trace = createG3CaseTrace({
+      caseId: examCase.id,
+      runId,
+      revision: deps.revision ?? "local-working-tree"
+    })
     let workspace = deps.workspaceOf?.(examCase) ?? workspaceForFamily(examCase.family)
     const documents = new Map<WorkspaceId, GeometryDocument>()
     const current = () => {
@@ -90,29 +106,48 @@ export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCas
     let verdict: Pick<ExamRunCaseResult, "outcome" | "failureLayer">
     if (plannerError !== null || budgetDenied) {
       verdict = { outcome: "error" }
+      trace = recordBoundary(trace, { boundary: "provider", code: budgetDenied ? "budget_denied" : "planner_error" })
     } else if (parsed === null) {
       verdict = { outcome: "error" }
+      trace = recordBoundary(trace, { boundary: "schema", code: "missing_plan_outcome" })
     } else if (!parsed.ok) {
       verdict = { outcome: "rejected", failureLayer: "schema" }
+      trace = recordBoundary(trace, { boundary: "schema", code: "plan_envelope_invalid" })
     } else if (parsed.value.kind !== "plan") {
       verdict = examTrialVerdictOf({ kind: parsed.value.kind })
+      if (verdict.outcome === "rejected") {
+        trace = recordBoundary(trace, { boundary: "stage", code: `non_plan_${parsed.value.kind}` })
+      }
     } else if (runtime.coordinator.phase() === "waiting") {
       verdict = { outcome: "rejected", failureLayer: "plan" }
+      trace = recordBoundary(trace, { boundary: "stage", code: "stalled_waiting" })
     } else if (lastStage !== undefined && !lastStage.ok) {
-      verdict = examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: errorDiagnostics(lastStage.planDiagnostics ?? []).map((entry) => entry.stage) } })
+      const stages = errorDiagnostics(lastStage.planDiagnostics ?? []).map((entry) => entry.stage)
+      verdict = examTrialVerdictOf({ kind: "plan", compile: { accepted: false, errorStages: stages } })
+      trace = recordBoundary(trace, { boundary: "stage", code: stages[0] ? `stage_${stages[0]}` : "stage_rejected" })
     } else if (lastStage?.ok) {
       const id = runtime.draftId()
       const preview = id === null ? null : runtime.drafts.getPreview(id)
+      const certHash = preview?.drawingCertificate?.candidateHash
+      if (certHash) trace = withCandidateHash(trace, certHash)
       verdict = examTrialVerdictOf({ kind: "plan", repaired: attempts.length > 1,
         compile: { accepted: true, errorStages: [], ...(preview?.diagramVerification === undefined ? {} : { verification: preview.diagramVerification.status }) }
       })
+      if (preview?.diagramVerification && preview.diagramVerification.status !== "passed") {
+        trace = recordBoundary(trace, { boundary: "verification", code: `verification_${preview.diagramVerification.status}` })
+      }
       // Passing compilation alone is never evidence of passing the product confirmation gate.
-      if (verdict.outcome !== "rejected" && runtime.coordinator.phase() !== "awaiting_confirmation") verdict = { outcome: "error" }
+      if (verdict.outcome !== "rejected" && runtime.coordinator.phase() !== "awaiting_confirmation") {
+        verdict = { outcome: "error" }
+        trace = recordBoundary(trace, { boundary: "stage", code: "not_awaiting_confirmation" })
+      }
     } else {
       verdict = { outcome: "error" }
+      trace = recordBoundary(trace, { boundary: "stage", code: "no_stage_outcome" })
     }
     const costError = plannerError ?? (budgetDenied ? new Error(detail) : null)
     const result = { ...verdict, costUsd: deps.costOf({ examCase, trial, outcome, error: costError, attempts }), latencyMs: now() - started, detail }
+    deps.onTrace?.(trace)
     runtime.discardDraft()
     return result
   }

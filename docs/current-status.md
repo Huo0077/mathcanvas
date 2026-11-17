@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-17 —— G3-DS 失败驱动实施：**Task 0（可观察性与 R4 题图依赖审计）已完成**（0 新增付费调用；真实成绩仍 0/36）
+
+- **`Task 0`（`G3CaseTrace` 阶段码、结构化诊断出口与输入审计）已完成（0 付费调用）**：新增 [g3DsCaseTrace.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.ts)（`G3Boundary` 闭集、`recordBoundary` 保留首失败、`explainFirstFailure` 无证据报 `"unknown"`、`serializeG3CaseTrace` 拒绝 `prompt`/`apiKey`/`toolInput` 泄漏、`auditInputFigureDependency` 对 R4 四道缺图题 `GK-S02/GK-S03/JT-S06/JT-S07` 标记 `input_figure_missing` 阻断完整通过而不改分母 `36`），在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入 `onStructuredDiagnostic`，在 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) 接入可选脱敏 `onTrace`；基于历史 [DS5 36 题脱敏基线](audit/2026-11-17-g3-ds5-live-36/summary.json) 建立阶段覆盖表（`7` 题 `tool_protocol/mixed_read_plan`、`10` 题达 `verification`、`19` 题诚实标 `unknown`）。`g3DsCaseTrace.test.ts`、`modelPlanner.test.ts`、`examRunCoordinated.test.ts`（`3` 文件 **`90 passed`**）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task 0 审计](audit/g3-ds-failure-driven-t0/README.md)，**下一步进入 Task 1（空场景构造与已有场景观察分流，零付费）**。
+
 ## 2026-11-17 —— G3-DS 失败驱动升级设计入档（仅方案，真实成绩仍0/36）
 
 基于当前修订 `f7cc9b76` 的[强制DS冻结36题实测](audit/2026-11-17-g3-ds5-live-36/README.md)，确定[升级设计](superpowers/specs/2026-11-17-g3-ds-failure-driven-design.md)和[新实施计划](superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)为下一轮 G3-DS 执行入口：先记录可负责的失败边界，再修7题已证实的混合工具冲突，按26题零候选（立体17、平面9）和10题不完整候选修通用能力，最后对齐多状态口径与真实画布/交付。**本次只是设计/文档更新，没有作图代码修复或新增付费模型请求；最新真实DS完整合同仍0/36，G3-DS与发布未退出。** 旧DS0–DS4的离线/回放工程退出与当前真实DS成绩不合并；付费复测需重新授权预算，不能沿用前两轮。 另外 `GK-S02/GK-S03/JT-S06/JT-S07` 在R4原审计中仍是未获题图证实的 `text_with_figure_reference` 输入；若必须题图才能唯一构造，需用户确认题图或诚实澄清，不能拿纯文字假定36/36。

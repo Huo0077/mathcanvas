@@ -195,6 +195,32 @@ export async function resolveActiveProvider(): Promise<ProviderResolution> {
   return { ok: true, provider: { id: profile.id, modelId: profile.modelId, dialect: profile.dialect, revision: profile.revision, capabilities: toGateCapabilities(profile, health.ok ? health.value : null), ...(profile.maxOutputTokens === undefined ? {} : { maxOutputTokens: profile.maxOutputTokens }) } }
 }
 
+export type ModelPlannerBoundary =
+  | "provider"
+  | "tool_protocol"
+  | "schema"
+  | "dag"
+  | "stage"
+  | "verification"
+  | "contract"
+  | "render"
+  | "delivery"
+
+export type ModelPlannerStructuredEvent =
+  | {
+      readonly kind: "request"
+      readonly index: number
+      readonly toolNames: readonly string[]
+      readonly responseKind: "tool_calls" | "text" | "error" | "unknown"
+      readonly usageKnown: boolean
+    }
+  | {
+      readonly kind: "boundary"
+      readonly boundary: ModelPlannerBoundary
+      readonly code: string
+      readonly fieldPath?: string
+    }
+
 export interface ModelPlannerDependencies {
   /** Automatically transcribed diagram observations, separate from the problem givens. */
   imageNotes?: string
@@ -213,6 +239,8 @@ export interface ModelPlannerDependencies {
    * "修复请求不回显模型上一轮原话"那条纪律不变（见 `modelPlanner.test.ts`）。
    */
   onDiagnostic?: (line: string) => void
+  /** Closed-set sanitized boundary and request telemetry (never carries prompts, keys, or raw tool inputs). */
+  onStructuredDiagnostic?: (event: ModelPlannerStructuredEvent) => void
   /** Switch between verbose action schema mode and compact structured DS intent extraction mode. */
   intentMode?: PromptIntentMode
 }
@@ -327,6 +355,13 @@ export function buildDsIntentToolSchema() {
   }
 }
 
+const DAG_INTENT_ERROR_CODES = new Set([
+  "undeclared_entity_ref",
+  "cross_scope_violation",
+  "cyclic_dependency",
+  "missing_host"
+])
+
 function resolveDsIntentOrPlanEnvelope(
   decoded: unknown,
   userMessage: string,
@@ -334,7 +369,8 @@ function resolveDsIntentOrPlanEnvelope(
   intentMode: PromptIntentMode,
   ids: { requestId: string; attemptId: string },
   stopReason?: string,
-  onDiagnostic?: (line: string) => void
+  onDiagnostic?: (line: string) => void,
+  onStructuredDiagnostic?: (event: ModelPlannerStructuredEvent) => void
 ): { plan: PlanEnvelope; requestId: string; attemptId: string } | { failure: ReturnType<typeof planFailureFromParseFailure>; requestId: string; attemptId: string } {
   const isDsPayload =
     typeof decoded === "object" &&
@@ -355,6 +391,13 @@ function resolveDsIntentOrPlanEnvelope(
         path: d.path,
         detail: d.detail
       }))
+      const firstError = errors[0]
+      onStructuredDiagnostic?.({
+        kind: "boundary",
+        boundary: firstError && DAG_INTENT_ERROR_CODES.has(firstError.code) ? "dag" : "schema",
+        code: firstError?.code ?? "schema_invalid",
+        ...(firstError?.path ? { fieldPath: firstError.path } : {})
+      })
       onDiagnostic?.(`[model] DS intent rejected (${channel}): ${describeParseErrors(errors)}`)
       return {
         failure: planFailureFromParseFailure(
@@ -376,6 +419,13 @@ function resolveDsIntentOrPlanEnvelope(
       onDiagnostic?.(`[ds-intent] compiled ${validatedIntent.value.constructionStrategies.length} strategies -> ${checked.value.kind}`)
       return { plan: checked.value, ...ids }
     }
+    const firstCheckedError = checked.errors[0]
+    onStructuredDiagnostic?.({
+      kind: "boundary",
+      boundary: "dag",
+      code: firstCheckedError?.code ?? "dag_compile_invalid",
+      ...(firstCheckedError?.path ? { fieldPath: firstCheckedError.path } : {})
+    })
     return {
       failure: planFailureFromParseFailure(
         {
@@ -394,6 +444,13 @@ function resolveDsIntentOrPlanEnvelope(
   const validated = parsePlanEnvelope(decoded)
   if (!validated.ok) {
     const parsedIntoJson = typeof decoded === "object" && decoded !== null
+    const firstErr = validated.errors[0]
+    onStructuredDiagnostic?.({
+      kind: "boundary",
+      boundary: "schema",
+      code: parsedIntoJson ? (firstErr?.code ?? "schema_invalid") : "invalid_json",
+      ...(firstErr?.path ? { fieldPath: firstErr.path } : {})
+    })
     onDiagnostic?.(`[model] envelope rejected (${channel}): ${describeParseErrors(validated.errors)}`)
     return {
       failure: planFailureFromParseFailure(
@@ -565,6 +622,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
        */
       const recovery = createRecoveryController()
       let attempts = 0
+      let structuredRequestIndex = 0
       let lastSignature: string | null = null
       /** 事件 id 优先：诊断时"这次请求对应哪条运行记录"要能对上代理里的账。 */
       let ids = { requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
@@ -600,6 +658,14 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
 
         const failure = failureOf(result)
         if (failure) {
+          structuredRequestIndex += 1
+          dependencies.onStructuredDiagnostic?.({
+            kind: "request",
+            index: structuredRequestIndex,
+            toolNames: [],
+            responseKind: "error",
+            usageKnown: false
+          })
           const error = recoveryErrorOf(failure)
           const decision = recovery.decide(error, {
             attempts,
@@ -610,6 +676,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             maxAttempts: MAX_TRANSPORT_ATTEMPTS
           })
           if (decision.action !== "retry") {
+            dependencies.onStructuredDiagnostic?.({
+              kind: "boundary",
+              boundary: "provider",
+              code: failure.failure
+            })
             /**
              * **把底层那句话带上**（2026-09-21 修）。
              *
@@ -623,7 +694,14 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           }
           // 取消优先于重试：用户按了停止就不该再发一次。
           if (request.signal.aborted) throw new ModelPlannerError("cancelled", "这次运行已取消。", false)
-          if (!spend(request.budget, decision)) throw new ModelPlannerError("provider_failed", `预算已不足以再试一次（${decision.detail}；底层原因：${failure.message}）`, failure.retryable)
+          if (!spend(request.budget, decision)) {
+            dependencies.onStructuredDiagnostic?.({
+              kind: "boundary",
+              boundary: "provider",
+              code: "budget_exhausted"
+            })
+            throw new ModelPlannerError("provider_failed", `预算已不足以再试一次（${decision.detail}；底层原因：${failure.message}）`, failure.retryable)
+          }
           lastSignature = `${error.class}:${error.status ?? "none"}:${error.message}`
           continue
         }
@@ -634,6 +712,16 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         lastSignature = null
         const events: readonly ModelEvent[] = result.ok ? result.events : []
         const calls = events.filter((event) => event.kind === "tool_call")
+        const hasUsageEvent = events.some((event) => event.kind === "usage")
+        const hasDeltaText = events.some((event) => event.kind === "delta" && event.text.length > 0)
+        structuredRequestIndex += 1
+        dependencies.onStructuredDiagnostic?.({
+          kind: "request",
+          index: structuredRequestIndex,
+          toolNames: calls.map((call) => call.toolId),
+          responseKind: calls.length > 0 ? "tool_calls" : hasDeltaText ? "text" : "unknown",
+          usageKnown: hasUsageEvent
+        })
         /**
          * **结束原因在这里取一次**（T1）：`completed.stopReason` 是 provider 给的原文，
          * 截断 / 空响应 / 拒绝三种故障全靠它分类。取在工具分支之前，
@@ -644,6 +732,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           ?? endings.find(event => event.stopReason !== undefined)?.stopReason
         const ending = classifyStopReason(stopReason)
         if (ending === "length" || ending === "refusal") {
+          dependencies.onStructuredDiagnostic?.({
+            kind: "boundary",
+            boundary: "provider",
+            code: ending === "length" ? "response_incomplete" : "provider_refusal"
+          })
           return { failure: createPlanFailure({ category: ending === "length" ? "response_incomplete" : "provider_refusal", channel, stopReason }), ...ids }
         }
         /**
@@ -753,6 +846,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
          */
         if (calls.length > 1) {
           const offender = calls.find((call) => readToolIdFromNative(call.toolId) === null)
+          dependencies.onStructuredDiagnostic?.({
+            kind: "boundary",
+            boundary: "tool_protocol",
+            code: offender ? "mixed_read_plan" : "unexpected_multi_tool_call"
+          })
           throw new ModelPlannerError(
             "unexpected_tool_call",
             offender
@@ -777,7 +875,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           const planToolWasOffered = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
           if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered) {
             const decoded = coerceEnvelopeArgument(toolCall.input, dependencies.onDiagnostic)
-            const resolvedTool = resolveDsIntentOrPlanEnvelope(decoded, request.userMessage, "native_tools", intentMode, ids, stopReason, dependencies.onDiagnostic)
+            const resolvedTool = resolveDsIntentOrPlanEnvelope(decoded, request.userMessage, "native_tools", intentMode, ids, stopReason, dependencies.onDiagnostic, dependencies.onStructuredDiagnostic)
             if ("failure" in resolvedTool) {
               dependencies.onDiagnostic?.(`[model] tool call ${toolCall.toolId} carried a plan that failed the envelope check — 参数：${boundedExcerpt(JSON.stringify(toolCall.input) ?? String(toolCall.input))}`)
             }
@@ -790,6 +888,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            * 本来是一句"这一轮只有这些工具"就能改好的事。分类交出去，
            * 由协调器决定还要不要修 —— 决定权仍只在它手里。
            */
+          dependencies.onStructuredDiagnostic?.({
+            kind: "boundary",
+            boundary: "tool_protocol",
+            code: "unexpected_tool_call"
+          })
           return {
             failure: createPlanFailure({
               category: "unexpected_tool_call",
@@ -815,13 +918,20 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             try {
               const maybeObj: unknown = JSON.parse(stripped)
               if (typeof maybeObj === "object" && maybeObj !== null && (maybeObj as Record<string, unknown>).schemaVersion === DS_INTENT_SCHEMA_VERSION) {
-                return resolveDsIntentOrPlanEnvelope(maybeObj, request.userMessage, effectiveChannel, "ds_intent", ids, stopReason, dependencies.onDiagnostic)
+                return resolveDsIntentOrPlanEnvelope(maybeObj, request.userMessage, effectiveChannel, "ds_intent", ids, stopReason, dependencies.onDiagnostic, dependencies.onStructuredDiagnostic)
               }
             } catch {
               // Fall through to standard parse failure reporting below.
             }
           }
           // 原文（有界）只进本机诊断：它是"模型到底回了什么"唯一的证据。
+          const firstParseError = parsed.errors[0]
+          dependencies.onStructuredDiagnostic?.({
+            kind: "boundary",
+            boundary: "schema",
+            code: parsed.reason,
+            ...(firstParseError?.path ? { fieldPath: firstParseError.path } : {})
+          })
           dependencies.onDiagnostic?.(`[model] envelope rejected (${parsed.channel}): ${describeParseErrors(parsed.errors)} — 原文：${boundedExcerpt(parsed.payload)}`)
           return {
             failure: planFailureFromParseFailure(parsed, stopReason === undefined ? {} : { stopReason }),

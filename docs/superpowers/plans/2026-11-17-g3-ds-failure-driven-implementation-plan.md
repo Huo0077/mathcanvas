@@ -27,10 +27,10 @@
 
 **Interfaces:** `G3Boundary = "provider" | "tool_protocol" | "schema" | "dag" | "stage" | "verification" | "contract" | "render" | "delivery"`; `G3CaseTrace = {caseId, runId, revision, candidateHash?, modelInvoked, requests:[{index, toolNames:string[], responseKind, usageKnown}], firstFailure?:{boundary:G3Boundary, code:string, fieldPath?:string}}`；公开 `recordBoundary(trace, event)` 只记录闭集码/路径/工具名，报告 `explainFirstFailure(trace)` 返回第一个能证实的阶段，否则 `unknown`。**不得**用解析模型正文推断原因码。
 
-- [ ] **输入审计**：逐题核查R4的 `GK-S02/GK-S03/JT-S06/JT-S07` 对题图的依赖；无用户核对的必要题图则登记 `input_figure_missing` 并阻断完整通过，不凭题号或历史答案补图；题图经用户补全后固定版本/hash且分母仍为36。历史纯文字实测不改写。
-- [ ] **RED**：在 `g3DsCaseTrace.test.ts` 用 GK-S08 的 `['scene_inspect','plan_set_plan']` 验证首失败 `tool_protocol/mixed_read_plan`；用 GK-P03 的 `cross_scope_violation` 保留字段路径；含 `prompt` / `apiKey` / `toolInput` 的序列化写入必须拒绝。Run: `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts --testTimeout=30000`；预期新增测试失败。
-- [ ] **最小实现**：使用明确的字段白名单组装，不传任何原始对象；把 `modelPlanner` 的 `onDiagnostic` 改为另可注入的结构化错误出口，保持旧诊断/错误兼容。重复失败不覆盖首次失败、请求序号与原生 usage 缺失分别记录。
-- [ ] **GREEN及反例**：同上命令通过；跑 `apps/web/src/agent/modelPlanner.test.ts` 与 `apps/web/src/agent/fixtures/examRunCoordinated.test.ts`；对36条旧脱敏记录建立阶段覆盖表，无法定位的写 `unknown`，**不能承诺全部旧记录都能追溯**。结束该区块同步文档、提交推送；不调用真实DS。
+- [x] **输入审计**：逐题核查R4的 `GK-S02/GK-S03/JT-S06/JT-S07` 对题图的依赖；无用户核对的必要题图则登记 `input_figure_missing` 并阻断完整通过，不凭题号或历史答案补图；题图经用户补全后固定版本/hash且分母仍为36。历史纯文字实测不改写。
+- [x] **RED**：在 `g3DsCaseTrace.test.ts` 用 GK-S08 的 `['scene_inspect','plan_set_plan']` 验证首失败 `tool_protocol/mixed_read_plan`；用 GK-P03 的 `cross_scope_violation` 保留字段路径；含 `prompt` / `apiKey` / `toolInput` 的序列化写入必须拒绝。Run: `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts --testTimeout=30000`；预期新增测试失败。
+- [x] **最小实现**：使用明确的字段白名单组装，不传任何原始对象；把 `modelPlanner` 的 `onDiagnostic` 改为另可注入的结构化错误出口，保持旧诊断/错误兼容。重复失败不覆盖首次失败、请求序号与原生 usage 缺失分别记录。
+- [x] **GREEN及反例**：同上命令通过；跑 `apps/web/src/agent/modelPlanner.test.ts` 与 `apps/web/src/agent/fixtures/examRunCoordinated.test.ts`；对36条旧脱敏记录建立阶段覆盖表，无法定位的写 `unknown`，**不能承诺全部旧记录都能追溯**。结束该区块同步文档、提交推送；不调用真实DS。
 
 ## Task 1 — 空场景构造与已有场景观察分流（零付费）
 
