@@ -1,3 +1,4 @@
+import { classifyDsFailureBoundary } from "@draw/agent-core"
 import { buildFromPoints, buildOpenSurface, compileExpression, evaluateExpression, evaluateFunctionWithDomain, evaluateSymbolicDerivative, intersectPlanarLineAndConicExact, polynomialOf, rotatePointAboutHinge } from "@draw/geometry-kernel"
 
 export interface ContractSourceSpan {
@@ -1843,5 +1844,45 @@ export function reconstructBaselineContractSummary(
       certificatePassed: artifacts.baselineReport.drawing.overall.certPassed,
       partialOracleExact: artifacts.partialAudit.filter((a) => a.oracle.grade === "exact").length
     }
+  }
+}
+
+export function formatContractFailureBoundarySummary(input: {
+  id: string
+  contract: ContractEvaluationResult
+  terminal: string
+  primitiveCount: number
+  verificationStatus: string | null
+  certificateStatus: string | null
+  requests: number
+}): {
+  id: string
+  objectCoverage: number
+  obligationCoverage: number
+  missingEntityIds: readonly string[]
+  failedObligationKinds: readonly string[]
+  failureBoundary: ReturnType<typeof classifyDsFailureBoundary>
+} {
+  const failedKinds = [...new Set(input.contract.obligationResults.filter((o) => !o.passed).map((o) => o.kind))]
+  const failureBoundary = classifyDsFailureBoundary({
+    terminal: input.terminal,
+    requests: input.requests,
+    passed: input.contract.passed,
+    primitiveCount: input.primitiveCount,
+    verificationStatus: input.verificationStatus,
+    certificateStatus: input.certificateStatus,
+    contractStatus: input.contract.status,
+    objectCoverage: input.contract.objectCoverage,
+    obligationCoverage: input.contract.obligationCoverage,
+    missingEntityIds: input.contract.missingEntityIds,
+    failedObligationIds: input.contract.failedObligationIds
+  })
+  return {
+    id: input.id,
+    objectCoverage: input.contract.objectCoverage,
+    obligationCoverage: input.contract.obligationCoverage,
+    missingEntityIds: input.contract.missingEntityIds,
+    failedObligationKinds: failedKinds,
+    failureBoundary
   }
 }

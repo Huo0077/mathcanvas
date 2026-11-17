@@ -20,8 +20,8 @@
 
 ## 已实测基线（冻结历史，不是新任务成绩）
 
-- 2026-11-16 America/Los_Angeles，本地 `eval-results/ds-live-36-20261116/official-36/summary.json`，修订 `06648346634aa0760ba329419de041e5296add77`：**强制 DS 规划**，36完成，完整通过2/36（GK-S08、GK-S09），21 partial，13 failed；23/36 有非空候选；80次原生请求、usage 输入1,724,928 / 输出66,549 tokens（可能不完整），费用未知；主画布0写入（没有自动确认）。这不是默认确定性优先生产路线，也没有逐题同候选浏览器渲染或真实主画布提交。
-- 13道无候选先定位生成/动作/编译/等待原因；21道 partial 中19道仍有对象或义务缺口，另 **JT-S07、JT-S09** 对象/义务覆盖均为1，但验证 `not_supported`、证书 `partial`。`drawingContracts.ts` 还要求 `verificationStatus === requireVerification`；不能把这2题改为数学“已通过”，应追查真实验证接线与拒绝原因。
+- 2026-11-16 America/Los_Angeles，本地 `eval-results/ds-live-36-20261116/official-36/summary.json`，修订 `06648346634aa0760ba329419de041e5296add77`：**强制 DS 规划**，36完成，完整通过2/36（GK-S08、GK-S09），21 partial，13 failed；23/36 有非空候选；`confirmable=4`（含真通过 GK-S08/GK-S09 与 **2 例假阳性放行 GK-P09/JT-P09**）；80次原生请求（单题平均约 `67.5–69.8 KB` 系统上下文）、usage 输入1,724,928 / 输出66,549 tokens（可能不完整），费用未知；主画布0写入（没有自动确认）。这不是默认确定性优先生产路线，也没有逐题同候选浏览器渲染或真实主画布提交。
+- 13道无候选先定位生成/动作/编译/等待原因（含 `JT-S04` 停在 `terminal="waiting"` / `bucket="interaction"`）；21道 partial 中19道仍有对象或义务缺口（其中 6 道 `prims > 0` 在 `req=1` 即死于 `validating`，因协调器尚无验证失败→修复回路），另 **JT-S07、JT-S09** 对象/义务覆盖均为1，但生产验证 `not_supported`、证书 `partial`；同时 **`GK-P09`（`obCov=0.00`）、`JT-P09`（`obCov=0.23`）** 存在生产证书 `passed` 并进入 `awaiting_confirmation` 的假阳性分叉。`drawingContracts.ts` 还要求 `verificationStatus === requireVerification`；不能把 `JT-S07/JT-S09` 直接改判，也不能放过 `GK-P09/JT-P09` 的 `draftStore.ts` 空题面/漏句旁路，必须双向追查真实验证接线。
 - 历史确定性路线 36/36 与本轮 DS 2/36 不可并表。原始逐题文件仍留在忽略目录，提交的审计件只能是去敏摘要、输入哈希、失败分类及可复算统计，不提交原始事件或密钥。
 
 ## 依赖图、阶段目标和停点
@@ -32,21 +32,21 @@ DS1–DS4 的单测与录制/脱敏回放仅检验实现，不计“DS live pass
 
 ### DS0：真实基线、脱敏逐题账本与失败边界
 
-**Files:** Create `docs/audit/2026-11-16-g3-ds-live-baseline/README.md`, `docs/audit/2026-11-16-g3-ds-live-baseline/cases.json`; Modify `apps/web/src/agent/fixtures/examRunCoordinated.ts`、其对应测试与 `scripts/reliability-eval/drawingContracts.ts` 的诊断呈现（具体出口先确认，不能更改判题语义）。
+**Files:** Create `docs/audit/2026-11-16-g3-ds-live-baseline/README.md`, `docs/audit/2026-11-16-g3-ds-live-baseline/cases.json`, `packages/agent-core/src/verification/dsLiveBaseline.ts`, `packages/agent-core/src/verification/dsLiveBaseline.test.ts`; Modify `apps/web/src/agent/fixtures/examRunCoordinated.ts`、`apps/web/src/agent/fixtures/examRunAdapter.ts`、`apps/web/src/agent/fixtures/examRunCoordinated.test.ts` 与 `scripts/reliability-eval/drawingContracts.ts` 的诊断呈现（不更改判题语义）。
 
-**Interfaces:** Input 为忽略目录原始逐题结果和冻结合同 ID；output 为不含 prompt、模型原话或密钥的 `{id, route, dsInvoked, hasCandidate, terminal, objectCoverage, obligationCoverage, certificateStatus, verificationStatus, failedObligationKinds, failureBoundary, requestCount}`。每个计数与原始摘要相等，人工复核 GK-S01、JT-S07、JT-S09、至少一题零候选。
+**Interfaces:** Input 为忽略目录原始逐题结果和冻结合同 ID；output 为不含 prompt、模型原话或密钥的 `{id, route, dsInvoked, hasCandidate, confirmable, terminal, objectCoverage, obligationCoverage, certificateStatus, verificationStatus, missingEntityIds, failedObligationKinds, failureBoundary, requestCount}`。每个计数与原始摘要相等（`2/21/13`、`23` 候选、`4` 可确认、`80` 请求、`1,724,928/66,549` tokens），人工/代码双向复核 `GK-S01`、`GK-P09`、`JT-P09`（假阳性）、`JT-S07`、`JT-S09`（假阴性）、`JT-S04`（`waiting`）与零候选例 `GK-S02`。
 
-- [ ] 写纯函数摘要测试：固定36个ID、2 passed/21 partial/13 failed、23非空候选、80请求、费用 `unknown`；篡改/漏记录/重复ID时拒绝生成。先跑 RED，再实现最小脱敏汇总，跑 GREEN。
-- [ ] 逐阶段回放一例无候选和一例 `not_supported`，记录输入输出边界：provider返回 → 结构化解析 → 动作编译 → stage → 生产证书 → 合同判题。**先证实中断位置才给出修复**；归因不确定时写 `unknown`，不一概归咎模型。
-- [ ] 仅提交脱敏报告和证据索引；同步 `docs/current-status.md`、`docs/project-progress.md`、`docs/agent-next-round-progress.md`，核查 Git 没有原始请求、token/secret；提交并推送。无新付费调用。
+- [x] 写纯函数摘要与脱敏守卫测试：固定36个ID、2 passed/21 partial/13 failed、23非空候选、4可确认（含 GK-P09/JT-P09 假阳性标注）、80请求、费用 `unknown`；篡改/漏记录/重复ID/泄漏原始 prompt 或密钥字段时拒绝生成。先跑 RED，再实现最小脱敏汇总，跑 GREEN。
+- [x] 逐阶段定位并写测试钉住真实中断/分叉边界：零候选（`GK-S02`、`GK-P04`、`JT-S04` `waiting`）、假阴性 `not_supported`（`JT-S07`/`JT-S09`）、**假阳性 `passed` 放行（`GK-P09`/`JT-P09`，追踪 `draftStore.ts` `prompt: ""` / 漏句旁路）**，以及 `req=1` 即死于 `validating` 无修复环（`coordinator.ts` lines 776–784）。**先证实中断位置才给出修复**；归因不确定时写 `unknown`，不一概归咎模型。
+- [x] 仅提交脱敏报告和证据索引；同步 `docs/current-status.md`、`docs/project-progress.md`、`docs/agent-next-round-progress.md`，核查 Git 没有原始请求、token/secret；提交并推送。无新付费调用。
 
-### DS1：DS 结构化施工单，先消除13道无候选
+### DS1：DS 结构化施工单与紧凑两阶段协议，先消除13道无候选
 
-**Files:** Modify `apps/web/src/agent/modelPlanner.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/drawingIntent.ts`, `packages/agent-core/src/obligationIR.ts`；Create `packages/agent-core/src/dsDrawingIntent.ts`, `packages/agent-core/src/dsDrawingIntent.test.ts`；Extend `apps/web/src/agent/modelPlanner.test.ts`、`agentRunner.test.ts`。
+**Files:** Modify `apps/web/src/agent/modelPlanner.ts`, `apps/web/src/agent/systemPrompt.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/drawingIntent.ts`, `packages/agent-core/src/obligationIR.ts`；Create `packages/agent-core/src/dsDrawingIntent.ts`, `packages/agent-core/src/dsDrawingIntent.test.ts`；Extend `apps/web/src/agent/modelPlanner.test.ts`、`apps/web/src/agent/systemPrompt.test.ts`、`agentRunner.test.ts`。
 
-**Interfaces:** `DsDrawingIntent` 携带 `entities[]`, `givenRelations[]`, `subquestions[{id,dependsOn,stateId,relations[]}]`, `constructionStrategies[]`, `unknowns[]` 与 source-span/证据；它是模型规划输入到现有 DAG/编译器的中间件，不承载标准答案。验证层拒绝未声明引用、跨 scope 条件污染、无证据常数和无法支持的动作，返回稳定诊断码。不能因为有字段就假定数学正确。
+**Interfaces:** `DsDrawingIntent` 携带 `entities[]`, `givenRelations[]`, `subquestions[{id,dependsOn,stateId,relations[]}]`, `constructionStrategies[]`, `unknowns[]` 与 source-span/证据；它是模型规划输入到现有通用 DAG/编译器的中间件，不承载标准答案。阶段 1 对 `systemPrompt` 瘦身（将单次 `~67.5 KB` 全量动作垃圾箱降为紧凑施工单协议，**禁止 DS 手算多面体顶点或无理数坐标**），接通用正交构造原语与 `compileConstructionDag`（设 Anti-Heuristic-Router 守卫，禁止退化成 36 题关键词/模板路由器）。验证层拒绝未声明引用、跨 scope 条件污染、无证据常数和无法支持的动作，返回稳定诊断码。不能因为有字段就假定数学正确。
 
-- [ ] 用零候选族写 RED：折叠立体（GK-S02）、函数（GK-P04）、切线（GK-P06）分别验证 `DS已调用 → 结构化意图 → 编译/拒绝原因`；覆盖题图缺信息、网络中断、无效 schema 和作用域交叉污染的负例。
+- [ ] 用零候选族写 RED：折叠立体（GK-S02 / JT-S04 `waiting`）、函数（GK-P04）、切线（GK-P06）分别验证 `DS已调用 → 结构化意图 → 编译/拒绝原因`；补**改点名/换数字/换叙事的通用变体测试**及题图缺信息、网络中断、无效 schema 和作用域交叉污染负例。
 - [ ] 仅修实核发现的第一处中断，接既有 planner 和 compiler，不另造36题模式表；逐题增加可复现回放与真实意图，而非复制标准坐标。不能识别的题要产生可解释澄清/失败，不能为得到候选数编造图。
 - [ ] 出口：13道历史零候选对应的每道都有可验候选，或有经审题确认的题图缺失/不可构造原因与正确安全终态；“零候选消除”本身不是36/36，通过仍取最终合同。定向测试/类型检查/复核后同步文档、提交推送。
 
@@ -62,19 +62,19 @@ DS1–DS4 的单测与录制/脱敏回放仅检验实现，不计“DS live pass
 
 ### DS3：生产证书和逐义务局部修复
 
-**Files:** Modify `packages/agent-core/src/verification/drawingCertificate.ts`, `apps/web/src/agent/draftStore.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/planCompiler.ts`；Extend `packages/agent-core/src/verification/drawingCertificate.test.ts`、`apps/web/src/agent/draftStore.test.ts` 和 `apps/web/src/agent/agentRunner.test.ts`。
+**Files:** Modify `packages/agent-core/src/verification/drawingCertificate.ts`, `packages/agent-core/src/coordinator.ts`, `apps/web/src/agent/draftStore.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/planCompiler.ts`；Extend `packages/agent-core/src/verification/drawingCertificate.test.ts`、`packages/agent-core/src/coordinator.test.ts`、`apps/web/src/agent/draftStore.test.ts` 和 `apps/web/src/agent/agentRunner.test.ts`。
 
-**Interfaces:** 验证产出 `failedObligations[{id,scope,stateId,kind,detail}]`, `missingEntities[]`, `candidateHash`, `certificateStatus`。修复器只读取**合法生产反馈**而不是黄金合同的预期答案，仅修改失败依赖的子图；每轮重验全题，最多按用户批准的请求上限，过期 hash/相互冲突/无进展立即停机。重新选分支不能悄悄改题设。
+**Interfaces:** 验证产出 `failedObligations[{id,scope,stateId,kind,detail}]`, `missingEntities[]`, `unresolvedClauses[]`, `candidateHash`, `certificateStatus`。首先**堵死 `draftStore.ts` 空题面 `prompt: ""` 证书旁路与无解析从句静默放行**（消除 `GK-P09`/`JT-P09` 假阳性）；并在 `coordinator.ts` 开通**有界 `validating -> repair` 回环**（消除 6 题 `req=1` 即死）。修复器只读取**合法生产反馈**而不是黄金合同的预期答案，仅修改失败依赖的子图；每轮重验全题，最多按用户批准的请求上限，过期 hash/相互冲突/无进展立即停机。重新选分支不能悄悄改题设。
 
-- [ ] 用 JT-S07/JT-S09 写 RED：对象/义务均满但 `not_supported` 时不可伪造证书，不得确认；先查其 `requireVerification` 与生产评估的真分叉，再修接线或补真实判据。
-- [ ] 写 RED：同一约束反复失败不无限请求、修补第二问不破坏第一问、全量重验、篡改候选后旧证书失效、无用户确认时主画布仍零写入。
-- [ ] 出口：在结构化回放中合同和真实生产证书 36/36；此结果仍**不**是 live DS 36/36。类型检查与定向回归后同步文档、提交推送。
+- [ ] 用 **JT-S07/JT-S09（假阴性）** 与 **`GK-P09/JT-P09`（假阳性：`verif=passed` 但契约 `obCov=0/0.23`）** 写双向 RED：对象/义务均满但 `not_supported` 时不可伪造证书，**有未解析/未核验题干从句时也绝不返回 `passed`**。
+- [ ] 写 RED：同一约束反复失败不无限请求（触发停滞停机）、修补第二问不破坏第一问、全量重验、篡改候选后旧证书失效、`validating` 失败能在配额内触发有界修复、无用户确认时主画布仍零写入。
+- [ ] 出口：在结构化回放中合同和真实生产证书 36/36（0 假阳性、0 假阴性）；此结果仍**不**是 live DS 36/36。类型检查与定向回归后同步文档、提交推送。
 
-### DS4：DS 候选的真实浏览器渲染和隔离工作区交付
+### DS4：DS 候选的真实浏览器渲染、冻结复播工件和隔离工作区交付
 
 **Files:** Extend `e2e/drawing-reliability-36-render.spec.ts`, `e2e/drawing-reliability-lifecycle.spec.ts`; Modify `apps/web/src/agent/renderLayoutInput.ts`, `apps/web/src/canvasEvidence.ts` 和 `apps/web/src/agent/hostBridge.ts` **仅在 RED 证明现有同版证据不足时**。
 
-**Interfaces:** 同一 `{runId,candidateHash,documentHash,cameraHash,viewportHash}` 串联 DS 施工单、证书、截图、确认及重开文档。不可把已有确定性36张截图重命名为DS截图。受控提交只在隔离临时工作区通过模拟用户真实点击执行，产品正式画布保持人工确认。
+**Interfaces:** 同一 `{runId,candidateHash,documentHash,cameraHash,viewportHash}` 串联 DS 施工单、证书、截图、确认及重开文档；导出**零费用可复播 `ds-candidate-bundle`**（置于忽略产物目录），让浏览器渲染/生命周期缺陷回归无需重复消耗付费 DS 额度。不可把已有确定性36张截图重命名为DS截图。受控提交只在隔离临时工作区通过模拟用户真实点击执行，产品正式画布保持人工确认。
 
 - [ ] 写浏览器 RED：候选/截图异版、对象在视野外或点名不可读、已确认候选被二次提交、取消后迟到写入；记录警告和失败，不把 warning 自动记成人工通过。
 - [ ] 对 DS **同一**候选逐题跑数学/生产证书→真实渲染→隔离工作区确认→撤销/重载；保存36题可审阅索引，人工和 AI 审查字段分开。浏览器工程自动通过与用户/教师签收分开报告。

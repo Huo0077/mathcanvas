@@ -1,6 +1,6 @@
 import {
-  createBudget, errorDiagnostics, examTrialVerdictOf, parsePlanEnvelope,
-  type Budget, type CommitterPort, type ExamCase, type ExamRunBudget, type ExamRunCaseResult,
+  classifyDsFailureBoundary, createBudget, errorDiagnostics, examTrialVerdictOf, parsePlanEnvelope,
+  type Budget, type CommitterPort, type DsFailureBoundary, type ExamCase, type ExamRunBudget, type ExamRunCaseResult,
   type PlanOutcome, type RunEvent, type WorkspaceId
 } from "@draw/agent-core"
 import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
@@ -116,4 +116,21 @@ export function createCoordinatedExamRunCase(deps: ExamRunAdapterDeps): (examCas
     runtime.discardDraft()
     return result
   }
+}
+
+/** Diagnostic boundary helper reusing agent-core classification without altering grading outcomes. */
+export function classifyCoordinatedRunBoundary(input: {
+  terminal: string
+  requests: number
+  passed: boolean
+  primitiveCount: number
+  verificationStatus: string | null
+  certificateStatus: string | null
+  contractStatus: string
+  objectCoverage: number
+  obligationCoverage: number
+  missingEntityIds: readonly string[]
+  failedObligationIds: readonly string[]
+}): DsFailureBoundary {
+  return classifyDsFailureBoundary(input)
 }

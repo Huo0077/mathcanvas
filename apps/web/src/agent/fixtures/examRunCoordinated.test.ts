@@ -5,7 +5,7 @@ import { resetGeometryWorkerForTests } from "../geometryWorkerHost"
 import { createModelPlanner, PLAN_TOOL_NAME, type ProviderResolution } from "../modelPlanner"
 import { inlineWorker } from "../testing/inlineWorker"
 import { handleGeometryRequest } from "../workerRuntime"
-import { createExamRunCase } from "./examRunAdapter"
+import { classifyCoordinatedRunBoundary, createExamRunCase } from "./examRunAdapter"
 
 // Synthetic smoke prompts only: these are not frozen-exam quality observations or gold.
 const CASE: ExamCase = { ...EXAM_CASES.find((entry) => entry.family === "solid")!, prompt: "Create a cube." }
@@ -165,6 +165,40 @@ describe("coordinator-driven exam adapter (zero provider network)", () => {
     expect(result.outcome, result.detail).toBe("planned_after_repair")
     expect(counts).toEqual([2])
     expect(result.costUsd).toBeNull()
+  })
+
+  it("classifies DS divergence boundaries without altering verdicts", () => {
+    expect(
+      classifyCoordinatedRunBoundary({
+        terminal: "awaiting_confirmation",
+        requests: 2,
+        passed: false,
+        primitiveCount: 3,
+        verificationStatus: "passed",
+        certificateStatus: "passed",
+        contractStatus: "partial",
+        objectCoverage: 1,
+        obligationCoverage: 0,
+        missingEntityIds: [],
+        failedObligationIds: ["ob-f-expression"]
+      })
+    ).toBe("false_positive_confirmable")
+
+    expect(
+      classifyCoordinatedRunBoundary({
+        terminal: "failed",
+        requests: 2,
+        passed: false,
+        primitiveCount: 28,
+        verificationStatus: "not_supported",
+        certificateStatus: "partial",
+        contractStatus: "partial",
+        objectCoverage: 1,
+        obligationCoverage: 1,
+        missingEntityIds: [],
+        failedObligationIds: []
+      })
+    ).toBe("verification_split_not_supported")
   })
 
 })

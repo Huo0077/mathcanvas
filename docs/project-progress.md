@@ -6,6 +6,12 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-17 —— G3-DS / DS0 脱敏基线账本与失败边界定位（0 付费调用）
+
+- **方案升级与 `DS0` 闭环**：基于实测 `eval-results/ds-live-36-20261116/official-36/summary.json` 逐题核查，同步升级 [G3-DS实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md) 并完成 **`DS0` 区块**（0 新增付费调用）：建立纯函数脱敏账本与防泄漏校验 [dsLiveBaseline.ts](packages/agent-core/src/verification/dsLiveBaseline.ts) 及 [dsLiveBaseline.test.ts](packages/agent-core/src/verification/dsLiveBaseline.test.ts)，扩展 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) / [drawingContracts.ts](scripts/reliability-eval/drawingContracts.ts) 只读边界分类器，生成脱敏证据 [DS0 真实基线与失败边界](audit/2026-11-16-g3-ds-live-baseline/README.md) 与 [cases.json](audit/2026-11-16-g3-ds-live-baseline/cases.json)。
+- **关键实证边界**：除已知 `2/36` 通过（`GK-S08`、`GK-S09`）、`JT-S07`/`JT-S09` 覆盖率 `1.00/1.00` 却判 `not_supported` 与 `13` 题零候选（含 `JT-S04` 停在 `waiting`）外，定位出 **`GK-P09`（`obCov=0.00`）与 `JT-P09`（`obCov=0.23`）生产证书假阳性放行进入 `awaiting_confirmation`**（根因涉及 `draftStore.ts:660` 空 `prompt: ""` 证书旁路及漏句），以及 **`coordinator.ts:776-784` 验证失败即死导致 6 题在 `req=1` 终止**、单次系统上下文达 `67.5–69.8 KB`。
+- **验证**：`dsLiveBaseline.test.ts`、`examRunCoordinated.test.ts`、`drawingContracts.test.ts`、`typecheck`、`lint` 与 `test:docs` 全数通过；下一步进入 **`DS1`**。
+
 ## 2026-11-16（America/Los_Angeles）—— G3-DS 真实模型升级方案入档
 
 用户指定以DS参与的冻结36题端到端36/36为新目标。[G3-DS独立实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)及[设计增补](superpowers/specs/2026-11-15-drawing-reliability-design.md)已记录DS0–DS5、历史强制DS 2/36、未见题独立计分与新付费授权边界；此轮仅文档，无新DS请求或代码修复。历史主画布0写入不能用作DS零出图结论。

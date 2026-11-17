@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import { readFileSync } from "node:fs"
 
 import { describe, expect, it } from "vitest"
+import { assertSanitizedDsLiveLedger, type SanitizedDsLiveSummary } from "@draw/agent-core"
 import { intersectPlanarLineAndConicExact, rotatePointAboutHinge } from "@draw/geometry-kernel"
 
 import {
@@ -11,6 +12,7 @@ import {
   evaluateDrawingContractBranches,
   evaluateDrawingContractScopes,
   evaluateDrawingContractStates,
+  formatContractFailureBoundarySummary,
   reconstructBaselineContractSummary,
   summarizeContractReports,
   validateContractSuite,
@@ -1679,5 +1681,36 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
         ...pyramidTopology(["p", "a", "b", "c", "d"])
       ]
     }, { verificationStatus: "passed" }).passed).toBe(false)
+
+    const splitSummary = formatContractFailureBoundarySummary({
+      id: "JT-S07",
+      contract: evaluateDrawingContract(jts01, { primitives: jts01Decoy }, { verificationStatus: "passed", scopeId: "(1)(ii)" }),
+      terminal: "failed",
+      primitiveCount: 28,
+      verificationStatus: "not_supported",
+      certificateStatus: "partial",
+      requests: 2
+    })
+    expect(splitSummary.id).toBe("JT-S07")
+    expect(splitSummary.failedObligationKinds.length).toBeGreaterThan(0)
+
+    const ledger = JSON.parse(readFileSync("docs/audit/2026-11-16-g3-ds-live-baseline/cases.json", "utf8")) as SanitizedDsLiveSummary
+    expect(ledger.denominator).toBe(36)
+    expect(ledger.passed).toBe(2)
+    expect(ledger.partial).toBe(21)
+    expect(ledger.failed).toBe(13)
+    expect(ledger.previewCount).toBe(23)
+    expect(ledger.confirmableCount).toBe(4)
+    expect(ledger.requestCount).toBe(80)
+    expect(ledger.inputTokens).toBe(1724928)
+    expect(ledger.outputTokens).toBe(66549)
+    expect(ledger.costUsd).toBeNull()
+    expect(ledger.costKnown).toBe(false)
+    expect(ledger.sceneWrites).toBe(0)
+    expect(ledger.cases.map((c) => c.id)).toEqual(suite.cases.map((c) => c.id))
+    expect(ledger.falsePositiveCaseIds).toEqual(["GK-P09", "JT-P09"])
+    expect(ledger.verificationSplitCaseIds).toEqual(["JT-S07", "JT-S09"])
+    expect(ledger.zeroCandidateWaitingCaseIds).toEqual(["JT-S04"])
+    expect(() => assertSanitizedDsLiveLedger(ledger)).not.toThrow()
   })
 })

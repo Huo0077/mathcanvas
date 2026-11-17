@@ -1,10 +1,11 @@
 # MathCanvas 当前状态
 
-## 2026-11-16（America/Los_Angeles）—— 新增 G3-DS 实测主线（计划，未完成）
+## 2026-11-16（America/Los_Angeles）—— 新增 G3-DS 实测主线（`DS0` 脱敏基线已完成，`DS1–DS5` 待实施）
 
-用户将 G3 后续目标改为**保存的 DS 实际参与冻结36题端到端作图36/36**，不再用离线确定性通过率作为DS成功率；[G3-DS 实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)分 DS0–DS5，均**未执行/未退出**。历史强制DS规划实测：完整合同 **2/36**（平面0/18、立体2/18），21 partial、13 failed、23有非空候选；80次请求，报告 usage 输入1,724,928/输出66,549 tokens，费用未知；主画布0写入因未自动确认。此口径没有逐题真实浏览器渲染、人工确认或受控提交，不与下文确定性36/36合并。原始报告位于忽略目录 `eval-results/ds-live-36-20261116/official-36/summary.json`。
+用户将 G3 后续目标改为**保存的 DS 实际参与冻结36题端到端作图36/36**，不再用离线确定性通过率作为DS成功率；[G3-DS 实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)分 DS0–DS5。历史强制DS规划实测（`06648346`，`deepseek-v4-flash`，0 新增付费请求）：完整合同 **2/36**（`GK-S08`、`GK-S09`；平面0/18、立体2/18），21 partial、13 failed、23有非空候选；`confirmable=4` 含 **2 例生产假阳性（`GK-P09` `obCov=0.00`、`JT-P09` `obCov=0.23`）**；另 `JT-S07`/`JT-S09` 合同覆盖全满（`1.00/1.00`）却被判 `not_supported`，`JT-S04` 停在 `terminal="waiting"`，且 5 题 `partial` + `JT-S09` 在 `req=1` 即死于 `validating` 无修复环；80次请求（单次上下文约 `67.5–69.8 KB`），报告 usage 输入1,724,928/输出66,549 tokens，费用未知；主画布0写入。
 
-先做零付费脱敏归因和产品接线；**已有36题调用不构成新一轮付费调用授权**，预检和整批均须事先明确批准请求、token/费用上限及停止点。用户/教师人工可读性与Windows实机仍是独立阻断；原文“DS未测”只表示此前旧时点，已被本段实测证据替代。计划不是测试通过，禁止宣称G3-DS或G3整体完成。
+- **`DS0`（真实基线、脱敏账本与边界定位）已完成（0 付费调用）**：新增 [dsLiveBaseline.ts](packages/agent-core/src/verification/dsLiveBaseline.ts) 严格脱敏汇总与防泄漏守卫、`examRunCoordinated` / `drawingContracts` 边界诊断辅助，并归档脱敏证据 [DS0 脱敏基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md) 与 [cases.json](audit/2026-11-16-g3-ds-live-baseline/cases.json)（已核查 `draftStore.ts:660` 空 `prompt: ""` 证书旁路及 `coordinator.ts:776-784` 验证失败无重试环）。下一步进入 **`DS1`**（紧凑 `DsDrawingIntent` 施工单协议 + 通用构造 DAG，先消除 13 道零候选）。
+- **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，预检和整批均须事先明确批准请求、token/费用上限及停止点；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
 最后更新：2026-11-17；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
 
