@@ -204,3 +204,59 @@ test("verifies discard zero-write, cross-conversation isolation, infeasible clar
   }
   await page.screenshot({ path: "test-results/t16-bound-drag-lifecycle.png" })
 })
+
+test("DS4 controlled delivery: enforces unified hash chain across preview/confirm/reload, blocks re-commit and late cancel writes", async ({ page }) => {
+  await openAgent(page, "平面几何")
+  await sendPrompt(page, CONIC)
+  const panel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(panel).toBeVisible({ timeout: 30000 })
+  const certNode = panel.locator("[data-certificate-status]")
+  await expect(certNode).toHaveAttribute("data-certificate-status", "passed")
+  const runId = await certNode.getAttribute("data-run-id")
+  const candidateHash = await certNode.getAttribute("data-candidate-hash")
+  expect(runId).toBeTruthy()
+  expect(candidateHash).toMatch(/^[0-9a-f]{64}$/)
+
+  const previewCanvas = page.getByRole("region", { name: "草稿画布预览" }).locator("svg[data-canvas-evidence-status]")
+  await expect(previewCanvas).toHaveAttribute("data-document-hash", candidateHash!)
+  const viewportHash = await previewCanvas.getAttribute("data-viewport-hash")
+  expect(viewportHash).toMatch(/^[0-9a-f]{64}$/)
+
+  // Confirm once in isolated workspace; double-commit is refused and confirm button disappears.
+  const confirm = panel.getByRole("button", { name: "确认并提交" })
+  await expect(confirm).toBeEnabled()
+  await confirm.click()
+  await expect(page.getByText("已提交").last()).toBeVisible()
+  await expect(panel.getByRole("button", { name: "确认并提交" })).toHaveCount(0)
+
+  const committed = await readCommittedDoc(page, "conics")
+  expect(committed).not.toBeNull()
+  const committedCount = committed!.primitives.length
+  expect(committedCount).toBeGreaterThan(0)
+  const committedSha = await computeSha256(page, committed!)
+
+  // Discard second draft -> zero late writes occur on the committed document.
+  await sendPrompt(page, "椭圆 x²/16+y²/9=1，画示意图")
+  const discardPanel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(discardPanel).toBeVisible({ timeout: 30000 })
+  await discardPanel.getByRole("button", { name: "丢弃草稿" }).click()
+  await expect(page.getByText("无需改动").last()).toBeVisible()
+  const afterDiscard = await readCommittedDoc(page, "conics")
+  expect(afterDiscard?.primitives.length).toBe(committedCount)
+  expect(await computeSha256(page, afterDiscard!)).toBe(committedSha)
+
+  // Return to canvas and confirm live canvas carries the identical candidate/document/viewport hashes, then reload cleanly.
+  await page.getByRole("button", { name: "返回画布" }).click()
+  const mainCanvas = page.locator("svg[data-canvas-evidence-status]")
+  await expect(mainCanvas).toHaveAttribute("data-document-hash", candidateHash!)
+  await expect(mainCanvas).toHaveAttribute("data-viewport-hash", viewportHash!)
+
+  await page.reload()
+  await page.getByRole("button", { name: "平面几何" }).click()
+  const reloaded = await readCommittedDoc(page, "conics")
+  expect(reloaded).not.toBeNull()
+  expect(reloaded!.primitives).toEqual(committed!.primitives)
+  const reloadedHash = await computeSha256(page, reloaded!)
+  await expect(page.locator("svg[data-canvas-evidence-status]")).toHaveAttribute("data-document-hash", reloadedHash)
+  await expect(page.locator("svg[data-canvas-evidence-status]")).toHaveAttribute("data-viewport-hash", viewportHash!)
+})

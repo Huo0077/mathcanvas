@@ -6,6 +6,11 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-17 —— G3-DS / DS4 同候选浏览器渲染、冻结复播工件与受控交付（0 付费调用）
+
+- **复播工件与 DOM Hash 链**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）与 [dsCandidateBundle.test.ts](packages/agent-core/src/dsCandidateBundle.test.ts)，并在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts)（`data-viewport-hash`）和 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx)（`data-run-id`/`data-candidate-hash`/`data-document-hash`）贯通同候选渲染与确认文档一致校验；同步合入 `DS3` 全量回归收敛修复（[coordinator.ts](packages/agent-core/src/coordinator.ts) 恢复 `MAX_PLAN_ATTEMPTS = 4`、[diagramObligations.ts](packages/agent-core/src/diagramObligations.ts) 收窄 `JT-S07` 纯求解排除）。
+- **验证与门禁**：最终代码改动后，全量 Vitest **`547` 文件 / `5824 passed | 1 todo`**、`typecheck` exit `0`、`lint`（`0 errors, 34 warnings`）、`test:rust` exit `0`、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（[drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) + [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)，`eval-results/g3-render-36/manifest.json` `36/36 passed`，`withHashes=36`，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）及 `test:docs` 全过；入档 [DS4 证据](audit/2026-11-17-g3-ds4-render-delivery/README.md)，**停在 `DS5` 付费授权门禁前**。
+
 ## 2026-11-17 —— G3-DS / DS3 生产证书双向真伪闭环与 `validating` 有界修复环（0 付费调用）
 
 - **双向证书真伪修复**：封堵 [draftStore.ts](apps/web/src/agent/draftStore.ts) 空 `prompt: ""` 旁路并保留纯参数与无题设指令兼容性；在 [drawingCertificate.ts](packages/agent-core/src/verification/drawingCertificate.ts) 产出 `candidateHash`/`failedObligations`/`missingEntities`/`unresolvedClauses`，拦住 `GK-P09`（错表达式/缺切线）与 `JT-P09`（缺圆 `M` 与垂直共点弦）假阳性；在 [diagramObligations.ts](packages/agent-core/src/diagramObligations.ts) 与 [diagramVerification.ts](packages/agent-core/src/diagramVerification.ts) 修复 `JT-S07`（`（2）求...` 边界截断）及 `JT-S09`（`cube`+球共存与缺省 `neutralPlan` 形状识别）假阴性。

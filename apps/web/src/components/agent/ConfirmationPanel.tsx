@@ -97,6 +97,9 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       className="agent-certificate-status"
       data-certificate-status={draft.drawingCertificate.certificateStatus}
       data-certificate-policy={draft.drawingCertificate.numericPolicyVersion}
+      data-run-id={draft.certificateBinding?.runId}
+      data-candidate-hash={draft.drawingCertificate.gate.binding.candidateHash}
+      data-document-hash={draft.certificateBinding?.documentHash}
     >
       数学证书：{draft.drawingCertificate.summary}
     </p>}

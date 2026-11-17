@@ -3177,7 +3177,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
   const partPattern = /(?:求证|试?证明|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
   const boundaryMatch = partStart !== undefined
     ? partPattern.exec(prompt.slice(partStart))
-    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*(?:(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))|^则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
+    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|(?<=^|[，,。；;\n])\s*则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
   const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
   const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
   const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length
@@ -3377,6 +3377,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
         || /[A-Z]\s*(?:在|位于)[^，,。；;\n]{0,30}(?:上方|下方)/.test(maskedLeftover))
     const originalClause = clause[0].trim()
     const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(maskedLeftover)
+      || (!/['′’]/.test(maskedLeftover) && /^(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求\s*二面角\s*[A-Z]-[A-Z]{2}-[A-Z]\s*的(?:余弦|正弦|正切)?值$/.test(maskedLeftover))
     if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)|渐近线|相切/.test(maskedLeftover) || unknownPointCondition)) {
       const classified = classifyUnverifiedResidual(maskedLeftover, recognizedEntities)
       unverified.push({

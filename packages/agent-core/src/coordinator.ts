@@ -194,7 +194,7 @@ export interface AgentCoordinator {
  * 结果是"读一次场景就把修复额度用光"（用户 2026-10-14 现场）。挂上之后谁改这里，
  * `budget.test.ts` 里那条不变量会立刻红。
  */
-export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS + MAX_VALIDATION_REPAIR_ATTEMPTS
+export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
 
 /**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。

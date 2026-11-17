@@ -178,6 +178,7 @@ export * from "./parametricSolidPlan"
 export * from "./scopedPyramidPlan"
 export * from "./trigMonotonicityPlan"
 export * from "./deterministicProblemRoute"
+export * from "./dsCandidateBundle"
 export * from "./dsDrawingIntent"
 export * from "./reliabilityDiagnostics"
 /**

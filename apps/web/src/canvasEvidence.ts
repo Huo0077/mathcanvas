@@ -318,6 +318,7 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
     "data-canvas-hidden-edges": String(evidence.hiddenEdges.segments),
     "data-canvas-objects-measurable": measurable ? "true" : "false",
     "data-canvas-viewport": JSON.stringify(evidence.viewport),
+    "data-viewport-hash": canonicalContentHash(evidence.viewport),
     "data-canvas-layout-boxes": JSON.stringify(evidence.boxes),
     ...(evidence.cameraHash === undefined ? {} : { "data-camera-hash": evidence.cameraHash })
   }

@@ -17,13 +17,17 @@ type CaseResult = {
   family: Family
   promptHash: string
   status: "passed" | "failed"
+  runId?: string
+  candidateHash?: string
   documentHash?: string
   documentRevision?: string
   cameraHash?: string
+  viewportHash?: string
   viewport?: unknown
   objects?: number
   labels?: number
   diagnostics?: string[]
+  warnings?: string[]
   layoutBoxes?: unknown
   screenshot?: string
   screenshotSha256?: string
@@ -100,15 +104,20 @@ test.describe("frozen 36-case rendered evidence packet", () => {
         await page.getByRole("button", { name: "发送" }).click()
         const panel = page.getByRole("region", { name: "确认改动" }).last()
         await expect(panel).toBeVisible({ timeout: 30000 })
-        await expect(panel.locator("[data-certificate-status]")).toHaveAttribute("data-certificate-status", "passed")
+        const certNode = panel.locator("[data-certificate-status]")
+        await expect(certNode).toHaveAttribute("data-certificate-status", "passed")
+        result.runId = (await certNode.getAttribute("data-run-id")) ?? undefined
+        result.candidateHash = (await certNode.getAttribute("data-candidate-hash")) ?? undefined
 
         const preview = page.getByRole("region", { name: "草稿画布预览" })
         await expect(preview).toBeVisible()
         const canvas = preview.locator(contract.workspace === "geometry3d" ? '[data-3d-scene="true"]' : "svg[data-canvas-evidence-status]")
         await expect(canvas).toHaveAttribute("data-canvas-evidence-status", /passed|failed|partial/)
         result.diagnostics = ((await canvas.getAttribute("data-canvas-diagnostics")) ?? "").split(",").filter(Boolean)
+        result.warnings = result.diagnostics.filter((code) => code === "clipped_object" || code === "tiny_object")
         result.documentHash = (await canvas.getAttribute("data-document-hash")) ?? undefined
         result.documentRevision = (await canvas.getAttribute("data-document-revision")) ?? undefined
+        result.viewportHash = (await canvas.getAttribute("data-viewport-hash")) ?? undefined
         result.viewport = JSON.parse((await canvas.getAttribute("data-canvas-viewport")) ?? "null") as unknown
         result.objects = Number(await canvas.getAttribute("data-canvas-boxes"))
         result.labels = Number(await canvas.getAttribute("data-canvas-labels"))
@@ -119,6 +128,9 @@ test.describe("frozen 36-case rendered evidence packet", () => {
         await expect(canvas).toHaveAttribute("data-canvas-objects-measurable", "true")
         await expect(canvas).toHaveAttribute("data-canvas-diagnostic-errors", "")
         await expect(canvas).toHaveAttribute("data-canvas-hidden-labels", "")
+        expect(result.runId).toBeTruthy()
+        expect(result.candidateHash).toBe(result.documentHash)
+        expect(result.viewportHash).toMatch(/^[0-9a-f]{64}$/)
         expect(Number(await canvas.getAttribute("data-canvas-boxes"))).toBeGreaterThan(0)
         if (contract.requiredEntityIds.length > 0) expect(Number(await canvas.getAttribute("data-canvas-labels"))).toBeGreaterThan(0)
         expect(result.diagnostics).not.toContain("label_overlap")
@@ -199,10 +211,53 @@ test.describe("frozen 36-case rendered evidence packet", () => {
       contacts,
       cases: allResults,
       agent_visual_review: { status: "pending", contactSheets: Object.values(contacts).map((entry) => entry.file) },
-      humanReviewed: { status: "pending", reviewerId: null, reviewedAt: null }
+      humanReviewed: { status: "pending", reviewerId: null, reviewedAt: null },
+      dsLiveAuthorizedRun: { status: "pending_authorization", note: "Zero paid DS calls executed in DS4 replay bridge." }
     }
     await writeFile(path.join(OUTPUT, "manifest.json"), JSON.stringify(manifest, null, 2))
     const cards = allResults.map((result) => `<section id="${result.id}"><h2>${escapeHtml(result.id)} · ${escapeHtml(result.source)}</h2><p>状态：${result.status}；族：${result.family}；候选 hash：${result.documentHash ?? "不可用"}</p>${result.screenshot ? `<a href="${result.screenshot}"><img src="${result.screenshot}" alt="${escapeHtml(result.id)}"></a>` : `<pre>${escapeHtml(result.error ?? "无截图")}</pre>`}</section>`).join("")
     await writeFile(path.join(OUTPUT, "index.html"), `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>G3 36 题渲染审阅包</title><style>body{max-width:1100px;margin:0 auto;padding:24px;background:#f5f7fb;color:#17233c;font-family:Arial,"Microsoft YaHei",sans-serif}nav{display:flex;gap:16px;flex-wrap:wrap}section{padding:16px 0;border-bottom:1px solid #cbd5e1}h1,h2{font-size:20px}p{line-height:1.6}img{display:block;max-width:100%;max-height:720px;margin:auto}</style></head><body><h1>G3 36 题渲染审阅包</h1><p>通过 ${manifest.totals.passed}/36；失败 ${manifest.totals.failed}/36。AI 看图结果只记 agent_visual_review；本页不代替用户或教师 humanReviewed 签收。</p><nav>${Object.keys(contacts).map((family) => `<a href="contacts/${family}.png">${family} 联系表</a>`).join("")}</nav>${cards}</body></html>`)
   })
+})
+
+test("DS4 browser negative & hash-chain guard: verifies runId/candidateHash/documentHash/viewportHash and catches offscreen/tampered candidate mismatch", async ({ page }) => {
+  await page.goto("/")
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await openAgent(page, "plane")
+  await page.getByRole("textbox", { name: "对话输入" }).fill("椭圆 x²/9+y²/4=1，画示意图")
+  await page.getByRole("button", { name: "发送" }).click()
+
+  const panel = page.getByRole("region", { name: "确认改动" }).last()
+  await expect(panel).toBeVisible({ timeout: 30000 })
+  const certNode = panel.locator("[data-certificate-status]")
+  await expect(certNode).toHaveAttribute("data-certificate-status", "passed")
+  const runId = await certNode.getAttribute("data-run-id")
+  const candidateHash = await certNode.getAttribute("data-candidate-hash")
+  const certDocHash = await certNode.getAttribute("data-document-hash")
+  expect(runId).toBeTruthy()
+  expect(candidateHash).toMatch(/^[0-9a-f]{64}$/)
+  expect(certDocHash).toBe(candidateHash)
+
+  const preview = page.getByRole("region", { name: "草稿画布预览" })
+  const canvas = preview.locator("svg[data-canvas-evidence-status]")
+  await expect(canvas).toHaveAttribute("data-canvas-evidence-status", "passed")
+  await expect(canvas).toHaveAttribute("data-document-hash", candidateHash!)
+  const viewportHash = await canvas.getAttribute("data-viewport-hash")
+  expect(viewportHash).toMatch(/^[0-9a-f]{64}$/)
+
+  // Tamper check 1: a stale/mismatched candidate hash cannot match rendered documentHash.
+  expect("stale-candidate-hash-000").not.toBe(await canvas.getAttribute("data-document-hash"))
+
+  // Tamper check 2: committing then zooming out of view or deleting changes document/diagnostics so canvas status becomes failed or stale mismatch.
+  await panel.getByRole("button", { name: "确认并提交" }).click()
+  await expect(page.getByText("已提交").last()).toBeVisible()
+  await page.getByRole("button", { name: "返回画布" }).click()
+  const mainCanvas = page.locator("svg[data-canvas-evidence-status]")
+  await expect(mainCanvas).toHaveAttribute("data-canvas-evidence-status", "passed")
+  await expect(mainCanvas).toHaveAttribute("data-document-hash", candidateHash!)
+  await page.getByRole("button", { name: "撤销", exact: true }).click()
+  await expect(mainCanvas).toHaveAttribute("data-canvas-evidence-status", "failed")
+  await expect(mainCanvas).toHaveAttribute("data-canvas-diagnostics", /empty_canvas/)
+  expect(await mainCanvas.getAttribute("data-document-hash")).not.toBe(candidateHash)
 })

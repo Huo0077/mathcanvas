@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-17 DS3 收口更新**：已完成 `DS0`（[DS0 基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md)）、`DS1`（[DS1 结构化施工单与紧凑协议](audit/2026-11-17-g3-ds1-intent/README.md)）、`DS2`（[DS2 义务族求解与作用域隔离](audit/2026-11-17-g3-ds2-partial-families/README.md)）与 `DS3`（[DS3 生产证书双向闭环与有界修复](audit/2026-11-17-g3-ds3-certificate-repair/README.md)，0 付费调用），**下一步进入 `DS4`**（零费用可复播 `ds-candidate-bundle` 工件、同候选真实浏览器渲染与隔离工作区受控交付）；`DS5` 付费运行仍须先获独立预算授权。实时分数只看[当前状态](current-status.md)。
+> **2026-11-17 DS4 收口更新**：已完成 `DS0`（[DS0 基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md)）、`DS1`（[DS1 结构化施工单与紧凑协议](audit/2026-11-17-g3-ds1-intent/README.md)）、`DS2`（[DS2 义务族求解与作用域隔离](audit/2026-11-17-g3-ds2-partial-families/README.md)）、`DS3`（[DS3 生产证书双向闭环与有界修复](audit/2026-11-17-g3-ds3-certificate-repair/README.md)）与 `DS4`（[DS4 同候选浏览器渲染与受控交付](audit/2026-11-17-g3-ds4-render-delivery/README.md)，0 付费调用，全量 Vitest `547/5824`、Playwright `40/40`、desktop 构建过）。**当前停在 `DS5` 付费实测授权门禁前**：需先由用户明确授权目标模型/题集、预检批量、最大请求数与 token/费用上限及停机条件，同时另行安排教师人工可读性与实机桌面窗口 UIA 签收。实时分数只看[当前状态](current-status.md)。
 
 > **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
 
