@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-17 DS0 收口更新**：已完成 `DS0` 零付费脱敏归因与边界证据（[DS0 基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md)），并已按实测缺陷升级 [G3-DS实测升级计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)；**下一步进入 `DS1`**（紧凑 `DsDrawingIntent` + `systemPrompt` 瘦身 + 通用构造 DAG，再按序 `DS2 → DS3 → DS4`）。`DS5` 的新付费预检/整批需先取得独立预算授权。强制DS旧基线 `2/36`（含 `GK-P09/JT-P09` 假阳性与 `JT-S07/JT-S09` 假阴性）严格区分于确定性 `36/36`；实时分数只看[当前状态](current-status.md)。
+> **2026-11-17 DS1 收口更新**：已完成 `DS0`（[DS0 基线与边界定位](audit/2026-11-16-g3-ds-live-baseline/README.md)）与 `DS1`（[DS1 结构化施工单与紧凑协议](audit/2026-11-17-g3-ds1-intent/README.md)，0 付费调用），**下一步进入 `DS2`**（按义务族打通 19 道 partial 构造与求解，随后 `DS3 → DS4`）。`DS5` 的新付费预检/整批需先取得独立预算授权。强制DS旧基线 `2/36`（含 `GK-P09/JT-P09` 假阳性与 `JT-S07/JT-S09` 假阴性）严格区分于确定性 `36/36`；实时分数只看[当前状态](current-status.md)。
 
 > **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
 

@@ -680,3 +680,28 @@ export interface ObligationIR {
   selectedScopeId?: string
 }
 
+export interface IrPromptClauseSummary {
+  scopeIds: string[]
+  selectedScopeId: string
+  obligationCount: number
+  unverifiedCount: number
+  unverifiedTexts: string[]
+}
+
+/** Extracts structural clause/scope coverage from raw prompt without consulting gold test fixtures. */
+export function irClauseSummaryForPrompt(prompt: string, selectedScopeId?: string): IrPromptClauseSummary {
+  const ir = parseObligationIR(prompt, selectedScopeId === undefined ? {} : { selectedScopeId })
+  const scopes = new Set<string>([SHARED_SCOPE_ID])
+  for (const scope of ir.scopes ?? []) scopes.add(scope.id)
+  for (const ob of ir.obligations) {
+    if (ob.scopeId) scopes.add(ob.scopeId)
+  }
+  return {
+    scopeIds: [...scopes],
+    selectedScopeId: selectedScopeId ?? SHARED_SCOPE_ID,
+    obligationCount: ir.obligations.length,
+    unverifiedCount: ir.unverified.length,
+    unverifiedTexts: ir.unverified.map((u) => u.sourceText)
+  }
+}
+

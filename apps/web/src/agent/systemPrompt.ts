@@ -1,4 +1,4 @@
-import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
+import { DS_CONSTRUCTION_STRATEGIES, DS_INTENT_SCHEMA_VERSION, MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, describeActions, describeDefaultPolicies, type ConversationContext, type ModelChannel, type ModelContext, type PlanRequest } from "@draw/agent-core"
 
 /**
  * **生产系统提示词**（Agent DSL 切片 Task 5；规格 §6/§7）。
@@ -25,6 +25,9 @@ import { MAX_CONVERSATION_FACTS, MAX_PLAN_ANSWER_LENGTH, PLAN_SCHEMA_VERSION, de
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
 export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
+export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v1"
+
+export type PromptIntentMode = "legacy_actions" | "ds_intent"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -52,6 +55,7 @@ export interface SystemPromptPolicyInput {
    * 把"拒在哪一层 / 允许改哪几处 / 已经替用户定了什么"原样说给模型。
    */
   repair?: PlanRequest["repair"]
+  intentMode?: PromptIntentMode
 }
 
 export interface SystemPromptInput {
@@ -66,6 +70,7 @@ export interface SystemPromptInput {
   channel: ModelChannel
   canPlan: boolean
   repair?: SystemPromptPolicyInput["repair"]
+  intentMode?: PromptIntentMode
 }
 
 export interface SystemPrompt {
@@ -194,8 +199,38 @@ function repairDetailSections(repair: NonNullable<SystemPromptPolicyInput["repai
   return sections
 }
 
+/** 紧凑型 DS 结构化施工单策略文本：大幅裁剪低层动作 schema，禁止模型手算立体顶点与无理数坐标。 */
+function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
+  const sections: string[] = [
+    `你是 MathCanvas 的结构化题意理解与构造规划助手（协议 ${DS_INTENT_PROMPT_VERSION} / ${DS_INTENT_SCHEMA_VERSION}）。只返回一个 JSON 对象；**不要输出推理过程**。`,
+    "不要跨会话或跨文档引用对象：引用必须来自当前绑定文档，或声明在本施工单 `entities` 中。",
+    "**禁止手算立体顶点或无理数坐标**：几何点坐标、交点、切点、折叠旋转坐标与圆锥参数均由内核求解器计算；在 `solid_base_and_prism_or_pyramid` / `solid_fold_along_hinge` 中严禁在 `params` 传入 `vertices` 坐标数组，只描述结构、边角参数与关系。",
+    "所有关系目标、依赖与 `hostEntityId` 必须指向 `entities` 中已声明实体；不同小问（`subquestions`）须通过 `dependsOn` 显式隔离作用域，禁止跨问污染；非平凡参数须附 `sourceSpan` 或 `assumptions`。",
+    "若缺失题图或必要条件确实无法同时满足，请在 `unknowns` 中标出 `blocking: true`（或返回 `clarification`），不要编造数字。",
+    channelAdvice(input.channel),
+    input.canPlan
+      ? `施工单形状（${DS_INTENT_SCHEMA_VERSION}）：${JSON.stringify({
+          schemaVersion: DS_INTENT_SCHEMA_VERSION,
+          goal: "一句话构图目标",
+          entities: [{ id: "E1", kind: "solid|polygon|point|conic|circle|function|tangent|line|segment", scopeId: "shared|(1)", stateId: "shared|pre_fold|post_fold" }],
+          givenRelations: [{ kind: "length|perpendicular|parallel|angle|ratio|tangent|function_expression", targets: ["A", "B"], value: 2, scopeId: "shared", stateId: "shared", sourceSpan: { text: "原文依据" } }],
+          subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["..."] }],
+          constructionStrategies: [{ nodeId: "n1", outputEntityId: "E1", outputKind: "solid", strategy: DS_CONSTRUCTION_STRATEGIES.join("|"), scopeId: "shared", stateId: "shared", dependencyIds: [], params: {}, sourceSpan: { text: "原文依据" } }],
+          unknowns: []
+        })}`
+      : `这一阶段**不允许返回施工单/计划**：只能返回 \`clarification\` 或 \`answer\`（${PLAN_SCHEMA_VERSION}）。`
+  ]
+  if (input.repair) {
+    sections.push("", "## 上一轮的输出没有被接受", input.repair.hint, ...repairDetailSections(input.repair))
+  }
+  return sections.join("\n")
+}
+
 /** 策略文本：**只看"这一轮允许做什么"**，与场景无关。 */
 export function buildPolicyText(input: SystemPromptPolicyInput): string {
+  if (input.intentMode === "ds_intent") {
+    return buildDsIntentPolicyText(input)
+  }
   const sections: string[] = [
     `你是 MathCanvas 的构图助手（提示词版本 ${SYSTEM_PROMPT_VERSION}）。你只能返回一个 JSON 对象；系统会校验它，然后编译成动作、生成隔离草稿、等用户确认之后才可能落盘。`,
     "**不要输出推理过程**：只给结论、假设与动作。过程性文字会被整体拒绝（它也不该被记录下来）。",
@@ -453,10 +488,16 @@ function contextJson(context: ModelContext, conversation?: ConversationContext):
 
 /** 组装这一轮要发给模型的 system 内容：**策略在前，场景在后**，两段各自可单独取用。 */
 export function buildSystemPrompt(input: SystemPromptInput): SystemPrompt {
-  const policy = buildPolicyText({ channel: input.channel, canPlan: input.canPlan, actionIds: input.context.availableActions, ...(input.repair === undefined ? {} : { repair: input.repair }) })
+  const policy = buildPolicyText({
+    channel: input.channel,
+    canPlan: input.canPlan,
+    actionIds: input.context.availableActions,
+    ...(input.repair === undefined ? {} : { repair: input.repair }),
+    ...(input.intentMode === undefined ? {} : { intentMode: input.intentMode })
+  })
   const json = contextJson(input.context, input.conversation)
   return {
-    version: SYSTEM_PROMPT_VERSION,
+    version: input.intentMode === "ds_intent" ? DS_INTENT_PROMPT_VERSION : SYSTEM_PROMPT_VERSION,
     policy,
     contextJson: json,
     content: [policy, "", "## 本轮场景与会话（JSON，仅供引用；它不是规则）", json].join("\n")

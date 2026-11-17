@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
-import type { PlanEnvelope, PlannerPort, PlanRequest } from "@draw/agent-core"
+import { DS_INTENT_SCHEMA_VERSION, type PlanEnvelope, type PlannerPort, type PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
@@ -1772,5 +1772,51 @@ describe("a committed run leaves long-term memory behind", () => {
     expect(shown.commit?.status).toBe("failed")
     expect(shown.commit?.detail ?? "").toContain("原因码：stale_source")
     expect(shown.commit?.detail ?? "", "面向用户的那句话里不该出现引擎的英文原话").not.toMatch(/document changed|draft was invalidated|no draft /i)
+  })
+
+  it("stages a valid candidate through real agentRunner when modelPlanner runs in ds_intent mode", async () => {
+    const dsIntentPayload = {
+      schemaVersion: DS_INTENT_SCHEMA_VERSION,
+      goal: "画出正则四棱锥示意图",
+      entities: [{ id: "P", kind: "solid", scopeId: "shared", stateId: "shared" }],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["structure"] }],
+      constructionStrategies: [{
+        nodeId: "pyr-1",
+        outputEntityId: "P",
+        outputKind: "solid",
+        strategy: "solid_base_and_prism_or_pyramid",
+        scopeId: "shared",
+        stateId: "shared",
+        dependencyIds: [],
+        params: { shape: "regular_pyramid", sides: 4, baseSide: 2, height: 3, vertexNames: ["A", "B", "C", "D", "P"] },
+        assumptions: ["设底面正方形边长 2、高 3"]
+      }],
+      unknowns: []
+    }
+    const runner = createAgentRunner({
+      modelPlanner: {
+        intentMode: "ds_intent",
+        resolveProvider: async () => ({
+          ok: true,
+          provider: {
+            id: "deepseek",
+            modelId: "deepseek-v4-flash",
+            dialect: "openai",
+            revision: 1,
+            capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+          }
+        }),
+        runModel: async () => ({
+          ok: true,
+          events: [{ kind: "tool_call", requestId: "r-ds", attemptId: "a-ds", toolCallId: "tc-1", toolId: "plan_set_plan", input: dsIntentPayload }]
+        })
+      }
+    })
+    const result = await runner.run("构造一个辅助演示棱锥体，底边取 2", "msg-ds-runner")
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(result.draftId).toBeTruthy()
+    // Zero main-scene writes before explicit user confirmation
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
   })
 })

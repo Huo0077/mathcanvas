@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   DRAFT_ACTION_IDS,
+  DS_INTENT_SCHEMA_VERSION,
   LEAF_CONSTRAINTS,
   PLAN_SCHEMA_VERSION,
   PROVIDER_SCHEMA_UNSUPPORTED_KEYWORDS,
@@ -14,7 +15,7 @@ import {
 } from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
-import { createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
+import { buildDsIntentToolSchema, createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
 import { planOf } from "@draw/agent-core"
 
 /**
@@ -1356,5 +1357,117 @@ describe("R09-B real buildPlanToolSchema vs runtime differential leaf validation
 
     expect(parsePlanEnvelope(blankActionKeyPayload).ok).toBe(false)
     expect(parsePlanEnvelope(oversizedNormalisationPayload).ok).toBe(false)
+  })
+})
+
+describe("DS1 compact ds_intent mode in modelPlanner", () => {
+  it("uses compact ds_intent tool schema, compiles valid DsDrawingIntent, and rejects hand-computed vertices for coordinator repair", async () => {
+    const compactToolBytes = JSON.stringify(buildDsIntentToolSchema()).length
+    const legacyToolBytes = JSON.stringify(buildPlanToolSchema([...DRAFT_ACTION_IDS])).length
+    expect(compactToolBytes).toBeLessThan(legacyToolBytes * 0.25)
+
+    const validIntent = {
+      schemaVersion: DS_INTENT_SCHEMA_VERSION,
+      goal: "Build parabola and tangent line",
+      entities: [
+        { id: "C", kind: "conic", label: "C", scopeId: "shared", stateId: "shared" },
+        { id: "E", kind: "point", label: "E", scopeId: "shared", stateId: "shared", hostEntityId: "C" }
+      ],
+      givenRelations: [],
+      subquestions: [{ id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["tangent"] }],
+      constructionStrategies: [
+        {
+          nodeId: "c1",
+          outputEntityId: "C",
+          outputKind: "conic",
+          strategy: "conic_from_equation_or_properties",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { conicType: "parabola", axis: "y", focalParameter: 2, label: "C" },
+          sourceSpan: { text: "x^2=4y" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const capturedSizes: number[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_intent",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 1,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async (req) => {
+        capturedSizes.push(JSON.stringify(req.messages).length + JSON.stringify(req.tools).length)
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: "r1", attemptId: "a1", toolCallId: "call-1", toolId: PLAN_TOOL_NAME, input: validIntent }]
+        }
+      }
+    })
+
+    const planReq = request({ userMessage: "画抛物线 C: x²=4y" })
+
+    const okOutcome = await planner.plan(planReq)
+    expect("plan" in okOutcome).toBe(true)
+    if ("plan" in okOutcome) {
+      expect(okOutcome.plan.kind).toBe("plan")
+      if (okOutcome.plan.kind === "plan") {
+        expect(okOutcome.plan.actions.some((a) => a.actionId === "planar.create_conic")).toBe(true)
+      }
+    }
+    expect(capturedSizes[0]!).toBeLessThan(12000)
+
+    // Hand-computed solid vertices inside ds_intent must surface structured schema_invalid failure for repair.
+    const badHandPlanner = createModelPlanner({
+      intentMode: "ds_intent",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 1,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async () => ({
+        ok: true,
+        events: [{
+          kind: "tool_call",
+          requestId: "r2",
+          attemptId: "a2",
+          toolCallId: "call-2",
+          toolId: PLAN_TOOL_NAME,
+          input: {
+            ...validIntent,
+            entities: [{ id: "S", kind: "solid", scopeId: "shared", stateId: "shared" }],
+            constructionStrategies: [{
+              nodeId: "s1",
+              outputEntityId: "S",
+              outputKind: "solid",
+              strategy: "solid_base_and_prism_or_pyramid",
+              scopeId: "shared",
+              stateId: "shared",
+              dependencyIds: [],
+              params: { vertices: [{ x: 0, y: 0, z: 0 }] },
+              sourceSpan: { text: "四棱锥" }
+            }]
+          }
+        }]
+      })
+    })
+    const badOutcome = await badHandPlanner.plan(planReq)
+    expect("failure" in badOutcome).toBe(true)
+    if ("failure" in badOutcome) {
+      expect(badOutcome.failure.errors.some((e) => e.code === "hand_computed_vertices_forbidden")).toBe(true)
+    }
   })
 })

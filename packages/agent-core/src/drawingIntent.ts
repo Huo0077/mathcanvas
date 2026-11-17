@@ -89,10 +89,23 @@ export const SUPPORTED_COMPOUND_OPERATORS: Record<string, CompoundOperatorSpec> 
   "solve.conic_focus": { outputKind: "focus", requiredHostKinds: ["conic"] },
   "solve.segment_ratio_point": { outputKind: "point", requiredHostKinds: ["segment"] },
   "solve.line_intersection": { outputKind: "point" },
-  "solve.fold_transform": { outputKind: "point", isFoldTransition: true }
+  "solve.fold_transform": { outputKind: "point", isFoldTransition: true },
+  "ds.conic_from_equation_or_properties": { outputKind: "conic" },
+  "ds.function_curve_and_tangent": { outputKind: "function" },
+  "ds.planar_point_on_host": { outputKind: "point" },
+  "ds.planar_line_or_segment": { outputKind: "line" },
+  "ds.solid_base_and_prism_or_pyramid": { outputKind: "solid" },
+  "ds.solid_point_on_edge_or_face": { outputKind: "point" },
+  "ds.solid_fold_along_hinge": { outputKind: "solid", isFoldTransition: true },
+  "ds.infeasible_disclosure": { outputKind: "point" }
 }
 
-const FOLD_TRANSITION_OPERATORS = new Set(["solid.fold", "solve.fold_transform"])
+const FOLD_TRANSITION_OPERATORS = new Set([
+  "solid.fold",
+  ...Object.entries(SUPPORTED_COMPOUND_OPERATORS)
+    .filter(([, spec]) => spec.isFoldTransition)
+    .map(([op]) => op)
+])
 
 const NON_MATERIAL_LABEL_TYPES = new Set(["label", "text", "annotation", "comment"])
 const REAL_GEOMETRIC_TYPES = new Set([

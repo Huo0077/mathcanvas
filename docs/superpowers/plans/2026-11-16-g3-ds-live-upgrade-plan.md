@@ -42,13 +42,13 @@ DS1–DS4 的单测与录制/脱敏回放仅检验实现，不计“DS live pass
 
 ### DS1：DS 结构化施工单与紧凑两阶段协议，先消除13道无候选
 
-**Files:** Modify `apps/web/src/agent/modelPlanner.ts`, `apps/web/src/agent/systemPrompt.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/drawingIntent.ts`, `packages/agent-core/src/obligationIR.ts`；Create `packages/agent-core/src/dsDrawingIntent.ts`, `packages/agent-core/src/dsDrawingIntent.test.ts`；Extend `apps/web/src/agent/modelPlanner.test.ts`、`apps/web/src/agent/systemPrompt.test.ts`、`agentRunner.test.ts`。
+**Files:** Modify `apps/web/src/agent/modelPlanner.ts`, `apps/web/src/agent/systemPrompt.ts`, `apps/web/src/agent/agentRunner.ts`, `packages/agent-core/src/drawingIntent.ts`, `packages/agent-core/src/obligationIR.ts`, `packages/agent-core/src/index.ts`；Create `packages/agent-core/src/dsDrawingIntent.ts`, `packages/agent-core/src/dsDrawingIntent.test.ts`, `docs/audit/2026-11-17-g3-ds1-intent/README.md`；Extend `apps/web/src/agent/modelPlanner.test.ts`、`apps/web/src/agent/systemPrompt.test.ts`、`agentRunner.test.ts`。
 
 **Interfaces:** `DsDrawingIntent` 携带 `entities[]`, `givenRelations[]`, `subquestions[{id,dependsOn,stateId,relations[]}]`, `constructionStrategies[]`, `unknowns[]` 与 source-span/证据；它是模型规划输入到现有通用 DAG/编译器的中间件，不承载标准答案。阶段 1 对 `systemPrompt` 瘦身（将单次 `~67.5 KB` 全量动作垃圾箱降为紧凑施工单协议，**禁止 DS 手算多面体顶点或无理数坐标**），接通用正交构造原语与 `compileConstructionDag`（设 Anti-Heuristic-Router 守卫，禁止退化成 36 题关键词/模板路由器）。验证层拒绝未声明引用、跨 scope 条件污染、无证据常数和无法支持的动作，返回稳定诊断码。不能因为有字段就假定数学正确。
 
-- [ ] 用零候选族写 RED：折叠立体（GK-S02 / JT-S04 `waiting`）、函数（GK-P04）、切线（GK-P06）分别验证 `DS已调用 → 结构化意图 → 编译/拒绝原因`；补**改点名/换数字/换叙事的通用变体测试**及题图缺信息、网络中断、无效 schema 和作用域交叉污染负例。
-- [ ] 仅修实核发现的第一处中断，接既有 planner 和 compiler，不另造36题模式表；逐题增加可复现回放与真实意图，而非复制标准坐标。不能识别的题要产生可解释澄清/失败，不能为得到候选数编造图。
-- [ ] 出口：13道历史零候选对应的每道都有可验候选，或有经审题确认的题图缺失/不可构造原因与正确安全终态；“零候选消除”本身不是36/36，通过仍取最终合同。定向测试/类型检查/复核后同步文档、提交推送。
+- [x] 用零候选族写 RED：折叠立体（GK-S02 / JT-S04 开放/棱台类）、函数（GK-P04）、切线（GK-P06）与立体棱锥/棱柱/四面体正交策略分别验证 `DS已调用 → 结构化意图 → 编译/拒绝原因`；补**改点名/换数字/换叙事的通用变体测试**及题图缺信息（`blocking` 转 `clarification`）、手算顶点拒收、未声明引用、无来源常数和作用域交叉污染负例。
+- [x] 仅修实核发现的第一处中断，接既有 planner 和 compiler，不另造36题模式表；逐题增加可复现回放与真实意图，而非复制标准坐标。不能识别的题要产生可解释澄清/失败，不能为得到候选数编造图。
+- [x] 出口：13道历史零候选对应的结构化家族在 DAG/内核构造链中全部可编译或安全澄清（0 付费调用，不宣称 DS live 36/36）。定向测试（`6` 文件 `196 passed`）/类型检查/Lint/`test:docs` 通过后同步文档、提交推送。
 
 ### DS2：19道有候选但不正确，按义务族补构造与求解
 

@@ -6,6 +6,12 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-17 —— G3-DS / DS1 结构化施工单、紧凑提示词与通用构造 DAG（0 付费调用）
+
+- **施工单编译器与不变量落地**：新增 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts)（8 类正交构图策略，直连数学内核与立体/平面求解器，拒绝手算立体顶点 `hand_computed_vertices_forbidden`、未声明引用、跨作用域污染与无来源自由常数，`blocking` 缺失转安全澄清），同步在 [drawingIntent.ts](packages/agent-core/src/drawingIntent.ts) 注册 `ds.*` 算子并在 [obligationIR.ts](packages/agent-core/src/obligationIR.ts) 增加 `irClauseSummaryForPrompt`。
+- **紧凑协议瘦身与端到端接线**：在 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)（`DS_INTENT_PROMPT_VERSION` 政策正文缩减 `<45%`）与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts)（`buildDsIntentToolSchema()` + `resolveDsIntentOrPlanEnvelope`）落地 `intentMode: "ds_intent"`，通过 [agentRunner.ts](apps/web/src/agent/agentRunner.ts) 验证草稿暂存且主画布 `0` 写入。
+- **验证**：`dsDrawingIntent.test.ts`、`drawingIntent.test.ts`、`obligationIR.test.ts`、`systemPrompt.test.ts`、`modelPlanner.test.ts`、`agentRunner.test.ts`（`6` 文件 **`196 passed`**）、`typecheck`、`lint` 与 `test:docs` 全过；入档 [DS1 证据](audit/2026-11-17-g3-ds1-intent/README.md)，下一步进入 **`DS2`**。
+
 ## 2026-11-17 —— G3-DS / DS0 脱敏基线账本与失败边界定位（0 付费调用）
 
 - **方案升级与 `DS0` 闭环**：基于实测 `eval-results/ds-live-36-20261116/official-36/summary.json` 逐题核查，同步升级 [G3-DS实施计划](superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md) 并完成 **`DS0` 区块**（0 新增付费调用）：建立纯函数脱敏账本与防泄漏校验 [dsLiveBaseline.ts](packages/agent-core/src/verification/dsLiveBaseline.ts) 及 [dsLiveBaseline.test.ts](packages/agent-core/src/verification/dsLiveBaseline.test.ts)，扩展 [examRunCoordinated.ts](apps/web/src/agent/fixtures/examRunCoordinated.ts) / [drawingContracts.ts](scripts/reliability-eval/drawingContracts.ts) 只读边界分类器，生成脱敏证据 [DS0 真实基线与失败边界](audit/2026-11-16-g3-ds-live-baseline/README.md) 与 [cases.json](audit/2026-11-16-g3-ds-live-baseline/cases.json)。

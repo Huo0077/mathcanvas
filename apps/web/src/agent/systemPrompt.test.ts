@@ -1,7 +1,7 @@
 import { MAX_MESSAGE_LIMIT, PLAN_SCHEMA_VERSION, DRAFT_ACTION_IDS, describeRepairPrompt, parsePlanEnvelope, repairRequestFor, type ModelContext } from "@draw/agent-core"
 import { describe, expect, it } from "vitest"
 
-import { SYSTEM_PROMPT_VERSION, buildPolicyText, buildSystemPrompt } from "./systemPrompt"
+import { DS_INTENT_PROMPT_VERSION, SYSTEM_PROMPT_VERSION, buildPolicyText, buildSystemPrompt } from "./systemPrompt"
 
 /**
  * **Task 3：提示词菜单与动作目录必须是同一个集合**（2026-10-12）。
@@ -667,5 +667,21 @@ describe("production system prompt", () => {
     expect(policy).toContain("残差")
     /** 只读那一支也会转述结论，这两条照样在。 */
     expect(buildPolicyText({ channel: "strict_json", canPlan: false, actionIds: [] })).toContain("不要手算")
+  })
+
+  it("provides a compact ds_intent policy that trims the legacy action dump and forbids hand-computed solid vertices", () => {
+    const legacy = buildPolicyText({ channel: "native_tools", canPlan: true, actionIds: [...DRAFT_ACTION_IDS] })
+    const compact = buildSystemPrompt({
+      context: context({ availableActions: [...DRAFT_ACTION_IDS] }),
+      channel: "native_tools",
+      canPlan: true,
+      intentMode: "ds_intent"
+    })
+
+    expect(compact.version).toBe(DS_INTENT_PROMPT_VERSION)
+    expect(compact.policy).toContain("mathcanvas.ds_intent.v1")
+    expect(compact.policy).toContain("禁止手算立体顶点")
+    expect(compact.policy).toContain("不要输出推理过程")
+    expect(compact.policy.length).toBeLessThan(legacy.length * 0.45)
   })
 })
