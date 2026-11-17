@@ -6,6 +6,11 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-17 —— G3-DS / DS2 4 类几何义务族求解、垂足与作用域隔离（0 付费调用）
+
+- **正交求解补强**：在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 补齐圆锥曲线焦点/离心率求参、直线与圆锥曲线交点/切线、过外点函数切线（数值求根+导数斜率）、`AD⊥DC` 四边形底座四棱锥、线/面垂足及连线、`infeasible_disclosure` 局部不可行共存，以及 `resolveAllowedScopes` / `compileDsDrawingIntentByScope` 作用域裁剪编译。
+- **验证**：`dsDrawingIntent.test.ts`、`planarContracts18.test.ts`、`solidContracts18.test.ts`、`planCompiler.offPath.golden.test.ts`、`agentRunner.test.ts`（`5` 文件 **`137 passed`**，含独立 `verifyDiagramObligations` 正例及 $D$ 点垂直度篡改 `failed` 反例）、`typecheck`、`lint` 与 `test:docs`（`8` 文件 `22 passed`）全过；入档 [DS2 证据](audit/2026-11-17-g3-ds2-partial-families/README.md)，下一步进入 **`DS3`**。
+
 ## 2026-11-17 —— G3-DS / DS1 结构化施工单、紧凑提示词与通用构造 DAG（0 付费调用）
 
 - **施工单编译器与不变量落地**：新增 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts)（8 类正交构图策略，直连数学内核与立体/平面求解器，拒绝手算立体顶点 `hand_computed_vertices_forbidden`、未声明引用、跨作用域污染与无来源自由常数，`blocking` 缺失转安全澄清），同步在 [drawingIntent.ts](packages/agent-core/src/drawingIntent.ts) 注册 `ds.*` 算子并在 [obligationIR.ts](packages/agent-core/src/obligationIR.ts) 增加 `irClauseSummaryForPrompt`。

@@ -1,7 +1,14 @@
+import type { Coordinate } from "@draw/dsl"
 import {
+  conicFoci,
+  ellipseFromFociAndPoint,
   evaluateFunctionWithDomain,
   evaluateSymbolicDerivative,
-  rotatePointAboutHinge
+  hyperbolaFromFociAndPoint,
+  intersectPlanarLineAndConicExact,
+  rotatePointAboutHinge,
+  tangentLineToConicAt,
+  type PlanarConic
 } from "@draw/geometry-kernel"
 import type { DraftAction } from "@draw/scene-graph"
 
@@ -411,6 +418,71 @@ function vec3(x: number, y: number, z: number) {
   return { x, y, z }
 }
 
+function asVec2(v: unknown): Coordinate | null {
+  if (!isPlainObj(v) || typeof v.x !== "number" || typeof v.y !== "number") return null
+  if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) return null
+  return { x: v.x, y: v.y }
+}
+
+/** Intersect circle(c1, r1) with circle(c2, r2) on XY plane (returns positive-side candidate). */
+function solveQuadVertexByEdgeLengths(
+  a: { x: number; y: number; z: number },
+  c: { x: number; y: number; z: number },
+  ab: number,
+  bc: number
+): { x: number; y: number; z: number } | null {
+  const dx = c.x - a.x
+  const dy = c.y - a.y
+  const dist = Math.hypot(dx, dy)
+  if (!(dist > 1e-9) || dist > ab + bc + 1e-9 || dist < Math.abs(ab - bc) - 1e-9) return null
+  const ex = dx / dist
+  const ey = dy / dist
+  const xProj = (ab * ab - bc * bc + dist * dist) / (2 * dist)
+  const hSq = Math.max(0, ab * ab - xProj * xProj)
+  const h = Math.sqrt(hSq)
+  // Pick the side (-ey, ex) that forms a convex non-self-intersecting base with D in +x/+y quadrant.
+  return { x: a.x + ex * xProj - ey * h, y: a.y + ey * xProj + ex * h, z: 0 }
+}
+
+/** Collects target scope, "shared", and any explicit parent subquestions via dependsOn. */
+export function resolveAllowedScopes(intent: DsDrawingIntent, targetScopeId?: string): Set<string> {
+  if (!targetScopeId || targetScopeId === "shared") {
+    return new Set(["shared", ...intent.subquestions.map((s) => s.id)])
+  }
+  const subqById = new Map(intent.subquestions.map((s) => [s.id, s]))
+  const allowed = new Set<string>(["shared", targetScopeId])
+  const queue = [targetScopeId]
+  while (queue.length > 0) {
+    const cur = queue.shift()!
+    const sub = subqById.get(cur)
+    if (!sub) continue
+    for (const dep of sub.dependsOn) {
+      if (!allowed.has(dep)) {
+        allowed.add(dep)
+        queue.push(dep)
+      }
+    }
+  }
+  return allowed
+}
+
+/**
+ * Compiles a validated DsDrawingIntent strictly for a single subquestion scope (preserving shared
+ * prerequisites while isolating sibling-subquestion entities/actions).
+ */
+export function compileDsDrawingIntentByScope(intent: DsDrawingIntent, targetScopeId?: string): PlanEnvelope {
+  if (!targetScopeId) return compileDsDrawingIntentToPlan(intent)
+  const allowed = resolveAllowedScopes(intent, targetScopeId)
+  const filtered: DsDrawingIntent = {
+    ...intent,
+    entities: intent.entities.filter((e) => allowed.has(e.scopeId)),
+    givenRelations: intent.givenRelations.filter((r) => allowed.has(r.scopeId)),
+    constructionStrategies: intent.constructionStrategies.filter((s) => allowed.has(s.scopeId)),
+    unknowns: intent.unknowns.filter((u) => allowed.has(u.scopeId))
+  }
+  return compileDsDrawingIntentToPlan(filtered)
+}
+
 /**
  * Compiles a validated DsDrawingIntent strictly from its structural entities, strategies,
  * and kernel mathematical solvers (zero exam-ID or prompt-keyword heuristic shortcuts).
@@ -429,6 +501,10 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
 
   const actions: DraftAction[] = []
   const assumptions: string[] = []
+  const disclosures: string[] = []
+  const point2Registry = new Map<string, Coordinate>()
+  const line2Registry = new Map<string, { a: Coordinate; b: Coordinate }>()
+  const conicRegistry = new Map<string, PlanarConic>()
   const point3Registry = new Map<string, { x: number; y: number; z: number }>()
   let keySeq = 0
   const nextKey = (prefix: string) => `${prefix}-${++keySeq}`
@@ -480,6 +556,66 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             }
           } as DraftAction)
         }
+      } else if (p.mode === "tangent_from_external_point") {
+        const expr = typeof p.expression === "string" ? p.expression : "x"
+        const ext = asVec2(p.externalPoint) ?? { x: asNum(p.px, 0), y: asNum(p.py, 0) }
+        const domain = Array.isArray(p.domain) && p.domain.length === 2 && typeof p.domain[0] === "number" && typeof p.domain[1] === "number"
+          ? [p.domain[0], p.domain[1]] as [number, number]
+          : [-5, 5] as [number, number]
+        const targetIndex = Math.max(0, Math.trunc(asNum(p.index, 0)))
+        const residual = (t: number): number | null => {
+          const ft = evaluateFunctionWithDomain(expr, t)
+          const dt = evaluateSymbolicDerivative(expr, t)
+          if (!ft.ok || !dt.ok) return null
+          return ft.value + dt.value * (ext.x - t) - ext.y
+        }
+        const roots: number[] = []
+        const steps = 120
+        const dx = (domain[1] - domain[0]) / steps
+        let prevT = domain[0]
+        let prevR = residual(prevT)
+        for (let i = 1; i <= steps; i += 1) {
+          const curT = domain[0] + dx * i
+          const curR = residual(curT)
+          if (prevR !== null && curR !== null && prevR * curR <= 0) {
+            let lo = prevT, hi = curT, rLo = prevR
+            for (let b = 0; b < 30; b += 1) {
+              const mid = 0.5 * (lo + hi)
+              const rMid = residual(mid)
+              if (rMid === null) break
+              if (rLo * rMid <= 0) {
+                hi = mid
+              } else {
+                lo = mid
+                rLo = rMid
+              }
+            }
+            const root = 0.5 * (lo + hi)
+            if (!roots.some((r) => Math.abs(r - root) < 1e-4)) roots.push(root)
+          }
+          prevT = curT
+          prevR = curR
+        }
+        const tStar = roots[Math.min(targetIndex, Math.max(0, roots.length - 1))]
+        if (tStar !== undefined) {
+          const yStar = evaluateFunctionWithDomain(expr, tStar)
+          const slope = evaluateSymbolicDerivative(expr, tStar)
+          if (yStar.ok && slope.ok) {
+            actions.push({
+              actionId: "planar.create_line",
+              actionKey: nextKey("ds-tan-ext"),
+              factIds: [],
+              inputs: {
+                alias: step.outputEntityId,
+                label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
+                points: [
+                  { x: ext.x - 1, y: yStar.value + slope.value * (ext.x - 1 - tStar) },
+                  { x: ext.x + 1, y: yStar.value + slope.value * (ext.x + 1 - tStar) }
+                ]
+              }
+            } as DraftAction)
+          }
+        }
       } else {
         const expr = typeof p.expression === "string" ? p.expression : "x"
         const domain = Array.isArray(p.domain) && p.domain.length === 2 && typeof p.domain[0] === "number" && typeof p.domain[1] === "number"
@@ -500,38 +636,79 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
       continue
     }
 
+    if (step.strategy === "infeasible_disclosure") {
+      if (typeof p.summary === "string" && p.summary.trim().length > 0) {
+        disclosures.push(p.summary.trim())
+      }
+      continue
+    }
+
     if (step.strategy === "conic_from_equation_or_properties") {
       const conicType = p.conicType === "ellipse" || p.conicType === "hyperbola" || p.conicType === "parabola" || p.conicType === "circle"
         ? p.conicType
         : "ellipse"
       const label = typeof p.label === "string" ? p.label : step.outputEntityId
       if (conicType === "circle") {
+        const center = { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
+        const radius = Math.max(0.1, asNum(p.radius, 1))
+        conicRegistry.set(step.outputEntityId, { id: step.outputEntityId, type: "circle", center, radius })
         actions.push({
           actionId: "planar.create_circle",
           actionKey: nextKey("ds-circ"),
           factIds: [],
-          inputs: {
-            alias: step.outputEntityId,
-            label,
-            center: { x: asNum(p.cx, 0), y: asNum(p.cy, 0) },
-            radius: Math.max(0.1, asNum(p.radius, 1))
-          }
+          inputs: { alias: step.outputEntityId, label, center, radius }
         } as DraftAction)
       } else if (conicType === "parabola") {
+        const vertex = { x: asNum(p.vx, 0), y: asNum(p.vy, 0) }
+        const axis: "x" | "y" = p.axis === "y" ? "y" : "x"
+        const focalParameter = Math.max(0.1, asNum(p.focalParameter, 2))
+        conicRegistry.set(step.outputEntityId, { id: step.outputEntityId, type: "parabola", vertex, axis, focalParameter })
         actions.push({
           actionId: "planar.create_conic",
           actionKey: nextKey("ds-conic"),
           factIds: [],
-          inputs: {
-            alias: step.outputEntityId,
-            label,
-            kind: "parabola",
-            vertex: { x: asNum(p.vx, 0), y: asNum(p.vy, 0) },
-            axis: p.axis === "y" ? "y" : "x",
-            focalParameter: Math.max(0.1, asNum(p.focalParameter, 2))
-          }
+          inputs: { alias: step.outputEntityId, label, kind: "parabola", vertex, axis, focalParameter }
         } as DraftAction)
       } else {
+        let center = { x: asNum(p.cx, 0), y: asNum(p.cy, 0) }
+        let axis: "x" | "y" = p.axis === "y" ? "y" : "x"
+        let rx = asNum(p.radiusX, 0)
+        let ry = asNum(p.radiusY, 0)
+
+        const fociRaw = Array.isArray(p.foci) && p.foci.length === 2 ? [asVec2(p.foci[0]), asVec2(p.foci[1])] : null
+        const throughPt = asVec2(p.throughPoint)
+        if (fociRaw && fociRaw[0] && fociRaw[1] && throughPt) {
+          const inv = conicType === "ellipse"
+            ? ellipseFromFociAndPoint([fociRaw[0], fociRaw[1]], throughPt)
+            : hyperbolaFromFociAndPoint([fociRaw[0], fociRaw[1]], throughPt)
+          if (inv.kind === "solved") {
+            center = inv.conic.center
+            rx = inv.conic.radiusX
+            ry = inv.conic.radiusY
+            if ("axis" in inv.conic && inv.conic.axis === "y") axis = "y"
+          }
+        } else if (typeof p.majorSemiAxis === "number" && Number.isFinite(p.majorSemiAxis) && typeof p.eccentricity === "number" && Number.isFinite(p.eccentricity)) {
+          const a = Math.max(0.1, p.majorSemiAxis)
+          const e = p.eccentricity
+          if (conicType === "ellipse" && e > 0 && e < 1) {
+            const b = a * Math.sqrt(1 - e * e)
+            rx = axis === "y" ? b : a
+            ry = axis === "y" ? a : b
+          } else if (conicType === "hyperbola" && e > 1) {
+            const b = a * Math.sqrt(e * e - 1)
+            rx = axis === "y" ? b : a
+            ry = axis === "y" ? a : b
+          }
+        }
+        rx = Math.max(0.1, rx || 2)
+        ry = Math.max(0.1, ry || 1)
+        const conic: PlanarConic = conicType === "ellipse"
+          ? { id: step.outputEntityId, type: "ellipse", center, radiusX: rx, radiusY: ry }
+          : { id: step.outputEntityId, type: "hyperbola", center, axis, radiusX: rx, radiusY: ry }
+        conicRegistry.set(step.outputEntityId, conic)
+        const excludedPoints = Array.isArray(p.excludedPoints)
+          ? p.excludedPoints.map(asVec2).filter((pt): pt is Coordinate => pt !== null)
+          : undefined
         actions.push({
           actionId: "planar.create_conic",
           actionKey: nextKey("ds-conic"),
@@ -540,10 +717,11 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             alias: step.outputEntityId,
             label,
             kind: conicType,
-            center: { x: asNum(p.cx, 0), y: asNum(p.cy, 0) },
-            axis: p.axis === "y" ? "y" : "x",
-            radiusX: Math.max(0.1, asNum(p.radiusX, 2)),
-            radiusY: Math.max(0.1, asNum(p.radiusY, 1))
+            center,
+            axis,
+            radiusX: rx,
+            radiusY: ry,
+            ...(excludedPoints && excludedPoints.length > 0 ? { excludedPoints } : {})
           }
         } as DraftAction)
       }
@@ -551,61 +729,136 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     }
 
     if (step.strategy === "planar_point_on_host") {
-      actions.push({
-        actionId: "planar.create_point",
-        actionKey: nextKey("ds-pt"),
-        factIds: [],
-        inputs: {
-          alias: step.outputEntityId,
-          label: typeof p.label === "string" ? p.label : step.outputEntityId,
-          points: [{ x: asNum(p.x, 0), y: asNum(p.y, 0) }]
+      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const mode = typeof p.mode === "string" ? p.mode : "explicit_coords"
+      let solvedPt: Coordinate | null = null
+
+      if (mode === "focus") {
+        const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
+        if (conic) {
+          const foci = conicFoci(conic)
+          const idx = Math.max(0, Math.min(foci.length - 1, Math.trunc(asNum(p.index, 0))))
+          solvedPt = foci[idx] ?? null
         }
-      } as DraftAction)
+      } else if (mode === "on_conic") {
+        const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
+        const param = asNum(p.parameter, Math.PI / 4)
+        if (conic) {
+          if (conic.type === "ellipse") {
+            solvedPt = { x: conic.center.x + conic.radiusX * Math.cos(param), y: conic.center.y + conic.radiusY * Math.sin(param) }
+          } else if (conic.type === "circle") {
+            solvedPt = { x: conic.center.x + conic.radius * Math.cos(param), y: conic.center.y + conic.radius * Math.sin(param) }
+          } else if (conic.type === "parabola") {
+            const pVal = conic.focalParameter
+            solvedPt = conic.axis === "y"
+              ? { x: conic.vertex.x + param, y: conic.vertex.y + (param * param) / (2 * pVal) }
+              : { x: conic.vertex.x + (param * param) / (2 * pVal), y: conic.vertex.y + param }
+          } else {
+            const c = Math.cos(param)
+            const s = Math.sin(param)
+            if (Math.abs(c) > 1e-6) {
+              solvedPt = conic.axis === "x"
+                ? { x: conic.center.x + conic.radiusX / c, y: conic.center.y + conic.radiusY * (s / c) }
+                : { x: conic.center.x + conic.radiusX * (s / c), y: conic.center.y + conic.radiusY / c }
+            }
+          }
+        }
+      } else if (mode === "line_conic_intersection") {
+        const line = line2Registry.get(String(p.lineId ?? ""))
+        const conic = conicRegistry.get(String(p.conicId ?? step.hostEntityId ?? ""))
+        if (line && conic) {
+          const res = intersectPlanarLineAndConicExact({ type: "line", a: line.a, b: line.b }, conic)
+          if (res.points.length > 0) {
+            const idx = Math.max(0, Math.min(res.points.length - 1, Math.trunc(asNum(p.index, 0))))
+            solvedPt = res.points[idx] ?? null
+          }
+        }
+      } else if (mode === "midpoint" || mode === "segment_ratio") {
+        const pFrom = point2Registry.get(String(p.from ?? ""))
+        const pTo = point2Registry.get(String(p.to ?? ""))
+        const t = mode === "midpoint" ? 0.5 : asNum(p.ratioFromFirst, 0.5)
+        if (pFrom && pTo) {
+          solvedPt = { x: pFrom.x + (pTo.x - pFrom.x) * t, y: pFrom.y + (pTo.y - pFrom.y) * t }
+        }
+      } else if (mode === "line_intersection") {
+        const l1 = line2Registry.get(String(p.firstLineId ?? ""))
+        const l2 = line2Registry.get(String(p.secondLineId ?? ""))
+        if (l1 && l2) {
+          const dx1 = l1.b.x - l1.a.x, dy1 = l1.b.y - l1.a.y
+          const dx2 = l2.b.x - l2.a.x, dy2 = l2.b.y - l2.a.y
+          const det = dx1 * dy2 - dy1 * dx2
+          if (Math.abs(det) > 1e-9) {
+            const rx = l2.a.x - l1.a.x, ry = l2.a.y - l1.a.y
+            const t = (rx * dy2 - ry * dx2) / det
+            solvedPt = { x: l1.a.x + t * dx1, y: l1.a.y + t * dy1 }
+          }
+        }
+      } else {
+        solvedPt = { x: asNum(p.x, 0), y: asNum(p.y, 0) }
+      }
+
+      if (solvedPt) {
+        point2Registry.set(step.outputEntityId, solvedPt)
+        point2Registry.set(label, solvedPt)
+        actions.push({
+          actionId: "planar.create_point",
+          actionKey: nextKey("ds-pt"),
+          factIds: [],
+          inputs: { alias: step.outputEntityId, label, points: [solvedPt] }
+        } as DraftAction)
+      }
       continue
     }
 
     if (step.strategy === "planar_line_or_segment") {
-      if (p.mode === "tangent_to_conic" && isPlainObj(p.touchPoint)) {
-        const tx = asNum(p.touchPoint.x, 0)
-        const ty = asNum(p.touchPoint.y, 0)
-        let dx = 1
-        let dy = 0
-        if (p.conicType === "parabola") {
-          const focal = Math.max(0.1, asNum(p.focalParameter, 2))
-          if (p.axis === "y") {
-            // x^2 = 2*p*y => y' = x / p
-            dx = 1
-            dy = tx / focal
-          } else {
-            // y^2 = 2*p*x => 2*y*y' = 2*p => tangent direction (y, p)
-            dx = ty
-            dy = focal
-          }
+      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      const mode = typeof p.mode === "string" ? p.mode : ""
+      let endpoints: [Coordinate, Coordinate] | null = null
+
+      if (mode === "equation") {
+        const a = asNum(p.a, 0), b = asNum(p.b, 0), c = asNum(p.c, 0)
+        if (Math.abs(b) > Math.abs(a) && Math.abs(b) > 1e-12) {
+          endpoints = [{ x: -4, y: -(a * -4 + c) / b }, { x: 4, y: -(a * 4 + c) / b }]
+        } else if (Math.abs(a) > 1e-12) {
+          endpoints = [{ x: -(b * -4 + c) / a, y: -4 }, { x: -(b * 4 + c) / a, y: 4 }]
         }
-        actions.push({
-          actionId: "planar.create_line",
-          actionKey: nextKey("ds-line"),
-          factIds: [],
-          inputs: {
-            alias: step.outputEntityId,
-            label: typeof p.label === "string" ? p.label : step.outputEntityId,
-            points: [
-              { x: tx - dx, y: ty - dy },
-              { x: tx + dx, y: ty + dy }
-            ]
-          }
-        } as DraftAction)
+      } else if (mode === "through_points") {
+        const p1 = point2Registry.get(String(p.from ?? ""))
+        const p2 = point2Registry.get(String(p.to ?? ""))
+        if (p1 && p2) endpoints = [p1, p2]
+      } else if (mode === "perpendicular_bisector") {
+        const p1 = point2Registry.get(String(p.from ?? ""))
+        const p2 = point2Registry.get(String(p.to ?? ""))
+        if (p1 && p2) {
+          const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+          const dx = p2.x - p1.x, dy = p2.y - p1.y
+          endpoints = [{ x: mid.x - dy, y: mid.y + dx }, { x: mid.x + dy, y: mid.y - dx }]
+        }
+      } else if (mode === "tangent_to_conic") {
+        const conic = conicRegistry.get(String(p.conicId ?? ""))
+        const touchPt = (typeof p.touchPointId === "string" ? point2Registry.get(p.touchPointId) : undefined) ?? asVec2(p.touchPoint)
+        if (conic && touchPt) {
+          const tan = tangentLineToConicAt(conic, touchPt, 5)
+          if (tan) endpoints = [tan.line.a, tan.line.b]
+        } else if (touchPt && p.conicType === "parabola") {
+          const focal = Math.max(0.1, asNum(p.focalParameter, 2))
+          const para: PlanarConic = { id: "inline-para", type: "parabola", vertex: { x: 0, y: 0 }, axis: p.axis === "y" ? "y" : "x", focalParameter: focal }
+          const tan = tangentLineToConicAt(para, touchPt, 5)
+          if (tan) endpoints = [tan.line.a, tan.line.b]
+        }
       } else if (Array.isArray(p.points) && p.points.length >= 2) {
-        const pts = p.points.slice(0, 2).map((pt) => isPlainObj(pt) ? { x: asNum(pt.x, 0), y: asNum(pt.y, 0) } : { x: 0, y: 0 })
+        const pts = p.points.slice(0, 2).map(asVec2)
+        if (pts[0] && pts[1]) endpoints = [pts[0], pts[1]]
+      }
+
+      if (endpoints) {
+        line2Registry.set(step.outputEntityId, { a: endpoints[0], b: endpoints[1] })
+        line2Registry.set(label, { a: endpoints[0], b: endpoints[1] })
         actions.push({
           actionId: p.segment === true ? "planar.create_segment" : "planar.create_line",
           actionKey: nextKey("ds-line"),
           factIds: [],
-          inputs: {
-            alias: step.outputEntityId,
-            label: typeof p.label === "string" ? p.label : step.outputEntityId,
-            points: pts
-          }
+          inputs: { alias: step.outputEntityId, label, points: endpoints }
         } as DraftAction)
       }
       continue
@@ -704,6 +957,42 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             }
           } as DraftAction)
         }
+      } else if (shape === "pyramid_perp_base_quad") {
+        const pa = Math.max(0.1, asNum(p.pa, 2))
+        const ab = Math.max(0.1, asNum(p.ab, 1))
+        const ad = Math.max(0.1, asNum(p.ad, 1))
+        const bc = Math.max(0.1, asNum(p.bc, 2))
+        const names = vNames.length === 5 ? vNames : ["A", "B", "C", "D", "P"]
+        const A = vec3(0, 0, 0)
+        const D = vec3(ad, 0, 0)
+        const P = vec3(0, 0, pa)
+        let C: { x: number; y: number; z: number }
+        let B: { x: number; y: number; z: number }
+        if (p.requireAdPerpDc === true && ab > Math.abs(bc - ad) + 1e-6) {
+          const dc = Math.sqrt(ab * ab - (bc - ad) * (bc - ad))
+          C = vec3(ad, dc, 0)
+          B = vec3(ad - bc, dc, 0)
+        } else if (p.requireAdPerpDc === true) {
+          const dc = asNum(p.dc, 1)
+          C = vec3(ad, dc, 0)
+          B = solveQuadVertexByEdgeLengths(A, C, ab, bc) ?? vec3(0, ab, 0)
+        } else {
+          B = vec3(0, ab, 0)
+          C = vec3(bc, ab, 0)
+        }
+        const verts = [A, B, C, D, P]
+        names.forEach((name, idx) => point3Registry.set(name, verts[idx]!))
+        actions.push({
+          actionId: "solid.create_polyhedron",
+          actionKey: nextKey("ds-pyr"),
+          factIds: [],
+          inputs: {
+            alias: step.outputEntityId,
+            vertices: verts,
+            vertexNames: names,
+            faces: [[0, 3, 2, 1], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]
+          }
+        } as DraftAction)
       } else if (shape === "right_trapezoid_open_base") {
         const b = Math.max(0.2, asNum(p.bottomLength, 4))
         const top = Math.max(0.2, asNum(p.topLength, 2))
@@ -736,21 +1025,79 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     }
 
     if (step.strategy === "solid_point_on_edge_or_face") {
-      const fromName = typeof p.from === "string" ? p.from : ""
-      const toName = typeof p.to === "string" ? p.to : ""
-      const t = Math.min(1, Math.max(0, asNum(p.ratioFromFirst, 0.5)))
-      const a = point3Registry.get(fromName)
-      const b = point3Registry.get(toName)
-      if (a && b) {
-        const pos = vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
-        const label = typeof p.label === "string" ? p.label : step.outputEntityId
-        point3Registry.set(label, pos)
-        actions.push({
-          actionId: "solid.create_point",
-          actionKey: nextKey("ds-pt3"),
-          factIds: [],
-          inputs: { alias: step.outputEntityId, label, position: pos }
-        } as DraftAction)
+      const mode = typeof p.mode === "string" ? p.mode : "edge_ratio"
+      const label = typeof p.label === "string" ? p.label : step.outputEntityId
+      if (mode === "segment") {
+        const fromName = typeof p.from === "string" ? p.from : ""
+        const toName = typeof p.to === "string" ? p.to : ""
+        if (point3Registry.has(fromName) && point3Registry.has(toName)) {
+          actions.push({
+            actionId: "solid.create_segment",
+            actionKey: nextKey("ds-seg3"),
+            factIds: [],
+            inputs: { alias: step.outputEntityId, label, vertexNames: [fromName, toName] }
+          } as DraftAction)
+        }
+      } else if (mode === "perpendicular_foot_on_plane") {
+        const src = point3Registry.get(String(p.sourcePoint ?? ""))
+        const planeNames = Array.isArray(p.planePoints) ? p.planePoints.map(String) : []
+        const p1 = planeNames[0] ? point3Registry.get(planeNames[0]) : undefined
+        const p2 = planeNames[1] ? point3Registry.get(planeNames[1]) : undefined
+        const p3 = planeNames[2] ? point3Registry.get(planeNames[2]) : undefined
+        if (src && p1 && p2 && p3) {
+          const ux = p2.x - p1.x, uy = p2.y - p1.y, uz = p2.z - p1.z
+          const vx = p3.x - p1.x, vy = p3.y - p1.y, vz = p3.z - p1.z
+          const nx = uy * vz - uz * vy
+          const ny = uz * vx - ux * vz
+          const nz = ux * vy - uy * vx
+          const nSq = nx * nx + ny * ny + nz * nz
+          if (nSq > 1e-12) {
+            const d = ((src.x - p1.x) * nx + (src.y - p1.y) * ny + (src.z - p1.z) * nz) / nSq
+            const pos = vec3(src.x - d * nx, src.y - d * ny, src.z - d * nz)
+            point3Registry.set(label, pos)
+            actions.push({
+              actionId: "solid.create_point",
+              actionKey: nextKey("ds-pt3"),
+              factIds: [],
+              inputs: { alias: step.outputEntityId, label, position: pos }
+            } as DraftAction)
+          }
+        }
+      } else if (mode === "perpendicular_foot_on_line") {
+        const src = point3Registry.get(String(p.sourcePoint ?? ""))
+        const a = point3Registry.get(String(p.lineFrom ?? p.from ?? ""))
+        const b = point3Registry.get(String(p.lineTo ?? p.to ?? ""))
+        if (src && a && b) {
+          const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z
+          const abSq = abx * abx + aby * aby + abz * abz
+          if (abSq > 1e-12) {
+            const t = ((src.x - a.x) * abx + (src.y - a.y) * aby + (src.z - a.z) * abz) / abSq
+            const pos = vec3(a.x + t * abx, a.y + t * aby, a.z + t * abz)
+            point3Registry.set(label, pos)
+            actions.push({
+              actionId: "solid.create_point",
+              actionKey: nextKey("ds-pt3"),
+              factIds: [],
+              inputs: { alias: step.outputEntityId, label, position: pos }
+            } as DraftAction)
+          }
+        }
+      } else {
+        const fromName = typeof p.from === "string" ? p.from : ""
+        const toName = typeof p.to === "string" ? p.to : ""
+        const t = Math.min(1, Math.max(0, asNum(p.ratioFromFirst, 0.5)))
+        const a = point3Registry.get(fromName)
+        const b = point3Registry.get(toName)
+        if (a && b) {
+          const pos = vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
+          point3Registry.set(label, pos)
+          actions.push({
+            actionId: "solid.create_point",
+            actionKey: nextKey("ds-pt3"),
+            factIds: [],
+            inputs: { alias: step.outputEntityId, label, position: pos }
+          } as DraftAction)
+        }
       }
       continue
     }
@@ -804,6 +1151,16 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
   }
 
   if (actions.length === 0) {
+    if (disclosures.length > 0) {
+      return {
+        schemaVersion: PLAN_SCHEMA_VERSION,
+        kind: "answer",
+        goal: intent.goal,
+        factIds: [],
+        answer: disclosures.join("；"),
+        toolResultRefs: []
+      }
+    }
     return {
       schemaVersion: PLAN_SCHEMA_VERSION,
       kind: "clarification",
@@ -819,6 +1176,7 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     goal: intent.goal,
     factIds: [],
     ...(assumptions.length > 0 ? { assumptions } : {}),
+    ...(disclosures.length > 0 ? { answer: disclosures.join("；") } : {}),
     actions
   }
 }

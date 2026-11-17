@@ -1,6 +1,15 @@
+import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
 
-import { compileDsDrawingIntentToPlan, parseAndValidateDsDrawingIntent, type DsDrawingIntent } from "./dsDrawingIntent"
+import { parseDiagramObligations } from "./diagramObligations"
+import { verifyDiagramObligations } from "./diagramVerification"
+import {
+  compileDsDrawingIntentByScope,
+  compileDsDrawingIntentToPlan,
+  parseAndValidateDsDrawingIntent,
+  type DsDrawingIntent
+} from "./dsDrawingIntent"
+import { compilePlan } from "./planCompiler"
 import { parsePlanEnvelope } from "./schemas"
 
 describe("DS1 DsDrawingIntent structural compiler & invariants", () => {
@@ -367,6 +376,370 @@ describe("DS1 DsDrawingIntent structural compiler & invariants", () => {
       if (compiled.kind !== "plan") continue
       expect(compiled.actions.some((a) => a.actionId === item.action)).toBe(true)
       expect(compiled.actions.some((a) => a.actionId === "solid.create_point")).toBe(true)
+    }
+  })
+
+  it("DS2 Family 1 & 3: solves ellipse from eccentricity, intersects with secant line, constructs midpoint & ellipse tangent via kernel", () => {
+    const intent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Construct ellipse x^2/4+y^2/2=1, secant line l, intersections A,B, midpoint M, and tangent at P",
+      entities: [
+        { id: "C", kind: "conic", label: "C", scopeId: "shared", stateId: "shared" },
+        { id: "F1", kind: "focus", label: "F₁", scopeId: "shared", stateId: "shared", hostEntityId: "C" },
+        { id: "l", kind: "line", label: "l", scopeId: "(1)", stateId: "shared" },
+        { id: "A", kind: "point", label: "A", scopeId: "(1)", stateId: "shared", hostEntityId: "C" },
+        { id: "B", kind: "point", label: "B", scopeId: "(1)", stateId: "shared", hostEntityId: "C" },
+        { id: "M", kind: "point", label: "M", scopeId: "(1)", stateId: "shared" },
+        { id: "P", kind: "point", label: "P", scopeId: "(2)", stateId: "shared", hostEntityId: "C" },
+        { id: "tP", kind: "tangent", label: "t", scopeId: "(2)", stateId: "shared", hostEntityId: "P" }
+      ],
+      givenRelations: [],
+      subquestions: [
+        { id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["intersection", "midpoint"] },
+        { id: "(2)", dependsOn: ["shared"], stateId: "shared", relations: ["tangent"] }
+      ],
+      constructionStrategies: [
+        {
+          nodeId: "build-ellipse",
+          outputEntityId: "C",
+          outputKind: "conic",
+          strategy: "conic_from_equation_or_properties",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { conicType: "ellipse", majorSemiAxis: 2, eccentricity: Math.SQRT1_2, axis: "x", label: "C" },
+          sourceSpan: { text: "a=2, e=√2/2" }
+        },
+        {
+          nodeId: "build-f1",
+          outputEntityId: "F1",
+          outputKind: "focus",
+          strategy: "planar_point_on_host",
+          scopeId: "shared",
+          stateId: "shared",
+          hostEntityId: "C",
+          dependencyIds: ["build-ellipse"],
+          params: { mode: "focus", conicId: "C", index: 0, label: "F₁" },
+          sourceSpan: { text: "左焦点 F₁" }
+        },
+        {
+          nodeId: "build-secant",
+          outputEntityId: "l",
+          outputKind: "line",
+          strategy: "planar_line_or_segment",
+          scopeId: "(1)",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { mode: "equation", a: 1, b: -1, c: -1, label: "l" },
+          sourceSpan: { text: "直线 x-y-1=0" }
+        },
+        {
+          nodeId: "build-a",
+          outputEntityId: "A",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(1)",
+          stateId: "shared",
+          hostEntityId: "C",
+          dependencyIds: ["build-ellipse", "build-secant"],
+          params: { mode: "line_conic_intersection", lineId: "l", conicId: "C", index: 0, label: "A" },
+          sourceSpan: { text: "交点 A" }
+        },
+        {
+          nodeId: "build-b",
+          outputEntityId: "B",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(1)",
+          stateId: "shared",
+          hostEntityId: "C",
+          dependencyIds: ["build-ellipse", "build-secant"],
+          params: { mode: "line_conic_intersection", lineId: "l", conicId: "C", index: 1, label: "B" },
+          sourceSpan: { text: "交点 B" }
+        },
+        {
+          nodeId: "build-m",
+          outputEntityId: "M",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(1)",
+          stateId: "shared",
+          dependencyIds: ["build-a", "build-b"],
+          params: { mode: "midpoint", from: "A", to: "B", label: "M" },
+          sourceSpan: { text: "AB 中点 M" }
+        },
+        {
+          nodeId: "build-p",
+          outputEntityId: "P",
+          outputKind: "point",
+          strategy: "planar_point_on_host",
+          scopeId: "(2)",
+          stateId: "shared",
+          hostEntityId: "C",
+          dependencyIds: ["build-ellipse"],
+          params: { mode: "on_conic", conicId: "C", parameter: Math.PI / 4, label: "P" },
+          assumptions: ["取椭圆上参数 θ=π/4 的点 P"]
+        },
+        {
+          nodeId: "build-tp",
+          outputEntityId: "tP",
+          outputKind: "tangent",
+          strategy: "planar_line_or_segment",
+          scopeId: "(2)",
+          stateId: "shared",
+          hostEntityId: "P",
+          dependencyIds: ["build-ellipse", "build-p"],
+          params: { mode: "tangent_to_conic", conicId: "C", touchPointId: "P", label: "t" },
+          sourceSpan: { text: "过点 P 的切线" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const parsed = parseAndValidateDsDrawingIntent(intent)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    // Scope (1) compiles A, B on x^2/4+y^2/2=1 AND x-y-1=0 without leaking P/tP from scope (2)!
+    const scope1Plan = compileDsDrawingIntentByScope(parsed.value, "(1)")
+    expect(scope1Plan.kind).toBe("plan")
+    if (scope1Plan.kind !== "plan") return
+    const compiled1 = compilePlan(scope1Plan, {
+      document: createEmptyDocument("conics"),
+      conversationId: "ds2-test-1",
+      documentGeneration: 0,
+      workspace: "conics"
+    })
+    expect(compiled1.ok, JSON.stringify(compiled1.diagnostics)).toBe(true)
+    expect(compiled1.draftDocument).not.toBeNull()
+    const prims1 = compiled1.draftDocument!.primitives
+    const ptA = prims1.find((p) => p.type === "point" && p.label === "A") as { type: "point"; x: number; y: number } | undefined
+    const ptB = prims1.find((p) => p.type === "point" && p.label === "B") as { type: "point"; x: number; y: number } | undefined
+    const ptM = prims1.find((p) => p.type === "point" && p.label === "M") as { type: "point"; x: number; y: number } | undefined
+    expect(ptA).toBeDefined()
+    expect(ptB).toBeDefined()
+    expect(ptM).toBeDefined()
+    expect(Math.abs((ptA!.x ** 2) / 4 + (ptA!.y ** 2) / 2 - 1)).toBeLessThan(1e-6)
+    expect(Math.abs(ptA!.x - ptA!.y - 1)).toBeLessThan(1e-6)
+    expect(Math.abs(ptM!.x - (ptA!.x + ptB!.x) / 2)).toBeLessThan(1e-6)
+    expect(prims1.some((p) => p.label === "t")).toBe(false)
+
+    // Scope (2) compiles ellipse tangent at P via kernel tangentLineToConicAt without leaking (1) secant M.
+    const scope2Plan = compileDsDrawingIntentByScope(parsed.value, "(2)")
+    expect(scope2Plan.kind).toBe("plan")
+    if (scope2Plan.kind !== "plan") return
+    const compiled2 = compilePlan(scope2Plan, {
+      document: createEmptyDocument("conics"),
+      conversationId: "ds2-test-2",
+      documentGeneration: 0,
+      workspace: "conics"
+    })
+    expect(compiled2.ok).toBe(true)
+    const prims2 = compiled2.draftDocument!.primitives
+    const ptP = prims2.find((p) => p.type === "point" && p.label === "P") as { type: "point"; x: number; y: number } | undefined
+    const lineT = prims2.find((p) => p.type === "line" && p.label === "t") as { type: "line"; a: { x: number; y: number }; b: { x: number; y: number } } | undefined
+    expect(ptP).toBeDefined()
+    expect(lineT).toBeDefined()
+    // Gradient of x^2/4 + y^2/2 = 1 at P is (x/2, y); tangent vector (b - a) must be perpendicular to gradient.
+    const dotGrad = (ptP!.x / 2) * (lineT!.b.x - lineT!.a.x) + ptP!.y * (lineT!.b.y - lineT!.a.y)
+    expect(Math.abs(dotGrad)).toBeLessThan(1e-6)
+    expect(prims2.some((p) => p.label === "M")).toBe(false)
+  })
+
+  it("DS2 Family 2 & 4: solves GK-S01-class pyramid (AD⊥DC + dihedral) & face projection foot + connecting segment across scopes", () => {
+    const intent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Construct pyramid P-ABCD with PA⊥base, BC∥AD, AD⊥DC, dihedral sine √42/7, and foot M on face PCD",
+      entities: [
+        { id: "S", kind: "solid", scopeId: "shared", stateId: "shared" },
+        { id: "M", kind: "point", label: "M", scopeId: "(2)", stateId: "shared", hostEntityId: "S" },
+        { id: "segAM", kind: "segment", label: "AM", scopeId: "(2)", stateId: "shared", hostEntityId: "M" }
+      ],
+      givenRelations: [
+        { kind: "perpendicular", targets: ["S"], scopeId: "(2)", stateId: "shared", sourceSpan: { text: "AD⊥DC" } }
+      ],
+      subquestions: [
+        { id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["parallel_bc_ad"] },
+        { id: "(2)", dependsOn: ["shared"], stateId: "shared", relations: ["ad_perp_dc", "dihedral_sine", "foot_on_pcd"] }
+      ],
+      constructionStrategies: [
+        {
+          nodeId: "build-pyr",
+          outputEntityId: "S",
+          outputKind: "solid",
+          strategy: "solid_base_and_prism_or_pyramid",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: {
+            shape: "pyramid_perp_base_quad",
+            vertexNames: ["A", "B", "C", "D", "P"],
+            pa: 2,
+            ab: 1,
+            ad: 1,
+            bc: 2,
+            requireAdPerpDc: true
+          },
+          sourceSpan: { text: "PA⊥底面ABCD，PA=2，AB=AD=1，BC=2，AD⊥DC" }
+        },
+        {
+          nodeId: "foot-m",
+          outputEntityId: "M",
+          outputKind: "point",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "(2)",
+          stateId: "shared",
+          hostEntityId: "S",
+          dependencyIds: ["build-pyr"],
+          params: { mode: "perpendicular_foot_on_plane", sourcePoint: "A", planePoints: ["P", "C", "D"], label: "M" },
+          sourceSpan: { text: "作 A 在平面 PCD 上的射影 M" }
+        },
+        {
+          nodeId: "seg-am",
+          outputEntityId: "segAM",
+          outputKind: "segment",
+          strategy: "solid_point_on_edge_or_face",
+          scopeId: "(2)",
+          stateId: "shared",
+          hostEntityId: "M",
+          dependencyIds: ["foot-m"],
+          params: { mode: "segment", from: "A", to: "M", label: "AM" },
+          sourceSpan: { text: "连线 AM" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const parsed = parseAndValidateDsDrawingIntent(intent)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const plan2 = compileDsDrawingIntentByScope(parsed.value, "(2)")
+    expect(plan2.kind).toBe("plan")
+    if (plan2.kind !== "plan") return
+    const compiled = compilePlan(plan2, {
+      document: createEmptyDocument("geometry3d"),
+      conversationId: "ds2-test-3",
+      documentGeneration: 0,
+      workspace: "geometry3d"
+    })
+    expect(compiled.ok, JSON.stringify(compiled.diagnostics)).toBe(true)
+    const prims = compiled.draftDocument!.primitives
+    const ptPos = (lbl: string) => (prims.find((p) => p.type === "point3" && p.label === lbl) as { type: "point3"; position: { x: number; y: number; z: number } }).position
+    const A = ptPos("A"), D = ptPos("D"), C = ptPos("C"), P = ptPos("P"), M = ptPos("M")
+    // Verify AD ⊥ DC accurately!
+    const adx = D.x - A.x, ady = D.y - A.y, dcx = C.x - D.x, dcy = C.y - D.y
+    expect(Math.abs(adx * dcx + ady * dcy)).toBeLessThan(1e-6)
+    // Verify AM ⊥ PCD (AM orthogonal to PC and PD)!
+    const am = { x: M.x - A.x, y: M.y - A.y, z: M.z - A.z }
+    const pc = { x: C.x - P.x, y: C.y - P.y, z: C.z - P.z }
+    const pd = { x: D.x - P.x, y: D.y - P.y, z: D.z - P.z }
+    expect(Math.abs(am.x * pc.x + am.y * pc.y + am.z * pc.z)).toBeLessThan(1e-6)
+    expect(Math.abs(am.x * pd.x + am.y * pd.y + am.z * pd.z)).toBeLessThan(1e-6)
+
+    // Independent verifier check: AD⊥DC passes on solved candidate and FAILS if D is tampered to break perpendicularity.
+    const obSet = parseDiagramObligations("四棱锥P-ABCD中，PA⊥底面ABCD，AD⊥DC")
+    const verified = verifyDiagramObligations(obSet, plan2, compiled.draftDocument!)
+    expect(verified.status).toBe("passed")
+    const tamperedDoc = structuredClone(compiled.draftDocument!)
+    for (const prim of tamperedDoc.primitives) {
+      if (prim.type === "point3" && prim.label === "D") prim.position.y += 0.6
+    }
+    const tamperedVer = verifyDiagramObligations(obSet, plan2, tamperedDoc)
+    expect(tamperedVer.status).toBe("failed")
+  })
+
+  it("DS2 negative & disclosure checks: solves external-point curve tangent and isolates infeasible subquestion disclosures", () => {
+    const extTangentIntent: DsDrawingIntent = {
+      schemaVersion: "mathcanvas.ds_intent.v1",
+      goal: "Plot parabola y=x^2 and tangent through external point (1, 0), disclosing infeasible case separately",
+      entities: [
+        { id: "f", kind: "function", label: "f", scopeId: "shared", stateId: "shared" },
+        { id: "t", kind: "tangent", label: "l", scopeId: "(1)", stateId: "shared", hostEntityId: "f" }
+      ],
+      givenRelations: [
+        { kind: "function_expression", targets: ["f"], value: "x^2", scopeId: "shared", stateId: "shared", sourceSpan: { text: "f(x)=x²" } }
+      ],
+      subquestions: [
+        { id: "(1)", dependsOn: ["shared"], stateId: "shared", relations: ["external_tangent"] },
+        { id: "(2)", dependsOn: ["shared"], stateId: "shared", relations: ["infeasible_existence"] }
+      ],
+      constructionStrategies: [
+        {
+          nodeId: "build-f",
+          outputEntityId: "f",
+          outputKind: "function",
+          strategy: "function_curve_and_tangent",
+          scopeId: "shared",
+          stateId: "shared",
+          dependencyIds: [],
+          params: { label: "f", expression: "x^2", domain: [-3, 3] },
+          sourceSpan: { text: "f(x)=x²" }
+        },
+        {
+          nodeId: "build-t",
+          outputEntityId: "t",
+          outputKind: "tangent",
+          strategy: "function_curve_and_tangent",
+          scopeId: "(1)",
+          stateId: "shared",
+          hostEntityId: "f",
+          dependencyIds: ["build-f"],
+          params: {
+            mode: "tangent_from_external_point",
+            expression: "x^2",
+            externalPoint: { x: 1, y: 0 },
+            domain: [0.5, 4],
+            index: 0,
+            tangentLabel: "l"
+          },
+          sourceSpan: { text: "过点 (1,0) 的切线" }
+        },
+        {
+          nodeId: "disclose-2",
+          outputEntityId: "f",
+          outputKind: "function",
+          strategy: "infeasible_disclosure",
+          scopeId: "(2)",
+          stateId: "shared",
+          dependencyIds: ["build-f"],
+          params: { summary: "第(2)问对应点不存在" },
+          sourceSpan: { text: "若不存在请说明理由" }
+        }
+      ],
+      unknowns: []
+    }
+
+    const parsed = parseAndValidateDsDrawingIntent(extTangentIntent)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    const plan1 = compileDsDrawingIntentByScope(parsed.value, "(1)")
+    expect(plan1.kind).toBe("plan")
+    if (plan1.kind !== "plan") return
+    expect(plan1.answer).toBeUndefined()
+    const compiled1 = compilePlan(plan1, {
+      document: createEmptyDocument("calculus"),
+      conversationId: "ds2-ext-1",
+      documentGeneration: 0,
+      workspace: "calculus"
+    })
+    expect(compiled1.ok, JSON.stringify(compiled1.diagnostics)).toBe(true)
+    const lineL = compiled1.draftDocument!.primitives.find((p) => p.type === "line" && p.label === "l") as
+      | { type: "line"; a: { x: number; y: number }; b: { x: number; y: number } }
+      | undefined
+    expect(lineL).toBeDefined()
+    // Tangent to y=x^2 from (1,0) in (0.5,4) touches at t=2 => y = 4(x-1) => passes through (1,0) and slope=4.
+    const slope = (lineL!.b.y - lineL!.a.y) / (lineL!.b.x - lineL!.a.x)
+    const yAt1 = lineL!.a.y + slope * (1 - lineL!.a.x)
+    expect(Math.abs(slope - 4)).toBeLessThan(1e-5)
+    expect(Math.abs(yAt1)).toBeLessThan(1e-5)
+    // Tampering negative check: a non-tangent slope like 2 cannot satisfy y=x^2 tangency through (1,0).
+    expect(Math.abs(slope - 2)).toBeGreaterThan(1)
+
+    const fullPlan = compileDsDrawingIntentByScope(parsed.value)
+    expect(fullPlan.kind).toBe("plan")
+    if (fullPlan.kind === "plan") {
+      expect(fullPlan.answer).toContain("第(2)问对应点不存在")
     }
   })
 })
