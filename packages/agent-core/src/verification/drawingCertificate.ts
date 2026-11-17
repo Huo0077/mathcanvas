@@ -45,6 +45,14 @@ export interface MathGateDecision {
   binding: MathGateBinding
 }
 
+export interface FailedObligationDetail {
+  id: string
+  scope?: string
+  stateId?: string
+  kind: string
+  detail: string
+}
+
 export interface DrawingCertificateResult {
   certificateStatus: "passed" | "partial" | "blocked" | "unverified"
   gate: MathGateDecision
@@ -52,6 +60,10 @@ export interface DrawingCertificateResult {
   numericPolicyVersion: string
   ignoredUntrustedSelfReport: boolean
   summary: string
+  candidateHash?: string
+  failedObligations?: FailedObligationDetail[]
+  missingEntities?: string[]
+  unresolvedClauses?: string[]
 }
 
 const DRAWING_KEYWORDS_RE =
@@ -204,7 +216,11 @@ export function certifyDrawingAgainstContract(input: {
       report: null,
       numericPolicyVersion: NUMERIC_POLICY_VERSION,
       ignoredUntrustedSelfReport: true,
-      summary: "完整数学证书开关已关闭：未完整核验（不回退为旧 passed）。"
+      summary: "完整数学证书开关已关闭：未完整核验（不回退为旧 passed）。",
+      candidateHash: input.candidateHash,
+      failedObligations: [],
+      missingEntities: [],
+      unresolvedClauses: []
     }
   }
 
@@ -215,7 +231,11 @@ export function certifyDrawingAgainstContract(input: {
       report: null,
       numericPolicyVersion: NUMERIC_POLICY_VERSION,
       ignoredUntrustedSelfReport: true,
-      summary: "草稿已追加/变更操作，早期题设需在新候选图上重新完整核验（不沿用旧通过状态）。"
+      summary: "草稿已追加/变更操作，早期题设需在新候选图上重新完整核验（不沿用旧通过状态）。",
+      candidateHash: input.candidateHash,
+      failedObligations: [],
+      missingEntities: [],
+      unresolvedClauses: []
     }
   }
 
@@ -227,7 +247,11 @@ export function certifyDrawingAgainstContract(input: {
       report: null,
       numericPolicyVersion: NUMERIC_POLICY_VERSION,
       ignoredUntrustedSelfReport: (input.untrustedSelfReportedChecks?.length ?? 0) > 0,
-      summary: "非作图问答，跳过数学作图证书门禁。"
+      summary: "非作图问答，跳过数学作图证书门禁。",
+      candidateHash: input.candidateHash,
+      failedObligations: [],
+      missingEntities: [],
+      unresolvedClauses: []
     }
   }
 
@@ -265,6 +289,7 @@ export function certifyDrawingAgainstContract(input: {
   const requiredIds: string[] = []
   const checkedIds: string[] = []
   const unresolvedSource: string[] = []
+  const failedObligations: FailedObligationDetail[] = []
 
   report.checks.forEach((check, idx) => {
     const id = `obl-${idx}`
@@ -275,12 +300,68 @@ export function certifyDrawingAgainstContract(input: {
     } else if (check.status === "failed") {
       checkedIds.push(id)
       evidence.push({ obligationId: id, status: "failed", candidateHash: input.candidateHash, detail: check.reason })
+      failedObligations.push({
+        id,
+        ...(input.selectedScopeId === undefined ? {} : { scope: input.selectedScopeId }),
+        kind: check.kind,
+        detail: `${check.sourceText}: ${check.reason}`
+      })
     } else {
       unresolvedSource.push(check.sourceText)
       checkedIds.push(id)
       evidence.push({ obligationId: id, status: "unknown", candidateHash: input.candidateHash, detail: check.reason })
+      failedObligations.push({
+        id,
+        ...(input.selectedScopeId === undefined ? {} : { scope: input.selectedScopeId }),
+        kind: check.kind,
+        detail: `${check.sourceText}: ${check.reason}`
+      })
     }
   })
+
+  // Unparsed premise clause coverage guards (never silently treat unparsed function-tangent or circle extreme-chord constraints as passed).
+  if (parsedObligations.givens.some((given) => given.kind === "functionGraph") && /(?:公?切线)/.test(parserPrompt) && !report.checks.some((check) => check.kind === "tangentAt")) {
+    const clause = "函数切线条件尚未形成可核验检查"
+    const id = "unparsed:tangent"
+    requiredIds.push(id)
+    checkedIds.push(id)
+    unresolvedSource.push(clause)
+    evidence.push({ obligationId: id, status: "unknown", candidateHash: input.candidateHash, detail: clause })
+    failedObligations.push({ id, kind: "unparsed", detail: clause })
+  }
+
+  const extremeChordMatch = /过(?:点\s*)?([A-Z])(?:\([^)]*\))?[^，,。；\n]*最长弦和最短弦分别是\s*([A-Z])([A-Z])\s*和\s*([A-Z])([A-Z])/.exec(parserPrompt)
+  if (extremeChordMatch) {
+    const [, throughLbl, aLbl, cLbl, bLbl, dLbl] = extremeChordMatch as unknown as [string, string, string, string, string, string]
+    const id = `circle-extreme-chords:${aLbl}${cLbl}-${bLbl}${dLbl}`
+    requiredIds.push(id)
+    checkedIds.push(id)
+    const circle = input.document.primitives.find((p) => p.type === "circle")
+    const ptOf = (lbl: string) => {
+      const p = input.document.primitives.find((prim) => prim.type === "point" && prim.label === lbl)
+      return p && p.type === "point" ? { x: p.x, y: p.y } : null
+    }
+    const P = ptOf(throughLbl), A = ptOf(aLbl), C = ptOf(cLbl), B = ptOf(bLbl), D = ptOf(dLbl)
+    if (!circle || circle.type !== "circle" || !P || !A || !C || !B || !D) {
+      const detail = "缺少圆或最长弦/最短弦端点（点名未物化）"
+      evidence.push({ obligationId: id, status: "failed", candidateHash: input.candidateHash, detail })
+      failedObligations.push({ id, kind: "conicChord", detail })
+    } else {
+      const onCirc = (pt: { x: number; y: number }) => Math.abs(Math.hypot(pt.x - circle.center.x, pt.y - circle.center.y) - circle.radius) <= 1e-3 * Math.max(1, circle.radius)
+      const acx = C.x - A.x, acy = C.y - A.y
+      const bdx = D.x - B.x, bdy = D.y - B.y
+      const acLen = Math.hypot(acx, acy)
+      const bdLen = Math.hypot(bdx, bdy)
+      const dotPerp = Math.abs(acx * bdx + acy * bdy)
+      const throughCenter = acLen > 1e-6 && Math.abs((circle.center.x - A.x) * acy - (circle.center.y - A.y) * acx) / acLen <= 1e-3
+      const pOnAc = acLen > 1e-6 && Math.abs((P.x - A.x) * acy - (P.y - A.y) * acx) / acLen <= 1e-3
+      const pOnBd = bdLen > 1e-6 && Math.abs((P.x - B.x) * bdy - (P.y - B.y) * bdx) / bdLen <= 1e-3
+      const ok = onCirc(A) && onCirc(B) && onCirc(C) && onCirc(D) && throughCenter && pOnAc && pOnBd && dotPerp <= 1e-3 * acLen * bdLen
+      const detail = ok ? `已核验过 ${throughLbl} 的直径弦 ${aLbl}${cLbl} ⊥ 最短弦 ${bLbl}${dLbl}` : `最长/最短弦 ${aLbl}${cLbl}、${bLbl}${dLbl} 未满足圆内垂直共点直径几何条件`
+      evidence.push({ obligationId: id, status: ok ? "passed" : "failed", candidateHash: input.candidateHash, detail })
+      if (!ok) failedObligations.push({ id, kind: "conicChord", detail })
+    }
+  }
 
   for (const extra of checkPointsOnEllipseInPrompt(input.prompt, input.document)) {
     requiredIds.push(extra.obligationId)
@@ -361,7 +442,11 @@ export function certifyDrawingAgainstContract(input: {
     summary:
       gate.status === "passed"
         ? `完整数学证书通过（${requiredIds.length} 项义务，策略 ${NUMERIC_POLICY_VERSION}）。`
-        : `数学证书未通过（${certificateStatus}）：${gate.blockers.join(", ")}`
+        : `数学证书未通过（${certificateStatus}）：${gate.blockers.join(", ")}`,
+    candidateHash: input.candidateHash,
+    failedObligations,
+    missingEntities: [...missingEntityIds],
+    unresolvedClauses: [...new Set(unresolvedSource)]
   }
 }
 

@@ -1116,4 +1116,87 @@ describe("planning failure contract", () => {
     expect(harness.planner.plan).toHaveBeenCalledTimes(1)
     expect(events.at(-1)?.detail).toMatch(/not_supported|capability_missing/i)
   })
+
+  it("DS3 validating -> repair RED 1: repairs obligation failure within quota, passes replaceDraft on full re-verify, and preserves commit gate", async () => {
+    let planCount = 0
+    const harness = makeHarness({
+      plan: () => {
+        planCount += 1
+        return {
+          plan: {
+            schemaVersion: "mathcanvas.plan.v1",
+            kind: "plan",
+            goal: planCount === 1 ? "attempt-1-partial" : "attempt-2-repaired",
+            factIds: ["fact-1"],
+            actions: [action(planCount === 1 ? "p1" : "p2")]
+          },
+          requestId: `req-${planCount}`,
+          attemptId: `attempt-${planCount}`
+        }
+      },
+      stage: async (req) => {
+        const key = (req.actions[0] as { actionKey: string }).actionKey
+        if (key === "p1") {
+          return {
+            ok: true as const,
+            draftVersion: 2,
+            previewHash: "preview-v1-bad",
+            verification: {
+              status: "failed" as const,
+              checks: [
+                { id: "diagram:0", status: "passed" as const, detail: "(1) BC∥AD passed" },
+                { id: "diagram:1", status: "failed" as const, detail: "(2) AD⊥DC failed: cosine=0.5" }
+              ],
+              next_actions: ["(2) AD⊥DC：向量不垂直，请修正顶点 D 构造"]
+            }
+          }
+        }
+        return {
+          ok: true as const,
+          draftVersion: 3,
+          previewHash: "preview-v2-good",
+          verification: {
+            status: "passed" as const,
+            checks: [
+              { id: "diagram:0", status: "passed" as const, detail: "(1) BC∥AD passed" },
+              { id: "diagram:1", status: "passed" as const, detail: "(2) AD⊥DC passed" }
+            ],
+            next_actions: []
+          }
+        }
+      }
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "四棱锥 BC∥AD，AD⊥DC" })
+    expect(harness.planner.plan).toHaveBeenCalledTimes(2)
+    expect(harness.committer.stage).toHaveBeenCalledTimes(2)
+    const secondPlanReq = (harness.planner.plan as ReturnType<typeof vi.fn>).mock.calls[1]![0]
+    expect(secondPlanReq.repair).toBeDefined()
+    expect(secondPlanReq.repair.hint).toContain("AD⊥DC")
+    const secondStageReq = (harness.committer.stage as ReturnType<typeof vi.fn>).mock.calls[1]![0]
+    expect(secondStageReq.replaceDraft).toBe(true)
+    expect(events.at(-1)?.phase).toBe("awaiting_confirmation")
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
+
+  it("DS3 validating -> repair RED 2: stops on stagnant validation failure and never loops or enters confirmation", async () => {
+    const harness = makeHarness({
+      stage: async () => ({
+        ok: true as const,
+        draftVersion: 2,
+        previewHash: "preview-stuck",
+        verification: {
+          status: "failed" as const,
+          checks: [{ id: "diagram:0", status: "failed" as const, detail: "AD⊥DC failed" }],
+          next_actions: ["AD⊥DC failed"]
+        }
+      })
+    })
+
+    const events = await drive(harness.coordinator, { run, userMessage: "AD⊥DC" })
+    expect(harness.coordinator.phase()).toBe("failed")
+    expect(events.some((e) => e.phase === "awaiting_confirmation")).toBe(false)
+    expect((harness.planner.plan as ReturnType<typeof vi.fn>).mock.calls.length).toBeLessThanOrEqual(2)
+    expect(harness.committer.commit).not.toHaveBeenCalled()
+  })
 })

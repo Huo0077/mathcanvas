@@ -6,6 +6,12 @@
 
 最后更新：2026-11-17。
 
+## 2026-11-17 —— G3-DS / DS3 生产证书双向真伪闭环与 `validating` 有界修复环（0 付费调用）
+
+- **双向证书真伪修复**：封堵 [draftStore.ts](apps/web/src/agent/draftStore.ts) 空 `prompt: ""` 旁路并保留纯参数与无题设指令兼容性；在 [drawingCertificate.ts](packages/agent-core/src/verification/drawingCertificate.ts) 产出 `candidateHash`/`failedObligations`/`missingEntities`/`unresolvedClauses`，拦住 `GK-P09`（错表达式/缺切线）与 `JT-P09`（缺圆 `M` 与垂直共点弦）假阳性；在 [diagramObligations.ts](packages/agent-core/src/diagramObligations.ts) 与 [diagramVerification.ts](packages/agent-core/src/diagramVerification.ts) 修复 `JT-S07`（`（2）求...` 边界截断）及 `JT-S09`（`cube`+球共存与缺省 `neutralPlan` 形状识别）假阴性。
+- **有界修复环**：扩展 [contracts.ts](packages/agent-core/src/contracts.ts)、[runState.ts](packages/agent-core/src/runState.ts)、[coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts)、[committerAdapter.ts](packages/agent-core/src/committerAdapter.ts) 与 [coordinator.ts](packages/agent-core/src/coordinator.ts)，支持带 `repairTracker` 停滞/无进展守卫和 `replaceDraft` 从头全量重验的 `validating -> planning` 修复（上限 2 次，无同意仍 0 写入）。
+- **验证**：`planarContracts18`、`solidContracts18`、`drawingCertificate`、`draftStore`、`coordinator`、`diagramObligations`、`diagramVerification`、`runState`、`committerAdapter`、`agentRunner`、`dsDrawingIntent`（`11` 文件 **`438 passed`**）、`typecheck`、`lint` 与 `test:docs`（`8` 文件 `22 passed`）全过；入档 [DS3 证据](audit/2026-11-17-g3-ds3-certificate-repair/README.md)，下一步进入 **`DS4`**。
+
 ## 2026-11-17 —— G3-DS / DS2 4 类几何义务族求解、垂足与作用域隔离（0 付费调用）
 
 - **正交求解补强**：在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 补齐圆锥曲线焦点/离心率求参、直线与圆锥曲线交点/切线、过外点函数切线（数值求根+导数斜率）、`AD⊥DC` 四边形底座四棱锥、线/面垂足及连线、`infeasible_disclosure` 局部不可行共存，以及 `resolveAllowedScopes` / `compileDsDrawingIntentByScope` 作用域裁剪编译。

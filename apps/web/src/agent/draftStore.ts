@@ -590,15 +590,24 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * `planHasVerifiableFigure` 白名单里”就让预览丢报告 —— 那正是编译器说 passed、面板什么都没有的分叉。
        */
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
+      const onlyParameterActions = materialised.actions.length > 0 && materialised.actions.every((action) => action.actionId.startsWith("parameter."))
       const explicitSolidDeclared = parserPrompt !== undefined && (hasExplicitSolidConditions(parserPrompt) || solidDimensionGate(parserPrompt, materialised.actions))
-      const parsed = parserPrompt && (planHasVerifiableFigure(materialised.actions) || explicitSolidDeclared || readFoldTransformations(parserPrompt).length > 0 || namedFoldDeclared)
+      const hasMathContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|f\s*\(|切线|椭圆|双曲线|抛物线|二面角|最长弦|最短弦|[A-Z]{2}\s*=|⊥|∥)/.test(parserPrompt)
+      const parsed = parserPrompt && !onlyParameterActions && (
+        planHasVerifiableFigure(materialised.actions)
+        || explicitSolidDeclared
+        || readFoldTransformations(parserPrompt).length > 0
+        || namedFoldDeclared
+        || hasMathContractSignal
+      )
         ? parseObligationWithLegacy(parserPrompt, {
             spatialPointConditions: witnessSearch === true,
             ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId })
           })
         : null
       const obligations = parsed?.legacy ?? null
-      const checked = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
+      const hasParsedMathObligations = obligations !== null && (obligations.givens.length > 0 || obligations.unverified.length > 0)
+      const checked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
             obligationIR: obligationIR === true,
             prompt: parserPrompt,
@@ -626,7 +635,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const nextDocumentHash = canonicalContentHash(compiled.draftDocument)
       if (userMessage !== undefined || stageOptions?.enableCompleteCertificate === false || stageOptions?.requiredEntityLabels !== undefined) {
         const sourceHash = record.rawPromptHash ?? canonicalContentHash({ prompt: userMessage ?? "" })
-        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined
+        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined || hasMathContractSignal
         if (stageOptions?.enableCompleteCertificate === false) {
           record.drawingCertificate = certifyDrawingAgainstContract({
             prompt: effectivePrompt ?? "",

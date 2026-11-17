@@ -567,3 +567,57 @@ describe("V0c: the draft layer re-verifies conic premises too", () => {
     expect(staged.ok).toBe(false)
   })
 })
+
+describe("DS3 production certificate integrity: block prompt:'' bypass and incomplete-clause false passed (GK-P09 & JT-P09)", () => {
+  it("DS3 RED A (GK-P09): never marks incomplete line/function candidate as certificate passed or not_applicable", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("calculus"))
+    const prompt = "6. 函数 $f(x)=x^{4}-2 x^{3}$ 的图像在点 $(1, f(1))$ 处的切线方程为 ()\nA. $y=-2 x-1$\nB. $y=-2 x+1$\nC. $y=2 x-3$\nD. $y=2 x+1$"
+    // Even if DS emits only a line (not in VERIFIABLE_FIGURE_ACTION_IDS), draftStore must NOT bypass with prompt: ""
+    const staged = await store.stage(
+      record.draftId,
+      [{
+        actionId: "planar.create_line",
+        actionKey: "k-line",
+        factIds: [],
+        inputs: { alias: "tan", label: "l", points: [{ x: 0, y: 1 }, { x: 2, y: -3 }] }
+      }] as never,
+      record.draftVersion,
+      prompt
+    )
+    if (staged.ok) {
+      expect(staged.preview.drawingCertificate?.gate.status).not.toBe("not_applicable")
+      expect(staged.preview.drawingCertificate?.certificateStatus).not.toBe("passed")
+    }
+  })
+
+  it("DS3 RED B (JT-P09): missing circle M and unverified chords never pass certificate even if O=(0,0) passes", async () => {
+    const store = createDraftStore()
+    const record = store.create(baseDocument())
+    const prompt = "4. 在圆 M：x²+y²-4x+2y-4=0 内，过点 O(0, 0) 的最长弦和最短弦分别是 AC 和 BD，则四边形 ABCD 的面积为（　　）"
+    const staged = await store.stage(
+      record.draftId,
+      [
+        {
+          actionId: "planar.create_point",
+          actionKey: "pt-o",
+          factIds: [],
+          inputs: { alias: "O", label: "O", points: [{ x: 0, y: 0 }] }
+        },
+        {
+          actionId: "planar.create_segment",
+          actionKey: "seg-ac",
+          factIds: [],
+          inputs: { alias: "AC", label: "AC", points: [{ x: -1, y: -1 }, { x: 1, y: 1 }] }
+        }
+      ] as never,
+      record.draftVersion,
+      prompt
+    )
+    if (staged.ok) {
+      expect(staged.preview.drawingCertificate?.gate.status).not.toBe("not_applicable")
+      expect(staged.preview.drawingCertificate?.certificateStatus).not.toBe("passed")
+      expect(staged.preview.diagramVerification?.status).not.toBe("passed")
+    }
+  })
+})

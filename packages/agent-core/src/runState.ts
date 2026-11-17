@@ -78,7 +78,7 @@ const TRANSITIONS: Record<RunPhase, readonly RunPhase[]> = {
    * 而"只修一次"由协调器的 `MAX_REPAIR_ATTEMPTS` 计数守住 —— 状态机只管"这一步是什么"。
    */
   compiling: ["validating", "planning", "failed", "cancelled", "interrupted"],
-  validating: ["awaiting_confirmation", "compiling", "failed", "cancelled", "interrupted"],
+  validating: ["awaiting_confirmation", "compiling", "planning", "failed", "cancelled", "interrupted"],
   awaiting_confirmation: ["committing", "compiling", "cancelled", "failed", "interrupted"],
   committing: ["completed", "failed", "cancelled", "interrupted"],
   waiting: ["observing", "planning", "cancelled", "failed", "interrupted"],

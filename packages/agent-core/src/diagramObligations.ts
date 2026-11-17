@@ -3177,7 +3177,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
   const partPattern = /(?:求证|试?证明|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
   const boundaryMatch = partStart !== undefined
     ? partPattern.exec(prompt.slice(partStart))
-    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|(?<=^|[，,。；;\n])\s*则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
+    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*(?:(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))|^则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
   const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
   const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
   const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length

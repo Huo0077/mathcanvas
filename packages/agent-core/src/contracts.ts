@@ -380,6 +380,9 @@ export const MAX_REPAIR_ATTEMPTS = 1
  */
 export const MAX_COMPILE_REPAIR_ATTEMPTS = 2
 
+/** Bounded validation-phase repair attempts (`validating -> planning -> re-verify full problem`). */
+export const MAX_VALIDATION_REPAIR_ATTEMPTS = 2
+
 /**
  * **这份计划是怎么被验证的**（规格 §8.2/§10）。
  *

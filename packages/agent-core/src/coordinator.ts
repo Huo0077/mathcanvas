@@ -2,7 +2,7 @@ import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
 import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
-import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
+import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, MAX_VALIDATION_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
 import { describePlanFailureRepair, describeRepairPrompt, planFailureDetail, schemaFailureDetail } from "./outputParser"
 import { describeCompileRepairPrompt } from "./planCompiler"
 import { createToolRegistry, TOOL_REGISTRY_REVISION, type ToolRegistry } from "./toolRegistry"
@@ -194,7 +194,7 @@ export interface AgentCoordinator {
  * 结果是"读一次场景就把修复额度用光"（用户 2026-10-14 现场）。挂上之后谁改这里，
  * `budget.test.ts` 里那条不变量会立刻红。
  */
-export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS
+export const MAX_PLAN_ATTEMPTS = 1 + MAX_REPAIR_ATTEMPTS + MAX_COMPILE_REPAIR_ATTEMPTS + MAX_VALIDATION_REPAIR_ATTEMPTS
 
 /**
  * **"上下文这一笔预算被拒了"** —— 只在 `buildPlanRequest` 的计费回调与它的调用点之间传递。
@@ -431,6 +431,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
        */
       let schemaRepairs = 0
       let compileRepairs = 0
+      let validationRepairs = 0
+      let replaceDraftNext = false
       const repairTracker = createRepairStagnationTracker()
 
       /**
@@ -684,14 +686,69 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }) })
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult
           stagedVerification = stagedResult.verification ?? null
-          // 只有**编译通过**的那一份才算数：修复那一次失败时循环会继续，这份仍是空的。
-          stagedPlan = plan
           ledger.record(`draft v${stagedResult.draftVersion} staged`, { draftVersion: stagedResult.draftVersion })
+          const validating = ledger.transition("validating", "checking the staged draft against the document")
+          if (validating.ok) yield validating.event
+
+          if (request.acceptance !== undefined || stagedVerification !== null) {
+            const gate = verificationGate(stagedVerification)
+            if (!gate.proceed) {
+              const failingChecks = (stagedVerification?.checks ?? []).filter((check) => check.status !== "passed")
+              const unrepairableCallerCheck = failingChecks.some((check) => check.id === "acceptance:none")
+              const candidateHash = `${stagedResult.previewHash}::${JSON.stringify(plan.actions)}`
+              const stagnation = repairTracker.record({
+                candidateHash,
+                diagnostics: failingChecks.map((check) => ({
+                  code: check.status === "failed" ? "residual_failed" : "unknown_numeric",
+                  sourceCode: check.id,
+                  stage: "runtime",
+                  detail: check.detail,
+                  candidateHash,
+                  provenUnsat: false,
+                  recoverable: !unrepairableCallerCheck,
+                  priorityAction: "retry_local_params",
+                  failureSignature: check.id
+                }))
+              })
+              if (!unrepairableCallerCheck && !stagnation.shouldStop && validationRepairs < MAX_VALIDATION_REPAIR_ATTEMPTS) {
+                validationRepairs += 1
+                replaceDraftNext = true
+                lastDetail = `${gate.code}: ${gate.reason}`
+                const feedbackLines = [
+                  ...(stagedVerification?.next_actions ?? []),
+                  ...failingChecks.map((check) => `${check.id} [${check.status}]: ${check.detail}`)
+                ]
+                repair = {
+                  reason: gate.code,
+                  errors: failingChecks.map((check) => ({
+                    code: check.id,
+                    path: "envelope.actions",
+                    detail: check.detail
+                  })),
+                  allowedChanges: ["envelope.actions", "envelope.assumptions", "envelope.normalisations"],
+                  attempt: validationRepairs,
+                  hint: `上一版草稿未通过独立验证（${gate.reason}），请仅修复失败义务并在保留已通过分问的前提下重建完整合法方案（禁止修改题设条件）：${feedbackLines.join("；")}`
+                }
+                ledger.record(`validation gate requested bounded repair (${validationRepairs}/${MAX_VALIDATION_REPAIR_ATTEMPTS}): ${gate.code}`)
+                continue
+              }
+
+              ledger.record(`verification gate blocked confirmation: ${gate.code}`)
+              const failedDetail = stagnation.shouldStop
+                ? `cannot confirm: ${gate.reason} (${stagnation.stopReason}: ${stagnation.detail})`
+                : `cannot confirm: ${gate.reason}`
+              const failed = ledger.transition("failed", failedDetail)
+              if (failed.ok) yield failed.event
+              return
+            }
+          }
+
+          stagedPlan = plan
           break
         }
 
@@ -747,8 +804,10 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         return
       }
 
-      const validating = ledger.transition("validating", "checking the staged draft against the document")
-      if (validating.ok) yield validating.event
+      if (ledger.phase() !== "validating") {
+        const validating = ledger.transition("validating", "checking the staged draft against the document")
+        if (validating.ok) yield validating.event
+      }
 
       /**
        * **验收门禁**（Phase 3 / Task 3.3）。

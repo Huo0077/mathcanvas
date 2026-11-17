@@ -447,6 +447,8 @@ export interface CommitRequest {
   runSwitchedWorkspace?: boolean
   /** Selected subquestion/scope id (`subquestion:2`, `shared`, etc.) for scoped obligation checks. */
   selectedScopeId?: string
+  /** True on validating-phase repair re-staging so the unshown failed candidate draft is discarded before re-verifying from scratch. */
+  replaceDraft?: boolean
   signal: AbortSignal
 }
 

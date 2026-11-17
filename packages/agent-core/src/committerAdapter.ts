@@ -150,7 +150,7 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
        * 一旦暂存成功、预览进了确认面板，就不会再有 `stage` 调用 —— 那条路走的是 `commit`，
        * 而它有 `HostBridge` 自己的同意校验与 CAS。
        */
-      if (draftId === null) {
+      if (draftId === null || request.replaceDraft === true) {
         draftId = dependencies.drafts.create(live.document, live.handle).draftId
       }
 

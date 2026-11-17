@@ -769,7 +769,7 @@ function candidateCommonTangents(plan: PlanEnvelope, candidate: GeometryDocument
 }
 
 function candidateCurves(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureFunction[] {
-  if (plan.kind !== "plan" || !plan.actions.some((action) => action.actionId === "function.create_graph")) return []
+  if (plan.kind !== "plan" || (plan.actions.length > 0 && !plan.actions.some((action) => action.actionId === "function.create_graph"))) return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   return candidate.primitives.flatMap((curve): FigureFunction[] =>
     curve.type === "function" && !priorIds.has(curve.id) && Number.isFinite(curve.domain[0]) && Number.isFinite(curve.domain[1]) && curve.domain[0] < curve.domain[1]
@@ -913,6 +913,7 @@ interface FigureContext {
    * "这条实体的这个度量"，而度量全都能从实体自己的 `radius` / `height` 算出来。
    */
   solid: FigureSolid | null
+  prism?: FigureSolid | null
   /**
    * **候选图里那条新画的圆**（2026-10-20，弦心距 / 弧长）。
    *
@@ -931,7 +932,7 @@ interface FigureCircle {
 
 function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureCircle | null {
   if (plan.kind !== "plan") return null
-  if (!plan.actions.some((action) => action.actionId === "planar.create_circle")) return null
+  if (plan.actions.length > 0 && !plan.actions.some((action) => action.actionId === "planar.create_circle")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const circles = candidate.primitives.filter((primitive) => primitive.type === "circle" && !priorIds.has(primitive.id))
   if (circles.length !== 1) return null
@@ -948,15 +949,42 @@ function candidateCircle(plan: PlanEnvelope, candidate: GeometryDocument, base?:
  * 一样按"**新出现的图元**"认（对 `base` 求差），少了或多了一条都返回 `null` ——
  * 那时如实落未核验，比挑一条来量好。
  */
+function candidatePrismOrCube(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
+  if (plan.kind !== "plan") return null
+  const isNeutral = plan.actions.length === 0
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_prism")) {
+    const prism = candidatePrism(candidate, base)
+    if (prism !== null) return prism
+  }
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_template")) {
+    const cubes = candidate.primitives.filter((primitive) => primitive.type === "cube" && !priorIds.has(primitive.id))
+    if (cubes.length === 1) {
+      const [cube] = cubes
+      if (cube.type === "cube" && [cube.size.x, cube.size.y, cube.size.z].every((value) => Number.isFinite(value) && value > 0)) {
+        return { shape: "cuboid", sizeX: cube.size.x, sizeY: cube.size.y, sizeZ: cube.size.z }
+      }
+    }
+  }
+  return null
+}
+
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
   if (plan.kind !== "plan") return null
-  if (plan.actions.some((action) => action.actionId === "solid.create_prism")) return candidatePrism(candidate, base)
-  if (plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) return candidatePyramid(candidate, base)
-  if (plan.actions.some((action) => action.actionId === "solid.create_polyhedron")) {
+  const isNeutral = plan.actions.length === 0
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_prism")) {
+    const prism = candidatePrism(candidate, base)
+    if (prism !== null) return prism
+  }
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) {
+    const pyramid = candidatePyramid(candidate, base)
+    if (pyramid !== null) return pyramid
+  }
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_polyhedron")) {
     const general = candidatePolyhedron(candidate, base)
     if (general !== null) return general
   }
-  if (plan.actions.some((action) => action.actionId === "solid.create_sphere")) {
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_sphere")) {
     /**
      * **球**（2026-10-20）：图元只有 `radius`，三个常用度量（半径 / 表面积 / 体积）都是它的函数。
      * 与别处同一条纪律：候选图里**恰好一条**新画的球才算数。
@@ -965,13 +993,15 @@ function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: 
      */
     const priorSphereIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
     const spheres = candidate.primitives.filter((primitive) => primitive.type === "sphere" && !priorSphereIds.has(primitive.id))
-    if (spheres.length !== 1) return null
-    const [sphere] = spheres
-    if (sphere.type !== "sphere" || !Number.isFinite(sphere.radius) || !(sphere.radius > 0)) return null
-    if (![sphere.center.x, sphere.center.y, sphere.center.z].every(Number.isFinite)) return null
-    return { shape: "sphere", radius: sphere.radius, center: sphere.center }
+    if (spheres.length === 1) {
+      const [sphere] = spheres
+      if (sphere.type === "sphere" && Number.isFinite(sphere.radius) && sphere.radius > 0 && [sphere.center.x, sphere.center.y, sphere.center.z].every(Number.isFinite)) {
+        return { shape: "sphere", radius: sphere.radius, center: sphere.center }
+      }
+    }
+    if (!isNeutral) return null
   }
-  if (!plan.actions.some((action) => action.actionId === "solid.create_template")) return null
+  if (!isNeutral && !plan.actions.some((action) => action.actionId === "solid.create_template")) return null
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   /**
    * **长方体先认**（2026-10-20）：`cube` 图元带 `size`（三条棱），而外接球 / 内切球半径就是
@@ -1444,21 +1474,28 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      * 只看底边与高会放过“直变斜”“三变四”“正六变四”和“菱形冒充正方形”。
      */
     const stated = item.prismShape
-    const drawn = figures.solid
-    if (stated === undefined || drawn === null || drawn.shape !== "prism") return null
+    const drawn = figures.prism ?? figures.solid
+    if (stated === undefined || drawn === null || (drawn.shape !== "prism" && drawn.shape !== "cuboid")) return null
+    const prismMetrics = drawn.shape === "cuboid"
+      ? {
+          sides: 4,
+          regular: Math.abs(drawn.sizeX - drawn.sizeY) <= 1e-6 * Math.max(1, drawn.sizeX),
+          upright: true
+        }
+      : { sides: drawn.sides, regular: drawn.regular, upright: drawn.upright }
     const failures: string[] = []
-    if (stated.sides !== undefined && drawn.sides !== stated.sides) failures.push(`底面边数实测 ${drawn.sides}，题设要求 ${stated.sides}`)
-    if (stated.regular === true && !drawn.regular) failures.push("底面不是正多边形（各边相等且顶点共圆才成立）")
-    if (stated.straight === true && !drawn.upright) failures.push("题设要求直棱柱，但侧棱不垂直底面")
-    if (stated.straight === false && drawn.upright) failures.push("题设要求斜棱柱，但侧棱垂直底面")
+    if (stated.sides !== undefined && prismMetrics.sides !== stated.sides) failures.push(`底面边数实测 ${prismMetrics.sides}，题设要求 ${stated.sides}`)
+    if (stated.regular === true && !prismMetrics.regular) failures.push("底面不是正多边形（各边相等且顶点共圆才成立）")
+    if (stated.straight === true && !prismMetrics.upright) failures.push("题设要求直棱柱，但侧棱不垂直底面")
+    if (stated.straight === false && prismMetrics.upright) failures.push("题设要求斜棱柱，但侧棱垂直底面")
     const actual = failures.length === 0 ? 0 : 1
     return {
       actual,
       expected: 0,
       tolerance: 1e-9,
       detail: failures.length === 0
-        ? `实测棱柱：底面 ${drawn.sides} 边、${drawn.regular ? "正多边形" : "非正多边形"}、${drawn.upright ? "直棱柱" : "斜棱柱"}；与题设形状一致。`
-        : `实测棱柱：底面 ${drawn.sides} 边、${drawn.regular ? "正多边形" : "非正多边形"}、${drawn.upright ? "直棱柱" : "斜棱柱"}；${failures.join("；")}。`
+        ? `实测棱柱：底面 ${prismMetrics.sides} 边、${prismMetrics.regular ? "正多边形" : "非正多边形"}、${prismMetrics.upright ? "直棱柱" : "斜棱柱"}；与题设形状一致。`
+        : `实测棱柱：底面 ${prismMetrics.sides} 边、${prismMetrics.regular ? "正多边形" : "非正多边形"}、${prismMetrics.upright ? "直棱柱" : "斜棱柱"}；${failures.join("；")}。`
     }
   }
   if (item.kind === "solidDimension") {
@@ -2693,6 +2730,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: curves.length === 1 ? curves[0] : null,
     solid: candidateSolid(plan, candidate, base),
+    prism: candidatePrismOrCube(plan, candidate, base),
     circle: candidateCircle(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
