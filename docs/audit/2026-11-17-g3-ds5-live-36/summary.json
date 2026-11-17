@@ -1,0 +1,1694 @@
+{
+  "schemaVersion": "g3-ds5-live-36-sanitized.v1",
+  "revision": "b4044dd9ee5073c4a37959d160fd3a16b6da35e5",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "denominator": 36,
+  "selected": [
+    "GK-S08",
+    "GK-S02",
+    "GK-S01",
+    "JT-S07",
+    "GK-S03",
+    "GK-S04",
+    "GK-S05",
+    "GK-S06",
+    "GK-S07",
+    "GK-S09",
+    "JT-S01",
+    "JT-S02",
+    "JT-S03",
+    "JT-S04",
+    "JT-S05",
+    "JT-S06",
+    "JT-S08",
+    "JT-S09",
+    "GK-P01",
+    "GK-P02",
+    "GK-P03",
+    "GK-P04",
+    "GK-P05",
+    "GK-P06",
+    "GK-P07",
+    "GK-P08",
+    "GK-P09",
+    "JT-P01",
+    "JT-P02",
+    "JT-P03",
+    "JT-P04",
+    "JT-P05",
+    "JT-P06",
+    "JT-P07",
+    "JT-P08",
+    "JT-P09"
+  ],
+  "completed": 36,
+  "modelId": "deepseek-v4-flash",
+  "mode": "forced DS intent + real coordinator + native provider; isolated draft; no auto confirm",
+  "limits": {
+    "calls": 108,
+    "perCase": 3,
+    "requestBytes": 80000,
+    "outputTokens": 4096,
+    "approvedMaxUsd": 5
+  },
+  "usage": {
+    "calls": 93,
+    "bytes": 724879,
+    "inputTokens": 211766,
+    "outputTokens": 105984,
+    "usageEvents": 91
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "totals": {
+    "passed": 0,
+    "partial": 3,
+    "failed": 33,
+    "nonzeroCandidate": 10,
+    "mixedReadAndPlanBatches": 7,
+    "allTerminalFailed": true,
+    "allWritesZero": true
+  },
+  "byCase": [
+    {
+      "id": "GK-S08",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "failedObligationIds": [
+        "ob-pd-ad",
+        "ob-pd-cd",
+        "ob-cd-ab",
+        "ob-ad",
+        "ob-dc",
+        "ob-cb",
+        "ob-ab",
+        "ob-dp",
+        "ob-base-coplanar",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "GK-S02",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "P"
+      ],
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-cd",
+        "ob-ad",
+        "ob-adc",
+        "ob-bad",
+        "ob-ae",
+        "ob-af",
+        "ob-pe",
+        "ob-pf",
+        "ob-pc",
+        "ob-base-coplanar",
+        "ob-open-topology",
+        "ob-fold-transform",
+        "ob-ef-pd",
+        "ob-plane-sine"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S01",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "failedObligationIds": [
+        "ob-pa-ab",
+        "ob-pa-ac",
+        "ob-pa-ad",
+        "ob-pa",
+        "ob-ac",
+        "ob-bc",
+        "ob-ab",
+        "ob-1-ad-pb",
+        "ob-2-ad-dc",
+        "ob-2-dihedral-sine",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S07",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-fa-ab",
+        "ob-fa-ad",
+        "ob-ab-ad",
+        "ob-ad-bc",
+        "ob-ad-fe",
+        "ob-fa-eq",
+        "ob-bc-eq",
+        "ob-fe-eq",
+        "ob-ad-2ab",
+        "ob-m-mid",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S03",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-ad",
+        "ob-ab",
+        "ob-bc",
+        "ob-cd",
+        "ob-ef",
+        "ob-ed",
+        "ob-fa",
+        "ob-fb",
+        "ob-ef-ad",
+        "ob-bc-ad",
+        "ob-m-mid",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S04",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "failedObligationIds": [
+        "ob-pa-ab",
+        "ob-pa-ad",
+        "ob-ab-ad",
+        "ob-ac-cd",
+        "ob-abc",
+        "ob-pa-eq-ab",
+        "ob-bc-eq-ab",
+        "ob-e-mid",
+        "ob-base-coplanar",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S05",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "partial",
+      "objectCoverage": 0.6666666666666666,
+      "obligationCoverage": 0.7142857142857143,
+      "primitiveCount": 27,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A₂",
+        "B₂",
+        "C₂",
+        "D₂"
+      ],
+      "failedObligationIds": [
+        "ob-1-b2c2-a2d2",
+        "ob-a2",
+        "ob-b2",
+        "ob-c2",
+        "ob-d2",
+        "ob-infeasible-2"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S06",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "failedObligationIds": [
+        "ob-db-da",
+        "ob-dc-da",
+        "ob-bd-cd",
+        "ob-adb",
+        "ob-adc",
+        "ob-e-mid",
+        "ob-ef-da",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S07",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "A₁",
+        "B₁",
+        "C₁",
+        "D"
+      ],
+      "failedObligationIds": [
+        "ob-right-ab",
+        "ob-right-ac",
+        "ob-vol",
+        "ob-area",
+        "ob-d-mid",
+        "ob-aa1-ab",
+        "ob-planes",
+        "ob-prism-aa1-bb1",
+        "ob-prism-aa1-cc1",
+        "ob-prism-ab-a1b1",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S09",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "A₁",
+        "B₁",
+        "C₁"
+      ],
+      "failedObligationIds": [
+        "ob-prism",
+        "ob-sphere",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S01",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "P"
+      ],
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-ac",
+        "ob-cab",
+        "ob-pc",
+        "ob-pa",
+        "ob-pc-ab",
+        "ob-sphere-present",
+        "ob-circumsphere",
+        "ob-topology",
+        "ob-sphere-radius",
+        "ob-min-dihedral"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S02",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "A₁",
+        "B₁",
+        "C₁",
+        "P"
+      ],
+      "failedObligationIds": [
+        "ob-c1b-ab",
+        "ob-c1b-bc",
+        "ob-plane-perp",
+        "ob-ac",
+        "ob-bc",
+        "ob-bc1",
+        "ob-2-p-host",
+        "ob-2-dihedral-cos",
+        "ob-translation-aa1-bb1",
+        "ob-translation-aa1-cc1",
+        "ob-corresponding-ab-a1b1",
+        "ob-corresponding-bc-b1c1",
+        "ob-corresponding-ca-c1a1",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "JT-S03",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-ad-bc",
+        "ob-ab-ad",
+        "ob-pa-ab",
+        "ob-pa-ad",
+        "ob-ratio-ab",
+        "ob-ratio-ad",
+        "ob-ratio-ap",
+        "ob-m",
+        "ob-m-in-pcd",
+        "ob-am-pc",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S04",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-ef",
+        "ob-be-ec",
+        "ob-af-fd",
+        "ob-bc",
+        "ob-ad",
+        "ob-bc-ad",
+        "ob-ab-ad",
+        "ob-e-ratio",
+        "ob-f-ratio",
+        "ob-fold-transform",
+        "ob-cf-bd",
+        "ob-planes-perpendicular",
+        "ob-closed-topology",
+        "ob-2-skew-min-cos",
+        "ob-ef-ec-perp"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S05",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "P",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-bc",
+        "ob-ab-bc",
+        "ob-pc",
+        "ob-pd",
+        "ob-vol",
+        "ob-e-mid",
+        "ob-ad",
+        "ob-cd",
+        "ob-base-coplanar",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S06",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "failedObligationIds": [
+        "ob-ab",
+        "ob-bc",
+        "ob-ad",
+        "ob-ae",
+        "ob-be",
+        "ob-ce",
+        "ob-ad-bc",
+        "ob-bc-ab",
+        "ob-topology"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S08",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-ab-cd",
+        "ob-ad",
+        "ob-dc",
+        "ob-cb",
+        "ob-abc",
+        "ob-cf",
+        "ob-ae",
+        "ob-acfe-rect",
+        "ob-ef-ac",
+        "ob-m-host",
+        "ob-planes-perpendicular",
+        "ob-1-bc-ac",
+        "ob-1-bc-cf",
+        "ob-2-cos-max",
+        "ob-2-cos-min"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S09",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "A₁",
+        "B₁",
+        "C₁",
+        "D₁"
+      ],
+      "failedObligationIds": [
+        "ob-cube",
+        "ob-topology",
+        "ob-hemisphere"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "GK-P01",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "l",
+        "A",
+        "B",
+        "O"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-l-pt",
+        "ob-a-on",
+        "ob-b-on",
+        "ob-area",
+        "ob-a-on-l",
+        "ob-b-on-l",
+        "ob-o-origin"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P02",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "E",
+        "A",
+        "B",
+        "P",
+        "M",
+        "N",
+        "T",
+        "H"
+      ],
+      "failedObligationIds": [
+        "ob-e",
+        "ob-a",
+        "ob-b",
+        "ob-p",
+        "ob-m-on",
+        "ob-n-on",
+        "ob-mn-distinct",
+        "ob-mt-th",
+        "ob-pmn-collinear",
+        "ob-mt-horizontal",
+        "ob-t-on-ab"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P03",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "partial",
+      "objectCoverage": 0.25,
+      "obligationCoverage": 0.125,
+      "primitiveCount": 7,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "F",
+        "D",
+        "A",
+        "B",
+        "AB"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-f",
+        "ob-d",
+        "ob-col-mnf",
+        "ob-col-mda",
+        "ob-col-ndb",
+        "ob-mn-distinct",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-a-distinct",
+        "ob-b-distinct",
+        "ob-a-on-ab",
+        "ob-b-on-ab",
+        "ob-ab-equation"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P04",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 10,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "f",
+        "g"
+      ],
+      "failedObligationIds": [
+        "ob-f-expression",
+        "ob-g-domain",
+        "ob-common-tangent-range",
+        "ob-f-0",
+        "ob-g-0",
+        "ob-tan",
+        "ob-f-tangent",
+        "ob-g-tangent"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P05",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "O",
+        "l",
+        "P",
+        "Q",
+        "M",
+        "A₁",
+        "A₂",
+        "A₃"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-circle",
+        "ob-l",
+        "ob-o-origin",
+        "ob-p-on-l",
+        "ob-q-on-l",
+        "ob-p-on-c",
+        "ob-q-on-c",
+        "ob-op-oq",
+        "ob-a1-on-c",
+        "ob-a2-on-c",
+        "ob-a3-on-c",
+        "ob-a1-on-a1a2",
+        "ob-a2-on-a1a2",
+        "ob-a1-on-a1a3",
+        "ob-a3-on-a1a3",
+        "ob-a2-on-a2a3",
+        "ob-a3-on-a2a3",
+        "ob-a1a2-tangent",
+        "ob-a1a3-tangent",
+        "ob-a2a3-tangent"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P06",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "D",
+        "A",
+        "B",
+        "E",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-d",
+        "ob-e",
+        "ob-da-tangent",
+        "ob-db-tangent",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-d-on-da",
+        "ob-a-on-da",
+        "ob-d-on-db",
+        "ob-b-on-db",
+        "ob-e-circle",
+        "ob-e-circle",
+        "ob-e-circle",
+        "ob-a-on-ab",
+        "ob-b-on-ab",
+        "ob-m-on-ab",
+        "ob-m-on-seg-ab",
+        "ob-ab-midpoint",
+        "ob-e-tangent",
+        "ob-e-tangent",
+        "ob-e-tangent",
+        "ob-area",
+        "ob-area",
+        "ob-area"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "GK-P07",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 6,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "F",
+        "M",
+        "P",
+        "A",
+        "B"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-m",
+        "ob-f",
+        "ob-p-on-m",
+        "ob-p-on-pa",
+        "ob-p-on-pb",
+        "ob-a-on-pa",
+        "ob-b-on-pb",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-pa-tangent",
+        "ob-pb-tangent",
+        "ob-max-area"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P08",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 1,
+      "obligationCoverage": 0,
+      "primitiveCount": 2,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [],
+      "failedObligationIds": [
+        "ob-circle",
+        "ob-hyp"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-P09",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 2,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "f"
+      ],
+      "failedObligationIds": [
+        "ob-f-expression",
+        "ob-f1",
+        "ob-f2",
+        "ob-tan-derivative"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P01",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "F₁",
+        "F₂",
+        "A",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-f1",
+        "ob-f2",
+        "ob-a",
+        "ob-locus",
+        "ob-2-infeasible"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "JT-P02",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "partial",
+      "objectCoverage": 0.16666666666666666,
+      "obligationCoverage": 0,
+      "primitiveCount": 5,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "A₁",
+        "A₂",
+        "M",
+        "N"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-x-1",
+        "ob-a1",
+        "ob-a2",
+        "ob-p-on-host",
+        "ob-m-on-c",
+        "ob-n-on-c",
+        "ob-p-a1-m",
+        "ob-p-a2-n",
+        "ob-p-off-axis",
+        "ob-m-ne-a1",
+        "ob-n-ne-a2",
+        "ob-m-ne-n"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P03",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "O",
+        "A",
+        "B",
+        "AB",
+        "l",
+        "D",
+        "E"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-l",
+        "ob-o",
+        "ob-oa-ob",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-ab-through",
+        "ob-l-equation",
+        "ob-d-on-l",
+        "ob-e-on-l",
+        "ob-oad",
+        "ob-obe",
+        "ob-de-min"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P04",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 10,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "Γ",
+        "M",
+        "P",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "failedObligationIds": [
+        "ob-gamma",
+        "ob-m",
+        "ob-p-y",
+        "ob-p-on-pa",
+        "ob-a-on-pa",
+        "ob-p-on-pb",
+        "ob-b-on-pb",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-pa-tangent",
+        "ob-pb-tangent",
+        "ob-c-directrix",
+        "ob-d-directrix",
+        "ob-ac-vertical",
+        "ob-bd-vertical",
+        "ob-2-infeasible"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P05",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "M",
+        "P",
+        "Q",
+        "F",
+        "A",
+        "B"
+      ],
+      "failedObligationIds": [
+        "ob-hyp",
+        "ob-m",
+        "ob-f",
+        "ob-p-on-c",
+        "ob-q-on-c",
+        "ob-mpq",
+        "ob-a-on-c",
+        "ob-b-on-c",
+        "ob-fab",
+        "ob-ab-pq-parallel",
+        "ob-ratio"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "JT-P06",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 5,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "F₁",
+        "F₂",
+        "M"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-f1",
+        "ob-f2",
+        "ob-m",
+        "ob-infeasible-2"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P07",
+      "requests": 1,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "C",
+        "A",
+        "B",
+        "l",
+        "P",
+        "Q",
+        "E",
+        "F"
+      ],
+      "failedObligationIds": [
+        "ob-c",
+        "ob-p-on",
+        "ob-q-on",
+        "ob-bpe",
+        "ob-bqf",
+        "ob-a",
+        "ob-b",
+        "ob-l-through",
+        "ob-p-on-l",
+        "ob-q-on-l",
+        "ob-e-x3",
+        "ob-f-x3",
+        "ob-pq-distinct",
+        "ob-pe-qf-min"
+      ],
+      "mixedReadAndPlan": true,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "plan_set_plan"
+        ]
+      ],
+      "usageEvents": 1
+    },
+    {
+      "id": "JT-P08",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "A",
+        "B",
+        "C",
+        "G",
+        "EF",
+        "E",
+        "F"
+      ],
+      "failedObligationIds": [
+        "ob-a",
+        "ob-b",
+        "ob-c",
+        "ob-g",
+        "ob-e-on",
+        "ob-f-on",
+        "ob-e-on-ef",
+        "ob-f-on-ef",
+        "ob-ec-2cf",
+        "ob-g-domain",
+        "ob-ef-positive",
+        "ob-ef-negative"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect"
+        ]
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P09",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "primitiveCount": 7,
+      "verification": "failed",
+      "certificate": "blocked",
+      "liveWrites": 0,
+      "missingEntityIds": [
+        "M",
+        "O",
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "failedObligationIds": [
+        "ob-m-circ",
+        "ob-o",
+        "ob-m",
+        "ob-ac",
+        "ob-bd",
+        "ob-perp",
+        "ob-a-on-m",
+        "ob-b-on-m",
+        "ob-c-on-m",
+        "ob-d-on-m",
+        "ob-oac",
+        "ob-obd",
+        "ob-area"
+      ],
+      "mixedReadAndPlan": false,
+      "toolsByRequest": [
+        [
+          "scene_inspect"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "scene_inspect",
+          "scene_search_entities"
+        ]
+      ],
+      "usageEvents": 3
+    }
+  ]
+}

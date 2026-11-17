@@ -1,4 +1,5 @@
 # MathCanvas Agent Tool Loop Scorecard
+> **2026-11-17 真实DS冻结36题**：强制 `ds_intent` 原生规划93次请求，数学合同 **0/36**、3 partial、33 failed、10题非空候选；93次中91次有usage，真实账单金额未知。DS候选渲染/受控交付未运行，不能将此前离线36/36或独立浏览器回归写为本次DS端到端成绩。[脱敏逐题审计](../audit/2026-11-17-g3-ds5-live-36/README.md)。
 > **2026-11-17 DS5 真实模型预检**：4题各1次真实请求、合同通过0/4、均无候选；至少3题首轮返回 `tool_calls` 而没有后续请求额度。这是有限请求预检，不是完整36题、默认产品路线或端到端渲染交付成绩；真实账单费用未知。[脱敏证据](../audit/2026-11-17-g3-ds5-live-preflight/README.md)。
 
 > **2026-11-16（America/Los_Angeles）真实 DS 口径更新**：强制 DS 规划冻结36题完整合同2/36，21 partial、13 failed、23非空候选、80请求，费用未知；未逐题做DS同候选真实浏览器/受控提交，故 `DS首轮端到端通过率` 仍**未测**，不能以2/36合同通过冒充端到端。DS0–DS5 新门禁和各分项见[实施计划](../superpowers/plans/2026-11-16-g3-ds-live-upgrade-plan.md)，实时状态见[当前状态](../current-status.md)。下文旧“Real drawing pass@1/pass@3 Not measured”仅是记录时点。
