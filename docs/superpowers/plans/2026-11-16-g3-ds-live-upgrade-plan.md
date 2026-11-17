@@ -1,5 +1,7 @@
 # G3-DS 真实模型作图升级实施计划
 
+> **2026-11-17 纠偏说明**：本页保存 DS0–DS5 历史施工合同与已做证据；最新强制DS冻结36题合同仍0/36。后续从 `f7cc9b76` 开始的执行顺序与诊断/工具协议/参数/多状态修复，以[新设计](../specs/2026-11-17-g3-ds-failure-driven-design.md)及[针对性实施计划](2026-11-17-g3-ds-failure-driven-implementation-plan.md)为准。旧勾选不映射新任务完成，历史费用授权不可重用。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 保存的 DeepSeek（DS）实质参与冻结36道真题的题意理解与构造决策，在独立数学、生产证书、同候选真实渲染及受控交付门禁下达到 **36/36 完整通过**；未见题另计，不承诺任意题100%。

@@ -1,4 +1,6 @@
 # 下一轮工作导航
+
+> **2026-11-17 G3-DS 新执行入口**：先读[当前状态](current-status.md)、[新设计](superpowers/specs/2026-11-17-g3-ds-failure-driven-design.md)与[失败驱动实施计划](superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)。Task 0诊断→Task 1工具协议→Task 2数学参数来源→Task 3候选与约束→Task 4多状态合同→Task 5同版画布→Task 6新授权实测；下文旧“下一步”只作历史导航。DS真实合同仍0/36，不启动新付费调用。
 > **2026-11-17 36题真实DS复测优先导航**：完整36题已按用户要求跑完，当前强制DS路线完整合同**0/36**、3 partial、33 failed、93原生请求；根因先查[逐题审计](audit/2026-11-17-g3-ds5-live-36/README.md)的混合工具批次、26题零候选及10题不完整候选。不得只增加重试、拿离线36/36抵账或沿用已耗尽的本轮付费授权。实时进度见[当前状态](current-status.md)。
 > **2026-11-17 DS5 预检更新**：已按用户额度真实请求4次，4题均未生成候选（完整合同0/4），受单题1请求限制；至少3题首轮出现 `tool_calls`，须先查工具环与预算诊断。证据见[DS5否定性预检](audit/2026-11-17-g3-ds5-live-preflight/README.md)。本次请求额度耗尽，新的2–3次/题或36题整批需重新授权；不继承旧的“DS未测”导航。
 

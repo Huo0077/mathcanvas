@@ -1,5 +1,7 @@
 # G3 Completion Implementation Plan
 
+> **2026-11-17 新 G3-DS 子计划**：[失败驱动设计](../specs/2026-11-17-g3-ds-failure-driven-design.md) / [实施计划](2026-11-17-g3-ds-failure-driven-implementation-plan.md)。旧G3-Math与浏览器工程历史验收保留，不能把它们写成最新真实DS0/36已修复；DS真实画布、人工签收、Windows实机和发布仍未闭环。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在当前 `feature/drawing-reliability-execution` 分支完成 G3-Math 与 G3-UX 的真实验收，不以 T01–T14 的提交记录替代 36 题退出证据。

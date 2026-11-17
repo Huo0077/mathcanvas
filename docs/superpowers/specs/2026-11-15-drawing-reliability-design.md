@@ -1,5 +1,7 @@
 # 画图可靠性全面整改设计：从 59ea3613 重新出发
 
+> **2026-11-17 真实DS后续设计**：本文件保留旧 G3 基础架构，针对最新36题强制DS合同0/36、26无候选与7个混合工具批次的修订见[失败驱动新设计](2026-11-17-g3-ds-failure-driven-design.md)；新设计不改写历史离线数学通过结论。
+
 <!-- progress-scope: active-reference -->
 > **文档角色（2026-11-15 对齐）**：架构设计及范围取舍；设计完成不表示功能完成。实时状态仅维护在[当前状态](../../current-status.md)；执行总顺序以[完整实施主计划](../plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->
