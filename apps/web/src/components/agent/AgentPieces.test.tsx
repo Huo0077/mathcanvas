@@ -118,6 +118,22 @@ describe("agent pieces", () => {
     expect(onDiscard).toHaveBeenCalledWith("run-7")
   })
 
+  it("hides confirm and discard actions once a draft has been discarded or committed", () => {
+    const conversation = createAgentConversation()
+    const discardedAssistant: AgentMessage = {
+      id: "message-discarded",
+      role: "assistant",
+      text: "这次没有需要改动的地方。",
+      createdAt: 1,
+      runId: "run-8",
+      commit: { status: "no_change" },
+      draft: { draftId: "draft-2", draftVersion: 1, previewHash: "h", stageCount: 1, undoesInOneStep: true }
+    }
+    render(<AgentMessageList conversation={{ ...conversation, messages: [discardedAssistant] }} onConfirm={vi.fn()} onDiscard={vi.fn()} />)
+    expect(screen.queryByRole("button", { name: "确认并提交" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "丢弃草稿" })).toBeNull()
+  })
+
   /**
    * **代码块要真的着色**，而不是只有一个可复制的壳。
    *

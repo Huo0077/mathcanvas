@@ -594,6 +594,7 @@ function tangentsFromPointToParabolaY(pt: Coordinate, focalParameter: number): [
 export function tryBuildPlanarDrawingPlan(prompt: string): PlanarDrawingPlanResult | null {
   const normalized = normalizeGeometryPrompt(prompt)
   if (isPureNonPlanarPrompt(normalized)) return null
+  if (/任意一点/.test(normalized) && /切线/.test(normalized) && /(?:恒为|定值)/.test(normalized)) return null
 
   const curveLabel = detectCurveLabel(normalized)
   const { named: parsedPoints, anonymous: anonymousPoints } = parseExplicitPoints(normalized)
@@ -1266,6 +1267,7 @@ export function tryBuildPlanarDrawingPlan(prompt: string): PlanarDrawingPlanResu
 
   const assumptions = [
     ...(isRepresentative ? representativeNotes : []),
+    ...(!isRepresentative && conic && representativeNotes.length === 0 ? ["曲线参数与几何位置均由题面条件唯一确定，并非系统自选。"] : []),
     ...infeasibleConstraints,
     ...domainExclusions.map((domain) => `轨迹定义域排除 ${domain}。`)
   ]

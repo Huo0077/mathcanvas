@@ -8,6 +8,11 @@
 
 
 
+## 2026-11-17 —— Task 6（T16）全生命周期与全量端到端收口及 G3 阶段总结
+
+- **UI 生命周期与路由兼容修复**：新建 [`e2e/drawing-reliability-lifecycle.spec.ts`](e2e/drawing-reliability-lifecycle.spec.ts)（确认前 0 写入、双击原子提交、一步撤销/重做、刷新与 `.mgeo` 导入导出哈希一致、丢弃草稿 0 写入、跨对话隔离、矛盾拒绝、棱上动点 `B₂` 拖动与一步撤销），暴露并修复 [`AgentMessageList.tsx`](apps/web/src/components/agent/AgentMessageList.tsx) 在已提交或已丢弃后确认面板仍保留操作按钮的缺陷（附 `AgentPieces.test.tsx` 9/9 单测回归）；[`planarDrawing.ts`](packages/agent-core/src/solver/planarDrawing.ts) 放行含符号参数不变量的轨迹题并明确“唯一确定”曲线参数说明，[`functionDrawingPlan.ts`](packages/agent-core/src/solver/functionDrawingPlan.ts) 保留非 LaTeX 原文函数式。
+- **验证与构建产物**：最终代码编辑后 `npm run typecheck`、`npm run lint`（0 errors）、`@draw/desktop` `no-bundle` 构建（[`mathcanvas-desktop.exe`](apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe) SHA-256 `826c6fc34b7bde2d23ff4620aa8e5ece6ca41630bbc361258585d901d91b9b0c`）、`eval:reliability -- --offline`（冒烟 **31/31**、36 题 **36/36**，覆盖率均 1.0）、全量 Vitest **543 文件 / 5794 passed | 1 todo**、`npm run test:rust`（0 failed）与全量串行 Playwright **290/290 passed**（14.2m）全部通过；证据见 [Task 6 生命周期与全量回归](docs/audit/2026-11-17-g3-interaction-exit/README.md) 与 [G3 阶段总验收汇总](docs/audit/2026-11-17-g3-final/README.md)（按用户要求保留 DeepSeek 实测及交互式桌面窗口/人工签收待用户后续执行，产品暂不正式发布）。
+
 ## 2026-11-17 —— Task 4 立体 / 折叠 18 题闭环与 G3-Math 36/36 总门禁退出
 
 - **立体 / 折叠契约、开放曲面与完整性加固**：`packages/dsl/src/schema.ts`、`packages/scene-graph/src/actions/{types,index}.ts`、`packages/agent-core/src/{actionRegistry,actionInputs}.ts` 为 `solid.create_polyhedron` / `polyhedron3` 新增严格布尔标记 `open`（`open === true` 走 `buildOpenSurface` 支持开放翻折曲面，闭合多面体仍保持 ≥4 面 / ≥6 棱不变）；`actionInputs.ts` 补齐 `solid.create_sphere.label` 解析；`scripts/reliability-eval/drawingContracts.ts`（`inspectPointAndPrimitiveIntegrity`）保留 `solid-1:v0`/`p0` 复合内部别名，消除三维立体假重复标签冲突。

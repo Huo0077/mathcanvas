@@ -8,6 +8,11 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— Task 6（T16）生命周期闭环与 G3 阶段总验收边界收口
+
+- **RED → GREEN 与全量回归**：新增 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)（确认前 0 写入、双击原子一次提交、撤销/重做、刷新与 `.mgeo` 导入导出哈希一致、丢弃 0 写入、跨对话隔离、矛盾拒绝、`GK-S05` 动点 `B₂` 拖动与一步撤销），实测曝光并修复 `AgentMessageList.tsx` 丢弃/提交后确认面板仍保留可点击按钮的缺陷，随后通过全量 Playwright `290/290` 发现并修复 `planarDrawing.ts` 拦截符号不变量题与 `functionDrawingPlan.ts` 丢失 `f(x)=x³−3x` 原文的回归。
+- **全量验证与诚实保留项**：最终编辑后 `npm run typecheck`、`npm run lint`（0 errors）、`@draw/desktop` `no-bundle` 构建（`mathcanvas-desktop.exe` SHA-256 `826c6fc34b7bde2d23ff4620aa8e5ece6ca41630bbc361258585d901d91b9b0c`）、`eval:reliability -- --offline` 冒烟 **31/31** + 36 题 **36/36**、全量 Vitest **543 文件 / 5794 passed | 1 todo**、`npm run test:rust`（0 failed）与全量串行 Playwright **290/290 passed**（14.2m）全部通过。应用户指示**保留 DeepSeek 实测由用户后续执行**，非沙盒交互式 Windows 桌面走查、人工可读性签收与 `P8` 单列保留；证据见[Task 6 交互与全量回归证据](audit/2026-11-17-g3-interaction-exit/README.md)与[G3 阶段总验收汇总](audit/2026-11-17-g3-final/README.md)。
+
 ## 2026-11-17 —— Task 4 立体 / 折叠 18 题闭环与 G3-Math 36/36 总门禁退出
 
 - **RED → GREEN 与契约/内核收口**：先跑出 `solidContracts18.test.ts` RED（0/18，随后首轮暴露复合点标 `solid-1:v0` 误截断与开放曲面 `polyhedron3` 校验阻断），继而在保留闭合体 ≥4 面 / ≥6 棱不变量前提下为 `solid.create_polyhedron` / `polyhedron3` 增加 `open?: boolean`、补齐 `solid.create_sphere.label` 解析、`inspectPointAndPrimitiveIntegrity` 内部复合点标例外、`solidVolume` / 分式根号 `dihedral` 余弦 / 翻折垂直优先级与 `scopePlans`/`statePlans`/`scopedStatePlans` 路由（`GK-S01..09`、`JT-S01..09`）。

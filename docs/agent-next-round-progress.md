@@ -6,8 +6,8 @@
 
 ## 从哪里开始
 
-1. 先读[当前状态](current-status.md)、[Task 4 G3-Math 36/36 退出证据](audit/2026-11-17-g3-math-exit/README.md)、[Task 3 平面 18 题证据](audit/2026-11-17-g3-planar-18/README.md)、[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)、[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)、[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`T01` 终审（R4）、`T15`、Task 2 证书全链、Task 3 平面 18 题与 **Task 4 `G3-Math` 36/36 已全部通过退出**；**`G3-UX` 与 G3 总验收尚未退出**，正继续推进 Task 6。
-2. 下一步按 `2026-11-16-g3-completion-plan.md` 立即执行：Task 6（`T16` 浏览器完整交互生命周期 E2E + Windows 桌面 `no-bundle` 实测 + 用户已授权保存的 DeepSeek 实测）→ Task 7 G3 总验收。
+1. 先读[当前状态](current-status.md)、[G3 阶段总验收汇总](audit/2026-11-17-g3-final/README.md)、[Task 6 交互与全量回归证据](audit/2026-11-17-g3-interaction-exit/README.md)、[Task 4 G3-Math 36/36 退出证据](audit/2026-11-17-g3-math-exit/README.md)、[Task 3 平面 18 题证据](audit/2026-11-17-g3-planar-18/README.md)、[Task 2 证书接线证据](audit/2026-11-17-g3-certificate-wiring/README.md)、[P0 / T01 R4 终审与基线](audit/2026-11-17-g3-contract-review-r4/README.md)、[P7 / T15渲染可见性证据](audit/2026-11-17-p7-render-visibility/README.md)、[DeepSeek真实结果](audit/2026-11-16-g3-deepseek-provider/README.md)和[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。`T01`（R4）、`T15`、Task 2、Task 3/4（**`G3-Math` 36/36 已退出**）及 Task 6（`T16` 浏览器全量 290/290 Playwright + 5794 Vitest + desktop `no-bundle` 构建）均已通过验证。
+2. 应用户明确指示，**已保存 DeepSeek 真实模型画图测试暂留由用户本人后续执行**；非沙盒交互式桌面 UIA 走查、教师/用户人工可读性签收与 `P8` 仍保持未完成，不以浏览器 E2E 或 AI 抽检冒充人工签收。
 3. 每个区块执行 RED→GREEN、生产接线、反例/兼容和独立复核，随后同步活动进度文档、提交并推送 `feature/drawing-reliability-execution`，核对远端 ahead/behind 均为0。
 4. 仅用户本次明确授权的保存 DeepSeek 可进行真实评测；其他付费 provider、P8、安装包/冷机与正式发布不在本 goal 内。实际 Windows 桌面 no-bundle 交互验证属于 G3-UX，不能用浏览器 mock 代替。AI 截图审查与用户/教师人工签收分开记录。
 

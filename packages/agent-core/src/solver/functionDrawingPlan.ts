@@ -215,6 +215,8 @@ export function tryBuildFunctionDrawingPlan(prompt: string): FunctionDrawingPlan
       }
     ]
 
+    const useNormalizedPrompt = prompt.includes("$") || optionMatch !== undefined
+
     return {
       plan: {
         schemaVersion: PLAN_SCHEMA_VERSION,
@@ -226,7 +228,7 @@ export function tryBuildFunctionDrawingPlan(prompt: string): FunctionDrawingPlan
       },
       family: "functions",
       skillIds: ["functions", "planar-basics"],
-      diagramPrompt: `${fn.name}(x)=${fn.expr}，在 x=${x0} 处的切线。`
+      diagramPrompt: useNormalizedPrompt ? `${fn.name}(x)=${fn.expr}，在 x=${x0} 处的切线。` : prompt
     }
   }
 
