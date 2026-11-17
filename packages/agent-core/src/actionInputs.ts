@@ -406,6 +406,11 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         }
         out.radius = radius
       }
+      if (value.label !== undefined) {
+        const label = boundedString(value.label, `${path}.label`, errors)
+        if (label === null) return null
+        out.label = label
+      }
       return out
     }
 
@@ -1051,6 +1056,13 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
       if (faces.length === 1 && faces[0]!.length !== vertices.length) {
         errors.push(fail("invalid_type", `${path}.faces[0]`, `a single-face polyhedron must use every vertex exactly once (got ${faces[0]!.length} corners for ${vertices.length} vertices)`))
         return null
+      }
+      if (value.open !== undefined) {
+        if (typeof value.open !== "boolean") {
+          errors.push(fail("invalid_type", `${path}.open`, "expected a boolean for open"))
+          return null
+        }
+        out.open = value.open
       }
       const label = boundLabel(value.label, `${path}.label`, errors)
       if (label !== undefined) out.label = label

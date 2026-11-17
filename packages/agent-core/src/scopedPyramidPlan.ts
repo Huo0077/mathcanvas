@@ -1,4 +1,5 @@
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
+import type { DeterministicProblemSubPlan } from "./deterministicProblemRoute"
 import { parseDiagramObligations } from "./diagramObligations"
 import { normalizeGeometryPrompt } from "./latexNormalisation"
 import { splitNumberedProblem } from "./numberedProblem"
@@ -7,7 +8,12 @@ import { solidWitnessActions } from "./solver/witnessSearch"
 
 // A right triangle on each side of the base diagonal, with the apex above
 // its first endpoint. The proof and the construction have separate givens.
-export function tryBuildScopedPyramidPlan(prompt: string): { plan: PlanEnvelope; diagramPrompt: string } | null {
+export function tryBuildScopedPyramidPlan(prompt: string): {
+  plan: PlanEnvelope
+  diagramPrompt: string
+  selectedScopeId?: string
+  scopePlans?: Readonly<Record<string, DeterministicProblemSubPlan>>
+} | null {
   const sections = splitNumberedProblem(prompt) ?? splitNumberedProblem(normalizeGeometryPrompt(prompt))
   if (sections?.parts.length !== 2) return null
   const stem = normalizeGeometryPrompt(sections.stem)
@@ -75,21 +81,49 @@ export function tryBuildScopedPyramidPlan(prompt: string): { plan: PlanEnvelope;
   const result = roundedSquare > 0 && Math.abs(tSquared - roundedSquare) <= 8 * Number.EPSILON * roundedSquare
     ? `= ${Number.isInteger(Math.sqrt(roundedSquare)) ? Math.sqrt(roundedSquare) : `√${roundedSquare}`}`
     : `≈ ${Number(t.toPrecision(8))}`
+  const proofVertices = [
+    { x: 0, y: 0, z: 0 },
+    { x: firstLeg ** 2 / diagonal, y: -firstLeg * secondLeg / diagonal, z: 0 },
+    { x: diagonal, y: 0, z: 0 },
+    { x: secondLeg ** 2 / diagonal, y: firstLeg * secondLeg / diagonal, z: 0 },
+    { x: 0, y: 0, z: height }
+  ]
+  const proofActions = solidWitnessActions({
+    names: [a, b, c, d, p],
+    vertices: proofVertices,
+    faces: [[0, 1, 2, 3], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]
+  }, "dihedral-pyramid-proof")
   const scope = "草稿按第（2）问的条件构造。"
+  const answer = [
+    `（1）${ab}² + ${bc}² = ${ac}²，故 ${ab} ⟂ ${bc}。${pa} ⟂ 底面 ${base}，因此 ${pa} ⟂ ${ad}。结合 ${ad} ⟂ ${pb}，得 ${ad} ⟂ 平面 ${p + ab}，所以 ${ad} ⟂ ${ab}。底面内 ${ad} 和 ${bc} 都垂直于 ${ab}，于是 ${ad} ∥ ${bc}。${bc} 在平面 ${face} 内，且 ${a} 在该平面外，故 ${ad} ∥ 平面 ${face}。`,
+    `（2）设 ${ad}=t、${ac}=L、${pa}=h，二面角为 θ。取 ${ac} 为 x 轴，${a} 为原点。由 ${ad} ⟂ ${dc}，${d} 的横坐标为 t²/L，到 ${ac} 的距离为 t√(1−t²/L²)。在垂直于 ${c + p} 的截面中，${c + d} 沿平面 ${p + ac} 的分量长度为 (L−t²/L)h/√(L²+h²)，垂直该平面的分量长度为 t√(1−t²/L²)。因此 sin²θ = t²(L²+h²)/[L²(t²+h²)]。代入题设，得 ${ad} ${result}。`,
+    scope
+  ].join("\n\n")
+  const mainPlan: PlanEnvelope = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "画出符合第（2）问题设的四棱锥",
+    factIds: [],
+    assumptions: [scope],
+    answer,
+    actions
+  }
+  const proofPlan: PlanEnvelope = {
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    kind: "plan",
+    goal: "画出符合第（1）问题设的四棱锥",
+    factIds: [],
+    assumptions: ["草稿按第（1）问的条件构造。"],
+    answer,
+    actions: proofActions
+  }
+  const proofDiagramPrompt = [common, proof.trim()].join("\n")
   return {
     diagramPrompt,
-    plan: {
-      schemaVersion: PLAN_SCHEMA_VERSION,
-      kind: "plan",
-      goal: "画出符合第（2）问题设的四棱锥",
-      factIds: [],
-      assumptions: [scope],
-      answer: [
-        `（1）${ab}² + ${bc}² = ${ac}²，故 ${ab} ⟂ ${bc}。${pa} ⟂ 底面 ${base}，因此 ${pa} ⟂ ${ad}。结合 ${ad} ⟂ ${pb}，得 ${ad} ⟂ 平面 ${p + ab}，所以 ${ad} ⟂ ${ab}。底面内 ${ad} 和 ${bc} 都垂直于 ${ab}，于是 ${ad} ∥ ${bc}。${bc} 在平面 ${face} 内，且 ${a} 在该平面外，故 ${ad} ∥ 平面 ${face}。`,
-        `（2）设 ${ad}=t、${ac}=L、${pa}=h，二面角为 θ。取 ${ac} 为 x 轴，${a} 为原点。由 ${ad} ⟂ ${dc}，${d} 的横坐标为 t²/L，到 ${ac} 的距离为 t√(1−t²/L²)。在垂直于 ${c + p} 的截面中，${c + d} 沿平面 ${p + ac} 的分量长度为 (L−t²/L)h/√(L²+h²)，垂直该平面的分量长度为 t√(1−t²/L²)。因此 sin²θ = t²(L²+h²)/[L²(t²+h²)]。代入题设，得 ${ad} ${result}。`,
-        scope
-      ].join("\n\n"),
-      actions
+    plan: mainPlan,
+    scopePlans: {
+      "(1)": { plan: proofPlan, diagramPrompt: proofDiagramPrompt },
+      "(2)": { plan: mainPlan, diagramPrompt }
     }
   }
 }

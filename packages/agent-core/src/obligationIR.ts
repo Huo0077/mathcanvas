@@ -85,7 +85,8 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   /** T04（2026-11-16）：圆锥曲线参数定义域约束（如 `a>b>0` / `m>0`），对照drawn圆锥曲线半轴大小检验。 */
   "parameterDomain",
   "collinear",
-  "pointLineCoord"
+  "pointLineCoord",
+  "solidVolume"
 ])
 
 /** 与 `diagramVerification.ts` 的常量同值（容差不能有两套；两处一起改）。 */
@@ -140,7 +141,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
     return { kind: "relative", value: UNITLESS_TOLERANCE }
   }
   // 面积是 L²：与核验器同一把相对尺子（构造满足到数值精度）。
-  if (kind === "area") return { kind: "relative", value: UNITLESS_TOLERANCE }
+  if (kind === "area" || kind === "solidVolume") return { kind: "relative", value: UNITLESS_TOLERANCE }
   // **个数是整数**：容差只能是 0 —— "3 个"与"4 个"之间没有"差不多"可讲。
   if (kind === "functionLineIntersections") return { kind: "absolute", value: 0 }
   // 等长/等边/中点/**点在线段上**：核验器按"那条线段的长度"缩放，绝对容差随实例变化 —— 这里如实不给。

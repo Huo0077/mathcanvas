@@ -8,6 +8,11 @@
 
 实时阶段进度只维护在[当前状态](current-status.md)。本文只记本轮过程；旧完整过程日志及旧状态/下一轮记录已按原字节[归档](audit/2026-11-15-pre-reset/README.md)，不删除历史、不继承旧完成数字。
 
+## 2026-11-17 —— Task 4 立体 / 折叠 18 题闭环与 G3-Math 36/36 总门禁退出
+
+- **RED → GREEN 与契约/内核收口**：先跑出 `solidContracts18.test.ts` RED（0/18，随后首轮暴露复合点标 `solid-1:v0` 误截断与开放曲面 `polyhedron3` 校验阻断），继而在保留闭合体 ≥4 面 / ≥6 棱不变量前提下为 `solid.create_polyhedron` / `polyhedron3` 增加 `open?: boolean`、补齐 `solid.create_sphere.label` 解析、`inspectPointAndPrimitiveIntegrity` 内部复合点标例外、`solidVolume` / 分式根号 `dihedral` 余弦 / 翻折垂直优先级与 `scopePlans`/`statePlans`/`scopedStatePlans` 路由（`GK-S01..09`、`JT-S01..09`）。
+- **验证与独立复核**：`solidContracts18.test.ts` **23/23 passed**（18 正例 + 4 项篡改反例）、`planarContracts18.test.ts` **23/23**、`drawingContracts.test.ts` **45/45**、`diagramObligations.test.ts` **109/109**、`eval:reliability -- --offline`（冒烟 **31/31** + 36 题 **`36/36 passed`**，`partial=0, failed=0, incomplete=0`，平均对象/义务覆盖率 **100%**，`liveWrites=0`、`drawingCertificateStatus="passed"`）、`typecheck`、`lint`（0 errors）、Web 构建、`test:rust` 与全量 Vitest **543 文件 / 5793 passed | 1 todo** 全部通过；只读独立数学与合同复核结论 **`SOUND (PASS)`**，**`G3-Math` 正式退出**，下一步推进 Task 6（`T16` 生命周期 E2E + Windows 桌面 `no-bundle` 实测 + 用户已保存 DeepSeek 实测）与 Task 7。证据见[Task 4 G3-Math 36/36 退出证据](audit/2026-11-17-g3-math-exit/README.md)。
+
 ## 2026-11-17 —— Task 3 平面 / 圆锥曲线 / 函数 18 题确定性求解与协调器全链闭环
 
 - **RED → GREEN 整改与验证**：新增并打通 `planar.create_conic.excludedPoints`、`collinear`/`pointLineCoord`、`pointOnCurve` 线性求解、`verifyTangentLine` 拐点切线+防割线容差、`selectedScopeId` 全链（含修复 `draftStore.stage` 漏传导致多问场景报 `not_supported`）及 `evaluateDrawingContractBranches`；新建 `planarContracts18.test.ts` **23/23 passed**（18/18 正例 + 4 项负向篡改反例），并在暴露并修复 `actionSchemas` 缺失 `excludedPoints` 种类、`resolveFocusEccentricity` 显式方程重复提取与切线有限差分容差后全线通过。

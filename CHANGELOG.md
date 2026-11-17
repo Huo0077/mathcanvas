@@ -8,6 +8,12 @@
 
 
 
+## 2026-11-17 —— Task 4 立体 / 折叠 18 题闭环与 G3-Math 36/36 总门禁退出
+
+- **立体 / 折叠契约、开放曲面与完整性加固**：`packages/dsl/src/schema.ts`、`packages/scene-graph/src/actions/{types,index}.ts`、`packages/agent-core/src/{actionRegistry,actionInputs}.ts` 为 `solid.create_polyhedron` / `polyhedron3` 新增严格布尔标记 `open`（`open === true` 走 `buildOpenSurface` 支持开放翻折曲面，闭合多面体仍保持 ≥4 面 / ≥6 棱不变）；`actionInputs.ts` 补齐 `solid.create_sphere.label` 解析；`scripts/reliability-eval/drawingContracts.ts`（`inspectPointAndPrimitiveIntegrity`）保留 `solid-1:v0`/`p0` 复合内部别名，消除三维立体假重复标签冲突。
+- **体积 / 余弦二面角 / 翻折垂直与多状态路由**：`packages/agent-core/src/{obligationIR,diagramObligations,diagramVerification}.ts` 新增 `solidVolume`（三棱柱 `det/2`、三棱锥/四面体 `det/6`）与带分式根号 `dihedral` 余弦核验，将翻折垂直规则前置避开矩形前缀抢占，并扩展 `parseDiagramScope` 处理 `(2) 求…` 与选择填空 `则…（）`；`deterministicProblemRoute.ts`、`scopedPyramidPlan.ts`、`solidDrawingPlan.ts` 与 `reliabilityEval.eval.test.ts` 贯通 `scopePlans`/`statePlans`/`scopedStatePlans` 收口全 18 道立体/折叠题。
+- **验证**：`solidContracts18.test.ts` **23/23 passed**（18 正例 + 4 项负向篡改反例）、`planarContracts18.test.ts` **23/23**、`drawingContracts.test.ts` **45/45**、`diagramObligations.test.ts` **109/109**、`eval:reliability -- --offline`（冒烟 **31/31**）及 36 题全链路评测达成 **36/36 passed**（`partial=0`、`failed=0`、`incomplete=0`，对象/义务覆盖率均 **100%**、`liveWrites=0`、`drawingCertificateStatus="passed"`）、`typecheck`、`lint`（0 errors）、Web 构建、`test:rust` 与全量 Vitest **543 文件 / 5793 passed | 1 todo** 全部通过，只读独立数学复核 `SOUND (PASS)`；证据见 [Task 4 G3-Math 36/36 退出证据](docs/audit/2026-11-17-g3-math-exit/README.md)。
+
 ## 2026-11-17 —— Task 3 平面 / 圆锥曲线 / 函数 18 题数学合同与协调器全链闭环
 
 - **平面 / 函数确定性求解、内核与契约加固**：`packages/dsl` / `scene-graph` / `agent-core` 全线打通 `planar.create_conic.excludedPoints`（含 `FIELD_KINDS: "pointList"` schema 校验）；`conic-parameters.ts` 支持 `pointOnCurve` 线性系统求参；`function-evidence.ts`（`verifyTangentLine`）修复拐点偶重根切线并维持斜率校验阻止割线伪切；`diagramObligations.ts` / `diagramVerification.ts` / `claimEvidence.ts` / `obligationIR.ts` 补齐 `collinear` / `pointLineCoord`、`domain.conicKind` 与隐式抛物线/圆解析；`functionDrawingPlan.ts` 与 `planarDrawing.ts` 收口全部 18 道平面题。

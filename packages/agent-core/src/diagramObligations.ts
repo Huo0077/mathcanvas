@@ -26,7 +26,7 @@ export type DiagramObligationKind =
    * 必须一起查**非退化 / 顶点闭合（平行四边形）/ 共面 / 四个角**，见 `diagramVerification`。
    */
   | "rectangle"
-  | "planePerpendicular" | "dihedral" | "dihedralSine" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate"
+  | "planePerpendicular" | "dihedral" | "dihedralSine" | "vectorDot" | "perpendicular" | "parallel" | "pointCoordinate" | "solidVolume"
   | "acuteTriangle" | "rightTriangle" | "obtuseTriangle" | "pointInsideTriangle"
   /**
    * **角平分线**（2026-10-20）：`AD 平分 ∠BAC` ⇒ `targets: ["D", "A", "B", "C"]`
@@ -1688,10 +1688,18 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: /二面角\s*([A-Z])\s*[-−–—]\s*([A-Z])\s*([A-Z])\s*[-−–—]\s*([A-Z])\s*的?正弦值?\s*(?:为|是|=)\s*((?:(?:\d+(?:\.\d+)?\s*)?√\s*)?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?=\s*(?:[，,。；;]|\.(?!\d)|$))/g,
+    pattern: new RegExp(`二面角\\s*(${POINT_NAME})\\s*[-−–—]\\s*(${POINT_NAME})\\s*(${POINT_NAME})\\s*[-−–—]\\s*(${POINT_NAME})\\s*的?正弦值?\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)(?=\\s*(?:[，,。；;]|\\.(?!\\d)|$))`, "g"),
     read: (m) => {
       const value = positiveRadicalOrFraction(m[5]!)
       return value === null || value > 1 ? null : { kind: "dihedralSine", targets: m.slice(1, 5), value }
+    }
+  },
+  {
+    pattern: new RegExp(`二面角\\s*(${POINT_NAME})\\s*[-−–—]\\s*(${POINT_NAME})\\s*(${POINT_NAME})\\s*[-−–—]\\s*(${POINT_NAME})\\s*的?余弦值?\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)(?=\\s*(?:[，,。；;?？]|\\.(?!\\d)|$))`, "g"),
+    read: (m) => {
+      const cosVal = positiveRadicalOrFraction(m[5]!)
+      if (cosVal === null || cosVal > 1) return null
+      return { kind: "dihedral", targets: m.slice(1, 5).map(canonicalPointName), value: (Math.acos(cosVal) * 180) / Math.PI }
     }
   },
   {
@@ -1815,6 +1823,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
+    pattern: /将\s*(矩形|长方形|三角形|四边形|梯形|△)?\s*([A-Z]{3,4})\s*翻折至与\s*(?:矩形|长方形|三角形|四边形|梯形|平面)?\s*([A-Z]{3,4})\s*垂直/g,
+    read: (m) => {
+      const firstAll = names(m[2]!)
+      const p1 = firstAll.slice(0, 3)
+      const p2 = names(m[3]!).slice(0, 3)
+      if (p1.length < 3 || p2.length < 3) return null
+      const out: ObligationDraft[] = [{ kind: "planePerpendicular", targets: [...p1, ...p2], planeLengths: [3, 3] }]
+      if ((m[1] === "矩形" || m[1] === "长方形") && firstAll.length === 4) {
+        out.unshift({ kind: "rectangle", targets: firstAll })
+      }
+      return out
+    }
+  },
+  {
     /**
      * **`矩形 ABCD 中` / `四边形 ABCD 是矩形`**（A3，2026-10-26）。
      *
@@ -1913,7 +1935,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
   {
-    pattern: new RegExp(`(?:△|三角形)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*(?:等边|正)三角形`, "g"),
+    pattern: new RegExp(`(?:△|三角形|侧面|底面)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*(?:等边|正)三角形`, "g"),
     read: (m) => {
       const targets = names(m[1])
       const side = m[2] === undefined ? null : finitePositive(m[2])
@@ -2311,6 +2333,53 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*(?:平面|底面|面)\\s*(${PLANE_NAME})`, "g"),
     read: (m) => ({ kind: m[2].includes("平行") || m[2] === "∥" ? "parallel" : "perpendicular", targets: [...names(m[1]), ...names(m[3])] })
+  },
+  {
+    pattern: new RegExp(`(?:直|正)?三棱柱\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的体积\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)`, "g"),
+    read: (m) => {
+      const value = positiveRadicalOrFraction(m[7]!)
+      if (value === null) return null
+      return { kind: "solidVolume", targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName), solid: { shape: "prism", metric: "volume" }, value }
+    }
+  },
+  {
+    pattern: new RegExp(`(?:三棱锥|四面体)\\s*(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的体积\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)`, "g"),
+    read: (m) => {
+      const value = positiveRadicalOrFraction(m[5]!)
+      if (value === null) return null
+      return { kind: "solidVolume", targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName), solid: { shape: "polyhedron", metric: "volume" }, value }
+    }
+  },
+  {
+    pattern: new RegExp(`过\\s*(${POINT_NAME})\\s*作\\s*(${SEGMENT_NAME})\\s*的平行线交\\s*(${SEGMENT_NAME})\\s*于\\s*(${POINT_NAME})`, "g"),
+    read: (m) => {
+      const p1 = canonicalPointName(m[1]!)
+      const p2 = canonicalPointName(m[4]!)
+      return [
+        { kind: "parallel", targets: [p1, p2, ...names(m[2]!)] },
+        { kind: "collinear", targets: [...names(m[3]!), p2] }
+      ]
+    }
+  },
+  {
+    pattern: /设三棱柱的侧棱垂直于底面[，,]所有棱长都为\s*[a-zA-Z0-9.√/]+(?:[，,]顶点都在一个球面上)?/g,
+    read: () => ({ kind: "solidPrismShape", targets: [], prismShape: { sides: 3, straight: true, regular: true } })
+  },
+  {
+    pattern: /已知?半球内有一个内接正方体[，,]正方体的一个面在半球的底面圆内/g,
+    read: () => ({ kind: "solidPrismShape", targets: [], prismShape: { sides: 4, straight: true, regular: true } })
+  },
+  {
+    pattern: new RegExp(`(${SEGMENT_NAME}(?:\\s*(?:∥|平行于?)\\s*${SEGMENT_NAME}){2,})(?![A-Z])`, "g"),
+    read: (m) => {
+      const segments = [...m[1]!.matchAll(new RegExp(SEGMENT_NAME, "g"))].map((entry) => names(entry[0])).filter((pair) => pair.length === 2)
+      if (segments.length < 2) return null
+      const drafts: ObligationDraft[] = []
+      for (let i = 1; i < segments.length; i += 1) {
+        drafts.push({ kind: "parallel", targets: [...segments[0]!, ...segments[i]!] })
+      }
+      return drafts
+    }
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(⊥|∥|垂直于?|平行于?)\\s*(${SEGMENT_NAME})(?![A-Z])`, "g"),
@@ -3105,10 +3174,10 @@ function resolvePlanarConstructions(
 }
 
 function parseDiagramScope(prompt: string, options: DiagramParseOptions, partStart?: number): DiagramObligationSet {
-  const partPattern = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
+  const partPattern = /(?:求证|试?证明|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
   const boundaryMatch = partStart !== undefined
     ? partPattern.exec(prompt.slice(partStart))
-    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?)/.exec(prompt)
+    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|(?<=^|[，,。；;\n])\s*则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
   const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
   const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
   const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length
@@ -3190,7 +3259,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || result.kind === "collinear" || result.kind === "pointLineCoord" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || result.kind === "solidPrismShape" || result.kind === "solidVolume" || result.kind === "collinear" || result.kind === "pointLineCoord" || new Set(result.targets).size >= 2)
       const labelPrefix = allowAfterLabelColon === true
         ? /(?:椭圆|双曲线|抛物线|圆)\s*([A-Z])\s*[：:]$/.exec(givenText.slice(Math.max(0, start - 16), start))
         : null

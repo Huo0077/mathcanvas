@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { areCoplanar, buildFromPoints, commonTangents, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, faceHost3, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
+import { areCoplanar, buildFromPoints, buildOpenSurface, commonTangents, buildPrismTopology, buildSolidTemplate, compileExpression, DEFAULT_SOLID_SEGMENTS, faceHost3, prismEdgeLabel, prismPointLabel, regularPyramidShape, regularTetrahedronShape, rotateAboutAxis, roundFrustumShape, solveCircumsphere3, solveInsphere3, templateEdgeLabel, templatePointLabel, validatePrismInput, type BuilderContext, type SolidBoundary, type SolidBuildResult, type TemplateSolidPrimitive } from "@draw/geometry-kernel"
 
 import type { DomainOperation } from "../operations"
 import { tangentThroughPoint } from "../analysisRecompute"
@@ -738,7 +738,17 @@ function compileSolidRegularPyramidAction(action: Extract<DraftAction, { actionI
  * 逐条报诊断（`degenerate_polyhedron`），于是"模型把面环写错了"的结局是**一次修复**，
  * 而不是一份画不出来的文档。
  */
-export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][]; vertexNames?: readonly string[] }, label?: string): ActionSolidBuildResult {
+export function compileSolidPolyhedron(solidId: string, input: { vertices: Vector3[]; faces: number[][]; vertexNames?: readonly string[]; open?: boolean }, label?: string): ActionSolidBuildResult {
+  if (input.open === true && input.faces.length >= 2) {
+    const built = buildOpenSurface({ vertices: input.vertices, faces: input.faces }, solidChildIds(solidId))
+    if (built.diagnostics.length === 0) {
+      const labeled = labelSolidChildren(built.primitives, label, input.vertexNames).map((primitive) =>
+        primitive.type === "polyhedron3" ? { ...primitive, open: true } : primitive
+      )
+      return { primitives: labeled, vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: [] }
+    }
+    return { primitives: [], vertexIds: built.vertexIds, edgeIds: built.edgeIds, faceIds: built.faceIds, solidId, diagnostics: built.diagnostics.map((entry) => diagnostic(solidId, "degenerate_polyhedron", entry.message)) }
+  }
   /**
    * **1 个面 = 平面多边形**（2026-10-17 用户现场）。
    *
@@ -1378,7 +1388,7 @@ function compileSolidPolyhedronAction(action: Extract<DraftAction, { actionId: "
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a polyhedron can only be created in the solid workspace")], aliasToId: {} }
   }
   const id = context.idAllocator.allocate("solid", inputs.alias)
-  const built = compileSolidPolyhedron(id, { vertices: inputs.vertices, faces: inputs.faces, ...(inputs.vertexNames === undefined ? {} : { vertexNames: inputs.vertexNames }) }, inputs.label)
+  const built = compileSolidPolyhedron(id, { vertices: inputs.vertices, faces: inputs.faces, ...(inputs.vertexNames === undefined ? {} : { vertexNames: inputs.vertexNames }), ...(inputs.open === true ? { open: true } : {}) }, inputs.label)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }

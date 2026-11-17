@@ -203,7 +203,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   // 反射（2026-10-19）：源点名 + 平面上的三个点名。
   source: "string", planePoints: "stringList",
   axisFrom: "string", axisTo: "string",
-  lineFrom: "string", lineTo: "string",
+  lineFrom: "string", lineTo: "string", open: "boolean",
   // 结构族
   plane: "plane", anchor: "tangentAnchor", patch: "updatablePatch"
 }
@@ -639,7 +639,7 @@ export const ACTIONS = {
   "solid.create_polyhedron": {
     // `vertexNames`：**可选**的点名（`["P","A","B","C","D"]`），让系统能把"关系里的点名"
     // 与"顶点下标"对上，而不是假设 vertices 的顺序就等于题面点名的顺序（那是个会静默出错的假设）。
-    inputFields: ["alias", "vertices", "faces", "vertexNames", "label"],
+    inputFields: ["alias", "vertices", "faces", "vertexNames", "open", "label"],
     requiresAlias: true,
     rawFieldTypes: {},
     required: ["vertices", "faces"]

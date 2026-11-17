@@ -630,7 +630,8 @@ function inspectPointAndPrimitiveIntegrity(
       }
       const pos = p.position as { x?: unknown; y?: unknown; z?: unknown } | undefined
       const primary = normalizeLabel(String(p.label ?? p.id ?? ""))
-      const idAlias = typeof p.id === "string" ? normalizeLabel(p.id) : ""
+      const rawId = typeof p.id === "string" ? p.id.trim() : ""
+      const idAlias = rawId && !/:(?:v|p)\d+$/i.test(rawId) ? normalizeLabel(rawId) : rawId
       const keys = new Set([primary, ...(idAlias && idAlias !== primary ? [idAlias] : [])].filter(Boolean))
       for (const key of keys) {
         const owner = point3Owners.get(key)
@@ -645,7 +646,8 @@ function inspectPointAndPrimitiveIntegrity(
         unexpected2dInSolid.push(String(p.label ?? p.id ?? `point@${index}`))
       }
       const primary = normalizeLabel(String(p.label ?? p.id ?? ""))
-      const idAlias = typeof p.id === "string" ? normalizeLabel(p.id) : ""
+      const rawId = typeof p.id === "string" ? p.id.trim() : ""
+      const idAlias = rawId && !/:(?:v|p)\d+$/i.test(rawId) ? normalizeLabel(rawId) : rawId
       const keys = new Set([primary, ...(idAlias && idAlias !== primary ? [idAlias] : [])].filter(Boolean))
       for (const key of keys) {
         const owner = point2Owners.get(key)

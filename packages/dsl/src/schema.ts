@@ -431,9 +431,11 @@ function validatePrimitive(value: unknown, byId: Map<string, unknown>, parameter
     const vertexIds = Array.isArray(value.vertexIds) ? value.vertexIds : []
     const edgeIds = Array.isArray(value.edgeIds) ? value.edgeIds : []
     const faceIds = Array.isArray(value.faceIds) ? value.faceIds : []
+    if (value.open !== undefined && typeof value.open !== "boolean") errors.push("polyhedron3 open flag is invalid")
+    const isOpenSurface = value.open === true
     const validVertices = isDistinctStringList(vertexIds, 4) && referencesTypes(byId, vertexIds, new Set(["point3"]))
-    const validEdges = edgeIds.length >= 6 && edgeIds.every((edgeId) => typeof edgeId === "string" && referenceType(byId, edgeId) === "edge3")
-    const validFaces = faceIds.length >= 4 && faceIds.every((faceId) => typeof faceId === "string" && referenceType(byId, faceId) === "face3")
+    const validEdges = edgeIds.length >= (isOpenSurface ? 5 : 6) && edgeIds.every((edgeId) => typeof edgeId === "string" && referenceType(byId, edgeId) === "edge3")
+    const validFaces = faceIds.length >= (isOpenSurface ? 2 : 4) && faceIds.every((faceId) => typeof faceId === "string" && referenceType(byId, faceId) === "face3")
     if (!validVertices) errors.push("polyhedron3 references missing vertex")
     if (!validEdges) errors.push("polyhedron3 references invalid edges")
     if (!validFaces) errors.push("polyhedron3 references invalid faces")

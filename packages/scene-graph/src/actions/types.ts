@@ -277,6 +277,7 @@ export interface SolidCreatePolyhedronAction extends ActionBase {
      * "`vertices` 的顺序 = 题面点名顺序"—— 顺序一乱判据就指错顶点，于是画对了也被判不满足。
      */
     vertexNames?: string[]
+    open?: boolean
     label?: string
   }
 }

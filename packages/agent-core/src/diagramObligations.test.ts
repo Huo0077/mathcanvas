@@ -908,11 +908,18 @@ describe("立体几何：能读的读，没判据的显形", () => {
     expect(parseDiagramObligations("E 在 AB 上").givens.some((item) => item.kind === "pointOnSegment")).toBe(false)
   })
 
-  it("异面直线所成角、点到平面的距离、体积：没有判据，但**不许消失**", () => {
-    for (const prompt of ["直线AB与CD所成角为60°", "点P到平面ABCD的距离为2", "三棱锥P-ABC的体积为4"]) {
+  it("异面直线所成角、点到平面的距离与未知体积：没有判据，但**不许消失**；已知三棱锥体积现可直接判定", () => {
+    for (const prompt of ["直线AB与CD所成角为60°", "点P到平面ABCD的距离为2", "圆柱的体积为4"]) {
       const parsed = parseDiagramObligations(prompt)
       expect(parsed.unverified.length, `${prompt} 应当落进未核验，而不是消失`).toBeGreaterThan(0)
     }
+    const tetraVolume = parseDiagramObligations("三棱锥P-ABC的体积为4")
+    expect(tetraVolume.unverified).toHaveLength(0)
+    expect(tetraVolume.givens).toContainEqual(expect.objectContaining({
+      kind: "solidVolume",
+      targets: ["P", "A", "B", "C"],
+      value: 4,
+    }))
   })
 })
 

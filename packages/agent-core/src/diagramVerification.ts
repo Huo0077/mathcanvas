@@ -2387,6 +2387,14 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     }
     return { actual: maxErr, expected: 0, tolerance: distanceTolerance(scale) }
   }
+  if (item.kind === "solidVolume") {
+    if (numeric === undefined || vertices.length !== 4) return null
+    const [p, a, b, c] = vertices as Vector3[]
+    const det = Math.abs(dotVector3(subtractVector3(p!, a!), crossVector3(subtractVector3(b!, a!), subtractVector3(c!, a!))))
+    const volume = item.solid?.shape === "prism" ? det / 2 : det / 6
+    if (!Number.isFinite(volume)) return null
+    return { actual: volume, expected: numeric, tolerance: Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric)) }
+  }
   if (item.kind === "area") {
     if (numeric === undefined) return null
     if (vertices.length !== 3) return null
