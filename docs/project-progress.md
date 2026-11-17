@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— G3-DS 当前版本冻结36题原生复测
+
+在修订 `92981ebd` clean HEAD 按用户新授权测试：36题全运行、77次真实请求，完整合同0/36、1 partial、35 failed；2题有候选、0主画布提交。工具混批由上轮7次降为本轮0次，但模型施工单的实体引用、参数和格式问题仍阻断。实际费用未知，DS候选真实浏览器与受控提交未测。报告见[脱敏审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)；本轮没有修改产品代码。
+
 ## 2026-11-17 —— G3-DS 失败驱动：Task 0–Task 5 完结 + Task 6 前置零付费加固（等待 Task 6 授权）
 
 - **零付费加固轮（[加固审计](audit/g3-ds-failure-driven-hardening/README.md)）**：修正 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts) `mathcanvas.ds_intent.prompt.v2` 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 工具参数契约冲突；修复 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) `PlannerPort` 工具/信号接线并接入 `evaluateTask6LivePreflight` 与 `aggregateTask6FunnelReport`；在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 补齐 `function.create_tangent`（含 `common_tangent`）、`perpendicular_through_point`/`parallel_through_point`、一般缩放圆锥方程、多顶点折叠旋转与 `unresolved_construction` fail-closed；全仓 `npm test` `550` 文件 **`5850 passed | 1 todo`**、`typecheck`、`lint` 全过。

@@ -1,0 +1,1130 @@
+{
+  "schemaVersion": "g3-ds-live36-retest-sanitized.v1",
+  "revision": "92981ebd17b5c4522612e917876e2560be30d00f",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "modelId": "deepseek-v4-flash",
+  "route": "forced ds_intent with real coordinator and isolated draft; candidate-level single contract; no live browser/commit",
+  "selected": [
+    "GK-S08",
+    "GK-S02",
+    "GK-S05",
+    "GK-P03",
+    "GK-S01",
+    "GK-S03",
+    "GK-S04",
+    "GK-S06",
+    "GK-S07",
+    "GK-S09",
+    "JT-S01",
+    "JT-S02",
+    "JT-S03",
+    "JT-S04",
+    "JT-S05",
+    "JT-S06",
+    "JT-S07",
+    "JT-S08",
+    "JT-S09",
+    "GK-P01",
+    "GK-P02",
+    "GK-P04",
+    "GK-P05",
+    "GK-P06",
+    "GK-P07",
+    "GK-P08",
+    "GK-P09",
+    "JT-P01",
+    "JT-P02",
+    "JT-P03",
+    "JT-P04",
+    "JT-P05",
+    "JT-P06",
+    "JT-P07",
+    "JT-P08",
+    "JT-P09"
+  ],
+  "denominator": 36,
+  "completed": 36,
+  "limits": {
+    "calls": 108,
+    "perCase": 3,
+    "requestBytes": 80000,
+    "outputTokens": 4096,
+    "approvedMaxUsd": 5
+  },
+  "usage": {
+    "calls": 77,
+    "bytes": 686760,
+    "inputTokens": 211368,
+    "outputTokens": 140132,
+    "usageEvents": 76
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "totals": {
+    "passed": 0,
+    "partial": 1,
+    "failed": 35,
+    "nonzeroCandidate": 2,
+    "mixedReadPlan": 0,
+    "sceneWrites": 0
+  },
+  "byCase": [
+    {
+      "id": "GK-S08",
+      "requests": 2,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 5,
+      "failedObligationCount": 10,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S02",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 15,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_json",
+        "invalid_schema",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S05",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "partial",
+      "primitiveCount": 32,
+      "objectCoverage": 1,
+      "obligationCoverage": 0.9523809523809523,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingCount": 0,
+      "failedObligationCount": 1,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        []
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "plan"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P03",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 8,
+      "failedObligationCount": 16,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "cross_scope_violation",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S01",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 5,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S03",
+      "requests": 2,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 12,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S04",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 10,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "plan",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "GK-S06",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 8,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S07",
+      "requests": 2,
+      "terminal": "completed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "cross_scope_violation",
+        "envelope_invalid",
+        "answer"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-S09",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 3,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "invalid_json",
+        "invalid_schema",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S01",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 4,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S02",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 14,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "invalid_schema",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S03",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "invalid_schema",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S04",
+      "requests": 2,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 16,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S05",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S06",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 5,
+      "failedObligationCount": 9,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "plan",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-S07",
+      "requests": 2,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S08",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 15,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-S09",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 8,
+      "failedObligationCount": 3,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_json",
+        "invalid_schema",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P01",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 5,
+      "failedObligationCount": 8,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P02",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 8,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P04",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 2,
+      "failedObligationCount": 8,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P05",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 9,
+      "failedObligationCount": 21,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P06",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 25,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P07",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 13,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P08",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 1,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 0,
+      "failedObligationCount": 2,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "GK-P09",
+      "requests": 3,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 2,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": "not_supported",
+      "certificate": "partial",
+      "liveWrites": 0,
+      "missingCount": 1,
+      "failedObligationCount": 4,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "plan",
+        "invalid_schema",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P01",
+      "requests": 3,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 5,
+      "failedObligationCount": 6,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "plan",
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 3
+    },
+    {
+      "id": "JT-P02",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 13,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "undeclared_entity_ref",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P03",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 8,
+      "failedObligationCount": 13,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P04",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 16,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "cross_scope_violation",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P05",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 11,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P06",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 4,
+      "failedObligationCount": 5,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "undeclared_entity_ref",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P07",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 8,
+      "failedObligationCount": 14,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "missing_required_parameter",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P08",
+      "requests": 2,
+      "terminal": "waiting",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 7,
+      "failedObligationCount": 12,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "missing_required_parameter",
+        "envelope_invalid",
+        "clarification"
+      ],
+      "usageEvents": 2
+    },
+    {
+      "id": "JT-P09",
+      "requests": 2,
+      "terminal": "failed",
+      "contract": "failed",
+      "primitiveCount": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "verification": null,
+      "certificate": null,
+      "liveWrites": 0,
+      "missingCount": 6,
+      "failedObligationCount": 13,
+      "toolsByRequest": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ],
+      "failureCodes": [
+        "invalid_schema",
+        "envelope_invalid",
+        "invalid_json",
+        "invalid_schema",
+        "envelope_invalid"
+      ],
+      "usageEvents": 2
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-17 —— 当前提交 `92981ebd` 真实 DS 36题再测：完整合同仍0/36
+
+经用户新一轮最多5美元/冻结36题授权，原生 `deepseek-v4-flash` 强制 `ds_intent` 路线跑完36/36题，77次请求（≤108，单题≤3），76次有usage，记录输入211368/输出140132 tokens，**实际费用未知**。独立完整合同 **0/36**、1 partial（GK-S05）、35 failed；非空候选2题（GK-S05、GK-P09），其余34题无候选；原先7题的读场景与提交计划同批冲突本轮**0次**，但实体引用/必要参数/格式不合规阻断了大部分规划。数学与证书均未通过者不计入DS真实浏览器/受控交付，本轮二者**未测**。旧确定性36/36不能顶替，G3-DS仍未退出；用户/教师人工可读性与Windows实机仍待签。逐题/口径见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)。本轮额度已用，不自动追加请求。
+
 ## 2026-11-17 —— G3-DS 失败驱动实施：**Task 0–Task 5 完成 + Task 6 前置零付费加固完成（等待 Task 6 付费授权）**（真实成绩仍 0/36）
 
 - **零付费加固轮（[加固审计](audit/g3-ds-failure-driven-hardening/README.md)，0 付费）**：依据 DS5 失败模式与运行器接口联调排查并修复三批实际缺陷——① 将 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts) 升级至 `mathcanvas.ds_intent.prompt.v2`（修正 `ds_intent` 工具指引误推 `kind` 的冲突并补全 8 类策略 `params` 速查）并在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 补齐 `buildDsIntentToolSchema` 节点字段；② 修复 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 对接 `PlannerPort` 时缺失 `plan.set_plan` / `AbortSignal` / `conversation` 必崩缺陷，并落地 `evaluateTask6LivePreflight` 与 `aggregateTask6FunnelReport` 预算/熔断门禁；③ 扩展 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts)（`common_tangent` 与源绑定 `tangent_at_x` 产出 `function.create_tangent`、`perpendicular_through_point`/`parallel_through_point`、缩放方程如 `4x^2+9y^2=36`、多动点 `solid_fold_along_hinge` 旋转，以及任一步骤未解出图元时的 `unresolved_construction` fail-closed 拦截）。全仓 `npm test`（`550` 文件 **`5850 passed | 1 todo`**）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；**仍严格停在 Task 6 之前等待用户显式付费授权**。

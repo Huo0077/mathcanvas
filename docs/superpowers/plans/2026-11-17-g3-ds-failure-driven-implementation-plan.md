@@ -1,5 +1,7 @@
 # G3-DS Failure-Driven Implementation Plan
 
+> **2026-11-17 Task 6 新证据（非退出）**：用户新授权的 `92981ebd` 强制DS冻结36题运行完成，77请求，数学合同0/36、1 partial、35 failed，2题非空候选；混合读/提交工具批次0，仍卡模型施工单实体/参数/格式。见[脱敏审计](../../audit/2026-11-17-g3-ds-live-retest-92981/README.md)。不将Task 6勾选为退出；新付费修复回归必须重新授权。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把冻结36题真实DS强制规划从当前合同0/36，按可追责失败边界修到同候选数学/证书/渲染/受控交付36/36；新题另计，不能保证任意新题100%。
