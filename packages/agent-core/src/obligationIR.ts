@@ -9,6 +9,7 @@ import {
   type DiagramSourceSpan
 } from "./diagramObligations"
 import type { ClaimRole, GeometryObligation, Judgeability, ObligationTolerance } from "./claimEvidence"
+import { addConstraintNode, createConstraintGraph, type ConstraintGraph, type ConstraintKind } from "./constraintGraph"
 import { normalizeGeometryPrompt } from "./latexNormalisation"
 import { SHARED_SCOPE_ID, parseSubquestionScopeId, subquestionScopeId } from "./numberedProblem"
 
@@ -703,5 +704,55 @@ export function irClauseSummaryForPrompt(prompt: string, selectedScopeId?: strin
     unverifiedCount: ir.unverified.length,
     unverifiedTexts: ir.unverified.map((u) => u.sourceText)
   }
+}
+
+function mapObligationKindToConstraintKind(kind: string): ConstraintKind {
+  switch (kind) {
+    case "length":
+    case "solidEdgeLength":
+    case "distance":
+      return "distance"
+    case "ratio":
+      return "ratio"
+    case "perpendicular":
+    case "foldPerp":
+      return "perpendicular"
+    case "parallel":
+      return "parallel"
+    case "angle":
+    case "dihedral":
+      return "angle"
+    case "collinear":
+      return "collinear"
+    case "coplanar":
+    case "baseCoplanar":
+      return "coplanar"
+    case "tangent":
+    case "commonTangent":
+      return "tangent"
+    case "topology":
+    case "openTopology":
+      return "topology"
+    case "foldTransform":
+      return "fold_transform"
+    default:
+      return "incidence"
+  }
+}
+
+export function buildConstraintGraphFromObligationIR(ir: ObligationIR): ConstraintGraph {
+  let graph = createConstraintGraph()
+  for (const ob of ir.obligations) {
+    graph = addConstraintNode(graph, {
+      id: ob.id,
+      kind: mapObligationKindToConstraintKind(ob.kind),
+      targets: ob.targets,
+      scopeId: ob.scopeId ?? SHARED_SCOPE_ID,
+      stateId: ob.stateId ?? ob.scopeId ?? SHARED_SCOPE_ID,
+      sourceRefs: [{ sourceText: ob.sourceText, start: ob.start, end: ob.end }],
+      status: ob.judgeability === "supported" ? "unknown" : "underdetermined"
+    })
+  }
+  return graph
 }
 

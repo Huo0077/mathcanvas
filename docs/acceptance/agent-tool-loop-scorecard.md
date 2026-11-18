@@ -1,6 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-> **2026-11-18 G3-DS Task F0–F2 进度（零付费，真实 DS 仍 0/36）**：已按 [G3-DS 最终版实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**（`f118c721`）、**Task F1**（`15be4dfc`）与 **Task F2**（[Task F2 审计](../audit/g3-final-f2/README.md)，22 项动作级闭集协议与 `accepted`/`repairable`/`blocked` 三态返回），正按 `F3 → F8` 顺序推进实体/约束图与内核求解，**Task F9**（分层真实 DS 复测）须待 F3–F8 完结且获新付费授权后方可执行。
+> **2026-11-18 G3-DS Task F0–F3 进度（零付费，真实 DS 仍 0/36）**：已按 [G3-DS 最终版实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**（`f118c721`）、**Task F1**（`15be4dfc`）、**Task F2**（`195bf691`）与 **Task F3**（[Task F3 审计](../audit/g3-final-f3/README.md)，实体/约束依赖图与三态观察），正按 `F4 → F8` 顺序推进二维/三维内核求解、折叠多状态与局部修复，**Task F9**（分层真实 DS 复测）须待 F4–F8 完结且获新付费授权后方可执行。
 
 > **2026-11-17 最新真实DS计分**：[当前修订原生36题报告](../audit/2026-11-17-g3-ds-live-retest-92981/README.md)：强制DS独立完整数学合同0/36，1 partial/35 failed，2非空候选、77请求、76次usage、实际费用未知；同版DS浏览器渲染/隔离提交未执行。旧离线36/36、旧DS2/36与前轮DS0/36各为不同修订/口径，不并表。
 

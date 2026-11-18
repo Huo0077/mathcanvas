@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F3：实体图 `EntityGraph`、约束图 `ConstraintGraph` 与三态观察（0 付费；下一步 Task F4）
+
+- **状态与证据**：新建 [entityGraph.ts](packages/agent-core/src/entityGraph.ts)、[constraintGraph.ts](packages/agent-core/src/constraintGraph.ts)、[kernelObservation.ts](packages/agent-core/src/kernelObservation.ts) 及 [entityGraph.test.ts](packages/agent-core/src/entityGraph.test.ts)、[constraintGraph.test.ts](packages/agent-core/src/constraintGraph.test.ts)，接入 [obligationIR.ts](packages/agent-core/src/obligationIR.ts) 与 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`33 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F3 审计](audit/g3-final-f3/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F4（二维与函数内核求解器 `constraintSolve2d`）**。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F2：动作级 DS ToolSpec 与单动作协议 `dsActionTools`（0 付费；下一步 Task F3）
 
 - 按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F2**：在 [actionRegistry.ts](packages/agent-core/src/actionRegistry.ts) 定义 22 项闭集 `DS_ACTION_CLOSED_SET`，新建 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 接入 `SpeculativeCanvas` 步进执行与 `accepted/repairable/blocked` 三态反馈；同步更新 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[modelToolPolicy.ts](apps/web/src/agent/modelToolPolicy.ts) 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 打通 `ds_action` 多轮单动作闭环（拒重 `toolCallId`、拒读+写混批、支持取消与澄清），保持 `ds_intent` 路线 A 兼容。`4` 文件 **`110 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F2 审计](audit/g3-final-f2/README.md)。真实 DS 仍 `0/36`；下一步推进 **Task F3（实体图与约束图）**。

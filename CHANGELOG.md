@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F3 实体图与约束图**：新增 [entityGraph.ts](packages/agent-core/src/entityGraph.ts)、[constraintGraph.ts](packages/agent-core/src/constraintGraph.ts)、[kernelObservation.ts](packages/agent-core/src/kernelObservation.ts) 与单测 [entityGraph.test.ts](packages/agent-core/src/entityGraph.test.ts)、[constraintGraph.test.ts](packages/agent-core/src/constraintGraph.test.ts)，支持可序列化实体/约束依赖、跨小问继承权限判定、待求参数表（`solvable`）及三态观察汇总；在 [obligationIR.ts](packages/agent-core/src/obligationIR.ts) 接入 `buildConstraintGraphFromObligationIR`、在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 接入 `classifyDsIntentTriState` 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `33 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **Task F2 动作级 DS ToolSpec**：在 [actionRegistry.ts](packages/agent-core/src/actionRegistry.ts) 与 [index.ts](packages/agent-core/src/index.ts) 导出 22 项闭集 `DS_ACTION_CLOSED_SET`，新建 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)，并在 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[modelToolPolicy.ts](apps/web/src/agent/modelToolPolicy.ts) 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入 `ds_action` 多轮单动作闭环（`4` 文件 `110 passed`、`typecheck`、`lint` 全过）。
 

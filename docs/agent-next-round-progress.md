@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-18 最终版 B→C 路线执行更新（Task F0–F2 完成，0 付费；真实 DS 仍 0/36）**：已完成 **Task F0**（`f118c721`，[2026-11-17-92981 基线](g3-final/retests/2026-11-17-92981/README.md)）、**Task F1**（`15be4dfc`，[Task F1 审计](audit/g3-final-f1/README.md)）与 **Task F2**（[Task F2 审计](audit/g3-final-f2/README.md)，22 项闭集单动作协议 `dsActionTools` + `modelPlanner` `ds_action` 模式，`4` 文件 `110 passed` + `typecheck` + `lint` + `test:docs` 全过）。真实 DS 仍 `0/36`，**当前执行入口推进至 Task F3（实体图 `EntityGraph` 与约束图 `ConstraintGraph`）**；**Task F9（分层真实 DS 复测）仍需独立付费授权**。
+> **2026-11-18 最终版 B→C 路线执行更新（Task F0–F3 完成，0 付费；真实 DS 仍 0/36）**：已完成 **Task F0**（`f118c721`，[2026-11-17-92981 基线](g3-final/retests/2026-11-17-92981/README.md)）、**Task F1**（`15be4dfc`，[Task F1 审计](audit/g3-final-f1/README.md)）、**Task F2**（`195bf691`，[Task F2 审计](audit/g3-final-f2/README.md)）与 **Task F3**（[Task F3 审计](audit/g3-final-f3/README.md)，实体图 `EntityGraph`、约束图 `ConstraintGraph` 与三态观察，`4` 文件 `33 passed` + `typecheck` + `lint` + `test:docs` 全过）。真实 DS 仍 `0/36`，**当前执行入口推进至 Task F4（二维与函数内核求解器 `constraintSolve2d`）**；**Task F9（分层真实 DS 复测）仍需独立付费授权**。
 
 > **2026-11-17 最新DS实测**：最新 `92981ebd` 全36题强制DS完整合同仍**0/36**，有候选2题、34题无候选；此前7个工具混批本轮0个。优先修结构化施工单的未声明实体/必需参数/格式协议，不以加请求、离线36/36或浏览器工程通过替代。逐题见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)，再次付费需新授权。
 

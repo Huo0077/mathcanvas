@@ -23,6 +23,7 @@ export * from "./budget"
 export * from "./capabilities"
 export * from "./claimEvidence"
 export * from "./committerAdapter"
+export * from "./constraintGraph"
 export * from "./constraintIR"
 export * from "./contracts"
 export * from "./contextBuilder"
@@ -33,6 +34,7 @@ export * from "./derivedPrimitives"
 export * from "./diagramObligations"
 export * from "./diagramVerification"
 export * from "./draftCounts"
+export * from "./entityGraph"
 export * from "./events"
 /**
  * **明确给出的球 / 棱柱条件**：规划器与编译器共用的唯一读取规则。
@@ -181,6 +183,7 @@ export * from "./trigMonotonicityPlan"
 export * from "./deterministicProblemRoute"
 export * from "./dsCandidateBundle"
 export * from "./dsDrawingIntent"
+export * from "./kernelObservation"
 export * from "./reliabilityDiagnostics"
 /**
  * **多边形（梯形）沿对角线翻折**（T6）：题面 → 计划 / 一次澄清。

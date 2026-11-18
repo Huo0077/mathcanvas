@@ -14,6 +14,14 @@ import type { DraftAction } from "@draw/scene-graph"
 
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { compileConstructionDag, type DrawingEntityKind, type DrawingIntentNode } from "./drawingIntent"
+import {
+  addConstraintNode,
+  createConstraintGraph,
+  registerPendingParameterVar,
+  type ConstraintKind
+} from "./constraintGraph"
+import { createEntityGraph, declareEntityNode, resolveEntityScopeAccess } from "./entityGraph"
+import { buildKernelObservation, type KernelObservation } from "./kernelObservation"
 import { irClauseSummaryForPrompt, type IrPromptClauseSummary } from "./obligationIR"
 import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
 import { constructRegularSquarePyramid } from "./solver/regularPyramid"
@@ -1820,4 +1828,111 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
     ...(disclosures.length > 0 ? { answer: disclosures.join("；") } : {}),
     actions
   }
+}
+
+function mapRelationKindToConstraintKind(kind: string): ConstraintKind {
+  switch (kind) {
+    case "length":
+    case "distance":
+      return "distance"
+    case "ratio":
+      return "ratio"
+    case "perpendicular":
+      return "perpendicular"
+    case "parallel":
+      return "parallel"
+    case "angle":
+      return "angle"
+    case "collinear":
+      return "collinear"
+    case "coplanar":
+      return "coplanar"
+    case "tangent":
+      return "tangent"
+    case "topology":
+      return "topology"
+    case "fold":
+      return "fold_transform"
+    default:
+      return "incidence"
+  }
+}
+
+/** Task F3 tri-state classifier separating accepted / repairable / blocked via EntityGraph & ConstraintGraph. */
+export function classifyDsIntentTriState(intent: DsDrawingIntent): KernelObservation {
+  let entities = createEntityGraph()
+  let constraints = createConstraintGraph()
+  const repairHints: string[] = []
+  const blockers: string[] = []
+
+  if (intent.unknowns.some((u) => u.blocking)) {
+    for (const u of intent.unknowns.filter((item) => item.blocking)) {
+      blockers.push(`${u.kind}:${u.detail}`)
+    }
+  }
+
+  for (const ent of intent.entities) {
+    entities = declareEntityNode(entities, {
+      id: ent.id,
+      kind: ent.kind,
+      ...(ent.label === undefined ? {} : { label: ent.label }),
+      scopeId: ent.scopeId,
+      stateId: ent.stateId,
+      ...(ent.hostEntityId === undefined ? {} : { hostEntityId: ent.hostEntityId }),
+      sourceRefs: ent.sourceSpan ? [{ sourceText: ent.sourceSpan.text, start: ent.sourceSpan.start ?? 0, end: ent.sourceSpan.end ?? ent.sourceSpan.text.length }] : []
+    })
+  }
+
+  for (let i = 0; i < intent.givenRelations.length; i += 1) {
+    const rel = intent.givenRelations[i]!
+    const constraintId = `rel-${i + 1}`
+    const refs = rel.sourceSpan
+      ? [{ sourceText: rel.sourceSpan.text, start: rel.sourceSpan.start ?? 0, end: rel.sourceSpan.end ?? rel.sourceSpan.text.length }]
+      : []
+    constraints = addConstraintNode(constraints, {
+      id: constraintId,
+      kind: mapRelationKindToConstraintKind(rel.kind),
+      targets: rel.targets,
+      scopeId: rel.scopeId,
+      stateId: rel.stateId,
+      sourceRefs: refs,
+      status: "unknown"
+    })
+    for (const target of rel.targets) {
+      const access = resolveEntityScopeAccess(entities, {
+        entityId: target,
+        consumerScopeId: rel.scopeId,
+        subquestions: intent.subquestions,
+        sourceRefs: refs
+      })
+      if (access.status === "repairable") {
+        repairHints.push(access.reason)
+        constraints = registerPendingParameterVar(constraints, {
+          name: `entity:${target}`,
+          entityId: target,
+          scopeId: rel.scopeId,
+          solvableFromConstraintIds: [constraintId],
+          kind: "solvable"
+        })
+      } else if (access.status === "blocked") {
+        blockers.push(access.reason)
+      }
+    }
+  }
+
+  const paramCheck = validateRequiredParameters(intent)
+  if (!paramCheck.ok) {
+    if (Object.keys(constraints.nodes).length > 0 && paramCheck.code === "missing_required_parameter") {
+      repairHints.push(`${paramCheck.code}:${paramCheck.path}`)
+    } else {
+      blockers.push(`${paramCheck.code}:${paramCheck.path}`)
+    }
+  }
+
+  return buildKernelObservation({
+    entities,
+    constraints,
+    repairHints,
+    blockers
+  })
 }
