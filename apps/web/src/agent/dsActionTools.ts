@@ -35,15 +35,47 @@ export interface DsActionExecutionResult {
   readonly ok: boolean
   readonly status: DsActionStatus
   readonly action: DsActionName
+  readonly stateChanged: boolean
   readonly entity?: string
   readonly position?: Coordinate
   readonly candidateHash: string
   readonly stepIndex: number
   readonly primitiveCount: number
+  readonly measurement?: Record<string, unknown>
+  readonly constraintStatus?: string
   readonly repairHint?: string
   readonly blockerCode?: string
   readonly terminated?: { readonly plan: PlanEnvelope }
 }
+
+/** Closed subset of DS actions backed by real kernel execution / state transitions or real observations. */
+export const IMPLEMENTED_DS_ACTION_TOOLS: readonly DsActionName[] = [
+  "declare_entity",
+  "add_relation",
+  "choose_strategy",
+  "construct_point",
+  "construct_line",
+  "construct_segment",
+  "construct_intersection",
+  "construct_circle",
+  "construct_conic",
+  "construct_tangent",
+  "construct_perpendicular",
+  "construct_parallel",
+  "repair_entity",
+  "repair_constraint",
+  "finish_candidate",
+  "request_clarification"
+]
+
+export const NON_CONSTRUCTIVE_DS_ACTIONS: ReadonlySet<DsActionName> = new Set<DsActionName>([
+  "declare_entity",
+  "add_relation",
+  "choose_strategy",
+  "query_measurement",
+  "query_constraint_status",
+  "request_clarification"
+])
 
 export interface DsActionSession {
   execute(toolName: string, rawInput: unknown): DsActionExecutionResult
@@ -75,8 +107,9 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   request_clarification: "Stop construction honestly when a required figure or parameter cannot be determined."
 }
 
-export function buildDsActionToolSchemas() {
-  return DS_ACTION_TOOL_NAMES.map((name) => ({
+export function buildDsActionToolSchemas(options: { includeUnimplemented?: boolean } = {}) {
+  const names = options.includeUnimplemented ? DS_ACTION_TOOL_NAMES : IMPLEMENTED_DS_ACTION_TOOLS
+  return names.map((name) => ({
     type: "function",
     function: {
       name,
@@ -152,6 +185,22 @@ export function createDsActionSession(options: {
       ok: false,
       status: "repairable",
       action,
+      stateChanged: false,
+      candidateHash: snap.candidateHash,
+      stepIndex: snap.stepIndex,
+      primitiveCount: snap.primitiveCount,
+      blockerCode,
+      repairHint
+    }
+  }
+
+  const failBlocked = (action: DsActionName, blockerCode: string, repairHint: string): DsActionExecutionResult => {
+    const snap = speculative.snapshot()
+    return {
+      ok: false,
+      status: "blocked",
+      action,
+      stateChanged: false,
       candidateHash: snap.candidateHash,
       stepIndex: snap.stepIndex,
       primitiveCount: snap.primitiveCount,
@@ -166,12 +215,14 @@ export function createDsActionSession(options: {
     entityId?: string,
     position?: Coordinate
   ): DsActionExecutionResult => {
+    const before = speculative.snapshot()
     const step = speculative.applyAction(draftAction)
     if (!step.ok) {
       return {
         ok: false,
         status: step.status,
         action: actionName,
+        stateChanged: false,
         ...(entityId === undefined ? {} : { entity: entityId }),
         candidateHash: step.candidateHash,
         stepIndex: step.stepIndex,
@@ -184,6 +235,7 @@ export function createDsActionSession(options: {
       ok: true,
       status: "accepted",
       action: actionName,
+      stateChanged: step.stepIndex > before.stepIndex || step.candidateHash !== before.candidateHash,
       ...(entityId === undefined ? {} : { entity: entityId }),
       ...(position === undefined ? {} : { position }),
       candidateHash: step.candidateHash,
@@ -203,6 +255,7 @@ export function createDsActionSession(options: {
           ok: false,
           status: parsed.status,
           action: isDsActionName(toolName) ? toolName : "declare_entity",
+          stateChanged: false,
           candidateHash: snap.candidateHash,
           stepIndex: snap.stepIndex,
           primitiveCount: snap.primitiveCount,
@@ -222,7 +275,7 @@ export function createDsActionSession(options: {
           scopeId: asString(input.scopeId) ?? "shared",
           stateId: asString(input.stateId) ?? "shared"
         })
-        return { ok: true, status: "accepted", action: name, entity: id, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
+        return { ok: true, status: "accepted", action: name, stateChanged: false, entity: id, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
       }
 
       if (name === "add_relation") {
@@ -232,11 +285,15 @@ export function createDsActionSession(options: {
           return failRepairable(name, "missing_required_parameter", "add_relation requires kind and targets")
         }
         relations.push({ kind, targets })
-        return { ok: true, status: "accepted", action: name, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
+        return { ok: true, status: "accepted", action: name, stateChanged: false, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
       }
 
-      if (name === "choose_strategy" || name === "query_measurement" || name === "query_constraint_status") {
-        return { ok: true, status: "accepted", action: name, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
+      if (name === "choose_strategy") {
+        return { ok: true, status: "accepted", action: name, stateChanged: false, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
+      }
+
+      if (name === "query_measurement" || name === "query_constraint_status") {
+        return failBlocked(name, "unsupported_action", `${name} observation handler is not wired yet`)
       }
 
       if (name === "repair_entity" || name === "repair_constraint") {
@@ -245,6 +302,7 @@ export function createDsActionSession(options: {
           ok: true,
           status: "accepted",
           action: name,
+          stateChanged: rolled.stepIndex < snap.stepIndex,
           candidateHash: rolled.candidateHash,
           stepIndex: rolled.stepIndex,
           primitiveCount: rolled.primitiveCount
@@ -427,6 +485,7 @@ export function createDsActionSession(options: {
           ok: true,
           status: "accepted",
           action: name,
+          stateChanged: false,
           candidateHash: snap.candidateHash,
           stepIndex: snap.stepIndex,
           primitiveCount: snap.primitiveCount,
@@ -450,6 +509,7 @@ export function createDsActionSession(options: {
           ok: true,
           status: "blocked",
           action: name,
+          stateChanged: false,
           candidateHash: snap.candidateHash,
           stepIndex: snap.stepIndex,
           primitiveCount: snap.primitiveCount,
@@ -460,28 +520,16 @@ export function createDsActionSession(options: {
 
       if (name === "construct_solid") {
         if (Array.isArray(input.vertices)) {
-          return {
-            ok: false,
-            status: "blocked",
-            action: name,
-            candidateHash: snap.candidateHash,
-            stepIndex: snap.stepIndex,
-            primitiveCount: snap.primitiveCount,
-            blockerCode: "hand_computed_vertices_forbidden",
-            repairHint: "never pass hand-computed vertices; pass parametric shape parameters"
-          }
+          return failBlocked(
+            name,
+            "hand_computed_vertices_forbidden",
+            "never pass hand-computed vertices; pass parametric shape parameters"
+          )
         }
-        return { ok: true, status: "accepted", action: name, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
+        return failBlocked(name, "unsupported_action", "construct_solid kernel execution is not implemented yet")
       }
 
-      return {
-        ok: true,
-        status: "accepted",
-        action: name,
-        candidateHash: snap.candidateHash,
-        stepIndex: snap.stepIndex,
-        primitiveCount: snap.primitiveCount
-      }
+      return failBlocked(name, "unsupported_action", `${name} kernel execution is not implemented yet`)
     }
   }
 }

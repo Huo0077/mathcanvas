@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-18 —— G3-F9 内核动作修复 **Task 0 已完成**（0 新增付费；正推进 Task 1–4 真实执行与多状态接线）
+
+- **`G3-F9 Task 0`（工具状态真实性闸 + 无进展停机）已完成（0 新增付费）**：按 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) 在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 移除末尾默认 `accepted` 兜底并新增 `stateChanged` 与 `IMPLEMENTED_DS_ACTION_TOOLS` 工具发布过滤（未落地立体/面/折叠/查询动作统一返回 `blocked / unsupported_action`），在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 加入无进展 `no_progress` 及时停机。`dsActionTools.test.ts` 与 `modelPlanner.test.ts` 共 **`2` 文件 `75 passed`**（覆盖三族 `construct_solid` / `construct_face` 零费复现反例）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 0 审计](audit/g3-f9-repair-t0/README.md)。真实 DS 仍未重测（`GK-S08` 此前 8 请求试点无候选，其余 35 题未测）；**下一步进入 Task 1（接通 `solveConstraint3d` 让立体动作真实生成隔离候选图元）**。
+
 ## 2026-11-17 —— F9三组零费用复测及新修复计划（真实DS未再调用）
 
 当前修订 `0267dd61` 未修复立体动作假成功。三组不同形状的零付费内核复现均观察到 `construct_solid accepted/0 → construct_face accepted/0 → finish_candidate empty_candidate`，所以本轮**新增DS付费请求0次**，不把这三次称为“DS真实模型复测”；此前首题8次真实调用仍保留原报告。新增[针对性修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)：先将虚假 accepted fail-closed，再接已有三维约束求解器、实现真实测量与停滞检测、最后打通live多状态CandidateSet，修复后重新授权单题真实回归。证据见[三组零费复现](audit/2026-11-17-g3-f9-repeat-probe/README.md)。F9、36题、人工/Windows门禁均未退出。

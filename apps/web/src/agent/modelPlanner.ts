@@ -46,7 +46,11 @@ import {
 } from "../services/providerProfileClient"
 import { invokeDesktop } from "../services/desktopRuntime"
 import { cancelModelRun, startModelRun, type ModelChatMessage, type ModelClientStart } from "../services/modelClient"
-import { buildDsActionToolSchemas, createDsActionSession } from "./dsActionTools"
+import {
+  buildDsActionToolSchemas,
+  createDsActionSession,
+  NON_CONSTRUCTIVE_DS_ACTIONS
+} from "./dsActionTools"
 import { buildSystemPrompt, type PromptIntentMode } from "./systemPrompt"
 import {
   deriveSceneToolContextFromRequest,
@@ -632,6 +636,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let observationCalls = 0
       let observationCompleted = false
       const seenCalls = new Set<string>()
+      const dsActionSignatures = new Map<string, number>()
       const dsActionSession = intentMode === "ds_action"
         ? createDsActionSession({ workspace: request.run.target.workspace, baseDocument: createEmptyDocument(request.run.target.workspace), runId })
         : null
@@ -969,6 +974,36 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
             if (execRes.terminated !== undefined) {
               return { plan: execRes.terminated.plan, ...ids }
+            }
+            const isConstructive = !NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action)
+            if (isConstructive && execRes.ok && !execRes.stateChanged) {
+              return {
+                failure: createPlanFailure({
+                  category: "unexpected_tool_call",
+                  channel,
+                  detail: `no_progress: constructive ds_action ${execRes.action} reported accepted without changing candidate state`,
+                  ...(stopReason === undefined ? {} : { stopReason })
+                }),
+                ...ids
+              }
+            }
+            if (!execRes.stateChanged || !execRes.ok) {
+              const actionSig = `${execRes.action}:${execRes.status}:${execRes.blockerCode ?? ""}:${execRes.candidateHash}:${execRes.primitiveCount}`
+              const nextCount = (dsActionSignatures.get(actionSig) ?? 0) + 1
+              dsActionSignatures.set(actionSig, nextCount)
+              if (nextCount >= 2) {
+                return {
+                  failure: createPlanFailure({
+                    category: "unexpected_tool_call",
+                    channel,
+                    detail: `no_progress: ds_action ${execRes.action} repeated stalled signature (${actionSig})`,
+                    ...(stopReason === undefined ? {} : { stopReason })
+                  }),
+                  ...ids
+                }
+              }
+            } else {
+              dsActionSignatures.clear()
             }
             if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
               throw new ModelPlannerError("provider_failed", "budget exhausted during ds_action construction step")

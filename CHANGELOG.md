@@ -8,6 +8,10 @@
 
 
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 0：工具状态真实性闸（开发版，0 新增付费）
+
+- **G3-F9 修复 Task 0**：按 [G3-F9 内核动作修复计划](docs/g3-final/G3-F9-kernel-action-repair-plan.md) 在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 删除尾部默认 `accepted` 兜底，引入 `stateChanged: boolean` 与 `IMPLEMENTED_DS_ACTION_TOOLS` 发布过滤，未实装 3D/观测动作一律 fail-closed（`blocked / unsupported_action`）；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 增加构造无变更/同签名 `no_progress` 熔断；补全 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 三族零费反例与 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 停机单测（`2` 文件 `75 passed`、`typecheck`、`lint` `0 errors`、`test:docs` 全过）。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F8 / F7 / F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
 
 - **Task F8 真实画布交付一致与全仓终态门禁**：在 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts) 阻断 `speculativeOnly` 与 `screenshotCandidateHash` 失配，在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 输出并校验 `data-candidate-hash`，并在 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts) 验证全链同哈希；终态后跑通 `npm test`（`557` 文件 `5875 passed | 1 todo`）、`typecheck`、`lint`（`0 errors`）、`test:rust` 与 Playwright E2E（`41 passed`，`0` 重试）。F0–F8 全部完结，严格停在 **Task F9** 付费授权前；真实 DS 仍维持 `0/36` 基线且 `humanReviewed` 保持 `pending`。

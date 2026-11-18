@@ -85,7 +85,13 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     expect(DS_ACTION_TOOL_NAMES).toHaveLength(22)
 
     const schemas = buildDsActionToolSchemas()
-    expect(schemas.map((s) => s.function.name)).toEqual([...DS_ACTION_CLOSED_SET])
+    expect(schemas.length).toBeGreaterThan(0)
+    expect(schemas.every((s) => DS_ACTION_CLOSED_SET.includes(s.function.name))).toBe(true)
+    const published = schemas.map((s) => s.function.name)
+    expect(published).toContain("construct_point")
+    expect(published).toContain("finish_candidate")
+    expect(published).not.toContain("construct_base")
+    expect(published).not.toContain("construct_fold_state")
 
     const prompt = buildSystemPrompt({
       context: plannerRequest().model.context,
@@ -290,5 +296,53 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     controller.abort()
     const abortReq = { ...plannerRequest(), signal: controller.signal }
     await expect(clarifyPlanner.plan(abortReq)).rejects.toThrow(/已取消|cancelled/i)
+  })
+
+  it("Task 0 fail-closed gate: unimplemented 3D/query actions never fake accepted with 0 primitives", () => {
+    const families = [
+      { kind: "square_pyramid", sideLength: 2, height: 3 },
+      { kind: "triangular_prism", sideLength: 3, height: 4 },
+      { kind: "tetrahedron", edgeLength: 2 }
+    ]
+
+    for (const input of families) {
+      const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+      const solidRes = session.execute("construct_solid", input)
+      expect(solidRes.ok).toBe(false)
+      expect(solidRes.status).toBe("blocked")
+      expect(solidRes.blockerCode).toBe("unsupported_action")
+      expect(solidRes.stateChanged).toBe(false)
+      expect(solidRes.primitiveCount).toBe(0)
+
+      const faceRes = session.execute("construct_face", { alias: "F1", vertexNames: ["A", "B", "C"] })
+      expect(faceRes.ok).toBe(false)
+      expect(faceRes.status).toBe("blocked")
+      expect(faceRes.blockerCode).toBe("unsupported_action")
+      expect(faceRes.stateChanged).toBe(false)
+
+      const baseRes = session.execute("construct_base", { shape: "square", sideLength: 2 })
+      expect(baseRes.ok).toBe(false)
+      expect(baseRes.status).toBe("blocked")
+      expect(baseRes.blockerCode).toBe("unsupported_action")
+
+      const foldRes = session.execute("construct_fold_state", { hinge: { from: "A", to: "C" }, angle: 90 })
+      expect(foldRes.ok).toBe(false)
+      expect(foldRes.status).toBe("blocked")
+      expect(foldRes.blockerCode).toBe("unsupported_action")
+
+      const queryM = session.execute("query_measurement", { metric: "distance", targets: ["A", "B"] })
+      expect(queryM.ok).toBe(false)
+      expect(queryM.status).toBe("blocked")
+
+      const queryC = session.execute("query_constraint_status", { targets: ["A", "B"] })
+      expect(queryC.ok).toBe(false)
+      expect(queryC.status).toBe("blocked")
+
+      const finish = session.execute("finish_candidate", {})
+      expect(finish.ok).toBe(false)
+      expect(finish.status).toBe("repairable")
+      expect(finish.blockerCode).toBe("empty_candidate")
+      expect(finish.terminated).toBeUndefined()
+    }
   })
 })

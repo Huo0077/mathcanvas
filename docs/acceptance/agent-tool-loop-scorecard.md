@@ -1,5 +1,7 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-18 G3-F9 内核动作修复（Task 0 完成，0 新增付费；正推进 Task 1）**：已完成 **Task 0**（[Task 0 审计](../audit/g3-f9-repair-t0/README.md)，工具状态真实性闸 + 无进展停机），正按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 依次落地 Task 1 立体参数化执行、Task 2 面/折叠/真实读数与 Task 4 多状态 `CandidateSet` live 接线。
+
 > **2026-11-18 G3-DS Task F0–F8 进度（全部工程完结，零付费，真实 DS 仍 0/36）**：已按 [G3-DS 最终版实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0–F8** 全部动作协议、隔离候选层、实体/约束图、2D/3D/折叠求解、定向局部修复及真实画布终态门禁（见 [Task F8 审计](../audit/g3-final-f8/README.md)），现按 §12 停机规则等待用户对 **Task F9（分层真实 DS 复测：Tier A→B→C）** 的显式付费授权与参数锁定。
 
 > **2026-11-17 最新真实DS计分**：[当前修订原生36题报告](../audit/2026-11-17-g3-ds-live-retest-92981/README.md)：强制DS独立完整数学合同0/36，1 partial/35 failed，2非空候选、77请求、76次usage、实际费用未知；同版DS浏览器渲染/隔离提交未执行。旧离线36/36、旧DS2/36与前轮DS0/36各为不同修订/口径，不并表。

@@ -1557,4 +1557,45 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
       expect.arrayContaining(["nodeId", "outputEntityId", "outputKind", "strategy", "scopeId", "stateId", "dependencyIds", "params", "sourceSpan"])
     )
   })
+
+  it("Task 0 ds_action stagnation guard: stops immediately on repeated blocked/no-progress calls instead of burning budget", async () => {
+    let modelCalls = 0
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "deepseek",
+          modelId: "deepseek-v4-flash",
+          dialect: "openai",
+          revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async () => {
+        modelCalls += 1
+        return {
+          ok: true,
+          events: [
+            {
+              kind: "tool_call",
+              requestId: `r-${modelCalls}`,
+              attemptId: `a-${modelCalls}`,
+              toolCallId: `tc-${modelCalls}`,
+              toolId: "construct_solid",
+              input: { kind: "square_pyramid", sideLength: 2, height: 3 }
+            }
+          ]
+        }
+      }
+    })
+
+    const budget = createBudget({ network: 8, generation: 8, tool: 12 })
+    const outcome = await planner.plan(request({ userMessage: "画正四棱锥", budget }))
+    expect("failure" in outcome).toBe(true)
+    expect(modelCalls).toBeLessThanOrEqual(2)
+    if ("failure" in outcome) {
+      expect(outcome.failure.detail).toMatch(/no_progress|stagnant|unsupported_action/i)
+    }
+  })
 })

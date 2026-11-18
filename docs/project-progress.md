@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 0：工具状态真实性闸与停滞保护（0 新增付费；下一步 Task 1）
+
+- **状态与证据**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 新增 `stateChanged` 字段、删除默认 `accepted` 兜底并收敛 `buildDsActionToolSchemas` 为已实装闭集；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入同签名/假推进 `no_progress` 熔断；在 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 与 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 先 RED 后 GREEN（`2` 文件 `75 passed`、`typecheck`、`lint` `0 errors`、`test:docs` 全过）；详见 [Task 0 审计](audit/g3-f9-repair-t0/README.md)。
+
 ## 2026-11-17 —— F9三组不同参数的零费重复复现与修复计划
 
 在当前`0267dd61`对方锥/三棱柱/四面体三族重复运行当前内核动作，3/3均 `construct_solid` 与 `construct_face` 虚报 accepted但0图元，finish 为 empty_candidate；本次没有新付费DS请求。将分级真实性闸、内核构造接线、面/读数/状态、熔断、多状态live评分写入[新计划](g3-final/G3-F9-kernel-action-repair-plan.md)，可复查证据[零费探针](audit/2026-11-17-g3-f9-repeat-probe/README.md)。旧8请求单题真实结果不更改，F9仍未完成。

@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 G3-F9 内核动作修复进展（Task 0 完成，0 新增付费；推进 Task 1）**：已完成 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) **Task 0**（[Task 0 审计](audit/g3-f9-repair-t0/README.md)，[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 删除空转 `accepted`、只发布已实装动作并落地 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) `no_progress` 熔断，`2` 文件 `75 passed` + `typecheck` + `lint` + `test:docs` 全过）；**当前执行入口推进至 Task 1（接通 `solveConstraint3d` 让 `construct_solid` 真实物化隔离候选图元）**，真实 DS 调用仍暂停直至 Task 0–4 全部零费闭环并获新付费授权。
+
 > **2026-11-17 F9修复入口**：先读[新修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)和[三组零费反例](audit/2026-11-17-g3-f9-repeat-probe/README.md)。Task0禁止3D动作假成功→Task1接 `solveConstraint3d` 真正物化立体→Task2面/观察→Task3无进展熔断→Task4真实多状态候选→Task5新授权小样本。当前真实F9仅GK-S08试点8请求、未形成候选；本轮额外付费0，不能扩到36。
 
 > **2026-11-17 F9 首题停批**：新授权下已真实发出8次 `ds_action` 请求测GK-S08，但`construct_solid`/`construct_face` 虚报成功且图元0，`finish_candidate` 因空候选失败；其余35题未测。先按[首题审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)修内核动作工具与读工具，继续补真正 live CandidateSet，多项零费通过后再复测一题。不能将剩余100次请求盲目用完。
