@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-17 当前 F9 实测停点**：纯文字 GK-S09 两次原生DS `construct_solid` 均未形成候选，35题未测。先补工具回执脱敏 `{status, blockerCode, primitiveCount, hashChanged}`，零费核验含符号边长与外接球的题型，再按新授权复测小样本；[证据](audit/2026-11-17-g3-f9-text-only-pilot/README.md)。不要拿本地回放成功替代真实DS成绩。
+
 > **2026-11-17 F9当前复测停点**：当前源码三族立体构造零费重新打包后19/21/15图元，旧假成功不再复现；GK-S08真实DS1请求即请求澄清，没有候选，余35题未测。先按[本轮审计](audit/2026-11-17-g3-f9-current-retest/README.md)核对其必要题图输入；或明确改选完整text_only代表题，再受控试点，不能把澄清算通过或直接放开36题。
 
 > **2026-11-18 G3-F9 内核动作修复进展（Task 0–5 零付费闭环完成，0 新增付费；停在付费重授权前）**：`GK-S08` 完整 `ds_action` 0 付费回放与全部全量检查均通过：`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、Playwright E2E **`41 passed`**（详见 [Task 5 审计](./audit/g3-f9-repair-t5-zero-cost/README.md)）；旧 `8 req` / `0/36` 与 `humanReviewed`/`Windows UIA` 待后续授权实测。

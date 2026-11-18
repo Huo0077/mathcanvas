@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "g3-f9-live-text-only-pilot.v1",
+  "revision": "89b00bcd6e8bed74389c8734499fc9efa3c13d65",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "denominator": 36,
+  "selected": [
+    "GK-S09"
+  ],
+  "completed": 1,
+  "unrun": 35,
+  "inputMode": "text_only",
+  "modelId": "deepseek-v4-flash",
+  "route": "ds_action",
+  "limits": {
+    "maxUsd": 5,
+    "maxRequests": 108,
+    "maxPerCase": 8,
+    "maxInputBytes": 80000,
+    "maxOutputTokens": 4096,
+    "failureStopThreshold": 1
+  },
+  "requests": 2,
+  "usage": {
+    "requests": 2,
+    "inputBytes": 13295,
+    "inputTokens": 3466,
+    "outputTokens": 194,
+    "usageEvents": 2
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "toolNamesByRequest": [
+    [
+      "construct_solid"
+    ],
+    [
+      "construct_solid"
+    ]
+  ],
+  "candidateCreated": false,
+  "contractStatus": "failed_no_candidate",
+  "certificateStatus": "not_measured",
+  "renderStatus": "not_measured",
+  "controlledDeliveryStatus": "not_measured",
+  "mainCanvasWrites": 0,
+  "exactToolBlockerCode": "not_recorded",
+  "stopBatch": true
+}
