@@ -1,5 +1,6 @@
 # 下一轮工作导航
 
+> **2026-11-17 F9零费用停点**：本轮用户维持5美元/108请求/单题3次，但 `ds_action` 最小正例需4次往返、F9 `PlannerPort` 当前仍只产 `shared` 候选。新模型请求0次；先解决两个零费接线问题，再商议单题上限或原子动作批次。证据：[F9接线门禁](audit/2026-11-17-g3-f9-zero-cost-gate/README.md)。
 > **F9停点（2026-11-17）**：四题旧 `ds_intent` 临时入口误测，不是 `ds_action` F9成绩；10次请求后已停止。先按[误路由审计](audit/2026-11-17-g3-f9-route-mismatch/README.md)做零付费入口/动作轨迹/候选集合检查，并重新确认本轮预算，再考虑新模型调用。禁止直接扩大到36题。
 
 > **2026-11-18 最终版 B→C 路线执行更新（Task F0–F8 全部完结，0 付费；真实 DS 仍 0/36）**：已完成 **Task F0**（`f118c721`）至 **Task F8**（[Task F8 审计](audit/g3-final-f8/README.md)，全仓 `557` 文件 `5875 passed | 1 todo` + `typecheck` + `lint` `0 errors` + `test:rust` + `Playwright` `41 passed` + `test:docs` 全过）。所有零付费工程改造已全部交付并推送；按 §12 门禁要求，**现严格停在 Task F9（分层真实 DeepSeek 复测：Tier A→B→C）独立付费授权前**，真实 DS 基线仍为 `0/36`（`bridge_replay_passed`，`humanReviewed: pending`）。
