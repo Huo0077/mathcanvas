@@ -5,6 +5,7 @@ import {
   buildDsActionToolSchemas,
   createDsActionSession,
   DS_ACTION_TOOL_NAMES,
+  SOLID_KIND_FAMILIES,
   parseDsActionToolCall
 } from "./dsActionTools"
 import { createModelPlanner } from "./modelPlanner"
@@ -78,6 +79,58 @@ function plannerRequest(userMessage = "作线段 AB") {
     }
   }
 }
+
+describe("construct_solid model-visible contract", () => {
+  it("rejects unknown solid fields before the kernel while preserving supported aliases", () => {
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const unknown = session.execute("construct_solid", { kind: "triangular_prism", sideLength: 1, height: 1, heightTypo: 1 })
+    expect(unknown.status).toBe("repairable")
+    expect(unknown.blockerCode).toBe("invalid_schema")
+    expect(unknown.primitiveCount).toBe(0)
+    const accepted = session.execute("construct_solid", { kind: "triangular_prism", sideLength: 1, height: 1 })
+    expect(accepted.status).toBe("accepted")
+    expect(accepted.primitiveCount).toBeGreaterThan(0)
+  })
+
+  it("keeps all published solid kinds executable and rejects missing or negative dimensions", () => {
+    const advertised = buildDsActionToolSchemas().find((schema) => schema.function.name === "construct_solid")!
+    const published = "properties" in advertised.function.parameters ? advertised.function.parameters.properties.kind.enum : []
+    expect(published).toEqual(Object.values(SOLID_KIND_FAMILIES).flat())
+    const validByFamily: Record<string, Record<string, unknown>> = {
+      regular_pyramid: { sideLength: 2, height: 3 },
+      tetrahedron: { edgeLength: 2 },
+      prism: { sideLength: 2, height: 3 },
+      perpendicular_pyramid: { sideLength: 2, height: 3 }
+    }
+    for (const [family, names] of Object.entries(SOLID_KIND_FAMILIES)) {
+      for (const kind of names) {
+        const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+        const valid = session.execute("construct_solid", { kind, ...validByFamily[family] })
+        expect(valid.status, `published kind ${kind}`).toBe("accepted")
+        expect(valid.primitiveCount).toBeGreaterThan(0)
+        const negative = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+          .execute("construct_solid", { kind, ...validByFamily[family], height: -1, sideLength: -1, edgeLength: -1 })
+        expect(negative.status, `negative dimension ${kind}`).not.toBe("accepted")
+      }
+    }
+  })
+
+  it("publishes supported kinds and numeric geometry fields rather than a free-form object", () => {
+    const tool = buildDsActionToolSchemas().find((schema) => schema.function.name === "construct_solid")!
+    expect(tool.function.parameters).toMatchObject({
+      type: "object",
+      required: ["kind"],
+      additionalProperties: false,
+      properties: {
+        kind: { type: "string", enum: expect.arrayContaining(["triangular_prism", "regular_pyramid", "tetrahedron"]) },
+        height: { type: "number", exclusiveMinimum: 0 },
+        sideLength: { type: "number", exclusiveMinimum: 0 },
+        vertexNames: { type: "array" }
+      }
+    })
+    expect(JSON.stringify(tool.function.parameters)).not.toContain('"vertices"')
+  })
+})
 
 describe("dsActionTools (Task F2 closed action-level protocol)", () => {
   it("exposes all 22 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {

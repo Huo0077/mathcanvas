@@ -253,6 +253,7 @@ function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
     "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
     "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（缺题图或无解时调用 `request_clarification`）。",
     "**禁止手算立体顶点**：构建立体只传参数规格，坐标由内核计算；只读场景观察与动作构造必须分轮执行，禁止同批混发。",
+    "For construct_solid use the published kind enum and positive numeric dimensions. triangular_prism needs kind, sideLength (or ab/ac/bc), and height. vertexNames is optional; never send raw vertices or invented dimensions.",
     input.canPlan
       ? "构造完成全部对象后调用 `finish_candidate({ goal })` 提交候选；若条件不足或缺少题图，调用 `request_clarification({ reason, questions })`。"
       : "当前处于观察阶段，只能先调用已发布的只读场景工具。"

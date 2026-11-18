@@ -136,6 +136,42 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   request_clarification: "Stop construction honestly when a required figure or parameter cannot be determined."
 }
 
+/** The public geometry vocabulary is shared with the kernel dispatch below. */
+export const SOLID_KIND_FAMILIES = {
+  regular_pyramid: ["regular_pyramid", "square_pyramid"],
+  tetrahedron: ["tetrahedron", "regular_tetrahedron"],
+  prism: ["prism", "triangular_prism", "rectangular_prism", "square_prism", "right_prism"],
+  perpendicular_pyramid: ["perpendicular_pyramid"]
+} as const
+
+const SOLID_KINDS = Object.values(SOLID_KIND_FAMILIES).flat()
+
+const CONSTRUCT_SOLID_PARAMETERS = {
+  type: "object",
+  additionalProperties: false,
+  required: ["kind"],
+  properties: {
+    kind: { type: "string", enum: SOLID_KINDS },
+    shape: { type: "string", enum: SOLID_KINDS },
+    id: { type: "string" }, output: { type: "string" }, label: { type: "string" },
+    sideLength: { type: "number", exclusiveMinimum: 0 },
+    baseSide: { type: "number", exclusiveMinimum: 0 },
+    edgeLength: { type: "number", exclusiveMinimum: 0 },
+    height: { type: "number", exclusiveMinimum: 0 },
+    lateralEdge: { type: "number", exclusiveMinimum: 0 },
+    ab: { type: "number", exclusiveMinimum: 0 }, ac: { type: "number", exclusiveMinimum: 0 },
+    bc: { type: "number", exclusiveMinimum: 0 }, pa: { type: "number", exclusiveMinimum: 0 },
+    pb: { type: "number", exclusiveMinimum: 0 }, pc: { type: "number", exclusiveMinimum: 0 },
+    width: { type: "number", exclusiveMinimum: 0 }, depth: { type: "number", exclusiveMinimum: 0 },
+    vertexNames: { type: "array", items: { type: "string" } },
+    baseVertexNames: { type: "array", items: { type: "string" } },
+    baseLabels: { type: "array", items: { type: "string" } },
+    topLabels: { type: "array", items: { type: "string" } },
+    apexName: { type: "string" }, footName: { type: "string" },
+    scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" }
+  }
+} as const
+
 export function buildDsActionToolSchemas(options: { includeUnimplemented?: boolean } = {}) {
   const names = options.includeUnimplemented ? DS_ACTION_TOOL_NAMES : IMPLEMENTED_DS_ACTION_TOOLS
   return names.map((name) => ({
@@ -143,7 +179,7 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
     function: {
       name,
       description: DS_ACTION_DESCRIPTIONS[name],
-      parameters: {
+      parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS : {
         type: "object",
         additionalProperties: true
       }
@@ -303,6 +339,10 @@ function resolveConstructSolidRequest(
       repairHint: "never pass hand-computed vertices; pass parametric shape parameters"
     }
   }
+  const unknownField = Object.keys(input).find((key) => !(key in CONSTRUCT_SOLID_PARAMETERS.properties))
+  if (unknownField !== undefined) {
+    return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `construct_solid does not accept field "${unknownField}"` }
+  }
   const rawKind = asString(input.kind ?? input.shape)
   if (!rawKind) {
     return {
@@ -323,7 +363,7 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if (kind === "regular_pyramid" || kind === "square_pyramid") {
+  if ((SOLID_KIND_FAMILIES.regular_pyramid as readonly string[]).includes(kind)) {
     const side = asPositiveNumber(input.sideLength ?? input.baseSide ?? input.ab)
     if (side === null) {
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive sideLength / baseSide` }
@@ -348,7 +388,7 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if (kind === "tetrahedron" || kind === "regular_tetrahedron") {
+  if ((SOLID_KIND_FAMILIES.tetrahedron as readonly string[]).includes(kind)) {
     const edge = asPositiveNumber(input.edgeLength ?? input.sideLength)
     const ab = asPositiveNumber(input.ab) ?? edge
     const ac = asPositiveNumber(input.ac) ?? edge
@@ -372,7 +412,7 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if (kind === "prism" || kind === "triangular_prism" || kind === "rectangular_prism" || kind === "square_prism" || kind === "right_prism") {
+  if ((SOLID_KIND_FAMILIES.prism as readonly string[]).includes(kind)) {
     const height = asPositiveNumber(input.height)
     if (height === null) {
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive height` }
@@ -398,7 +438,7 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if (kind === "perpendicular_pyramid") {
+  if ((SOLID_KIND_FAMILIES.perpendicular_pyramid as readonly string[]).includes(kind)) {
     const height = asPositiveNumber(input.height ?? input.pa)
     if (height === null) {
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "perpendicular_pyramid requires positive height" }
