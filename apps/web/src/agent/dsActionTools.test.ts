@@ -85,13 +85,7 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     expect(DS_ACTION_TOOL_NAMES).toHaveLength(22)
 
     const schemas = buildDsActionToolSchemas()
-    expect(schemas.length).toBeGreaterThan(0)
-    expect(schemas.every((s) => DS_ACTION_CLOSED_SET.includes(s.function.name))).toBe(true)
-    const published = schemas.map((s) => s.function.name)
-    expect(published).toContain("construct_point")
-    expect(published).toContain("finish_candidate")
-    expect(published).not.toContain("construct_base")
-    expect(published).not.toContain("construct_fold_state")
+    expect(schemas.map((s) => s.function.name)).toEqual([...DS_ACTION_CLOSED_SET])
 
     const prompt = buildSystemPrompt({
       context: plannerRequest().model.context,
@@ -298,7 +292,7 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     await expect(clarifyPlanner.plan(abortReq)).rejects.toThrow(/已取消|cancelled/i)
   })
 
-  it("Task 0 fail-closed gate: unimplemented 3D/query actions never fake accepted with 0 primitives", () => {
+  it("Task 0 fail-closed gate: empty finish_candidate and unsupported observations never fake accepted with 0 primitives", () => {
     const families = [
       { kind: "square_pyramid", sideLength: 2, height: 3 },
       { kind: "triangular_prism", sideLength: 3, height: 4 },
@@ -307,29 +301,14 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
 
     for (const input of families) {
       const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
-      const faceRes = session.execute("construct_face", { alias: "F1", vertexNames: ["A", "B", "C"] })
-      expect(faceRes.ok).toBe(false)
-      expect(faceRes.status).toBe("blocked")
-      expect(faceRes.blockerCode).toBe("unsupported_action")
-      expect(faceRes.stateChanged).toBe(false)
+      const badFace = session.execute("construct_face", { alias: "F1", vertexNames: ["A", "B", "C"] })
+      expect(badFace.ok).toBe(false)
+      expect(badFace.stateChanged).toBe(false)
 
-      const baseRes = session.execute("construct_base", { shape: "square", sideLength: 2 })
-      expect(baseRes.ok).toBe(false)
-      expect(baseRes.status).toBe("blocked")
-      expect(baseRes.blockerCode).toBe("unsupported_action")
-
-      const foldRes = session.execute("construct_fold_state", { hinge: { from: "A", to: "C" }, angle: 90 })
-      expect(foldRes.ok).toBe(false)
-      expect(foldRes.status).toBe("blocked")
-      expect(foldRes.blockerCode).toBe("unsupported_action")
-
-      const queryM = session.execute("query_measurement", { metric: "distance", targets: ["A", "B"] })
-      expect(queryM.ok).toBe(false)
-      expect(queryM.status).toBe("blocked")
-
-      const queryC = session.execute("query_constraint_status", { targets: ["A", "B"] })
-      expect(queryC.ok).toBe(false)
-      expect(queryC.status).toBe("blocked")
+      const badObs = session.execute("query_measurement", { metric: "unsupported_custom_metric", targets: ["A", "B"] })
+      expect(badObs.ok).toBe(false)
+      expect(badObs.status).toBe("blocked")
+      expect(badObs.blockerCode).toBe("unsupported_observation")
 
       const finish = session.execute("finish_candidate", { goal: `empty-${input.kind}` })
       expect(finish.ok).toBe(false)
@@ -414,5 +393,89 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     expect(uRes.ok).toBe(false)
     expect(uRes.blockerCode).toBe("undeclared_entity_ref")
     expect(negUndeclared.currentSnapshot().actions).toHaveLength(0)
+  })
+
+  it("Task 2 real construct_base, construct_face, construct_fold_state, query_measurement, and query_constraint_status with rollback hygiene", () => {
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+
+    // 1. construct_base requires real parameters (missing rejected) then materializes rectangle ABCD
+    const badBase = session.execute("construct_base", { shape: "rectangle" })
+    expect(badBase.ok).toBe(false)
+    expect(session.currentSnapshot().actions).toHaveLength(0)
+
+    const baseRes = session.execute("construct_base", { id: "BASE", shape: "rectangle", width: 4, depth: 2, vertexNames: ["A", "B", "C", "D"] })
+    expect(baseRes.ok).toBe(true)
+    expect(baseRes.stateChanged).toBe(true)
+    expect(baseRes.primitiveCount).toBeGreaterThan(0)
+    const primsAfterBase = baseRes.primitiveCount
+
+    // 2. query_measurement reads actual AB length = 4, blocks missing/rolled-back points
+    const distAB = session.execute("query_measurement", { metric: "distance", targets: ["A", "B"] })
+    expect(distAB.ok).toBe(true)
+    expect(distAB.stateChanged).toBe(false)
+    expect(distAB.measurement?.value).toBeCloseTo(4, 9)
+    expect(distAB.measurement?.sourceEntityIds).toEqual(["A", "B"])
+
+    // Stage a temporary 3D point, confirm measurable, then rollback and ensure query_measurement rejects stale access
+    const tempPt = session.execute("construct_point", { id: "P_TEMP", x: 1, y: 1, z: 3 })
+    expect(tempPt.ok).toBe(true)
+    expect(session.execute("query_measurement", { metric: "position", target: "P_TEMP" }).ok).toBe(true)
+    const rolled = session.execute("repair_entity", {})
+    expect(rolled.stateChanged).toBe(true)
+    const afterRollbackQuery = session.execute("query_measurement", { metric: "position", target: "P_TEMP" })
+    expect(afterRollbackQuery.ok).toBe(false)
+    expect(afterRollbackQuery.blockerCode).toBe("undeclared_entity_ref")
+
+    // 3. construct_point off-plane -> verify non-coplanar face rejection; coplanar face accepted
+    expect(session.execute("construct_point", { id: "P", x: 0, y: 0, z: 3 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "Q_NONCOPLANAR", x: 1, y: 1, z: 2 }).ok).toBe(true)
+    const nonCoplanarFace = session.execute("construct_face", { id: "BAD_F", vertexNames: ["A", "B", "C", "Q_NONCOPLANAR"] })
+    expect(nonCoplanarFace.ok).toBe(false)
+    expect(nonCoplanarFace.blockerCode).toBe("non_coplanar_face")
+
+    const collinearPt = session.execute("construct_point", { id: "MID_AB", from: "A", to: "B", ratio: 0.5 })
+    expect(collinearPt.ok).toBe(true)
+    const collinearFace = session.execute("construct_face", { id: "COL_F", vertexNames: ["A", "MID_AB", "B"] })
+    expect(collinearFace.ok).toBe(false)
+    expect(collinearFace.blockerCode).toBe("degenerate_face")
+
+    const validFace = session.execute("construct_face", { id: "FACE_PAB", vertexNames: ["P", "A", "B"] })
+    expect(validFace.ok).toBe(true)
+    expect(validFace.stateChanged).toBe(true)
+    expect(validFace.primitiveCount).toBeGreaterThan(primsAfterBase)
+
+    // 4. query_constraint_status reads real coplanar / distance kernel verdict & residual
+    const checkCoplanar = session.execute("query_constraint_status", { kind: "coplanar", targets: ["A", "B", "C", "D"] })
+    expect(checkCoplanar.ok).toBe(true)
+    expect(checkCoplanar.constraintStatus).toBe("satisfied")
+    expect(Number(checkCoplanar.measurement?.residual ?? 999)).toBeLessThan(1e-9)
+
+    const checkWrongDist = session.execute("query_constraint_status", { kind: "fixed_distance", targets: ["A", "B"], expected: 10 })
+    expect(checkWrongDist.ok).toBe(true)
+    expect(checkWrongDist.constraintStatus).toBe("violated")
+
+    // 5. construct_fold_state produces distinct pre_fold / post_fold lineage hashes
+    const foldSession = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    expect(foldSession.execute("construct_base", { id: "RECT", shape: "rectangle", width: 4, depth: 2, vertexNames: ["A", "B", "C", "D"] }).ok).toBe(true)
+    expect(foldSession.execute("construct_face", { id: "FIXED", vertexNames: ["A", "C", "D"] }).ok).toBe(true)
+    const badFold = foldSession.execute("construct_fold_state", { vertexNames: ["A", "B", "C"], hinge: { from: "A", to: "C" }, apex: "B", apexAs: "B′", angle: 0 })
+    expect(badFold.ok).toBe(false)
+
+    const goodFold = foldSession.execute("construct_fold_state", {
+      id: "FOLD_ABC",
+      vertexNames: ["A", "B", "C"],
+      hinge: { from: "A", to: "C" },
+      apex: "B",
+      apexAs: "B′",
+      angle: 90,
+      scopeId: "shared",
+      stateId: "after_fold"
+    })
+    expect(goodFold.ok).toBe(true)
+    expect(goodFold.stateChanged).toBe(true)
+    const slices = foldSession.stateSlices()
+    expect(slices.length).toBeGreaterThanOrEqual(2)
+    const hashSet = new Set(slices.map((s) => s.candidateHash))
+    expect(hashSet.size).toBe(slices.length)
   })
 })

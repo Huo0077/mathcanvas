@@ -1,6 +1,6 @@
 # Agent 发布前门禁
 
-> **2026-11-18 G3-F9 内核动作修复进度（Task 0–1 完成，0 新增付费）**：已按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 完成 **Task 0**（`4e2bb55a`）与 **Task 1**（[Task 1 审计](../audit/g3-f9-repair-t1/README.md)，`construct_solid` 四族立体真实物化与负例拒止），正推进 **Task 2–4** 面/底座/折叠/读数/多状态接线与零费终审；真实 DS 表现、人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
+> **2026-11-18 G3-F9 内核动作修复进度（Task 0–2 完成，0 新增付费）**：已按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 完成 **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）与 **Task 2**（[Task 2 审计](../audit/g3-f9-repair-t2/README.md)，面/底座/折叠与真实测量/约束读数），正推进 **Task 3–4** 停滞修复闭环、多状态 live `CandidateSet` 接线与零费终审；真实 DS 表现、人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
 
 > **2026-11-17 F9新增阻断**：三组零费内核复现均证明 `construct_solid` / `construct_face` 虚报成功却未生成任何图元，`finish_candidate` 为空候选；真实GK-S08八请求不能代表36题通过。[修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md)与[负例](../audit/2026-11-17-g3-f9-repeat-probe/README.md)未退出前禁止把 DS 动作级构图标为发布准备完成。人工与Windows验收另单列。
 

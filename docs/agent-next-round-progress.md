@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-18 G3-F9 内核动作修复进展（Task 0–1 完成，0 新增付费；推进 Task 2）**：已完成 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) **Task 0**（`4e2bb55a`，[Task 0 审计](audit/g3-f9-repair-t0/README.md)）与 **Task 1**（[Task 1 审计](audit/g3-f9-repair-t1/README.md)，`construct_solid` 经 `solveConstraint3d` 真实物化隔离候选，`17 + 23 passed` + `typecheck` + `lint` + `test:docs` 全过）；**当前执行入口推进至 Task 2（实际面/底座/折叠动作与真实测量/约束状态查询）**，真实 DS 调用仍暂停。
+> **2026-11-18 G3-F9 内核动作修复进展（Task 0–2 完成，0 新增付费；推进 Task 3）**：已完成 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）与 **Task 2**（[Task 2 审计](audit/g3-f9-repair-t2/README.md)，面/底座/折叠、3D 点线与真实查询，`4` 文件 `27 passed` + `typecheck` + `lint` + `test:docs` 全过）；**当前执行入口推进至 Task 3（无进展停滞熔断 vs 合法修复放行与预算统一）**，真实 DS 调用仍暂停。
 
 > **2026-11-17 F9修复入口**：先读[新修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)和[三组零费反例](audit/2026-11-17-g3-f9-repeat-probe/README.md)。Task0禁止3D动作假成功→Task1接 `solveConstraint3d` 真正物化立体→Task2面/观察→Task3无进展熔断→Task4真实多状态候选→Task5新授权小样本。当前真实F9仅GK-S08试点8请求、未形成候选；本轮额外付费0，不能扩到36。
 

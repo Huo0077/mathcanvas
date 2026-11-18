@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-F9 内核动作修复 Task 1 / Task 0（开发版，0 新增付费）
+## 2026-11-18 —— G3-F9 内核动作修复 Task 2 / Task 1 / Task 0（开发版，0 新增付费）
+
+- **G3-F9 修复 Task 2**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 实现 `construct_base`、`construct_face`（三点不共线 + 四点及以上共面核验）、`construct_fold_state`（独立 `pre_fold`/`post_fold` 切片与 `stateSlices()`）、3D `construct_point`（含棱定比）/ `construct_segment`，以及真实 `query_measurement` 与 `query_constraint_status`（支持 `pointHistory`/`sliceHistory` 回滚清理）；同步更新 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)（`4` 文件 `27 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **G3-F9 修复 Task 1**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 接入 `solveConstraint3d`，使 `construct_solid`（正四棱锥/棱柱/直棱锥/四面体）真实编译写入 `solid.create_polyhedron` 至 `SpeculativeCanvas` 并同步维护命名 `points3` 快照与回滚栈，补齐缺参/不可行三角形/重名/手算顶点/未声明宿主反例（[dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)，`3` 文件 `17 passed` + [solidContracts18.test.ts](scripts/reliability-eval/solidContracts18.test.ts) `23 passed`、`typecheck`、`lint` `0 errors`）。
 
