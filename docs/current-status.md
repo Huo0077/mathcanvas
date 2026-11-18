@@ -1,5 +1,7 @@
 # MathCanvas 当前状态
 
+> **2026-11-18 live authorization gate rechecked**: `--allow-paid --max-requests 3` is parsed as live, but the actual runner refuses to start when `DEEPSEEK_API_KEY` is absent (`no automatic spend`). No provider request or charge occurred; the next action still requires new explicit user authorization.
+
 > **2026-11-18 Task 9 verification note**: The required 41 Playwright same-candidate/lifecycle tests passed. A default parallel `npm test` run reported 8 timeout failures in unrelated common-tangent suites; rerunning those 3 files serialized with `--maxWorkers=1 --testTimeout=30000` passed `46/46`. This is recorded as an environment/timeout verification caveat, not converted into a false full-suite pass. No paid DS call was made.
 
 > **2026-11-18 Task 8 zero-cost checkpoint**: Added real `construct_circumsphere` and symbolic GK-S09 display-scale provenance. Frozen GK-S09 recorded action replay passes at display scales 1 and 2 with prism, sphere, contract, and certificate; targeted tests 183 passed, docs 22 passed, typecheck passed. Browser same-candidate verification and new authorized live DS remain pending; real historical GK-S09 remains two unclassified requests and 35 cases unrun.
