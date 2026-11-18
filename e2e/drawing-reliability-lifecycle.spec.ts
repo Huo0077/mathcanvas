@@ -218,6 +218,7 @@ test("DS4 controlled delivery: enforces unified hash chain across preview/confir
   expect(candidateHash).toMatch(/^[0-9a-f]{64}$/)
 
   const previewCanvas = page.getByRole("region", { name: "草稿画布预览" }).locator("svg[data-canvas-evidence-status]")
+  await expect(previewCanvas).toHaveAttribute("data-candidate-hash", candidateHash!)
   await expect(previewCanvas).toHaveAttribute("data-document-hash", candidateHash!)
   const viewportHash = await previewCanvas.getAttribute("data-viewport-hash")
   expect(viewportHash).toMatch(/^[0-9a-f]{64}$/)
@@ -248,6 +249,7 @@ test("DS4 controlled delivery: enforces unified hash chain across preview/confir
   // Return to canvas and confirm live canvas carries the identical candidate/document/viewport hashes, verify Undo/Redo lifecycle, then reload cleanly.
   await page.getByRole("button", { name: "返回画布" }).click()
   const mainCanvas = page.locator("svg[data-canvas-evidence-status]")
+  await expect(mainCanvas).toHaveAttribute("data-candidate-hash", candidateHash!)
   await expect(mainCanvas).toHaveAttribute("data-document-hash", candidateHash!)
   await expect(mainCanvas).toHaveAttribute("data-viewport-hash", viewportHash!)
 

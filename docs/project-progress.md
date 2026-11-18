@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F8：真实画布同哈希交付与全仓终态回归（0 付费；F0–F8 工程完结，停在 Task F9 授权前）
+
+- **状态与证据**：强化 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts) 与 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 的 `speculativeOnly` 硬阻断与 `data-candidate-hash` / `screenshotCandidateHash` 绑定，扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终修改后全仓回归实测全部通过：`npm test` **`557` 文件 `5875 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、`test:rust` 全过、`Playwright` **`41 passed`（`0` 重试）**、`test:docs` 全过；详见 [Task F8 审计](audit/g3-final-f8/README.md)。Task F0–F8 零付费工程已全面闭环，现严格停在 **Task F9（分层真实 DS 复测）** 付费授权门前。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F7：定向局部修复与停机闭环 `repairProgress`（0 付费；下一步 Task F8）
 
 - **状态与证据**：新建 [repairProgress.ts](packages/agent-core/src/repairProgress.ts) 与 [repairProgress.test.ts](packages/agent-core/src/repairProgress.test.ts)，接入 [coordinator.ts](packages/agent-core/src/coordinator.ts)、[coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts)、[runState.ts](packages/agent-core/src/runState.ts)、[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`154 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F7 审计](audit/g3-final-f7/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F8（真实画布交付一致性与全仓终态回归，随后在 Task F9 付费授权前停止）**。

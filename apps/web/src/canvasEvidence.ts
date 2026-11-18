@@ -278,9 +278,25 @@ export function canvasEvidenceOf(input: { document: GeometryDocument; root: Pare
  * 属性名与 `renderEvidence.ts` 的字段一一对应，**人话与数字分开**：
  * 数字给断言用，`data-canvas-diagnostics` 的码给"哪里不好"用（码是稳定可枚举的闭集）。
  */
-export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasurable = true, currentDocument?: GeometryDocument): Record<string, string> {
+export function canvasEvidenceAttributes(
+  evidence: CanvasEvidence,
+  objectsMeasurable = true,
+  currentDocument?: GeometryDocument,
+  options: { speculativeOnly?: boolean; expectedCandidateHash?: string } = {}
+): Record<string, string> {
   // Consumption checks the live content, not the snapshot's own identity. The scope here
   // is a live workspace canvas, not an agent draft or a confirmation authorization.
+  if (options.speculativeOnly === true) return {
+    "data-canvas-evidence-status": "speculative_blocked",
+    "data-canvas-evidence-accepted": "false",
+    "data-candidate-hash": evidence.documentHash
+  }
+  if (options.expectedCandidateHash !== undefined && options.expectedCandidateHash !== evidence.documentHash) return {
+    "data-canvas-evidence-status": "stale",
+    "data-canvas-evidence-accepted": "false",
+    "data-canvas-evidence-stale-reason": "candidate_hash_mismatch",
+    "data-candidate-hash": evidence.documentHash
+  }
   const staleness = currentDocument === undefined ? null : renderEvidenceStaleness(
     { draftId: evidence.workspace, draftVersion: evidence.revision + 1, documentHash: evidence.documentHash },
     { draftId: currentDocument.workspace, documentHash: canonicalContentHash(currentDocument) }
@@ -298,6 +314,7 @@ export function canvasEvidenceAttributes(evidence: CanvasEvidence, objectsMeasur
     "data-canvas-evidence-status": status,
     "data-canvas-evidence-accepted": status === "passed" ? "true" : "false",
     "data-render-evidence-tier": "rendered",
+    "data-candidate-hash": evidence.documentHash,
     "data-document-hash": evidence.documentHash,
     "data-document-revision": String(evidence.revision),
     "data-canvas-boxes": String(evidence.boxes.filter((box) => box.kind === "object").length),

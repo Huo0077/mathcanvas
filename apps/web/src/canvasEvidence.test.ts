@@ -256,3 +256,19 @@ it("measures named function labels from the rendered curve", () => {
   expect(measured.boxes.filter((box) => box.kind === "object")).toHaveLength(1)
   expect(measured.boxes.filter((box) => box.kind === "label")).toHaveLength(1)
 })
+
+it("exposes data-candidate-hash matching data-document-hash and blocks speculative or mismatched candidates", () => {
+  const geometry = createEmptyDocument("conics")
+  geometry.primitives.push({ id: "a", type: "point", x: 0, y: 0, label: "A" })
+  const evidence = canvasEvidenceOf({ document: geometry, root: renderedCanvas(), viewport: { width: 400, height: 300 } })
+  const okAttrs = canvasEvidenceAttributes(evidence, true, geometry)
+  expect(okAttrs["data-candidate-hash"]).toBe(evidence.documentHash)
+
+  const speculativeAttrs = canvasEvidenceAttributes(evidence, true, geometry, { speculativeOnly: true })
+  expect(speculativeAttrs["data-canvas-evidence-status"]).toBe("speculative_blocked")
+  expect(speculativeAttrs["data-canvas-evidence-accepted"]).toBe("false")
+
+  const mismatchAttrs = canvasEvidenceAttributes(evidence, true, geometry, { expectedCandidateHash: "stale-cand-hash" })
+  expect(mismatchAttrs["data-canvas-evidence-status"]).toBe("stale")
+  expect(mismatchAttrs["data-canvas-evidence-accepted"]).toBe("false")
+})

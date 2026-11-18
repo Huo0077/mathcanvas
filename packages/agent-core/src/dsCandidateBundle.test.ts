@@ -227,5 +227,30 @@ describe("DS4 zero-cost replayable ds-candidate-bundle & evidence chain", () => 
     expect(liveVerdict.passed).toBe(true)
     expect(liveVerdict.classification).toBe("dsLiveRendered")
     expect(liveVerdict.humanReviewed).toBe("pending")
+
+    const speculativeBlocked = verifyBundleRenderAndDelivery(liveBundle, {
+      runId: "run-t5-live",
+      traceCandidateHash: docHash,
+      candidateHash: docHash,
+      documentHash: docHash,
+      screenshotCandidateHash: "different-screenshot-hash",
+      speculativeOnly: true,
+      cameraHash: "cam-after-orbit",
+      viewportHash,
+      evidenceStatus: "passed",
+      renderTier: "rendered",
+      objectsCount: 2,
+      labelsCount: 1,
+      diagnosticErrors: [],
+      diagnosticWarnings: [],
+      hiddenLabels: [],
+      commitCount: 1,
+      mainCanvasWritesBeforeConfirm: 0
+    })
+    expect(speculativeBlocked.passed).toBe(false)
+    expect(speculativeBlocked.classification).toBe("blocked")
+    expect(speculativeBlocked.blockers).toEqual(
+      expect.arrayContaining(["speculative_candidate_rejected", "screenshot_candidate_hash_mismatch"])
+    )
   })
 })

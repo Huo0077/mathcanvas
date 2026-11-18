@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F7 / F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F8 / F7 / F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F8 真实画布交付一致与全仓终态门禁**：在 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts) 阻断 `speculativeOnly` 与 `screenshotCandidateHash` 失配，在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 输出并校验 `data-candidate-hash`，并在 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts) 验证全链同哈希；终态后跑通 `npm test`（`557` 文件 `5875 passed | 1 todo`）、`typecheck`、`lint`（`0 errors`）、`test:rust` 与 Playwright E2E（`41 passed`，`0` 重试）。F0–F8 全部完结，严格停在 **Task F9** 付费授权前；真实 DS 仍维持 `0/36` 基线且 `humanReviewed` 保持 `pending`。
 
 - **Task F7 定向局部修复闭环**：新建 [repairProgress.ts](packages/agent-core/src/repairProgress.ts) 与 [repairProgress.test.ts](packages/agent-core/src/repairProgress.test.ts)（实现失败实体/约束锁定、已通过条款 `preserved_obligation_regressed` 保护、残差/条数单调进步判据及 `no_progress` / `stagnant_signature` / `max_rounds_reached` 停机），接入 [coordinator.ts](packages/agent-core/src/coordinator.ts)、[coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts)、[runState.ts](packages/agent-core/src/runState.ts)（`recordRepairProgress`）与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `154 passed`、`typecheck`、`lint` `0 errors`）。
 

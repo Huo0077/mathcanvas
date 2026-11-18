@@ -30,6 +30,7 @@ export interface DsBundleReviewStatus {
 export interface DsCandidateBundle {
   schemaVersion: typeof DS_CANDIDATE_BUNDLE_SCHEMA
   bundleKind: DsBundleKind
+  speculativeOnly?: boolean
   revision: string
   caseId: string
   scopeId?: string
@@ -102,6 +103,7 @@ function containsForbiddenKeyOrSecret(value: unknown, seen = new Set<unknown>())
 /** Builds a hash-bound replayable candidate bundle from sanitized case metadata (0 paid API calls for synthetic replay). */
 export function createDsCandidateBundle(input: {
   bundleKind: DsBundleKind
+  speculativeOnly?: boolean
   revision: string
   caseId: string
   scopeId?: string
@@ -192,6 +194,8 @@ export interface BundleRenderDeliveryObservation {
   traceCandidateHash?: string
   candidateHash: string
   documentHash: string
+  screenshotCandidateHash?: string
+  speculativeOnly?: boolean
   cameraHash?: string
   previousCameraHash?: string
   cameraMoved?: boolean
@@ -226,6 +230,9 @@ export function verifyBundleRenderAndDelivery(
   observed: BundleRenderDeliveryObservation
 ): BundleRenderDeliveryVerdict {
   const blockers: string[] = []
+  if (bundle.speculativeOnly === true || observed.speculativeOnly === true) {
+    blockers.push("speculative_candidate_rejected")
+  }
   if (bundle.certificateStatus !== "passed") blockers.push(`certificate_not_passed:${bundle.certificateStatus}`)
   if (observed.runId !== bundle.evidenceChain.runId) blockers.push("run_id_mismatch")
   if (
@@ -234,6 +241,12 @@ export function verifyBundleRenderAndDelivery(
       observed.traceCandidateHash !== observed.candidateHash)
   ) {
     blockers.push("trace_candidate_hash_mismatch")
+  }
+  if (
+    observed.screenshotCandidateHash !== undefined &&
+    observed.screenshotCandidateHash !== bundle.evidenceChain.candidateHash
+  ) {
+    blockers.push("screenshot_candidate_hash_mismatch")
   }
   if (observed.candidateHash !== bundle.evidenceChain.candidateHash) blockers.push("candidate_hash_mismatch")
   if (observed.documentHash !== bundle.evidenceChain.documentHash) blockers.push("document_hash_mismatch")
