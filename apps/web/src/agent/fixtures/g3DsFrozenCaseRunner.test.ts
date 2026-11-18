@@ -492,4 +492,70 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
     const resMissing = await runFrozenDsCase(pub, plannerMissing, createBudget({ network: 40, generation: 40, tool: 60 }), { contract: gkp06 })
     expect(resMissing.contractStatus).toBe("incomplete")
   })
+
+  it("Task 5 zero-cost gate replays GK-S08 via ds_action (construct_point -> construct_solid -> query_measurement -> finish_candidate) with passed certificate, contract, and bounded budget", async () => {
+    const gks08 = getCase("GK-S08")
+    const pub = projectPublicFrozenCaseInput(gks08)
+    const providerStub = {
+      id: "deepseek",
+      modelId: "deepseek-v4-flash",
+      dialect: "openai" as const,
+      revision: 2,
+      capabilities: { tools: "verified" as const, json: "verified" as const, vision: "unknown" as const }
+    }
+    const calls = [
+      { id: "k1", name: "construct_point", input: { id: "A", label: "A", x: 0, y: 0, z: 0 } },
+      { id: "k2", name: "construct_point", input: { id: "B", label: "B", x: 2, y: 0, z: 0 } },
+      { id: "k3", name: "construct_point", input: { id: "C", label: "C", x: 1.5, y: Math.sqrt(3) / 2, z: 0 } },
+      { id: "k4", name: "construct_point", input: { id: "D", label: "D", x: 0.5, y: Math.sqrt(3) / 2, z: 0 } },
+      {
+        id: "k5",
+        name: "construct_solid",
+        input: {
+          id: "P_ABCD",
+          kind: "perpendicular_pyramid",
+          baseVertexNames: ["A", "B", "C", "D"],
+          apexName: "P",
+          footName: "D",
+          height: Math.sqrt(3)
+        }
+      },
+      { id: "k6", name: "query_measurement", input: { metric: "distance", targets: ["D", "P"] } },
+      { id: "k7", name: "finish_candidate", input: { goal: "GK-S08 perpendicular trapezoid pyramid" } }
+    ]
+
+    let idx = 0
+    let seenDpDistance = Number.NaN
+    const budget = createBudget({ network: 7, generation: 7, tool: 12 })
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: providerStub }),
+      async runModel(req) {
+        const last = req.messages.at(-1)
+        if (last?.role === "tool_result" && idx === 6) {
+          const parsed = JSON.parse(last.content) as { ok?: boolean; measurement?: { value?: number } }
+          if (parsed.ok && typeof parsed.measurement?.value === "number") {
+            seenDpDistance = parsed.measurement.value
+          }
+        }
+        const next = calls[idx++]!
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: `s08-r-${idx}`, attemptId: `s08-a-${idx}`, toolCallId: next.id, toolId: next.name, input: next.input }]
+        }
+      }
+    })
+
+    const res = await runFrozenDsCase(pub, planner, budget, { contract: gks08 })
+    expect(seenDpDistance).toBeCloseTo(Math.sqrt(3), 6)
+    expect(res.modelInvoked).toBe(true)
+    expect(res.renderStatus).toBe("pending")
+    expect(res.commitStatus).toBe("pending")
+    expect(res.candidateSet).toHaveLength(1)
+    expect(res.candidateSet[0]?.certificateStatus).toBe("passed")
+    expect(res.candidateSet[0]?.candidateHash.length).toBeGreaterThan(10)
+    expect(res.contractStatus).toBe("passed")
+    expect(budget.remaining("network")).toBe(0)
+    expect(budget.remaining("generation")).toBe(1)
+  })
 })

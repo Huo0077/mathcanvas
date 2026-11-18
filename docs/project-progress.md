@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 5：0 付费端到端全绿收口，停在真实 DS 重授权闸口（0 新增付费）
+
+- 新增 `GK-S08` `ds_action` 端到端 0 付费回放通过（[g3DsFrozenCaseRunner.test.ts](./../apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 与 `solid-\d+:v\d+` 拓扑焊接），最后一次改码后全量实测全通过：`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、Playwright E2E **`41 passed`**（`0` 重试）；详见 [g3-f9-repair-t5-zero-cost/README.md](./audit/g3-f9-repair-t5-zero-cost/README.md)。全程 **0 新增付费**，旧 `0/36` / `8 req` 试飞未重测、`humanReviewed: pending`、`Windows UIA: pending`，严停待用户重新授权 `GK-S08` 单题重测。
+
 ## 2026-11-18 —— G3-F9 内核动作修复 Task 4：Live 多范围 / 多状态 / 多分支 `CandidateSet` 接线（0 新增付费；下一步 Task 5）
 
 - 在不触发任何新 DeepSeek API 付费调用前提下完成 Task 4：`PlanOutcome.candidateSlices`、`dsActionTools` 分支独立 `SpeculativeCanvas`（含 `parabola`）、`g3DsFrozenCaseRunner` 多状态/多分支展开、以及 `GK-S02` 开放折面与 `GK-P06` 三分支 live `ds_action` 端到端全绿（`4` 文件 **`131 passed`**，`typecheck` 退出 `0`，`lint` `0 errors`；详见 [g3-f9-repair-t4/README.md](./audit/g3-f9-repair-t4/README.md)）；历史 `0/36` / `8 req` 仍未重测。

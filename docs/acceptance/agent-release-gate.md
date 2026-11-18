@@ -1,5 +1,6 @@
 # Agent 发布前门禁
 
+> **2026-11-18 G3-F9 内核动作修复进度（Task 0–5 零付费门禁完成，0 新增付费；待新授权）**：`GK-S08` `ds_action` 0 付费端到端回放及全量检查全通过（`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` `0 errors`、Playwright E2E **`41 passed`**，见 [Task 5 审计](../audit/g3-f9-repair-t5-zero-cost/README.md)）；真实 DS 仍未重测且 `humanReviewed` / `Windows UIA` 维持 `pending`。
 > **2026-11-18 G3-F9 内核动作修复进度（Task 0–4 完成，0 新增付费）**：[coordinatorPorts.ts](../../packages/agent-core/src/coordinatorPorts.ts)、[dsActionTools.ts](../../apps/web/src/agent/dsActionTools.ts)、[modelPlanner.ts](../../apps/web/src/agent/modelPlanner.ts)、[g3DsFrozenCaseRunner.ts](../../apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [drawingContracts.ts](../../scripts/reliability-eval/drawingContracts.ts) 已打通多范围 / 多状态 / 多分支 `CandidateSet` 接线与 `GK-S02` / `GK-P06` 零付费测试（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](../audit/g3-f9-repair-t4/README.md)）。
 > **2026-11-18 G3-F9 内核动作修复进度（Task 0–3 完成，0 新增付费）**：已按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 完成 **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](../audit/g3-f9-repair-t3/README.md)，停滞保护与预算不双扣），正推进 **Task 4** 多状态 `CandidateSet` live 接线与零费终审；真实 DS 表现、人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
 

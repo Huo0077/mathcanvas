@@ -1,5 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-18 G3-F9 内核动作修复（Task 0–5 零付费闭环完成，0 新增付费；停在付费重授权前）**：`GK-S08` `ds_action` 0 付费端到端与全仓门禁全过（`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` `0 errors`、Playwright E2E **`41 passed`**；见 [Task 5 审计](../audit/g3-f9-repair-t5-zero-cost/README.md)），旧 `8 req` 仍未重跑。
 > **2026-11-18 G3-F9 内核动作修复（Task 0–4 完成，0 新增付费；正推进 Task 5 零付费门禁）**：`PlanOutcome.candidateSlices`、`dsActionTools` 分支画布隔离与 `GK-S02`/`GK-P06` 多状态多分支 `CandidateSet` live 接线已通（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](../audit/g3-f9-repair-t4/README.md)）。
 > **2026-11-18 G3-F9 内核动作修复（Task 0–3 完成，0 新增付费；正推进 Task 4）**：已完成 **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](../audit/g3-f9-repair-t3/README.md)，回执签名、无进展熔断与预算一致），正按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 推进 Task 4 多状态 `CandidateSet` live 接线及 Task 5 零费总审。
 
