@@ -1,8 +1,9 @@
 # MathCanvas 当前状态
 
-## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0 已完成**（0 新增付费；真实 DS 仍 0/36）
+## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0–F1 已完成**（0 新增付费；真实 DS 仍 0/36）
 
-- **`Task F0`（冻结 `92981ebd` 真实 36 题失败真源）已完成（0 付费）**：依据最新实施档案 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md)，在 [g3DsCaseTrace.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 新增 `classifyRetest92981Case` 并通过 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 对 [898d31ae 复测 summary.json](audit/2026-11-17-g3-ds-live-retest-92981/summary.json) 完成 36/36 全量首失败边界归因（`unknown = 0`，`mixed_read_plan = 0`，全数落入 `schema` / `dag` / `verification` 并保留 `GK-S02/GK-S03/JT-S06/JT-S07` 的 `input_figure_missing` 输入边界）；建档 [2026-11-17-92981 基线记录](g3-final/retests/2026-11-17-92981/README.md)。相关单测（`3` 文件 **`93 passed`**）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；**下一步推进 Task F1（探索候选隔离层 `speculativeCanvas.ts`）**。
+- **`Task F1`（探索候选隔离层 `speculativeCanvas.ts`）已完成（0 付费）**：新建 [speculativeCanvas.ts](apps/web/src/agent/speculativeCanvas.ts) 与 [speculativeCanvas.test.ts](apps/web/src/agent/speculativeCanvas.test.ts)（步进探索、精确多步回滚/废弃、`candidateHash` 链绑定、晋升出口 `promoteToDraftStore`）；并在 [draftStore.ts](apps/web/src/agent/draftStore.ts) 与 [hostBridge.ts](apps/web/src/agent/hostBridge.ts) 增加 `speculativeOnly` 双重门禁，硬拦截任何未晋升探索候选的授权铸造与主画布写入。定向 `3` 文件 **`47 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F1 审计](audit/g3-final-f1/README.md)，**下一步推进 Task F2（动作级 DS ToolSpec `dsActionTools.ts`）**。
+- **`Task F0`（冻结 `92981ebd` 真实 36 题失败真源）已完成（`f118c721`，0 付费）**：见 [2026-11-17-92981 基线记录](g3-final/retests/2026-11-17-92981/README.md)（36/36 全量首失败边界归因，`unknown = 0`，`mixed_read_plan = 0`）。
 
 ## 2026-11-17 —— 当前提交 `92981ebd` 真实 DS 36题再测：完整合同仍0/36
 

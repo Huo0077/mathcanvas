@@ -273,6 +273,9 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
       const artifact = drafts.getPreview(draftId)
       const current = dependencies.live()
       if (!artifact || !current) return { ok: false, reason: "unknown_draft" }
+      if (artifact.speculativeOnly === true) {
+        return { ok: false, reason: "unverified_diagram", detail: "speculative exploratory candidate cannot be consented or committed to main canvas" }
+      }
       if (artifact.diagramVerification && artifact.diagramVerification.status !== "passed") return { ok: false, reason: "unverified_diagram" }
       if (
         artifact.drawingCertificate !== undefined &&
@@ -369,6 +372,9 @@ export function createHostBridge(dependencies: HostBridgeDependencies): HostBrid
 
       const artifact = drafts.getPreview(draftId)
       if (!artifact) return { ok: false, reason: "unknown_draft" }
+      if (artifact.speculativeOnly === true) {
+        return { ok: false, reason: "unverified_diagram", detail: "speculative exploratory candidate cannot write to main canvas" }
+      }
       // 预览之后草稿又变过 → 用户看到的不是将要提交的东西。
       if (artifact.previewHash !== consent.previewHash || artifact.draftVersion !== consent.draftVersion) {
         return { ok: false, reason: "stale_preview" }

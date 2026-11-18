@@ -83,6 +83,8 @@ export interface DraftRecord {
   /** Raw user wording identity; normalization must never make two source prompts equivalent. */
   rawPromptHash?: string
   proofRawPromptHash?: string
+  /** Marked true only for unpromoted exploratory candidates blocked from main canvas commit. */
+  speculativeOnly?: boolean
 }
 
 export interface DraftPreview {
@@ -112,6 +114,8 @@ export interface DraftPreview {
   promptNormalisation?: import("@draw/agent-core").NormalisationReport
   /** 同 `DraftRecord`：预览是给界面看的，所以那一次证明尝试也跟着走。 */
   proofAttempt?: DraftProofAttempt
+  /** Exploratory-only flag blocking direct HostBridge consent/commit when true. */
+  speculativeOnly?: boolean
 }
 
 export type StageReason = "unknown_draft" | "stale_draft_version" | "compile_failed"
@@ -207,6 +211,7 @@ export interface DraftStore {
       conversationId?: string
       requiredEntityLabels?: readonly string[]
       selectedScopeId?: string
+      speculativeOnly?: boolean
     }
   ): Promise<StageResult>
   /** 基础文档或题文变了（手工编辑、撤销、切工作区、改题）→ 草稿过期，不能再提交。 */
@@ -442,7 +447,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
     ...(record.drawingCertificate === undefined ? {} : { drawingCertificate: structuredClone(record.drawingCertificate) }),
     ...(record.certificateBinding === undefined ? {} : { certificateBinding: structuredClone(record.certificateBinding) }),
     ...(record.promptNormalisation === undefined ? {} : { promptNormalisation: structuredClone(record.promptNormalisation) }),
-    ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(proofAttemptFor(record) ?? record.proofAttempt) })
+    ...(record.proofAttempt === undefined ? {} : { proofAttempt: structuredClone(proofAttemptFor(record) ?? record.proofAttempt) }),
+    ...(record.speculativeOnly === true ? { speculativeOnly: true } : {})
   })
 
   return {
@@ -750,6 +756,11 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       }
       if (drafts.get(draftId) !== source || stageLeases.get(draftId) !== lease) {
         return { ok: false, reason: "stale_draft_version", detail: "a newer stage superseded this asynchronous result" }
+      }
+      if (stageOptions?.speculativeOnly === true) {
+        record.speculativeOnly = true
+      } else {
+        delete record.speculativeOnly
       }
       record.draftVersion += 1
       drafts.set(draftId, record)

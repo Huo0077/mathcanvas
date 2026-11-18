@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-18 最终版 B→C 路线执行更新（Task F0 完成，0 付费；真实 DS 仍 0/36）**：按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 推进 **Task F0**：已完成 `92981ebd` 36 题首失败边界 100% 归因（[2026-11-17-92981 基线](g3-final/retests/2026-11-17-92981/README.md)，`0 unknown`、`0 mixed_read_plan`，定向 `3` 文件 `93 passed` + `typecheck` + `lint` + `test:docs` 全过）。真实 DS 仍 `0/36`，**当前执行入口推进至 Task F1（探索候选隔离层 `speculativeCanvas.ts`）**；**Task F9（分层真实 DS 复测）仍需独立付费授权**。
+> **2026-11-18 最终版 B→C 路线执行更新（Task F0–F1 完成，0 付费；真实 DS 仍 0/36）**：已完成 **Task F0**（`f118c721`，[2026-11-17-92981 基线](g3-final/retests/2026-11-17-92981/README.md)）与 **Task F1**（[Task F1 审计](audit/g3-final-f1/README.md)，`speculativeCanvas` 探索隔离层 + `draftStore`/`hostBridge` `speculativeOnly` 硬阻断，`3` 文件 `47 passed` + `typecheck` + `lint` + `test:docs` 全过）。真实 DS 仍 `0/36`，**当前执行入口推进至 Task F2（动作级 DS ToolSpec `dsActionTools.ts`）**；**Task F9（分层真实 DS 复测）仍需独立付费授权**。
 
 > **2026-11-17 最新DS实测**：最新 `92981ebd` 全36题强制DS完整合同仍**0/36**，有候选2题、34题无候选；此前7个工具混批本轮0个。优先修结构化施工单的未声明实体/必需参数/格式协议，不以加请求、离线36/36或浏览器工程通过替代。逐题见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)，再次付费需新授权。
 

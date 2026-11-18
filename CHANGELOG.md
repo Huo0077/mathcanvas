@@ -8,9 +8,10 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F0：冻结 `92981ebd` 真实 36 题失败真源基线（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F1 & Task F0（开发版，0 付费）
 
-- 新增 [classifyRetest92981Case](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 及 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 校验，将 `898d31ae` 提交记录的 `92981ebd` 真实 DeepSeek 36 题复测冻结为 [Task F0 真源基线](docs/g3-final/retests/2026-11-17-92981/README.md)（36/36 首失败边界 100% 归因、`0 unknown`、`0 mixed_read_plan`、真实合同仍 `0/36`）；仅零付费工程基线对齐，未解除人工可读性、Windows 桌面实机或真实 DS 端到端门禁。
+- **Task F1 探索候选隔离层**：新增 [speculativeCanvas.ts](apps/web/src/agent/speculativeCanvas.ts) 与 [speculativeCanvas.test.ts](apps/web/src/agent/speculativeCanvas.test.ts)，支持不改活文档的步进试探、精确回滚/废弃与 `candidateHash` 晋升；并在 [draftStore.ts](apps/web/src/agent/draftStore.ts) 与 [hostBridge.ts](apps/web/src/agent/hostBridge.ts) 增加 `speculativeOnly` 硬拦截，禁止任何未晋升探索候选写主画布或铸造同意（`3` 文件 `47 passed`、`typecheck`、`lint` 全过）。
+- **Task F0 真源冻结**：新增 [classifyRetest92981Case](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 及 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 校验，将 `898d31ae` 提交记录的 `92981ebd` 真实 DeepSeek 36 题复测冻结为 [Task F0 真源基线](docs/g3-final/retests/2026-11-17-92981/README.md)（36/36 首失败边界 100% 归因、`0 unknown`、`0 mixed_read_plan`、真实合同仍 `0/36`）；仅零付费工程基线对齐，未解除人工可读性、Windows 桌面实机或真实 DS 端到端门禁。
 
 ## 2026-11-17 —— G3真实画布证据与兼容回归修复（开发版）
 
