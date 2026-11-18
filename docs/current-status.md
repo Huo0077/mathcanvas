@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-17 —— F9 入场误用旧路由，四题后停止（F9 未完成）
+
+本轮用户要求进入 F9，但临时实测入口错误地强制使用旧 `ds_intent`，而非 F2 新增 `ds_action`；真实调用4题10请求（9条usage，输入26627/输出19113 tokens），旧路径下完整合同0/4、1 partial、3 failed，尚未测另外32题，也未验证F9多状态真实候选/同候选浏览器交付。本轮未获得新的明确美元额度却沿用了已用尽的旧5美元预算，这是授权失误；发现后立即停批，绝不继续付费。真实平台账单未知。**不得把这个0/4写成新架构F9成绩；F9仍未测、G3-DS仍未退出。** 详见[误路由审计](audit/2026-11-17-g3-f9-route-mismatch/README.md)。下一步先零费验证F9入口确实启用动作级工具与多状态评分，再取得新的金额/请求授权。
+
 ## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0–F8 全部工程完结**（0 新增付费；真实 DS 仍 0/36；等待 Task F9 付费授权）
 
 - **`Task F8`（真实画布交付一致与全仓终态回归）已完成（0 付费）**：在 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts) 与 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 补齐 `speculativeOnly` 阻断、`screenshotCandidateHash` / `data-candidate-hash` 校验，并在 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts) 绑定全链同哈希断言。终态实测全过：`npm test` **`557` 文件 / `5875 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、`test:rust` 全过、`Playwright` **`41 passed`**（`0` 重试、`bridge_replay_passed`）与 `test:docs` 全过；入档 [Task F8 审计](audit/g3-final-f8/README.md)。

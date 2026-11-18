@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— F9误路由的付费四题检查点
+
+应用户要求启动F9时沿用旧临时 `ds_intent` 而非新版 `ds_action`：四题10次真实DS请求、旧口径完整合同0/4；实际金额未知。用户本轮没有新指定金额，错误沿用已用尽的5美元；发现后停止，未测余下32题。脱敏证据见[审计](audit/2026-11-17-g3-f9-route-mismatch/README.md)。需先零费纠正实测入口、证明动作级链与多状态候选集合接线，再重新取得明确预算，绝不把本次结果计入F9新架构成绩。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F8：真实画布同哈希交付与全仓终态回归（0 付费；F0–F8 工程完结，停在 Task F9 授权前）
 
 - **状态与证据**：强化 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts) 与 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 的 `speculativeOnly` 硬阻断与 `data-candidate-hash` / `screenshotCandidateHash` 绑定，扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终修改后全仓回归实测全部通过：`npm test` **`557` 文件 `5875 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、`test:rust` 全过、`Playwright` **`41 passed`（`0` 重试）**、`test:docs` 全过；详见 [Task F8 审计](audit/g3-final-f8/README.md)。Task F0–F8 零付费工程已全面闭环，现严格停在 **Task F9（分层真实 DS 复测）** 付费授权门前。

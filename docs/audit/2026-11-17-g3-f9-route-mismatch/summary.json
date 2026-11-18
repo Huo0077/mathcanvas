@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "g3-f9-misrouted-preflight.v1",
+  "revision": "b49843b0276a0b9a15fdb78919cabe2834ed631a",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "mode": "old forced ds_intent through coordinator; NOT F9 ds_action",
+  "denominator": 36,
+  "completed": 4,
+  "unrun": 32,
+  "modelId": "deepseek-v4-flash",
+  "requestCaps": {
+    "calls": 108,
+    "perCase": 3,
+    "requestBytes": 80000,
+    "outputTokens": 4096,
+    "approvedMaxUsd": 5
+  },
+  "usage": {
+    "calls": 10,
+    "bytes": 93297,
+    "inputTokens": 26627,
+    "outputTokens": 19113,
+    "usageEvents": 9
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "totals": {
+    "passed": 0,
+    "partial": 1,
+    "failed": 3,
+    "nonempty": 1
+  },
+  "byCase": [
+    {
+      "id": "GK-S08",
+      "requests": 3,
+      "terminal": "failed",
+      "contractStatus": "failed",
+      "candidatePrimitives": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "certificateStatus": null,
+      "verificationStatus": null,
+      "mainCanvasWrites": 0,
+      "usageEventCount": 3,
+      "toolNames": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ]
+    },
+    {
+      "id": "GK-S02",
+      "requests": 2,
+      "terminal": "failed",
+      "contractStatus": "failed",
+      "candidatePrimitives": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "certificateStatus": null,
+      "verificationStatus": null,
+      "mainCanvasWrites": 0,
+      "usageEventCount": 2,
+      "toolNames": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ]
+    },
+    {
+      "id": "GK-S05",
+      "requests": 3,
+      "terminal": "waiting",
+      "contractStatus": "partial",
+      "candidatePrimitives": 32,
+      "objectCoverage": 1,
+      "obligationCoverage": 0.9523809523809523,
+      "certificateStatus": "partial",
+      "verificationStatus": "not_supported",
+      "mainCanvasWrites": 0,
+      "usageEventCount": 2,
+      "toolNames": [
+        [],
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ]
+    },
+    {
+      "id": "GK-P03",
+      "requests": 2,
+      "terminal": "failed",
+      "contractStatus": "failed",
+      "candidatePrimitives": 0,
+      "objectCoverage": 0,
+      "obligationCoverage": 0,
+      "certificateStatus": null,
+      "verificationStatus": null,
+      "mainCanvasWrites": 0,
+      "usageEventCount": 2,
+      "toolNames": [
+        [
+          "plan_set_plan"
+        ],
+        [
+          "plan_set_plan"
+        ]
+      ]
+    }
+  ]
+}

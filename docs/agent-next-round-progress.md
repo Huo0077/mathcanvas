@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **F9停点（2026-11-17）**：四题旧 `ds_intent` 临时入口误测，不是 `ds_action` F9成绩；10次请求后已停止。先按[误路由审计](audit/2026-11-17-g3-f9-route-mismatch/README.md)做零付费入口/动作轨迹/候选集合检查，并重新确认本轮预算，再考虑新模型调用。禁止直接扩大到36题。
+
 > **2026-11-18 最终版 B→C 路线执行更新（Task F0–F8 全部完结，0 付费；真实 DS 仍 0/36）**：已完成 **Task F0**（`f118c721`）至 **Task F8**（[Task F8 审计](audit/g3-final-f8/README.md)，全仓 `557` 文件 `5875 passed | 1 todo` + `typecheck` + `lint` `0 errors` + `test:rust` + `Playwright` `41 passed` + `test:docs` 全过）。所有零付费工程改造已全部交付并推送；按 §12 门禁要求，**现严格停在 Task F9（分层真实 DeepSeek 复测：Tier A→B→C）独立付费授权前**，真实 DS 基线仍为 `0/36`（`bridge_replay_passed`，`humanReviewed: pending`）。
 
 > **2026-11-17 最新DS实测**：最新 `92981ebd` 全36题强制DS完整合同仍**0/36**，有候选2题、34题无候选；此前7个工具混批本轮0个。优先修结构化施工单的未声明实体/必需参数/格式协议，不以加请求、离线36/36或浏览器工程通过替代。逐题见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)，再次付费需新授权。
