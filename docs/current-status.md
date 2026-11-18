@@ -1,5 +1,7 @@
 # MathCanvas 当前状态
 
+> **2026-11-18 GK-S09 symbolic-input hardening**: A RED test showed an all-edges-`a` prompt still accepted unlabelled numeric side/height values, allowing a guessed value to masquerade as the problem parameter. `construct_solid` now fails closed with `symbol_source_required` unless the model provides `symbol:"a"` plus a positive `displayScale`; the explicit symbolic path remains valid. Product ds_action and recorded replay regressions pass; no paid DS call.
+
 > **2026-11-18 product-route correction (zero-cost recorded provider):** The product runner previously took the deterministic GK-S09 shortcut before consulting a selected `ds_action` planner. A RED test observed zero model calls. Explicit `intentMode: ds_action` now bypasses only that shortcut; the recorded 3-action provider path reaches the real product coordinator, waits for confirmation with zero main-canvas writes, and commits a sphere only after confirmation. The ordinary default deterministic route is unchanged. This is a test-injected opt-in path, not a proof that the default UI selects ds_action or that any paid DeepSeek call succeeded.
 
 > **2026-11-18 full-suite caveat:** A serialized full Vitest command (`--maxWorkers=1 --testTimeout=30000`) exceeded the 10-minute execution timeout, so no full-suite pass is claimed. Targeted tests, typecheck, document checks, and the exact-candidate browser check are reported separately.

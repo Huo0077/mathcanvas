@@ -99,6 +99,10 @@ The earlier 41 browser tests used a different deterministic planner, so they did
 
 A RED test with the actual frozen GK-S09 prompt showed that `createAgentRunner({ modelPlanner: { intentMode: "ds_action" } })` called the provider zero times because `routeDeterministicProblem` preempted the model. Explicit ds_action opt-in now bypasses only that shortcut. A recorded provider calls the product coordinator three times, stages prism + derived sphere with zero main-canvas writes before confirmation, then commits once on confirmation. Default UI routing remains deterministic or legacy and no paid DS result is implied.
 
+### Task 7 symbolic-input hardening (2026-11-18, zero cost)
+
+For a prompt stating that all prism edges equal symbolic `a`, an unlabelled numeric `sideLength`/`height` is now blocked with `symbol_source_required`. The model must send `symbol:"a"` and positive `displayScale`, which is recorded as a display assumption rather than a value for `a`. Product ds_action and recorded replay regressions cover both legal and illegal inputs.
+
 ## 不可偷换的出口
 
 Task 6 只解决“知道为什么失败”；Task 7 只解决“模型知道怎么调用”；Task 8 只解决“内核能产生真球/符号表达”；Task 9 的录制成功只解决“链路可用”。**只有新的真实 DS 请求 + 同版候选的全合同/证书/画布/交付共同通过，才能记 GK-S09 实测通过**。35题仍未测；不得以某一个阶段的 GREEN 更新真实36题成功率。

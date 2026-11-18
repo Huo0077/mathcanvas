@@ -82,6 +82,18 @@ function plannerRequest(userMessage = "作线段 AB") {
 }
 
 describe("GK-S09 derived circumsphere action", () => {
+  it("refuses numeric side and height as unlabelled values for an all-edges-a prompt", () => {
+    const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    const before = session.currentSnapshot()
+    const guessed = session.execute("construct_solid", { id: "prism", kind: "triangular_prism", sideLength: 1, height: 1 })
+    expect(guessed.status).toBe("blocked")
+    expect(guessed.blockerCode).toBe("symbol_source_required")
+    expect(session.currentSnapshot().candidateHash).toBe(before.candidateHash)
+    const explicit = session.execute("construct_solid", { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 1 })
+    expect(explicit.status).toBe("accepted")
+  })
+
   it("accepts implicit positive symbolic edge length in the frozen GK-S09 prompt without guessing its value", () => {
     const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
     const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
@@ -103,7 +115,7 @@ describe("GK-S09 derived circumsphere action", () => {
     expect(session.execute("repair_entity", {}).status).toBe("accepted")
     const rolled = session.execute("repair_entity", {})
     expect(rolled.status).toBe("accepted")
-    expect(session.execute("construct_solid", { id: "N", kind: "triangular_prism", sideLength: 3, height: 3 }).status).toBe("accepted")
+    expect(session.execute("construct_solid", { id: "N", kind: "tetrahedron", edgeLength: 3 }).status).toBe("accepted")
     const afterRollback = session.execute("finish_candidate", { goal: "without symbolic prism" })
     expect(afterRollback.terminated?.plan.kind).toBe("plan")
     if (afterRollback.terminated?.plan.kind === "plan") expect(afterRollback.terminated.plan.assumptions ?? []).toEqual([])

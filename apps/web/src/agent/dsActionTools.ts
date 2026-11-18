@@ -338,6 +338,12 @@ function resolveBasePolygonFromParams(
   }
 }
 
+/** A dimension symbol in the problem is not an actual numeric dimension. */
+function hasEqualEdgeSymbolA(text: string): boolean {
+  return /\u6240\u6709\u68f1\u957f\u90fd\u4e3a\s*\$?a\b/i.test(text) ||
+    /(?:edge(?:s)?\s+(?:have\s+)?length|all\s+edges).*\ba\b/i.test(text)
+}
+
 function resolveConstructSolidRequest(
   input: Record<string, unknown>,
   points3: ReadonlyMap<string, Vector3>
@@ -1315,11 +1321,14 @@ export function createDsActionSession(options: {
 
       if (name === "construct_solid") {
         const symbol = asString(input.symbol)
+        const text = options.problemText ?? ""
+        if (symbol === null && input.displayScale === undefined && asString(input.kind ?? input.shape) === "triangular_prism" && hasEqualEdgeSymbolA(text)) {
+          return failBlocked(name, "symbol_source_required", "this prompt gives a symbolic edge length; provide symbol and displayScale instead of invented dimensions")
+        }
         let normalizedInput: Record<string, unknown> = input
         if (symbol !== null || input.displayScale !== undefined) {
-          const text = options.problemText ?? ""
-          const positiveSource = /\ba\s*>\s*0\b/i.test(text) || /\u6240\u6709\u68f1\u957f\u90fd\u4e3a\s*\$?a\b/i.test(text)
-          const equalEdgeSource = /(?:edge(?:s)?\s+(?:have\s+)?length|all\s+edges).*\ba\b/i.test(text) || /\u6240\u6709\u68f1\u957f\u90fd\u4e3a\s*\$?a\b/i.test(text)
+          const positiveSource = /\ba\s*>\s*0\b/i.test(text) || hasEqualEdgeSymbolA(text)
+          const equalEdgeSource = hasEqualEdgeSymbolA(text)
           if (symbol !== "a" || !positiveSource || !equalEdgeSource) {
             return failBlocked(name, "symbol_source_missing", "symbolic display needs a confirmed source with positive edge parameter a")
           }

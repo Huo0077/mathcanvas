@@ -719,7 +719,7 @@ describe("GK-S09 recorded ds_action whole-case gate (zero cost)", () => {
       runModel: async () => {
         turn += 1
         const calls = [
-          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", sideLength: 1, height: 1,
+          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 1,
             vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] } },
           { toolId: "construct_circumsphere", input: { id: "circumsphere", solidId: "prism" } },
           { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }
