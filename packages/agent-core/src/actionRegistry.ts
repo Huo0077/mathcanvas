@@ -866,6 +866,7 @@ export const DS_ACTION_CLOSED_SET = [
   "construct_perpendicular",
   "construct_parallel",
   "construct_solid",
+  "construct_circumsphere",
   "construct_face",
   "construct_fold_state",
   "query_measurement",

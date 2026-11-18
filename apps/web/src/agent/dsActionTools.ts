@@ -78,6 +78,7 @@ export const IMPLEMENTED_DS_ACTION_TOOLS: readonly DsActionName[] = [
   "construct_perpendicular",
   "construct_parallel",
   "construct_solid",
+  "construct_circumsphere",
   "construct_face",
   "construct_fold_state",
   "query_measurement",
@@ -126,6 +127,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line through a point parallel to a line.",
   construct_solid: "Construct a named parametric solid via kernel solver (never raw hand vertices).",
+  construct_circumsphere: "Derive a real circumsphere from an existing named solid; never provide center or radius.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
   query_measurement: "Inspect distance/coordinates of currently staged entities.",
@@ -146,6 +148,12 @@ export const SOLID_KIND_FAMILIES = {
 
 const SOLID_KINDS = Object.values(SOLID_KIND_FAMILIES).flat()
 
+const CONSTRUCT_CIRCUMSPHERE_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["solidId"],
+  properties: { solidId: { type: "string" }, id: { type: "string" }, label: { type: "string" },
+    scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" } }
+} as const
+
 const CONSTRUCT_SOLID_PARAMETERS = {
   type: "object",
   additionalProperties: false,
@@ -153,6 +161,8 @@ const CONSTRUCT_SOLID_PARAMETERS = {
   properties: {
     kind: { type: "string", enum: SOLID_KINDS },
     shape: { type: "string", enum: SOLID_KINDS },
+    symbol: { type: "string", enum: ["a"] },
+    displayScale: { type: "number", exclusiveMinimum: 0 },
     id: { type: "string" }, output: { type: "string" }, label: { type: "string" },
     sideLength: { type: "number", exclusiveMinimum: 0 },
     baseSide: { type: "number", exclusiveMinimum: 0 },
@@ -179,7 +189,8 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
     function: {
       name,
       description: DS_ACTION_DESCRIPTIONS[name],
-      parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS : {
+      parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS
+        : name === "construct_circumsphere" ? CONSTRUCT_CIRCUMSPHERE_PARAMETERS : {
         type: "object",
         additionalProperties: true
       }
@@ -473,6 +484,7 @@ export function createDsActionSession(options: {
   readonly workspace: GeometryDocument["workspace"]
   readonly baseDocument: GeometryDocument
   readonly runId?: string
+  readonly problemText?: string
 }): DsActionSession {
   const speculative = createSpeculativeCanvas(options.baseDocument, { runId: options.runId })
   const entities = new Map<string, { id: string; kind: string; scopeId: string; stateId: string }>()
@@ -502,6 +514,7 @@ export function createDsActionSession(options: {
     }
     return canvas
   }
+  const symbolicDisplays = new Map<string, { symbol: "a"; displayScale: number }>()
   const relations: Array<{ kind: string; targets: string[] }> = []
   const recordedSlices: DsActionStateSlice[] = []
   const sliceHistory: Array<{
@@ -633,11 +646,11 @@ export function createDsActionSession(options: {
       })
     } else {
       sharedBranchlessActions.push(draftAction)
-      if (sliceTarget?.stateId !== undefined) {
+      if (sliceTarget !== undefined) {
         const curSnap = canvas.snapshot()
         upsertSlice({
           scopeId: sliceTarget.scopeId,
-          stateId: sliceTarget.stateId,
+          ...(sliceTarget.stateId === undefined ? {} : { stateId: sliceTarget.stateId }),
           candidateHash: curSnap.candidateHash,
           actions: [...curSnap.actions]
         })
@@ -1234,12 +1247,31 @@ export function createDsActionSession(options: {
         if (primaryActions.length === 0) {
           return failRepairable(name, "empty_candidate", "stage at least one geometric action before finish_candidate")
         }
+        const symbolicPrisms = primaryActions.filter((action): action is Extract<DraftAction, { actionId: "solid.create_prism" }> =>
+          action.actionId === "solid.create_prism" && symbolicDisplays.has(action.actionKey))
+        const derivedSpheres = primaryActions.filter((action): action is Extract<DraftAction, { actionId: "derived.create_circumsphere" }> =>
+          action.actionId === "derived.create_circumsphere")
+        // Draft actions carry an unresolved scoped alias until compilePlan resolves it to SceneReference.
+        const host = derivedSpheres[0]?.inputs.solidId as unknown as { scope?: string; alias?: string } | undefined
+        const boundSymbolicPrism = symbolicPrisms.length === 1 && derivedSpheres.length === 1 &&
+          host?.scope === "draft" && host.alias === symbolicPrisms[0]!.inputs.alias
         const plan: PlanEnvelope = {
           schemaVersion: PLAN_SCHEMA_VERSION,
           kind: "plan",
           goal: asString(input.goal) ?? "DS 动作级构图候选",
           factIds: [],
-          actions: [...primaryActions]
+          actions: [...primaryActions],
+          ...(boundSymbolicPrism ? {
+            answer: "For a > 0, an equilateral right triangular prism with every edge a has base circumradius squared a^2/3 and half-height squared a^2/4. Thus R^2 = 7a^2/12 and sphere area = 4*pi*R^2 = 7/3*pi*a^2. The display scale is illustrative, not a value for a."
+          } : {}),
+          ...(symbolicDisplays.size === 0 ? {} : {
+            assumptions: primaryActions.flatMap((action) => {
+              const display = symbolicDisplays.get(action.actionKey)
+              return display === undefined ? [] : [
+                `${display.symbol} > 0; display ${display.displayScale} is a drawing scale only, not a value inferred for ${display.symbol}`
+              ]
+            })
+          })
         }
         return {
           ok: true,
@@ -1282,7 +1314,25 @@ export function createDsActionSession(options: {
       }
 
       if (name === "construct_solid") {
-        const resolved = resolveConstructSolidRequest(input, points3)
+        const symbol = asString(input.symbol)
+        let normalizedInput: Record<string, unknown> = input
+        if (symbol !== null || input.displayScale !== undefined) {
+          const text = options.problemText ?? ""
+          const positiveSource = /\ba\s*>\s*0\b/i.test(text) || /\u6240\u6709\u68f1\u957f\u90fd\u4e3a\s*\$?a\b/i.test(text)
+          const equalEdgeSource = /(?:edge(?:s)?\s+(?:have\s+)?length|all\s+edges).*\ba\b/i.test(text) || /\u6240\u6709\u68f1\u957f\u90fd\u4e3a\s*\$?a\b/i.test(text)
+          if (symbol !== "a" || !positiveSource || !equalEdgeSource) {
+            return failBlocked(name, "symbol_source_missing", "symbolic display needs a confirmed source with positive edge parameter a")
+          }
+          const scale = asPositiveNumber(input.displayScale)
+          if (scale === null || !Number.isFinite(scale) || scale > 1e6 || input.height !== undefined || input.sideLength !== undefined || input.ab !== undefined || input.ac !== undefined || input.bc !== undefined) {
+            return failBlocked(name, "invalid_symbolic_scale", "provide a finite positive displayScale only; no contradictory numeric dimensions")
+          }
+          if (asString(input.kind ?? input.shape) !== "triangular_prism") {
+            return failBlocked(name, "unsupported_symbolic_kind", "symbolic equal-edge display currently supports triangular_prism")
+          }
+          normalizedInput = { ...input, sideLength: scale, height: scale }
+        }
+        const resolved = resolveConstructSolidRequest(normalizedInput, points3)
         if (!resolved.ok) {
           return resolved.status === "blocked"
             ? failBlocked(name, resolved.blockerCode, resolved.repairHint)
@@ -1315,16 +1365,33 @@ export function createDsActionSession(options: {
         }
         const staged = stageDraftAction(
           name,
-          {
-            actionId: "solid.create_polyhedron",
-            actionKey: `ds-act-${stepSeq}`,
-            factIds: [],
-            inputs: { alias: id, label, vertices, vertexNames, faces }
-          } as DraftAction,
+          resolved.request.kind === "prism"
+            ? {
+                actionId: "solid.create_prism",
+                actionKey: `ds-act-${stepSeq}`,
+                factIds: [],
+                inputs: {
+                  alias: id, label,
+                  basePolygon: resolved.request.baseVertices.map((v) => v.point),
+                  vector: {
+                    x: solved.pointRegistry[resolved.request.topLabels[0]!]!.x - resolved.request.baseVertices[0]!.point.x,
+                    y: solved.pointRegistry[resolved.request.topLabels[0]!]!.y - resolved.request.baseVertices[0]!.point.y,
+                    z: solved.pointRegistry[resolved.request.topLabels[0]!]!.z - resolved.request.baseVertices[0]!.point.z
+                  },
+                  vertexNames: [...resolved.request.baseVertices.map((v) => v.name), ...resolved.request.topLabels]
+                }
+              } as DraftAction
+            : {
+                actionId: "solid.create_polyhedron",
+                actionKey: `ds-act-${stepSeq}`,
+                factIds: [],
+                inputs: { alias: id, label, vertices, vertexNames, faces }
+              } as DraftAction,
           id,
           undefined,
           sliceTarget
         )
+        if (staged.ok && symbol === "a") symbolicDisplays.set(`ds-act-${stepSeq}`, { symbol: "a", displayScale: Number(input.displayScale) })
         if (!staged.ok) {
           const rollbackSnap = pointHistory[Math.min(snap.stepIndex, pointHistory.length - 1)]!
           points3.clear()
@@ -1338,6 +1405,29 @@ export function createDsActionSession(options: {
           })
         }
         return staged
+      }
+
+      if (name === "construct_circumsphere") {
+        if (options.workspace !== "geometry3d") return failBlocked(name, "workspace_mismatch", "circumsphere requires geometry3d")
+        const unknownField = Object.keys(input).find((field) => !(field in CONSTRUCT_CIRCUMSPHERE_PARAMETERS.properties))
+        if (unknownField) return failBlocked(name, "invalid_schema", "circumsphere accepts only solidId, id, label and slice identifiers")
+        const solidId = asString(input.solidId)
+        if (!solidId) return failRepairable(name, "missing_required_parameter", "circumsphere requires a named solidId")
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const stateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const canvas = getTargetCanvas(branchId)
+        const hostExists = canvas.snapshot().actions.some((action) =>
+          (action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_prism") && action.inputs.alias === solidId
+        )
+        if (!hostExists) return failBlocked(name, "missing_host", "circumsphere host must be an existing staged polyhedron")
+        const id = asString(input.id) ?? `SPHERE_${stepSeq}`
+        const label = asString(input.label) ?? id
+        return stageDraftAction(name, {
+          actionId: "derived.create_circumsphere", actionKey: `ds-act-${stepSeq}`, factIds: [],
+          inputs: { alias: id, label, solidId: { scope: "draft", alias: solidId } }
+        } as unknown as DraftAction, id, undefined, { scopeId,
+          ...(stateId === undefined ? {} : { stateId }), ...(branchId === undefined ? {} : { branchId }) })
       }
 
       if (name === "construct_base") {

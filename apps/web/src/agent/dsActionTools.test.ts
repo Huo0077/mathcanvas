@@ -1,6 +1,7 @@
-import { createBudget, DS_ACTION_CLOSED_SET } from "@draw/agent-core"
+import { createBudget, DS_ACTION_CLOSED_SET, compilePlan } from "@draw/agent-core"
 import { createEmptyDocument } from "@draw/dsl"
 import { describe, expect, it } from "vitest"
+import drawingContracts36 from "../../../../test-fixtures/reliability/drawing-contracts-36.json"
 import {
   buildDsActionToolSchemas,
   createDsActionSession,
@@ -80,6 +81,106 @@ function plannerRequest(userMessage = "作线段 AB") {
   }
 }
 
+describe("GK-S09 derived circumsphere action", () => {
+  it("accepts implicit positive symbolic edge length in the frozen GK-S09 prompt without guessing its value", () => {
+    const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    const result = session.execute("construct_solid", { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 2,
+      vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] })
+    expect(result.status).toBe("accepted")
+    const noSphere = session.execute("finish_candidate", { goal: "symbolic equal-edge right prism" })
+    expect(noSphere.terminated?.plan.kind).toBe("plan")
+    if (noSphere.terminated?.plan.kind === "plan") expect(noSphere.terminated.plan.answer).toBeUndefined()
+    const derived = session.execute("construct_circumsphere", { solidId: "prism", id: "sphere" })
+    expect(derived.status).toBe("accepted")
+    const finished = session.execute("finish_candidate", { goal: "symbolic equal-edge right prism" })
+    expect(finished.terminated?.plan.kind).toBe("plan")
+    if (finished.terminated?.plan.kind === "plan") {
+      expect(finished.terminated.plan.assumptions).toEqual(expect.arrayContaining([expect.stringMatching(/a > 0.*display.*2/i)]))
+      expect(finished.terminated.plan.answer).toContain("7/3")
+      expect(finished.terminated.plan.answer).toContain("a^2")
+    }
+    expect(session.execute("repair_entity", {}).status).toBe("accepted")
+    const rolled = session.execute("repair_entity", {})
+    expect(rolled.status).toBe("accepted")
+    expect(session.execute("construct_solid", { id: "N", kind: "triangular_prism", sideLength: 3, height: 3 }).status).toBe("accepted")
+    const afterRollback = session.execute("finish_candidate", { goal: "without symbolic prism" })
+    expect(afterRollback.terminated?.plan.kind).toBe("plan")
+    if (afterRollback.terminated?.plan.kind === "plan") expect(afterRollback.terminated.plan.assumptions ?? []).toEqual([])
+    const unrelated = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "Let a denote an angle; draw a prism." })
+      .execute("construct_solid", { kind: "triangular_prism", symbol: "a", displayScale: 2 })
+    expect(unrelated.blockerCode).toBe("symbol_source_missing")
+  })
+
+  it("uses displayScale only with a positive symbolic a source and does not silently set a=1", () => {
+    const build = () => createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "All edges of the right triangular prism have length a, where a>0." })
+    const symbolic = build()
+    const result = symbolic.execute("construct_solid", { id: "P", kind: "triangular_prism", symbol: "a", displayScale: 2 })
+    expect(result.status).toBe("accepted")
+    const action = symbolic.currentSnapshot().actions[0]!
+    expect(action.actionId).toBe("solid.create_prism")
+    if (action.actionId === "solid.create_prism") {
+      expect(action.inputs.vector.z).toBeCloseTo(2)
+      expect(Math.hypot(
+        action.inputs.basePolygon[0]!.x - action.inputs.basePolygon[1]!.x,
+        action.inputs.basePolygon[0]!.y - action.inputs.basePolygon[1]!.y,
+        action.inputs.basePolygon[0]!.z - action.inputs.basePolygon[1]!.z
+      )).toBeCloseTo(2)
+    }
+    const noSource = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+      .execute("construct_solid", { kind: "triangular_prism", symbol: "a", displayScale: 2 })
+    expect(noSource.ok).toBe(false)
+    expect(noSource.blockerCode).toBe("symbol_source_missing")
+    const zero = build().execute("construct_solid", { kind: "triangular_prism", symbol: "a", displayScale: 0 })
+    expect(zero.ok).toBe(false)
+  })
+
+  it("keeps the derived sphere radius proportional to symbolic display scale", () => {
+    const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
+    for (const displayScale of [1, 2]) {
+      const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+      expect(session.execute("construct_solid", { kind: "triangular_prism", id: "P", symbol: "a", displayScale }).status).toBe("accepted")
+      expect(session.execute("construct_circumsphere", { solidId: "P", id: "S" }).status).toBe("accepted")
+      const finished = session.execute("finish_candidate", { goal: "sphere area" })
+      if (finished.terminated?.plan.kind !== "plan") throw new Error("no plan")
+      expect(finished.terminated.plan.answer).toContain("7/3*pi*a^2")
+      const compiled = compilePlan(finished.terminated.plan, { document: createEmptyDocument("geometry3d"), conversationId: "symbolic-test" })
+      expect(compiled.ok).toBe(true)
+      const sphere = compiled.draftDocument?.primitives.find((primitive) => primitive.type === "sphere")
+      expect(sphere?.type).toBe("sphere")
+      if (sphere?.type === "sphere") expect(sphere.radius / displayScale).toBeCloseTo(Math.sqrt(7 / 12), 8)
+    }
+  })
+
+  it("creates a real sphere from the named prism via the kernel and keeps unknown hosts atomic", () => {
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const prism = session.execute("construct_solid", { id: "prism", kind: "triangular_prism", sideLength: 1, height: 1,
+      vertexNames: ["A", "B", "C", "A1", "B1", "C1"] })
+    expect(prism.status).toBe("accepted")
+    const before = session.currentSnapshot()
+    const missing = session.execute("construct_circumsphere", { id: "bad", solidId: "not-found" })
+    expect(missing.ok).toBe(false)
+    expect(missing.status).toBe("blocked")
+    expect(session.currentSnapshot().candidateHash).toBe(before.candidateHash)
+    const derived = session.execute("construct_circumsphere", { id: "sphere", solidId: "prism", label: "circumsphere" })
+    expect(derived.status).toBe("accepted")
+    expect(derived.stateChanged).toBe(true)
+    expect(derived.primitiveCount).toBeGreaterThan(prism.primitiveCount)
+    const tool = buildDsActionToolSchemas().find((schema) => schema.function.name === "construct_circumsphere")!
+    expect(tool.function.parameters).toMatchObject({ required: ["solidId"], additionalProperties: false })
+    expect(JSON.stringify(tool.function.parameters)).not.toMatch(/center|radius/)
+    const badRadius = session.execute("construct_circumsphere", { id: "fake", solidId: "prism", radius: 99 })
+    expect(badRadius.ok).toBe(false)
+    expect(session.currentSnapshot().candidateHash).toBe(derived.candidateHash)
+    expect(session.currentSnapshot().actions.at(-1)).toMatchObject({ actionId: "derived.create_circumsphere",
+      inputs: { alias: "sphere", solidId: { scope: "draft", alias: "prism" } } })
+    const finish = session.execute("finish_candidate", { goal: "equal-edge triangular prism and circumsphere" })
+    expect(finish.terminated?.plan.kind).toBe("plan")
+  })
+})
+
 describe("construct_solid model-visible contract", () => {
   it("rejects unknown solid fields before the kernel while preserving supported aliases", () => {
     const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
@@ -94,7 +195,8 @@ describe("construct_solid model-visible contract", () => {
 
   it("keeps all published solid kinds executable and rejects missing or negative dimensions", () => {
     const advertised = buildDsActionToolSchemas().find((schema) => schema.function.name === "construct_solid")!
-    const published = "properties" in advertised.function.parameters ? advertised.function.parameters.properties.kind.enum : []
+    const published = "properties" in advertised.function.parameters && "kind" in advertised.function.parameters.properties
+      ? advertised.function.parameters.properties.kind.enum : []
     expect(published).toEqual(Object.values(SOLID_KIND_FAMILIES).flat())
     const validByFamily: Record<string, Record<string, unknown>> = {
       regular_pyramid: { sideLength: 2, height: 3 },
@@ -133,9 +235,9 @@ describe("construct_solid model-visible contract", () => {
 })
 
 describe("dsActionTools (Task F2 closed action-level protocol)", () => {
-  it("exposes all 22 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
+  it("exposes all 23 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
     expect(DS_ACTION_TOOL_NAMES).toEqual(DS_ACTION_CLOSED_SET)
-    expect(DS_ACTION_TOOL_NAMES).toHaveLength(22)
+    expect(DS_ACTION_TOOL_NAMES).toHaveLength(23)
 
     const schemas = buildDsActionToolSchemas()
     expect(schemas.map((s) => s.function.name)).toEqual([...DS_ACTION_CLOSED_SET])

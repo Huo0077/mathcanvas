@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 next entry**: Continue from Task 9 with same-candidate browser rendering and lifecycle gates. Do not treat the two zero-cost symbolic replays as live DS results; request new paid authorization before GK-S09 live testing.
+
 > **2026-11-18 Task 7 parameter protocol first block (zero cost):** `construct_solid` now publishes a closed schema with supported kind values, positive dimensions, and named fields; the parser shares the same kind/field vocabulary and rejects unknown parameters. Targeted family/negative/missing-parameter checks pass, typecheck and test:docs pass, lint has 0 errors (34 pre-existing warnings). Per-family required-field rules and provider schema compatibility are not finished; Task 7 remains open. See [detailed plan](g3-final/G3-F9-GK-S09-detailed-repair-plan.md).
 
 > **2026-11-18 Task 6 回执桥接（零付费）**：已增加 `runFrozenDsCaseTraced`，将真实 `ds_action` 逐请求/逐动作事件接入脱敏 `G3CaseTrace`，记录首次阻断码、图元变化和回执送达；零费伪 provider 验证缺参数和终止动作。旧 GK-S09 两次原始回执不可追溯，35题未测，实际费用未知。下一步 Task 7 参数 schema。详见 [详细修复计划](g3-final/G3-F9-GK-S09-detailed-repair-plan.md)。

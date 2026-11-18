@@ -624,3 +624,71 @@ describe("GK-S09 action receipt runner bridge (zero cost)", () => {
     expect(JSON.stringify(traces[0])).not.toMatch(/sideLength|toolInput|Draw a right|apiKey/)
   })
 })
+
+describe("GK-S09 recorded ds_action whole-case gate (zero cost)", () => {
+  it("accepts symbolic a from actual GK-S09 text at two display scales with genuine spheres", async () => {
+    const realCase = getCase("GK-S09")
+    for (const displayScale of [1, 2]) {
+      let turn = 0
+      const result = await runFrozenDsCaseTraced(
+        { id: realCase.id, prompt: realCase.prompt, workspace: "geometry3d" },
+        createBudget({ network: 8, generation: 8, tool: 12 }),
+        {
+          intentMode: "ds_action",
+          resolveProvider: async () => ({ ok: true, provider: {
+            id: "ds-test", modelId: "deepseek-v4-flash", dialect: "openai", revision: 2,
+            capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+          } }),
+          runModel: async () => {
+            turn += 1
+            const calls = [
+              { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", symbol: "a", displayScale,
+                vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] } },
+              { toolId: "construct_circumsphere", input: { id: "sphere", solidId: "prism" } },
+              { toolId: "finish_candidate", input: { goal: "symbolic right triangular prism and circumsphere" } }
+            ] as const
+            const action = calls[Math.min(turn - 1, calls.length - 1)]!
+            return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`,
+              toolCallId: `tc-${turn}`, toolId: action.toolId, input: action.input }] }
+          }
+        },
+        { contract: realCase, revision: "recorded-replay", runId: `gks09-symbolic-${displayScale}`, onTrace: () => {} }
+      )
+      expect(result.contractStatus, `displayScale ${displayScale}`).toBe("passed")
+      expect(result.candidateSet[0]?.certificateStatus).toBe("passed")
+      expect(turn).toBe(3)
+    }
+  })
+
+  it("requires prism and derived sphere to satisfy the independent frozen contract", async () => {
+    const realCase = getCase("GK-S09")
+    let turn = 0
+    const input = { id: realCase.id, prompt: realCase.prompt, workspace: "geometry3d" as const }
+    const traces: import("./g3DsCaseTrace").G3CaseTrace[] = []
+    const result = await runFrozenDsCaseTraced(input, createBudget({ network: 8, generation: 8, tool: 12 }), {
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "ds-test", modelId: "deepseek-v4-flash", dialect: "openai", revision: 2,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        turn += 1
+        const calls = [
+          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", sideLength: 1, height: 1,
+            vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] } },
+          { toolId: "construct_circumsphere", input: { id: "circumsphere", solidId: "prism" } },
+          { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }
+        ] as const
+        const action = calls[Math.min(turn - 1, calls.length - 1)]!
+        return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`,
+          toolCallId: `tc-${turn}`, toolId: action.toolId, input: action.input }] }
+      }
+    }, { contract: realCase, revision: "recorded-replay", runId: "gks09-recorded", onTrace: (trace) => traces.push(trace) })
+    expect(result.candidateSet).toHaveLength(1)
+    expect(result.candidateSet[0]?.certificateStatus, JSON.stringify(result.candidateSet)).toBe("passed")
+    expect(result.contractStatus).toBe("passed")
+    expect(traces[0]?.actionReceipts?.map((a) => a.toolName)).toEqual([
+      "construct_solid", "construct_circumsphere", "finish_candidate"
+    ])
+  })
+})

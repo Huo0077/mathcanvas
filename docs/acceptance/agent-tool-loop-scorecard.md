@@ -1,5 +1,7 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-18 Task 8 evidence**: The action loop now supports schema-checked symbolic triangular-prism construction and a kernel-derived circumsphere. Recorded GK-S09 replays pass at two scales; this is not live provider evidence and does not change the historical live score.
+
 > **2026-11-18 Task 6 回执桥接（零付费）**：已增加 `runFrozenDsCaseTraced`，将真实 `ds_action` 逐请求/逐动作事件接入脱敏 `G3CaseTrace`，记录首次阻断码、图元变化和回执送达；零费伪 provider 验证缺参数和终止动作。旧 GK-S09 两次原始回执不可追溯，35题未测，实际费用未知。下一步 Task 7 参数 schema。详见 [详细修复计划](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md)。
 
 > **2026-11-18 GK-S09 当前实测与续作**：纯文字真实DS仅2次 `construct_solid`、无候选；35题未测，动作回执码缺失，实际费用未知。[Task 6–9详细执行计划](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md)仅写入文档，尚未实现或重新付费测试；不可合并旧36题分数。

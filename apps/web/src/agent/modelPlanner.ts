@@ -651,7 +651,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       const seenCalls = new Set<string>()
       const dsActionSignatures = new Map<string, number>()
       const dsActionSession = intentMode === "ds_action"
-        ? createDsActionSession({ workspace: request.run.target.workspace, baseDocument: createEmptyDocument(request.run.target.workspace), runId })
+        ? createDsActionSession({ workspace: request.run.target.workspace, baseDocument: createEmptyDocument(request.run.target.workspace), runId, problemText: request.userMessage })
         : null
       /**
        * 用户按了停止 → 让 Rust 侧**真的**停下来。

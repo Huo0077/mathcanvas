@@ -71,6 +71,13 @@ type G3ActionReceiptTrace = {
 - [ ] **最小实现**：复用 `packages/agent-core/src/actionRegistry.ts` 的 `derived.create_circumsphere`，经 `SpeculativeCanvas.applyAction` 暂存；动作响应包含实际图元数/hash变化，但球心半径由内核推导，模型不得手写球参数绕过来源。若派生动作只对特定实体类型可用，先加内核失败测试明确指出边界再做最小适配；不在工具层写第二套外接球求解。符号相关说明只作为独立、可溯源约束，不写进冻结合同标准答案给模型。提示词描述实例与普遍结论区别，不静默补缺参数。
 - [ ] **GREEN** 运行 `npm.cmd exec -- vitest run apps/web/src/agent/dsActionTools.test.ts scripts/reliability-eval/drawingContracts.test.ts packages/agent-core/src/verification/drawingCertificate.test.ts --testTimeout=30000`、`npm.cmd run typecheck`；检查合同分别要求棱柱与球，数值缩放例如 `a_display=2` 时球心/半径同倍、退化拒绝、非共球拒绝、证书绑定同一候选。浏览器可读性另验。对无法派生球的内核缺陷以准确 blockerCode 停止，绝不画装饰性圆冒充球。同步进度、提交推送。
 
+### Task 8 progress (2026-11-18)
+
+- Implemented the action-level `construct_circumsphere` tool. It accepts only a staged solid reference and rejects center/radius injection, missing hosts, wrong workspace, unknown fields, and failed derivations atomically. It reuses `derived.create_circumsphere` and the existing scene-graph kernel.
+- Implemented GK-S09 symbolic display handling: the actual frozen prompt can establish `a` from ?all edges equal a? without requiring a literal `a>0` phrase; `displayScale` is a positive drawing coordinate scale and is recorded as an assumption, never treated as the value of `a`. Unsupported symbol sources are blocked.
+- Added zero-cost proof at display scales `1` and `2`: the same action chain (`construct_solid ? construct_circumsphere ? finish_candidate`) produces a genuine sphere, passes the independent GK-S09 contract and certificate, and preserves the symbolic result `7/3*pi*a^2`.
+- Verification: targeted geometry/planner/certificate tests `183 passed`; documentation tests `22 passed`; full typecheck passed. No paid DS call was made. Browser same-candidate verification and a new authorized live DS run remain open.
+
 ## Task 9：录制整题回放 → 浏览器 → 新授权真实 DS → 分族扩批
 
 - [ ] **RED：零费整题** 在 `g3DsFrozenCaseRunner.test.ts` 用按次回放的模型动作串（不是直接注入合格 CandidateSet）驱动 `construct_solid → construct_circumsphere → finish_candidate`；缺球、只文字、匿名替身、破坏等棱长、缺 finish、证书失败均断言整题未通过。冻结 `expected/requiredObligations` 只能传给独立裁判，不出现在 provider 请求。定向运行 `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts scripts/reliability-eval/drawingContracts.test.ts --testTimeout=30000`，确认 RED 后完成接线再 GREEN。
