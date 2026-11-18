@@ -10,6 +10,7 @@ import {
   classifyRetest92981Case,
   createG3CaseTrace,
   explainFirstFailure,
+  recordActionReceipt,
   recordBoundary,
   recordRequestTrace,
   serializeG3CaseTrace,
@@ -264,11 +265,13 @@ describe("g3DsCaseTrace (Task 0 observability & sanitization)", () => {
               responseKind: ev.responseKind,
               usageKnown: ev.usageKnown
             })
-          : recordBoundary(trace, {
+          : ev.kind === "boundary"
+            ? recordBoundary(trace, {
               boundary: ev.boundary,
               code: ev.code,
               ...(ev.fieldPath === undefined ? {} : { fieldPath: ev.fieldPath })
             })
+            : trace
     }
     expect(trace.requests).toEqual([
       { index: 1, toolNames: ["scene_inspect", "plan_set_plan"], responseKind: "tool_calls", usageKnown: true }
@@ -318,5 +321,37 @@ describe("g3DsCaseTrace (Task 0 observability & sanitization)", () => {
     expect(counts.unknown).toBe(0)
     expect(counts.tool_protocol).toBe(0)
     expect(counts.schema + counts.dag + counts.verification).toBe(36)
+  })
+
+  it("records sanitized per-action receipts and rejects raw action payloads", () => {
+    let trace: G3CaseTrace = createG3CaseTrace({
+      caseId: "GK-S09",
+      runId: "run-action-receipt-1",
+      revision: "test"
+    })
+    trace = recordActionReceipt(trace, {
+      requestIndex: 1,
+      actionIndex: 1,
+      toolName: "construct_solid",
+      resultStatus: "repairable",
+      blockerCode: "missing_required_parameter",
+      primitiveCountBefore: 0,
+      primitiveCountAfter: 0,
+      candidateHashChanged: false,
+      stateChanged: false,
+      feedbackDelivered: true
+    })
+    expect(trace.actionReceipts).toEqual([expect.objectContaining({
+      requestIndex: 1,
+      actionIndex: 1,
+      toolName: "construct_solid",
+      resultStatus: "repairable",
+      blockerCode: "missing_required_parameter"
+    })])
+    expect(serializeG3CaseTrace(trace)).not.toContain("toolInput")
+    expect(() => serializeG3CaseTrace({
+      ...trace,
+      actionReceipts: [{ ...trace.actionReceipts![0]!, toolInput: { sideLength: 1 } }]
+    } as unknown as G3CaseTrace)).toThrow(/forbidden|unknown|sanitiz/i)
   })
 })

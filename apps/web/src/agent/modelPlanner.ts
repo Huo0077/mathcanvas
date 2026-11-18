@@ -234,6 +234,19 @@ export type ModelPlannerStructuredEvent =
       readonly code: string
       readonly fieldPath?: string
     }
+  | {
+      readonly kind: "action"
+      readonly requestIndex: number
+      readonly actionIndex: number
+      readonly toolName: string
+      readonly resultStatus: "accepted" | "repairable" | "blocked"
+      readonly blockerCode?: string
+      readonly primitiveCountBefore: number
+      readonly primitiveCountAfter: number
+      readonly candidateHashChanged: boolean
+      readonly stateChanged: boolean
+      readonly feedbackDelivered: boolean
+    }
 
 export interface ModelPlannerDependencies {
   /** Automatically transcribed diagram observations, separate from the problem givens. */
@@ -665,6 +678,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       const recovery = createRecoveryController()
       let attempts = 0
       let structuredRequestIndex = 0
+      let dsActionIndex = 0
+      let lastDsPrimitiveCount = 0
+      let lastDsCandidateHash = ""
       let lastSignature: string | null = null
       /** 事件 id 优先：诊断时"这次请求对应哪条运行记录"要能对上代理里的账。 */
       let ids = { requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
@@ -971,7 +987,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
             seenCalls.add(toolCall.toolCallId)
             if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
+            const primitiveCountBefore = lastDsPrimitiveCount
+            const previousCandidateHash = lastDsCandidateHash
+            const actionIndex = ++dsActionIndex
             const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
+            lastDsPrimitiveCount = execRes.primitiveCount
+            lastDsCandidateHash = execRes.candidateHash
             if (execRes.terminated !== undefined) {
               const candidateSlices =
                 execRes.terminated.slices && execRes.terminated.slices.length > 0
@@ -1037,6 +1058,19 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               toolCallId: toolCall.toolCallId,
               toolName: toolCall.toolId,
               content: boundedExcerpt(JSON.stringify(execRes), 4000)
+            })
+            dependencies.onStructuredDiagnostic?.({
+              kind: "action",
+              requestIndex: structuredRequestIndex,
+              actionIndex,
+              toolName: toolCall.toolId,
+              resultStatus: execRes.status,
+              ...(execRes.blockerCode === undefined ? {} : { blockerCode: execRes.blockerCode }),
+              primitiveCountBefore,
+              primitiveCountAfter: execRes.primitiveCount,
+              candidateHashChanged: previousCandidateHash !== execRes.candidateHash,
+              stateChanged: execRes.stateChanged,
+              feedbackDelivered: true
             })
             continue
           }

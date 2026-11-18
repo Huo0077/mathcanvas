@@ -48,6 +48,12 @@ type G3ActionReceiptTrace = {
 - [ ] 定向 GREEN 后核验取消、预算耗尽、blocked、repairable、usage 缺失，现有 no_progress 策略及确认前主画布0写入。运行 `npm.cmd run typecheck`、`npm.cmd run test:docs -- --testTimeout=30000`。独立复核 trace 的键集及与下一轮模型实际回执的一致性；如果该阶段仍无法获取 first-failure code，不开展付费重试。
 - [ ] 记审计与进度；提交推送并核对远端。**不能追溯修复旧两次的缺失回执**：Task 6 只让后续调用可定责，不单独发 DS。
 
+### Task 6 progress (2026-11-18)
+
+- Code-only checkpoint: sanitized receipt type and deep validation, plus planner action events carrying request/action indices, status/blocker, primitive counts, state/hash changes, and feedback delivery. No raw prompts, coordinates or inputs are recorded.
+- RED observed before implementation; targeted tests now show 80 passing and typecheck passes.
+- Not complete: wire planner events into a production/fixture case trace or explicitly report telemetry_missing. Prior GK-S09 receipts cannot be reconstructed. No paid DS calls.
+
 ## Task 7：工具 schema 与支持形状一一对应，零费用
 
 **接口**：建议新增只读 `CONSTRUCT_SOLID_CAPABILITIES`，每族列 canonical kind、别名、required 字段、互斥替代字段、正数/名称约束，令解析器、schema 生成和 prompt 从同一表读取；必要的复杂几何校验仍由内核负责。不要把 symbol `a` 直接塞给 `asPositiveNumber`。

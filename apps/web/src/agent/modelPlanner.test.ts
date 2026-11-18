@@ -15,7 +15,7 @@ import {
 } from "@draw/agent-core"
 
 import type { ProviderHealth, ProviderProfile } from "../services/providerProfileClient"
-import { buildDsIntentToolSchema, createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider } from "./modelPlanner"
+import { buildDsIntentToolSchema, createModelPlanner, toGateCapabilities, buildPlanToolSchema, PLAN_TOOL_NAME, PLAN_TOOL_SCHEMA, type ModelPlannerProvider, type ModelPlannerStructuredEvent } from "./modelPlanner"
 import { planOf } from "@draw/agent-core"
 
 /**
@@ -1610,8 +1610,10 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
 
     // Case 1: identical missing-parameter failure twice -> stops cleanly in <=2 calls
     let badCalls = 0
+    const stalledEvents: ModelPlannerStructuredEvent[] = []
     const stalledPlanner = createModelPlanner({
       intentMode: "ds_action",
+      onStructuredDiagnostic: (event) => { stalledEvents.push(event) },
       resolveProvider: async () => ({ ok: true, provider }),
       runModel: async () => {
         badCalls += 1
@@ -1633,6 +1635,7 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     const badRes = await stalledPlanner.plan(request({ userMessage: "画正四棱锥", budget: createBudget({ network: 8, generation: 8, tool: 12 }) }))
     expect("failure" in badRes).toBe(true)
     expect(badCalls).toBeLessThanOrEqual(2)
+    expect(stalledEvents.some((event) => event.kind === "action" && event.toolName === "construct_solid" && event.resultStatus === "repairable" && event.blockerCode === "missing_required_parameter")).toBe(true)
 
     // Case 2: repair missing height -> real solid -> query_measurement -> finish_candidate fits inside exact network=4, generation=4 with external beforeProviderRequest!
     let okCalls = 0

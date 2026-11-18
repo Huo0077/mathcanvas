@@ -21,6 +21,19 @@ export interface G3RequestTrace {
   readonly usageKnown: boolean
 }
 
+export interface G3ActionReceipt {
+  readonly requestIndex: number
+  readonly actionIndex: number
+  readonly toolName: string
+  readonly resultStatus: "accepted" | "repairable" | "blocked"
+  readonly blockerCode?: string
+  readonly primitiveCountBefore: number
+  readonly primitiveCountAfter: number
+  readonly candidateHashChanged: boolean
+  readonly stateChanged: boolean
+  readonly feedbackDelivered: boolean
+}
+
 export interface G3FailureRecord {
   readonly boundary: G3Boundary
   readonly code: string
@@ -34,6 +47,7 @@ export interface G3CaseTrace {
   readonly candidateHash?: string
   readonly modelInvoked: boolean
   readonly requests: readonly G3RequestTrace[]
+  readonly actionReceipts?: readonly G3ActionReceipt[]
   readonly firstFailure?: G3FailureRecord
 }
 
@@ -95,10 +109,12 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "candidateHash",
   "modelInvoked",
   "requests",
+  "actionReceipts",
   "firstFailure"
 ])
 
 const ALLOWED_REQUEST_KEYS = new Set(["index", "toolNames", "responseKind", "usageKnown"])
+const ALLOWED_ACTION_RECEIPT_KEYS = new Set(["requestIndex", "actionIndex", "toolName", "resultStatus", "blockerCode", "primitiveCountBefore", "primitiveCountAfter", "candidateHashChanged", "stateChanged", "feedbackDelivered"])
 const ALLOWED_FAILURE_KEYS = new Set(["boundary", "code", "fieldPath"])
 const SECRET_VALUE_PATTERN = /\bsk-[A-Za-z0-9]{12,}\b|\bBearer\s+[A-Za-z0-9._-]{12,}/i
 const SAFE_CODE_PATTERN = /^[a-z][a-z0-9_.-]{0,79}$/
@@ -186,6 +202,19 @@ export function assertSanitizedG3CaseTrace(trace: G3CaseTrace): G3CaseTrace {
       throw new Error("Invalid usageKnown flag in trace request")
     }
   }
+  if (trace.actionReceipts !== undefined) {
+    if (!Array.isArray(trace.actionReceipts)) throw new Error("Trace actionReceipts must be an array")
+    for (const receipt of trace.actionReceipts) {
+      if (typeof receipt !== "object" || receipt === null || Array.isArray(receipt)) throw new Error("Trace action receipt must be an object")
+      for (const key of Object.keys(receipt)) if (!ALLOWED_ACTION_RECEIPT_KEYS.has(key)) throw new Error(`Forbidden or unknown action receipt field "${key}"`)
+      if (!Number.isInteger(receipt.requestIndex) || receipt.requestIndex < 1 || !Number.isInteger(receipt.actionIndex) || receipt.actionIndex < 1) throw new Error("Invalid action receipt index")
+      assertSafeString(receipt.toolName, "action receipt toolName", 80)
+      if (!["accepted", "repairable", "blocked"].includes(receipt.resultStatus)) throw new Error("Invalid action receipt status")
+      if (receipt.blockerCode !== undefined) assertSafeString(receipt.blockerCode, "action receipt blockerCode", 80)
+      for (const key of ["primitiveCountBefore", "primitiveCountAfter"] as const) if (!Number.isInteger(receipt[key]) || receipt[key] < 0) throw new Error(`Invalid ${key}`)
+      for (const key of ["candidateHashChanged", "stateChanged", "feedbackDelivered"] as const) if (typeof receipt[key] !== "boolean") throw new Error(`Invalid ${key}`)
+    }
+  }
   if (trace.firstFailure !== undefined) {
     for (const key of Object.keys(trace.firstFailure)) {
       if (!ALLOWED_FAILURE_KEYS.has(key)) {
@@ -218,7 +247,8 @@ export function createG3CaseTrace(input: {
     revision: input.revision,
     ...(input.candidateHash === undefined ? {} : { candidateHash: input.candidateHash }),
     modelInvoked: input.modelInvoked ?? false,
-    requests: []
+    requests: [],
+    actionReceipts: []
   })
 }
 
@@ -241,6 +271,22 @@ export function recordRequestTrace(trace: G3CaseTrace, request: G3RequestTrace):
     modelInvoked: true,
     requests: [...trace.requests, sanitizedReq]
   })
+}
+
+export function recordActionReceipt(trace: G3CaseTrace, receipt: G3ActionReceipt): G3CaseTrace {
+  const normalized: G3ActionReceipt = {
+    requestIndex: receipt.requestIndex,
+    actionIndex: receipt.actionIndex,
+    toolName: receipt.toolName,
+    resultStatus: receipt.resultStatus,
+    ...(receipt.blockerCode === undefined ? {} : { blockerCode: receipt.blockerCode }),
+    primitiveCountBefore: receipt.primitiveCountBefore,
+    primitiveCountAfter: receipt.primitiveCountAfter,
+    candidateHashChanged: receipt.candidateHashChanged,
+    stateChanged: receipt.stateChanged,
+    feedbackDelivered: receipt.feedbackDelivered
+  }
+  return assertSanitizedG3CaseTrace({ ...trace, actionReceipts: [...(trace.actionReceipts ?? []), normalized] })
 }
 
 export function recordBoundary(trace: G3CaseTrace, event: G3FailureRecord): G3CaseTrace {

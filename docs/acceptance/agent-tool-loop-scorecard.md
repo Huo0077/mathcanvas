@@ -1,5 +1,7 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-18 Task 6 in progress (code only, no paid DS):** Sanitized action receipt types and planner action events are implemented. Targeted tests: 80 passed; typecheck: passed. The production/fixture trace bridge is not complete, so the old GK-S09 blocker code remains unknown; Task 7 has not started. See [detailed plan](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md).
+
 > **2026-11-18 GK-S09 当前实测与续作**：纯文字真实DS仅2次 `construct_solid`、无候选；35题未测，动作回执码缺失，实际费用未知。[Task 6–9详细执行计划](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md)仅写入文档，尚未实现或重新付费测试；不可合并旧36题分数。
 
 > **2026-11-18 G3-F9 内核动作修复（Task 0–5 零付费闭环完成，0 新增付费；停在付费重授权前）**：`GK-S08` `ds_action` 0 付费端到端与全仓门禁全过（`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` `0 errors`、Playwright E2E **`41 passed`**；见 [Task 5 审计](../audit/g3-f9-repair-t5-zero-cost/README.md)），旧 `8 req` 仍未重跑。
