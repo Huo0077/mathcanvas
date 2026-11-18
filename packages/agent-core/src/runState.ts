@@ -1,4 +1,5 @@
 import type { DocumentHandle, RunId, ToolResult, VerificationReport } from "./contracts"
+import type { RepairScopeDirective } from "./repairProgress"
 
 /**
  * **运行账本**（Task 2.1，设计规格 §9.1）。
@@ -239,6 +240,8 @@ export interface RunLedger {
   recordToolTrace(trace: ToolCallTrace): ToolCallTrace | null
   /** 这次运行已经记下的工具痕迹（按记录顺序）。 */
   toolTraces(): readonly ToolCallTrace[]
+  /** Records bounded targeted-repair progress telemetry without altering transition phases. */
+  recordRepairProgress(directive: RepairScopeDirective, ids?: Partial<RunEventIds>): RunEvent | null
 }
 
 export interface RunLedgerInit {
@@ -310,6 +313,23 @@ export function createRunLedger(init: RunLedgerInit): RunLedger {
       return trace
     },
 
-    toolTraces: () => [...traces]
+    toolTraces: () => [...traces],
+
+    recordRepairProgress(directive, patch) {
+      if (finished()) return null
+      if (patch) ids = { ...ids, ...patch, runId: init.runId, promptMessageId: patch.promptMessageId ?? ids.promptMessageId }
+      sequence += 1
+      const event: RunEvent = {
+        ...ids,
+        revisions,
+        sequence,
+        at: now(),
+        phase,
+        from: phase,
+        detail: boundTrace(directive.summary)
+      }
+      events.push(event)
+      return event
+    }
   }
 }

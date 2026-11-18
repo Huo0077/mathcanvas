@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F7：定向局部修复与停机闭环 `repairProgress`（0 付费；下一步 Task F8）
+
+- **状态与证据**：新建 [repairProgress.ts](packages/agent-core/src/repairProgress.ts) 与 [repairProgress.test.ts](packages/agent-core/src/repairProgress.test.ts)，接入 [coordinator.ts](packages/agent-core/src/coordinator.ts)、[coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts)、[runState.ts](packages/agent-core/src/runState.ts)、[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`154 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F7 审计](audit/g3-final-f7/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F8（真实画布交付一致性与全仓终态回归，随后在 Task F9 付费授权前停止）**。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F6：折叠多状态分支谱系与统一候选评估（0 付费；下一步 Task F7）
 
 - **状态与证据**：在 [foldChain.ts](packages/agent-core/src/foldChain.ts) 新增 `foldMirrorPairAboutHinge`、`buildFoldStateLineage` 与 `verifyFoldStateHashesDistinct` 并在 [foldChain.sequence.test.ts](packages/agent-core/src/foldChain.sequence.test.ts) 验证；在 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 绑定 `lineageKey` / `documentHash` 并导出 `evaluateFrozenCandidateSet` 统一 Live 与 Offline 候选集评估。先 RED 后 GREEN，`4` 文件 **`27 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F6 审计](audit/g3-final-f6/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F7（局部修复闭环 `repairProgress`）**。

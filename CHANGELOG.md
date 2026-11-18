@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F7 / F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F7 定向局部修复闭环**：新建 [repairProgress.ts](packages/agent-core/src/repairProgress.ts) 与 [repairProgress.test.ts](packages/agent-core/src/repairProgress.test.ts)（实现失败实体/约束锁定、已通过条款 `preserved_obligation_regressed` 保护、残差/条数单调进步判据及 `no_progress` / `stagnant_signature` / `max_rounds_reached` 停机），接入 [coordinator.ts](packages/agent-core/src/coordinator.ts)、[coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts)、[runState.ts](packages/agent-core/src/runState.ts)（`recordRepairProgress`）与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `154 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **Task F6 折叠多状态谱系与统一候选评估**：在 [foldChain.ts](packages/agent-core/src/foldChain.ts) 与 [foldChain.sequence.test.ts](packages/agent-core/src/foldChain.sequence.test.ts) 新增镜像双枝折叠 `foldMirrorPairAboutHinge`、状态谱系 `buildFoldStateLineage` 与跨状态/分支哈希防复用检验 `verifyFoldStateHashesDistinct`；在 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 为每条切片绑定 `lineageKey` + `documentHash`，抽离 `evaluateFrozenCandidateSet` 统一 Live 与 Offline `CandidateSet` + `PolicyEvaluation` 并硬阻断 `duplicate_lineage_hash` 碰撞（`4` 文件 `27 passed`、`typecheck`、`lint` `0 errors`）。
 

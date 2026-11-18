@@ -5,6 +5,7 @@ import type { Budget } from "./budget"
 import { buildContext, buildConversationContext, conversationLimitsFor, type ConversationContext, type ConversationContextSource, type ModelContext, type ObservationSummary } from "./contextBuilder"
 import { parseDiagramObligations } from "./diagramObligations"
 import type { RunEvent } from "./runState"
+import type { RepairTargetScope } from "./repairProgress"
 import type { ObservedDerivedStatus } from "./sceneObservation"
 import { createToolRegistry, type ToolDescriptor, type ToolRegistry } from "./toolRegistry"
 import type { AcceptanceCheck } from "./verification/taskAcceptance"
@@ -109,6 +110,8 @@ export interface PlanRequest {
      * 一条已经写进 `assumptions` 的决定悄悄改掉。
      */
     assumptions?: readonly StructuredAssumption[]
+    /** Targeted failing entity/constraint scope and locked passed obligations from repairProgress. */
+    targetedScope?: RepairTargetScope & { readonly round: number }
   }
 }
 

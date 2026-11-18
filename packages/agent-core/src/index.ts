@@ -187,6 +187,7 @@ export * from "./kernelObservation"
 export * from "./solver/constraintSolve2d"
 export * from "./solver/constraintSolve3d"
 export * from "./reliabilityDiagnostics"
+export * from "./repairProgress"
 /**
  * **多边形（梯形）沿对角线翻折**（T6）：题面 → 计划 / 一次澄清。
  *

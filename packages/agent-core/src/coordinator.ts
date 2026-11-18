@@ -11,6 +11,7 @@ import { PLAN_SCHEMA_VERSION } from "./contracts"
 import { verificationGate } from "./verification/completionGate"
 import type { AcceptanceCheck } from "./verification/taskAcceptance"
 import { classifyPlanDiagnostics, createRepairStagnationTracker } from "./reliabilityDiagnostics"
+import { createTargetedRepairTracker } from "./repairProgress"
 
 /**
  * **协调器**（Task 2.1）。
@@ -434,6 +435,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
       let validationRepairs = 0
       let replaceDraftNext = false
       const repairTracker = createRepairStagnationTracker()
+      const targetedRepair = createTargetedRepairTracker({ maxRounds: MAX_VALIDATION_REPAIR_ATTEMPTS })
 
       /**
        * **一次原始尝试 + 每类各一次可见修复**的循环。
@@ -715,7 +717,16 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
                   failureSignature: check.id
                 }))
               })
-              if (!unrepairableCallerCheck && !stagnation.shouldStop && validationRepairs < MAX_VALIDATION_REPAIR_ATTEMPTS) {
+              const targeted = targetedRepair.evaluate({
+                candidateHash,
+                checks: (stagedVerification?.checks ?? []).map((check) => ({
+                  id: check.id,
+                  status: check.status,
+                  detail: check.detail
+                }))
+              })
+              ledger.recordRepairProgress(targeted)
+              if (!unrepairableCallerCheck && !stagnation.shouldStop && targeted.allowRepair && validationRepairs < MAX_VALIDATION_REPAIR_ATTEMPTS) {
                 validationRepairs += 1
                 replaceDraftNext = true
                 lastDetail = `${gate.code}: ${gate.reason}`
@@ -732,7 +743,14 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
                   })),
                   allowedChanges: ["envelope.actions", "envelope.assumptions", "envelope.normalisations"],
                   attempt: validationRepairs,
-                  hint: `上一版草稿未通过独立验证（${gate.reason}），请仅修复失败义务并在保留已通过分问的前提下重建完整合法方案（禁止修改题设条件）：${feedbackLines.join("；")}`
+                  hint: `上一版草稿未通过独立验证（${gate.reason}），请仅修复失败义务并在保留已通过分问的前提下重建完整合法方案（禁止修改题设条件）：${feedbackLines.join("；")}`,
+                  targetedScope: {
+                    targetEntities: targeted.targetEntities,
+                    targetConstraintIds: targeted.targetConstraintIds,
+                    preservedObligationIds: targeted.preservedObligationIds,
+                    failureSignature: targeted.signature,
+                    round: targeted.round
+                  }
                 }
                 ledger.record(`validation gate requested bounded repair (${validationRepairs}/${MAX_VALIDATION_REPAIR_ATTEMPTS}): ${gate.code}`)
                 continue
@@ -741,7 +759,9 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
               ledger.record(`verification gate blocked confirmation: ${gate.code}`)
               const failedDetail = stagnation.shouldStop
                 ? `cannot confirm: ${gate.reason} (${stagnation.stopReason}: ${stagnation.detail})`
-                : `cannot confirm: ${gate.reason}`
+                : !targeted.allowRepair && targeted.stopReason
+                  ? `cannot confirm: ${gate.reason} (${targeted.stopReason}: ${targeted.summary})`
+                  : `cannot confirm: ${gate.reason}`
               const failed = ledger.transition("failed", failedDetail)
               if (failed.ok) yield failed.event
               return

@@ -7,6 +7,7 @@ import {
   compileDsDrawingIntentToPlan,
   createPlanFailure,
   classifyStopReason,
+  formatTargetedRepairSummary,
   isDsActionName,
   isRegisteredActionId,
   createRecoveryController,
@@ -525,9 +526,12 @@ function buildMessages(
     ...(intentMode === undefined ? {} : { intentMode }),
     ...(request.repair === undefined ? {} : { repair: request.repair })
   })
-  const content = imageNotes
+  const baseContent = imageNotes
     ? `${request.userMessage}\n\n配图参考（模型读图，可能有误）：\n${JSON.stringify(imageNotes)}`
     : request.userMessage
+  const content = request.repair?.targetedScope
+    ? `${baseContent}\n\n[Targeted Repair Scope]\n${formatTargetedRepairSummary(request.repair.targetedScope)}`
+    : baseContent
   return [{ role: "system", content: prompt.content }, { role: "user", content }]
 }
 
