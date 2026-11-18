@@ -922,7 +922,7 @@ describe("the model-backed planner", () => {
       runModel: async () => {
         requests += 1
         const calls = [
-          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 2,
+          { toolId: "construct_equal_edge_triangular_prism", input: { id: "prism", displayScale: 2,
             vertexNames: ["A", "B", "C", "A1", "B1", "C1"] } },
           { toolId: "construct_circumsphere", input: { id: "sphere", solidId: "prism" } },
           { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }

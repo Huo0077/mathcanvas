@@ -23,7 +23,7 @@ test("recorded ds_action GK-S09 candidate is rendered as the same certified pris
       runModel: async () => {
         turn += 1
         const sequence = [
-          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 2,
+          { toolId: "construct_equal_edge_triangular_prism", input: { id: "prism", displayScale: 2,
             vertexNames: ["A", "B", "C", "A₁", "B₁", "C₁"] } },
           { toolId: "construct_circumsphere", input: { id: "sphere", solidId: "prism" } },
           { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }

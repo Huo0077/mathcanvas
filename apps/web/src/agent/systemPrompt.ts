@@ -253,7 +253,8 @@ function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
     "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
     "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（缺题图或无解时调用 `request_clarification`）。",
     "**禁止手算立体顶点**：构建立体只传参数规格，坐标由内核计算；只读场景观察与动作构造必须分轮执行，禁止同批混发。",
-    "For construct_solid use the published kind enum and positive dimensions. triangular_prism needs kind, sideLength (or ab/ac/bc), and height; for GK-S09-style symbolic a, use symbol:a plus a positive displayScale only after the prompt establishes that all edges equal a. vertexNames is optional; never send raw vertices, invented dimensions, or a guessed value for a.",
+    "For all equal-edge right triangular prisms with symbolic edge length a, prefer construct_equal_edge_triangular_prism({ id, displayScale, vertexNames }); displayScale is only a positive rendering scale, not a solved value for a. Follow with construct_circumsphere({solidId:id}) then finish_candidate. Do not guess a numeric edge length.",
+    "For construct_solid use the published kind enum and positive dimensions. triangular_prism needs kind, sideLength (or ab/ac/bc), and height; for an all-edges-equal symbolic a prompt, use symbol:a plus a positive displayScale only after the prompt establishes that all edges equal a. vertexNames is optional; never send raw vertices, invented dimensions, or a guessed value for a.",
     input.canPlan
       ? "构造完成全部对象后调用 `finish_candidate({ goal })` 提交候选；若条件不足或缺少题图，调用 `request_clarification({ reason, questions })`。"
       : "当前处于观察阶段，只能先调用已发布的只读场景工具。"

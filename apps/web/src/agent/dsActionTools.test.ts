@@ -81,6 +81,27 @@ function plannerRequest(userMessage = "作线段 AB") {
   }
 }
 
+describe("simple symbolic equal-edge prism tool", () => {
+  it("publishes a small family-specific schema that can construct and name a real prism", () => {
+    const tool = buildDsActionToolSchemas().find((item) => item.function.name === "construct_equal_edge_triangular_prism")
+    expect(tool?.function.parameters).toMatchObject({
+      type: "object", additionalProperties: false, required: ["id", "displayScale"],
+      properties: { id: { type: "string" }, displayScale: { type: "number", exclusiveMinimum: 0 } }
+    })
+    expect(JSON.stringify(tool?.function.parameters)).not.toMatch(/sideLength|height|"kind"|"vertices"/)
+    const prompt = drawingContracts36.cases.find((item) => item.id === "GK-S09")!.prompt
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    const accepted = session.execute("construct_equal_edge_triangular_prism", { id: "prism", displayScale: 2,
+      vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] })
+    expect(accepted.status).toBe("accepted")
+    expect(accepted.primitiveCount).toBeGreaterThan(0)
+    expect(accepted.action).toBe("construct_equal_edge_triangular_prism")
+    const unknown = session.execute("construct_equal_edge_triangular_prism", { id: "bad", displayScale: 2, height: 4 })
+    expect(unknown.ok).toBe(false)
+    expect(session.currentSnapshot().candidateHash).toBe(accepted.candidateHash)
+  })
+})
+
 describe("GK-S09 derived circumsphere action", () => {
   it("refuses numeric side and height as unlabelled values for an all-edges-a prompt", () => {
     const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
@@ -247,9 +268,9 @@ describe("construct_solid model-visible contract", () => {
 })
 
 describe("dsActionTools (Task F2 closed action-level protocol)", () => {
-  it("exposes all 23 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
+  it("exposes all 24 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
     expect(DS_ACTION_TOOL_NAMES).toEqual(DS_ACTION_CLOSED_SET)
-    expect(DS_ACTION_TOOL_NAMES).toHaveLength(23)
+    expect(DS_ACTION_TOOL_NAMES).toHaveLength(24)
 
     const schemas = buildDsActionToolSchemas()
     expect(schemas.map((s) => s.function.name)).toEqual([...DS_ACTION_CLOSED_SET])

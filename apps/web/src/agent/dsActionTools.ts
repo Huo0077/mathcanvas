@@ -78,6 +78,7 @@ export const IMPLEMENTED_DS_ACTION_TOOLS: readonly DsActionName[] = [
   "construct_perpendicular",
   "construct_parallel",
   "construct_solid",
+  "construct_equal_edge_triangular_prism",
   "construct_circumsphere",
   "construct_face",
   "construct_fold_state",
@@ -127,6 +128,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line through a point parallel to a line.",
   construct_solid: "Construct a named parametric solid via kernel solver (never raw hand vertices).",
+  construct_equal_edge_triangular_prism: "For a right triangular prism whose every edge has symbolic length a: give a named solid id and a positive displayScale; the kernel builds all geometry, not a numeric value for a.",
   construct_circumsphere: "Derive a real circumsphere from an existing named solid; never provide center or radius.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
@@ -147,6 +149,15 @@ export const SOLID_KIND_FAMILIES = {
 } as const
 
 const SOLID_KINDS = Object.values(SOLID_KIND_FAMILIES).flat()
+
+const CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["id", "displayScale"],
+  properties: {
+    id: { type: "string" }, displayScale: { type: "number", exclusiveMinimum: 0 },
+    vertexNames: { type: "array", items: { type: "string" } },
+    label: { type: "string" }, scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" }
+  }
+} as const
 
 const CONSTRUCT_CIRCUMSPHERE_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["solidId"],
@@ -190,6 +201,7 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
       name,
       description: DS_ACTION_DESCRIPTIONS[name],
       parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS
+        : name === "construct_equal_edge_triangular_prism" ? CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS
         : name === "construct_circumsphere" ? CONSTRUCT_CIRCUMSPHERE_PARAMETERS : {
         type: "object",
         additionalProperties: true
@@ -701,7 +713,19 @@ export function createDsActionSession(options: {
           repairHint: parsed.detail
         }
       }
-      const { name, input } = parsed
+      const { name } = parsed
+      if (name === "construct_equal_edge_triangular_prism") {
+        const supplied = parsed.input
+        if (Object.keys(supplied).some((key) => !(key in CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS.properties))) {
+          return failBlocked(name, "invalid_schema", "symbolic prism accepts only its published fields")
+        }
+        if (!asString(supplied.id) || asPositiveNumber(supplied.displayScale) === null) {
+          return failRepairable(name, "missing_required_parameter", "symbolic prism requires id and positive displayScale")
+        }
+      }
+      const input = name === "construct_equal_edge_triangular_prism"
+        ? { ...parsed.input, kind: "triangular_prism", symbol: "a" }
+        : parsed.input
       const stepSeq = ++monotonicActionSeq
 
       if (name === "declare_entity") {
@@ -1319,7 +1343,7 @@ export function createDsActionSession(options: {
         }
       }
 
-      if (name === "construct_solid") {
+      if (name === "construct_solid" || name === "construct_equal_edge_triangular_prism") {
         const symbol = asString(input.symbol)
         const text = options.problemText ?? ""
         if (symbol === null && input.displayScale === undefined && asString(input.kind ?? input.shape) === "triangular_prism" && hasEqualEdgeSymbolA(text)) {

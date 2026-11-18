@@ -62,6 +62,11 @@ type G3ActionReceiptTrace = {
 - [ ] **最小实现**：将 `buildDsActionToolSchemas` 的泛用 schema 改为严格、可被当前 provider 接受的结构；若供应商实测/协议验证不接受 `oneOf` 等复杂联合，改为 `construct_triangular_prism` 等分族外壳（每个工具先映射到现有 `construct_solid`，不新建求解器）。先用本地 provider mock/原生适配器协议测试确认工具名与 schema 原样送达；不得凭猜测宣称供应商支持联合 schema。输入规范化后依旧经 `resolveConstructSolidRequest` 和 `solveConstraint3d`，未知参数明确错误；已在场景中的点引用先查实体，不能默造。
 - [ ] GREEN：上述定向、`npm.cmd run typecheck`、`npm.cmd run lint`，并跑有效族的反例回归；独立复核 schema→请求→内核的必填字段一致性，以及 `additionalProperties` 不再给模型错误自由度。失败则撤回工具发布而不是放宽形状校验。同步文档、提交推送。
 
+### Task 7 family-tool checkpoint (2026-11-18, zero cost)
+
+- A simple, closed `construct_equal_edge_triangular_prism` tool is now published for symbolic equal-edge right triangular prisms. Required fields: `id`, `displayScale`; optional `vertexNames` and slice identifiers. The action maps to the same `solveConstraint3d` and speculative canvas as `construct_solid`, with source validation and no hand vertices.
+- The mock native provider actually receives the simple schema; the recorded product runner and exact-candidate browser test use this tool successfully. Provider-side acceptance has **not** been established without an authorized native request; do not mark the full remote schema gate complete.
+
 ## Task 8：符号 a、等棱长三棱柱、真正外接球
 
 **数学与数据边界**：题设 `a>0`，示意归一化选择 `a_display=1` 仅为**绘图坐标系**；底边三段和高均采用同一尺度，展示物体以注记标示 `a`，绝不能写成从题面得到了 `a=1`。单位构型六顶点可为 `A=(0,0,0), B=(1,0,0), C=(1/2,√3/2,0)`、顶点对应平移 `z=1`；球心 `(1/2,√3/6,1/2)`，半径 `√(7/12)`，一般尺度为 `R=a√(7/12)`。使用参数族的不变量证明一般性，不从一个数值通过推出任意 a 的数学结论。

@@ -1599,6 +1599,29 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     }
   })
 
+  it("publishes the simple symbolic prism schema in the actual native provider request", async () => {
+    let offered: unknown[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        offered = input.tools
+        return { ok: true, events: [{ kind: "tool_call" as const,
+          requestId: "r-1", attemptId: "a-1", toolCallId: "tc-1", toolId: "request_clarification",
+          input: { reason: "recorded inspection only" } }] }
+      }
+    })
+    await planner.plan(request({ userMessage: "Draw a right triangular prism whose every edge is a" }))
+    const tool = (offered as Array<{ function?: { name?: string; parameters?: unknown } }>).find((entry) =>
+      entry.function?.name === "construct_equal_edge_triangular_prism")
+    expect(tool?.function?.parameters).toMatchObject({
+      type: "object", additionalProperties: false, required: ["id", "displayScale"]
+    })
+  })
+
   it("Task 3 ds_action bounded repair: stops in <=2 requests on identical invalid solid params, allows genuine recovery, and avoids network double-charging under beforeProviderRequest", async () => {
     const provider = {
       id: "deepseek",

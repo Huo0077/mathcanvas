@@ -16,6 +16,15 @@ import { DS_INTENT_PROMPT_VERSION, SYSTEM_PROMPT_VERSION, buildPolicyText, build
  * ②**输入 schema** 由 `ACTIONS` 登记表；③**工具发布**由 `buildPlanToolSchema`
  *（判据在 `modelPlanner.test.ts`）；④**提示词菜单**就是这里。
  */
+describe("DS symbolic prism tool guidance", () => {
+  it("directs a symbolic equal-edge triangular prism to the simple family-specific action", () => {
+    const text = buildPolicyText({ channel: "native_tools", canPlan: true, intentMode: "ds_action", actionIds: [] })
+    expect(text).toContain("construct_equal_edge_triangular_prism")
+    expect(text).toContain("displayScale")
+    expect(text).not.toContain("a=1")
+  })
+})
+
 describe("Task 3 — the prompt menu and the action catalogue are the same set", () => {
   it("lists every catalogue action when this round offers all of them", () => {
     const policy = buildPolicyText({ channel: "strict_json", canPlan: true, actionIds: [...DRAFT_ACTION_IDS] })
