@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "g3-f9-repeat-probe.v1",
+  "revision": "0267dd61",
+  "kind": "zero-cost-local-kernel-reproduction",
+  "paidDsRequests": 0,
+  "cases": [
+    {
+      "case": "square_pyramid",
+      "solid": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "face": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "finish": {
+        "ok": false,
+        "status": "repairable",
+        "primitiveCount": 0,
+        "blockerCode": "empty_candidate"
+      },
+      "snapshotPrimitiveCount": 0
+    },
+    {
+      "case": "triangular_prism",
+      "solid": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "face": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "finish": {
+        "ok": false,
+        "status": "repairable",
+        "primitiveCount": 0,
+        "blockerCode": "empty_candidate"
+      },
+      "snapshotPrimitiveCount": 0
+    },
+    {
+      "case": "tetrahedron",
+      "solid": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "face": {
+        "ok": true,
+        "status": "accepted",
+        "primitiveCount": 0
+      },
+      "finish": {
+        "ok": false,
+        "status": "repairable",
+        "primitiveCount": 0,
+        "blockerCode": "empty_candidate"
+      },
+      "snapshotPrimitiveCount": 0
+    }
+  ]
+}

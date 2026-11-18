@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-17 —— F9三组零费用复测及新修复计划（真实DS未再调用）
+
+当前修订 `0267dd61` 未修复立体动作假成功。三组不同形状的零付费内核复现均观察到 `construct_solid accepted/0 → construct_face accepted/0 → finish_candidate empty_candidate`，所以本轮**新增DS付费请求0次**，不把这三次称为“DS真实模型复测”；此前首题8次真实调用仍保留原报告。新增[针对性修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)：先将虚假 accepted fail-closed，再接已有三维约束求解器、实现真实测量与停滞检测、最后打通live多状态CandidateSet，修复后重新授权单题真实回归。证据见[三组零费复现](audit/2026-11-17-g3-f9-repeat-probe/README.md)。F9、36题、人工/Windows门禁均未退出。
+
 ## 2026-11-17 —— F9 `ds_action` 首题真实试点失败，立体构造假成功（停止扩批）
 
 用户确认沿用最多5美元/108次总请求，并将单题上限从3次改为8次。零费用验证 `dsActionTools` 与冻结题CandidateSet测试 **8/8**；原生干跑证明首轮发布动作级工具，不再用 `ds_intent`。仅对GK-S08发出**8次真实DS请求**（8条usage，输入17104/输出631 tokens），模型按顺序调用 `construct_solid` 等动作，最终 `finish_candidate` 前没有任何图元，`internal_budget` 停止，未进入数学合同/证书/画布验收；**其他35题未测，不是“F9 0/36”**。零费用内核探针证实 `construct_solid` 与 `construct_face` 返回 `accepted` 却均生成0图元，随后 `finish_candidate` 以 `empty_candidate` 拒绝；这是动作工具实现缺口，不能靠加请求修复。实际账单未知，停止剩余额度的付费调用；详见[首题真实试点审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)。G3-DS与发布仍未退出。

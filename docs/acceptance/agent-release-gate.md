@@ -1,5 +1,7 @@
 # Agent 发布前门禁
 
+> **2026-11-17 F9新增阻断**：三组零费内核复现均证明 `construct_solid` / `construct_face` 虚报成功却未生成任何图元，`finish_candidate` 为空候选；真实GK-S08八请求不能代表36题通过。[修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md)与[负例](../audit/2026-11-17-g3-f9-repeat-probe/README.md)未退出前禁止把 DS 动作级构图标为发布准备完成。人工与Windows验收另单列。
+
 > **2026-11-18 最终版 G3-DS 门禁进度（Task F0–F8 工程全部完结，零付费；真实 DS 仍 0/36）**：已按 [G3-DS 最终版真实作图能力实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0–F8** 全部零付费工程建设（详见 [Task F8 审计](../audit/g3-final-f8/README.md)，终态 `557` 文件 `5875 passed | 1 todo` + `typecheck` + `lint` `0 errors` + `test:rust` + `Playwright` `41 passed`）；现停在 **Task F9（授权真实 DS 分层复测）** 前，真实 DS 表现、人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
 
 > **2026-11-17 最新阻断**：当前修订原生DS复测36题完整合同仍0/36，DS候选真实浏览器/提交未执行；不得以工具混批归零或离线36/36作为发布条件。见[脱敏实测](../audit/2026-11-17-g3-ds-live-retest-92981/README.md)，人工可读性、Windows窗口/冷机与发布仍待明确签收。

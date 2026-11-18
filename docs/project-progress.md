@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— F9三组不同参数的零费重复复现与修复计划
+
+在当前`0267dd61`对方锥/三棱柱/四面体三族重复运行当前内核动作，3/3均 `construct_solid` 与 `construct_face` 虚报 accepted但0图元，finish 为 empty_candidate；本次没有新付费DS请求。将分级真实性闸、内核构造接线、面/读数/状态、熔断、多状态live评分写入[新计划](g3-final/G3-F9-kernel-action-repair-plan.md)，可复查证据[零费探针](audit/2026-11-17-g3-f9-repeat-probe/README.md)。旧8请求单题真实结果不更改，F9仍未完成。
+
 ## 2026-11-17 —— F9 动作级模型真测及立体无操作根因
 
 先零费验证 `ds_action` 工具及录制的多状态CandidateSet评分，后在用户新授权的5美元/108总请求/单题8次内测历史通过GK-S08。8次原生请求、8条usage；模型以`construct_solid`起步并以`finish_candidate`结束，但产品实现把前者及`construct_face`当成功却不产生图元，终因`empty_candidate`/内部预算停止。其余35题未测，费用实际金额未知，不把此结果算作36题失败率。脱敏[审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)记录停批与代码修复方向。

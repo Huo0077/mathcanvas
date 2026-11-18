@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-17 F9修复入口**：先读[新修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)和[三组零费反例](audit/2026-11-17-g3-f9-repeat-probe/README.md)。Task0禁止3D动作假成功→Task1接 `solveConstraint3d` 真正物化立体→Task2面/观察→Task3无进展熔断→Task4真实多状态候选→Task5新授权小样本。当前真实F9仅GK-S08试点8请求、未形成候选；本轮额外付费0，不能扩到36。
+
 > **2026-11-17 F9 首题停批**：新授权下已真实发出8次 `ds_action` 请求测GK-S08，但`construct_solid`/`construct_face` 虚报成功且图元0，`finish_candidate` 因空候选失败；其余35题未测。先按[首题审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)修内核动作工具与读工具，继续补真正 live CandidateSet，多项零费通过后再复测一题。不能将剩余100次请求盲目用完。
 
 > **2026-11-17 F9零费用停点**：本轮用户维持5美元/108请求/单题3次，但 `ds_action` 最小正例需4次往返、F9 `PlannerPort` 当前仍只产 `shared` 候选。新模型请求0次；先解决两个零费接线问题，再商议单题上限或原子动作批次。证据：[F9接线门禁](audit/2026-11-17-g3-f9-zero-cost-gate/README.md)。
