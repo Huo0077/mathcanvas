@@ -4,7 +4,7 @@ import type { GeometryDocument } from "@draw/dsl"
 export type ToolPhase = "construct" | "observe"
 
 export interface ToolPhaseInput {
-  readonly intentMode: "ds_intent" | "legacy_actions"
+  readonly intentMode: "ds_intent" | "ds_action" | "legacy_actions"
   readonly hasExistingGeometry: boolean
   readonly hasSelectedRefs: boolean
   readonly requiresSceneObservation: boolean
@@ -53,7 +53,7 @@ export function selectToolPhase(input: ToolPhaseInput): ToolPhase {
 }
 
 export function partitionPublishedTools<TPlan, TRead = TPlan>(input: {
-  intentMode: "ds_intent" | "legacy_actions"
+  intentMode: "ds_intent" | "ds_action" | "legacy_actions"
   phase: ToolPhase
   planTool: TPlan
   readTools: readonly TRead[]

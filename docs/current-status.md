@@ -1,8 +1,9 @@
 # MathCanvas 当前状态
 
-## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0–F1 已完成**（0 新增付费；真实 DS 仍 0/36）
+## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0–F2 已完成**（0 新增付费；真实 DS 仍 0/36）
 
-- **`Task F1`（探索候选隔离层 `speculativeCanvas.ts`）已完成（0 付费）**：新建 [speculativeCanvas.ts](apps/web/src/agent/speculativeCanvas.ts) 与 [speculativeCanvas.test.ts](apps/web/src/agent/speculativeCanvas.test.ts)（步进探索、精确多步回滚/废弃、`candidateHash` 链绑定、晋升出口 `promoteToDraftStore`）；并在 [draftStore.ts](apps/web/src/agent/draftStore.ts) 与 [hostBridge.ts](apps/web/src/agent/hostBridge.ts) 增加 `speculativeOnly` 双重门禁，硬拦截任何未晋升探索候选的授权铸造与主画布写入。定向 `3` 文件 **`47 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F1 审计](audit/g3-final-f1/README.md)，**下一步推进 Task F2（动作级 DS ToolSpec `dsActionTools.ts`）**。
+- **`Task F2`（动作级 DS ToolSpec `dsActionTools.ts`）已完成（0 付费）**：在 [actionRegistry.ts](packages/agent-core/src/actionRegistry.ts) 导出 22 项动作闭集 `DS_ACTION_CLOSED_SET`（`declare_entity` … `finish_candidate` / `request_clarification`），新建 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)（基于 `SpeculativeCanvas` 的单动作逐步构造、三态反馈 `accepted`/`repairable`/`blocked`、严禁立体手算顶点）；在 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)（`mathcanvas.ds_action.prompt.v1`）、[modelToolPolicy.ts](apps/web/src/agent/modelToolPolicy.ts) 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入 `intentMode: "ds_action"` 多轮单动作闭环，校验重复 `toolCallId`、混合批与取消信号并保留 `ds_intent` / `legacy_actions` 兼容。`4` 文件 **`110 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F2 审计](audit/g3-final-f2/README.md)，**下一步推进 Task F3（实体图 `EntityGraph` 与约束图 `ConstraintGraph`）**。
+- **`Task F1`（探索候选隔离层 `speculativeCanvas.ts`）已完成（`15be4dfc`，0 付费）**：见 [Task F1 审计](audit/g3-final-f1/README.md)（`3` 文件 `47 passed`、`speculativeOnly` 阻断未晋升写入主画布）。
 - **`Task F0`（冻结 `92981ebd` 真实 36 题失败真源）已完成（`f118c721`，0 付费）**：见 [2026-11-17-92981 基线记录](g3-final/retests/2026-11-17-92981/README.md)（36/36 全量首失败边界归因，`unknown = 0`，`mixed_read_plan = 0`）。
 
 ## 2026-11-17 —— 当前提交 `92981ebd` 真实 DS 36题再测：完整合同仍0/36

@@ -849,3 +849,37 @@ export const ACTIONS = {
 
 /** 登记表里的键就是**动作 id**。它跟着表走：表在哪个文件，这个类型就在哪个文件。 */
 export type ActionId = keyof typeof ACTIONS
+
+/** Closed single-action vocabulary exposed to DS in action-level mode (Task F2). */
+export const DS_ACTION_CLOSED_SET = [
+  "declare_entity",
+  "add_relation",
+  "choose_strategy",
+  "construct_base",
+  "construct_point",
+  "construct_line",
+  "construct_segment",
+  "construct_intersection",
+  "construct_circle",
+  "construct_conic",
+  "construct_tangent",
+  "construct_perpendicular",
+  "construct_parallel",
+  "construct_solid",
+  "construct_face",
+  "construct_fold_state",
+  "query_measurement",
+  "query_constraint_status",
+  "repair_entity",
+  "repair_constraint",
+  "finish_candidate",
+  "request_clarification"
+] as const
+
+export type DsActionName = (typeof DS_ACTION_CLOSED_SET)[number]
+
+const DS_ACTION_SET: ReadonlySet<string> = new Set(DS_ACTION_CLOSED_SET)
+
+export function isDsActionName(name: string): name is DsActionName {
+  return DS_ACTION_SET.has(name)
+}

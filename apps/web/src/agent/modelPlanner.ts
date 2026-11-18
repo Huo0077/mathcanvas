@@ -7,6 +7,7 @@ import {
   compileDsDrawingIntentToPlan,
   createPlanFailure,
   classifyStopReason,
+  isDsActionName,
   isRegisteredActionId,
   createRecoveryController,
   isCapabilityVerified,
@@ -33,6 +34,7 @@ import {
   type RecoveryError,
   type RetryDecision
 } from "@draw/agent-core"
+import { createEmptyDocument } from "@draw/dsl"
 
 import {
   listProviderProfiles,
@@ -43,6 +45,7 @@ import {
 } from "../services/providerProfileClient"
 import { invokeDesktop } from "../services/desktopRuntime"
 import { cancelModelRun, startModelRun, type ModelChatMessage, type ModelClientStart } from "../services/modelClient"
+import { buildDsActionToolSchemas, createDsActionSession } from "./dsActionTools"
 import { buildSystemPrompt, type PromptIntentMode } from "./systemPrompt"
 import {
   deriveSceneToolContextFromRequest,
@@ -625,6 +628,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let observationCalls = 0
       let observationCompleted = false
       const seenCalls = new Set<string>()
+      const dsActionSession = intentMode === "ds_action"
+        ? createDsActionSession({ workspace: request.run.target.workspace, baseDocument: createEmptyDocument(request.run.target.workspace), runId })
+        : null
       /**
        * 用户按了停止 → 让 Rust 侧**真的**停下来。
        *
@@ -655,6 +661,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let ids = { requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
 
       for (;;) {
+        if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled (这次运行已取消)", false)
         attempts += 1
         const sceneSnapshot = dependencies.sceneContext
           ? dependencies.sceneContext(request)
@@ -666,7 +673,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           requiresSceneObservation: sceneSnapshot.requiresSceneObservation,
           observationCompleted
         })
-        if (channel === "native_tools" && intentMode === "ds_intent" && toolPhase === "observe" && registeredReadTools.length === 0) {
+        if (channel === "native_tools" && (intentMode === "ds_intent" || intentMode === "ds_action") && toolPhase === "observe" && registeredReadTools.length === 0) {
           dependencies.onStructuredDiagnostic?.({
             kind: "boundary",
             boundary: "tool_protocol",
@@ -674,7 +681,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           })
           throw new ModelPlannerError(
             "unexpected_tool_call",
-            "scene observation is required before construction in ds_intent mode, but no read-only tool executor is available"
+            `scene observation is required before construction in ${intentMode} mode, but no read-only tool executor is available`
           )
         }
         const partitioned = partitionPublishedTools({
@@ -683,11 +690,15 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           planTool: planToolSchema,
           readTools: registeredReadTools
         })
-        const tools = channel === "native_tools" ? [...partitioned.publishedTools] : []
+        const tools = channel === "native_tools"
+          ? intentMode === "ds_action" && toolPhase === "construct"
+            ? buildDsActionToolSchemas()
+            : [...partitioned.publishedTools]
+          : []
         const phaseReadTools = partitioned.publishedReadTools
         const phaseCanOfferPlan = partitioned.canOfferPlan && planToolOfferedInRequest
 
-        if (intentMode === "ds_intent") {
+        if (intentMode === "ds_intent" || intentMode === "ds_action") {
           const turnMessages = buildMessages(request, channel, dependencies.imageNotes, intentMode, phaseCanOfferPlan)
           messages[0].content =
             channel === "native_tools" && phaseReadTools.length > 0
@@ -945,7 +956,32 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            * 静默接受等于让阶段边界失效，静默忽略又会让用户以为模型做了些什么。
            */
           const planToolWasOffered = phaseCanOfferPlan && request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
-          if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered) {
+          if (channel === "native_tools" && intentMode === "ds_action" && planToolWasOffered && isDsActionName(toolCall.toolId) && dsActionSession !== null) {
+            if (!toolCall.toolCallId || seenCalls.has(toolCall.toolCallId)) {
+              throw new ModelPlannerError("unexpected_tool_call", "missing or duplicate tool call id")
+            }
+            seenCalls.add(toolCall.toolCallId)
+            if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
+            const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
+            if (execRes.terminated !== undefined) {
+              return { plan: execRes.terminated.plan, ...ids }
+            }
+            if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
+              throw new ModelPlannerError("provider_failed", "budget exhausted during ds_action construction step")
+            }
+            if (!request.budget.consume("generation").ok || !request.budget.consume("network").ok) {
+              throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action step")
+            }
+            messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
+            messages.push({
+              role: "tool_result",
+              toolCallId: toolCall.toolCallId,
+              toolName: toolCall.toolId,
+              content: boundedExcerpt(JSON.stringify(execRes), 4000)
+            })
+            continue
+          }
+          if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered && intentMode !== "ds_action") {
             const decoded = coerceEnvelopeArgument(toolCall.input, dependencies.onDiagnostic)
             const resolvedTool = resolveDsIntentOrPlanEnvelope(decoded, request.userMessage, "native_tools", intentMode, ids, stopReason, dependencies.onDiagnostic, dependencies.onStructuredDiagnostic)
             if ("failure" in resolvedTool) {

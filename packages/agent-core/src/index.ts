@@ -1,4 +1,5 @@
 export * from "./actionSchemas"
+export { DS_ACTION_CLOSED_SET, isDsActionName, type DsActionName } from "./actionRegistry"
 export {
   LEAF_CONSTRAINTS,
   isBlankText,

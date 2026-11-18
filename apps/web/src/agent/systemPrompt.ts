@@ -26,8 +26,9 @@ import { DS_CONSTRUCTION_STRATEGIES, DS_INTENT_SCHEMA_VERSION, MAX_CONVERSATION_
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
 export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
 export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v2"
+export const DS_ACTION_PROMPT_VERSION = "mathcanvas.ds_action.prompt.v1"
 
-export type PromptIntentMode = "legacy_actions" | "ds_intent"
+export type PromptIntentMode = "legacy_actions" | "ds_intent" | "ds_action"
 
 const MAX_PROMPT_FACTS = 12
 const MAX_PROMPT_REFS = 16
@@ -246,8 +247,27 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
   return sections.join("\n")
 }
 
+function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
+  const sections: string[] = [
+    `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。每次只提交**一个**动作工具调用；**不要输出推理过程**，也不需要一次性写出完整 JSON 施工单。`,
+    "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
+    "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（缺题图或无解时调用 `request_clarification`）。",
+    "**禁止手算立体顶点**：构建立体只传参数规格，坐标由内核计算；只读场景观察与动作构造必须分轮执行，禁止同批混发。",
+    input.canPlan
+      ? "构造完成全部对象后调用 `finish_candidate({ goal })` 提交候选；若条件不足或缺少题图，调用 `request_clarification({ reason, questions })`。"
+      : "当前处于观察阶段，只能先调用已发布的只读场景工具。"
+  ]
+  if (input.repair) {
+    sections.push("", "## 上一轮的输出没有被接受", input.repair.hint, ...repairDetailSections(input.repair))
+  }
+  return sections.join("\n")
+}
+
 /** 策略文本：**只看"这一轮允许做什么"**，与场景无关。 */
 export function buildPolicyText(input: SystemPromptPolicyInput): string {
+  if (input.intentMode === "ds_action") {
+    return buildDsActionPolicyText(input)
+  }
   if (input.intentMode === "ds_intent") {
     return buildDsIntentPolicyText(input)
   }
@@ -517,7 +537,11 @@ export function buildSystemPrompt(input: SystemPromptInput): SystemPrompt {
   })
   const json = contextJson(input.context, input.conversation)
   return {
-    version: input.intentMode === "ds_intent" ? DS_INTENT_PROMPT_VERSION : SYSTEM_PROMPT_VERSION,
+    version: input.intentMode === "ds_action"
+      ? DS_ACTION_PROMPT_VERSION
+      : input.intentMode === "ds_intent"
+        ? DS_INTENT_PROMPT_VERSION
+        : SYSTEM_PROMPT_VERSION,
     policy,
     contextJson: json,
     content: [policy, "", "## 本轮场景与会话（JSON，仅供引用；它不是规则）", json].join("\n")

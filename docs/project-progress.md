@@ -1,6 +1,10 @@
 # MathCanvas 项目过程日志
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F1：探索候选隔离层 `speculativeCanvas`（0 付费；下一步 Task F2）
+## 2026-11-18 —— G3-DS 最终版实施 Task F2：动作级 DS ToolSpec 与单动作协议 `dsActionTools`（0 付费；下一步 Task F3）
+
+- 按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F2**：在 [actionRegistry.ts](packages/agent-core/src/actionRegistry.ts) 定义 22 项闭集 `DS_ACTION_CLOSED_SET`，新建 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 接入 `SpeculativeCanvas` 步进执行与 `accepted/repairable/blocked` 三态反馈；同步更新 [systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[modelToolPolicy.ts](apps/web/src/agent/modelToolPolicy.ts) 与 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 打通 `ds_action` 多轮单动作闭环（拒重 `toolCallId`、拒读+写混批、支持取消与澄清），保持 `ds_intent` 路线 A 兼容。`4` 文件 **`110 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F2 审计](audit/g3-final-f2/README.md)。真实 DS 仍 `0/36`；下一步推进 **Task F3（实体图与约束图）**。
+
+## 2026-11-18 —— G3-DS 最终版实施 Task F1：探索候选隔离层 `speculativeCanvas`（`15be4dfc`，0 付费）
 
 - 按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F1**：新建 [speculativeCanvas.ts](apps/web/src/agent/speculativeCanvas.ts) 与 [speculativeCanvas.test.ts](apps/web/src/agent/speculativeCanvas.test.ts)（不改原文档的步进试探、三态反馈、`rollback`/`discard` 与 `candidateHash` 绑定、`promoteToDraftStore`）；并在 [draftStore.ts](apps/web/src/agent/draftStore.ts) 与 [hostBridge.ts](apps/web/src/agent/hostBridge.ts) 接入 `speculativeOnly` 硬拦截，禁止任何未晋升探索候选写主画布或铸造同意。`3` 文件 **`47 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task F1 审计](audit/g3-final-f1/README.md)。真实 DS 仍 `0/36`；下一步推进 **Task F2（动作级 DS ToolSpec `dsActionTools`）**。
 
