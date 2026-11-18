@@ -52,7 +52,7 @@ type G3ActionReceiptTrace = {
 
 - Code-only checkpoint: sanitized receipt type and deep validation, plus planner action events carrying request/action indices, status/blocker, primitive counts, state/hash changes, and feedback delivery. No raw prompts, coordinates or inputs are recorded.
 - RED observed before implementation; targeted tests now show 80 passing and typecheck passes.
-- Not complete: wire planner events into a production/fixture case trace or explicitly report telemetry_missing. Prior GK-S09 receipts cannot be reconstructed. No paid DS calls.
+- 新增 `runFrozenDsCaseTraced` 原生 planner 运行器入口：记录逐请求动作回执、第一失败边界与终止回执；缺少动作事件时记录 `telemetry_missing`。旧 GK-S09 两次回执不能追溯，仍不能定责；未调用付费 DS。
 
 ## Task 7：工具 schema 与支持形状一一对应，零费用
 

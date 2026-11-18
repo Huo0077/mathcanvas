@@ -680,7 +680,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let structuredRequestIndex = 0
       let dsActionIndex = 0
       let lastDsPrimitiveCount = 0
-      let lastDsCandidateHash = ""
+      let lastDsCandidateHash: string | null = null
       let lastSignature: string | null = null
       /** 事件 id 优先：诊断时"这次请求对应哪条运行记录"要能对上代理里的账。 */
       let ids = { requestId: `model-request-${sequence}`, attemptId: `model-attempt-${sequence}` }
@@ -993,7 +993,21 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
             lastDsPrimitiveCount = execRes.primitiveCount
             lastDsCandidateHash = execRes.candidateHash
+            const reportAction = (feedbackDelivered: boolean) => dependencies.onStructuredDiagnostic?.({
+              kind: "action",
+              requestIndex: structuredRequestIndex,
+              actionIndex,
+              toolName: toolCall.toolId,
+              resultStatus: execRes.status,
+              ...(execRes.blockerCode === undefined ? {} : { blockerCode: execRes.blockerCode }),
+              primitiveCountBefore,
+              primitiveCountAfter: execRes.primitiveCount,
+              candidateHashChanged: previousCandidateHash !== null && previousCandidateHash !== execRes.candidateHash,
+              stateChanged: execRes.stateChanged,
+              feedbackDelivered
+            })
             if (execRes.terminated !== undefined) {
+              reportAction(false)
               const candidateSlices =
                 execRes.terminated.slices && execRes.terminated.slices.length > 0
                   ? execRes.terminated.slices.map((s) => ({
@@ -1017,6 +1031,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
             const isConstructive = !NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action)
             if (isConstructive && execRes.ok && !execRes.stateChanged) {
+              reportAction(false)
               return {
                 failure: createPlanFailure({
                   category: "unexpected_tool_call",
@@ -1032,6 +1047,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               const nextCount = (dsActionSignatures.get(actionSig) ?? 0) + 1
               dsActionSignatures.set(actionSig, nextCount)
               if (nextCount >= 2) {
+                reportAction(false)
                 return {
                   failure: createPlanFailure({
                     category: "unexpected_tool_call",
@@ -1059,19 +1075,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               toolName: toolCall.toolId,
               content: boundedExcerpt(JSON.stringify(execRes), 4000)
             })
-            dependencies.onStructuredDiagnostic?.({
-              kind: "action",
-              requestIndex: structuredRequestIndex,
-              actionIndex,
-              toolName: toolCall.toolId,
-              resultStatus: execRes.status,
-              ...(execRes.blockerCode === undefined ? {} : { blockerCode: execRes.blockerCode }),
-              primitiveCountBefore,
-              primitiveCountAfter: execRes.primitiveCount,
-              candidateHashChanged: previousCandidateHash !== execRes.candidateHash,
-              stateChanged: execRes.stateChanged,
-              feedbackDelivered: true
-            })
+            reportAction(true)
             continue
           }
           if (channel === "native_tools" && toolCall.toolId === PLAN_TOOL_NAME && planToolWasOffered && intentMode !== "ds_action") {

@@ -1,6 +1,6 @@
 # 下一轮工作导航
 
-> **2026-11-18 Task 6 in progress (code only, no paid DS):** Sanitized action receipt types and planner action events are implemented. Targeted tests: 80 passed; typecheck: passed. The production/fixture trace bridge is not complete, so the old GK-S09 blocker code remains unknown; Task 7 has not started. See [detailed plan](g3-final/G3-F9-GK-S09-detailed-repair-plan.md).
+> **2026-11-18 Task 6 回执桥接（零付费）**：已增加 `runFrozenDsCaseTraced`，将真实 `ds_action` 逐请求/逐动作事件接入脱敏 `G3CaseTrace`，记录首次阻断码、图元变化和回执送达；零费伪 provider 验证缺参数和终止动作。旧 GK-S09 两次原始回执不可追溯，35题未测，实际费用未知。下一步 Task 7 参数 schema。详见 [详细修复计划](g3-final/G3-F9-GK-S09-detailed-repair-plan.md)。
 
 > **2026-11-18 GK-S09详细实施计划已入档（仅文档）**：按[Task 6–9执行清单](g3-final/G3-F9-GK-S09-detailed-repair-plan.md)先补脱敏动作回执，再统一工具参数契约、符号尺度与真实外接球，最后零费整题回放及另获授权单题实测。本次不改作图代码、不发DS；旧真实GK-S09仍是2次请求无候选，35题未测，原因待回执定责。
 

@@ -19,7 +19,9 @@ import {
   type DrawingContractCase,
   type PolicyCandidateSlice
 } from "../../../../../scripts/reliability-eval/drawingContracts"
-import type { G3Boundary } from "./g3DsCaseTrace"
+import type { G3Boundary, G3CaseTrace } from "./g3DsCaseTrace"
+import { createG3CaseTrace, recordActionReceipt, recordBoundary, recordRequestTrace } from "./g3DsCaseTrace"
+import { createModelPlanner, type ModelPlannerDependencies } from "../modelPlanner"
 
 export interface PublicFrozenCaseInput {
   readonly id: string
@@ -610,5 +612,45 @@ export function compareLegacySingleVsMultiSliceReplay(
     legacySingleStatus: singleRes.status,
     multiSliceStatus: multiRes.status,
     diverged: singleRes.status !== multiRes.status
+  }
+}
+
+/** Executes the actual ds_action planner and publishes only validated trace fields. */
+export async function runFrozenDsCaseTraced(
+  publicInput: Parameters<typeof runFrozenDsCase>[0],
+  budget: Budget | ExamRunBudget,
+  dependencies: ModelPlannerDependencies,
+  options: {
+    readonly contract?: DrawingContractCase
+    readonly revision: string
+    readonly runId: string
+    readonly onTrace: (trace: G3CaseTrace) => void
+  }
+): Promise<FrozenDsCaseResult> {
+  let trace = createG3CaseTrace({ caseId: publicInput.id, runId: options.runId, revision: options.revision })
+  const planner = createModelPlanner({
+    ...dependencies,
+    onStructuredDiagnostic: (event) => {
+      dependencies.onStructuredDiagnostic?.(event)
+      if (event.kind === "request") {
+        trace = recordRequestTrace(trace, {
+          index: event.index, toolNames: event.toolNames,
+          responseKind: event.responseKind, usageKnown: event.usageKnown
+        })
+      } else if (event.kind === "action") {
+        trace = recordActionReceipt(trace, event)
+        if (event.resultStatus !== "accepted") trace = recordBoundary(trace, { boundary: "schema", code: event.blockerCode ?? "action_blocked" })
+      } else {
+        trace = recordBoundary(trace, event)
+      }
+    }
+  })
+  try {
+    return await runFrozenDsCase(publicInput, planner, budget, { ...(options.contract === undefined ? {} : { contract: options.contract }) })
+  } finally {
+    if (trace.requests.some((request) => request.toolNames.some((name) => name !== "plan_set_plan")) && (trace.actionReceipts?.length ?? 0) === 0) {
+      trace = recordBoundary(trace, { boundary: "tool_protocol", code: "telemetry_missing" })
+    }
+    options.onTrace(trace)
   }
 }

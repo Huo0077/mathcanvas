@@ -11,6 +11,7 @@ import {
   evaluateTask6LivePreflight,
   projectPublicFrozenCaseInput,
   runFrozenDsCase,
+  runFrozenDsCaseTraced,
   type CandidateSliceArtifact
 } from "./g3DsFrozenCaseRunner"
 
@@ -557,5 +558,69 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
     expect(res.contractStatus).toBe("passed")
     expect(budget.remaining("network")).toBe(0)
     expect(budget.remaining("generation")).toBe(1)
+  })
+})
+
+
+describe("GK-S09 action receipt runner bridge (zero cost)", () => {
+  it("captures terminal receipts without implying feedback was delivered", async () => {
+    let n = 0
+    const traces: import("./g3DsCaseTrace").G3CaseTrace[] = []
+    await runFrozenDsCaseTraced(
+      { id: "GK-S09", prompt: "Draw a right triangular prism", workspace: "geometry3d" },
+      createBudget({ network: 5, generation: 5, tool: 8 }),
+      {
+        intentMode: "ds_action",
+        resolveProvider: async () => ({ ok: true, provider: {
+          id: "ds-test", modelId: "deepseek-v4-flash", dialect: "openai", revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        } }),
+        runModel: async () => {
+          n += 1
+          return { ok: true, events: [{ kind: "tool_call", requestId: `r-${n}`, attemptId: `a-${n}`,
+            toolCallId: `tc-${n}`, toolId: n === 1 ? "construct_solid" : "finish_candidate",
+            input: n === 1
+              ? { id: "prism", kind: "triangular_prism", sideLength: 1, height: 1, vertexNames: ["A", "B", "C", "A1", "B1", "C1"] }
+              : { goal: "right triangular prism" } }] }
+        }
+      },
+      { revision: "test", runId: "run-s09-success", onTrace: (trace) => traces.push(trace) }
+    )
+    expect(traces[0]?.actionReceipts).toHaveLength(2)
+    expect(traces[0]?.actionReceipts?.[0]).toMatchObject({ resultStatus: "accepted", candidateHashChanged: false, feedbackDelivered: true })
+    expect(traces[0]?.actionReceipts?.[1]).toMatchObject({ toolName: "finish_candidate", feedbackDelivered: false })
+    expect(JSON.stringify(traces[0])).not.toMatch(/sideLength|vertexNames|right triangular prism/)
+  })
+
+  it("captures first repairable blocker from real planner execution without tool input", async () => {
+    let requestCount = 0
+    const traces: import("./g3DsCaseTrace").G3CaseTrace[] = []
+    const result = await runFrozenDsCaseTraced(
+      { id: "GK-S09", prompt: "Draw a right triangular prism with six equal edges", workspace: "geometry3d" },
+      createBudget({ network: 5, generation: 5, tool: 8 }),
+      {
+        intentMode: "ds_action",
+        resolveProvider: async () => ({ ok: true, provider: {
+          id: "ds-test", modelId: "deepseek-v4-flash", dialect: "openai", revision: 2,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        } }),
+        runModel: async () => {
+          requestCount += 1
+          return { ok: true, events: [{ kind: "tool_call", requestId: `r-${requestCount}`, attemptId: `a-${requestCount}`,
+            toolCallId: `tc-${requestCount}`, toolId: "construct_solid", input: { kind: "triangular_prism", sideLength: 1 } }] }
+        }
+      },
+      { contract: getCase("GK-S09"), revision: "test", runId: "run-s09-1", onTrace: (trace) => traces.push(trace) }
+    )
+    expect(result.contractStatus).not.toBe("passed")
+    expect(traces).toHaveLength(1)
+    expect(traces[0]?.requests).toHaveLength(2)
+    expect(traces[0]?.actionReceipts).toHaveLength(2)
+    expect(traces[0]?.actionReceipts?.[0]).toMatchObject({
+      requestIndex: 1, toolName: "construct_solid", resultStatus: "repairable",
+      blockerCode: "missing_required_parameter", primitiveCountBefore: 0, primitiveCountAfter: 0,
+      candidateHashChanged: false, feedbackDelivered: true
+    })
+    expect(JSON.stringify(traces[0])).not.toMatch(/sideLength|toolInput|Draw a right|apiKey/)
   })
 })
