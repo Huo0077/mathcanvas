@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-18 —— G3-DS 最终版实施（混合 B→C 路线）：**Task F0 已完成**（0 新增付费；真实 DS 仍 0/36）
+
+- **`Task F0`（冻结 `92981ebd` 真实 36 题失败真源）已完成（0 付费）**：依据最新实施档案 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md)，在 [g3DsCaseTrace.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 新增 `classifyRetest92981Case` 并通过 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 对 [898d31ae 复测 summary.json](audit/2026-11-17-g3-ds-live-retest-92981/summary.json) 完成 36/36 全量首失败边界归因（`unknown = 0`，`mixed_read_plan = 0`，全数落入 `schema` / `dag` / `verification` 并保留 `GK-S02/GK-S03/JT-S06/JT-S07` 的 `input_figure_missing` 输入边界）；建档 [2026-11-17-92981 基线记录](g3-final/retests/2026-11-17-92981/README.md)。相关单测（`3` 文件 **`93 passed`**）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；**下一步推进 Task F1（探索候选隔离层 `speculativeCanvas.ts`）**。
+
 ## 2026-11-17 —— 当前提交 `92981ebd` 真实 DS 36题再测：完整合同仍0/36
 
 经用户新一轮最多5美元/冻结36题授权，原生 `deepseek-v4-flash` 强制 `ds_intent` 路线跑完36/36题，77次请求（≤108，单题≤3），76次有usage，记录输入211368/输出140132 tokens，**实际费用未知**。独立完整合同 **0/36**、1 partial（GK-S05）、35 failed；非空候选2题（GK-S05、GK-P09），其余34题无候选；原先7题的读场景与提交计划同批冲突本轮**0次**，但实体引用/必要参数/格式不合规阻断了大部分规划。数学与证书均未通过者不计入DS真实浏览器/受控交付，本轮二者**未测**。旧确定性36/36不能顶替，G3-DS仍未退出；用户/教师人工可读性与Windows实机仍待签。逐题/口径见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)。本轮额度已用，不自动追加请求。
@@ -35,7 +39,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-17；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
+最后更新：2026-11-18；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

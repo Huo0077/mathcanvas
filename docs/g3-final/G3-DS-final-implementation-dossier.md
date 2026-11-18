@@ -1,4 +1,4 @@
-﻿# G3-DS 最终版真实作图能力实施档案
+# G3-DS 最终版真实作图能力实施档案
 
 > **文档状态：** Final implementation dossier / 待实施
 >

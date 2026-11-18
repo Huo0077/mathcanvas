@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 最终版 B→C 路线执行更新（Task F0 完成，0 付费；真实 DS 仍 0/36）**：按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 推进 **Task F0**：已完成 `92981ebd` 36 题首失败边界 100% 归因（[2026-11-17-92981 基线](g3-final/retests/2026-11-17-92981/README.md)，`0 unknown`、`0 mixed_read_plan`，定向 `3` 文件 `93 passed` + `typecheck` + `lint` + `test:docs` 全过）。真实 DS 仍 `0/36`，**当前执行入口推进至 Task F1（探索候选隔离层 `speculativeCanvas.ts`）**；**Task F9（分层真实 DS 复测）仍需独立付费授权**。
+
 > **2026-11-17 最新DS实测**：最新 `92981ebd` 全36题强制DS完整合同仍**0/36**，有候选2题、34题无候选；此前7个工具混批本轮0个。优先修结构化施工单的未声明实体/必需参数/格式协议，不以加请求、离线36/36或浏览器工程通过替代。逐题见[本轮审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)，再次付费需新授权。
 
 > **2026-11-17 Task 0–Task 5 完成 + 零付费加固更新（停机等待 Task 6 付费授权）**：已完成 [Task 0](audit/g3-ds-failure-driven-t0/README.md)（`6747fb72`）、[Task 1](audit/g3-ds-failure-driven-t1/README.md)（`3a803541`）、[Task 2](audit/g3-ds-failure-driven-t2/README.md)（`524b92f2`）、[Task 3](audit/g3-ds-failure-driven-t3/README.md)（`375bb194`）、[Task 4](audit/g3-ds-failure-driven-t4/README.md)（`332d8e47`）、[Task 5](audit/g3-ds-failure-driven-t5/README.md)（`b776d609`）及 [零付费加固轮](audit/g3-ds-failure-driven-hardening/README.md)（修复 `ds_intent` 提示词/schema 参数契约冲突、`g3DsFrozenCaseRunner` `plan.set_plan`/`AbortSignal` 接线与 Task 6 预检熔断门禁、`dsDrawingIntent` 公切线/源绑定切线/垂直平行线/缩放方程/多点折叠/未解步骤 fail-closed；全仓 `npm test` `550` 文件 `5850 passed | 1 todo`、`typecheck`、`lint` 与 `test:docs` 全过）；真实 DS 成绩仍为 `0/36`，**当前执行严格停在 Task 6（Live 预检 + 36 题在线复测）之前，等待用户显式付费授权**。

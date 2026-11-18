@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F0：冻结 `92981ebd` 失败真源基线（0 付费；下一步 Task F1）
+
+- 按 [G3-DS 最终版真实作图能力实施档案](g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**：在 [g3DsCaseTrace.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 与 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 新增 `classifyRetest92981Case`，对 `92981ebd` 实测 36 题全部给出可追责首失败边界（`0` `unknown`、`0` `mixed_read_plan`）与 4 题缺图界标，生成 [Task F0 冻结基线](g3-final/retests/2026-11-17-92981/README.md)；定向 `3` 文件 **`93 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过。真实 DS 成绩仍为 `0/36`；下一步进入 **Task F1（探索候选隔离层 `speculativeCanvas`）**。
+
 ## 2026-11-17 —— G3-DS 当前版本冻结36题原生复测
 
 在修订 `92981ebd` clean HEAD 按用户新授权测试：36题全运行、77次真实请求，完整合同0/36、1 partial、35 failed；2题有候选、0主画布提交。工具混批由上轮7次降为本轮0次，但模型施工单的实体引用、参数和格式问题仍阻断。实际费用未知，DS候选真实浏览器与受控提交未测。报告见[脱敏审计](audit/2026-11-17-g3-ds-live-retest-92981/README.md)；本轮没有修改产品代码。

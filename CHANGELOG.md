@@ -8,6 +8,10 @@
 
 
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F0：冻结 `92981ebd` 真实 36 题失败真源基线（开发版，0 付费）
+
+- 新增 [classifyRetest92981Case](apps/web/src/agent/fixtures/g3DsCaseTrace.ts) 及 [g3DsCaseTrace.test.ts](apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts) 校验，将 `898d31ae` 提交记录的 `92981ebd` 真实 DeepSeek 36 题复测冻结为 [Task F0 真源基线](docs/g3-final/retests/2026-11-17-92981/README.md)（36/36 首失败边界 100% 归因、`0 unknown`、`0 mixed_read_plan`、真实合同仍 `0/36`）；仅零付费工程基线对齐，未解除人工可读性、Windows 桌面实机或真实 DS 端到端门禁。
+
 ## 2026-11-17 —— G3真实画布证据与兼容回归修复（开发版）
 
 - 36题真实浏览器预览和同候选渲染证据36/36；补3D解析球体的真实对象索引，修复因empty_canvas导致的确认拒绝。

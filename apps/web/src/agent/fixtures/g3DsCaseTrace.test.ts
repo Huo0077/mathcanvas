@@ -1,11 +1,13 @@
 import { createBudget } from "@draw/agent-core"
 import { describe, expect, it, vi } from "vitest"
 import ds5Summary from "../../../../../docs/audit/2026-11-17-g3-ds5-live-36/summary.json"
+import retest92981Summary from "../../../../../docs/audit/2026-11-17-g3-ds-live-retest-92981/summary.json"
 import drawingContracts36 from "../../../../../test-fixtures/reliability/drawing-contracts-36.json"
 import { createModelPlanner, type ModelPlannerStructuredEvent } from "../modelPlanner"
 import {
   auditInputFigureDependency,
   classifyHistoricalDs5SummaryCase,
+  classifyRetest92981Case,
   createG3CaseTrace,
   explainFirstFailure,
   recordBoundary,
@@ -273,5 +275,48 @@ describe("g3DsCaseTrace (Task 0 observability & sanitization)", () => {
     ])
     expect(explainFirstFailure(trace)).toEqual({ boundary: "tool_protocol", code: "mixed_read_plan" })
     expect(serializeG3CaseTrace(trace)).not.toContain("敏感原题")
+  })
+
+  it("Task F0: freezes 92981ebd 36-case retest truth with 100% first-failure boundary coverage (0 unknown, 0 mixed_read_plan)", () => {
+    const summary = retest92981Summary as {
+      revision: string
+      byCase: Array<{
+        id: string
+        requests: number
+        terminal: string
+        contract: string
+        primitiveCount: number
+        verification: string | null
+        certificate: string | null
+        toolsByRequest?: string[][]
+        failureCodes?: string[]
+        usageEvents?: number
+      }>
+    }
+    const traces = summary.byCase.map((entry) => classifyRetest92981Case(entry, summary.revision))
+    expect(traces).toHaveLength(36)
+
+    const counts: Record<G3Boundary | "unknown", number> = {
+      provider: 0,
+      tool_protocol: 0,
+      schema: 0,
+      dag: 0,
+      stage: 0,
+      verification: 0,
+      contract: 0,
+      render: 0,
+      delivery: 0,
+      unknown: 0
+    }
+    for (const trace of traces) {
+      const first = explainFirstFailure(trace)
+      if (first === "unknown") counts.unknown += 1
+      else counts[first.boundary] += 1
+      expect(serializeG3CaseTrace(trace)).not.toContain("sk-")
+    }
+
+    expect(counts.unknown).toBe(0)
+    expect(counts.tool_protocol).toBe(0)
+    expect(counts.schema + counts.dag + counts.verification).toBe(36)
   })
 })

@@ -49,6 +49,19 @@ export interface HistoricalDs5SummaryEntry {
   readonly usageEvents?: number
 }
 
+export interface Retest92981SummaryEntry {
+  readonly id: string
+  readonly requests: number
+  readonly terminal: string
+  readonly contract: string
+  readonly primitiveCount: number
+  readonly verification: string | null
+  readonly certificate: string | null
+  readonly toolsByRequest?: readonly (readonly string[])[]
+  readonly failureCodes?: readonly string[]
+  readonly usageEvents?: number
+}
+
 export type InputFigureAuditResult =
   | { readonly ok: true; readonly status: "self_contained" | "confirmed_figure" }
   | {
@@ -320,5 +333,68 @@ export function classifyHistoricalDs5SummaryCase(entry: HistoricalDs5SummaryEntr
     }
   }
   // Remaining zero-candidate cases in historical summary.json did not log schema/dag vs stage codes.
+  return trace
+}
+
+const SCHEMA_FAILURE_CODES = new Set([
+  "invalid_json",
+  "invalid_schema",
+  "envelope_invalid",
+  "missing_required_parameter",
+  "unproven_parameter",
+  "unsupported_construction"
+])
+
+const DAG_FAILURE_CODES = new Set([
+  "undeclared_entity_ref",
+  "cross_scope_violation",
+  "cyclic_dependency",
+  "missing_host",
+  "wrong_host_kind",
+  "unresolved_construction"
+])
+
+const TOOL_PROTOCOL_CODES = new Set(["mixed_read_plan", "unexpected_tool_call"])
+
+export function classifyRetest92981Case(entry: Retest92981SummaryEntry, revision: string): G3CaseTrace {
+  let trace = createG3CaseTrace({
+    caseId: entry.id,
+    runId: `retest-92981-${entry.id}`,
+    revision
+  })
+  const toolsByReq = entry.toolsByRequest ?? []
+  for (let i = 0; i < toolsByReq.length; i += 1) {
+    const tools = toolsByReq[i] ?? []
+    trace = recordRequestTrace(trace, {
+      index: i + 1,
+      toolNames: tools,
+      responseKind: tools.length > 0 ? "tool_calls" : "text",
+      usageKnown: (entry.usageEvents ?? 0) > i
+    })
+  }
+  const codes = entry.failureCodes ?? []
+  if (codes[0] === "plan" && entry.primitiveCount > 0 && entry.verification) {
+    return recordBoundary(trace, {
+      boundary: "verification",
+      code: entry.verification === "failed" ? "certificate_blocked" : "verification_not_supported"
+    })
+  }
+  for (const code of codes) {
+    if (TOOL_PROTOCOL_CODES.has(code)) {
+      return recordBoundary(trace, { boundary: "tool_protocol", code })
+    }
+    if (SCHEMA_FAILURE_CODES.has(code)) {
+      return recordBoundary(trace, { boundary: "schema", code })
+    }
+    if (DAG_FAILURE_CODES.has(code)) {
+      return recordBoundary(trace, { boundary: "dag", code })
+    }
+  }
+  if (entry.primitiveCount > 0 && entry.verification) {
+    return recordBoundary(trace, {
+      boundary: "verification",
+      code: entry.verification === "failed" ? "certificate_blocked" : "verification_not_supported"
+    })
+  }
   return trace
 }

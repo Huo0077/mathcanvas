@@ -1,5 +1,7 @@
 # Agent 发布前门禁
 
+> **2026-11-18 最终版 G3-DS 门禁进度（Task F0 完成，零付费；真实 DS 仍 0/36）**：已按 [G3-DS 最终版真实作图能力实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**（[Task F0 真源基线](../g3-final/retests/2026-11-17-92981/README.md) 36/36 首失败边界已冻结，Task F1–F8 工程改造及 Task F9 授权真实 DS 复测尚未完成）；人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
+
 > **2026-11-17 最新阻断**：当前修订原生DS复测36题完整合同仍0/36，DS候选真实浏览器/提交未执行；不得以工具混批归零或离线36/36作为发布条件。见[脱敏实测](../audit/2026-11-17-g3-ds-live-retest-92981/README.md)，人工可读性、Windows窗口/冷机与发布仍待明确签收。
 
 > **2026-11-17 新G3-DS发布阻断（Task 0–Task 5 已完成，零付费；停机等待 Task 6 付费授权）**：[失败驱动G3方案](../superpowers/plans/2026-11-17-g3-ds-failure-driven-implementation-plan.md)已推进至 **Task 5 完结**（[Task 0](../audit/g3-ds-failure-driven-t0/README.md)、[Task 1](../audit/g3-ds-failure-driven-t1/README.md)、[Task 2](../audit/g3-ds-failure-driven-t2/README.md)、[Task 3](../audit/g3-ds-failure-driven-t3/README.md)、[Task 4](../audit/g3-ds-failure-driven-t4/README.md)、[Task 5](../audit/g3-ds-failure-driven-t5/README.md)），仅余 **Task 6**（在线预检与36题复测，须用户重授权后执行）；当前真实DS冻结36题完整数学合同仍为0/36，端到端真实DS渲染仍待 Task 6 实测（当前 `manifest.json` 严格标为 `bridge_replay_passed`），且用户/教师可读性（`humanReviewed: pending`）与Windows桌面实机（UIA）仍待签。下文“DeepSeek保留后续执行”仅是旧时点记录，已被[本轮实测](../audit/2026-11-17-g3-ds5-live-36/README.md)取代。任何离线/浏览器回放全绿（含 `41 passed` 零重试）均不能放开发布。 另有4题在R4仍标 `text_with_figure_reference` 未知（Task 0 已核实 `GK-S02/GK-S03/JT-S06/JT-S07` 为 `input_figure_missing`），图像输入与用户核对须独立记录，不能用模型猜图或题号答案顶替。
