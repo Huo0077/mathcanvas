@@ -1,5 +1,7 @@
 # Agent 发布前门禁
 
+> **2026-11-18 详细执行门禁**：[GK-S09 Task 6–9详细计划](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md)已入档但未实施；真实试点仍无候选、35题未测，回执缺失待查，未获新的付费测试授权，发布门禁保持关闭。
+
 > **2026-11-18 真实DS F9阻断延续**：最新GK-S09试点两次原生 `construct_solid` 未形成候选，动作执行的具体 blockerCode 尚未记录；[Task 6–9修复续篇](../g3-final/G3-F9-kernel-action-repair-plan.md)要求先完成回执追踪、符号参数/球体构造、独立合同/生产证书与同候选渲染，再准许扩大付费批次。离线通过与两次请求不能作为发布证据。
 
 > **2026-11-18 G3-F9 内核动作修复进度（Task 0–5 零付费门禁完成，0 新增付费；待新授权）**：`GK-S08` `ds_action` 0 付费端到端回放及全量检查全通过（`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` `0 errors`、Playwright E2E **`41 passed`**，见 [Task 5 审计](../audit/g3-f9-repair-t5-zero-cost/README.md)）；真实 DS 仍未重测且 `humanReviewed` / `Windows UIA` 维持 `pending`。

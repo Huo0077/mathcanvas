@@ -1,5 +1,8 @@
 # 下一轮工作导航
 
+> **2026-11-18 GK-S09详细实施计划已入档（仅文档）**：按[Task 6–9执行清单](g3-final/G3-F9-GK-S09-detailed-repair-plan.md)先补脱敏动作回执，再统一工具参数契约、符号尺度与真实外接球，最后零费整题回放及另获授权单题实测。本次不改作图代码、不发DS；旧真实GK-S09仍是2次请求无候选，35题未测，原因待回执定责。
+
+
 > **2026-11-18 F9下一步**：以[修复计划 Task 6–9](g3-final/G3-F9-kernel-action-repair-plan.md)为执行入口：先记录两次 `construct_solid` 的脱敏真实回执，再修 `kind`/参数schema与 GK-S09 的符号棱长、外接球能力，完成零费用整题合同+证书回放后另获付费授权复测一题。旧单题请求不重跑、不合并为36题通过率。
 
 > **2026-11-17 当前 F9 实测停点**：纯文字 GK-S09 两次原生DS `construct_solid` 均未形成候选，35题未测。先补工具回执脱敏 `{status, blockerCode, primitiveCount, hashChanged}`，零费核验含符号边长与外接球的题型，再按新授权复测小样本；[证据](audit/2026-11-17-g3-f9-text-only-pilot/README.md)。不要拿本地回放成功替代真实DS成绩。
