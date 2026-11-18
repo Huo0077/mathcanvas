@@ -190,3 +190,108 @@ export function foldPointAboutHinge(point: FoldPoint3, from: FoldPoint3, to: Fol
   const rotated = add(add(scale(offset, cos), scale(cross(unit, offset), sin)), scale(unit, dot(unit, offset) * (1 - cos)))
   return add(from, rotated)
 }
+
+export interface FoldStateLineageEntry {
+  readonly stateId: string
+  readonly phase: "pre_fold" | "post_fold"
+  readonly stepIndex: number
+  readonly parentStateId: string | null
+  readonly branchId: string
+  readonly mirrorBranch: "primary" | "mirror"
+  readonly documentHash?: string
+  readonly candidateHash?: string
+  readonly dependsOn: readonly number[]
+}
+
+/** Computes symmetric (+angle / -angle) mirror fold images of a point about the hinge axis. */
+export function foldMirrorPairAboutHinge(
+  point: FoldPoint3,
+  from: FoldPoint3,
+  to: FoldPoint3,
+  angleDegrees: number
+): { primary: FoldPoint3; mirror: FoldPoint3 } {
+  return {
+    primary: foldPointAboutHinge(point, from, to, angleDegrees),
+    mirror: foldPointAboutHinge(point, from, to, -angleDegrees)
+  }
+}
+
+/** Builds independent pre_fold / post_fold / mirror branch lineage descriptors for a fold prompt. */
+export function buildFoldStateLineage(
+  prompt: string,
+  options: {
+    mirrorBranches?: boolean
+    stateHashes?: Readonly<Record<string, { documentHash?: string; candidateHash?: string }>>
+  } = {}
+): FoldStateLineageEntry[] {
+  const chain = buildFoldChain(prompt)
+  const preKey = "pre_fold:0"
+  const preHashes = options.stateHashes?.[preKey]
+  const entries: FoldStateLineageEntry[] = [
+    {
+      stateId: preKey,
+      phase: "pre_fold",
+      stepIndex: 0,
+      parentStateId: null,
+      branchId: "base",
+      mirrorBranch: "primary",
+      ...(preHashes?.documentHash === undefined ? {} : { documentHash: preHashes.documentHash }),
+      ...(preHashes?.candidateHash === undefined ? {} : { candidateHash: preHashes.candidateHash }),
+      dependsOn: []
+    }
+  ]
+  if (chain.status === "none") return entries
+  const branches: readonly ("primary" | "mirror")[] = options.mirrorBranches ? ["primary", "mirror"] : ["primary"]
+  for (const step of chain.steps) {
+    const parentStateId = step.inputState === 0 ? preKey : `post_fold:${step.inputState}:primary`
+    for (const mirrorBranch of branches) {
+      const stateId = `post_fold:${step.index}:${mirrorBranch}`
+      const hashes = options.stateHashes?.[stateId]
+      entries.push({
+        stateId,
+        phase: "post_fold",
+        stepIndex: step.index,
+        parentStateId,
+        branchId: mirrorBranch,
+        mirrorBranch,
+        ...(hashes?.documentHash === undefined ? {} : { documentHash: hashes.documentHash }),
+        ...(hashes?.candidateHash === undefined ? {} : { candidateHash: hashes.candidateHash }),
+        dependsOn: step.dependsOn
+      })
+    }
+  }
+  return entries
+}
+
+/** Rejects fold lineages where distinct states or mirror branches share identical documentHash or candidateHash. */
+export function verifyFoldStateHashesDistinct(
+  entries: readonly FoldStateLineageEntry[]
+): { ok: true } | { ok: false; collisionStateIds: [string, string]; reason: string } {
+  const seenDocHashes = new Map<string, string>()
+  const seenCandHashes = new Map<string, string>()
+  for (const entry of entries) {
+    if (entry.documentHash) {
+      const prior = seenDocHashes.get(entry.documentHash)
+      if (prior && prior !== entry.stateId) {
+        return {
+          ok: false,
+          collisionStateIds: [prior, entry.stateId],
+          reason: `状态 ${prior} 与 ${entry.stateId} 复用了同一份 documentHash (${entry.documentHash})。`
+        }
+      }
+      seenDocHashes.set(entry.documentHash, entry.stateId)
+    }
+    if (entry.candidateHash) {
+      const prior = seenCandHashes.get(entry.candidateHash)
+      if (prior && prior !== entry.stateId) {
+        return {
+          ok: false,
+          collisionStateIds: [prior, entry.stateId],
+          reason: `状态 ${prior} 与 ${entry.stateId} 复用了同一份 candidateHash (${entry.candidateHash})。`
+        }
+      }
+      seenCandHashes.set(entry.candidateHash, entry.stateId)
+    }
+  }
+  return { ok: true }
+}

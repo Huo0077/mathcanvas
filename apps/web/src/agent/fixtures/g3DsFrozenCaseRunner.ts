@@ -32,6 +32,7 @@ export interface CandidateSliceArtifact {
   readonly scopeId: string
   readonly stateId?: string
   readonly branchId?: string
+  readonly parentCandidateHash?: string
   readonly document?: GeometryDocument
   readonly plan?: PlanEnvelope
   readonly answerText?: string
@@ -43,6 +44,9 @@ export interface CandidateSliceCertificate {
   readonly scopeId: string
   readonly stateId?: string
   readonly branchId?: string
+  readonly lineageKey: string
+  readonly parentCandidateHash?: string
+  readonly documentHash: string
   readonly candidateHash: string
   readonly certificateStatus: DrawingCertificateResult["certificateStatus"]
   readonly failedObligations?: readonly string[]
@@ -339,6 +343,116 @@ export function aggregateTask6FunnelReport(
   }
 }
 
+export function evaluateFrozenCandidateSet(
+  publicCase: PublicFrozenCaseInput,
+  slices: readonly CandidateSliceArtifact[],
+  contract?: DrawingContractCase
+): {
+  readonly candidateSet: readonly CandidateSliceCertificate[]
+  readonly contractStatus: FrozenDsCaseResult["contractStatus"]
+} {
+  const candidateSet: CandidateSliceCertificate[] = []
+  const evalSlices: PolicyCandidateSlice[] = []
+  let allCertificatesPassed = slices.length > 0
+  let anyCertificateHashMismatch = false
+  let anyLineageHashCollision = false
+  const seenLineageByHash = new Map<string, string>()
+
+  for (let i = 0; i < slices.length; i += 1) {
+    const slice = slices[i]!
+    const lineageKey = `${slice.scopeId}::${slice.stateId ?? "shared"}::${slice.branchId ?? "default"}`
+    const doc = materializeSliceDocument(slice, publicCase.workspace, i)
+    if (!doc) {
+      allCertificatesPassed = false
+      candidateSet.push({
+        scopeId: slice.scopeId,
+        ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
+        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
+        ...(slice.parentCandidateHash === undefined ? {} : { parentCandidateHash: slice.parentCandidateHash }),
+        lineageKey,
+        documentHash: "",
+        candidateHash: "",
+        certificateStatus: "blocked"
+      })
+      continue
+    }
+
+    const actualCandidateHash = canonicalContentHash(doc)
+    const boundHash = slice.overrideCertificateHash ?? actualCandidateHash
+    const cert = certifyDrawingAgainstContract({
+      prompt: publicCase.prompt,
+      document: doc,
+      candidateHash: boundHash,
+      sourceHash: boundHash,
+      selectedScopeId: toCertificateScopeId(slice.scopeId)
+    })
+    const hashMatches = boundHash === actualCandidateHash
+    if (!hashMatches) anyCertificateHashMismatch = true
+
+    let collidesWithDistinctStateOrBranch = false
+    if (slice.stateId !== undefined || slice.branchId !== undefined) {
+      const priorLineage = seenLineageByHash.get(actualCandidateHash)
+      if (priorLineage && priorLineage !== lineageKey) {
+        collidesWithDistinctStateOrBranch = true
+        anyLineageHashCollision = true
+      } else {
+        seenLineageByHash.set(actualCandidateHash, lineageKey)
+      }
+    }
+
+    const effectiveCertStatus: DrawingCertificateResult["certificateStatus"] =
+      !hashMatches || collidesWithDistinctStateOrBranch ? "blocked" : cert.certificateStatus
+
+    if (effectiveCertStatus !== "passed") {
+      allCertificatesPassed = false
+    }
+
+    const failedObligations = [
+      ...(cert.failedObligations?.map((f) => `${f.id}:${f.detail}`) ?? []),
+      ...(collidesWithDistinctStateOrBranch ? ["duplicate_lineage_hash"] : [])
+    ]
+
+    candidateSet.push({
+      scopeId: slice.scopeId,
+      ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
+      ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
+      ...(slice.parentCandidateHash === undefined ? {} : { parentCandidateHash: slice.parentCandidateHash }),
+      lineageKey,
+      documentHash: actualCandidateHash,
+      candidateHash: actualCandidateHash,
+      certificateStatus: effectiveCertStatus,
+      ...(failedObligations.length > 0 ? { failedObligations } : {})
+    })
+
+    evalSlices.push({
+      scopeId: slice.scopeId,
+      ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
+      ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
+      candidate: doc,
+      options: {
+        verificationStatus: effectiveCertStatus === "passed" ? "passed" : "failed",
+        answerText: slice.answerText ?? null,
+        scopeId: slice.scopeId,
+        ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
+        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId })
+      }
+    })
+  }
+
+  let contractStatus: FrozenDsCaseResult["contractStatus"] = "failed"
+  if (contract) {
+    const policyEval = evaluateDrawingContractSetByPolicy(contract, evalSlices)
+    contractStatus = policyEval.status
+    if (anyCertificateHashMismatch || anyLineageHashCollision || (!allCertificatesPassed && contractStatus === "passed")) {
+      contractStatus = "failed"
+    }
+  } else if (allCertificatesPassed) {
+    contractStatus = "passed"
+  }
+
+  return { candidateSet, contractStatus }
+}
+
 export async function runFrozenDsCase(
   rawPublicInput: {
     readonly id: string
@@ -368,79 +482,7 @@ export async function runFrozenDsCase(
           return { modelInvoked: true, slices: [] }
         })()
 
-  const candidateSet: CandidateSliceCertificate[] = []
-  const evalSlices: PolicyCandidateSlice[] = []
-  let allCertificatesPassed = response.slices.length > 0
-  let anyCertificateHashMismatch = false
-
-  for (let i = 0; i < response.slices.length; i += 1) {
-    const slice = response.slices[i]!
-    const doc = materializeSliceDocument(slice, publicCase.workspace, i)
-    if (!doc) {
-      allCertificatesPassed = false
-      candidateSet.push({
-        scopeId: slice.scopeId,
-        ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
-        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
-        candidateHash: "",
-        certificateStatus: "blocked"
-      })
-      continue
-    }
-
-    const actualCandidateHash = canonicalContentHash(doc)
-    const boundHash = slice.overrideCertificateHash ?? actualCandidateHash
-    const cert = certifyDrawingAgainstContract({
-      prompt: publicCase.prompt,
-      document: doc,
-      candidateHash: boundHash,
-      sourceHash: boundHash,
-      selectedScopeId: toCertificateScopeId(slice.scopeId)
-    })
-    const hashMatches = boundHash === actualCandidateHash
-    if (!hashMatches) anyCertificateHashMismatch = true
-    const effectiveCertStatus: DrawingCertificateResult["certificateStatus"] = !hashMatches
-      ? "blocked"
-      : cert.certificateStatus
-
-    if (effectiveCertStatus !== "passed") {
-      allCertificatesPassed = false
-    }
-
-    candidateSet.push({
-      scopeId: slice.scopeId,
-      ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
-      ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
-      candidateHash: actualCandidateHash,
-      certificateStatus: effectiveCertStatus,
-      ...(cert.failedObligations?.length ? { failedObligations: cert.failedObligations.map((f) => `${f.id}:${f.detail}`) } : {})
-    })
-
-    evalSlices.push({
-      scopeId: slice.scopeId,
-      ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
-      ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
-      candidate: doc,
-      options: {
-        verificationStatus: effectiveCertStatus === "passed" ? "passed" : "failed",
-        answerText: slice.answerText ?? null,
-        scopeId: slice.scopeId,
-        ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
-        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId })
-      }
-    })
-  }
-
-  let contractStatus: FrozenDsCaseResult["contractStatus"] = "failed"
-  if (options.contract) {
-    const policyEval = evaluateDrawingContractSetByPolicy(options.contract, evalSlices)
-    contractStatus = policyEval.status
-    if (anyCertificateHashMismatch || (!allCertificatesPassed && contractStatus === "passed")) {
-      contractStatus = "failed"
-    }
-  } else if (allCertificatesPassed) {
-    contractStatus = "passed"
-  }
+  const { candidateSet, contractStatus } = evaluateFrozenCandidateSet(publicCase, response.slices, options.contract)
 
   return {
     candidateSet,

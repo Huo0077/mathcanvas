@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import { buildFoldChain, foldPointAboutHinge, readFoldAngles, type FoldPoint3 } from "./foldChain"
+import {
+  buildFoldChain,
+  buildFoldStateLineage,
+  foldMirrorPairAboutHinge,
+  foldPointAboutHinge,
+  readFoldAngles,
+  verifyFoldStateHashesDistinct,
+  type FoldPoint3
+} from "./foldChain"
 
 /**
  * **T6（2026-10-24）：连续折叠的依赖表示与分类**
@@ -101,5 +109,34 @@ describe("T6 — sequential fold chains", () => {
     // 折痕退化成一点：原样返回，而不是 NaN。
     expect(foldPointAboutHinge({ x: 1, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, 90)).toEqual({ x: 1, y: 1, z: 0 })
     expect(foldPointAboutHinge({ x: 1, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, Number.NaN)).toEqual({ x: 1, y: 1, z: 0 })
+  })
+
+  it("assigns independent state lineage for pre_fold, post_fold, and mirror branches and rejects hash collisions", () => {
+    const mirrorPair = foldMirrorPairAboutHinge({ x: 1, y: 1, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, 60)
+    expect(mirrorPair.primary.z).toBeCloseTo(Math.sin(Math.PI / 3), 9)
+    expect(mirrorPair.mirror.z).toBeCloseTo(-Math.sin(Math.PI / 3), 9)
+
+    const lineage = buildFoldStateLineage(CHAINED, {
+      mirrorBranches: true,
+      stateHashes: {
+        "pre_fold:0": { documentHash: "doc-pre", candidateHash: "cand-pre" },
+        "post_fold:1:primary": { documentHash: "doc-1p", candidateHash: "cand-1p" },
+        "post_fold:1:mirror": { documentHash: "doc-1m", candidateHash: "cand-1m" },
+        "post_fold:2:primary": { documentHash: "doc-2p", candidateHash: "cand-2p" },
+        "post_fold:2:mirror": { documentHash: "doc-2m", candidateHash: "cand-2m" }
+      }
+    })
+    expect(lineage[0]?.phase).toBe("pre_fold")
+    expect(lineage.some((e) => e.phase === "post_fold" && e.mirrorBranch === "mirror")).toBe(true)
+    expect(verifyFoldStateHashesDistinct(lineage).ok).toBe(true)
+
+    const colliding = buildFoldStateLineage(CHAINED, {
+      mirrorBranches: true,
+      stateHashes: {
+        "pre_fold:0": { documentHash: "same-hash", candidateHash: "same-cand" },
+        "post_fold:1:primary": { documentHash: "same-hash", candidateHash: "same-cand" }
+      }
+    })
+    expect(verifyFoldStateHashesDistinct(colliding).ok).toBe(false)
   })
 })

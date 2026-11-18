@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F6 / F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F6 折叠多状态谱系与统一候选评估**：在 [foldChain.ts](packages/agent-core/src/foldChain.ts) 与 [foldChain.sequence.test.ts](packages/agent-core/src/foldChain.sequence.test.ts) 新增镜像双枝折叠 `foldMirrorPairAboutHinge`、状态谱系 `buildFoldStateLineage` 与跨状态/分支哈希防复用检验 `verifyFoldStateHashesDistinct`；在 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 为每条切片绑定 `lineageKey` + `documentHash`，抽离 `evaluateFrozenCandidateSet` 统一 Live 与 Offline `CandidateSet` + `PolicyEvaluation` 并硬阻断 `duplicate_lineage_hash` 碰撞（`4` 文件 `27 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **Task F5 三维约束内核求解器**：在 [constraints3d.ts](packages/geometry-kernel/src/constraints3d.ts) 与 [measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts) 新增线面/面面关系、共面残差、线/面垂足投影与闭合流形半边拓扑校验 `verifyClosedPolyhedronTopology3`；新建 [constraintSolve3d.ts](packages/agent-core/src/solver/constraintSolve3d.ts) 与 [constraintSolve3d.test.ts](packages/agent-core/src/solver/constraintSolve3d.test.ts)（覆盖棱柱、棱锥、四面体、垂足、线面/面面、共面、闭合拓扑、棱/面内点定比及开放壳/违背反例，返回 `{ status, residuals, constraintStatus, pointRegistry }`）；接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `35 passed`、`typecheck`、`lint` `0 errors`）。
 

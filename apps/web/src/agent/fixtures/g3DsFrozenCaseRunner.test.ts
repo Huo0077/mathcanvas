@@ -7,6 +7,7 @@ import { createModelPlanner } from "../modelPlanner"
 import {
   aggregateTask6FunnelReport,
   compareLegacySingleVsMultiSliceReplay,
+  evaluateFrozenCandidateSet,
   evaluateTask6LivePreflight,
   projectPublicFrozenCaseInput,
   runFrozenDsCase,
@@ -311,5 +312,37 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
     expect(report.costUsd).toBeNull()
     expect(report.shouldStopBatch).toBe(true)
     expect(report.stopReason).toBe("mixed_read_plan_recurrence")
+  })
+
+  it("binds distinct documentHash/candidateHash per pre_fold/post_fold/mirror lineage and unifies live vs offline CandidateSet evaluation", async () => {
+    const gkp06 = getCase("GK-P06")
+    const pub = projectPublicFrozenCaseInput(gkp06)
+    const validSlices = [
+      makeGkp06Slice(0, "zero"),
+      makeGkp06Slice(1, "positive"),
+      makeGkp06Slice(-1, "negative")
+    ]
+
+    const liveRes = await runFrozenDsCase(
+      pub,
+      async () => ({ modelInvoked: true, slices: validSlices }),
+      createBudget(),
+      { contract: gkp06 }
+    )
+    const offlineEval = evaluateFrozenCandidateSet(pub, validSlices, gkp06)
+    expect(offlineEval.contractStatus).toBe(liveRes.contractStatus)
+    expect(offlineEval.candidateSet.map((c) => c.candidateHash)).toEqual(
+      liveRes.candidateSet.map((c) => c.candidateHash)
+    )
+    expect(offlineEval.candidateSet.every((c) => c.documentHash.length > 10 && c.lineageKey.length > 0)).toBe(true)
+
+    const duplicateMirrorDoc = makeGkp06Slice(1, "mirror").document
+    const collidingSlices: CandidateSliceArtifact[] = [
+      { scopeId: "(2)", stateId: "pre_fold", branchId: "primary", document: duplicateMirrorDoc },
+      { scopeId: "(2)", stateId: "post_fold", branchId: "mirror", document: duplicateMirrorDoc }
+    ]
+    const collisionEval = evaluateFrozenCandidateSet(pub, collidingSlices, gkp06)
+    expect(collisionEval.contractStatus).toBe("failed")
+    expect(collisionEval.candidateSet.some((c) => c.certificateStatus === "blocked")).toBe(true)
   })
 })

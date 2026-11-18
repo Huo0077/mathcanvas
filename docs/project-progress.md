@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F6：折叠多状态分支谱系与统一候选评估（0 付费；下一步 Task F7）
+
+- **状态与证据**：在 [foldChain.ts](packages/agent-core/src/foldChain.ts) 新增 `foldMirrorPairAboutHinge`、`buildFoldStateLineage` 与 `verifyFoldStateHashesDistinct` 并在 [foldChain.sequence.test.ts](packages/agent-core/src/foldChain.sequence.test.ts) 验证；在 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 绑定 `lineageKey` / `documentHash` 并导出 `evaluateFrozenCandidateSet` 统一 Live 与 Offline 候选集评估。先 RED 后 GREEN，`4` 文件 **`27 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F6 审计](audit/g3-final-f6/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F7（局部修复闭环 `repairProgress`）**。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F5：三维约束内核求解器 `constraintSolve3d`（0 付费；下一步 Task F6）
 
 - **状态与证据**：在 [constraints3d.ts](packages/geometry-kernel/src/constraints3d.ts) 与 [measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts) 新增线面/面面关系、共面残差、垂足投影与闭合流形半边拓扑校验，新建 [constraintSolve3d.ts](packages/agent-core/src/solver/constraintSolve3d.ts) 与 [constraintSolve3d.test.ts](packages/agent-core/src/solver/constraintSolve3d.test.ts)，接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`35 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F5 审计](audit/g3-final-f5/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F6（折叠与多状态分支及统一候选评估）**。
