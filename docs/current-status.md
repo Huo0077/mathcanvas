@@ -1,7 +1,8 @@
 # MathCanvas 当前状态
 
-## 2026-11-18 —— G3-F9 内核动作修复 **Task 0–3 已完成**（0 新增付费；推进 Task 4）
+## 2026-11-18 —— G3-F9 内核动作修复 **Task 0–4 已完成**（0 新增付费；推进 Task 5 零付费门禁）
 
+- **`G3-F9 Task 4`（Live 多范围 / 多状态 / 多分支 `CandidateSet` 接线）已完成（0 新增付费）**：[coordinatorPorts.ts](../packages/agent-core/src/coordinatorPorts.ts)、[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts)、[modelPlanner.ts](../apps/web/src/agent/modelPlanner.ts)、[g3DsFrozenCaseRunner.ts](../apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [drawingContracts.ts](../scripts/reliability-eval/drawingContracts.ts) 已打通 `ds_action` 分支画布隔离、`PlanOutcome.candidateSlices` 回传、开放折面 `buildOpenSurface` 拓扑核验及 `before_fold/after_fold` 独立证书认证（`g3DsFrozenCaseRunner.test.ts` + `dsActionTools.test.ts` + `modelPlanner.test.ts` + `drawingContracts.test.ts` **`4` 文件 `131 passed`**，`typecheck` 退出 `0`，`lint` `0 errors`，详见 [Task 4 审计报告](./audit/g3-f9-repair-t4/README.md)）。
 - **`G3-F9 Task 3`（有界修复停滞保护与预算不双扣）已完成（0 新增付费）**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 为每条动作回执附带 `toolName` + `progressSignature`，在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 精准区分“无进展连续相同签名（`<=2` 次熔断）”与“合法修复推进”，并消除 `beforeProviderRequest` 与 `ds_action` 内部 `network` 预算双扣。实测 `3` 文件 **`83 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task 3 审计](audit/g3-f9-repair-t3/README.md)，**下一步进入 Task 4（Live 多问 / 多状态 / 多分支 `CandidateSet` 接线）**。
 
 - **`G3-F9 Task 2`（面/底座/折叠动作与真实内核读数）已完成（0 新增付费）**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 落地 `construct_base`、`construct_face`、`construct_fold_state`、3D `construct_point` / `construct_segment` 及真实只读 `query_measurement`、`query_constraint_status`（同步支持 `rollback` 点表/切片清理，共线/非共面/退化折叠均拒绝，且 22 项 `DS_ACTION_CLOSED_SET` 已全数具备真实内核或受控只读实现）。实测 `4` 文件 **`27 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task 2 审计](audit/g3-f9-repair-t2/README.md)。

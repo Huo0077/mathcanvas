@@ -973,7 +973,26 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
             const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
             if (execRes.terminated !== undefined) {
-              return { plan: execRes.terminated.plan, ...ids }
+              const candidateSlices =
+                execRes.terminated.slices && execRes.terminated.slices.length > 0
+                  ? execRes.terminated.slices.map((s) => ({
+                      scopeId: s.scopeId,
+                      ...(s.stateId === undefined ? {} : { stateId: s.stateId }),
+                      ...(s.branchId === undefined ? {} : { branchId: s.branchId }),
+                      plan: {
+                        schemaVersion: execRes.terminated!.plan.schemaVersion,
+                        kind: "plan" as const,
+                        goal: execRes.terminated!.plan.goal,
+                        factIds: [] as string[],
+                        actions: [...s.actions]
+                      }
+                    }))
+                  : undefined
+              return {
+                plan: execRes.terminated.plan,
+                ...ids,
+                ...(candidateSlices === undefined ? {} : { candidateSlices })
+              }
             }
             const isConstructive = !NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action)
             if (isConstructive && execRes.ok && !execRes.stateChanged) {

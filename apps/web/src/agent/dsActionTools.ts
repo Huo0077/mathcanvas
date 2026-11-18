@@ -1,4 +1,4 @@
-import type { Coordinate, GeometryDocument, Vector3 } from "@draw/dsl"
+import { createEmptyDocument, type Coordinate, type GeometryDocument, type Vector3 } from "@draw/dsl"
 import {
   DS_ACTION_CLOSED_SET,
   PLAN_SCHEMA_VERSION,
@@ -54,7 +54,10 @@ export interface DsActionExecutionResult {
   readonly constraintStatus?: string
   readonly repairHint?: string
   readonly blockerCode?: string
-  readonly terminated?: { readonly plan: PlanEnvelope }
+  readonly terminated?: {
+    readonly plan: PlanEnvelope
+    readonly slices?: readonly DsActionStateSlice[]
+  }
 }
 
 type DsActionRawResult = Omit<DsActionExecutionResult, "toolName" | "progressSignature">
@@ -437,12 +440,73 @@ export function createDsActionSession(options: {
   const points3 = new Map<string, Vector3>()
   const lines2 = new Map<string, { a: Coordinate; b: Coordinate }>()
   const conics2 = new Map<string, PlanarConic>()
+  const branchPoints2 = new Map<string, Map<string, Coordinate>>()
+  const branchPoints3 = new Map<string, Map<string, Vector3>>()
+  const branchLines2 = new Map<string, Map<string, { a: Coordinate; b: Coordinate }>>()
+  const branchConics2 = new Map<string, Map<string, PlanarConic>>()
+  const sharedBranchlessActions: DraftAction[] = []
+  const branchActionBuckets = new Map<string, { scopeId: string; stateId?: string; branchId: string; actions: DraftAction[] }>()
+  const branchCanvases = new Map<string, ReturnType<typeof createSpeculativeCanvas>>()
+  let monotonicActionSeq = 0
+  const getTargetCanvas = (branchId?: string) => {
+    if (!branchId) return speculative
+    let canvas = branchCanvases.get(branchId)
+    if (!canvas) {
+      canvas = createSpeculativeCanvas(
+        options.baseDocument ?? createEmptyDocument(options.workspace)
+      )
+      for (const act of sharedBranchlessActions) {
+        canvas.applyAction(act)
+      }
+      branchCanvases.set(branchId, canvas)
+    }
+    return canvas
+  }
   const relations: Array<{ kind: string; targets: string[] }> = []
   const recordedSlices: DsActionStateSlice[] = []
-  const sliceHistory: Array<DsActionStateSlice[]> = [[]]
+  const sliceHistory: Array<{
+    slices: DsActionStateSlice[]
+    sharedActions: DraftAction[]
+    branchBuckets: Array<[string, { scopeId: string; stateId?: string; branchId: string; actions: DraftAction[] }]>
+  }> = [{ slices: [], sharedActions: [], branchBuckets: [] }]
   const pointHistory: Array<{ points2: Map<string, Coordinate>; points3: Map<string, Vector3> }> = [
     { points2: new Map(), points3: new Map() }
   ]
+
+  const branchMapGet = <T>(
+    sharedMap: Map<string, T>,
+    branchMaps: Map<string, Map<string, T>>,
+    key: string,
+    branchId?: string
+  ): T | undefined => (branchId ? branchMaps.get(branchId)?.get(key) : undefined) ?? sharedMap.get(key)
+
+  const branchMapSet = <T>(
+    sharedMap: Map<string, T>,
+    branchMaps: Map<string, Map<string, T>>,
+    key: string,
+    val: T,
+    branchId?: string
+  ) => {
+    if (!branchId) {
+      sharedMap.set(key, val)
+      return
+    }
+    let m = branchMaps.get(branchId)
+    if (!m) {
+      m = new Map<string, T>()
+      branchMaps.set(branchId, m)
+    }
+    m.set(key, val)
+  }
+
+  const readP2 = (key: string, branchId?: string) => branchMapGet(points2, branchPoints2, key, branchId)
+  const writeP2 = (key: string, val: Coordinate, branchId?: string) => branchMapSet(points2, branchPoints2, key, val, branchId)
+  const readP3 = (key: string, branchId?: string) => branchMapGet(points3, branchPoints3, key, branchId)
+  const writeP3 = (key: string, val: Vector3, branchId?: string) => branchMapSet(points3, branchPoints3, key, val, branchId)
+  const readL2 = (key: string, branchId?: string) => branchMapGet(lines2, branchLines2, key, branchId)
+  const writeL2 = (key: string, val: { a: Coordinate; b: Coordinate }, branchId?: string) => branchMapSet(lines2, branchLines2, key, val, branchId)
+  const readC2 = (key: string, branchId?: string) => branchMapGet(conics2, branchConics2, key, branchId)
+  const writeC2 = (key: string, val: PlanarConic, branchId?: string) => branchMapSet(conics2, branchConics2, key, val, branchId)
 
   const upsertSlice = (slice: DsActionStateSlice) => {
     const key = `${slice.scopeId}::${slice.stateId ?? ""}::${slice.branchId ?? ""}`
@@ -487,10 +551,12 @@ export function createDsActionSession(options: {
     actionName: DsActionName,
     draftAction: DraftAction,
     entityId?: string,
-    position?: Coordinate
+    position?: Coordinate,
+    sliceTarget?: { readonly scopeId: string; readonly stateId?: string; readonly branchId?: string }
   ): DsActionRawResult => {
-    const before = speculative.snapshot()
-    const step = speculative.applyAction(draftAction)
+    const canvas = getTargetCanvas(sliceTarget?.branchId)
+    const before = canvas.snapshot()
+    const step = canvas.applyAction(draftAction)
     if (!step.ok) {
       return {
         ok: false,
@@ -505,8 +571,44 @@ export function createDsActionSession(options: {
         repairHint: step.detail ?? "adjust parameters and retry"
       }
     }
+    if (sliceTarget?.branchId) {
+      const bKey = `${sliceTarget.scopeId}::${sliceTarget.stateId ?? ""}::${sliceTarget.branchId}`
+      let bucket = branchActionBuckets.get(bKey)
+      if (!bucket) {
+        bucket = {
+          scopeId: sliceTarget.scopeId,
+          ...(sliceTarget.stateId === undefined ? {} : { stateId: sliceTarget.stateId }),
+          branchId: sliceTarget.branchId,
+          actions: [...sharedBranchlessActions]
+        }
+        branchActionBuckets.set(bKey, bucket)
+      }
+      bucket.actions.push(draftAction)
+      upsertSlice({
+        scopeId: sliceTarget.scopeId,
+        ...(sliceTarget.stateId === undefined ? {} : { stateId: sliceTarget.stateId }),
+        branchId: sliceTarget.branchId,
+        candidateHash: step.candidateHash,
+        actions: [...bucket.actions]
+      })
+    } else {
+      sharedBranchlessActions.push(draftAction)
+      if (sliceTarget?.stateId !== undefined) {
+        const curSnap = canvas.snapshot()
+        upsertSlice({
+          scopeId: sliceTarget.scopeId,
+          stateId: sliceTarget.stateId,
+          candidateHash: curSnap.candidateHash,
+          actions: [...curSnap.actions]
+        })
+      }
+    }
     pointHistory.push({ points2: new Map(points2), points3: new Map(points3) })
-    sliceHistory.push([...recordedSlices])
+    sliceHistory.push({
+      slices: [...recordedSlices],
+      sharedActions: [...sharedBranchlessActions],
+      branchBuckets: [...branchActionBuckets.entries()].map(([k, v]) => [k, { ...v, actions: [...v.actions] }])
+    })
     return {
       ok: true,
       status: "accepted",
@@ -522,7 +624,11 @@ export function createDsActionSession(options: {
 
   const executeRaw = (toolName: string, rawInput: unknown): DsActionRawResult => {
       const parsed = parseDsActionToolCall(toolName, rawInput)
-      const snap = speculative.snapshot()
+      const branchHint =
+        rawInput && typeof rawInput === "object"
+          ? (asString((rawInput as Record<string, unknown>).branchId) ?? undefined)
+          : undefined
+      const snap = getTargetCanvas(branchHint).snapshot()
       if (!parsed.ok) {
         return {
           ok: false,
@@ -537,7 +643,7 @@ export function createDsActionSession(options: {
         }
       }
       const { name, input } = parsed
-      const stepSeq = snap.stepIndex + 1
+      const stepSeq = ++monotonicActionSeq
 
       if (name === "declare_entity") {
         const id = asString(input.id)
@@ -766,9 +872,15 @@ export function createDsActionSession(options: {
         for (const [k, v] of snapshotPts.points2) points2.set(k, v)
         points3.clear()
         for (const [k, v] of snapshotPts.points3) points3.set(k, v)
-        const snapSlices = sliceHistory[Math.min(rolled.stepIndex, sliceHistory.length - 1)] ?? []
+        const snapSliceState = sliceHistory[Math.min(rolled.stepIndex, sliceHistory.length - 1)]
         sliceHistory.length = Math.max(1, rolled.stepIndex + 1)
-        recordedSlices.splice(0, recordedSlices.length, ...snapSlices)
+        recordedSlices.splice(0, recordedSlices.length, ...(snapSliceState?.slices ?? []))
+        sharedBranchlessActions.splice(0, sharedBranchlessActions.length, ...(snapSliceState?.sharedActions ?? []))
+        branchActionBuckets.clear()
+        branchCanvases.clear()
+        for (const [bk, bv] of snapSliceState?.branchBuckets ?? []) {
+          branchActionBuckets.set(bk, { ...bv, actions: [...bv.actions] })
+        }
         return {
           ok: true,
           status: "accepted",
@@ -784,41 +896,47 @@ export function createDsActionSession(options: {
         const id = asString(input.id ?? input.output) ?? `P${stepSeq}`
         const label = asString(input.label) ?? id
         const scopeId = asString(input.scopeId) ?? "shared"
-        const stateId = asString(input.stateId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const stateId = explicitStateId ?? "shared"
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const fromId = asString(input.from)
         const toId = asString(input.to)
         const ratio = asFiniteNumber(input.ratio)
 
         if (fromId && toId && ratio !== null) {
-          const p3A = points3.get(fromId)
-          const p3B = points3.get(toId)
+          const p3A = readP3(fromId, branchId)
+          const p3B = readP3(toId, branchId)
           if (p3A && p3B) {
             const solved = solveConstraint3d({ kind: "interior_ratio", targetKind: "edge", anchors: [p3A, p3B], ratio, resultName: id })
             const pos3 = solved.status === "solved" ? solved.pointRegistry[id] : undefined
             if (!pos3) return failRepairable(name, "invalid_ratio", solved.reason ?? "ratio must fall in [0, 1]")
-            points3.set(id, pos3)
-            points3.set(label, pos3)
+            writeP3(id, pos3, branchId)
+            writeP3(label, pos3, branchId)
             entities.set(id, { id, kind: "point", scopeId, stateId })
             return stageDraftAction(
               name,
               { actionId: "solid.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, position: pos3 } } as DraftAction,
-              id
+              id,
+              undefined,
+              sliceTarget
             )
           }
-          const p2A = points2.get(fromId)
-          const p2B = points2.get(toId)
+          const p2A = readP2(fromId, branchId)
+          const p2B = readP2(toId, branchId)
           if (p2A && p2B) {
             const solved2 = solveConstraint2d({ kind: "segment_ratio", a: p2A, b: p2B, ratio, splitBetween: true })
             const pos2 = solved2.status === "solved" ? solved2.roots[0]?.point : undefined
             if (!pos2) return failRepairable(name, "invalid_ratio", solved2.reason ?? "ratio out of range")
-            points2.set(id, pos2)
-            points2.set(label, pos2)
+            writeP2(id, pos2, branchId)
+            writeP2(label, pos2, branchId)
             entities.set(id, { id, kind: "point", scopeId, stateId })
             return stageDraftAction(
               name,
               { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [pos2] } },
               id,
-              pos2
+              pos2,
+              sliceTarget
             )
           }
           return failRepairable(name, "undeclared_entity_ref", `missing endpoint(s) "${fromId}", "${toId}"`)
@@ -832,51 +950,60 @@ export function createDsActionSession(options: {
             return failRepairable(name, "missing_required_parameter", "3D construct_point requires finite x, y, z or edge ratio (from, to, ratio)")
           }
           const pos3: Vector3 = { x, y, z }
-          points3.set(id, pos3)
-          points3.set(label, pos3)
+          writeP3(id, pos3, branchId)
+          writeP3(label, pos3, branchId)
           entities.set(id, { id, kind: "point", scopeId, stateId })
           return stageDraftAction(
             name,
             { actionId: "solid.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, position: pos3 } } as DraftAction,
-            id
+            id,
+            undefined,
+            sliceTarget
           )
         }
         if (x === null || y === null) {
           return failRepairable(name, "missing_required_parameter", "construct_point requires finite x and y coordinates")
         }
         const pt = { x, y }
-        points2.set(id, pt)
-        points2.set(label, pt)
+        writeP2(id, pt, branchId)
+        writeP2(label, pt, branchId)
         entities.set(id, { id, kind: "point", scopeId, stateId })
         return stageDraftAction(
           name,
           { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [pt] } },
           id,
-          pt
+          pt,
+          sliceTarget
         )
       }
 
       if (name === "construct_segment" || name === "construct_line") {
         const id = asString(input.id ?? input.output) ?? `L${stepSeq}`
         const label = asString(input.label) ?? id
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const fromId = asString(input.from)
         const toId = asString(input.to)
-        const p3A = fromId ? points3.get(fromId) : undefined
-        const p3B = toId ? points3.get(toId) : undefined
+        const p3A = fromId ? readP3(fromId, branchId) : undefined
+        const p3B = toId ? readP3(toId, branchId) : undefined
         if (p3A && p3B && fromId && toId) {
           return stageDraftAction(
             name,
             { actionId: "solid.create_segment", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, vertexNames: [fromId, toId] } } as DraftAction,
-            id
+            id,
+            undefined,
+            sliceTarget
           )
         }
-        const p1 = fromId ? points2.get(fromId) : undefined
-        const p2 = toId ? points2.get(toId) : undefined
+        const p1 = fromId ? readP2(fromId, branchId) : undefined
+        const p2 = toId ? readP2(toId, branchId) : undefined
         if (!p1 || !p2) {
           return failRepairable(name, "undeclared_entity_ref", `construct points before referencing "${fromId ?? "?"}" and "${toId ?? "?"}"`)
         }
-        lines2.set(id, { a: p1, b: p2 })
-        lines2.set(label, { a: p1, b: p2 })
+        writeL2(id, { a: p1, b: p2 }, branchId)
+        writeL2(label, { a: p1, b: p2 }, branchId)
         return stageDraftAction(
           name,
           {
@@ -885,25 +1012,33 @@ export function createDsActionSession(options: {
             factIds: [],
             inputs: { alias: id, label, points: [p1, p2] }
           },
-          id
+          id,
+          undefined,
+          sliceTarget
         )
       }
 
       if (name === "construct_intersection") {
         const outId = asString(input.output ?? input.id) ?? `X${stepSeq}`
-        const lA = asString(input.lineA) ? lines2.get(String(input.lineA)) : undefined
-        const lB = asString(input.lineB) ? lines2.get(String(input.lineB)) : undefined
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
+        const lA = asString(input.lineA) ? readL2(String(input.lineA), branchId) : undefined
+        const lB = asString(input.lineB) ? readL2(String(input.lineB), branchId) : undefined
         const conicId = asString(input.conicId)
-        if (lA && conicId && conics2.has(conicId)) {
-          const res = intersectPlanarLineAndConicExact({ type: "line", a: lA.a, b: lA.b }, conics2.get(conicId)!)
+        const conic = conicId ? readC2(conicId, branchId) : undefined
+        if (lA && conic) {
+          const res = intersectPlanarLineAndConicExact({ type: "line", a: lA.a, b: lA.b }, conic)
           const pt = res.points[0]
           if (!pt) return failRepairable(name, "no_intersection", "line does not intersect conic")
-          points2.set(outId, pt)
+          writeP2(outId, pt, branchId)
           return stageDraftAction(
             name,
             { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outId, points: [pt] } },
             outId,
-            pt
+            pt,
+            sliceTarget
           )
         }
         if (!lA || !lB) {
@@ -917,17 +1052,23 @@ export function createDsActionSession(options: {
         }
         const t = ((lB.a.x - lA.a.x) * dy2 - (lB.a.y - lA.a.y) * dx2) / det
         const pt = { x: lA.a.x + t * dx1, y: lA.a.y + t * dy1 }
-        points2.set(outId, pt)
+        writeP2(outId, pt, branchId)
         return stageDraftAction(
           name,
           { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outId, points: [pt] } },
           outId,
-          pt
+          pt,
+          sliceTarget
         )
       }
 
       if (name === "construct_circle") {
         const id = asString(input.id ?? input.output) ?? `C${stepSeq}`
+        const label = asString(input.label) ?? id
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const cx = asFiniteNumber(input.cx) ?? 0
         const cy = asFiniteNumber(input.cy) ?? 0
         const r = asFiniteNumber(input.radius)
@@ -935,19 +1076,45 @@ export function createDsActionSession(options: {
           return failRepairable(name, "missing_required_parameter", "construct_circle requires positive radius")
         }
         const circ: PlanarConic = { id, type: "circle", center: { x: cx, y: cy }, radius: r }
-        conics2.set(id, circ)
+        writeC2(id, circ, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_circle", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label: id, center: { x: cx, y: cy }, radius: r } },
-          id
+          { actionId: "planar.create_circle", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, center: { x: cx, y: cy }, radius: r } },
+          id,
+          undefined,
+          sliceTarget
         )
       }
 
       if (name === "construct_conic") {
         const id = asString(input.id ?? input.output) ?? `C${stepSeq}`
+        const label = asString(input.label) ?? id
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
+        const rawType = asString(input.conicType)?.toLowerCase()
+        if (rawType === "parabola") {
+          const focalParameter = asFiniteNumber(input.focalParameter)
+          const axis = input.axis === "x" ? "x" : "y"
+          const vx = asFiniteNumber(input.vx ?? input.cx) ?? 0
+          const vy = asFiniteNumber(input.vy ?? input.cy) ?? 0
+          if (focalParameter === null || Math.abs(focalParameter) <= 1e-9) {
+            return failRepairable(name, "missing_required_parameter", "parabola requires non-zero focalParameter")
+          }
+          const conic: PlanarConic = { id, type: "parabola", vertex: { x: vx, y: vy }, axis, focalParameter }
+          writeC2(id, conic, branchId)
+          return stageDraftAction(
+            name,
+            { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind: "parabola", vertex: { x: vx, y: vy }, axis, focalParameter } },
+            id,
+            undefined,
+            sliceTarget
+          )
+        }
         const rx = asFiniteNumber(input.radiusX)
         const ry = asFiniteNumber(input.radiusY)
-        const kind = input.conicType === "hyperbola" ? "hyperbola" : "ellipse"
+        const kind = rawType === "hyperbola" ? "hyperbola" : "ellipse"
         if (rx === null || ry === null || !(rx > 0 && ry > 0)) {
           return failRepairable(name, "missing_required_parameter", "construct_conic requires positive radiusX and radiusY")
         }
@@ -955,37 +1122,51 @@ export function createDsActionSession(options: {
           kind === "ellipse"
             ? { id, type: "ellipse", center: { x: 0, y: 0 }, radiusX: rx, radiusY: ry }
             : { id, type: "hyperbola", center: { x: 0, y: 0 }, axis: "x", radiusX: rx, radiusY: ry }
-        conics2.set(id, conic)
+        writeC2(id, conic, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label: id, kind, center: { x: 0, y: 0 }, radiusX: rx, radiusY: ry } },
-          id
+          { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind, center: { x: 0, y: 0 }, radiusX: rx, radiusY: ry } },
+          id,
+          undefined,
+          sliceTarget
         )
       }
 
       if (name === "construct_tangent") {
         const id = asString(input.id ?? input.output) ?? `T${stepSeq}`
+        const label = asString(input.label) ?? id
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const conicId = asString(input.conicId)
         const ptId = asString(input.pointId)
-        const conic = conicId ? conics2.get(conicId) : undefined
-        const pt = ptId ? points2.get(ptId) : undefined
+        const conic = conicId ? readC2(conicId, branchId) : undefined
+        const pt = ptId ? readP2(ptId, branchId) : undefined
         if (!conic || !pt) return failRepairable(name, "undeclared_entity_ref", "construct_tangent requires valid conicId and pointId")
         const tan = tangentLineToConicAt(conic, pt, 5)
         if (!tan) return failRepairable(name, "not_on_conic", "point does not lie on conic")
-        lines2.set(id, { a: tan.line.a, b: tan.line.b })
+        writeL2(id, { a: tan.line.a, b: tan.line.b }, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label: id, points: [tan.line.a, tan.line.b] } },
-          id
+          { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [tan.line.a, tan.line.b] } },
+          id,
+          undefined,
+          sliceTarget
         )
       }
 
       if (name === "construct_perpendicular" || name === "construct_parallel") {
         const id = asString(input.id ?? input.output) ?? `L${stepSeq}`
+        const label = asString(input.label) ?? id
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const lineId = asString(input.lineId)
         const ptId = asString(input.throughPointId)
-        const ref = lineId ? lines2.get(lineId) : undefined
-        const pt = ptId ? points2.get(ptId) : undefined
+        const ref = lineId ? readL2(lineId, branchId) : undefined
+        const pt = ptId ? readP2(ptId, branchId) : undefined
         if (!ref || !pt) return failRepairable(name, "undeclared_entity_ref", `${name} requires existing lineId and throughPointId`)
         const dx = ref.b.x - ref.a.x
         const dy = ref.b.y - ref.a.y
@@ -998,16 +1179,19 @@ export function createDsActionSession(options: {
           { x: pt.x - dirX * 5, y: pt.y - dirY * 5 },
           { x: pt.x + dirX * 5, y: pt.y + dirY * 5 }
         ]
-        lines2.set(id, { a: endpoints[0], b: endpoints[1] })
+        writeL2(id, { a: endpoints[0], b: endpoints[1] }, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label: id, points: endpoints } },
-          id
+          { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: endpoints } },
+          id,
+          undefined,
+          sliceTarget
         )
       }
 
       if (name === "finish_candidate") {
-        if (snap.actions.length === 0) {
+        const primaryActions = snap.actions.length > 0 ? snap.actions : recordedSlices[0]?.actions ?? []
+        if (primaryActions.length === 0) {
           return failRepairable(name, "empty_candidate", "stage at least one geometric action before finish_candidate")
         }
         const plan: PlanEnvelope = {
@@ -1015,7 +1199,7 @@ export function createDsActionSession(options: {
           kind: "plan",
           goal: asString(input.goal) ?? "DS 动作级构图候选",
           factIds: [],
-          actions: [...snap.actions]
+          actions: [...primaryActions]
         }
         return {
           ok: true,
@@ -1025,7 +1209,10 @@ export function createDsActionSession(options: {
           candidateHash: snap.candidateHash,
           stepIndex: snap.stepIndex,
           primitiveCount: snap.primitiveCount,
-          terminated: { plan }
+          terminated: {
+            plan,
+            ...(recordedSlices.length > 0 ? { slices: [...recordedSlices] } : {})
+          }
         }
       }
 
@@ -1078,6 +1265,14 @@ export function createDsActionSession(options: {
         for (const [vn, pt] of Object.entries(solved.pointRegistry)) {
           points3.set(vn, pt)
         }
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = {
+          scopeId,
+          ...(explicitStateId === undefined ? {} : { stateId: explicitStateId }),
+          ...(branchId === undefined ? {} : { branchId })
+        }
         const staged = stageDraftAction(
           name,
           {
@@ -1086,23 +1281,20 @@ export function createDsActionSession(options: {
             factIds: [],
             inputs: { alias: id, label, vertices, vertexNames, faces }
           } as DraftAction,
-          id
+          id,
+          undefined,
+          sliceTarget
         )
         if (!staged.ok) {
           const rollbackSnap = pointHistory[Math.min(snap.stepIndex, pointHistory.length - 1)]!
           points3.clear()
           for (const [k, v] of rollbackSnap.points3) points3.set(k, v)
-        } else {
-          const scopeId = asString(input.scopeId) ?? "shared"
-          const stateId = asString(input.stateId) ?? "shared"
-          const branchId = asString(input.branchId) ?? undefined
+        } else if (!branchId && !explicitStateId) {
           const curSnap = speculative.snapshot()
           upsertSlice({
             scopeId,
-            stateId,
-            ...(branchId === undefined ? {} : { branchId }),
             candidateHash: curSnap.candidateHash,
-            actions: curSnap.actions
+            actions: [...curSnap.actions]
           })
         }
         return staged
@@ -1111,6 +1303,9 @@ export function createDsActionSession(options: {
       if (name === "construct_base") {
         const shape = asString(input.shape ?? input.kind)?.toLowerCase() ?? "rectangle"
         const mappedKind = shape === "triangle" ? "triangular_prism" : shape
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const stateId = asString(input.stateId) ?? "before_fold"
+        const branchId = asString(input.branchId) ?? undefined
         const base = resolveBasePolygonFromParams(mappedKind, input, points3)
         if (!base.ok) {
           return base.status === "blocked"
@@ -1124,8 +1319,8 @@ export function createDsActionSession(options: {
         const id = asString(input.id ?? input.output) ?? `BASE_${stepSeq}`
         const label = asString(input.label) ?? id
         for (const bv of baseVertices) {
-          points3.set(bv.name, bv.point)
-          points2.set(bv.name, { x: bv.point.x, y: bv.point.y })
+          writeP3(bv.name, bv.point, branchId)
+          writeP2(bv.name, { x: bv.point.x, y: bv.point.y }, branchId)
         }
         const staged = stageDraftAction(
           name,
@@ -1140,7 +1335,9 @@ export function createDsActionSession(options: {
               vertexNames: baseVertices.map((bv) => bv.name)
             }
           } as DraftAction,
-          id
+          id,
+          undefined,
+          { scopeId, stateId, ...(branchId === undefined ? {} : { branchId }) }
         )
         if (!staged.ok) {
           const rollbackSnap = pointHistory[Math.min(snap.stepIndex, pointHistory.length - 1)]!
@@ -1148,14 +1345,6 @@ export function createDsActionSession(options: {
           for (const [k, v] of rollbackSnap.points3) points3.set(k, v)
           points2.clear()
           for (const [k, v] of rollbackSnap.points2) points2.set(k, v)
-        } else {
-          const curSnap = speculative.snapshot()
-          upsertSlice({
-            scopeId: asString(input.scopeId) ?? "shared",
-            stateId: asString(input.stateId) ?? "before_fold",
-            candidateHash: curSnap.candidateHash,
-            actions: curSnap.actions
-          })
         }
         return staged
       }
@@ -1168,9 +1357,13 @@ export function createDsActionSession(options: {
         if (new Set(vertexNames).size !== vertexNames.length) {
           return failRepairable(name, "duplicate_vertex_name", "construct_face vertexNames must be distinct")
         }
+        const scopeId = asString(input.scopeId) ?? "shared"
+        const explicitStateId = asString(input.stateId) ?? undefined
+        const branchId = asString(input.branchId) ?? undefined
+        const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const verts: Vector3[] = []
         for (const vn of vertexNames) {
-          const pt = points3.get(vn)
+          const pt = readP3(vn, branchId)
           if (!pt) return failRepairable(name, "undeclared_entity_ref", `undeclared 3D vertex "${vn}"`)
           verts.push(pt)
         }
@@ -1194,7 +1387,9 @@ export function createDsActionSession(options: {
             factIds: [],
             inputs: { alias: id, label, vertices: verts, vertexNames }
           } as DraftAction,
-          id
+          id,
+          undefined,
+          sliceTarget
         )
       }
 

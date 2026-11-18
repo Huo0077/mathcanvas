@@ -345,4 +345,151 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
     expect(collisionEval.contractStatus).toBe("failed")
     expect(collisionEval.candidateSet.some((c) => c.certificateStatus === "blocked")).toBe(true)
   })
+
+  it("Task 4 executes live ds_action multi-state fold (GK-S02) into independent CandidateSet slices passing contract evaluation", async () => {
+    const gks02 = getCase("GK-S02")
+    const pub = projectPublicFrozenCaseInput(gks02)
+    const r = Math.sqrt(3)
+    const calls = [
+      { id: "d1", name: "construct_point", input: { id: "D", label: "D", x: 0, y: 0, z: 0, scopeId: "(2)", stateId: "before_fold" } },
+      { id: "d2", name: "construct_point", input: { id: "C", label: "C", x: 0, y: 3, z: 0, scopeId: "(2)", stateId: "before_fold" } },
+      { id: "d3", name: "construct_point", input: { id: "B", label: "B", x: r, y: 4, z: 0, scopeId: "(2)", stateId: "before_fold" } },
+      { id: "d4", name: "construct_point", input: { id: "A", label: "A", x: 5 * r, y: 0, z: 0, scopeId: "(2)", stateId: "before_fold" } },
+      { id: "d5", name: "construct_point", input: { id: "E", label: "E", from: "A", to: "D", ratio: 0.4, scopeId: "(2)", stateId: "before_fold" } },
+      { id: "d6", name: "construct_point", input: { id: "F", label: "F", from: "A", to: "B", ratio: 0.5, scopeId: "(2)", stateId: "before_fold" } },
+      {
+        id: "d7",
+        name: "construct_fold_state",
+        input: {
+          id: "fold",
+          label: "PEF",
+          vertexNames: ["A", "E", "F"],
+          hinge: { from: "E", to: "F" },
+          apex: "A",
+          apexAs: "P",
+          angle: 90,
+          scopeId: "(2)",
+          preStateId: "before_fold",
+          stateId: "after_fold"
+        }
+      },
+      {
+        id: "d8",
+        name: "construct_face",
+        input: {
+          id: "base",
+          label: "EDCBEF",
+          vertexNames: ["E", "D", "C", "B", "F"],
+          scopeId: "(2)",
+          stateId: "after_fold"
+        }
+      },
+      { id: "d9", name: "finish_candidate", input: { goal: "GK-S02 fold construction" } }
+    ]
+
+    const providerStub = {
+      id: "deepseek",
+      modelId: "deepseek-v4-flash",
+      dialect: "openai" as const,
+      revision: 2,
+      capabilities: { tools: "verified" as const, json: "verified" as const, vision: "unknown" as const }
+    }
+    let idx = 0
+    const seenRequests: unknown[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: providerStub }),
+      async runModel(req) {
+        seenRequests.push(req)
+        const next = calls[idx++]!
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: `r-${idx}`, attemptId: `a-${idx}`, toolCallId: next.id, toolId: next.name, input: next.input }]
+        }
+      }
+    })
+
+    const res = await runFrozenDsCase(pub, planner, createBudget({ network: 20, generation: 20, tool: 30 }), { contract: gks02 })
+    expect(JSON.stringify(seenRequests)).not.toContain("requiredObligations")
+    expect(JSON.stringify(seenRequests)).not.toContain("expectedResult")
+    expect(res.candidateSet.map((s) => s.stateId)).toEqual(["before_fold", "after_fold"])
+    expect(new Set(res.candidateSet.map((s) => s.candidateHash)).size).toBe(2)
+    expect(res.candidateSet.every((s) => s.certificateStatus === "passed"), JSON.stringify(res.candidateSet)).toBe(true)
+    expect(res.contractStatus).toBe("passed")
+  })
+
+  it("Task 4 executes live ds_action multi-branch (GK-P06) into independent CandidateSet slices and rejects missing branches", async () => {
+    const gkp06 = getCase("GK-P06")
+    const pub = projectPublicFrozenCaseInput(gkp06)
+    const providerStub = {
+      id: "deepseek",
+      modelId: "deepseek-v4-flash",
+      dialect: "openai" as const,
+      revision: 2,
+      capabilities: { tools: "verified" as const, json: "verified" as const, vision: "unknown" as const }
+    }
+    const buildBranchCalls = (d: number, branchId: string, prefix: string) => {
+      const aX = d + Math.sqrt(d * d + 1)
+      const bX = d - Math.sqrt(d * d + 1)
+      return [
+        { id: `${prefix}-1`, name: "construct_point", input: { id: "D", label: "D", x: d, y: -0.5, scopeId: "(2)", branchId } },
+        { id: `${prefix}-2`, name: "construct_point", input: { id: "A", label: "A", x: aX, y: (aX * aX) / 2, scopeId: "(2)", branchId } },
+        { id: `${prefix}-3`, name: "construct_point", input: { id: "B", label: "B", x: bX, y: (bX * bX) / 2, scopeId: "(2)", branchId } },
+        { id: `${prefix}-4`, name: "construct_point", input: { id: "M", label: "M", x: d, y: d * d + 0.5, scopeId: "(2)", branchId } },
+        { id: `${prefix}-5`, name: "construct_point", input: { id: "E_pt", label: "E", x: 0, y: 2.5, scopeId: "(2)", branchId } },
+        { id: `${prefix}-6`, name: "construct_circle", input: { id: "E", label: "E", cx: 0, cy: 2.5, radius: Math.hypot(d, 2 - d * d), scopeId: "(2)", branchId } },
+        { id: `${prefix}-7`, name: "construct_line", input: { id: "DA", label: "DA", from: "D", to: "A", scopeId: "(2)", branchId } },
+        { id: `${prefix}-8`, name: "construct_line", input: { id: "DB", label: "DB", from: "D", to: "B", scopeId: "(2)", branchId } },
+        { id: `${prefix}-9`, name: "construct_line", input: { id: "AB", label: "AB", from: "A", to: "B", scopeId: "(2)", branchId } }
+      ]
+    }
+    const calls = [
+      { id: "c0", name: "construct_conic", input: { id: "C", label: "C", conicType: "parabola", focalParameter: 1, scopeId: "(2)" } },
+      ...buildBranchCalls(0, "zero", "b0"),
+      ...buildBranchCalls(1, "positive", "b1"),
+      ...buildBranchCalls(-1, "negative", "b2"),
+      { id: "done", name: "finish_candidate", input: { goal: "GK-P06 3 branches" } }
+    ]
+
+    let idx = 0
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: providerStub }),
+      async runModel() {
+        const next = calls[idx++]!
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: `r-${idx}`, attemptId: `a-${idx}`, toolCallId: next.id, toolId: next.name, input: next.input }]
+        }
+      }
+    })
+
+    const res = await runFrozenDsCase(pub, planner, createBudget({ network: 40, generation: 40, tool: 60 }), { contract: gkp06 })
+    expect(res.candidateSet.map((s) => s.branchId)).toEqual(["zero", "positive", "negative"])
+    expect(new Set(res.candidateSet.map((s) => s.candidateHash)).size).toBe(3)
+    expect(res.candidateSet.every((s) => s.certificateStatus === "passed"), JSON.stringify(res.candidateSet)).toBe(true)
+    expect(res.contractStatus).toBe("passed")
+
+    // Counterexample: omitting one branch must produce incomplete (not pass).
+    const twoBranchCalls = [
+      { id: "c0", name: "construct_conic", input: { id: "C", label: "C", conicType: "parabola", focalParameter: 1, scopeId: "(2)" } },
+      ...buildBranchCalls(0, "zero", "b0"),
+      ...buildBranchCalls(1, "positive", "b1"),
+      { id: "done", name: "finish_candidate", input: { goal: "GK-P06 missing negative" } }
+    ]
+    let idx2 = 0
+    const plannerMissing = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: providerStub }),
+      async runModel() {
+        const next = twoBranchCalls[idx2++]!
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: `m-${idx2}`, attemptId: `ma-${idx2}`, toolCallId: next.id, toolId: next.name, input: next.input }]
+        }
+      }
+    })
+    const resMissing = await runFrozenDsCase(pub, plannerMissing, createBudget({ network: 40, generation: 40, tool: 60 }), { contract: gkp06 })
+    expect(resMissing.contractStatus).toBe("incomplete")
+  })
 })

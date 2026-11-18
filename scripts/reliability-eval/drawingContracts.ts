@@ -398,9 +398,27 @@ function evaluatePolyhedronTopology(
     const actual = primitive.vertexIds.map(nameFor)
     return actual.every((name) => name !== null) && new Set(actual).size === actual.length && actual.length === expectedVertices.length && expectedVertices.every((name) => actual.includes(name))
   })
-  if (matchingSolids.length === 0) return { passed: false, detail: `missing named polyhedron ${check.solidId ?? "candidate"}` }
-  if (expectedVertices !== undefined && matchingSolids.length !== 1) return { passed: false, detail: "ambiguous named polyhedron" }
-  for (const solid of matchingSolids) {
+  let resolvedSolids = matchingSolids
+  if (resolvedSolids.length === 0 && check.open === true) {
+    const openFaces = prims.filter(
+      (primitive) => primitive.type === "face3" && Array.isArray(primitive.pointIds) && typeof primitive.id === "string"
+    )
+    if (openFaces.length >= 2) {
+      const vertexIds = [...new Set(openFaces.flatMap((f) => (f.pointIds as unknown[]).filter((id): id is string => typeof id === "string")))]
+      const actual = vertexIds.map(nameFor)
+      const namesOk =
+        actual.every((name) => name !== null) &&
+        new Set(actual).size === actual.length &&
+        (expectedVertices === undefined ||
+          (actual.length === expectedVertices.length && expectedVertices.every((name) => actual.includes(name))))
+      if (namesOk) {
+        resolvedSolids = [{ type: "polyhedron3", id: check.solidId ?? "open-faces", vertexIds, faceIds: openFaces.map((f) => f.id) }]
+      }
+    }
+  }
+  if (resolvedSolids.length === 0) return { passed: false, detail: `missing named polyhedron ${check.solidId ?? "candidate"}` }
+  if (expectedVertices !== undefined && resolvedSolids.length !== 1) return { passed: false, detail: "ambiguous named polyhedron" }
+  for (const solid of resolvedSolids) {
     if (!Array.isArray(solid.vertexIds) || !Array.isArray(solid.faceIds)) return { passed: false, detail: "polyhedron is missing vertexIds or faceIds" }
     const vertices = solid.vertexIds.map((id) => positions.get(id as string))
     if (vertices.some((point) => point === undefined)) return { passed: false, detail: "polyhedron references a missing or non-finite vertex" }

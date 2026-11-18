@@ -1,5 +1,6 @@
 # 下一轮工作导航
 
+> **2026-11-18 G3-F9 内核动作修复进展（Task 0–4 完成，0 新增付费；推进 Task 5 零付费门禁）**：`PlanOutcome.candidateSlices`、`dsActionTools` 分支画布隔离与 `parabola` 支持、`GK-S02` `before_fold/after_fold` 开放折面与 `GK-P06` 三分支 `ds_action` live 接线已通（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](./audit/g3-f9-repair-t4/README.md)），真实 DS 仍未重测。
 > **2026-11-18 G3-F9 内核动作修复进展（Task 0–3 完成，0 新增付费；推进 Task 4）**：已完成 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](audit/g3-f9-repair-t3/README.md)，回执签名、无进展熔断与预算不双扣，`3` 文件 `83 passed` + `typecheck` + `lint` + `test:docs` 全过）；**当前执行入口推进至 Task 4（Live 多问 / 多状态 / 多分支 `CandidateSet` 接线与回归验证）**，真实 DS 调用仍暂停。
 
 > **2026-11-17 F9修复入口**：先读[新修复计划](g3-final/G3-F9-kernel-action-repair-plan.md)和[三组零费反例](audit/2026-11-17-g3-f9-repeat-probe/README.md)。Task0禁止3D动作假成功→Task1接 `solveConstraint3d` 真正物化立体→Task2面/观察→Task3无进展熔断→Task4真实多状态候选→Task5新授权小样本。当前真实F9仅GK-S08试点8请求、未形成候选；本轮额外付费0，不能扩到36。

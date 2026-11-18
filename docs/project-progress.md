@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 4：Live 多范围 / 多状态 / 多分支 `CandidateSet` 接线（0 新增付费；下一步 Task 5）
+
+- 在不触发任何新 DeepSeek API 付费调用前提下完成 Task 4：`PlanOutcome.candidateSlices`、`dsActionTools` 分支独立 `SpeculativeCanvas`（含 `parabola`）、`g3DsFrozenCaseRunner` 多状态/多分支展开、以及 `GK-S02` 开放折面与 `GK-P06` 三分支 live `ds_action` 端到端全绿（`4` 文件 **`131 passed`**，`typecheck` 退出 `0`，`lint` `0 errors`；详见 [g3-f9-repair-t4/README.md](./audit/g3-f9-repair-t4/README.md)）；历史 `0/36` / `8 req` 仍未重测。
+
 ## 2026-11-18 —— G3-F9 内核动作修复 Task 3：有界反馈、停滞熔断与预算统一（0 新增付费；下一步 Task 4）
 
 - **状态与证据**：[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 输出 `toolName` 与 `progressSignature`，[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 实装停滞熔断与恢复放行并修复 `beforeProviderRequest` `network` 双扣；`3` 文件 **`83 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 3 审计](audit/g3-f9-repair-t3/README.md)。

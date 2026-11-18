@@ -1,5 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-18 G3-F9 内核动作修复（Task 0–4 完成，0 新增付费；正推进 Task 5 零付费门禁）**：`PlanOutcome.candidateSlices`、`dsActionTools` 分支画布隔离与 `GK-S02`/`GK-P06` 多状态多分支 `CandidateSet` live 接线已通（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](../audit/g3-f9-repair-t4/README.md)）。
 > **2026-11-18 G3-F9 内核动作修复（Task 0–3 完成，0 新增付费；正推进 Task 4）**：已完成 **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](../audit/g3-f9-repair-t3/README.md)，回执签名、无进展熔断与预算一致），正按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 推进 Task 4 多状态 `CandidateSet` live 接线及 Task 5 零费总审。
 
 > **2026-11-18 G3-DS Task F0–F8 进度（全部工程完结，零付费，真实 DS 仍 0/36）**：已按 [G3-DS 最终版实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0–F8** 全部动作协议、隔离候选层、实体/约束图、2D/3D/折叠求解、定向局部修复及真实画布终态门禁（见 [Task F8 审计](../audit/g3-final-f8/README.md)），现按 §12 停机规则等待用户对 **Task F9（分层真实 DS 复测：Tier A→B→C）** 的显式付费授权与参数锁定。

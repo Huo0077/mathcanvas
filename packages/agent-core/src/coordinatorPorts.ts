@@ -135,8 +135,16 @@ export interface PlanRequest {
  *
  * `requestId` / `attemptId` 两边都有：失败的那一次同样要能对上账本里的记录。
  */
+export interface CandidatePlanSlice {
+  readonly scopeId: string
+  readonly stateId?: string
+  readonly branchId?: string
+  readonly plan: PlanEnvelope
+  readonly answerText?: string
+}
+
 export type PlanOutcome =
-  | { plan: PlanEnvelope; requestId: string; attemptId: string }
+  | { plan: PlanEnvelope; requestId: string; attemptId: string; candidateSlices?: readonly CandidatePlanSlice[] }
   | { failure: PlanFailure; requestId: string; attemptId: string }
 
 /**

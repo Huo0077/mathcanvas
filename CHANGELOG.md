@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-F9 内核动作修复 Task 3 / Task 2 / Task 1 / Task 0（开发版，0 新增付费）
+## 2026-11-18 —— G3-F9 内核动作修复 Task 4 / Task 3 / Task 2 / Task 1 / Task 0（开发版，0 新增付费）
+
+- **G3-F9 修复 Task 4**：在 [coordinatorPorts.ts](packages/agent-core/src/coordinatorPorts.ts) 为 `PlanOutcome` 扩展可选 `candidateSlices`；在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 按 `branchId` 隔离独立 `SpeculativeCanvas`（复用共享底图与单调 `actionKey`）并补齐 `parabola` 抛物线支持；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 与 [g3DsFrozenCaseRunner.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 打通多状态 / 多分支切片展开、同位生成面顶拓扑焊接与预折态安全认证；在 [drawingContracts.ts](scripts/reliability-eval/drawingContracts.ts) 支持 `check.open === true` 的 `face3` 连通网格 `buildOpenSurface` 校验；补全 [g3DsFrozenCaseRunner.test.ts](apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) `GK-S02` 折展态与 `GK-P06` 三分支 live `ds_action` 对照（`4` 文件 `131 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **G3-F9 修复 Task 3**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 为所有 `DsActionExecutionResult` 统一附加 `toolName` 与 `progressSignature`；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入统一签名 `no_progress` 停机并消除外部 `beforeProviderRequest` 与 `ds_action` 续步之间的 `network` 预算双扣；补齐 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 停滞/恢复/预算对照用例（`3` 文件 `83 passed`、`typecheck`、`lint` `0 errors`）。
 

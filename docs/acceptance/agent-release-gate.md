@@ -1,5 +1,6 @@
 # Agent 发布前门禁
 
+> **2026-11-18 G3-F9 内核动作修复进度（Task 0–4 完成，0 新增付费）**：[coordinatorPorts.ts](../../packages/agent-core/src/coordinatorPorts.ts)、[dsActionTools.ts](../../apps/web/src/agent/dsActionTools.ts)、[modelPlanner.ts](../../apps/web/src/agent/modelPlanner.ts)、[g3DsFrozenCaseRunner.ts](../../apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.ts) 与 [drawingContracts.ts](../../scripts/reliability-eval/drawingContracts.ts) 已打通多范围 / 多状态 / 多分支 `CandidateSet` 接线与 `GK-S02` / `GK-P06` 零付费测试（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](../audit/g3-f9-repair-t4/README.md)）。
 > **2026-11-18 G3-F9 内核动作修复进度（Task 0–3 完成，0 新增付费）**：已按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 完成 **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](../audit/g3-f9-repair-t3/README.md)，停滞保护与预算不双扣），正推进 **Task 4** 多状态 `CandidateSet` live 接线与零费终审；真实 DS 表现、人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
 
 > **2026-11-17 F9新增阻断**：三组零费内核复现均证明 `construct_solid` / `construct_face` 虚报成功却未生成任何图元，`finish_candidate` 为空候选；真实GK-S08八请求不能代表36题通过。[修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md)与[负例](../audit/2026-11-17-g3-f9-repeat-probe/README.md)未退出前禁止把 DS 动作级构图标为发布准备完成。人工与Windows验收另单列。
