@@ -326,3 +326,70 @@ export function solvePoint3Constraints(constraints: ConstraintSpec[], context: C
   const diagnostics = diagnoseConstraints3(constraints, map, tolerance)
   return { positions, diagnostics, converged: diagnostics.every((diagnostic) => diagnostic.satisfied) }
 }
+
+/** Evaluates line-to-plane perpendicularity (|d×n|) or parallelism (|d·n|) using unit direction and normal. */
+export function evaluateLinePlaneRelation3(
+  line: readonly [Vector3, Vector3],
+  planePoints: readonly [Vector3, Vector3, Vector3],
+  relation: "perpendicular" | "parallel"
+): number | null {
+  const dir = subtractVector3(line[1], line[0])
+  const len = lengthVector3(dir)
+  const plane = planeFromPoints(planePoints[0], planePoints[1], planePoints[2])
+  if (!plane || len <= EPSILON) return null
+  const unitDir = scaleVector3(dir, 1 / len)
+  const unitNormal = normalizeVector3(plane.normal)
+  if (lengthVector3(unitNormal) <= EPSILON) return null
+  return relation === "perpendicular"
+    ? lengthVector3(crossVector3(unitDir, unitNormal))
+    : Math.abs(dotVector3(unitDir, unitNormal))
+}
+
+/** Evaluates plane-to-plane perpendicularity (|n1·n2|) or parallelism (|n1×n2|) using unit normals. */
+export function evaluatePlanePlaneRelation3(
+  firstPlane: readonly [Vector3, Vector3, Vector3],
+  secondPlane: readonly [Vector3, Vector3, Vector3],
+  relation: "perpendicular" | "parallel"
+): number | null {
+  const p1 = planeFromPoints(firstPlane[0], firstPlane[1], firstPlane[2])
+  const p2 = planeFromPoints(secondPlane[0], secondPlane[1], secondPlane[2])
+  if (!p1 || !p2) return null
+  const n1 = normalizeVector3(p1.normal)
+  const n2 = normalizeVector3(p2.normal)
+  if (lengthVector3(n1) <= EPSILON || lengthVector3(n2) <= EPSILON) return null
+  return relation === "perpendicular"
+    ? Math.abs(dotVector3(n1, n2))
+    : lengthVector3(crossVector3(n1, n2))
+}
+
+/** Evaluates maximum plane-distance residual across 4+ points against a non-degenerate triangle triplet. */
+export function evaluateCoplanarPoints3(points: readonly Vector3[]): number | null {
+  if (points.length < 4) return points.length === 3 ? 0 : null
+  for (let i = 0; i < points.length - 2; i += 1) {
+    const plane = planeFromPoints(points[i]!, points[i + 1]!, points[i + 2]!)
+    if (!plane) continue
+    let maxDist = 0
+    for (const pt of points) {
+      maxDist = Math.max(maxDist, Math.abs(dotVector3(plane.normal, pt) + plane.constant))
+    }
+    return maxDist
+  }
+  return null
+}
+
+/** Orthogonal projection of a 3D point onto the line defined by two distinct endpoints. */
+export function projectPointOntoSegmentEndpoints3(pointValue: Vector3, a: Vector3, b: Vector3): Vector3 | null {
+  const dir = subtractVector3(b, a)
+  const sq = dotVector3(dir, dir)
+  if (!Number.isFinite(sq) || sq <= EPSILON * EPSILON) return null
+  const ratio = dotVector3(subtractVector3(pointValue, a), dir) / sq
+  return addVector3(a, scaleVector3(dir, ratio))
+}
+
+/** Orthogonal projection of a 3D point onto the plane defined by three non-collinear points. */
+export function projectPointOntoPlanePoints3(pointValue: Vector3, a: Vector3, b: Vector3, c: Vector3): Vector3 | null {
+  const plane = planeFromPoints(a, b, c)
+  if (!plane) return null
+  const dist = dotVector3(plane.normal, pointValue) + plane.constant
+  return subtractVector3(pointValue, scaleVector3(plane.normal, dist))
+}

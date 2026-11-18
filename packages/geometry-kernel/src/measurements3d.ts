@@ -270,3 +270,128 @@ export function createMeasurement3(id: string, metric: Measurement3["metric"], s
 }
 
 export const measure3d = createMeasurement3
+
+export interface PolyhedronTopologyVerdict {
+  closed: boolean
+  manifold: boolean
+  coplanarFaces: boolean
+  coplanarResidual: number
+  boundaryEdgeCount: number
+  volume: number
+  eulerCharacteristic: number
+  reason?: string
+}
+
+/** Verifies watertight oriented half-edge topology, planar faces, and non-zero volume for a polyhedron. */
+export function verifyClosedPolyhedronTopology3(
+  vertices: readonly Vector3[],
+  faces: readonly (readonly number[])[],
+  tolerance = 1e-6
+): PolyhedronTopologyVerdict {
+  if (vertices.length < 4 || faces.length < 4) {
+    return {
+      closed: false,
+      manifold: false,
+      coplanarFaces: false,
+      coplanarResidual: Number.POSITIVE_INFINITY,
+      boundaryEdgeCount: 0,
+      volume: 0,
+      eulerCharacteristic: 0,
+      reason: "多面体顶点数或面数不足（至少需 4 顶点与 4 面）。"
+    }
+  }
+  const directedEdges = new Map<string, number>()
+  const undirectedEdges = new Set<string>()
+  let maxCoplanarResidual = 0
+  let coplanarFaces = true
+  let signedVolume = 0
+  const origin = vertices[0]!
+
+  for (const ring of faces) {
+    if (ring.length < 3 || new Set(ring).size !== ring.length) {
+      return {
+        closed: false,
+        manifold: false,
+        coplanarFaces: false,
+        coplanarResidual: Number.POSITIVE_INFINITY,
+        boundaryEdgeCount: 0,
+        volume: 0,
+        eulerCharacteristic: 0,
+        reason: "存在少于 3 个互异顶点的退化面环。"
+      }
+    }
+    const pts: Vector3[] = []
+    for (let i = 0; i < ring.length; i += 1) {
+      const idx = ring[i]!
+      const next = ring[(i + 1) % ring.length]!
+      const v = vertices[idx]
+      if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.y) || !Number.isFinite(v.z)) {
+        return {
+          closed: false,
+          manifold: false,
+          coplanarFaces: false,
+          coplanarResidual: Number.POSITIVE_INFINITY,
+          boundaryEdgeCount: 0,
+          volume: 0,
+          eulerCharacteristic: 0,
+          reason: "面环引用了越界或非有限顶点索引。"
+        }
+      }
+      pts.push(v)
+      const dirKey = `${idx}->${next}`
+      directedEdges.set(dirKey, (directedEdges.get(dirKey) ?? 0) + 1)
+      const lo = Math.min(idx, next)
+      const hi = Math.max(idx, next)
+      undirectedEdges.add(`${lo}-${hi}`)
+    }
+    const plane = planeFromPoints(pts[0]!, pts[1]!, pts[2]!)
+    if (!plane) {
+      coplanarFaces = false
+      maxCoplanarResidual = Number.POSITIVE_INFINITY
+    } else {
+      for (const p of pts.slice(3)) {
+        maxCoplanarResidual = Math.max(maxCoplanarResidual, Math.abs(dotVector3(plane.normal, p) + plane.constant))
+      }
+      if (maxCoplanarResidual > tolerance) coplanarFaces = false
+    }
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const a = subtractVector3(pts[0]!, origin)
+      const b = subtractVector3(pts[i]!, origin)
+      const c = subtractVector3(pts[i + 1]!, origin)
+      signedVolume += dotVector3(a, crossVector3(b, c)) / 6
+    }
+  }
+
+  let boundaryEdgeCount = 0
+  let manifold = true
+  for (const [edgeKey, count] of directedEdges.entries()) {
+    if (count !== 1) manifold = false
+    const [u, v] = edgeKey.split("->")
+    const revCount = directedEdges.get(`${v}->${u}`) ?? 0
+    if (revCount === 0) boundaryEdgeCount += 1
+    else if (revCount !== 1) manifold = false
+  }
+  const volume = Math.abs(signedVolume)
+  const closed = boundaryEdgeCount === 0 && manifold && coplanarFaces && volume > tolerance
+  const eulerCharacteristic = vertices.length - undirectedEdges.size + faces.length
+  return {
+    closed,
+    manifold,
+    coplanarFaces,
+    coplanarResidual: maxCoplanarResidual,
+    boundaryEdgeCount,
+    volume,
+    eulerCharacteristic,
+    ...(closed
+      ? {}
+      : {
+          reason: boundaryEdgeCount > 0
+            ? `多面体未闭合：存在 ${boundaryEdgeCount} 条边界半边。`
+            : !manifold
+              ? "存在非流形重边或同向半边。"
+              : !coplanarFaces
+                ? `存在不共面面片（残差 ${maxCoplanarResidual.toExponential(2)}）。`
+                : "多面体体积退化为零。"
+        })
+  }
+}

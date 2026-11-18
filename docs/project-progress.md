@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-DS 最终版实施 Task F5：三维约束内核求解器 `constraintSolve3d`（0 付费；下一步 Task F6）
+
+- **状态与证据**：在 [constraints3d.ts](packages/geometry-kernel/src/constraints3d.ts) 与 [measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts) 新增线面/面面关系、共面残差、垂足投影与闭合流形半边拓扑校验，新建 [constraintSolve3d.ts](packages/agent-core/src/solver/constraintSolve3d.ts) 与 [constraintSolve3d.test.ts](packages/agent-core/src/solver/constraintSolve3d.test.ts)，接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`35 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F5 审计](audit/g3-final-f5/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F6（折叠与多状态分支及统一候选评估）**。
+
 ## 2026-11-18 —— G3-DS 最终版实施 Task F4：二维与函数内核求解器 `constraintSolve2d`（0 付费；下一步 Task F5）
 
 - **状态与证据**：在 [planar-constraints.ts](packages/geometry-kernel/src/planar-constraints.ts) 与 [function-evidence.ts](packages/geometry-kernel/src/function-evidence.ts) 新增二维关系与定义域证据辅助，新建 [constraintSolve2d.ts](packages/agent-core/src/solver/constraintSolve2d.ts) 与 [constraintSolve2d.test.ts](packages/agent-core/src/solver/constraintSolve2d.test.ts)，接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)；先 RED 后 GREEN，`4` 文件 **`93 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task F4 审计](audit/g3-final-f4/README.md)。真实 DS 36 题仍维持 `0/36` 基线，下一步进入 **Task F5（三维约束内核求解器 `constraintSolve3d`）**。

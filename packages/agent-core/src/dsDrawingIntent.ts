@@ -28,6 +28,7 @@ import { constructRegularSquarePyramid } from "./solver/regularPyramid"
 import { constructRightPrism } from "./solver/prism"
 import { constructTetrahedron } from "./solver/tetrahedron"
 import { solveConstraint2d } from "./solver/constraintSolve2d"
+import { solveConstraint3d } from "./solver/constraintSolve3d"
 
 export const DS_INTENT_SCHEMA_VERSION = "mathcanvas.ds_intent.v1" as const
 
@@ -1654,15 +1655,15 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
         const p2 = planeNames[1] ? point3Registry.get(planeNames[1]) : undefined
         const p3 = planeNames[2] ? point3Registry.get(planeNames[2]) : undefined
         if (src && p1 && p2 && p3) {
-          const ux = p2.x - p1.x, uy = p2.y - p1.y, uz = p2.z - p1.z
-          const vx = p3.x - p1.x, vy = p3.y - p1.y, vz = p3.z - p1.z
-          const nx = uy * vz - uz * vy
-          const ny = uz * vx - ux * vz
-          const nz = ux * vy - uy * vx
-          const nSq = nx * nx + ny * ny + nz * nz
-          if (nSq > 1e-12) {
-            const d = ((src.x - p1.x) * nx + (src.y - p1.y) * ny + (src.z - p1.z) * nz) / nSq
-            const pos = vec3(src.x - d * nx, src.y - d * ny, src.z - d * nz)
+          const solved = solveConstraint3d({
+            kind: "perpendicular_foot",
+            targetKind: "plane",
+            point: src,
+            planePoints: [p1, p2, p3],
+            resultName: label
+          })
+          const pos = solved.status === "solved" ? solved.pointRegistry[label] : undefined
+          if (pos) {
             point3Registry.set(step.outputEntityId, pos)
             point3Registry.set(label, pos)
             point3LabelRegistry.set(step.outputEntityId, label)
@@ -1680,11 +1681,15 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
         const a = point3Registry.get(String(p.lineFrom ?? p.from ?? ""))
         const b = point3Registry.get(String(p.lineTo ?? p.to ?? ""))
         if (src && a && b) {
-          const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z
-          const abSq = abx * abx + aby * aby + abz * abz
-          if (abSq > 1e-12) {
-            const t = ((src.x - a.x) * abx + (src.y - a.y) * aby + (src.z - a.z) * abz) / abSq
-            const pos = vec3(a.x + t * abx, a.y + t * aby, a.z + t * abz)
+          const solved = solveConstraint3d({
+            kind: "perpendicular_foot",
+            targetKind: "line",
+            point: src,
+            line: [a, b],
+            resultName: label
+          })
+          const pos = solved.status === "solved" ? solved.pointRegistry[label] : undefined
+          if (pos) {
             point3Registry.set(step.outputEntityId, pos)
             point3Registry.set(label, pos)
             point3LabelRegistry.set(step.outputEntityId, label)
@@ -1705,17 +1710,26 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
         const a = point3Registry.get(fromName)
         const b = point3Registry.get(toName)
         if (a && b) {
-          const pos = vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
-          point3Registry.set(step.outputEntityId, pos)
-          point3Registry.set(label, pos)
-          point3LabelRegistry.set(step.outputEntityId, label)
-          point3LabelRegistry.set(label, label)
-          actions.push({
-            actionId: "solid.create_point",
-            actionKey: nextKey("ds-pt3"),
-            factIds: [],
-            inputs: { alias: step.outputEntityId, label, position: pos }
-          } as DraftAction)
+          const solved = solveConstraint3d({
+            kind: "interior_ratio",
+            targetKind: "edge",
+            anchors: [a, b],
+            ratio: t,
+            resultName: label
+          })
+          const pos = solved.status === "solved" ? solved.pointRegistry[label] : undefined
+          if (pos) {
+            point3Registry.set(step.outputEntityId, pos)
+            point3Registry.set(label, pos)
+            point3LabelRegistry.set(step.outputEntityId, label)
+            point3LabelRegistry.set(label, label)
+            actions.push({
+              actionId: "solid.create_point",
+              actionKey: nextKey("ds-pt3"),
+              factIds: [],
+              inputs: { alias: step.outputEntityId, label, position: pos }
+            } as DraftAction)
+          }
         }
       }
       if (actions.length === actionsBefore) {

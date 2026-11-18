@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F5 / F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F5 三维约束内核求解器**：在 [constraints3d.ts](packages/geometry-kernel/src/constraints3d.ts) 与 [measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts) 新增线面/面面关系、共面残差、线/面垂足投影与闭合流形半边拓扑校验 `verifyClosedPolyhedronTopology3`；新建 [constraintSolve3d.ts](packages/agent-core/src/solver/constraintSolve3d.ts) 与 [constraintSolve3d.test.ts](packages/agent-core/src/solver/constraintSolve3d.test.ts)（覆盖棱柱、棱锥、四面体、垂足、线面/面面、共面、闭合拓扑、棱/面内点定比及开放壳/违背反例，返回 `{ status, residuals, constraintStatus, pointRegistry }`）；接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `35 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **Task F4 二维与函数内核求解器**：在 [planar-constraints.ts](packages/geometry-kernel/src/planar-constraints.ts) 与 [function-evidence.ts](packages/geometry-kernel/src/function-evidence.ts) 补全平面关系、定比、定向线与函数定义域证据辅助；新增 [constraintSolve2d.ts](packages/agent-core/src/solver/constraintSolve2d.ts) 与 [constraintSolve2d.test.ts](packages/agent-core/src/solver/constraintSolve2d.test.ts)（覆盖点在线上、交点、共线、中点、定比、等距、垂直/平行、圆锥曲线-直线交点与分支选择、函数定义域/切线/外点切线/公切线、焦点/离心率及退化无解反例，输出 `{ status, roots, selectedBranch, residual, domainStatus, constraintStatus }`）；接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `93 passed`、`typecheck`、`lint` `0 errors`）。
 
