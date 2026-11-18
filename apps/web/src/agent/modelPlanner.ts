@@ -988,7 +988,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               }
             }
             if (!execRes.stateChanged || !execRes.ok) {
-              const actionSig = `${execRes.action}:${execRes.status}:${execRes.blockerCode ?? ""}:${execRes.candidateHash}:${execRes.primitiveCount}`
+              const actionSig = execRes.progressSignature
               const nextCount = (dsActionSignatures.get(actionSig) ?? 0) + 1
               dsActionSignatures.set(actionSig, nextCount)
               if (nextCount >= 2) {
@@ -1005,10 +1005,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             } else {
               dsActionSignatures.clear()
             }
-            if (request.budget.remaining("generation") < 1 || request.budget.remaining("network") < 1) {
+            const externalNetworkGuard = request.beforeProviderRequest !== undefined
+            if (request.budget.remaining("generation") < 1 || (!externalNetworkGuard && request.budget.remaining("network") < 1)) {
               throw new ModelPlannerError("provider_failed", "budget exhausted during ds_action construction step")
             }
-            if (!request.budget.consume("generation").ok || !request.budget.consume("network").ok) {
+            if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
               throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action step")
             }
             messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })

@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 3：有界反馈、停滞熔断与预算统一（0 新增付费；下一步 Task 4）
+
+- **状态与证据**：[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 输出 `toolName` 与 `progressSignature`，[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 实装停滞熔断与恢复放行并修复 `beforeProviderRequest` `network` 双扣；`3` 文件 **`83 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 3 审计](audit/g3-f9-repair-t3/README.md)。
+
 ## 2026-11-18 —— G3-F9 内核动作修复 Task 2：实际面/底座/折叠动作与真实内核只读查询（0 新增付费；下一步 Task 3）
 
 - **状态与证据**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 补全 `construct_base`、`construct_face`（共线/非共面拒止）、`construct_fold_state`（独立 `pre_fold` / `post_fold` 切片与 `stateSlices()`）、3D 点线构造与 `query_measurement` / `query_constraint_status`（rollback 同步清理）；[dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 等 `4` 文件 **`27 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 2 审计](audit/g3-f9-repair-t2/README.md)。

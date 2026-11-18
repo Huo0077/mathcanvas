@@ -477,5 +477,10 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     expect(slices.length).toBeGreaterThanOrEqual(2)
     const hashSet = new Set(slices.map((s) => s.candidateHash))
     expect(hashSet.size).toBe(slices.length)
+
+    // Task 3: progressSignature and toolName must be emitted deterministically on tool receipts
+    const distReceipt = foldSession.execute("query_measurement", { metric: "distance", targets: ["A", "B"] })
+    expect(distReceipt.toolName).toBe("query_measurement")
+    expect(distReceipt.progressSignature).toContain("query_measurement:accepted:")
   })
 })

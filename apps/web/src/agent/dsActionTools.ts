@@ -42,6 +42,8 @@ export interface DsActionExecutionResult {
   readonly ok: boolean
   readonly status: DsActionStatus
   readonly action: DsActionName
+  readonly toolName: DsActionName
+  readonly progressSignature: string
   readonly stateChanged: boolean
   readonly entity?: string
   readonly position?: Coordinate
@@ -54,6 +56,8 @@ export interface DsActionExecutionResult {
   readonly blockerCode?: string
   readonly terminated?: { readonly plan: PlanEnvelope }
 }
+
+type DsActionRawResult = Omit<DsActionExecutionResult, "toolName" | "progressSignature">
 
 /** Closed subset of DS actions backed by real kernel execution / state transitions or real observations. */
 export const IMPLEMENTED_DS_ACTION_TOOLS: readonly DsActionName[] = [
@@ -449,7 +453,7 @@ export function createDsActionSession(options: {
     else recordedSlices.push(slice)
   }
 
-  const failRepairable = (action: DsActionName, blockerCode: string, repairHint: string): DsActionExecutionResult => {
+  const failRepairable = (action: DsActionName, blockerCode: string, repairHint: string): DsActionRawResult => {
     const snap = speculative.snapshot()
     return {
       ok: false,
@@ -464,7 +468,7 @@ export function createDsActionSession(options: {
     }
   }
 
-  const failBlocked = (action: DsActionName, blockerCode: string, repairHint: string): DsActionExecutionResult => {
+  const failBlocked = (action: DsActionName, blockerCode: string, repairHint: string): DsActionRawResult => {
     const snap = speculative.snapshot()
     return {
       ok: false,
@@ -484,7 +488,7 @@ export function createDsActionSession(options: {
     draftAction: DraftAction,
     entityId?: string,
     position?: Coordinate
-  ): DsActionExecutionResult => {
+  ): DsActionRawResult => {
     const before = speculative.snapshot()
     const step = speculative.applyAction(draftAction)
     if (!step.ok) {
@@ -516,11 +520,7 @@ export function createDsActionSession(options: {
     }
   }
 
-  return {
-    currentSnapshot: () => speculative.snapshot(),
-    stateSlices: () => [...recordedSlices],
-
-    execute(toolName, rawInput) {
+  const executeRaw = (toolName: string, rawInput: unknown): DsActionRawResult => {
       const parsed = parseDsActionToolCall(toolName, rawInput)
       const snap = speculative.snapshot()
       if (!parsed.ok) {
@@ -1281,6 +1281,19 @@ export function createDsActionSession(options: {
       }
 
       return failBlocked(name, "unsupported_action", `${name} kernel execution is not implemented yet`)
+  }
+
+  const attachTelemetry = (res: DsActionRawResult): DsActionExecutionResult => ({
+    ...res,
+    toolName: res.action,
+    progressSignature: `${res.action}:${res.status}:${res.blockerCode ?? "none"}:${res.candidateHash}:${res.stepIndex}:${res.primitiveCount}`
+  })
+
+  return {
+    currentSnapshot: () => speculative.snapshot(),
+    stateSlices: () => [...recordedSlices],
+    execute(toolName, rawInput) {
+      return attachTelemetry(executeRaw(toolName, rawInput))
     }
   }
 }

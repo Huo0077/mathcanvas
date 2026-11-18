@@ -1583,7 +1583,7 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
               attemptId: `a-${modelCalls}`,
               toolCallId: `tc-${modelCalls}`,
               toolId: "construct_solid",
-              input: { kind: "square_pyramid", sideLength: 2, height: 3 }
+              input: { kind: "unsupported_polyhedron_x", sideLength: 2, height: 3 }
             }
           ]
         }
@@ -1597,5 +1597,81 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     if ("failure" in outcome) {
       expect(outcome.failure.detail).toMatch(/no_progress|stagnant|unsupported_action/i)
     }
+  })
+
+  it("Task 3 ds_action bounded repair: stops in <=2 requests on identical invalid solid params, allows genuine recovery, and avoids network double-charging under beforeProviderRequest", async () => {
+    const provider = {
+      id: "deepseek",
+      modelId: "deepseek-v4-flash",
+      dialect: "openai" as const,
+      revision: 2,
+      capabilities: { tools: "verified" as const, json: "verified" as const, vision: "unknown" as const }
+    }
+
+    // Case 1: identical missing-parameter failure twice -> stops cleanly in <=2 calls
+    let badCalls = 0
+    const stalledPlanner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider }),
+      runModel: async () => {
+        badCalls += 1
+        return {
+          ok: true,
+          events: [
+            {
+              kind: "tool_call",
+              requestId: `bad-${badCalls}`,
+              attemptId: `a-${badCalls}`,
+              toolCallId: `bad-tc-${badCalls}`,
+              toolId: "construct_solid",
+              input: { id: "S1", kind: "regular_pyramid", sideLength: 2 }
+            }
+          ]
+        }
+      }
+    })
+    const badRes = await stalledPlanner.plan(request({ userMessage: "画正四棱锥", budget: createBudget({ network: 8, generation: 8, tool: 12 }) }))
+    expect("failure" in badRes).toBe(true)
+    expect(badCalls).toBeLessThanOrEqual(2)
+
+    // Case 2: repair missing height -> real solid -> query_measurement -> finish_candidate fits inside exact network=4, generation=4 with external beforeProviderRequest!
+    let okCalls = 0
+    const recoveringPlanner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider }),
+      runModel: async () => {
+        okCalls += 1
+        if (okCalls === 1) {
+          return {
+            ok: true,
+            events: [{ kind: "tool_call", requestId: "ok-1", attemptId: "a-1", toolCallId: "tc-1", toolId: "construct_solid", input: { id: "S1", kind: "regular_pyramid", sideLength: 2 } }]
+          }
+        }
+        if (okCalls === 2) {
+          return {
+            ok: true,
+            events: [{ kind: "tool_call", requestId: "ok-2", attemptId: "a-2", toolCallId: "tc-2", toolId: "construct_solid", input: { id: "S1", kind: "regular_pyramid", sideLength: 2, height: 3 } }]
+          }
+        }
+        if (okCalls === 3) {
+          return {
+            ok: true,
+            events: [{ kind: "tool_call", requestId: "ok-3", attemptId: "a-3", toolCallId: "tc-3", toolId: "query_measurement", input: { metric: "distance", targets: ["A", "B"] } }]
+          }
+        }
+        return {
+          ok: true,
+          events: [{ kind: "tool_call", requestId: "ok-4", attemptId: "a-4", toolCallId: "tc-4", toolId: "finish_candidate", input: { goal: "正四棱锥" } }]
+        }
+      }
+    })
+    const exactBudget = createBudget({ network: 4, generation: 4, tool: 8 })
+    const exactReq = {
+      ...request({ userMessage: "画底边长为2高为3的正四棱锥", budget: exactBudget }),
+      beforeProviderRequest: (amount = 1) => exactBudget.consume("network", amount).ok
+    }
+    const okRes = await recoveringPlanner.plan(exactReq)
+    expect("plan" in okRes && okRes.plan.kind === "plan").toBe(true)
+    expect(okCalls).toBe(4)
   })
 })

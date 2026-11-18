@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-F9 内核动作修复 Task 2 / Task 1 / Task 0（开发版，0 新增付费）
+## 2026-11-18 —— G3-F9 内核动作修复 Task 3 / Task 2 / Task 1 / Task 0（开发版，0 新增付费）
+
+- **G3-F9 修复 Task 3**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 为所有 `DsActionExecutionResult` 统一附加 `toolName` 与 `progressSignature`；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入统一签名 `no_progress` 停机并消除外部 `beforeProviderRequest` 与 `ds_action` 续步之间的 `network` 预算双扣；补齐 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 与 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 停滞/恢复/预算对照用例（`3` 文件 `83 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **G3-F9 修复 Task 2**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 实现 `construct_base`、`construct_face`（三点不共线 + 四点及以上共面核验）、`construct_fold_state`（独立 `pre_fold`/`post_fold` 切片与 `stateSlices()`）、3D `construct_point`（含棱定比）/ `construct_segment`，以及真实 `query_measurement` 与 `query_constraint_status`（支持 `pointHistory`/`sliceHistory` 回滚清理）；同步更新 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)（`4` 文件 `27 passed`、`typecheck`、`lint` `0 errors`）。
 
