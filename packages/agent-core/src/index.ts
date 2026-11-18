@@ -184,6 +184,7 @@ export * from "./deterministicProblemRoute"
 export * from "./dsCandidateBundle"
 export * from "./dsDrawingIntent"
 export * from "./kernelObservation"
+export * from "./solver/constraintSolve2d"
 export * from "./reliabilityDiagnostics"
 /**
  * **多边形（梯形）沿对角线翻折**（T6）：题面 → 计划 / 一次澄清。

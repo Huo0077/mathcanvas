@@ -27,6 +27,7 @@ import { constructPerpendicularPyramid } from "./solver/perpendicularPyramid"
 import { constructRegularSquarePyramid } from "./solver/regularPyramid"
 import { constructRightPrism } from "./solver/prism"
 import { constructTetrahedron } from "./solver/tetrahedron"
+import { solveConstraint2d } from "./solver/constraintSolve2d"
 
 export const DS_INTENT_SCHEMA_VERSION = "mathcanvas.ds_intent.v1" as const
 
@@ -1059,9 +1060,11 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
             } as DraftAction)
           } else {
             const expr = asNonEmptyStr(p.expression)
-            const y0 = expr ? evaluateFunctionWithDomain(expr, x0) : null
-            const slope = expr ? evaluateSymbolicDerivative(expr, x0) : null
-            if (y0?.ok && slope?.ok) {
+            const solved = expr
+              ? solveConstraint2d({ kind: "tangent_at_x", expression: expr, domain: [x0 - 1, x0 + 1], x: x0 })
+              : null
+            const root = solved?.status === "solved" ? solved.roots[0] : undefined
+            if (root && typeof root.y === "number" && typeof root.slope === "number") {
               const xL = x0 - 1
               const xR = x0 + 1
               actions.push({
@@ -1072,8 +1075,8 @@ export function compileDsDrawingIntentToPlan(intent: DsDrawingIntent): PlanEnvel
                   alias: step.outputEntityId,
                   label: typeof p.tangentLabel === "string" ? p.tangentLabel : step.outputEntityId,
                   points: [
-                    { x: xL, y: y0.value + slope.value * (xL - x0) },
-                    { x: xR, y: y0.value + slope.value * (xR - x0) }
+                    { x: xL, y: root.y + root.slope * (xL - x0) },
+                    { x: xR, y: root.y + root.slope * (xR - x0) }
                   ]
                 }
               } as DraftAction)

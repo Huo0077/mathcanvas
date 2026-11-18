@@ -952,3 +952,58 @@ export function judgeUniversalClaim(claim: UniversalClaim, instances: readonly R
     reason: `只声称在 ${rendered} 这些取值上成立 —— 这是如实标注的参数实例，不是全称结论。`
   }
 }
+
+export interface FunctionDomainEvidence {
+  domainStatus: "valid" | "partial_breaks" | "empty_domain" | "invalid_expression"
+  validSampleCount: number
+  sampleCount: number
+  breaks: number[]
+  note: string
+}
+
+/** Evaluates whether `source` is well-defined over `domain`, distinguishing empty/out-of-domain intervals from breakpoints. */
+export function evaluateFunctionDomainEvidence(
+  source: string,
+  domain: [number, number],
+  options: EvidenceOptions = {}
+): FunctionDomainEvidence {
+  if (!Number.isFinite(domain[0]) || !Number.isFinite(domain[1]) || domain[0] >= domain[1]) {
+    return {
+      domainStatus: "empty_domain",
+      validSampleCount: 0,
+      sampleCount: 0,
+      breaks: [],
+      note: "定义域区间为空或上下界无效。"
+    }
+  }
+  if (compiledOrNull(source) === null) {
+    return {
+      domainStatus: "invalid_expression",
+      validSampleCount: 0,
+      sampleCount: 0,
+      breaks: [],
+      note: `表达式 ${source} 无法解析或包含不支持的算子。`
+    }
+  }
+  const steps = Math.max(32, Math.min(256, Math.round(options.steps ?? 128)))
+  const sampled = functionGraphEvidence(source, domain, { ...options, steps })
+  const validSampleCount = sampled.segments.reduce((acc, seg) => acc + seg.length, 0)
+  if (validSampleCount === 0) {
+    return {
+      domainStatus: "empty_domain",
+      validSampleCount: 0,
+      sampleCount: steps + 1,
+      breaks: sampled.breaks,
+      note: `函数 ${source} 在 [${domain[0]}, ${domain[1]}] 上没有任何实值有效点。`
+    }
+  }
+  return {
+    domainStatus: sampled.breaks.length > 0 ? "partial_breaks" : "valid",
+    validSampleCount,
+    sampleCount: steps + 1,
+    breaks: sampled.breaks,
+    note: sampled.breaks.length > 0
+      ? `函数在区间 [${domain[0]}, ${domain[1]}] 内存在 ${sampled.breaks.length} 处断点/无定义点。`
+      : `函数在区间 [${domain[0]}, ${domain[1]}] 上定义域有效。`
+  }
+}

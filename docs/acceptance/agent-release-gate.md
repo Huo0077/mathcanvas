@@ -1,6 +1,6 @@
 # Agent 发布前门禁
 
-> **2026-11-18 最终版 G3-DS 门禁进度（Task F0–F3 完成，零付费；真实 DS 仍 0/36）**：已按 [G3-DS 最终版真实作图能力实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**（`f118c721`）、**Task F1**（`15be4dfc`）、**Task F2**（`195bf691`）与 **Task F3**（[Task F3 审计](../audit/g3-final-f3/README.md)，实体图/约束图/三态观察），Task F4–F8 工程改造及 Task F9 授权真实 DS 复测尚未完成；人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
+> **2026-11-18 最终版 G3-DS 门禁进度（Task F0–F4 完成，零付费；真实 DS 仍 0/36）**：已按 [G3-DS 最终版真实作图能力实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0**（`f118c721`）、**Task F1**（`15be4dfc`）、**Task F2**（`195bf691`）、**Task F3**（`372cccd0`）与 **Task F4**（[Task F4 审计](../audit/g3-final-f4/README.md)，二维/函数内核求解器 `constraintSolve2d`），Task F5–F8 工程改造及 Task F9 授权真实 DS 复测尚未完成；人工可读性（`humanReviewed: pending`）与 Windows 实机窗口签收仍阻断发布。
 
 > **2026-11-17 最新阻断**：当前修订原生DS复测36题完整合同仍0/36，DS候选真实浏览器/提交未执行；不得以工具混批归零或离线36/36作为发布条件。见[脱敏实测](../audit/2026-11-17-g3-ds-live-retest-92981/README.md)，人工可读性、Windows窗口/冷机与发布仍待明确签收。
 

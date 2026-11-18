@@ -1288,3 +1288,95 @@ export function tangentSegment(tangent: CurveTangent, halfLength: number): { a: 
 export function normalFromTangent(tangent: CurveTangent): CurveTangent {
   return { ...tangent, direction: { x: -tangent.direction.y, y: tangent.direction.x } }
 }
+
+export interface PlanarLineSolveResult {
+  point: Coordinate
+  endpoint: Coordinate
+  direction: Coordinate
+  slope: number | null
+  intercept: number | null
+  residual: number
+}
+
+/** Evaluates Euclidean perpendicular distance from `point` to the line through `a` and `b`, or `null` if the line is degenerate. */
+export function pointToLineDistance2d(a: Coordinate, b: Coordinate, point: Coordinate): number | null {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  if (!Number.isFinite(len) || len <= EPSILON) return null
+  return Math.abs((point.x - a.x) * dy - (point.y - a.y) * dx) / len
+}
+
+/** Evaluates or solves a point along segment/line AB at affine parameter `t` (with residual if `candidate` is provided). */
+export function solvePointOnLine2d(
+  a: Coordinate,
+  b: Coordinate,
+  options: { parameter?: number; candidate?: Coordinate } = {}
+): { point: Coordinate | null; parameter: number | null; residual: number; degenerate: boolean } {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  if (!Number.isFinite(len) || len <= EPSILON) {
+    return { point: null, parameter: null, residual: Number.POSITIVE_INFINITY, degenerate: true }
+  }
+  if (options.candidate) {
+    const t = ((options.candidate.x - a.x) * dx + (options.candidate.y - a.y) * dy) / (len * len)
+    const dist = pointToLineDistance2d(a, b, options.candidate) ?? Number.POSITIVE_INFINITY
+    return { point: { x: a.x + t * dx, y: a.y + t * dy }, parameter: t, residual: dist, degenerate: false }
+  }
+  const t = options.parameter ?? 0.5
+  return { point: { x: a.x + t * dx, y: a.y + t * dy }, parameter: t, residual: 0, degenerate: false }
+}
+
+/** Evaluates midpoint or affine ratio point `A + t*(B - A)` and optional candidate Euclidean residual. */
+export function solveAffineRatioPoint2d(
+  a: Coordinate,
+  b: Coordinate,
+  t: number,
+  candidate?: Coordinate
+): { point: Coordinate | null; residual: number } {
+  if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y) || !Number.isFinite(t)) {
+    return { point: null, residual: Number.POSITIVE_INFINITY }
+  }
+  const point = { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }
+  const residual = candidate ? Math.hypot(candidate.x - point.x, candidate.y - point.y) : 0
+  return { point, residual }
+}
+
+/** Constructs a line through `throughPoint` perpendicular or parallel to `line`, optionally measuring angular residual of a candidate line. */
+export function solveOrientedLineThroughPoint2d(
+  line: readonly [Coordinate, Coordinate],
+  throughPoint: Coordinate,
+  orientation: "perpendicular" | "parallel",
+  options: { length?: number; candidateLine?: readonly [Coordinate, Coordinate] } = {}
+): PlanarLineSolveResult | null {
+  const dx = line[1].x - line[0].x
+  const dy = line[1].y - line[0].y
+  const len = Math.hypot(dx, dy)
+  if (!Number.isFinite(len) || len <= EPSILON || !Number.isFinite(throughPoint.x) || !Number.isFinite(throughPoint.y)) {
+    return null
+  }
+  const ux = dx / len
+  const uy = dy / len
+  const dir = orientation === "perpendicular" ? { x: -uy, y: ux } : { x: ux, y: uy }
+  const span = options.length && Number.isFinite(options.length) && options.length > 0 ? options.length : 1
+  const endpoint = { x: throughPoint.x + dir.x * span, y: throughPoint.y + dir.y * span }
+  const slope = Math.abs(dir.x) > EPSILON ? dir.y / dir.x : null
+  const intercept = slope !== null ? throughPoint.y - slope * throughPoint.x : null
+  let residual = 0
+  if (options.candidateLine) {
+    const cdx = options.candidateLine[1].x - options.candidateLine[0].x
+    const cdy = options.candidateLine[1].y - options.candidateLine[0].y
+    const clen = Math.hypot(cdx, cdy)
+    if (!Number.isFinite(clen) || clen <= EPSILON) {
+      residual = Number.POSITIVE_INFINITY
+    } else {
+      const cux = cdx / clen
+      const cuy = cdy / clen
+      const angleMismatch = Math.abs(cux * dir.y - cuy * dir.x)
+      const passMismatch = pointToLineDistance2d(options.candidateLine[0], options.candidateLine[1], throughPoint) ?? Number.POSITIVE_INFINITY
+      residual = Math.max(angleMismatch, passMismatch)
+    }
+  }
+  return { point: throughPoint, endpoint, direction: dir, slope, intercept, residual }
+}

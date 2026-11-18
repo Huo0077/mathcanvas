@@ -8,7 +8,9 @@
 
 
 
-## 2026-11-18 —— G3-DS 最终版实施 Task F3 / F2 / F1 / F0（开发版，0 付费）
+## 2026-11-18 —— G3-DS 最终版实施 Task F4 / F3 / F2 / F1 / F0（开发版，0 付费）
+
+- **Task F4 二维与函数内核求解器**：在 [planar-constraints.ts](packages/geometry-kernel/src/planar-constraints.ts) 与 [function-evidence.ts](packages/geometry-kernel/src/function-evidence.ts) 补全平面关系、定比、定向线与函数定义域证据辅助；新增 [constraintSolve2d.ts](packages/agent-core/src/solver/constraintSolve2d.ts) 与 [constraintSolve2d.test.ts](packages/agent-core/src/solver/constraintSolve2d.test.ts)（覆盖点在线上、交点、共线、中点、定比、等距、垂直/平行、圆锥曲线-直线交点与分支选择、函数定义域/切线/外点切线/公切线、焦点/离心率及退化无解反例，输出 `{ status, roots, selectedBranch, residual, domainStatus, constraintStatus }`）；接入 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `93 passed`、`typecheck`、`lint` `0 errors`）。
 
 - **Task F3 实体图与约束图**：新增 [entityGraph.ts](packages/agent-core/src/entityGraph.ts)、[constraintGraph.ts](packages/agent-core/src/constraintGraph.ts)、[kernelObservation.ts](packages/agent-core/src/kernelObservation.ts) 与单测 [entityGraph.test.ts](packages/agent-core/src/entityGraph.test.ts)、[constraintGraph.test.ts](packages/agent-core/src/constraintGraph.test.ts)，支持可序列化实体/约束依赖、跨小问继承权限判定、待求参数表（`solvable`）及三态观察汇总；在 [obligationIR.ts](packages/agent-core/src/obligationIR.ts) 接入 `buildConstraintGraphFromObligationIR`、在 [dsDrawingIntent.ts](packages/agent-core/src/dsDrawingIntent.ts) 接入 `classifyDsIntentTriState` 并导出至 [index.ts](packages/agent-core/src/index.ts)（`4` 文件 `33 passed`、`typecheck`、`lint` `0 errors`）。
 
