@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "g3-f9-action-retest.v1",
+  "revision": "bff4d0ebc67400a061838cb37f9a2901360bc30b",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "suiteDenominator": 36,
+  "selected": [
+    "GK-S08"
+  ],
+  "completed": 1,
+  "unrun": 35,
+  "mode": "ds_action + real native DeepSeek; text-only prompt; no confirmed figure attached",
+  "modelId": "deepseek-v4-flash",
+  "limits": {
+    "maxRequests": 108,
+    "maxPerCase": 8,
+    "maxInputBytes": 80000,
+    "maxOutputTokens": 4096,
+    "authorizedMaxUsd": 5
+  },
+  "actual": {
+    "requests": 1,
+    "inputBytes": 6119,
+    "inputTokens": 1560,
+    "outputTokens": 184,
+    "usageEvents": 1,
+    "actions": [
+      "request_clarification"
+    ],
+    "candidateCreated": false,
+    "contractStatus": "failed_no_candidate",
+    "certificateStatus": "not_measured",
+    "renderStatus": "not_measured",
+    "controlledDeliveryStatus": "not_measured",
+    "mainCanvasWrites": 0
+  },
+  "costUsd": null,
+  "costKnown": false,
+  "stopBatch": true,
+  "inputMode": "text_with_figure_reference",
+  "inputFigureSupplied": false
+}

@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-17 F9当前复测停点**：当前源码三族立体构造零费重新打包后19/21/15图元，旧假成功不再复现；GK-S08真实DS1请求即请求澄清，没有候选，余35题未测。先按[本轮审计](audit/2026-11-17-g3-f9-current-retest/README.md)核对其必要题图输入；或明确改选完整text_only代表题，再受控试点，不能把澄清算通过或直接放开36题。
+
 > **2026-11-18 G3-F9 内核动作修复进展（Task 0–5 零付费闭环完成，0 新增付费；停在付费重授权前）**：`GK-S08` 完整 `ds_action` 0 付费回放与全部全量检查均通过：`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、Playwright E2E **`41 passed`**（详见 [Task 5 审计](./audit/g3-f9-repair-t5-zero-cost/README.md)）；旧 `8 req` / `0/36` 与 `humanReviewed`/`Windows UIA` 待后续授权实测。
 > **2026-11-18 G3-F9 内核动作修复进展（Task 0–4 完成，0 新增付费；推进 Task 5 零付费门禁）**：`PlanOutcome.candidateSlices`、`dsActionTools` 分支画布隔离与 `parabola` 支持、`GK-S02` `before_fold/after_fold` 开放折面与 `GK-P06` 三分支 `ds_action` live 接线已通（`4` 文件 `131 passed`，`typecheck` 退出 `0`，`lint` `0 errors`；见 [Task 4 审计](./audit/g3-f9-repair-t4/README.md)），真实 DS 仍未重测。
 > **2026-11-18 G3-F9 内核动作修复进展（Task 0–3 完成，0 新增付费；推进 Task 4）**：已完成 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) **Task 0**（`4e2bb55a`）、**Task 1**（`8af88e39`）、**Task 2**（`5ab07e00`）与 **Task 3**（[Task 3 审计](audit/g3-f9-repair-t3/README.md)，回执签名、无进展熔断与预算不双扣，`3` 文件 `83 passed` + `typecheck` + `lint` + `test:docs` 全过）；**当前执行入口推进至 Task 4（Live 多问 / 多状态 / 多分支 `CandidateSet` 接线与回归验证）**，真实 DS 调用仍暂停。

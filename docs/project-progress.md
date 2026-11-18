@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-17 —— F9当前修订零费与真实DS首题复测
+
+从当前源码重新打包原先的立体探针（避免旧打包JS污染），方锥/三棱柱/四面体得到19/21/15图元；86项定向测试通过。GK-S08真实原生DS试点1请求返回 `request_clarification`；其输入标记 `text_with_figure_reference`、此次无核对题图，35题未跑；候选/证书/渲染未测。实际扣费未知。本轮完整证据及止损见[审计](audit/2026-11-17-g3-f9-current-retest/README.md)，不改历史8请求记录。
+
 ## 2026-11-18 —— G3-F9 内核动作修复 Task 5：0 付费端到端全绿收口，停在真实 DS 重授权闸口（0 新增付费）
 
 - 新增 `GK-S08` `ds_action` 端到端 0 付费回放通过（[g3DsFrozenCaseRunner.test.ts](./../apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts) 与 `solid-\d+:v\d+` 拓扑焊接），最后一次改码后全量实测全通过：`npm test` **`557` 文件 `5883 passed | 1 todo`**、`typecheck` 退出 `0`、`lint` **`0 errors`**、Playwright E2E **`41 passed`**（`0` 重试）；详见 [g3-f9-repair-t5-zero-cost/README.md](./audit/g3-f9-repair-t5-zero-cost/README.md)。全程 **0 新增付费**，旧 `0/36` / `8 req` 试飞未重测、`humanReviewed: pending`、`Windows UIA: pending`，严停待用户重新授权 `GK-S08` 单题重测。
