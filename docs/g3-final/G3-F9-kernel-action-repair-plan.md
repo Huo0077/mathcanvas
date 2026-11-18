@@ -106,3 +106,54 @@
 ## 自审 / 禁止的捷径
 
 不要重跑当前修订再消耗DS额度；不要把零费三组复现写作“三次真实DS”；不要把 `construct_solid accepted/0` 解释为模型已学会立体；不要临时允许模型手输顶点绕过来源/拓扑；不要为了拿合同分数删减/放宽题设；不要让预造 CandidateSet 测试冒充 live 多状态；不要把 usage 乘当日官方价格推断为服务商真实扣款。
+---
+
+## 2026-11-18 增补：GK-S09 纯文字真实 DS 失败驱动修复（新 Task 6–9，均未实施）
+
+> **优先级与事实边界**：旧 Task 0–5 的零费工程任务已经完成，但不自动关闭以下任务。当前真实证据是[GK-S09 单题试点](../audit/2026-11-17-g3-f9-text-only-pilot/README.md)：`89b00bcd`、`inputMode=text_only`、两次原生 `construct_solid`、没有候选、35题未运行。该报告**没有两次动作回执的 status、blockerCode、字段名或 hash 变化**；目前不能确定“模型给错参数”还是“现有内核拒绝”，更不能报告“F9 0/36”。此前 GK-S08 缺题图的澄清和旧立体动作 accepted/0 各是不同修订的历史问题，不得作为本题根因。
+
+### 能力差距：先从题目需要的图像倒推，不从现有工具表倒推
+
+GK-S09 的文字描述涉及**所有棱长同为符号 `a`、侧棱垂直底面、顶点共球面的三棱柱**。题目的作图至少要让 DS 输出命名棱柱和相应球体，并由内核检验顶点共球面；若给出答案/证明，还必须区分示意实例与任意 `a>0` 的符号结论。现有 `construct_solid` 在 `apps/web/src/agent/dsActionTools.ts` 中只接受部分 `kind` 的**正数尺寸**；`buildDsActionToolSchemas` 对工具参数仍是 `additionalProperties:true` 的通用对象，工具名称说明未给受支持 `kind`、必需字段和示例。`packages/agent-core/src/actionRegistry.ts` 虽有 `derived.create_circumsphere`，但动作级工具闭集没有对应构造出口。**这些是代码能力/接口差距，不证明它们就是两次请求的具体失败原因**；后者必须等 Task 6 的真实回执才能定责。尤其不能为了提高产图率静默把 `a` 代为某个数后声称已处理任意 `a`。
+
+### Task 6 — 工具回执的可追责、最小化脱敏观测（第一优先，零付费）
+
+**Files:** Modify `apps/web/src/agent/modelPlanner.ts`, `apps/web/src/agent/modelPlanner.test.ts`, `apps/web/src/agent/fixtures/g3DsCaseTrace.ts`, `apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts`; Extend `apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts` if the live runner does not forward telemetry.
+
+**Interface:** 对每一次 `dsActionSession.execute` 产生仅白名单字段的 `G3ActionReceiptTrace = {runId, requestIndex, toolName, resultStatus, blockerCode?, primitiveCountBefore, primitiveCountAfter, candidateHashChanged, stateChanged, feedbackDelivered}`。`requestIndex` 要绑定同一原生请求计数；不记 `toolCall.input`、题干、模型正文、具体尺寸/坐标、凭据或完整 `repairHint`。记录模型实际接收到的反馈类别，但不改变原有安全拒绝语义。若接线/记录失败，以 `telemetry_missing` 单列，不能把它记作成功或把旧 GK-S09 回执补写成猜测值。
+
+- [ ] **RED**：注入一个缺 `height` 的 `construct_solid({kind:"triangular_prism"})`，要求 `resultStatus="repairable"`、`blockerCode="missing_required_parameter"`、图元数/hash不变且 `feedbackDelivered=true`；再用合法正数参数要求 `accepted`、图元增加、hash改变；对相同失败重复两次验证熔断信号。序列化测试必须拒绝 `prompt`、`toolInput`、`messages`、密钥字段和坐标/原始参数。Run: `npm.cmd exec -- vitest run apps/web/src/agent/modelPlanner.test.ts apps/web/src/agent/fixtures/g3DsCaseTrace.test.ts --testTimeout=30000`，新增断言先 RED。
+- [ ] **GREEN**：仅在 `execute` 返回后、向模型送回执前生成白名单诊断，复用当前 `onStructuredDiagnostic`/trace 真源；分别验证 native tool、repairable、blocked、取消/预算停机和 usage 缺失路径。保持主画布0写入。对新代码**再经授权**复测 GK-S09 一题，取得真正 first-failure code；在此之前只报告“回执未记录”。
+
+### Task 7 — 模型可见的工具契约与真正支持的立体族对齐（零付费）
+
+**Files:** Modify `apps/web/src/agent/dsActionTools.ts`, `apps/web/src/agent/dsActionTools.test.ts`, `apps/web/src/agent/systemPrompt.ts`, `apps/web/src/agent/systemPrompt.test.ts`; `apps/web/src/agent/modelPlanner.ts` only if tool schema publication/phase selection needs changes.
+
+**Interface:** `construct_solid` 按 `kind` 显示受支持的封闭参数族（当前至少 `regular_pyramid`, `perpendicular_pyramid`, `prism`/`triangular_prism`, `tetrahedron`；兼容别名由内核规范化），工具 schema 显式列每族必需字段、正数条件、顶点名/底面引用形式；模型提示和参数校验从**同一策略能力表**生成。对可能额外要求已存在画布点的族明确何时先 `construct_base`/`construct_point`。仍不允许原始 `vertices`；非公开字段不泄漏。不得通过通用 schema `additionalProperties:true` 让模型猜“合法”输入。若 provider 不支持复杂 union schema，应提供简单、经验证的分族工具，而不是仅在 prompt 中列出限制。
+
+- [ ] **RED**：断言 `construct_solid` 工具 schema 能让模型看到 `kind` 枚举及各族必需字段；模型提交 `shape:"ball"`、无边长、错类型尺寸、未声明底面名，返回稳定字段路径与 `blockerCode`，且不创建候选；合法三棱柱参数通过现有 `solveConstraint3d`/`SpeculativeCanvas`。Run: `npm.cmd exec -- vitest run apps/web/src/agent/dsActionTools.test.ts apps/web/src/agent/systemPrompt.test.ts apps/web/src/agent/modelPlanner.test.ts --testTimeout=30000`，新增断言先 RED。
+- [ ] **GREEN**：仅发布已实现的 `kind`/动作；将 `repairHint` 压缩成模型可执行的“缺哪一字段、可由哪条关系求得”，不回显题库预期图。保留 `hand_computed_vertices_forbidden`、混合工具批次拒绝、重复 callId 和证书边界。通过正负变体及已有二维/立体测试后独立提交。
+
+### Task 8 — 符号尺寸与外接球：先定可验证图像语义，再补内核（零付费）
+
+**Files:** Extend `packages/agent-core/src/solver/constraintSolve3d.ts` and `constraintSolve3d.test.ts` **only if** current solver cannot represent the selected parameterization; add a focused `packages/agent-core/src/solver/circumsphereFromSolid.ts` and `.test.ts` if existing `derived.create_circumsphere` cannot be reused; Modify `apps/web/src/agent/dsActionTools.ts` / `.test.ts`, `packages/agent-core/src/actionRegistry.ts` only for an actual registered action; Extend `scripts/reliability-eval/solidContracts18.test.ts` and `apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts`.
+
+**Contract:** 先决策 `a>0` 的表现：**默认**生成明确标注的比例实例（如正规化 `a=1` 仅用作绘图尺度），同时保留符号 `a`、所有棱相等和顶点共球面的关系来源；证明或选项的数值结论仍须对任意 `a>0` 由代数推导或明确标为未证明，禁止把单实例当普遍结论。若题目要求动态参数，模型输出 `parameter:a`，内核绑定实例值后可随参数变更重算图、证书随 hash 失效。`construct_circumsphere({solidId,alias})` 从**已经构造的闭合棱柱**求球心与半径，复用 `derived.create_circumsphere` 的内核/动作，不收 DS 提供的球心半径。
+
+- [ ] **RED**：合法三棱柱六个顶点均在派生球面上，三条底边与三条侧棱均为归一化尺寸 `a`；对 `a=1` 与另一个正值做比例变化，核对归一化关系和球面方程；只有三棱柱没有球体、假球体/错半径、非等棱、不可用符号、不同名称及退化/无解均失败。当前 `GK-S09` 合同要求命名立体与实际球体，只有 prism 不得算通过。Run: `npm.cmd exec -- vitest run packages/agent-core/src/solver/constraintSolve3d.test.ts packages/agent-core/src/verification/drawingCertificate.test.ts scripts/reliability-eval/solidContracts18.test.ts apps/web/src/agent/dsActionTools.test.ts --testTimeout=30000`；确认新增用例 RED。
+- [ ] **最小实现**：只从内核算出球体与来源链，输出可追踪 `solidId`、球心/半径/证书输入 hash；为模型提供可执行的派生球动作、有效范例和无解反馈；不按 GK-S09 题号写坐标或选项，不向模型注入黄金答案。检查是否与已有 `derived.create_circumsphere` 重复，优先适配，不造第二套球算法。
+- [ ] **GREEN**：`npm.cmd exec -- vitest run packages/agent-core/src/solver/constraintSolve3d.test.ts packages/agent-core/src/verification/drawingCertificate.test.ts scripts/reliability-eval/solidContracts18.test.ts apps/web/src/agent/dsActionTools.test.ts --testTimeout=30000`、`npm.cmd run typecheck`；零费录制 `ds_action` 从合法参数化三棱柱→派生球→`finish_candidate`→完整合同/生产证书均过，反例均拒。浏览器同候选截图再单独验收，不能以合同过代替画布可读性。
+
+### Task 9 — 分层真实DS回归与止损（不得沿用本次旧请求）
+
+**Files:** Add sanitized readme + per-case report to `docs/audit/g3-f9-next-live-retest/`; Update `docs/current-status.md`, `docs/project-progress.md`, `docs/agent-next-round-progress.md`, `docs/acceptance/agent-tool-loop-scorecard.md`, `docs/acceptance/agent-release-gate.md`。原生报告放 `eval-results/` 忽略目录。
+
+- [ ] 固定 **Task 6–8 完成后的新修订**、题集 SHA-256、profile revision、确认题图/纯文字模式、官方价格与本轮请求/token/美元上限、首题失败停机门槛；明确取得用户**新付费授权**。旧两次 `construct_solid` 的实际 blocker 不能通过猜测回填；新回执含状态码才可判定是模型参数、不支持形状、场景依赖还是内核失败。
+- [ ] 先只测 `GK-S09`，同版序列记录：模型被实际调用、动作参数字段形状、每步回执、立体与球体物化、全部约束残差、数学合同、生产证书、同候选浏览器画布、隔离交付。单题合同/证书未同时过立即停批；不能拿旧离线36/36补分子。
+- [ ] 首题通过后，按题图完整性和能力族依次做立体另一题、平面曲线题、多问多状态、最终固定36题；每次扩批前更新预算且分母透明。对 `text_with_figure_reference` 题缺用户确认图像时允许澄清但仍计完整作图未通过。真实账单金额未知则写 `unknown`；人工可读性与Windows桌面窗口发布门禁仍独立。
+
+### 审查重点：不要用“放宽防御”伪造提升
+
+- `repairable` 只表示还可以探索，不等于“已画图”；所有数学关系、球体与拓扑在最终证书和独立合同继续 fail-closed。
+- **能出图元不等于符合题意**：必须明确检验外接球、符号关系、多问和真实画布同版；缺一项仍失败。
+- 同一种 `construct_solid` 再次失败若工具回执重复且 hash 不变，进入停滞熔断；不为“再测几次”自动增加花费。上一轮首题 GK-S09 的两次请求和本轮文档更新不构成下次额度。

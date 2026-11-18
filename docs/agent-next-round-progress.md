@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 F9下一步**：以[修复计划 Task 6–9](g3-final/G3-F9-kernel-action-repair-plan.md)为执行入口：先记录两次 `construct_solid` 的脱敏真实回执，再修 `kind`/参数schema与 GK-S09 的符号棱长、外接球能力，完成零费用整题合同+证书回放后另获付费授权复测一题。旧单题请求不重跑、不合并为36题通过率。
+
 > **2026-11-17 当前 F9 实测停点**：纯文字 GK-S09 两次原生DS `construct_solid` 均未形成候选，35题未测。先补工具回执脱敏 `{status, blockerCode, primitiveCount, hashChanged}`，零费核验含符号边长与外接球的题型，再按新授权复测小样本；[证据](audit/2026-11-17-g3-f9-text-only-pilot/README.md)。不要拿本地回放成功替代真实DS成绩。
 
 > **2026-11-17 F9当前复测停点**：当前源码三族立体构造零费重新打包后19/21/15图元，旧假成功不再复现；GK-S08真实DS1请求即请求澄清，没有候选，余35题未测。先按[本轮审计](audit/2026-11-17-g3-f9-current-retest/README.md)核对其必要题图输入；或明确改选完整text_only代表题，再受控试点，不能把澄清算通过或直接放开36题。
