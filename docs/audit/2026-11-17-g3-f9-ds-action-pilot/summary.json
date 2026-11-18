@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "g3-f9-ds-action-pilot.v1",
+  "revision": "edacbf896aae961d22de3b908f4a32e8d99611b8",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "suiteDenominator": 36,
+  "selected": [
+    "GK-S08"
+  ],
+  "completed": 1,
+  "unrun": 35,
+  "modelId": "deepseek-v4-flash",
+  "route": "ds_action",
+  "limits": {
+    "maxRequests": 108,
+    "maxPerCase": 8,
+    "maxInputBytes": 80000,
+    "maxOutputTokens": 4096,
+    "approvedUsd": 5
+  },
+  "usage": {
+    "requests": 8,
+    "inputBytes": 63834,
+    "inputTokens": 17104,
+    "outputTokens": 631,
+    "usageEvents": 8
+  },
+  "requestCount": 8,
+  "toolCallsByRequest": [
+    [
+      "construct_solid"
+    ],
+    [
+      "query_measurement"
+    ],
+    [
+      "query_constraint_status"
+    ],
+    [
+      "construct_face"
+    ],
+    [
+      "add_relation"
+    ],
+    [
+      "add_relation"
+    ],
+    [
+      "add_relation"
+    ],
+    [
+      "finish_candidate"
+    ]
+  ],
+  "errorCode": "internal_budget",
+  "candidateCreated": false,
+  "contractStatus": "not_measured_no_candidate",
+  "certificateStatus": "not_measured_no_candidate",
+  "browserRenderStatus": "not_measured",
+  "controlledDeliveryStatus": "not_measured",
+  "costUsd": null,
+  "costKnown": false,
+  "stopBatch": true,
+  "zeroCostProbe": [
+    {
+      "tool": "construct_solid",
+      "accepted": true,
+      "primitivesAfter": 0
+    },
+    {
+      "tool": "construct_face",
+      "accepted": true,
+      "primitivesAfter": 0
+    },
+    {
+      "tool": "finish_candidate",
+      "accepted": false,
+      "code": "empty_candidate"
+    }
+  ]
+}

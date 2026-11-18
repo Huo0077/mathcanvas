@@ -1,5 +1,9 @@
 # MathCanvas 当前状态
 
+## 2026-11-17 —— F9 `ds_action` 首题真实试点失败，立体构造假成功（停止扩批）
+
+用户确认沿用最多5美元/108次总请求，并将单题上限从3次改为8次。零费用验证 `dsActionTools` 与冻结题CandidateSet测试 **8/8**；原生干跑证明首轮发布动作级工具，不再用 `ds_intent`。仅对GK-S08发出**8次真实DS请求**（8条usage，输入17104/输出631 tokens），模型按顺序调用 `construct_solid` 等动作，最终 `finish_candidate` 前没有任何图元，`internal_budget` 停止，未进入数学合同/证书/画布验收；**其他35题未测，不是“F9 0/36”**。零费用内核探针证实 `construct_solid` 与 `construct_face` 返回 `accepted` 却均生成0图元，随后 `finish_candidate` 以 `empty_candidate` 拒绝；这是动作工具实现缺口，不能靠加请求修复。实际账单未知，停止剩余额度的付费调用；详见[首题真实试点审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)。G3-DS与发布仍未退出。
+
 ## 2026-11-17 —— F9 新授权零费用接线复核：真实调用暂停
 
 用户同意沿用最多5美元/108请求/单题3次，本轮**新增真实DS请求0次**。定向单测3文件78项通过，但 `ds_action` 正例最简单“两点一线段+finish”需4次模型响应，现有单题3次无法完成；冻结题runner的真实 `PlannerPort` 路径仍只产 `shared` 单候选，未闭环多状态/多分支。故未启动新一轮付费测试，也不能说F9新架构成功率已测；先零费接线、再确认单题上限方案，见[门禁审计](audit/2026-11-17-g3-f9-zero-cost-gate/README.md)。历史旧路由4题10请求不属于本轮授权的调用。

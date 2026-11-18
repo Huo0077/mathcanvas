@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-17 F9 首题停批**：新授权下已真实发出8次 `ds_action` 请求测GK-S08，但`construct_solid`/`construct_face` 虚报成功且图元0，`finish_candidate` 因空候选失败；其余35题未测。先按[首题审计](audit/2026-11-17-g3-f9-ds-action-pilot/README.md)修内核动作工具与读工具，继续补真正 live CandidateSet，多项零费通过后再复测一题。不能将剩余100次请求盲目用完。
+
 > **2026-11-17 F9零费用停点**：本轮用户维持5美元/108请求/单题3次，但 `ds_action` 最小正例需4次往返、F9 `PlannerPort` 当前仍只产 `shared` 候选。新模型请求0次；先解决两个零费接线问题，再商议单题上限或原子动作批次。证据：[F9接线门禁](audit/2026-11-17-g3-f9-zero-cost-gate/README.md)。
 > **F9停点（2026-11-17）**：四题旧 `ds_intent` 临时入口误测，不是 `ds_action` F9成绩；10次请求后已停止。先按[误路由审计](audit/2026-11-17-g3-f9-route-mismatch/README.md)做零付费入口/动作轨迹/候选集合检查，并重新确认本轮预算，再考虑新模型调用。禁止直接扩大到36题。
 
