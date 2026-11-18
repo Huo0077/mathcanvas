@@ -95,6 +95,10 @@ Each real `ds_action` request is now checked against its action-call count. A ze
 
 The earlier 41 browser tests used a different deterministic planner, so they did not prove rendering of the DS action candidate. A dedicated Playwright test now exports the *recorded ds_action* GK-S09 candidate only after its independent contract and certificate pass; imports the same normalized document into the real browser; and checks equal candidate/document hashes, prism, sphere, six labels, and visibility. Import normalization via `createDefaultCadLayout` is necessary: the browser otherwise inserts layers/sheets and changes the semantic hash. This check is not native DS participation, nor an isolated candidate confirmation/commit test.
 
+### Task 9 product-route gate (2026-11-18, zero cost)
+
+A RED test with the actual frozen GK-S09 prompt showed that `createAgentRunner({ modelPlanner: { intentMode: "ds_action" } })` called the provider zero times because `routeDeterministicProblem` preempted the model. Explicit ds_action opt-in now bypasses only that shortcut. A recorded provider calls the product coordinator three times, stages prism + derived sphere with zero main-canvas writes before confirmation, then commits once on confirmation. Default UI routing remains deterministic or legacy and no paid DS result is implied.
+
 ## 不可偷换的出口
 
 Task 6 只解决“知道为什么失败”；Task 7 只解决“模型知道怎么调用”；Task 8 只解决“内核能产生真球/符号表达”；Task 9 的录制成功只解决“链路可用”。**只有新的真实 DS 请求 + 同版候选的全合同/证书/画布/交付共同通过，才能记 GK-S09 实测通过**。35题仍未测；不得以某一个阶段的 GREEN 更新真实36题成功率。

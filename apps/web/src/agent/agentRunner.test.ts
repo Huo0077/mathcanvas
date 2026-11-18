@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
+import drawingContracts36 from "../../../../test-fixtures/reliability/drawing-contracts-36.json"
 import { DS_INTENT_SCHEMA_VERSION, type PlanEnvelope, type PlannerPort, type PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
@@ -908,6 +909,40 @@ describe("the model-backed planner", () => {
   })
 
   const selectedProvider = { resolveProvider: async () => ({ ok: true as const, provider: { id: "openai-1", modelId: "gpt-x", dialect: "openai_native", revision: 3, capabilities: { tools: "unknown" as const, json: "verified" as const, vision: "unknown" as const } } }) }
+
+  it("uses the selected ds_action provider for GK-S09 instead of silently taking the deterministic shortcut", async () => {
+    const prompt = drawingContracts36.cases.find((item) => item.id === "GK-S09")!.prompt
+    let requests = 0
+    const runner = createAgentRunner({ modelPlanner: {
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        requests += 1
+        const calls = [
+          { toolId: "construct_solid", input: { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 2,
+            vertexNames: ["A", "B", "C", "A1", "B1", "C1"] } },
+          { toolId: "construct_circumsphere", input: { id: "sphere", solidId: "prism" } },
+          { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }
+        ] as const
+        const call = calls[Math.min(requests - 1, calls.length - 1)]!
+        return { ok: true, events: [{ kind: "tool_call" as const,
+          requestId: `r-${requests}`, attemptId: `a-${requests}`, toolCallId: `tc-${requests}`,
+          toolId: call.toolId, input: call.input }] }
+      }
+    } })
+    const result = await runAndWait(runner, prompt)
+    expect(requests).toBe(3)
+    expect(result.phase).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    const draft = runner.getActiveDraftCandidate()
+    expect(draft?.candidate.primitives.some((p) => p.type === "polyhedron3")).toBe(true)
+    expect(draft?.candidate.primitives.some((p) => p.type === "sphere")).toBe(true)
+    expect(runner.confirm().status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.some((p) => p.type === "sphere")).toBe(true)
+  })
 
   it("sends the prompt to the selected profile and turns its JSON into a real, confirmable draft", async () => {
     const calls: { profileId: string; messages: { role: string; content: string }[] }[] = []

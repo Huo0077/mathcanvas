@@ -514,7 +514,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
      * 模型只负责结构/动作参数，不手算顶点坐标（见 `systemPrompt` 的那条纪律）。
      * 识别不出或核验不过 ⇒ 返回 null，继续走原来的模型/兜底路径。
      */
-    const deterministic = routeDeterministicProblem(prompt)
+    // An explicitly selected action-level provider must not be replaced by a local plan.
+    const deterministic = dependencies.modelPlanner?.intentMode === "ds_action" ? null : routeDeterministicProblem(prompt)
     if (deterministic) return {
       planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
       diagramPrompt: deterministic.diagramPrompt,

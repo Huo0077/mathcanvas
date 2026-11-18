@@ -1,4 +1,4 @@
-﻿import { createBudget } from "@draw/agent-core"
+import { createBudget } from "@draw/agent-core"
 import { encodeMgeo } from "@draw/dsl"
 import { expect, test } from "@playwright/test"
 
