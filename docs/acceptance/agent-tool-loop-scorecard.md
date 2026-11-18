@@ -1,6 +1,6 @@
 # MathCanvas Agent Tool Loop Scorecard
 
-> **2026-11-18 G3-F9 内核动作修复（Task 0 完成，0 新增付费；正推进 Task 1）**：已完成 **Task 0**（[Task 0 审计](../audit/g3-f9-repair-t0/README.md)，工具状态真实性闸 + 无进展停机），正按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 依次落地 Task 1 立体参数化执行、Task 2 面/折叠/真实读数与 Task 4 多状态 `CandidateSet` live 接线。
+> **2026-11-18 G3-F9 内核动作修复（Task 0–1 完成，0 新增付费；正推进 Task 2）**：已完成 **Task 0**（`4e2bb55a`）与 **Task 1**（[Task 1 审计](../audit/g3-f9-repair-t1/README.md)，`construct_solid` 四族立体经 `solveConstraint3d` 真实写入），正按 [修复计划](../g3-final/G3-F9-kernel-action-repair-plan.md) 推进 Task 2 面/底座/折叠与真实内核读数、Task 3 熔断及 Task 4 多状态 `CandidateSet` live 接线。
 
 > **2026-11-18 G3-DS Task F0–F8 进度（全部工程完结，零付费，真实 DS 仍 0/36）**：已按 [G3-DS 最终版实施档案](../g3-final/G3-DS-final-implementation-dossier.md) 完成 **Task F0–F8** 全部动作协议、隔离候选层、实体/约束图、2D/3D/折叠求解、定向局部修复及真实画布终态门禁（见 [Task F8 审计](../audit/g3-final-f8/README.md)），现按 §12 停机规则等待用户对 **Task F9（分层真实 DS 复测：Tier A→B→C）** 的显式付费授权与参数锁定。
 

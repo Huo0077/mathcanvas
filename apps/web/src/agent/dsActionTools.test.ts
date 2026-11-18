@@ -307,13 +307,6 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
 
     for (const input of families) {
       const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
-      const solidRes = session.execute("construct_solid", input)
-      expect(solidRes.ok).toBe(false)
-      expect(solidRes.status).toBe("blocked")
-      expect(solidRes.blockerCode).toBe("unsupported_action")
-      expect(solidRes.stateChanged).toBe(false)
-      expect(solidRes.primitiveCount).toBe(0)
-
       const faceRes = session.execute("construct_face", { alias: "F1", vertexNames: ["A", "B", "C"] })
       expect(faceRes.ok).toBe(false)
       expect(faceRes.status).toBe("blocked")
@@ -338,11 +331,88 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
       expect(queryC.ok).toBe(false)
       expect(queryC.status).toBe("blocked")
 
-      const finish = session.execute("finish_candidate", {})
+      const finish = session.execute("finish_candidate", { goal: `empty-${input.kind}` })
       expect(finish.ok).toBe(false)
       expect(finish.status).toBe("repairable")
       expect(finish.blockerCode).toBe("empty_candidate")
       expect(finish.terminated).toBeUndefined()
     }
+  })
+
+  it("Task 1 parametric construct_solid: materializes regular_pyramid, prism, perpendicular_pyramid, and tetrahedron into SpeculativeCanvas and rejects invalid specs", () => {
+    // 1. regular_pyramid / square_pyramid
+    const s1 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const hashBefore = s1.currentSnapshot().candidateHash
+    const r1 = s1.execute("construct_solid", { id: "S1", kind: "square_pyramid", sideLength: 2, height: 3 })
+    expect(r1.ok).toBe(true)
+    expect(r1.status).toBe("accepted")
+    expect(r1.stateChanged).toBe(true)
+    expect(r1.primitiveCount).toBeGreaterThan(0)
+    expect(r1.candidateHash).not.toBe(hashBefore)
+    const fin1 = s1.execute("finish_candidate", { goal: "正四棱锥" })
+    expect(fin1.terminated?.plan.kind).toBe("plan")
+    expect(s1.currentSnapshot().actions[0]?.actionId).toBe("solid.create_polyhedron")
+    const polyInputs1 = s1.currentSnapshot().actions[0]?.inputs as { vertices: Array<{ x: number; y: number; z: number }>; faces: number[][]; vertexNames: string[] }
+    expect(polyInputs1.vertices).toHaveLength(5)
+    expect(polyInputs1.faces).toHaveLength(5)
+    expect(Math.max(...polyInputs1.vertices.map((v) => v.z))).toBeCloseTo(3, 6)
+
+    // 2. prism (triangular_prism)
+    const s2 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const r2 = s2.execute("construct_solid", { id: "S2", kind: "triangular_prism", sideLength: 3, height: 4 })
+    expect(r2.ok).toBe(true)
+    expect(r2.stateChanged).toBe(true)
+    expect(r2.primitiveCount).toBeGreaterThan(0)
+    const fin2 = s2.execute("finish_candidate", { goal: "正三棱柱" })
+    expect(fin2.terminated?.plan.kind).toBe("plan")
+
+    // 3. perpendicular_pyramid
+    const s3 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const r3 = s3.execute("construct_solid", { id: "S3", kind: "perpendicular_pyramid", sideLength: 4, height: 5, footName: "A", apexName: "S" })
+    expect(r3.ok).toBe(true)
+    expect(r3.stateChanged).toBe(true)
+    const polyInputs3 = s3.currentSnapshot().actions[0]?.inputs as { vertices: Array<{ x: number; y: number; z: number }>; vertexNames: string[] }
+    const sIdx = polyInputs3.vertexNames.indexOf("S")
+    expect(sIdx).toBeGreaterThanOrEqual(0)
+    expect(polyInputs3.vertices[sIdx]?.z).toBeCloseTo(5, 6)
+
+    // 4. tetrahedron
+    const s4 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const r4 = s4.execute("construct_solid", { id: "S4", kind: "tetrahedron", edgeLength: 2 })
+    expect(r4.ok).toBe(true)
+    expect(r4.stateChanged).toBe(true)
+    const polyInputs4 = s4.currentSnapshot().actions[0]?.inputs as { vertices: Array<{ x: number; y: number; z: number }>; faces: number[][] }
+    expect(polyInputs4.vertices).toHaveLength(4)
+    expect(polyInputs4.faces).toHaveLength(4)
+
+    // Negative counterexamples: missing dimensions, impossible triangle, duplicate names, hand vertices, undeclared base refs
+    const negMissing = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const mRes = negMissing.execute("construct_solid", { id: "Bad1", kind: "regular_pyramid", sideLength: 2 })
+    expect(mRes.ok).toBe(false)
+    expect(mRes.blockerCode).toBe("missing_required_parameter")
+    expect(negMissing.currentSnapshot().actions).toHaveLength(0)
+
+    const negImpossible = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const iRes = negImpossible.execute("construct_solid", { id: "Bad2", kind: "tetrahedron", ab: 1, ac: 1, bc: 10, pa: 2, pb: 2, pc: 2 })
+    expect(iRes.ok).toBe(false)
+    expect(iRes.status).toBe("blocked")
+    expect(negImpossible.currentSnapshot().actions).toHaveLength(0)
+
+    const negDup = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const dRes = negDup.execute("construct_solid", { id: "Bad3", kind: "tetrahedron", edgeLength: 2, vertexNames: ["P", "A", "A", "C"] })
+    expect(dRes.ok).toBe(false)
+    expect(negDup.currentSnapshot().actions).toHaveLength(0)
+
+    const negHand = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const hRes = negHand.execute("construct_solid", { id: "Bad4", kind: "tetrahedron", vertices: [{ x: 0, y: 0, z: 0 }] })
+    expect(hRes.ok).toBe(false)
+    expect(hRes.blockerCode).toBe("hand_computed_vertices_forbidden")
+    expect(negHand.currentSnapshot().actions).toHaveLength(0)
+
+    const negUndeclared = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const uRes = negUndeclared.execute("construct_solid", { id: "Bad5", kind: "prism", baseVertexNames: ["X", "Y", "Z"], height: 3 })
+    expect(uRes.ok).toBe(false)
+    expect(uRes.blockerCode).toBe("undeclared_entity_ref")
+    expect(negUndeclared.currentSnapshot().actions).toHaveLength(0)
   })
 })

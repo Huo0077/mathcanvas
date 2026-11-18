@@ -1,8 +1,10 @@
 # MathCanvas 当前状态
 
-## 2026-11-18 —— G3-F9 内核动作修复 **Task 0 已完成**（0 新增付费；正推进 Task 1–4 真实执行与多状态接线）
+## 2026-11-18 —— G3-F9 内核动作修复 **Task 0–1 已完成**（0 新增付费；推进 Task 2–4）
 
-- **`G3-F9 Task 0`（工具状态真实性闸 + 无进展停机）已完成（0 新增付费）**：按 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) 在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 移除末尾默认 `accepted` 兜底并新增 `stateChanged` 与 `IMPLEMENTED_DS_ACTION_TOOLS` 工具发布过滤（未落地立体/面/折叠/查询动作统一返回 `blocked / unsupported_action`），在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 加入无进展 `no_progress` 及时停机。`dsActionTools.test.ts` 与 `modelPlanner.test.ts` 共 **`2` 文件 `75 passed`**（覆盖三族 `construct_solid` / `construct_face` 零费复现反例）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 0 审计](audit/g3-f9-repair-t0/README.md)。真实 DS 仍未重测（`GK-S08` 此前 8 请求试点无候选，其余 35 题未测）；**下一步进入 Task 1（接通 `solveConstraint3d` 让立体动作真实生成隔离候选图元）**。
+- **`G3-F9 Task 1`（`construct_solid` 经 `solveConstraint3d` 真实写入）已完成（0 新增付费）**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 完成 `regular_pyramid`、`prism`、`perpendicular_pyramid` 与 `tetrahedron` 到 `solveConstraint3d` → `solid.create_polyhedron` → `SpeculativeCanvas.applyAction` 真实执行并维护 3D 顶点注册/回滚栈，同步纳入 `IMPLEMENTED_DS_ACTION_TOOLS`；缺参、不可能三角形、重名、手算顶点与未声明点引用均零写入拒绝。实测 `3` 文件 **`17 passed`**、[solidContracts18.test.ts](scripts/reliability-eval/solidContracts18.test.ts) **`23 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；入档 [Task 1 审计](audit/g3-f9-repair-t1/README.md)，**下一步进入 Task 2（实际面/底座/折叠动作与真实只读查询）**。
+
+- **`G3-F9 Task 0`（工具状态真实性闸 + 无进展停机）已完成（0 新增付费）**：按 [修复计划](g3-final/G3-F9-kernel-action-repair-plan.md) 在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 移除末尾默认 `accepted` 兜底并新增 `stateChanged` 与 `IMPLEMENTED_DS_ACTION_TOOLS` 工具发布过滤（未落地立体/面/折叠/查询动作统一返回 `blocked / unsupported_action`），在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 加入无进展 `no_progress` 及时停机。`dsActionTools.test.ts` 与 `modelPlanner.test.ts` 共 **`2` 文件 `75 passed`**（覆盖三族 `construct_solid` / `construct_face` 零费复现反例）、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 0 审计](audit/g3-f9-repair-t0/README.md)。真实 DS 仍未重测（`GK-S08` 此前 8 请求试点无候选，其余 35 题未测）。
 
 ## 2026-11-17 —— F9三组零费用复测及新修复计划（真实DS未再调用）
 

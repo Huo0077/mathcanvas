@@ -1,9 +1,12 @@
-import type { Coordinate, GeometryDocument } from "@draw/dsl"
+import type { Coordinate, GeometryDocument, Vector3 } from "@draw/dsl"
 import {
   DS_ACTION_CLOSED_SET,
   PLAN_SCHEMA_VERSION,
   isDsActionName,
+  solveConstraint3d,
+  type ConstraintSolve3dRequest,
   type DsActionName,
+  type NamedVertex3,
   type PlanEnvelope
 } from "@draw/agent-core"
 import {
@@ -62,6 +65,7 @@ export const IMPLEMENTED_DS_ACTION_TOOLS: readonly DsActionName[] = [
   "construct_tangent",
   "construct_perpendicular",
   "construct_parallel",
+  "construct_solid",
   "repair_entity",
   "repair_constraint",
   "finish_candidate",
@@ -166,6 +170,239 @@ function asFiniteNumber(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null
 }
 
+function asPositiveNumber(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null
+}
+
+function asStringList(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null
+  const out: string[] = []
+  for (const item of v) {
+    const s = asString(item)
+    if (!s) return null
+    out.push(s)
+  }
+  return out
+}
+
+type SolidResolution =
+  | { ok: true; request: ConstraintSolve3dRequest; explicitNames?: string[] }
+  | { ok: false; status: "repairable" | "blocked"; blockerCode: string; repairHint: string }
+
+function resolveBasePolygonFromParams(
+  kind: string,
+  input: Record<string, unknown>,
+  points3: ReadonlyMap<string, Vector3>
+):
+  | { ok: true; baseVertices: NamedVertex3[]; defaultTopPrefix?: boolean }
+  | { ok: false; status: "repairable" | "blocked"; blockerCode: string; repairHint: string } {
+  const baseRefs = asStringList(input.baseVertexNames ?? input.baseLabels)
+  const wantTriangle = kind === "triangular_prism" || kind === "tetrahedron"
+  if (baseRefs && Array.isArray(input.baseVertexNames)) {
+    if (baseRefs.length < 3) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "baseVertexNames requires at least 3 distinct point names" }
+    }
+    const baseVertices: NamedVertex3[] = []
+    for (const name of baseRefs) {
+      const pt = points3.get(name)
+      if (!pt) {
+        return { ok: false, status: "repairable", blockerCode: "undeclared_entity_ref", repairHint: `undeclared base point "${name}"` }
+      }
+      baseVertices.push({ name, point: pt })
+    }
+    return { ok: true, baseVertices }
+  }
+
+  const side = asPositiveNumber(input.sideLength ?? input.baseSide)
+  const w = asPositiveNumber(input.width ?? input.ab)
+  const d = asPositiveNumber(input.depth ?? input.bc)
+  if (wantTriangle) {
+    const ab = asPositiveNumber(input.ab ?? side)
+    const bc = asPositiveNumber(input.bc ?? side)
+    const ac = asPositiveNumber(input.ac ?? side)
+    const names = baseRefs && baseRefs.length === 3 ? baseRefs : ["A", "B", "C"]
+    if (ab !== null && ac !== null && bc !== null) {
+      const xC = (ac * ac + ab * ab - bc * bc) / (2 * ab)
+      const ySq = ac * ac - xC * xC
+      if (!(ySq > 1e-12)) {
+        return { ok: false, status: "blocked", blockerCode: "infeasible", repairHint: "base triangle side lengths violate triangle inequality" }
+      }
+      return {
+        ok: true,
+        baseVertices: [
+          { name: names[0]!, point: { x: 0, y: 0, z: 0 } },
+          { name: names[1]!, point: { x: ab, y: 0, z: 0 } },
+          { name: names[2]!, point: { x: xC, y: Math.sqrt(ySq), z: 0 } }
+        ]
+      }
+    }
+    if (ab !== null && bc !== null) {
+      return {
+        ok: true,
+        baseVertices: [
+          { name: names[0]!, point: { x: 0, y: 0, z: 0 } },
+          { name: names[1]!, point: { x: ab, y: 0, z: 0 } },
+          { name: names[2]!, point: { x: 0, y: bc, z: 0 } }
+        ]
+      }
+    }
+    return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "triangular base requires positive sideLength or edge lengths" }
+  }
+
+  const quadW = w ?? side
+  const quadD = d ?? side
+  if (quadW === null || quadD === null) {
+    return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "base requires positive sideLength or width and depth" }
+  }
+  const names = baseRefs && baseRefs.length === 4 ? baseRefs : ["A", "B", "C", "D"]
+  return {
+    ok: true,
+    baseVertices: [
+      { name: names[0]!, point: { x: 0, y: 0, z: 0 } },
+      { name: names[1]!, point: { x: quadW, y: 0, z: 0 } },
+      { name: names[2]!, point: { x: quadW, y: quadD, z: 0 } },
+      { name: names[3]!, point: { x: 0, y: quadD, z: 0 } }
+    ]
+  }
+}
+
+function resolveConstructSolidRequest(
+  input: Record<string, unknown>,
+  points3: ReadonlyMap<string, Vector3>
+): SolidResolution {
+  if (Array.isArray(input.vertices)) {
+    return {
+      ok: false,
+      status: "blocked",
+      blockerCode: "hand_computed_vertices_forbidden",
+      repairHint: "never pass hand-computed vertices; pass parametric shape parameters"
+    }
+  }
+  const rawKind = asString(input.kind ?? input.shape)
+  if (!rawKind) {
+    return {
+      ok: false,
+      status: "repairable",
+      blockerCode: "missing_required_parameter",
+      repairHint: "construct_solid requires kind (regular_pyramid | prism | perpendicular_pyramid | tetrahedron)"
+    }
+  }
+  const kind = rawKind.toLowerCase()
+  const vNames = asStringList(input.vertexNames)
+  if (input.vertexNames !== undefined && (!vNames || new Set(vNames).size !== vNames.length)) {
+    return {
+      ok: false,
+      status: "repairable",
+      blockerCode: "duplicate_vertex_name",
+      repairHint: "vertexNames must contain distinct non-empty names"
+    }
+  }
+
+  if (kind === "regular_pyramid" || kind === "square_pyramid") {
+    const side = asPositiveNumber(input.sideLength ?? input.baseSide ?? input.ab)
+    if (side === null) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive sideLength / baseSide` }
+    }
+    const directLat = asPositiveNumber(input.lateralEdge)
+    const height = asPositiveNumber(input.height)
+    const lateral = directLat ?? (height !== null ? Math.hypot(height, (side * Math.SQRT2) / 2) : null)
+    if (lateral === null) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive height or lateralEdge` }
+    }
+    if (vNames && vNames.length !== 5) {
+      return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `${rawKind} vertexNames must have length 5` }
+    }
+    const baseLabels = vNames
+      ? ([vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const)
+      : (["A", "B", "C", "D"] as const)
+    const apexName = vNames ? vNames[4]! : (asString(input.apexName) ?? "P")
+    return {
+      ok: true,
+      request: { kind: "regular_pyramid", baseSide: side, lateralEdge: lateral, baseLabels, apexName },
+      ...(vNames ? { explicitNames: vNames } : {})
+    }
+  }
+
+  if (kind === "tetrahedron" || kind === "regular_tetrahedron") {
+    const edge = asPositiveNumber(input.edgeLength ?? input.sideLength)
+    const ab = asPositiveNumber(input.ab) ?? edge
+    const ac = asPositiveNumber(input.ac) ?? edge
+    const bc = asPositiveNumber(input.bc) ?? edge
+    const pa = asPositiveNumber(input.pa) ?? edge
+    const pb = asPositiveNumber(input.pb) ?? edge
+    const pc = asPositiveNumber(input.pc) ?? edge
+    if (ab === null || ac === null || bc === null || pa === null || pb === null || pc === null) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "tetrahedron requires edgeLength or all six positive edge lengths (ab, ac, bc, pa, pb, pc)" }
+    }
+    if (vNames && vNames.length !== 4) {
+      return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: "tetrahedron vertexNames must have length 4" }
+    }
+    const names = vNames
+      ? ([vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const)
+      : (["P", "A", "B", "C"] as const)
+    return {
+      ok: true,
+      request: { kind: "tetrahedron", names, ab, ac, bc, pa, pb, pc },
+      ...(vNames ? { explicitNames: vNames } : {})
+    }
+  }
+
+  if (kind === "prism" || kind === "triangular_prism" || kind === "rectangular_prism" || kind === "square_prism" || kind === "right_prism") {
+    const height = asPositiveNumber(input.height)
+    if (height === null) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive height` }
+    }
+    const base = resolveBasePolygonFromParams(kind, input, points3)
+    if (!base.ok) return base
+    const n = base.baseVertices.length
+    if (vNames && vNames.length !== 2 * n) {
+      return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `prism vertexNames must have length ${2 * n}` }
+    }
+    const baseVertices = vNames
+      ? base.baseVertices.map((bv, i) => ({ name: vNames[i]!, point: bv.point }))
+      : base.baseVertices
+    const explicitTop = asStringList(input.topLabels)
+    const topLabels = vNames
+      ? vNames.slice(n)
+      : explicitTop && explicitTop.length === n
+        ? explicitTop
+        : baseVertices.map((bv) => `${bv.name}1`)
+    return {
+      ok: true,
+      request: { kind: "prism", baseVertices, topLabels, height }
+    }
+  }
+
+  if (kind === "perpendicular_pyramid") {
+    const height = asPositiveNumber(input.height ?? input.pa)
+    if (height === null) {
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "perpendicular_pyramid requires positive height" }
+    }
+    const base = resolveBasePolygonFromParams(kind, input, points3)
+    if (!base.ok) return base
+    const n = base.baseVertices.length
+    if (vNames && vNames.length !== n + 1) {
+      return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `perpendicular_pyramid vertexNames must have length ${n + 1}` }
+    }
+    const baseVertices = vNames
+      ? base.baseVertices.map((bv, i) => ({ name: vNames[i]!, point: bv.point }))
+      : base.baseVertices
+    const apexName = vNames ? vNames[n]! : (asString(input.apexName) ?? "S")
+    const footName = asString(input.footName) ?? baseVertices[0]!.name
+    return {
+      ok: true,
+      request: { kind: "perpendicular_pyramid", apexName, baseVertices, footName, height }
+    }
+  }
+
+  return {
+    ok: false,
+    status: "blocked",
+    blockerCode: "unsupported_action",
+    repairHint: `solid kind "${rawKind}" is unsupported`
+  }
+}
+
 /** Single-action exploratory execution backing iterative DS calls (Task F2). */
 export function createDsActionSession(options: {
   readonly workspace: GeometryDocument["workspace"]
@@ -175,9 +412,13 @@ export function createDsActionSession(options: {
   const speculative = createSpeculativeCanvas(options.baseDocument, { runId: options.runId })
   const entities = new Map<string, { id: string; kind: string; scopeId: string; stateId: string }>()
   const points2 = new Map<string, Coordinate>()
+  const points3 = new Map<string, Vector3>()
   const lines2 = new Map<string, { a: Coordinate; b: Coordinate }>()
   const conics2 = new Map<string, PlanarConic>()
   const relations: Array<{ kind: string; targets: string[] }> = []
+  const pointHistory: Array<{ points2: Map<string, Coordinate>; points3: Map<string, Vector3> }> = [
+    { points2: new Map(), points3: new Map() }
+  ]
 
   const failRepairable = (action: DsActionName, blockerCode: string, repairHint: string): DsActionExecutionResult => {
     const snap = speculative.snapshot()
@@ -231,6 +472,7 @@ export function createDsActionSession(options: {
         repairHint: step.detail ?? "adjust parameters and retry"
       }
     }
+    pointHistory.push({ points2: new Map(points2), points3: new Map(points3) })
     return {
       ok: true,
       status: "accepted",
@@ -298,6 +540,12 @@ export function createDsActionSession(options: {
 
       if (name === "repair_entity" || name === "repair_constraint") {
         const rolled = speculative.rollback(1)
+        const snapshotPts = pointHistory[Math.min(rolled.stepIndex, pointHistory.length - 1)] ?? pointHistory[0]!
+        pointHistory.length = Math.max(1, rolled.stepIndex + 1)
+        points2.clear()
+        for (const [k, v] of snapshotPts.points2) points2.set(k, v)
+        points3.clear()
+        for (const [k, v] of snapshotPts.points3) points3.set(k, v)
         return {
           ok: true,
           status: "accepted",
@@ -519,14 +767,45 @@ export function createDsActionSession(options: {
       }
 
       if (name === "construct_solid") {
-        if (Array.isArray(input.vertices)) {
-          return failBlocked(
-            name,
-            "hand_computed_vertices_forbidden",
-            "never pass hand-computed vertices; pass parametric shape parameters"
-          )
+        const resolved = resolveConstructSolidRequest(input, points3)
+        if (!resolved.ok) {
+          return resolved.status === "blocked"
+            ? failBlocked(name, resolved.blockerCode, resolved.repairHint)
+            : failRepairable(name, resolved.blockerCode, resolved.repairHint)
         }
-        return failBlocked(name, "unsupported_action", "construct_solid kernel execution is not implemented yet")
+        const solved = solveConstraint3d(resolved.request)
+        if (solved.status !== "solved" || !solved.topologyValid || !solved.vertices || !solved.faceRings) {
+          return solved.status === "infeasible" || solved.status === "degenerate"
+            ? failBlocked(name, solved.status, solved.reason ?? "solid parameters are infeasible or degenerate")
+            : failRepairable(name, solved.status, solved.reason ?? "solid parameters need adjustment")
+        }
+        const id = asString(input.id ?? input.output) ?? `SOLID_${stepSeq}`
+        const label = asString(input.label) ?? id
+        const vertexNames = Object.keys(solved.pointRegistry)
+        const vertices = vertexNames.map((vn) => solved.pointRegistry[vn]!)
+        const nameToIdx = new Map(vertexNames.map((vn, idx) => [vn, idx]))
+        const faces = solved.namedFaceRings
+          ? solved.namedFaceRings.map((ring) => ring.map((vn) => nameToIdx.get(vn)!))
+          : solved.faceRings
+        for (const [vn, pt] of Object.entries(solved.pointRegistry)) {
+          points3.set(vn, pt)
+        }
+        const staged = stageDraftAction(
+          name,
+          {
+            actionId: "solid.create_polyhedron",
+            actionKey: `ds-act-${stepSeq}`,
+            factIds: [],
+            inputs: { alias: id, label, vertices, vertexNames, faces }
+          } as DraftAction,
+          id
+        )
+        if (!staged.ok) {
+          const rollbackSnap = pointHistory[Math.min(snap.stepIndex, pointHistory.length - 1)]!
+          points3.clear()
+          for (const [k, v] of rollbackSnap.points3) points3.set(k, v)
+        }
+        return staged
       }
 
       return failBlocked(name, "unsupported_action", `${name} kernel execution is not implemented yet`)

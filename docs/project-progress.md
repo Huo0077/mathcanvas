@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-18 —— G3-F9 内核动作修复 Task 1：参数化 `construct_solid` 经 `solveConstraint3d` 真实写入（0 新增付费；下一步 Task 2）
+
+- **状态与证据**：[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 接入 `solveConstraint3d` 将四族立体实际写入 `SpeculativeCanvas`，同步维护 `points3` 快照/回滚并补充 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 正反例；`3` 文件 **`17 passed`**、[solidContracts18.test.ts](scripts/reliability-eval/solidContracts18.test.ts) **`23 passed`**、`typecheck`、`lint`（`0 errors`）与 `test:docs` 全过；详见 [Task 1 审计](audit/g3-f9-repair-t1/README.md)。
+
 ## 2026-11-18 —— G3-F9 内核动作修复 Task 0：工具状态真实性闸与停滞保护（0 新增付费；下一步 Task 1）
 
 - **状态与证据**：在 [dsActionTools.ts](apps/web/src/agent/dsActionTools.ts) 新增 `stateChanged` 字段、删除默认 `accepted` 兜底并收敛 `buildDsActionToolSchemas` 为已实装闭集；在 [modelPlanner.ts](apps/web/src/agent/modelPlanner.ts) 接入同签名/假推进 `no_progress` 熔断；在 [dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts) 与 [modelPlanner.test.ts](apps/web/src/agent/modelPlanner.test.ts) 先 RED 后 GREEN（`2` 文件 `75 passed`、`typecheck`、`lint` `0 errors`、`test:docs` 全过）；详见 [Task 0 审计](audit/g3-f9-repair-t0/README.md)。
