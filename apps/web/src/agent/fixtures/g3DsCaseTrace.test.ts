@@ -10,6 +10,7 @@ import {
   classifyRetest92981Case,
   createG3CaseTrace,
   explainFirstFailure,
+  markMissingActionReceipts,
   recordActionReceipt,
   recordBoundary,
   recordRequestTrace,
@@ -321,6 +322,18 @@ describe("g3DsCaseTrace (Task 0 observability & sanitization)", () => {
     expect(counts.unknown).toBe(0)
     expect(counts.tool_protocol).toBe(0)
     expect(counts.schema + counts.dag + counts.verification).toBe(36)
+  })
+
+  it("marks a missing action receipt for the second request even when the first request has telemetry", () => {
+    let trace = createG3CaseTrace({ caseId: "GK-S09", runId: "partial-telemetry", revision: "test" })
+    trace = recordRequestTrace(trace, { index: 1, toolNames: ["construct_solid"], responseKind: "tool_calls", usageKnown: true })
+    trace = recordActionReceipt(trace, { requestIndex: 1, actionIndex: 1, toolName: "construct_solid",
+      resultStatus: "accepted", primitiveCountBefore: 0, primitiveCountAfter: 21,
+      candidateHashChanged: true, stateChanged: true, feedbackDelivered: true })
+    trace = recordRequestTrace(trace, { index: 2, toolNames: ["construct_circumsphere"], responseKind: "tool_calls", usageKnown: true })
+    expect(markMissingActionReceipts(trace).firstFailure).toEqual({
+      boundary: "tool_protocol", code: "telemetry_missing"
+    })
   })
 
   it("records sanitized per-action receipts and rejects raw action payloads", () => {

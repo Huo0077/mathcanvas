@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 F9 per-request receipt gate**: Zero-cost tests reproduced and fixed the case where an earlier request had an action receipt but a later action request lost telemetry. Each `ds_action` request is now checked against its action-call count and missing data is marked `telemetry_missing`. The generic `eval:reliability` runner also requires `--confirm-paid`; it is not the native G3-F9 `ds_action` entry and does not replace new user authorization. No paid request was made.
+
 > **2026-11-18 live authorization gate rechecked**: `--allow-paid --max-requests 3` is parsed as live, but the actual runner refuses to start when `DEEPSEEK_API_KEY` is absent (`no automatic spend`). No provider request or charge occurred; the next action still requires new explicit user authorization.
 
 > **2026-11-18 Task 9 verification note**: The required 41 Playwright same-candidate/lifecycle tests passed. A default parallel `npm test` run reported 8 timeout failures in unrelated common-tangent suites; rerunning those 3 files serialized with `--maxWorkers=1 --testTimeout=30000` passed `46/46`. This is recorded as an environment/timeout verification caveat, not converted into a false full-suite pass. No paid DS call was made.

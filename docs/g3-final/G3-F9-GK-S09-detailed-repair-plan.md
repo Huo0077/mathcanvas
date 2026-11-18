@@ -78,6 +78,10 @@ type G3ActionReceiptTrace = {
 - Added zero-cost proof at display scales `1` and `2`: the same action chain (`construct_solid ? construct_circumsphere ? finish_candidate`) produces a genuine sphere, passes the independent GK-S09 contract and certificate, and preserves the symbolic result `7/3*pi*a^2`.
 - Verification: targeted geometry/planner/certificate tests `183 passed`; documentation tests `22 passed`; full typecheck passed. No paid DS call was made. Browser same-candidate verification and a new authorized live DS run remain open.
 
+### Task 6 receipt completeness addendum (2026-11-18)
+
+Each real `ds_action` request is now checked against its action-call count. A zero-cost RED test proved that partial telemetry could previously be missed; `markMissingActionReceipts` now records `telemetry_missing`. The two historical GK-S09 receipts remain unrecoverable and are not backfilled.
+
 ## Task 9：录制整题回放 → 浏览器 → 新授权真实 DS → 分族扩批
 
 - [ ] **RED：零费整题** 在 `g3DsFrozenCaseRunner.test.ts` 用按次回放的模型动作串（不是直接注入合格 CandidateSet）驱动 `construct_solid → construct_circumsphere → finish_candidate`；缺球、只文字、匿名替身、破坏等棱长、缺 finish、证书失败均断言整题未通过。冻结 `expected/requiredObligations` 只能传给独立裁判，不出现在 provider 请求。定向运行 `npm.cmd exec -- vitest run apps/web/src/agent/fixtures/g3DsFrozenCaseRunner.test.ts scripts/reliability-eval/drawingContracts.test.ts --testTimeout=30000`，确认 RED 后完成接线再 GREEN。

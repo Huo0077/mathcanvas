@@ -20,7 +20,7 @@ import {
   type PolicyCandidateSlice
 } from "../../../../../scripts/reliability-eval/drawingContracts"
 import type { G3Boundary, G3CaseTrace } from "./g3DsCaseTrace"
-import { createG3CaseTrace, recordActionReceipt, recordBoundary, recordRequestTrace } from "./g3DsCaseTrace"
+import { createG3CaseTrace, markMissingActionReceipts, recordActionReceipt, recordBoundary, recordRequestTrace } from "./g3DsCaseTrace"
 import { createModelPlanner, type ModelPlannerDependencies } from "../modelPlanner"
 
 export interface PublicFrozenCaseInput {
@@ -648,9 +648,6 @@ export async function runFrozenDsCaseTraced(
   try {
     return await runFrozenDsCase(publicInput, planner, budget, { ...(options.contract === undefined ? {} : { contract: options.contract }) })
   } finally {
-    if (trace.requests.some((request) => request.toolNames.some((name) => name !== "plan_set_plan")) && (trace.actionReceipts?.length ?? 0) === 0) {
-      trace = recordBoundary(trace, { boundary: "tool_protocol", code: "telemetry_missing" })
-    }
-    options.onTrace(trace)
+    options.onTrace(markMissingActionReceipts(trace))
   }
 }

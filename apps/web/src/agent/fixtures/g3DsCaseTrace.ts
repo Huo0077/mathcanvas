@@ -1,3 +1,7 @@
+import { DS_ACTION_CLOSED_SET } from "@draw/agent-core"
+
+const DS_ACTION_TOOL_NAMES_FOR_TRACE: ReadonlySet<string> = new Set(DS_ACTION_CLOSED_SET)
+
 export const G3_BOUNDARIES = [
   "provider",
   "tool_protocol",
@@ -307,6 +311,22 @@ export function recordBoundary(trace: G3CaseTrace, event: G3FailureRecord): G3Ca
     ...trace,
     firstFailure: normalized
   })
+}
+
+/** Fail closed on each action request, not just runs with zero receipts. */
+export function markMissingActionReceipts(trace: G3CaseTrace): G3CaseTrace {
+  assertSanitizedG3CaseTrace(trace)
+  for (const request of trace.requests) {
+    for (const name of request.toolNames) {
+      // Only the action-level tool vocabulary is checked. Read/plan tools use a different receipt type.
+      if (!DS_ACTION_TOOL_NAMES_FOR_TRACE.has(name)) continue
+      const count = (trace.actionReceipts ?? []).filter((receipt) =>
+        receipt.requestIndex === request.index && receipt.toolName === name).length
+      const expected = request.toolNames.filter((toolName) => toolName === name).length
+      if (count < expected) return recordBoundary(trace, { boundary: "tool_protocol", code: "telemetry_missing" })
+    }
+  }
+  return trace
 }
 
 export function explainFirstFailure(trace: G3CaseTrace): G3FailureRecord | "unknown" {

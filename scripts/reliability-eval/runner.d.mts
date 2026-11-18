@@ -1,6 +1,7 @@
 export interface ReliabilityArgs {
   help?: boolean
   mode: "offline" | "replay" | "live"
+  paidConfirmed: boolean
   replay?: string
   maxRequests?: string
   out?: string

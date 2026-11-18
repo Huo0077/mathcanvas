@@ -8,7 +8,7 @@ import { fileURLToPath, URL } from "node:url"
  * 三种模式互相排斥：
  * - `--offline`（缺省）：确定性本地规划器，**不产生任何费用**；
  * - `--replay FILE`：回放记录的逐轮信封（不会补出记录里没有的轮次）；
- * - `--allow-paid --max-requests N`：真实 provider。必须另有 `DEEPSEEK_API_KEY`；
+ * - `--allow-paid --confirm-paid --max-requests N`：真实 provider。必须另有 `DEEPSEEK_API_KEY`；
  *   缺一样就**拒绝启动**（不是跑到一半才失败）。
  *
  * 报告目录每次唯一（`eval-results/reliability/<mode>-<时间>-<pid>/`），
@@ -16,7 +16,7 @@ import { fileURLToPath, URL } from "node:url"
  * 真实费用今天无法可靠计量 ⇒ 报告里 `costUsd: null`、`costKnown: false`，**不写 0**。
  */
 export function parseReliabilityArgs(args) {
-  const options = { mode: "offline" }
+  const options = { mode: "offline", paidConfirmed: false }
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index]
     if (flag === "--help") return { help: true }
@@ -28,6 +28,10 @@ export function parseReliabilityArgs(args) {
       options.mode = "live"
       continue
     }
+    if (flag === "--confirm-paid") {
+      options.paidConfirmed = true
+      continue
+    }
     const field = { "--replay": "replay", "--max-requests": "maxRequests", "--out": "out", "--cases": "cases", "--baseline": "baseline" }[flag]
     if (!field || args[index + 1] === undefined || args[index + 1].startsWith("--")) throw new Error(`Unknown or incomplete option: ${flag}`)
     options[field] = args[++index]
@@ -36,7 +40,9 @@ export function parseReliabilityArgs(args) {
     if (options.mode === "live") throw new Error("--replay does not accept --allow-paid")
     options.mode = "replay"
   }
+  if (options.mode !== "live" && options.paidConfirmed) throw new Error("--confirm-paid only applies to --allow-paid")
   if (options.mode === "live") {
+    if (!options.paidConfirmed) throw new Error("Live evaluation requires --confirm-paid for a new explicit paid authorization")
     const value = Number(options.maxRequests)
     if (!Number.isInteger(value) || value < 1 || value > 60) throw new Error("Live evaluation requires --max-requests N (integer 1..60)")
   } else if (options.maxRequests !== undefined) {
@@ -55,7 +61,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         [
           "Offline smoke (local planner, no cost): npm run eval:reliability -- --offline [--cases FILE]",
           "Replay recorded rounds:               npm run eval:reliability -- --replay FILE",
-          "Live provider (explicit):             npm run eval:reliability -- --allow-paid --max-requests N",
+          "Live provider (explicit):             npm run eval:reliability -- --allow-paid --confirm-paid --max-requests N",
           "",
           "Cases default to test-fixtures/reliability/dev-smoke.json (dev smoke, NOT the T02 acceptance set).",
           "Live also requires DEEPSEEK_API_KEY. Reports land in eval-results/reliability/<mode>-<time>-<pid>/.",
