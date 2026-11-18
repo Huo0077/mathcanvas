@@ -1514,10 +1514,12 @@ describe("drawing-contracts-36 golden contract suite & P0 evaluator", () => {
   it("parses runner CLI flags for offline/replay contract evaluation cleanly", () => {
     expect(parseReliabilityArgs(["--offline", "--cases", "test-fixtures/reliability/drawing-contracts-36.json"])).toEqual({
       mode: "offline",
+      paidConfirmed: false,
       cases: "test-fixtures/reliability/drawing-contracts-36.json"
     })
     expect(parseReliabilityArgs(["--replay", "eval-results/replay.json", "--cases", "test-fixtures/reliability/drawing-contracts-36.json"])).toEqual({
       mode: "replay",
+      paidConfirmed: false,
       replay: "eval-results/replay.json",
       cases: "test-fixtures/reliability/drawing-contracts-36.json"
     })

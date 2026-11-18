@@ -660,11 +660,56 @@ describe("GK-S09 recorded ds_action whole-case gate (zero cost)", () => {
     }
   })
 
+  it("does not label a certificate-only candidate as independently verified without the frozen contract", async () => {
+    const input = { id: "GK-S09", prompt: "draw a prism", workspace: "geometry3d" as const }
+    const candidates: import("./g3DsFrozenCaseRunner").VerifiedFrozenCandidate[] = []
+    const result = await runFrozenDsCase(input,
+      async () => ({ modelInvoked: false, slices: [{ scopeId: "shared", plan: {
+        schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "simple prism", factIds: [],
+        actions: [{ actionId: "solid.create_prism", actionKey: "prism", factIds: [],
+          inputs: { alias: "prism", basePolygon: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }], vector: { x: 0, y: 0, z: 1 } } }]
+      } }] }), createBudget(), { onVerifiedCandidate: (candidate) => candidates.push(candidate) })
+    expect(result.candidateSet).toHaveLength(1)
+    expect(candidates).toHaveLength(0)
+  })
+
+  it("never exposes a verified render artifact when the GK-S09 sphere is absent", async () => {
+    const realCase = getCase("GK-S09")
+    let turn = 0
+    const exposed: import("./g3DsFrozenCaseRunner").VerifiedFrozenCandidate[] = []
+    const result = await runFrozenDsCaseTraced(
+      { id: realCase.id, prompt: realCase.prompt, workspace: "geometry3d" },
+      createBudget({ network: 6, generation: 6, tool: 8 }),
+      {
+        intentMode: "ds_action",
+        resolveProvider: async () => ({ ok: true, provider: {
+          id: "recorded", modelId: "recorded", dialect: "openai", revision: 1,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        } }),
+        runModel: async () => {
+          turn += 1
+          return { ok: true, events: [{ kind: "tool_call" as const,
+            requestId: `r-${turn}`, attemptId: `a-${turn}`, toolCallId: `tc-${turn}`,
+            toolId: turn === 1 ? "construct_solid" : "finish_candidate",
+            input: turn === 1
+              ? { id: "prism", kind: "triangular_prism", symbol: "a", displayScale: 2,
+                vertexNames: ["A", "B", "C", "A\u2081", "B\u2081", "C\u2081"] }
+              : { goal: "prism without sphere" } }] }
+        }
+      },
+      { contract: realCase, revision: "recorded", runId: "gks09-no-sphere", onTrace: () => {},
+        onVerifiedCandidate: (candidate) => exposed.push(candidate) }
+    )
+    expect(result.contractStatus).not.toBe("passed")
+    expect(exposed).toHaveLength(0)
+  })
+
   it("requires prism and derived sphere to satisfy the independent frozen contract", async () => {
     const realCase = getCase("GK-S09")
     let turn = 0
     const input = { id: realCase.id, prompt: realCase.prompt, workspace: "geometry3d" as const }
     const traces: import("./g3DsCaseTrace").G3CaseTrace[] = []
+    const renderedCandidates: Array<{ document: import("@draw/dsl").GeometryDocument; candidateHash: string }> = []
     const result = await runFrozenDsCaseTraced(input, createBudget({ network: 8, generation: 8, tool: 12 }), {
       intentMode: "ds_action",
       resolveProvider: async () => ({ ok: true, provider: {
@@ -683,7 +728,11 @@ describe("GK-S09 recorded ds_action whole-case gate (zero cost)", () => {
         return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`,
           toolCallId: `tc-${turn}`, toolId: action.toolId, input: action.input }] }
       }
-    }, { contract: realCase, revision: "recorded-replay", runId: "gks09-recorded", onTrace: (trace) => traces.push(trace) })
+    }, { contract: realCase, revision: "recorded-replay", runId: "gks09-recorded", onTrace: (trace) => traces.push(trace),
+      onVerifiedCandidate: (artifact) => renderedCandidates.push(artifact) })
+    expect(renderedCandidates).toHaveLength(1)
+    expect(renderedCandidates[0]?.candidateHash).toBe(result.candidateSet[0]?.candidateHash)
+    expect(renderedCandidates[0]?.document.primitives.some((p) => p.type === "sphere")).toBe(true)
     expect(result.candidateSet).toHaveLength(1)
     expect(result.candidateSet[0]?.certificateStatus, JSON.stringify(result.candidateSet)).toBe("passed")
     expect(result.contractStatus).toBe("passed")

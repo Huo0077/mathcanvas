@@ -1,5 +1,7 @@
 # MathCanvas 项目过程日志
 
+> **2026-11-18 exact-candidate browser evidence (recorded replay only):** The earlier 41 browser checks used the default deterministic planner, not the DS action candidate. A new Playwright check exports the GK-S09 candidate only after the independent contract and production certificate pass, imports that exact normalized document into the actual browser, and verifies the same candidate hash, prism, sphere, six labels, and canvas visibility (1/1). File import is a rendering check, NOT native DS participation or isolated confirmation/delivery for that candidate. Both remain open.
+
 > **2026-11-18 F9 per-request receipt gate**: Zero-cost tests reproduced and fixed the case where an earlier request had an action receipt but a later action request lost telemetry. Each `ds_action` request is now checked against its action-call count and missing data is marked `telemetry_missing`. The generic `eval:reliability` runner also requires `--confirm-paid`; it is not the native G3-F9 `ds_action` entry and does not replace new user authorization. No paid request was made.
 
 > **2026-11-18 live authorization gate rechecked**: `--allow-paid --max-requests 3` is parsed as live, but the actual runner refuses to start when `DEEPSEEK_API_KEY` is absent (`no automatic spend`). No provider request or charge occurred; the next action still requires new explicit user authorization.

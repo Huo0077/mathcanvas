@@ -91,6 +91,10 @@ Each real `ds_action` request is now checked against its action-call count. A ze
 - [ ] **扩批决策** 仅首题完整通过并获得所需范围授权后依次测另一立体、二维曲线、多状态/多分支、缺图题的图像输入门槛、最后固定36题；每批都明确已测分母、通过数、partial/失败数、费用未知项及同版 revision。题图缺失只能请求澄清且作图记未通过。目标100%是验收方向，**不能承诺保证DS每次都100%**，需重复真实测量稳定性和失败类型才考虑发布。
 - [ ] 每个区块独立审阅、更新 `docs/current-status.md`、`docs/project-progress.md`、`docs/agent-next-round-progress.md`、`docs/acceptance/agent-tool-loop-scorecard.md` 和 `docs/acceptance/agent-release-gate.md`，归档脱敏证据，`git diff --check` 后单独提交并推送当前分支；核对远端 ahead/behind = `0/0`。失败或回归时只回滚该区块的功能变更，保留负面证据、冻结合同和主画布安全门禁。
 
+### Task 9 exact-candidate browser gate (2026-11-18, zero cost)
+
+The earlier 41 browser tests used a different deterministic planner, so they did not prove rendering of the DS action candidate. A dedicated Playwright test now exports the *recorded ds_action* GK-S09 candidate only after its independent contract and certificate pass; imports the same normalized document into the real browser; and checks equal candidate/document hashes, prism, sphere, six labels, and visibility. Import normalization via `createDefaultCadLayout` is necessary: the browser otherwise inserts layers/sheets and changes the semantic hash. This check is not native DS participation, nor an isolated candidate confirmation/commit test.
+
 ## 不可偷换的出口
 
 Task 6 只解决“知道为什么失败”；Task 7 只解决“模型知道怎么调用”；Task 8 只解决“内核能产生真球/符号表达”；Task 9 的录制成功只解决“链路可用”。**只有新的真实 DS 请求 + 同版候选的全合同/证书/画布/交付共同通过，才能记 GK-S09 实测通过**。35题仍未测；不得以某一个阶段的 GREEN 更新真实36题成功率。
