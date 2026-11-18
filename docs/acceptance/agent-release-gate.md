@@ -1,5 +1,7 @@
 # Agent 发布前门禁
 
+> **2026-11-18 Task 9 verification note**: The required 41 Playwright same-candidate/lifecycle tests passed. A default parallel `npm test` run reported 8 timeout failures in unrelated common-tangent suites; rerunning those 3 files serialized with `--maxWorkers=1 --testTimeout=30000` passed `46/46`. This is recorded as an environment/timeout verification caveat, not converted into a false full-suite pass. No paid DS call was made.
+
 > **2026-11-18 release gate remains closed**: Task 8 zero-cost symbolic GK-S09 replays pass with a genuine derived sphere at scales 1 and 2, but same-candidate browser verification, human/desktop acceptance, and new authorized live DS evidence are still missing.
 
 > **2026-11-18 Task 6 回执桥接（零付费）**：已增加 `runFrozenDsCaseTraced`，将真实 `ds_action` 逐请求/逐动作事件接入脱敏 `G3CaseTrace`，记录首次阻断码、图元变化和回执送达；零费伪 provider 验证缺参数和终止动作。旧 GK-S09 两次原始回执不可追溯，35题未测，实际费用未知。下一步 Task 7 参数 schema。详见 [详细修复计划](../g3-final/G3-F9-GK-S09-detailed-repair-plan.md)。
