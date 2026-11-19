@@ -458,6 +458,37 @@ describe("explicit planar line equation construction", () => {
   })
 })
 
+describe("DS conic orientation and center fidelity", () => {
+  it("uses published center and axis for a vertical hyperbola, and center for an ellipse", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_conic", { id: "H", conicType: "hyperbola", radiusX: 2, radiusY: 3, axis: "y", cx: -1, cy: 4 }).ok).toBe(true)
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, cx: 5, cy: -2 }).ok).toBe(true)
+    const actions = session.currentSnapshot().actions.filter((action) => action.actionId === "planar.create_conic")
+    expect(actions).toHaveLength(2)
+    expect(actions[0]?.inputs).toMatchObject({ alias: "H", kind: "hyperbola", axis: "y", center: { x: -1, y: 4 }, radiusX: 2, radiusY: 3 })
+    expect(actions[1]?.inputs).toMatchObject({ alias: "E", kind: "ellipse", center: { x: 5, y: -2 }, radiusX: 3, radiusY: 2 })
+    const compiled = compilePlan({ schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "two translated conics", factIds: [], actions: [...session.currentSnapshot().actions] },
+      { document: createEmptyDocument("conics"), conversationId: "conic-placement", documentGeneration: 0, workspace: "conics" })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.draftDocument?.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "hyperbola", axis: "y", center: { x: -1, y: 4 } }),
+      expect.objectContaining({ type: "ellipse", center: { x: 5, y: -2 } })
+    ]))
+  })
+
+  it("rejects invalid supplied axis or center instead of silently using origin or another orientation", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    const initialHash = session.currentSnapshot().candidateHash
+    expect(session.execute("construct_conic", { id: "H", conicType: "hyperbola", radiusX: 2, radiusY: 3, axis: "z" }).blockerCode).toBe("invalid_axis")
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, cx: "unknown" }).blockerCode).toBe("invalid_center")
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, vx: 5 }).blockerCode).toBe("incompatible_conic_fields")
+    expect(session.execute("construct_conic", { id: "P", conicType: "parabola", focalParameter: 2, radiusX: 3 }).blockerCode).toBe("incompatible_conic_fields")
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, axis: "y" }).blockerCode).toBe("incompatible_conic_fields")
+    expect(session.currentSnapshot().candidateHash).toBe(initialHash)
+    expect(session.referenceDirectory().materializedConics).toEqual([])
+  })
+})
+
 describe("real DS planar tool schema fidelity", () => {
   it("executes the published planar conic/point/line fields and refuses missing geometry", () => {
     const scene = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
@@ -488,6 +519,8 @@ describe("real DS planar tool schema fidelity", () => {
         focalParameter: { type: "number" } }
     })
     expect(tools.get("construct_conic")?.description).not.toMatch(/from equation/i)
+    expect(tools.get("construct_conic")?.description).toMatch(/axis.*x.*y/i)
+    expect(tools.get("construct_conic")?.description).toMatch(/cx.*cy/i)
     expect(tools.get("construct_line")?.parameters).toMatchObject({ required: ["id"],
       properties: { from: { type: "string" }, to: { type: "string" } } })
     expect(tools.get("construct_line")?.description).toMatch(/finite equation coefficients a,b,c/i)

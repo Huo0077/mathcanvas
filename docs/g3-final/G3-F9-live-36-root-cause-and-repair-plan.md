@@ -64,6 +64,8 @@
 
 **B3 非付费引用状态检查点（2026-11-18）**：发现并修复撤销后旧直线/曲线仍可被内核引用、带 branchId 的 repair 错撤共享候选；模型工具回执现区分已声明与真正物化且按 branchId 返回有界目录。见[Block B3 审计](../audit/2026-11-18-g3-f9-entity-reference-b3/README.md)。scope/state 重名、共享图元变更后的分支联动及原生 DS 接受度还未退出，Block B 未宣称完成。
 
+**B4 零付费检查点（2026-11-19）**：模型可见的曲线 `axis/cx/cy` 此前被执行器忽略，纵轴双曲线会被错误画为横轴；现将方向/中心用于真实内核构造，非法输入不偷换。见[B4 审计](../audit/2026-11-19-g3-conic-axis-center-b4/README.md)。该缺陷属于已证实代码失真，**旧36题原始模型参数未保留，不能据此声称旧12次曲线缺参都已修好**。下一步围绕曲线族条件必填与模型可见能力继续修复。
+
 ### Block C — 真题原图输入与诚实澄清
 
 **Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。

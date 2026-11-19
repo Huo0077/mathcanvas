@@ -132,7 +132,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_segment: "Construct a segment between two existing named points.",
   construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
   construct_circle: "Construct a circle by center and radius.",
-  construct_conic: "Construct an ellipse/hyperbola with positive radiusX and radiusY, or a parabola with nonzero focalParameter and axis. Give conicType and a named id; raw equation strings are not supported.",
+  construct_conic: "Give id and conicType. Ellipse/hyperbola require positive radiusX, radiusY; optional center cx, cy (default origin). Hyperbola axis must be x or y (default x). Parabola requires nonzero focalParameter and axis x or y (default y), optional vertex vx, vy. Raw equation strings are not supported.",
   construct_tangent: "Construct a tangent line to a conic at a point.",
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line through a point parallel to a line.",
@@ -1345,6 +1345,18 @@ export function createDsActionSession(options: {
         if (rawType !== "ellipse" && rawType !== "hyperbola" && rawType !== "parabola") {
           return failRepairable(name, "unsupported_conic_kind", "construct_conic supports only ellipse, hyperbola, or parabola")
         }
+        if (input.axis !== undefined && input.axis !== "x" && input.axis !== "y") {
+          return failRepairable(name, "invalid_axis", "axis must be x or y")
+        }
+        for (const field of ["cx", "cy", "vx", "vy"] as const) {
+          if (input[field] !== undefined && asFiniteNumber(input[field]) === null) {
+            return failRepairable(name, "invalid_center", `${field} must be a finite number`)
+          }
+        }
+        const incompatible = rawType === "parabola"
+          ? ["radiusX", "radiusY"].some((field) => input[field] !== undefined)
+          : ["vx", "vy", "focalParameter", ...(rawType === "ellipse" ? ["axis"] : [])].some((field) => input[field] !== undefined)
+        if (incompatible) return failRepairable(name, "incompatible_conic_fields", "the selected conic kind cannot use these geometry fields")
         if (rawType === "parabola") {
           const focalParameter = asFiniteNumber(input.focalParameter)
           const axis = input.axis === "x" ? "x" : "y"
@@ -1369,14 +1381,17 @@ export function createDsActionSession(options: {
         if (rx === null || ry === null || !(rx > 0 && ry > 0)) {
           return failRepairable(name, "missing_required_parameter", "construct_conic requires positive radiusX and radiusY")
         }
+        const center = { x: asFiniteNumber(input.cx) ?? 0, y: asFiniteNumber(input.cy) ?? 0 }
+        const axis = input.axis === "y" ? "y" : "x"
         const conic: PlanarConic =
           kind === "ellipse"
-            ? { id, type: "ellipse", center: { x: 0, y: 0 }, radiusX: rx, radiusY: ry }
-            : { id, type: "hyperbola", center: { x: 0, y: 0 }, axis: "x", radiusX: rx, radiusY: ry }
+            ? { id, type: "ellipse", center, radiusX: rx, radiusY: ry }
+            : { id, type: "hyperbola", center, axis, radiusX: rx, radiusY: ry }
         writeC2(id, conic, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind, center: { x: 0, y: 0 }, radiusX: rx, radiusY: ry } },
+          { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind, center, radiusX: rx, radiusY: ry,
+            ...(kind === "hyperbola" ? { axis } : {}) } },
           id,
           undefined,
           sliceTarget
