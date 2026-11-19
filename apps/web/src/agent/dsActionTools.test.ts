@@ -622,6 +622,27 @@ describe("B7 declaration schema and execution agree", () => {
   })
 })
 
+describe("B8 segment parameter contract", () => {
+  it("requires materialized endpoint references and rejects geometry fields that the segment action cannot use", () => {
+    const tool = buildDsActionToolSchemas().find(item => item.function.name === "construct_segment")?.function
+    expect(tool?.parameters).toMatchObject({ type: "object", additionalProperties: false, required: ["from", "to"],
+      properties: { from: { type: "string" }, to: { type: "string" }, id: { type: "string" } } })
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: 0 }).status).toBe("accepted")
+    expect(session.execute("construct_point", { id: "B", x: 2, y: 0 }).status).toBe("accepted")
+    const count = session.currentSnapshot().primitiveCount
+    expect(session.execute("construct_segment", { id: "S", from: "A" })).toMatchObject({ status: "repairable", blockerCode: "missing_required_parameter" })
+    expect(session.execute("construct_segment", { id: "S", from: "A", to: "B", radius: 9 })).toMatchObject({ status: "repairable", blockerCode: "invalid_schema" })
+    expect(session.currentSnapshot().primitiveCount).toBe(count)
+    expect(session.execute("construct_segment", { id: "S", from: "A", to: "B" }).status).toBe("accepted")
+    expect(session.currentSnapshot().primitiveCount).toBe(count + 1)
+    const spatial = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    expect(spatial.execute("construct_point", { id: "U", x: 0, y: 0, z: 0 }).status).toBe("accepted")
+    expect(spatial.execute("construct_point", { id: "V", x: 0, y: 0, z: 3 }).status).toBe("accepted")
+    expect(spatial.execute("construct_segment", { id: "UV", from: "U", to: "V" }).status).toBe("accepted")
+  })
+})
+
 describe("dsActionTools (Task F2 closed action-level protocol)", () => {
   it("exposes all 24 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
     expect(DS_ACTION_TOOL_NAMES).toEqual(DS_ACTION_CLOSED_SET)

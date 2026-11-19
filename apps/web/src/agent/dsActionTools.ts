@@ -130,7 +130,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_base: "Construct a base polygon or reference frame in 2D/3D.",
   construct_point: "Construct a named point: id with 2D x,y or 3D x,y,z, or id with from,to,ratio referencing materialized points.",
   construct_line: "Construct a named 2D line with id: use existing point names from and to, or finite equation coefficients a,b,c for a*x+b*y+c=0; never guess missing coefficients.",
-  construct_segment: "Construct a segment between two existing named points.",
+  construct_segment: "Construct a segment between two existing named points; provide both from and to references.",
   construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
   construct_circle: "Construct a circle by center and radius.",
   construct_conic: "Give id and conicType. Ellipse/hyperbola require positive radiusX and radiusY, OR throughPointIds with exactly two existing points of a centered axis-aligned conic; never guess semi-axes. Optional center cx, cy (default origin). Hyperbola axis x or y. Parabola requires nonzero focalParameter and axis x or y (default y), optional vertex vx, vy. Raw equation strings are not supported.",
@@ -228,6 +228,10 @@ const CONSTRUCT_POINT_PARAMETERS = {
   properties: { ...PLANAR_ENTITY_FIELDS, x: { type: "number" }, y: { type: "number" }, z: { type: "number" },
     from: { type: "string" }, to: { type: "string" }, ratio: { type: "number" } }
 } as const
+const CONSTRUCT_SEGMENT_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["from", "to"],
+  properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" } }
+} as const
 const CONSTRUCT_LINE_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["id"],
   properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" },
@@ -259,6 +263,7 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
         : name === "construct_conic" ? CONSTRUCT_CONIC_PARAMETERS
         : name === "construct_point" ? CONSTRUCT_POINT_PARAMETERS
         : name === "construct_line" ? CONSTRUCT_LINE_PARAMETERS
+        : name === "construct_segment" ? CONSTRUCT_SEGMENT_PARAMETERS
         : name === "query_measurement" ? QUERY_MEASUREMENT_PARAMETERS
         : name === "query_constraint_status" ? QUERY_CONSTRAINT_STATUS_PARAMETERS : {
         type: "object",
@@ -1212,6 +1217,14 @@ export function createDsActionSession(options: {
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const fromId = asString(input.from)
         const toId = asString(input.to)
+        if (name === "construct_segment") {
+          if (Object.keys(input).some(key => !Object.hasOwn(CONSTRUCT_SEGMENT_PARAMETERS.properties, key))) {
+            return failRepairable(name, "invalid_schema", "construct_segment accepts only named from/to points and optional display identifiers")
+          }
+          if (!fromId || !toId) {
+            return failRepairable(name, "missing_required_parameter", "construct_segment requires both from and to materialized point names")
+          }
+        }
         const hasEquation = name === "construct_line" && ["a", "b", "c"].some((key) => Object.hasOwn(input, key))
         if (hasEquation) {
           if (Object.hasOwn(input, "from") || Object.hasOwn(input, "to")) {
