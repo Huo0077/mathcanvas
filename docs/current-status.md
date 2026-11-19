@@ -1,5 +1,8 @@
 # MathCanvas 当前状态
 
+> **2026-11-19 来源筛查检查点（0 新增 DS）**：[初筛审计](audit/2026-11-19-g3-text-only-source-triage/README.md)锁定旧23题文本/哈希、8道高考转录线索及5道联考原卷页/SHA；发现“题干无如图但旁有配图”的拒选反例，不能只凭关键词放行。所有候选仍待原卷/独立合同复审，[筛查数据](../test-fixtures/reliability/text-only-36-source-triage.json) `runnable=false`，新36题实测仍未开始；旧合同1/26/9与原生交付未测口径不变。
+
+
 > **2026-11-19 纯文字36题重规划（0 新增 DS）**：用户明确本轮跳过原题有图的题，不进行视觉实测。旧36题保留历史 91 请求、合同 1通过/26失败/9未测且原生交付未测；[新规格](g3-final/G3-F9-text-only-36-suite-spec.md)和[实施计划](g3-final/G3-F9-text-only-36-implementation-plan.md)确定保留23个纯文字候选、另补8道高考立体+5道联考立体无图真题。13个目前只是待审空槽位，[规划清单](../test-fixtures/reliability/text-only-36-plan.json) `runnable=false`，新36未凑齐/不可开始实测，旧成绩不进入新分母；C0/C1视觉工作保留但退出本轮关键路径。先来源/文本完整性/独立合同审查，再另获费用授权做 DS 真测。
 
 

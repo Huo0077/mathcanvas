@@ -1,0 +1,338 @@
+{
+  "suite": "g3-f9-text-only-36-triage.v1",
+  "runnable": false,
+  "reviewStatus": "provisional_not_independently_approved",
+  "retained": [
+    {
+      "id": "GK-S09",
+      "inputHash": "ad432b0c156b5be3be77138df2bab5435b416e8859995a8a10cb98f39281d895",
+      "source": "2010年新课标全国卷 第10题 (GAOKAO-Bench text-7)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-S01",
+      "inputHash": "70afbbdbae54b0bdc1776a025312cf5f97c86e67c3a8a1797e58dc02d1218f7d",
+      "source": "2025年八省联考 第17题",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-S03",
+      "inputHash": "7f4f8a6ab59571f62134dff2bd20c530d3aa35a99f37be44dbbc219524c1326a",
+      "source": "2025届T8联考（12月） 第16题",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-S08",
+      "inputHash": "0c4d45964b209cec25c207a9f84b82fd680f9bd5ba639814e17c25d757a4ddc9",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第15题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-S09",
+      "inputHash": "00bd85ac3707247dcb46dad0a644230a9f40b01d07e16fd39fd33870a05f26ff",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第4题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P01",
+      "inputHash": "e5b0274208489148cd04c5b89ab0616ba423ace512a260f953625b1ec2466cd4",
+      "source": "2025年新高考II卷 第16题",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P02",
+      "inputHash": "158fb91a7d802a46a9430dd8cceb4080da4ce530580a90e1b82e87fd3181be96",
+      "source": "2022年全国乙卷理科 第20题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P03",
+      "inputHash": "c354edd536f5e8a5a93d7d2fd714141f9e54c17207911329e107424a88452d84",
+      "source": "2022年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P04",
+      "inputHash": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9",
+      "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P05",
+      "inputHash": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a",
+      "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P06",
+      "inputHash": "765eabaebd3f7f268ab82dc4a7bbe1d5cdaf1095432c549383e1bb284c4fcf42",
+      "source": "2019年新课标III理科 第21题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P07",
+      "inputHash": "6eaa5b742714b6adc166784b6e50313d0046fe34706f5a1e9239ba31a4131464",
+      "source": "2021年新高考I卷 第21题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P08",
+      "inputHash": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4",
+      "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "GK-P09",
+      "inputHash": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe",
+      "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P01",
+      "inputHash": "55a29f4baa3fbe3c4cd52f77624549b89b25ed0f462de80ae28dc271bc6594a7",
+      "source": "2025年八省联考 第18题",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P02",
+      "inputHash": "beca519dc97e6c217c05674a24ee7030a1fcbe6fbd1a5bb566dea3dd2be76939",
+      "source": "2025年湖北省T8联盟考前模拟（一） 第18题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P03",
+      "inputHash": "eae195fceea94036470e20f473d88b119c1a71d1eb2ca022efcda758996301d8",
+      "source": "2025年湖北省新八校协作体联考（2月） 第18题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P04",
+      "inputHash": "1b8106a030ca07ba2d2453fe1e98a1ba3f29b2b0df3754ac8e50659b6424c5e8",
+      "source": "2025年浙江省天域全国名校协作体联考（3月） 第17题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P05",
+      "inputHash": "3cc387da6021fbc5b8b2a73f2705ae9e6744fffd76f3c16e1bf5bb3b7042cc8f",
+      "source": "2025年重庆市金太阳联考（5月） 第16题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P06",
+      "inputHash": "e80df950984164ecc429db618fc0266cffa87e3817af99041d61c827241042f5",
+      "source": "2025年湖南省一起考大联考（二） 第19题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P07",
+      "inputHash": "bd9ddc44f99363aec0b706c7ef14861a91e3affda60a4a08b175001fe2246545",
+      "source": "2025年长郡中学、杭州二中、南师附中三校联考（4月） 第19题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P08",
+      "inputHash": "35a32276c8f869a66c0c313333d76c4bc6a23a0af9a579852564208493926d6c",
+      "source": "2025年四省天一大联考（二） 第15题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    },
+    {
+      "id": "JT-P09",
+      "inputHash": "dde1a3e824214f45b494f93954e953132989334e540fcaa7135c9d5ae7dca093",
+      "source": "2025年重庆市金太阳联考（5月） 第4题 (jyeoo)",
+      "textualFigureCue": false,
+      "status": "needs_original_paper_review"
+    }
+  ],
+  "replacementCandidates": [
+    {
+      "slotId": "GK-S10",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_II_MCQs.json#example[46]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_II_MCQs.json",
+      "sourceSha256": "5f977c8aefbd54d7de6f630cb7cb4a85ac5391fd96753fb6689aa052819e1df7",
+      "questionNumber": 7,
+      "questionSha256": "890a25763bbc09e95ede76ab5d85432d944660b8cd3f5adedf334d4bd46fe8fc",
+      "year": "2014",
+      "examCategory": "（新课标ⅱ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S11",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_II_MCQs.json#example[72]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_II_MCQs.json",
+      "sourceSha256": "5f977c8aefbd54d7de6f630cb7cb4a85ac5391fd96753fb6689aa052819e1df7",
+      "questionNumber": 4,
+      "questionSha256": "ca143f22af38a7c9e3c65088eb5591836e76e157b303f1180e1e703d2ca5386a",
+      "year": "2016",
+      "examCategory": "（新课标ⅱ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S12",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_II_MCQs.json#example[109]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_II_MCQs.json",
+      "sourceSha256": "5f977c8aefbd54d7de6f630cb7cb4a85ac5391fd96753fb6689aa052819e1df7",
+      "questionNumber": 5,
+      "questionSha256": "3b838399455cfd40357dc6447525880cc46fd9d603d81e13c7566efbc007a2ad",
+      "year": "2018",
+      "examCategory": "（新课标ⅰ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S13",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_I_MCQs.json#example[206]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sourceSha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c",
+      "questionNumber": 9,
+      "questionSha256": "ce8394e975d36433bb76c27a3d3a6f0aa90ee6e03387fbd3b834c06d35567c64",
+      "year": "2022",
+      "examCategory": "（全国乙卷）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S14",
+      "category": "gaokao",
+      "sourceKey": "Data/Subjective_Questions/2010-2022_Math_I_Fill-in-the-Blank.json#example[49]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Subjective_Questions/2010-2022_Math_I_Fill-in-the-Blank.json",
+      "sourceSha256": "f7ab2860a0dcf877bc6572f51c800cd51dc5d1b3e7829ede6be68b43e885a0e9",
+      "questionNumber": 16,
+      "questionSha256": "dd19cfe6692d2cde31f649f67ab20cd711b0d02853ff2b82d335787b184a7a00",
+      "year": "2018",
+      "examCategory": "（新课标ⅱ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S15",
+      "category": "gaokao",
+      "sourceKey": "Data/Subjective_Questions/2010-2022_Math_II_Fill-in-the-Blank.json#example[12]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Subjective_Questions/2010-2022_Math_II_Fill-in-the-Blank.json",
+      "sourceSha256": "797ccc7635a6c1fb7c3ecdb7497a9cd525affd5d2f449a20c2c921b105e20d3a",
+      "questionNumber": 15,
+      "questionSha256": "bcf70a0f1cc4bd394938fabf2cad0c47dfc82bcbe10f2ae6fb451c049a6c9635",
+      "year": "2013",
+      "examCategory": "（新课标ⅰ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S16",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_I_MCQs.json#example[80]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sourceSha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c",
+      "questionNumber": 10,
+      "questionSha256": "64d3355852b62e7bb34c87d38ef567ae4fe2a08a5154609c04b1074cce034644",
+      "year": "2016",
+      "examCategory": "（新课标ⅲ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "GK-S17",
+      "category": "gaokao",
+      "sourceKey": "Data/Objective_Questions/2010-2022_Math_I_MCQs.json#example[180]",
+      "sourceUrl": "https://raw.githubusercontent.com/OpenLMLab/GAOKAO-Bench/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data/Objective_Questions/2010-2022_Math_I_MCQs.json",
+      "sourceSha256": "e1d80fb7e6f1b614edeadf6c9007c3ea0e47540b9c6b41ac68bb414ea39fed4c",
+      "questionNumber": 10,
+      "questionSha256": "31455f7872640a6d8cf2b0dcb92a97c723d76cfa031c8636b5b6a355f84fd613",
+      "year": "2020",
+      "examCategory": "（新课标Ⅱ）",
+      "status": "transcript_only_needs_paper",
+      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+    },
+    {
+      "slotId": "JT-S10",
+      "sourceKey": "2023-Hubei-September-Grade3#Q11",
+      "sourceUrl": "https://imgs.app.gaokaozhitongche.com/resource/pdf/paper/202309/20230906063006_9MvefJ.pdf",
+      "sourceSha256": "ea53fb67d4421ee883add314b0ea6ff008e91fe7da6f11a56b4ffca29cd2bc77",
+      "questionNumber": 11,
+      "page": 2,
+      "notes": "Visual page check: cube with three edge midpoints; no attached question figure; option geometry/contract and second-source review pending.",
+      "category": "joint",
+      "status": "pdf_page_checked_needs_independent_review"
+    },
+    {
+      "slotId": "JT-S11",
+      "sourceKey": "2023-Hubei-September-Grade3#Q16",
+      "sourceUrl": "https://imgs.app.gaokaozhitongche.com/resource/pdf/paper/202309/20230906063006_9MvefJ.pdf",
+      "sourceSha256": "ea53fb67d4421ee883add314b0ea6ff008e91fe7da6f11a56b4ffca29cd2bc77",
+      "questionNumber": 16,
+      "page": 2,
+      "notes": "Visual page check: triangle folding into tetrahedron; no attached question figure; fold orientation/branch and second-source review pending.",
+      "category": "joint",
+      "status": "pdf_page_checked_needs_independent_review"
+    },
+    {
+      "slotId": "JT-S12",
+      "sourceKey": "2024-T8-December#Q15",
+      "sourceUrl": "https://cdn.gaokzx.com/zixunzhan/202403/6c2acfcb-2c76-4a8d-8354-2087925e9ba2.pdf",
+      "sourceSha256": "e082e5235563bffbbcc494a4efcd16a883d7f4fb20f359a3fa5cf8f12067a57a",
+      "questionNumber": 15,
+      "page": 3,
+      "notes": "Visual page check: regular tetrahedron rotated about height; no attached question figure; overlap geometry and second-source review pending.",
+      "category": "joint",
+      "status": "pdf_page_checked_needs_independent_review"
+    },
+    {
+      "slotId": "JT-S13",
+      "sourceKey": "2025-Jiangxi-Shangjin-Autumn-Grade3#Q7",
+      "sourceUrl": "https://cdn.zizzs.com/1726022708635%E6%B1%9F%E8%A5%BF%E4%B8%8A%E8%BF%9B%E8%81%94%E8%80%832025%E5%B1%8A%E6%96%B0%E9%AB%98%E4%B8%89%E7%A7%8B%E5%AD%A3%E5%85%A5%E5%AD%A6%E6%91%B8%E5%BA%95%E8%80%83%E8%AF%95%E6%95%B0%E5%AD%A6%E8%AF%95%E9%A2%98.pdf",
+      "sourceSha256": "07b2007e20ced2c4eacdc357f0b9209e093c398f7e5a6b6e75cb283481b5b1d1",
+      "questionNumber": 7,
+      "page": 1,
+      "notes": "Visual spread page check: frustum upper/lower radii and side area; no attached question figure; second-source review pending. Q11 in same PDF DOES have a figure and is excluded.",
+      "category": "joint",
+      "status": "pdf_page_checked_needs_independent_review"
+    },
+    {
+      "slotId": "JT-S14",
+      "sourceKey": "2025-Hengshui-August-Grade3#Q14",
+      "sourceUrl": "https://imgs.app.gaokaozhitongche.com/resource/pdf/paper/202408/20240826140101_6fhNID.pdf",
+      "sourceSha256": "45714c189d515ac937dcabc7094d1d00f252554b560f377d6fb25c728b4625db",
+      "questionNumber": 14,
+      "page": 2,
+      "notes": "Visual page check: frustum and circumsphere; no attached question figure; parameter-range/branch and second-source review pending.",
+      "category": "joint",
+      "status": "pdf_page_checked_needs_independent_review"
+    }
+  ],
+  "notice": "Source pointers, not certified problems: GaoKao transcriptions require original-paper visual verification; joint scans need independent reviewer, full contracts, text sufficiency and duplicate/branch checks. No model request is allowed from this file.",
+  "excludedDuringPageReview": [
+    {
+      "sourceKey": "2025-Jiangxi-Shangjin-Autumn-Grade3#Q11",
+      "reason": "embedded_figure_without_textual_cue",
+      "page": 1,
+      "sourceSha256": "07b2007e20ced2c4eacdc357f0b9209e093c398f7e5a6b6e75cb283481b5b1d1"
+    }
+  ]
+}
