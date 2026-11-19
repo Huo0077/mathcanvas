@@ -458,6 +458,59 @@ describe("explicit planar line equation construction", () => {
   })
 })
 
+describe("conic from two real points", () => {
+  it("fits the origin-centred ellipse through two materialized points without guessed semi-axes", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: -2 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "B", x: 1.5, y: -1 }).ok).toBe(true)
+    const fit = session.execute("construct_conic", { id: "E", conicType: "ellipse", throughPointIds: ["A", "B"] })
+    expect(fit.status).toBe("accepted")
+    const action = session.currentSnapshot().actions.at(-1)
+    expect(action?.actionId).toBe("planar.create_conic")
+    expect(action?.inputs).toMatchObject({ kind: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(3), radiusY: 2 })
+    const compiled = compilePlan({ schemaVersion: "mathcanvas.plan.v1", kind: "plan", goal: "ellipse through A and B", factIds: [], actions: [...session.currentSnapshot().actions] },
+      { document: createEmptyDocument("conics"), conversationId: "ellipse-through-points", documentGeneration: 0, workspace: "conics" })
+    expect(compiled.ok).toBe(true)
+    expect(compiled.draftDocument?.primitives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(3), radiusY: 2 })
+    ]))
+  })
+  it("preserves a fitted vertical hyperbola's axis rather than defaulting to x", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: 2 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "B", x: 1, y: Math.sqrt(5) }).ok).toBe(true)
+    expect(session.execute("construct_conic", { id: "H", conicType: "hyperbola", throughPointIds: ["A", "B"] }).ok).toBe(true)
+    const last = session.currentSnapshot().actions.at(-1)
+    expect(last?.actionId).toBe("planar.create_conic")
+    if (last?.actionId !== "planar.create_conic") return
+    expect(last.inputs).toMatchObject({ kind: "hyperbola", axis: "y" })
+    expect(last.inputs.radiusX).toBeCloseTo(2, 9)
+    expect(last.inputs.radiusY).toBeCloseTo(2, 9)
+  })
+  it("fits from shared points into a branch without publishing that conic to another branch", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 1, y: -3 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "B", x: 2.5, y: -2 }).ok).toBe(true)
+    const result = session.execute("construct_conic", { id: "E", conicType: "ellipse", throughPointIds: ["A", "B"], cx: 1, cy: -1, branchId: "left" })
+    expect(result.ok).toBe(true)
+    expect(session.referenceDirectory("left").materializedConics).toContain("E")
+    expect(session.referenceDirectory("right").materializedConics).toEqual([])
+    expect(session.referenceDirectory().materializedConics).toEqual([])
+  })
+  it("rejects missing, dependent, contradictory, and mixed sources with no candidate change", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: -2 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "B", x: 1.5, y: -1 }).ok).toBe(true)
+    const before = session.currentSnapshot().candidateHash
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", throughPointIds: ["A", "Missing"] }).blockerCode).toBe("undeclared_entity_ref")
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", throughPointIds: ["A", "A"] }).blockerCode).toBe("conic_fit_unsatisfied")
+    expect(session.execute("construct_conic", { id: "H", conicType: "hyperbola", throughPointIds: ["A", "B"] }).blockerCode).toBe("conic_fit_unsatisfied")
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", throughPointIds: ["A", "B"], radiusX: 3, radiusY: 2 }).blockerCode).toBe("ambiguous_geometry_input")
+    expect(session.currentSnapshot().candidateHash).toBe(before)
+    expect(session.referenceDirectory().materializedConics).toEqual([])
+  })
+})
+
 describe("DS conic orientation and center fidelity", () => {
   it("uses published center and axis for a vertical hyperbola, and center for an ellipse", () => {
     const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
@@ -521,6 +574,8 @@ describe("real DS planar tool schema fidelity", () => {
     expect(tools.get("construct_conic")?.description).not.toMatch(/from equation/i)
     expect(tools.get("construct_conic")?.description).toMatch(/axis.*x.*y/i)
     expect(tools.get("construct_conic")?.description).toMatch(/cx.*cy/i)
+    expect(tools.get("construct_conic")?.description).toMatch(/throughPointIds.*two existing points/i)
+    expect(tools.get("construct_conic")?.parameters).toMatchObject({ properties: { throughPointIds: { type: "array", items: { type: "string" } } } })
     expect(tools.get("construct_line")?.parameters).toMatchObject({ required: ["id"],
       properties: { from: { type: "string" }, to: { type: "string" } } })
     expect(tools.get("construct_line")?.description).toMatch(/finite equation coefficients a,b,c/i)

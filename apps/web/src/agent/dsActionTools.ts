@@ -13,6 +13,7 @@ import {
 } from "@draw/agent-core"
 import {
   distanceVector3,
+  fitOriginConicThroughPoints,
   intersectPlanarLineAndConicExact,
   planeFromPoints,
   tangentLineToConicAt,
@@ -132,7 +133,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_segment: "Construct a segment between two existing named points.",
   construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
   construct_circle: "Construct a circle by center and radius.",
-  construct_conic: "Give id and conicType. Ellipse/hyperbola require positive radiusX, radiusY; optional center cx, cy (default origin). Hyperbola axis must be x or y (default x). Parabola requires nonzero focalParameter and axis x or y (default y), optional vertex vx, vy. Raw equation strings are not supported.",
+  construct_conic: "Give id and conicType. Ellipse/hyperbola require positive radiusX and radiusY, OR throughPointIds with exactly two existing points of a centered axis-aligned conic; never guess semi-axes. Optional center cx, cy (default origin). Hyperbola axis x or y. Parabola requires nonzero focalParameter and axis x or y (default y), optional vertex vx, vy. Raw equation strings are not supported.",
   construct_tangent: "Construct a tangent line to a conic at a point.",
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line through a point parallel to a line.",
@@ -212,6 +213,7 @@ const CONSTRUCT_CONIC_PARAMETERS = {
   properties: { ...PLANAR_ENTITY_FIELDS, conicType: { type: "string", enum: ["ellipse", "hyperbola", "parabola"] },
     radiusX: { type: "number", exclusiveMinimum: 0 }, radiusY: { type: "number", exclusiveMinimum: 0 },
     focalParameter: { type: "number" }, axis: { type: "string", enum: ["x", "y"] },
+    throughPointIds: { type: "array", items: { type: "string" } },
     vx: { type: "number" }, vy: { type: "number" }, cx: { type: "number" }, cy: { type: "number" }
   }
 } as const
@@ -1354,7 +1356,7 @@ export function createDsActionSession(options: {
           }
         }
         const incompatible = rawType === "parabola"
-          ? ["radiusX", "radiusY"].some((field) => input[field] !== undefined)
+          ? ["radiusX", "radiusY", "throughPointIds"].some((field) => input[field] !== undefined)
           : ["vx", "vy", "focalParameter", ...(rawType === "ellipse" ? ["axis"] : [])].some((field) => input[field] !== undefined)
         if (incompatible) return failRepairable(name, "incompatible_conic_fields", "the selected conic kind cannot use these geometry fields")
         if (rawType === "parabola") {
@@ -1375,14 +1377,36 @@ export function createDsActionSession(options: {
             sliceTarget
           )
         }
-        const rx = asFiniteNumber(input.radiusX)
-        const ry = asFiniteNumber(input.radiusY)
-        const kind = rawType === "hyperbola" ? "hyperbola" : "ellipse"
-        if (rx === null || ry === null || !(rx > 0 && ry > 0)) {
-          return failRepairable(name, "missing_required_parameter", "construct_conic requires positive radiusX and radiusY")
-        }
         const center = { x: asFiniteNumber(input.cx) ?? 0, y: asFiniteNumber(input.cy) ?? 0 }
-        const axis = input.axis === "y" ? "y" : "x"
+        const kind = rawType === "hyperbola" ? "hyperbola" : "ellipse"
+        let rx = asFiniteNumber(input.radiusX)
+        let ry = asFiniteNumber(input.radiusY)
+        let axis: "x" | "y" = input.axis === "y" ? "y" : "x"
+        if (input.throughPointIds !== undefined) {
+          if (input.radiusX !== undefined || input.radiusY !== undefined) {
+            return failRepairable(name, "ambiguous_geometry_input", "use throughPointIds or semi-axes, never both")
+          }
+          const ids = asStringList(input.throughPointIds)
+          if (!ids || ids.length !== 2 || ids[0] === ids[1]) {
+            return failRepairable(name, "conic_fit_unsatisfied", "throughPointIds requires two distinct existing points")
+          }
+          const first = readP2(ids[0]!, branchId)
+          const second = readP2(ids[1]!, branchId)
+          if (!first || !second) {
+            return failRepairable(name, "undeclared_entity_ref", "construct both throughPointIds before fitting the conic")
+          }
+          const fit = fitOriginConicThroughPoints(
+            [{ x: first.x - center.x, y: first.y - center.y }, { x: second.x - center.x, y: second.y - center.y }],
+            kind === "hyperbola" && input.axis !== undefined ? axis : undefined, kind
+          )
+          if (!fit) return failRepairable(name, "conic_fit_unsatisfied", "points do not uniquely determine the requested centered conic")
+          rx = fit.radiusX
+          ry = fit.radiusY
+          if (fit.kind === "hyperbola") axis = fit.axis
+        }
+        if (rx === null || ry === null || !(rx > 0 && ry > 0)) {
+          return failRepairable(name, "missing_required_parameter", "construct_conic requires positive radiusX/radiusY or two materialized throughPointIds")
+        }
         const conic: PlanarConic =
           kind === "ellipse"
             ? { id, type: "ellipse", center, radiusX: rx, radiusY: ry }

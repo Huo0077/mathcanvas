@@ -66,6 +66,8 @@
 
 **B4 零付费检查点（2026-11-19）**：模型可见的曲线 `axis/cx/cy` 此前被执行器忽略，纵轴双曲线会被错误画为横轴；现将方向/中心用于真实内核构造，非法输入不偷换。见[B4 审计](../audit/2026-11-19-g3-conic-axis-center-b4/README.md)。该缺陷属于已证实代码失真，**旧36题原始模型参数未保留，不能据此声称旧12次曲线缺参都已修好**。下一步围绕曲线族条件必填与模型可见能力继续修复。
 
+**B5 零费检查点（2026-11-19）**：GK-P02 真实“先两次构点、后构曲线缺参数”序列促成内核能力补全；`construct_conic` 可显式选 `throughPointIds`，内核从已物化的两点计算唯一椭圆/双曲线的半轴及轴向，退化/错族/错分支拒绝。证据见[B5 审计](../audit/2026-11-19-g3-conic-fit-b5/README.md)。旧回执不含原参数，**不声明模型当时使用过点拟合或历史成功率提高**。后续仍需焦点/离心率等其它输入族和同版真实复测。
+
 ### Block C — 真题原图输入与诚实澄清
 
 **Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。
