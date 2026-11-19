@@ -1,5 +1,8 @@
 # MathCanvas 项目过程日志
 
+> **2026-11-19 2022全国甲卷理科两题原卷复核（0 DS 请求）**：GK-P03 第20题与 GK-P08 第14题均已核对原卷 PDF 与附图归属；旧23纯文字候选现有 **5/23 仅原卷页级初核**，其余18题需逐卷复审，全部36合同仍未独立审核。[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)记录证据；[新版准入清单](../test-fixtures/reliability/text-only-36-source-triage.json)继续 `runnable=false`。旧DS 1/26/9 和原生交付未测保持不变。
+
+
 > **2026-11-19 保留题 GK-P05 原卷核验（0 新增 DS）**：使用 2021 全国甲卷理科原卷 p4 第20题确认抛物线题与旁边第19题立体配图无关；旧23已有 GK-P02/GK-P05/GK-P09 共 **3/23 页级初核**，余20题待复核。[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)列出 PDF SHA；[新版清单](../test-fixtures/reliability/text-only-36-source-triage.json)仍 `runnable=false`，独立合同/DS真实作图/原生交付未测，旧36成绩不变。
 
 

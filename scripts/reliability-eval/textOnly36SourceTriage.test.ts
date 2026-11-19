@@ -31,7 +31,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       expect(row.inputHash).toBe(old?.inputHash)
       expect(row.source).toBe(old?.source)
       expect(row.textualFigureCue).toBe(false)
-      expect(row.status).toBe(["GK-P02", "GK-P05", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : "needs_original_paper_review")
+      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : "needs_original_paper_review")
     }
   })
 
@@ -117,7 +117,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
     expect(rows.filter(row => row.status === "page_preview_checked_needs_pdf_and_independent_review" && row.originalPaperSha256)).toEqual([])
   })
 
-  it("rechecks two retained planar problems from matching original exam pages", () => {
+  it("rechecks five retained planar problems from matching original exam pages", () => {
     const row = triage().retained.find(x => x.id === "GK-P09")
     expect(row).toMatchObject({
       status: "pdf_page_checked_needs_independent_review",
@@ -136,7 +136,14 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       originalPaperSha256: "3318ba55310181e2320c92b46b2997a2d57d1547d21dea278d3f068975ba494d",
       originalPaperPage: 4
     })
-    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P05", "GK-P09"])
+    for (const [id, page] of [["GK-P03", 6], ["GK-P08", 5]] as const) {
+      expect(triage().retained.find(x => x.id === id)).toMatchObject({
+        status: "pdf_page_checked_needs_independent_review",
+        originalPaperUrl: "https://m.shsbnu.net/pluginfile.php/54461/mod_folder/content/0/2022%E5%B9%B4%E9%AB%98%E8%80%83%E7%9C%9F%E9%A2%98%E5%85%A8%E5%9B%BD%E7%94%B2%E5%8D%B7%E7%90%86%E7%A7%91%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7-%E5%AD%A6%E7%94%9F%E7%94%A8%E5%8D%B7.pdf",
+        originalPaperSha256: "f8362915a798b85da50ece7be83783264ed3c4920328cb5b5911910475862625", originalPaperPage: page
+      })
+    }
+    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"])
   })
 
   it("ties exactly 13 distinct provisional source records to the slots and requires source hashes", () => {

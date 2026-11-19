@@ -60,7 +60,10 @@
       "inputHash": "c354edd536f5e8a5a93d7d2fd714141f9e54c17207911329e107424a88452d84",
       "source": "2022年全国甲卷理科 第20题 (GAOKAO-Bench)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "pdf_page_checked_needs_independent_review",
+      "originalPaperUrl": "https://m.shsbnu.net/pluginfile.php/54461/mod_folder/content/0/2022%E5%B9%B4%E9%AB%98%E8%80%83%E7%9C%9F%E9%A2%98%E5%85%A8%E5%9B%BD%E7%94%B2%E5%8D%B7%E7%90%86%E7%A7%91%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7-%E5%AD%A6%E7%94%9F%E7%94%A8%E5%8D%B7.pdf",
+      "originalPaperSha256": "f8362915a798b85da50ece7be83783264ed3c4920328cb5b5911910475862625",
+      "originalPaperPage": 6
     },
     {
       "id": "GK-P04",
@@ -98,7 +101,10 @@
       "inputHash": "61889aa5ca789074ca4306e8a7250eb156f6696048ad6d866a7520bc8f462ca4",
       "source": "2022年全国甲卷理科 第14题 (GAOKAO-Bench)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "pdf_page_checked_needs_independent_review",
+      "originalPaperUrl": "https://m.shsbnu.net/pluginfile.php/54461/mod_folder/content/0/2022%E5%B9%B4%E9%AB%98%E8%80%83%E7%9C%9F%E9%A2%98%E5%85%A8%E5%9B%BD%E7%94%B2%E5%8D%B7%E7%90%86%E7%A7%91%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7-%E5%AD%A6%E7%94%9F%E7%94%A8%E5%8D%B7.pdf",
+      "originalPaperSha256": "f8362915a798b85da50ece7be83783264ed3c4920328cb5b5911910475862625",
+      "originalPaperPage": 5
     },
     {
       "id": "GK-P09",
