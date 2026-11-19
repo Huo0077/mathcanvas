@@ -4,7 +4,7 @@
 
 旧冻结题库 [source](../../../test-fixtures/reliability/drawing-contracts-36.json)、新版[23+13规划清单](../../../test-fixtures/reliability/text-only-36-plan.json)均只读；本轮新增[来源筛查数据](../../../test-fixtures/reliability/text-only-36-source-triage.json)（无题面正文、无原卷文件）。8道高考线索最初来自 [GAOKAO-Bench 原始数据仓](https://github.com/OpenLMLab/GAOKAO-Bench/tree/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data) 固定修订的数学题 JSON，文件 SHA 与单题文本 SHA 均锁定，**但转录仅是线索，不等于原卷无图**。其中 GK-S11/GK-S12/GK-S13/GK-S14/GK-S16/GK-S17 后续已取得相应试题 PDF 并核验题号、题意和配图归属；GK-S10/GK-S15 是第三方**题页 JPEG 预览**，不是 PDF 原卷或独立审查。六道 PDF 初核题也未做独立第二审核与合同签收。5道联考线索来自第三方承载的试卷 PDF 真正字节，已核对文件头为 PDF、记录 SHA-256 并目视对应页；发布者并非命题方，题目来源仍需独立二次复核。临时原卷放系统临时目录，未进入仓库。
 
-原23条的 prompt/来源/哈希与旧合同逐项机械对齐且文本中没有“如图/见图”等显式图示词；其中 GK-P09 已核对相符原卷 p2 的第6题，另外22条仍仅有旧文字来源；**不能推导原始卷面无图或画面唯一**，全部标为 `needs_original_paper_review`。13槽位全部保持 pending；本筛查文件 `runnable=false`，不能喂给 DS 或计算新版成功率。
+原23条的 prompt/来源/哈希与旧合同逐项机械对齐且文本中没有“如图/见图”等显式图示词；其中 GK-P02、GK-P09 分别已核对相符原卷页，另外21条仍仅有旧文字来源；**不能推导原始卷面无图或画面唯一**，全部标为 `needs_original_paper_review`。13槽位全部保持 pending；本筛查文件 `runnable=false`，不能喂给 DS 或计算新版成功率。
 
 ### 高考候选（8条：6 PDF 页初核、2 JPEG 题页预览；均未独立审核）
 
@@ -28,6 +28,8 @@
 **拒收错配来源**：曾下载两份标题类似的 PDF，但 2016 全国 III“试卷答案/详解”下载件 PDF p4 #10 是随机模拟题（SHA-256 `a726ea29a53116a1d1ddbcaba0defe847fe95431c0ed046b470b0e38026c2373`），2020 全国 I 另一下载件 p1 #6 是向量题（SHA-256 `2e57a1ae1f87fd18cbc4da2f5bb7f5ad08b64ef3d87d4d1abe273730feab04bd`）。它们都**不能**作为目标题 #10/#6 的原卷证据，已用 `paper_question_mismatch` 显式登记拒收。标题/年份匹配不是题目匹配。新增两道原卷和错配源分别测试先 RED 再 GREEN；最终 `npm.cmd run typecheck` 通过、`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过、旧合同+旧运行器+新清单4文件/73用例通过、`npm.cmd run lint` 0错误/34条既有警告，`git diff --check` 通过。
 
 **2026-11-19 公开页预览（不冒充 PDF）**：GK-S10 [2014 全国Ⅱ卷文科预览 p2](https://cdn.att.tthaoke.com/testpaper/preview/8/8b0d7586467107bcc47c3e8d0a1cb0e2/p002.jpg) JPEG SHA-256 `c55a6570ec1da8dcf1cf547b5560b73bba9ced867a9c68679a58fbc9f745cf86`，#7 正三棱柱体积题无随题附图；前一题 #6 的三视图及后题 #8 流程图不可错认。GK-S15 [2013 全国Ⅰ卷文科预览 p3](https://cdn.att.tthaoke.com/testpaper/preview/2/20fda96f61ae09480ea11dff410a071d/p003.jpg) JPEG SHA-256 `b4f7535e0d3d2e421c0c701c397b64b54314ddc2a50a61712d8e2229ccacf7af`，#15 球/截面题无随题附图；前一题的三视图不可错认。这是第三方网页展示的**图像预览字节**，既不是原始试卷 PDF 字节哈希，也不证明命题方原版页未被编辑。状态单列 `page_preview_checked_needs_pdf_and_independent_review`，不升级为 `pdf_page_checked_needs_independent_review`，仍需原 PDF 和独立合同。用例先 RED（预览状态与 SHA 缺失）再 GREEN；最终 `npm.cmd run typecheck` 通过，`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过，来源准入+旧合同+旧运行器定向4文件/74用例通过，`npm.cmd run lint` 0错误/34条既有警告，`git diff --check` 通过。
+
+**旧23题中的第二道原卷复核**：GK-P02（2022 全国乙卷理科第20题）与已经记录的 GK-S13 同卷，原卷 PDF 字节 SHA-256 `fb7509622fe55a681f6145067c0a91c6377aeb127f78cd3f60818c72551448dc`，p5 椭圆过 A(0,-2)、B(3/2,-1)，无附题图；仍未做独立第二审核/合同重新签收，旧版实测不因此加分。新增测试先 RED 后 GREEN；旧23页级核对现为2/23。最终 `npm.cmd run typecheck` 通过，`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过，定向4文件/74用例通过，`npm.cmd run lint` 0错误/34条既有警告，`git diff --check` 通过。
 
 ### 联考候选（5条，页面已初核，无独立签收）
 

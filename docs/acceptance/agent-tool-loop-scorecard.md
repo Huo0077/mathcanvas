@@ -1,5 +1,8 @@
 # MathCanvas Agent Tool Loop Scorecard
 
+> **2026-11-19 旧23题第二道原卷复核（0新增DS）**：GK-P02 已用 2022 全国乙卷理科学生试卷 p5 核对第20题椭圆题与附图归属；连同 GK-P09，旧23目前 2/23 仅页级初核，其余21题未核对。来源[审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)及[清单](../../test-fixtures/reliability/text-only-36-source-triage.json)保留具体 SHA。**不是独立合同批准，也不是新 DS 实测**；新36仍 `runnable=false`、旧实测读数不变。
+
+
 > **2026-11-19 题页预览线索（0 DS 请求）**：GK-S10/GK-S15 已找到并目视核验第三方 JPEG 试卷题页预览（题号及配图归属），但**未取得原试卷 PDF，也无独立合同**；[来源清单](../../test-fixtures/reliability/text-only-36-source-triage.json) 将预览状态与六道高考 PDF 页状态分开记录，[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)附字节 SHA。旧23只有 GK-P09 原卷初核，剩余22待复核；新版36保持 `runnable=false`，既有 DS 实测读数不变。
 
 
