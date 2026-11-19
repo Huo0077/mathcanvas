@@ -99,7 +99,10 @@
       "inputHash": "d18f3bdde6937838c43bdada17d1b838f6e8a39c09fdd9c9e26070993d7e9bfe",
       "source": "2020年新课标I卷 第6题 (GAOKAO-Bench text-168)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "pdf_page_checked_needs_independent_review",
+      "originalPaperUrl": "https://cdn.zizzs.com/zixunzhan/202310/c15dec3e-666b-4c24-a7fb-7d66a2f1d1f1.pdf",
+      "originalPaperSha256": "56877d60bea527f9025ffa697672f228414c9e2c39b534518109646c637c2ed4",
+      "originalPaperPage": 2
     },
     {
       "id": "JT-P01",
@@ -266,8 +269,11 @@
       "questionSha256": "64d3355852b62e7bb34c87d38ef567ae4fe2a08a5154609c04b1074cce034644",
       "year": "2016",
       "examCategory": "（新课标ⅲ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "pdf_page_checked_needs_independent_review",
+      "notes": "2016 national III mathematics (science) original exam p3 Q10 verified from actual PDF; closed right triangular prism, AB perpendicular BC, AB=6, BC=8, AA1=3, sphere max volume. The page has a histogram for preceding Q9, not an image for Q10. Earlier xdf download was answer/explanation paper with unrelated Q10: not acceptable as original source. Dataset typo 棱雉 must be corrected from printed 棱柱 before suite freeze; independent source/contract review pending.",
+      "originalPaperUrl": "https://dfiles.jiajiaoban.com/ohr/2019/08/20/164640_5d5bb370c2137.pdf",
+      "originalPaperSha256": "72a58f7b2a7c4db04efa63737ab5948b6d3662682a39b08bf5a308f4016e525a",
+      "originalPaperPage": 3
     },
     {
       "slotId": "GK-S17",
@@ -279,8 +285,11 @@
       "questionSha256": "31455f7872640a6d8cf2b0dcb92a97c723d76cfa031c8636b5b6a355f84fd613",
       "year": "2020",
       "examCategory": "（新课标Ⅱ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "pdf_page_checked_needs_independent_review",
+      "notes": "2020 national II mathematics (science) exam p2 Q10 checked: equilateral triangle area 9sqrt(3)/4 on sphere of surface area 16pi; find center-to-plane distance. No image attached to Q10; earlier Q7 multi-view diagram belongs only to Q7. Source and independent contract review pending.",
+      "originalPaperUrl": "https://cdn.zizzs.com/zixunzhan/202310/2f7a402a-a096-4e6e-b162-11cbac3dec78.pdf",
+      "originalPaperSha256": "53a3e8489a098c52727aa8427c53b8c63fd779ae9eb5257acdd94716253cea09",
+      "originalPaperPage": 2
     },
     {
       "slotId": "JT-S10",
@@ -345,6 +354,18 @@
       "reason": "embedded_figure_without_textual_cue",
       "page": 1,
       "sourceSha256": "07b2007e20ced2c4eacdc357f0b9209e093c398f7e5a6b6e75cb283481b5b1d1"
+    },
+    {
+      "sourceKey": "2016-national-III-wrong-answer-paper#Q10",
+      "reason": "paper_question_mismatch",
+      "page": 4,
+      "sourceSha256": "a726ea29a53116a1d1ddbcaba0defe847fe95431c0ed046b470b0e38026c2373"
+    },
+    {
+      "sourceKey": "2020-national-I-wrong-scan#Q6",
+      "reason": "paper_question_mismatch",
+      "page": 1,
+      "sourceSha256": "2e57a1ae1f87fd18cbc4da2f5bb7f5ad08b64ef3d87d4d1abe273730feab04bd"
     }
   ]
 }

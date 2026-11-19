@@ -88,6 +88,8 @@
 
 **历史记录（不在当前关键路径）**：先前 [C0 缺图阻断](../audit/2026-11-18-g3-f9-figure-input-c0/README.md)、[C1 题图哈希绑定](../audit/2026-11-19-g3-figure-digest-c1/README.md)仍然保留，产品现有视觉读取能力不撤销，但不为本轮寻找13张原题图、不做视觉付费测试。旧13图题只保留旧版审计，不进入新版36题。
 
+**C-T1 继续初核（2026-11-19）**：高考新增 GK-S16/GK-S17 原卷页核对，累计 6/8 有对应 PDF 页；旧23首核 GK-P09，另外22尚无原卷核对。发现两份“标题看似正确但题号内容不对”的 PDF，已按 `paper_question_mismatch` 拒收；数据集“棱雉/棱柱”差异须以后用正确原题重新锁定 hash。见[来源筛查审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新集依旧 `runnable=false`，不构成 DS 成功率。
+
 ### Block D — 真实候选可见与原生受控交付
 
 **Files**：`apps/web/src/agent/agentRunner.ts`、`apps/web/src/agent/draftStore.ts`、`apps/web/src/canvasEvidence.ts`、`apps/web/src/components/agent/ConfirmationPanel.tsx`、`e2e/drawing-reliability-lifecycle.spec.ts`，以及受控原生测试入口。

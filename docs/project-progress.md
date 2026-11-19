@@ -1,5 +1,8 @@
 # MathCanvas 项目过程日志
 
+> **2026-11-19 无图题来源复核增量（0 新增 DS）**：[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)与[清单](../test-fixtures/reliability/text-only-36-source-triage.json)现记录 6/8 道高考立体候选的 PDF 页级初核、旧23中 GK-P09 原卷初核；仍缺高考 GK-S10/GK-S15 和旧22原卷审查。两份标题正确但题号内容不符的下载件明确拒收；GK-S16 转录“棱雉/棱柱”待按原卷重锁文本。所有候选未独立审核、合同未冻结，`runnable=false`；不改变旧36合同1/26/9或原生交付未测，也未发起新 DS。
+
+
 > **2026-11-19 B8 线段参数闭合（0 新增 DS）**：`construct_segment` 由任意对象收紧为真实端点 `from/to` 必填；缺端点给明确缺字段码、额外几何字段不再被忽略后假接受，2D/3D 合法线段仍可构图。见[B8 审计](audit/2026-11-19-g3-segment-schema-b8/README.md)。旧36合同1/26/9、原生交付未测不变，新无图36待来源与合同审核、`runnable=false`；修复完成后的一次实测仍需新预算与每题请求上限。
 
 
