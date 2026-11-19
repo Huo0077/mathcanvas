@@ -1,5 +1,8 @@
 # Agent 发布前门禁
 
+> **2026-11-19 高考候选原卷增量初核（0 新增 DS）**：GK-S11（2016 全国新课标Ⅱ 第4题）和 GK-S13（2022 全国乙卷理科 第9题）已核验学生试卷 PDF 字节 SHA、题号、页码及附图归属，题目未附图；[证据](../audit/2026-11-19-g3-text-only-source-triage/README.md)。另外6道高考候选仍只有转录线索，旧23需原卷复审，全部13候选仍待独立审阅与新合同；[来源清单](../../test-fixtures/reliability/text-only-36-source-triage.json)继续 `runnable=false`。旧36合同 1/26/9 和原生交付未测均未改变。
+
+
 > **2026-11-19 来源筛查检查点（0 新增 DS）**：[初筛审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)锁定旧23题文本/哈希、8道高考转录线索及5道联考原卷页/SHA；发现“题干无如图但旁有配图”的拒选反例，不能只凭关键词放行。所有候选仍待原卷/独立合同复审，[筛查数据](../../test-fixtures/reliability/text-only-36-source-triage.json) `runnable=false`，新36题实测仍未开始；旧合同1/26/9与原生交付未测口径不变。
 
 
