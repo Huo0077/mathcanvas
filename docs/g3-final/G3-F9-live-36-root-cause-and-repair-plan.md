@@ -58,6 +58,8 @@
 - [ ] **终止/答案**：阶段性进度显式提示仍缺哪些合同义务；足够时允许模型调用 `finish_candidate`，证书/合同仍独立判断。拆出 GK-S09 硬编码答案，标注内核计算、模型陈述及验证三种来源；不以固定题号答案蒙混真实泛化。
 - [ ] **退出**：协议示例经模型可见 schema 与实际工具均能执行；当前真实失败族对应的脱敏断点可被局部复现；所有相关合同不放宽、参数负例与同名/跨分支引用负例持续拒绝。
 
+**B2 非付费检查点（2026-11-18）**：补齐 `construct_line` 的精确 `a,b,c` 方程转两点内核构图，合法解析式不再必须先猜两个端点；旧端点路径保持，混合/退化输入拒绝。原始 DS 构线参数未保留，不能宣称旧 `undeclared_entity_ref` 已全部治愈。见[Block B2 审计](../audit/2026-11-18-g3-f9-line-equation-b2/README.md)。模型可见引用目录/实体回滚一致性尚待 B3。
+
 ### Block C — 真题原图输入与诚实澄清
 
 **Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。

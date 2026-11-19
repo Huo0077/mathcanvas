@@ -119,7 +119,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   choose_strategy: "Select a geometric construction strategy for an entity.",
   construct_base: "Construct a base polygon or reference frame in 2D/3D.",
   construct_point: "Construct a named point: id with 2D x,y or 3D x,y,z, or id with from,to,ratio referencing materialized points.",
-  construct_line: "Construct a 2D line through two existing named points using from and to. Equation coefficients are not supported.",
+  construct_line: "Construct a named 2D line with id: use existing point names from and to, or finite equation coefficients a,b,c for a*x+b*y+c=0; never guess missing coefficients.",
   construct_segment: "Construct a segment between two existing named points.",
   construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
   construct_circle: "Construct a circle by center and radius.",
@@ -212,8 +212,9 @@ const CONSTRUCT_POINT_PARAMETERS = {
     from: { type: "string" }, to: { type: "string" }, ratio: { type: "number" } }
 } as const
 const CONSTRUCT_LINE_PARAMETERS = {
-  type: "object", additionalProperties: false, required: ["from", "to"],
-  properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" } }
+  type: "object", additionalProperties: false, required: ["id"],
+  properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" },
+    a: { type: "number" }, b: { type: "number" }, c: { type: "number" } }
 } as const
 const QUERY_MEASUREMENT_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["metric"],
@@ -1118,6 +1119,40 @@ export function createDsActionSession(options: {
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const fromId = asString(input.from)
         const toId = asString(input.to)
+        const hasEquation = name === "construct_line" && ["a", "b", "c"].some((key) => Object.hasOwn(input, key))
+        if (hasEquation) {
+          if (Object.hasOwn(input, "from") || Object.hasOwn(input, "to")) {
+            return failRepairable(name, "ambiguous_geometry_input", "use from/to or a,b,c, never both")
+          }
+          const a = asFiniteNumber(input.a)
+          const b = asFiniteNumber(input.b)
+          const c = asFiniteNumber(input.c)
+          if (a === null || b === null || c === null) {
+            return failRepairable(name, "missing_required_parameter", "line equation requires finite numeric a,b,c")
+          }
+          if (a === 0 && b === 0) return failRepairable(name, "degenerate_line", "a and b cannot both be zero")
+          const endpoints: [Coordinate, Coordinate] = Math.abs(b) >= Math.abs(a)
+            ? [{ x: 0, y: -c / b }, { x: 1, y: -(a + c) / b }]
+            : [{ x: -c / a, y: 0 }, { x: -(b + c) / a, y: 1 }]
+          if (endpoints.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y)) ||
+              Math.hypot(endpoints[0].x - endpoints[1].x, endpoints[0].y - endpoints[1].y) < 1e-9) {
+            return failRepairable(name, "degenerate_line", "equation cannot produce two distinct finite points")
+          }
+          const staged = stageDraftAction(
+            name,
+            { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [],
+              inputs: { alias: id, label, points: endpoints } },
+            id, undefined, sliceTarget
+          )
+          if (staged.ok) {
+            writeL2(id, { a: endpoints[0], b: endpoints[1] }, branchId)
+            writeL2(label, { a: endpoints[0], b: endpoints[1] }, branchId)
+          }
+          return staged
+        }
+        if (name === "construct_line" && (!fromId || !toId)) {
+          return failRepairable(name, "missing_required_parameter", "construct_line requires both from/to or finite a,b,c")
+        }
         const p3A = fromId ? readP3(fromId, branchId) : undefined
         const p3B = toId ? readP3(toId, branchId) : undefined
         if (p3A && p3B && fromId && toId) {

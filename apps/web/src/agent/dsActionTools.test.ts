@@ -291,6 +291,36 @@ describe("construct_solid model-visible contract", () => {
   })
 })
 
+describe("explicit planar line equation construction", () => {
+  it("constructs the exact line 2x + 3y - 6 = 0 without inventing endpoint entities", () => {
+    const schema = buildDsActionToolSchemas().find((tool) => tool.function.name === "construct_line")!.function.parameters
+    expect(schema).toMatchObject({ additionalProperties: false, required: ["id"],
+      properties: { a: { type: "number" }, b: { type: "number" }, c: { type: "number" } } })
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    const result = session.execute("construct_line", { id: "L", a: 2, b: 3, c: -6 })
+    expect(result.status).toBe("accepted")
+    expect(result.primitiveCount).toBeGreaterThan(0)
+    const lineAction = session.currentSnapshot().actions.find((action) => action.actionId === "planar.create_line")
+    expect(lineAction).toBeDefined()
+    if (lineAction?.actionId !== "planar.create_line") return
+    const points = lineAction.inputs.points as Array<{ x: number; y: number }>
+    expect(points).toHaveLength(2)
+    for (const point of points) expect(2 * point.x + 3 * point.y - 6).toBeCloseTo(0, 9)
+    expect(Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y)).toBeGreaterThan(0.1)
+  })
+  it("rejects zero normals, missing coefficients and mixed endpoint/equation requests atomically", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    const before = session.currentSnapshot().candidateHash
+    expect(session.execute("construct_line", { id: "L", a: 0, b: 0, c: 1 }).blockerCode).toBe("degenerate_line")
+    expect(session.execute("construct_line", { id: "L", a: 1, b: 2 }).blockerCode).toBe("missing_required_parameter")
+    expect(session.execute("construct_line", { id: "L" }).blockerCode).toBe("missing_required_parameter")
+    expect(session.execute("construct_line", { id: "L", from: "A" }).blockerCode).toBe("missing_required_parameter")
+    expect(session.execute("construct_line", { id: "L", a: 1, b: 2, c: 3, from: "A", to: "B" }).blockerCode).toBe("ambiguous_geometry_input")
+    expect(session.currentSnapshot().candidateHash).toBe(before)
+    expect(session.currentSnapshot().primitiveCount).toBe(0)
+  })
+})
+
 describe("real DS planar tool schema fidelity", () => {
   it("executes the published planar conic/point/line fields and refuses missing geometry", () => {
     const scene = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
@@ -321,9 +351,9 @@ describe("real DS planar tool schema fidelity", () => {
         focalParameter: { type: "number" } }
     })
     expect(tools.get("construct_conic")?.description).not.toMatch(/from equation/i)
-    expect(tools.get("construct_line")?.parameters).toMatchObject({ required: ["from", "to"],
+    expect(tools.get("construct_line")?.parameters).toMatchObject({ required: ["id"],
       properties: { from: { type: "string" }, to: { type: "string" } } })
-    expect(tools.get("construct_line")?.description).toMatch(/Equation coefficients are not supported/i)
+    expect(tools.get("construct_line")?.description).toMatch(/finite equation coefficients a,b,c/i)
     expect(tools.get("construct_point")?.description).toMatch(/id.*x.*y/i)
     expect(tools.get("query_measurement")?.description).toMatch(/metric.*distance.*targets/i)
     expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
