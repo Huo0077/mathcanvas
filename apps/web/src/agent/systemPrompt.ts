@@ -26,7 +26,7 @@ import { DS_CONSTRUCTION_STRATEGIES, DS_INTENT_SCHEMA_VERSION, MAX_CONVERSATION_
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
 export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
 export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v2"
-export const DS_ACTION_PROMPT_VERSION = "mathcanvas.ds_action.prompt.v1"
+export const DS_ACTION_PROMPT_VERSION = "mathcanvas.ds_action.prompt.v2"
 
 export type PromptIntentMode = "legacy_actions" | "ds_intent" | "ds_action"
 
@@ -249,7 +249,8 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
 
 function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
   const sections: string[] = [
-    `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。每次只提交**一个**动作工具调用；**不要输出推理过程**，也不需要一次性写出完整 JSON 施工单。`,
+    `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。每轮可提交一个动作；仅当动作相互独立时可同轮批量提交最多 8 个。修复、只读观察与终止动作必须单独成轮，不能跟构造同批。**不要输出推理过程**，也不需要一次性写出完整 JSON 施工单。`,
+    "`repair_entity`/`repair_constraint` 以及 `finish_candidate`/`request_clarification` 必须各自单独调用；同一批修复后几何会被撤销，不得声称已画出。",
     "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
     "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（缺题图或无解时调用 `request_clarification`）。",
     "**禁止手算立体顶点**：构建立体只传参数规格，坐标由内核计算；只读场景观察与动作构造必须分轮执行，禁止同批混发。",

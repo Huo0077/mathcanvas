@@ -1859,6 +1859,69 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     expect(events.some((event) => event.kind === "action")).toBe(false)
   })
 
+  it("does not leak a declared-only name from a rejected batch into later tool feedback", async () => {
+    let turn = 0
+    const requests: Array<{ messages: Array<{ role: string; content: string; toolCallId?: string }> }> = []
+    const events: ModelPlannerStructuredEvent[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      onStructuredDiagnostic: (event) => events.push(event),
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (request) => {
+        requests.push({ ...request, messages: request.messages.map((message) => ({ ...message })) })
+        turn += 1
+        return { ok: true, events: turn === 1 ? [
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "declared", toolId: "declare_entity", input: { id: "P", kind: "point" } },
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "invalid", toolId: "construct_point", input: { id: "Q", x: 2 } }
+        ] : [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "stop", toolId: "request_clarification", input: { reason: "protocol probe done" } }] }
+      }
+    })
+    const req = request({ userMessage: "Draw P and Q", budget: createBudget({ network: 4, generation: 4, tool: 8 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    await planner.plan(req)
+    expect(events.filter((event) => event.kind === "action" && event.requestIndex === 1)).toHaveLength(2)
+    const feedback = requests[1]?.messages.filter((message) => message.role === "tool_result" && ["declared", "invalid"].includes(message.toolCallId ?? "")) ?? []
+    expect(feedback).toHaveLength(2)
+    expect(feedback.map((message) => JSON.parse(message.content).referenceDirectory.declaredOnly)).toEqual([[], []])
+    expect(feedback.map((message) => JSON.parse(message.content).status)).not.toContain("accepted")
+  })
+
+  it("does not accept a constructive batch that repairs away its own geometry", async () => {
+    const events: ModelPlannerStructuredEvent[] = []
+    const sent: Array<{ messages: Array<{ role: string; content: string; toolCallId?: string }> }> = []
+    let turn = 0
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      onStructuredDiagnostic: (event) => events.push(event),
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((message) => ({ ...message })) })
+        turn++
+        return { ok: true, events: turn === 1 ? [
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-point", toolId: "construct_point", input: { id: "P", x: 0, y: 0 } },
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-repair", toolId: "repair_entity", input: {} }
+        ] : [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "c-stop", toolId: "request_clarification", input: { reason: "stop after protocol check" } }] }
+      }
+    })
+    const req = request({ userMessage: "Draw point P", budget: createBudget({ network: 4, generation: 4, tool: 8 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    const result = await planner.plan(req)
+    expect("plan" in result && result.plan.kind === "clarification").toBe(true)
+    expect(turn).toBe(2)
+    const batch = events.filter((event) => event.kind === "action" && event.requestIndex === 1)
+    expect(batch).toHaveLength(2)
+    expect(batch.every((event) => event.kind === "action" && event.resultStatus !== "accepted" && event.primitiveCountAfter === 0)).toBe(true)
+    const feedback = sent[1]?.messages.filter((message) => message.role === "tool_result" && ["c-point", "c-repair"].includes(message.toolCallId ?? ""))
+    expect(feedback).toHaveLength(2)
+    expect(feedback?.every((message) => JSON.parse(message.content).blockerCode === "unsupported_action_batch_mix")).toBe(true)
+  })
+
   it("rolls back every action in a ds_action batch when one tool is invalid and responds to both IDs", async () => {
     const events: ModelPlannerStructuredEvent[] = []
     let turn = 0

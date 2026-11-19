@@ -16,6 +16,17 @@ import { DS_INTENT_PROMPT_VERSION, SYSTEM_PROMPT_VERSION, buildPolicyText, build
  * ②**输入 schema** 由 `ACTIONS` 登记表；③**工具发布**由 `buildPlanToolSchema`
  *（判据在 `modelPlanner.test.ts`）；④**提示词菜单**就是这里。
  */
+describe("DS batch action policy mirrors the runtime", () => {
+  it("permits bounded independent construction but requires repair, read, and finish in separate turns", () => {
+    const text = buildPolicyText({ channel: "native_tools", canPlan: true, intentMode: "ds_action", actionIds: [] })
+    expect(text).toContain("最多 8 个")
+    expect(text).toContain("相互独立")
+    expect(text).toContain("repair_entity")
+    expect(text).toContain("finish_candidate")
+    expect(text).not.toContain("每次只提交**一个**")
+  })
+})
+
 describe("DS symbolic prism tool guidance", () => {
   it("directs a symbolic equal-edge triangular prism to the simple family-specific action", () => {
     const text = buildPolicyText({ channel: "native_tools", canPlan: true, intentMode: "ds_action", actionIds: [] })

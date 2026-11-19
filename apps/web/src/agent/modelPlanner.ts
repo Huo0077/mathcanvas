@@ -973,9 +973,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           }
           const before = dsActionSession.currentSnapshot()
           const terminal = calls.some((call) => call.toolId === "finish_candidate" || call.toolId === "request_clarification")
+          // A repair mutates prior state. If batched with another action, the trial
+          // can report accepted construction even after repair removes its geometry.
+          const destructive = calls.some((call) => call.toolId === "repair_entity" || call.toolId === "repair_constraint")
           const hasRead = calls.some((call) => call.toolId === "query_measurement" || call.toolId === "query_constraint_status")
           const hasConstruct = calls.some((call) => isDsActionName(call.toolId) && !NON_CONSTRUCTIVE_DS_ACTIONS.has(call.toolId))
-          const mixed = terminal || (hasRead && hasConstruct)
+          const mixed = terminal || destructive || (hasRead && hasConstruct)
           let trial: ReturnType<typeof newDsActionSession> | null = null
           let results: DsActionExecutionResult[] = []
           if (!mixed) {
@@ -1036,7 +1039,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             })
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
               content: accepted ? boundedExcerpt(JSON.stringify({ ...res, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) }), 4000) : JSON.stringify({ status, blockerCode, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)),
-                repairHint: mixed ? "Send read and terminal tools in separate turns" : res && !res.ok ? res.repairHint : "Entire batch rolled back; correct failing call and retry" }) })
+                repairHint: mixed ? "Send read, repair, and terminal tools in separate turns" : res && !res.ok ? res.repairHint : "Entire batch rolled back; correct failing call and retry" }) })
           }
           continue
         }
