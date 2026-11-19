@@ -288,7 +288,7 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
             }
         }
         _ => {
-            let dialog: Vec<serde_json::Value> = messages.iter().map(openai_message).collect();
+            let dialog = openai_dialog(&messages);
             object.insert("messages".into(), serde_json::json!(dialog));
             // **OpenAI 兼容的输出约束**（T3）。
             //
@@ -381,6 +381,33 @@ fn ollama_message(message: &ChatMessage) -> serde_json::Value {
     }
 }
 
+/// Consecutive tool calls from one provider response are a single assistant message.
+/// The matching tool results follow as separate messages with their original IDs.
+fn openai_dialog(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
+    let mut dialog = Vec::with_capacity(messages.len());
+    let mut index = 0;
+    while index < messages.len() {
+        if messages[index].role == "tool_call" {
+            let mut calls = Vec::new();
+            while index < messages.len() && messages[index].role == "tool_call" {
+                let message = &messages[index];
+                let args = serde_json::to_string(&message.tool_input).unwrap_or_else(|_| "{}".into());
+                calls.push(serde_json::json!({
+                    "id": message.tool_call_id.as_deref().unwrap_or_default(),
+                    "type": "function",
+                    "function": { "name": message.tool_name, "arguments": args }
+                }));
+                index += 1;
+            }
+            dialog.push(serde_json::json!({"role": "assistant", "content": serde_json::Value::Null, "tool_calls": calls}));
+        } else {
+            dialog.push(openai_message(&messages[index]));
+            index += 1;
+        }
+    }
+    dialog
+}
+
 fn openai_message(message: &ChatMessage) -> serde_json::Value {
     if message.role == "tool_call" {
         let id = message.tool_call_id.as_deref().unwrap_or_default();
@@ -442,4 +469,29 @@ pub fn authorize(request: &ProviderRequest, secret: &str) -> Vec<(String, String
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod batch_tool_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn groups_same_turn_tool_calls_in_one_assistant_message_with_matching_results() {
+        let messages = vec![
+            ChatMessage::text("user", "two points"),
+            ChatMessage::tool_call("c-p", "construct_point", json!({"id":"P","x":0,"y":0})),
+            ChatMessage::tool_call("c-q", "construct_point", json!({"id":"Q","x":2,"y":0})),
+            ChatMessage::tool_result("c-p", "construct_point", "accepted P"),
+            ChatMessage::tool_result("c-q", "construct_point", "accepted Q"),
+        ];
+        let dialog = openai_dialog(&messages);
+        assert_eq!(dialog.len(), 4);
+        assert_eq!(dialog[1]["role"], "assistant");
+        assert_eq!(dialog[1]["tool_calls"].as_array().unwrap().len(), 2);
+        assert_eq!(dialog[1]["tool_calls"][0]["id"], "c-p");
+        assert_eq!(dialog[1]["tool_calls"][1]["id"], "c-q");
+        assert_eq!(dialog[2]["tool_call_id"], "c-p");
+        assert_eq!(dialog[3]["tool_call_id"], "c-q");
+    }
 }

@@ -1700,4 +1700,171 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     expect("plan" in okRes && okRes.plan.kind === "plan").toBe(true)
     expect(okCalls).toBe(4)
   })
+
+  it.each([
+    ["GK-P01", ["declare_entity", "declare_entity", "declare_entity"]],
+    ["GK-P03", ["construct_point", "construct_point"]],
+    ["GK-P05", ["construct_point", "construct_line"]],
+    ["GK-P06", ["construct_conic", "construct_line"]],
+    ["JT-P02", ["construct_point", "construct_point"]],
+    ["JT-P06", ["construct_point", "construct_point", "construct_point"]],
+    ["JT-P07", ["construct_conic", "construct_point", "construct_point", "construct_point"]],
+    ["JT-P08", ["construct_point", "construct_point", "construct_point"]]
+  ] as const)("does not misclassify live %s action-batch tool names as a mixed scene-read batch", async (_id, names) => {
+    let turn = 0
+    const events: ModelPlannerStructuredEvent[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action", onStructuredDiagnostic: (event) => { events.push(event) },
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        turn += 1
+        return { ok: true, events: turn === 1
+          ? names.map((toolId, index) => ({ kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: `batch-${index}`,
+            toolId, input: toolId === "declare_entity" ? { id: `P${index}`, kind: "point" } :
+              toolId === "construct_point" ? { id: `P${index}`, x: index, y: index } :
+                toolId === "construct_conic" ? { id: "C", conicType: "ellipse", radiusX: 2, radiusY: 1 } :
+                  { id: "L", from: "P0", to: "P1" } }))
+          : [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "stop", toolId: "request_clarification", input: { reason: "protocol probe complete" } }] }
+      }
+    })
+    await planner.plan(request({ userMessage: "Protocol-only batch probe", budget: createBudget({ network: 4, generation: 4, tool: 12 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } }))
+    expect(events.filter((event) => event.kind === "action" && event.requestIndex === 1)).toHaveLength(names.length)
+    expect(events.some((event) => event.kind === "boundary" && event.code === "mixed_read_plan")).toBe(false)
+  })
+
+  it("continues after a GK-P01-style three-declaration batch without fabricating primitives", async () => {
+    let turn = 0
+    const events: ModelPlannerStructuredEvent[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action", onStructuredDiagnostic: (event) => { events.push(event) },
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        turn += 1
+        const action = turn === 1
+          ? ["P", "Q", "R"].map((id) => ({ kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: `decl-${id}`,
+              toolId: "declare_entity", input: { id, kind: "point" } }))
+          : turn === 2
+            ? [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "construct-P", toolId: "construct_point", input: { id: "P", x: 0, y: 0 } }]
+            : [{ kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "done", toolId: "finish_candidate", input: { goal: "named P" } }]
+        return { ok: true, events: action }
+      }
+    })
+    const req = request({ userMessage: "Draw P", budget: createBudget({ network: 5, generation: 5, tool: 12 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    const outcome = await planner.plan(req)
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    expect(turn).toBe(3)
+    const declarations = events.filter((event) => event.kind === "action" && event.requestIndex === 1)
+    expect(declarations).toHaveLength(3)
+    expect(declarations.every((event) => event.kind === "action" && event.resultStatus === "accepted" && event.primitiveCountAfter === 0 && event.feedbackDelivered)).toBe(true)
+  })
+
+  it("stops repeated invalid ds_action batches without spending the full request budget", async () => {
+    let turns = 0
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        turns += 1
+        return { ok: true, events: [
+          { kind: "tool_call" as const, requestId: `r-${turns}`, attemptId: `a-${turns}`, toolCallId: `p-${turns}`, toolId: "construct_point", input: { id: "P", x: 0, y: 0 } },
+          { kind: "tool_call" as const, requestId: `r-${turns}`, attemptId: `a-${turns}`, toolCallId: `q-${turns}`, toolId: "construct_point", input: { id: "Q", x: 2 } }
+        ] }
+      }
+    })
+    await expect(planner.plan(request({ userMessage: "Draw P and Q", budget: createBudget({ network: 8, generation: 8, tool: 24 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } }))).rejects.toThrow(/stalled|no_progress/i)
+    expect(turns).toBeLessThanOrEqual(2)
+  })
+
+  it("does not execute duplicate tool IDs in one ds_action batch", async () => {
+    const events: ModelPlannerStructuredEvent[] = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action", onStructuredDiagnostic: (event) => { events.push(event) },
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => ({ ok: true, events: [
+        { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "same", toolId: "construct_point", input: { id: "P", x: 0, y: 0 } },
+        { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "same", toolId: "construct_point", input: { id: "Q", x: 2, y: 0 } }
+      ] })
+    })
+    await expect(planner.plan(request({ budget: createBudget({ network: 4, generation: 4, tool: 8 }) }))).rejects.toThrow(/invalid ds_action batch/)
+    expect(events.some((event) => event.kind === "boundary" && event.code === "invalid_action_batch")).toBe(true)
+    expect(events.some((event) => event.kind === "action")).toBe(false)
+  })
+
+  it("rolls back every action in a ds_action batch when one tool is invalid and responds to both IDs", async () => {
+    const events: ModelPlannerStructuredEvent[] = []
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; toolCallId?: string; content: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      onStructuredDiagnostic: (event) => { events.push(event) },
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((message) => ({ ...message })) })
+        turn += 1
+        return { ok: true, events: turn === 1 ? [
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-p", toolId: "construct_point", input: { id: "P", x: 0, y: 0 } },
+          { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-q", toolId: "construct_point", input: { id: "Q", x: 2 } }
+        ] : turn === 2 ? [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "c-finish", toolId: "finish_candidate", input: { goal: "two points" } }] : [{ kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "c-stop", toolId: "request_clarification", input: { reason: "invalid request batch" } }] }
+      }
+    })
+    const req = request({ userMessage: "Draw P and Q", budget: createBudget({ network: 4, generation: 4, tool: 8 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    const outcome = await planner.plan(req)
+    expect("plan" in outcome && outcome.plan.kind === "clarification").toBe(true)
+    expect(turn).toBe(3)
+    expect(events.some((event) => event.kind === "action" && event.toolName === "finish_candidate" && event.blockerCode === "empty_candidate")).toBe(true)
+    expect(events.filter((event) => event.kind === "action" && event.requestIndex === 1)).toHaveLength(2)
+    expect(events.filter((event) => event.kind === "action" && event.requestIndex === 1 && event.primitiveCountAfter > 0)).toHaveLength(0)
+    expect(sent[1]?.messages.filter((message) => message.role === "tool_result").map((message) => message.toolCallId)).toEqual(["c-p", "c-q"])
+  })
+
+  it("accepts one ds_action response containing independent point constructions and reports every tool result", async () => {
+    const events: ModelPlannerStructuredEvent[] = []
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; toolCallId?: string; content: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      onStructuredDiagnostic: (event) => { events.push(event) },
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((message) => ({ ...message })) })
+        turn += 1
+        return { ok: true, events: turn === 1
+          ? [
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-p", toolId: "construct_point", input: { id: "P", x: 0, y: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "c-q", toolId: "construct_point", input: { id: "Q", x: 2, y: 0 } }
+          ]
+          : [{ kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "c-finish", toolId: "finish_candidate", input: { goal: "two named points" } }] }
+      }
+    })
+    const req = request({ userMessage: "Draw P and Q", budget: createBudget({ network: 4, generation: 4, tool: 8 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    const outcome = await planner.plan(req)
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    expect(turn).toBe(2)
+    expect(events.filter((event) => event.kind === "action" && event.resultStatus === "accepted")).toHaveLength(3)
+    expect(sent[1]?.messages.filter((message) => message.role === "tool_result").map((message) => message.toolCallId)).toEqual(["c-p", "c-q"])
+  })
+
 })

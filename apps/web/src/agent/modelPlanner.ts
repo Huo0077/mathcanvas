@@ -49,7 +49,8 @@ import { cancelModelRun, startModelRun, type ModelChatMessage, type ModelClientS
 import {
   buildDsActionToolSchemas,
   createDsActionSession,
-  NON_CONSTRUCTIVE_DS_ACTIONS
+  NON_CONSTRUCTIVE_DS_ACTIONS,
+  type DsActionExecutionResult
 } from "./dsActionTools"
 import { buildSystemPrompt, type PromptIntentMode } from "./systemPrompt"
 import {
@@ -650,9 +651,10 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let observationCompleted = false
       const seenCalls = new Set<string>()
       const dsActionSignatures = new Map<string, number>()
-      const dsActionSession = intentMode === "ds_action"
-        ? createDsActionSession({ workspace: request.run.target.workspace, baseDocument: createEmptyDocument(request.run.target.workspace), runId, problemText: request.userMessage })
-        : null
+      const dsActionBaseDocument = createEmptyDocument(request.run.target.workspace)
+      const newDsActionSession = () => createDsActionSession({ workspace: request.run.target.workspace, baseDocument: dsActionBaseDocument, runId, problemText: request.userMessage })
+      let dsActionSession = intentMode === "ds_action" ? newDsActionSession() : null
+      const dsActionHistory: Array<{ name: string; input: unknown }> = []
       /**
        * 用户按了停止 → 让 Rust 侧**真的**停下来。
        *
@@ -946,12 +948,95 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         }
         /**
          * 走到这里有两种情形，**都必须显式处理，不许静默丢弃**：
-         * - 批次里只要有一个调用不是已发布的只读工具（含 `plan_set_plan`、编造的工具名）；
+         * - 非 ds_action 批次里只要有一个调用不是已发布的只读工具（含 `plan_set_plan`、编造的工具名）；
          * - 频道不是 native（那时 `tools` 本来是空的，模型不该给出任何调用）。
          *
-         * 判据：**`calls.length > 1` 一律拒绝**。单调用（`calls.length === 1`）留给下面那段 ——
+         * 判据：**非 ds_action 的多调用保留旧拒绝规则**；ds_action 先走原子批次分支。单调用（`calls.length === 1`）留给下面那段 ——
          * 它既处理 `plan_set_plan` 这个终点，也处理"发过一个我们没发过的工具"的拒绝。
          */
+        // ds_action actions are not scene read tools. Validate the whole response before
+        // committing any speculative geometry; preserve a result for every tool_call_id.
+        if (channel === "native_tools" && intentMode === "ds_action" && dsActionSession !== null && calls.length > 1) {
+          if (calls.some((call) => readToolIdFromNative(call.toolId) !== null) && calls.some((call) => readToolIdFromNative(call.toolId) === null)) {
+            dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "mixed_read_plan" })
+            throw new ModelPlannerError("unexpected_tool_call", "the provider returned a batch that mixes a read tool with an action; refusing partial execution")
+          }
+          const published = new Set(tools.map((tool) => String((tool as { function?: { name?: string } }).function?.name ?? "")))
+          const ids = calls.map((call) => call.toolCallId)
+          if (calls.length > 8 || ids.some((id, index) => !id || seenCalls.has(id) || ids.indexOf(id) !== index) ||
+            calls.some((call) => !published.has(call.toolId) || !isDsActionName(call.toolId) || typeof call.input !== "object" || call.input === null || Array.isArray(call.input))) {
+            dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "invalid_action_batch" })
+            throw new ModelPlannerError("unexpected_tool_call", "invalid ds_action batch: IDs, names, input objects or size")
+          }
+          const before = dsActionSession.currentSnapshot()
+          const terminal = calls.some((call) => call.toolId === "finish_candidate" || call.toolId === "request_clarification")
+          const hasRead = calls.some((call) => call.toolId === "query_measurement" || call.toolId === "query_constraint_status")
+          const hasConstruct = calls.some((call) => isDsActionName(call.toolId) && !NON_CONSTRUCTIVE_DS_ACTIONS.has(call.toolId))
+          const mixed = terminal || (hasRead && hasConstruct)
+          let trial: ReturnType<typeof newDsActionSession> | null = null
+          let results: DsActionExecutionResult[] = []
+          if (!mixed) {
+            trial = newDsActionSession()
+            for (const prior of dsActionHistory) trial.execute(prior.name, prior.input)
+            const replay = trial.currentSnapshot()
+            if (replay.candidateHash !== before.candidateHash || replay.primitiveCount !== before.primitiveCount) {
+              throw new ModelPlannerError("provider_failed", "ds_action batch snapshot drift")
+            }
+            results = calls.map((call) => trial!.execute(call.toolId, call.input))
+          }
+          const failure = results.find((res) => !res.ok || res.terminated !== undefined || (!NON_CONSTRUCTIVE_DS_ACTIONS.has(res.action) && !res.stateChanged))
+          const accepted = !mixed && failure === undefined && trial !== null
+          if (!accepted) {
+            const signature = `batch:${calls.map((call) => call.toolId).join(",")}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
+            const stalled = (dsActionSignatures.get(signature) ?? 0) + 1
+            dsActionSignatures.set(signature, stalled)
+            if (stalled >= 2) {
+              dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "no_progress" })
+              for (const call of calls) dependencies.onStructuredDiagnostic?.({
+                kind: "action", requestIndex: structuredRequestIndex, actionIndex: ++dsActionIndex,
+                toolName: call.toolId, resultStatus: "repairable", blockerCode: "no_progress",
+                primitiveCountBefore: before.primitiveCount, primitiveCountAfter: before.primitiveCount,
+                candidateHashChanged: false, stateChanged: false, feedbackDelivered: false
+              })
+              throw new ModelPlannerError("unexpected_tool_call", "no_progress: repeated stalled ds_action batch")
+            }
+          }
+          if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
+          const externalNetworkGuard = request.beforeProviderRequest !== undefined
+          if (request.budget.remaining("generation") < 1 || (!externalNetworkGuard && request.budget.remaining("network") < 1)) {
+            throw new ModelPlannerError("provider_failed", "budget exhausted before ds_action batch feedback")
+          }
+          if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
+            throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action batch")
+          }
+          if (accepted) {
+            dsActionSession = trial
+            for (const call of calls) dsActionHistory.push({ name: call.toolId, input: call.input })
+            lastDsPrimitiveCount = trial!.currentSnapshot().primitiveCount
+            lastDsCandidateHash = trial!.currentSnapshot().candidateHash
+            dsActionSignatures.clear()
+          } else dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: mixed ? "unsupported_action_batch_mix" : failure?.blockerCode ?? "batch_rolled_back" })
+          for (const call of calls) {
+            seenCalls.add(call.toolCallId)
+            messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
+          }
+          for (const [index, call] of calls.entries()) {
+            const res = results[index]
+            const status = accepted ? "accepted" : res && !res.ok ? res.status : "repairable"
+            const blockerCode = accepted ? undefined : res && !res.ok ? res.blockerCode ?? "batch_rolled_back" : mixed ? "unsupported_action_batch_mix" : "batch_rolled_back"
+            dependencies.onStructuredDiagnostic?.({
+              kind: "action", requestIndex: structuredRequestIndex, actionIndex: ++dsActionIndex, toolName: call.toolId,
+              resultStatus: status, ...(blockerCode === undefined ? {} : { blockerCode }),
+              primitiveCountBefore: before.primitiveCount, primitiveCountAfter: accepted ? res!.primitiveCount : before.primitiveCount,
+              candidateHashChanged: accepted && res!.candidateHash !== before.candidateHash,
+              stateChanged: accepted && res!.stateChanged, feedbackDelivered: true
+            })
+            messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
+              content: accepted ? boundedExcerpt(JSON.stringify(res), 4000) : JSON.stringify({ status, blockerCode,
+                repairHint: mixed ? "Send read and terminal tools in separate turns" : res && !res.ok ? res.repairHint : "Entire batch rolled back; correct failing call and retry" }) })
+          }
+          continue
+        }
         if (calls.length > 1) {
           const offender = calls.find((call) => readToolIdFromNative(call.toolId) === null)
           dependencies.onStructuredDiagnostic?.({
@@ -991,6 +1076,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const previousCandidateHash = lastDsCandidateHash
             const actionIndex = ++dsActionIndex
             const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
+            dsActionHistory.push({ name: toolCall.toolId, input: toolCall.input })
             lastDsPrimitiveCount = execRes.primitiveCount
             lastDsCandidateHash = execRes.candidateHash
             const reportAction = (feedbackDelivered: boolean) => dependencies.onStructuredDiagnostic?.({

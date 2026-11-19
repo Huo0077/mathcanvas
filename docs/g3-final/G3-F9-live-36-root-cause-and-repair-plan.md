@@ -34,6 +34,9 @@
 
 ### Block A — 同轮多工具调用的安全事务与真实回执（最高优先）
 
+**A1 非付费工程检查点（2026-11-18）**：已用本轮8种真实工具名称序列做协议级回归，避免通用场景只读闸误拒；同轮构造支持隔离预执行、全批原子提交/回滚和逐 ID 回执，Rust 将多调用编码为单条 assistant 消息。证据见[Block A1 审计](../audit/2026-11-18-g3-f9-batch-protocol-a1/README.md)。**仍未在新提交上原生调用 DS**，8题合同状态不改；Block A 的供应商真实回执及同候选交付退出门禁仍未完成。
+
+
 **Files**：`apps/web/src/agent/modelPlanner.ts`、`apps/web/src/agent/dsActionTools.ts`、`apps/desktop/src-tauri/src/providers/request.rs`、`apps/web/src/agent/fixtures/g3DsCaseTrace.ts`；测试：`modelPlanner.test.ts`、`dsActionTools.test.ts`、Rust request tests、`g3DsFrozenCaseRunner.test.ts`。
 
 - [ ] **RED**：用脱敏的 GK-P01 三声明、GK-P05 点+线、JT-P07 曲线+多点及“同轮缺 ID/重复 ID/混只读+写入/某项非法/预算不足/取消”测试；断言旧实现给 `mixed_read_plan` 或零回执；不输入受保护的原始模型正文。
