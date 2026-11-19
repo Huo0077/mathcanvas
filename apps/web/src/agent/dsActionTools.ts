@@ -107,7 +107,16 @@ export interface DsActionStateSlice {
   readonly actions: readonly DraftAction[]
 }
 
+export interface DsActionReferenceDirectory {
+  readonly materializedPoints: readonly string[]
+  readonly materializedLines: readonly string[]
+  readonly materializedConics: readonly string[]
+  readonly declaredOnly: readonly string[]
+  readonly truncated: boolean
+}
+
 export interface DsActionSession {
+  referenceDirectory(branchId?: string): DsActionReferenceDirectory
   execute(toolName: string, rawInput: unknown): DsActionExecutionResult
   currentSnapshot(): ReturnType<ReturnType<typeof createSpeculativeCanvas>["snapshot"]>
   stateSlices(): readonly DsActionStateSlice[]
@@ -556,6 +565,7 @@ export function createDsActionSession(options: {
 }): DsActionSession {
   const speculative = createSpeculativeCanvas(options.baseDocument, { runId: options.runId })
   const entities = new Map<string, { id: string; kind: string; scopeId: string; stateId: string }>()
+  const explicitDeclarations = new Map<string, Set<string>>()
   const points2 = new Map<string, Coordinate>()
   const points3 = new Map<string, Vector3>()
   const lines2 = new Map<string, { a: Coordinate; b: Coordinate }>()
@@ -590,9 +600,46 @@ export function createDsActionSession(options: {
     sharedActions: DraftAction[]
     branchBuckets: Array<[string, { scopeId: string; stateId?: string; branchId: string; actions: DraftAction[] }]>
   }> = [{ slices: [], sharedActions: [], branchBuckets: [] }]
-  const pointHistory: Array<{ points2: Map<string, Coordinate>; points3: Map<string, Vector3> }> = [
-    { points2: new Map(), points3: new Map() }
-  ]
+  const copyBranches = <T>(source: Map<string, Map<string, T>>) =>
+    new Map([...source].map(([branch, values]) => [branch, new Map(values)]))
+  const snapshotRefs = () => ({
+    points2: new Map(points2), points3: new Map(points3),
+    lines2: new Map(lines2), conics2: new Map(conics2),
+    branchPoints2: copyBranches(branchPoints2), branchPoints3: copyBranches(branchPoints3),
+    branchLines2: copyBranches(branchLines2), branchConics2: copyBranches(branchConics2)
+  })
+  const restoreRefs = (saved: ReturnType<typeof snapshotRefs>) => {
+    const restore = <T>(target: Map<string, T>, values: Map<string, T>) => {
+      target.clear()
+      for (const [key, value] of values) target.set(key, value)
+    }
+    restore(points2, saved.points2)
+    restore(points3, saved.points3)
+    restore(lines2, saved.lines2)
+    restore(conics2, saved.conics2)
+    restore(branchPoints2, saved.branchPoints2)
+    restore(branchPoints3, saved.branchPoints3)
+    restore(branchLines2, saved.branchLines2)
+    restore(branchConics2, saved.branchConics2)
+  }
+  const branchHistory = new Map<string, Array<{
+    stepIndex: number
+    refs: ReturnType<typeof snapshotRefs>
+    slices: DsActionStateSlice[]
+    buckets: Array<[string, { scopeId: string; stateId?: string; branchId: string; actions: DraftAction[] }]>
+  }>>()
+  const restoreBranchRefs = (saved: ReturnType<typeof snapshotRefs>, branchId: string) => {
+    const restore = <T>(target: Map<string, Map<string, T>>, source: Map<string, Map<string, T>>) => {
+      const values = source.get(branchId)
+      if (values) target.set(branchId, new Map(values))
+      else target.delete(branchId)
+    }
+    restore(branchPoints2, saved.branchPoints2)
+    restore(branchPoints3, saved.branchPoints3)
+    restore(branchLines2, saved.branchLines2)
+    restore(branchConics2, saved.branchConics2)
+  }
+  const pointHistory: Array<ReturnType<typeof snapshotRefs>> = [snapshotRefs()]
 
   const branchMapGet = <T>(
     sharedMap: Map<string, T>,
@@ -675,6 +722,9 @@ export function createDsActionSession(options: {
     position?: Coordinate,
     sliceTarget?: { readonly scopeId: string; readonly stateId?: string; readonly branchId?: string }
   ): DsActionRawResult => {
+    if (!sliceTarget?.branchId && branchActionBuckets.size > 0) {
+      return failBlocked(actionName, "active_branch_dependency", "finish or repair active branches before adding shared geometry")
+    }
     const canvas = getTargetCanvas(sliceTarget?.branchId)
     const before = canvas.snapshot()
     const step = canvas.applyAction(draftAction)
@@ -724,12 +774,16 @@ export function createDsActionSession(options: {
         })
       }
     }
-    pointHistory.push({ points2: new Map(points2), points3: new Map(points3) })
-    sliceHistory.push({
-      slices: [...recordedSlices],
-      sharedActions: [...sharedBranchlessActions],
-      branchBuckets: [...branchActionBuckets.entries()].map(([k, v]) => [k, { ...v, actions: [...v.actions] }])
-    })
+    if (!sliceTarget?.branchId) {
+      pointHistory[step.stepIndex] = snapshotRefs()
+      pointHistory.length = step.stepIndex + 1
+      sliceHistory[step.stepIndex] = {
+        slices: [...recordedSlices],
+        sharedActions: [...sharedBranchlessActions],
+        branchBuckets: [...branchActionBuckets.entries()].map(([k, v]) => [k, { ...v, actions: [...v.actions] }])
+      }
+      sliceHistory.length = step.stepIndex + 1
+    }
     return {
       ok: true,
       status: "accepted",
@@ -787,6 +841,13 @@ export function createDsActionSession(options: {
           scopeId: asString(input.scopeId) ?? "shared",
           stateId: asString(input.stateId) ?? "shared"
         })
+        const declarationBranch = asString(input.branchId) ?? ""
+        let branchDeclarations = explicitDeclarations.get(declarationBranch)
+        if (!branchDeclarations) {
+          branchDeclarations = new Set<string>()
+          explicitDeclarations.set(declarationBranch, branchDeclarations)
+        }
+        branchDeclarations.add(id)
         return { ok: true, status: "accepted", action: name, stateChanged: false, entity: id, candidateHash: snap.candidateHash, stepIndex: snap.stepIndex, primitiveCount: snap.primitiveCount }
       }
 
@@ -815,8 +876,8 @@ export function createDsActionSession(options: {
             return failRepairable(name, "missing_required_parameter", "distance query requires exactly two named targets")
           }
           const [tA, tB] = [targets[0]!, targets[1]!]
-          const p3A = points3.get(tA)
-          const p3B = points3.get(tB)
+          const p3A = readP3(tA, branchHint)
+          const p3B = readP3(tB, branchHint)
           if (p3A && p3B) {
             return {
               ok: true,
@@ -833,8 +894,8 @@ export function createDsActionSession(options: {
               }
             }
           }
-          const p2A = points2.get(tA)
-          const p2B = points2.get(tB)
+          const p2A = readP2(tA, branchHint)
+          const p2B = readP2(tB, branchHint)
           if (p2A && p2B) {
             return {
               ok: true,
@@ -858,7 +919,7 @@ export function createDsActionSession(options: {
           if (!target) {
             return failRepairable(name, "missing_required_parameter", "position query requires target entity name")
           }
-          const p3 = points3.get(target)
+          const p3 = readP3(target, branchHint)
           if (p3) {
             return {
               ok: true,
@@ -872,7 +933,7 @@ export function createDsActionSession(options: {
               measurement: { metric: "position", value: p3, sourceEntityIds: [target] }
             }
           }
-          const p2 = points2.get(target)
+          const p2 = readP2(target, branchHint)
           if (p2) {
             return {
               ok: true,
@@ -904,7 +965,7 @@ export function createDsActionSession(options: {
           }
           const pts: Vector3[] = []
           for (const t of targets) {
-            const pt = points3.get(t)
+            const pt = readP3(t, branchHint)
             if (!pt) return failRepairable(name, "undeclared_entity_ref", `undeclared 3D point "${t}"`)
             pts.push(pt)
           }
@@ -941,8 +1002,8 @@ export function createDsActionSession(options: {
           if (targets.length !== 2 || expected === null) {
             return failRepairable(name, "missing_required_parameter", "fixed_distance check requires 2 targets and positive expected length")
           }
-          const pA = points3.get(targets[0]!)
-          const pB = points3.get(targets[1]!)
+          const pA = readP3(targets[0]!, branchHint)
+          const pB = readP3(targets[1]!, branchHint)
           if (pA && pB) {
             const actual = distanceVector3(pA, pB)
             const residual = Math.abs(actual - expected)
@@ -958,8 +1019,8 @@ export function createDsActionSession(options: {
               measurement: { kind, expected, actual, residual, sourceEntityIds: targets }
             }
           }
-          const d2A = points2.get(targets[0]!)
-          const d2B = points2.get(targets[1]!)
+          const d2A = readP2(targets[0]!, branchHint)
+          const d2B = readP2(targets[1]!, branchHint)
           if (d2A && d2B) {
             const actual = Math.hypot(d2B.x - d2A.x, d2B.y - d2A.y)
             const residual = Math.abs(actual - expected)
@@ -978,7 +1039,7 @@ export function createDsActionSession(options: {
           return failRepairable(name, "undeclared_entity_ref", `point(s) not materialized: ${targets.join(", ")}`)
         }
         if (kind === "collinear" && targets.length === 3) {
-          const pts = targets.map((t) => points2.get(t))
+          const pts = targets.map((t) => readP2(t, branchHint))
           if (pts.some((p) => !p)) return failRepairable(name, "undeclared_entity_ref", "collinear check requires materialized 2D points")
           const res = solveConstraint2d({ kind: "collinear", points: [pts[0]!, pts[1]!, pts[2]!] })
           return {
@@ -997,14 +1058,33 @@ export function createDsActionSession(options: {
       }
 
       if (name === "repair_entity" || name === "repair_constraint") {
+        const branchId = asString(input.branchId)
+        if (branchId) {
+          const history = branchHistory.get(branchId)
+          const previous = history?.pop()
+          if (!previous) return failRepairable(name, "no_branch_step", "no materialized step exists in this branch")
+          const rolled = getTargetCanvas(branchId).revertToStep(previous.stepIndex)
+          restoreBranchRefs(previous.refs, branchId)
+          for (let i = recordedSlices.length - 1; i >= 0; i -= 1) {
+            if (recordedSlices[i]?.branchId === branchId) recordedSlices.splice(i, 1)
+          }
+          recordedSlices.push(...previous.slices)
+          for (const key of branchActionBuckets.keys()) {
+            if (key.endsWith(`::${branchId}`)) branchActionBuckets.delete(key)
+          }
+          for (const [key, bucket] of previous.buckets) branchActionBuckets.set(key, bucket)
+          if (history?.length === 0) branchCanvases.delete(branchId)
+          return { ok: true, status: "accepted", action: name, stateChanged: true,
+            candidateHash: rolled.candidateHash, stepIndex: rolled.stepIndex, primitiveCount: rolled.primitiveCount }
+        }
+        if ([...branchHistory.values()].some((history) => history.length > 0)) {
+          return failBlocked(name, "active_branch_dependency", "repair a branch first; shared rollback with active branches is unsafe")
+        }
         const rolled = speculative.rollback(1)
         const idx = Math.min(rolled.stepIndex, pointHistory.length - 1)
         const snapshotPts = pointHistory[idx] ?? pointHistory[0]!
         pointHistory.length = Math.max(1, rolled.stepIndex + 1)
-        points2.clear()
-        for (const [k, v] of snapshotPts.points2) points2.set(k, v)
-        points3.clear()
-        for (const [k, v] of snapshotPts.points3) points3.set(k, v)
+        restoreRefs(snapshotPts)
         const snapSliceState = sliceHistory[Math.min(rolled.stepIndex, sliceHistory.length - 1)]
         sliceHistory.length = Math.max(1, rolled.stepIndex + 1)
         recordedSlices.splice(0, recordedSlices.length, ...(snapSliceState?.slices ?? []))
@@ -1738,11 +1818,73 @@ export function createDsActionSession(options: {
     progressSignature: `${res.action}:${res.status}:${res.blockerCode ?? "none"}:${res.candidateHash}:${res.stepIndex}:${res.primitiveCount}`
   })
 
+  const referenceDirectory = (branchId?: string): DsActionReferenceDirectory => {
+    const actions = getTargetCanvas(branchId).snapshot().actions
+    const points = new Set<string>()
+    const lines = new Set<string>()
+    const conics = new Set<string>()
+    const add = (target: Set<string>, name: unknown, materialized: (key: string) => boolean) => {
+      const id = asString(name)
+      if (id && id.length <= 48 && /^[\p{L}\p{N}_\u2080-\u2089-]+$/u.test(id) && materialized(id)) target.add(id)
+    }
+    for (const action of actions) {
+      const inputs = action.inputs as Record<string, unknown>
+      const names = [inputs.alias, inputs.label]
+      if (action.actionId === "planar.create_point" || action.actionId === "solid.create_point") {
+        for (const name of names) add(points, name, (key) => readP2(key, branchId) !== undefined || readP3(key, branchId) !== undefined)
+      } else if (action.actionId === "planar.create_line") {
+        for (const name of names) add(lines, name, (key) => readL2(key, branchId) !== undefined)
+      } else if (action.actionId === "planar.create_conic" || action.actionId === "planar.create_circle") {
+        for (const name of names) add(conics, name, (key) => readC2(key, branchId) !== undefined)
+      }
+      if (action.actionId === "solid.create_face" || action.actionId === "solid.create_prism" || action.actionId === "solid.create_polyhedron") {
+        for (const vertex of Array.isArray(inputs.vertexNames) ? inputs.vertexNames : []) {
+          add(points, vertex, (key) => readP3(key, branchId) !== undefined)
+        }
+      }
+    }
+    const max = 24
+    let remaining = 32
+    const take = (values: string[]) => {
+      const selected = values.slice(0, Math.min(max, remaining))
+      remaining -= selected.length
+      return selected
+    }
+    const sorted = (values: Set<string>) => [...values].sort()
+    const materialized = new Set([...points, ...lines, ...conics])
+    const visibleDeclarations = [...(explicitDeclarations.get("") ?? []), ...(branchId ? explicitDeclarations.get(branchId) ?? [] : [])]
+    const declared = sorted(new Set(visibleDeclarations.filter((name) => !materialized.has(name) && name.length <= 48 && /^[\p{L}\p{N}_\u2080-\u2089-]+$/u.test(name))))
+    const pointIds = sorted(points), lineIds = sorted(lines), conicIds = sorted(conics)
+    const materializedPoints = take(pointIds)
+    const materializedLines = take(lineIds)
+    const materializedConics = take(conicIds)
+    const declaredOnly = take(declared)
+    return { materializedPoints, materializedLines, materializedConics, declaredOnly,
+      truncated: pointIds.length > materializedPoints.length || lineIds.length > materializedLines.length ||
+        conicIds.length > materializedConics.length || declared.length > declaredOnly.length }
+  }
+
   return {
+    referenceDirectory,
     currentSnapshot: () => speculative.snapshot(),
     stateSlices: () => [...recordedSlices],
     execute(toolName, rawInput) {
-      return attachTelemetry(executeRaw(toolName, rawInput))
+      const before = snapshotRefs()
+      const branchId = rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+        ? asString((rawInput as Record<string, unknown>).branchId) : null
+      const beforeBranchStep = branchId ? getTargetCanvas(branchId).snapshot().stepIndex : null
+      const beforeBranchSlices = branchId ? recordedSlices.filter((slice) => slice.branchId === branchId).map((slice) => ({ ...slice, actions: [...slice.actions] })) : []
+      const beforeBranchBuckets = branchId ? [...branchActionBuckets.entries()]
+        .filter(([key]) => key.endsWith(`::${branchId}`))
+        .map(([key, bucket]): [string, typeof bucket] => [key, { ...bucket, actions: [...bucket.actions] }]) : []
+      const result = executeRaw(toolName, rawInput)
+      if (!result.ok) restoreRefs(before)
+      else if (branchId && beforeBranchStep !== null && result.stateChanged && toolName !== "repair_entity" && toolName !== "repair_constraint") {
+        let history = branchHistory.get(branchId)
+        if (!history) { history = []; branchHistory.set(branchId, history) }
+        history.push({ stepIndex: beforeBranchStep, refs: before, slices: beforeBranchSlices, buckets: beforeBranchBuckets })
+      }
+      return attachTelemetry(result)
     }
   }
 }

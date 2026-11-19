@@ -60,6 +60,8 @@
 
 **B2 非付费检查点（2026-11-18）**：补齐 `construct_line` 的精确 `a,b,c` 方程转两点内核构图，合法解析式不再必须先猜两个端点；旧端点路径保持，混合/退化输入拒绝。原始 DS 构线参数未保留，不能宣称旧 `undeclared_entity_ref` 已全部治愈。见[Block B2 审计](../audit/2026-11-18-g3-f9-line-equation-b2/README.md)。模型可见引用目录/实体回滚一致性尚待 B3。
 
+**B3 非付费引用状态检查点（2026-11-18）**：发现并修复撤销后旧直线/曲线仍可被内核引用、带 branchId 的 repair 错撤共享候选；模型工具回执现区分已声明与真正物化且按 branchId 返回有界目录。见[Block B3 审计](../audit/2026-11-18-g3-f9-entity-reference-b3/README.md)。scope/state 重名、共享图元变更后的分支联动及原生 DS 接受度还未退出，Block B 未宣称完成。
+
 ### Block C — 真题原图输入与诚实澄清
 
 **Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。

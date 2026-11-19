@@ -291,6 +291,143 @@ describe("construct_solid model-visible contract", () => {
   })
 })
 
+describe("failed staged point reference hygiene", () => {
+  it("never overwrites the reference position of an existing point with a conflicting same-name construction", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "P", x: 0, y: 0 }).ok).toBe(true)
+    const original = session.currentSnapshot().candidateHash
+    const conflicting = session.execute("construct_point", { id: "P", x: 100, y: 0 })
+    expect(conflicting.ok).toBe(false)
+    expect(session.currentSnapshot().candidateHash).toBe(original)
+    expect(session.execute("query_measurement", { metric: "position", target: "P" }).measurement?.value).toEqual({ x: 0, y: 0 })
+    expect(session.referenceDirectory().materializedPoints).toEqual(["P"])
+  })
+})
+
+describe("rolled-back line and conic references", () => {
+  it("cannot intersect a rolled-back line even when its prior endpoint coordinates still exist", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    for (const [id, x, y] of [["P", 0, 0], ["Q", 2, 0], ["R", 0, 2]] as const) {
+      expect(session.execute("construct_point", { id, x, y }).ok).toBe(true)
+    }
+    expect(session.execute("construct_line", { id: "L1", from: "P", to: "Q" }).ok).toBe(true)
+    expect(session.execute("construct_line", { id: "L2", from: "P", to: "R" }).ok).toBe(true)
+    expect(session.execute("repair_entity", {}).stateChanged).toBe(true)
+    expect(session.execute("construct_intersection", { id: "X", lineA: "L1", lineB: "L2" }).blockerCode).toBe("undeclared_entity_ref")
+  })
+  it("cannot use a rolled-back conic for a later tangent", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "P", x: 3, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2 }).ok).toBe(true)
+    expect(session.execute("repair_entity", {}).stateChanged).toBe(true)
+    expect(session.execute("construct_tangent", { id: "T", conicId: "E", pointId: "P" }).blockerCode).toBe("undeclared_entity_ref")
+  })
+})
+
+describe("materialized reference truth", () => {
+  it("never tells the model that a declaration or rolled-back point is materialized", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("declare_entity", { id: "P", kind: "point" }).status).toBe("accepted")
+    expect(session.referenceDirectory()).toEqual({ materializedPoints: [], materializedLines: [], materializedConics: [], declaredOnly: ["P"], truncated: false })
+    expect(session.execute("construct_point", { id: "P", x: 0, y: 0 }).status).toBe("accepted")
+    expect(session.execute("construct_point", { id: "Q", x: 2, y: 0 }).status).toBe("accepted")
+    expect(session.referenceDirectory().materializedPoints).toEqual(["P", "Q"])
+    session.execute("repair_entity", {})
+    expect(session.referenceDirectory().materializedPoints).toEqual(["P"])
+    expect(session.referenceDirectory().declaredOnly).toEqual([])
+    expect(session.execute("construct_line", { id: "L", from: "P", to: "Q" }).blockerCode).toBe("undeclared_entity_ref")
+  })
+  it("bounds the provider-visible directory and flags omitted names instead of truncating feedback JSON", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    for (let i = 0; i < 20; i += 1) {
+      expect(session.execute("construct_point", { id: `P${i}`, x: i, y: 0 }).ok).toBe(true)
+      expect(session.execute("declare_entity", { id: `D${i}`, kind: "point" }).ok).toBe(true)
+    }
+    const directory = session.referenceDirectory()
+    expect(directory.materializedPoints).toHaveLength(20)
+    expect(directory.materializedPoints.length + directory.materializedLines.length + directory.materializedConics.length + directory.declaredOnly.length).toBeLessThanOrEqual(32)
+    expect(directory.truncated).toBe(true)
+  })
+  it("repairs the selected branch without deleting shared geometry or keeping stale branch points", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "P", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("repair_entity", { branchId: "left" }).stateChanged).toBe(true)
+    expect(session.referenceDirectory().materializedPoints).toEqual(["S"])
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["S"])
+    expect(session.execute("query_measurement", { metric: "position", target: "P", branchId: "left" }).blockerCode).toBe("undeclared_entity_ref")
+  })
+  it("never lets the other branch consume a line or conic that only exists locally", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "P", x: 3, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("construct_tangent", { id: "T", conicId: "E", pointId: "P", branchId: "right" }).blockerCode).toBe("undeclared_entity_ref")
+    expect(session.execute("query_measurement", { metric: "position", target: "P", branchId: "right" }).blockerCode).toBe("undeclared_entity_ref")
+    expect(session.referenceDirectory("right").materializedConics).toEqual([])
+  })
+  it("keeps different branch checkpoints isolated when repairing only one branch", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "L", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "R", x: 2, y: 0, branchId: "right" }).ok).toBe(true)
+    expect(session.execute("repair_entity", { branchId: "left" }).ok).toBe(true)
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["S"])
+    expect(session.referenceDirectory("right").materializedPoints).toEqual(["R", "S"])
+    expect(session.execute("query_measurement", { metric: "position", target: "R", branchId: "right" }).ok).toBe(true)
+  })
+  it("does not silently omit new shared geometry from an already-materialized branch", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "P", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    const sharedBefore = session.currentSnapshot().candidateHash
+    expect(session.execute("construct_point", { id: "T", x: 2, y: 0 }).blockerCode).toBe("active_branch_dependency")
+    expect(session.currentSnapshot().candidateHash).toBe(sharedBefore)
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["P", "S"])
+    expect(session.execute("repair_entity", { branchId: "left" }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "T", x: 2, y: 0 }).ok).toBe(true)
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["S", "T"])
+  })
+  it("keeps shared rollback checkpoints aligned after earlier branch work", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "P", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("repair_entity", { branchId: "left" }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "T", x: 2, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "U", x: 3, y: 0 }).ok).toBe(true)
+    expect(session.execute("repair_entity", {}).stateChanged).toBe(true)
+    expect(session.referenceDirectory().materializedPoints).toEqual(["S", "T"])
+    expect(session.referenceDirectory("left").materializedPoints).not.toContain("P")
+    expect(session.execute("query_measurement", { metric: "position", target: "T" }).ok).toBe(true)
+  })
+  it("refuses to undo shared geometry while an active branch still depends on it", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "P", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("repair_entity", {}).blockerCode).toBe("active_branch_dependency")
+    expect(session.referenceDirectory().materializedPoints).toEqual(["S"])
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["P", "S"])
+  })
+  it("removes a branch conic without leaving a stale tangent reference", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "P", x: 3, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2, branchId: "left" }).ok).toBe(true)
+    expect(session.execute("repair_entity", { branchId: "left" }).stateChanged).toBe(true)
+    expect(session.referenceDirectory("left").materializedConics).toEqual([])
+    expect(session.execute("construct_tangent", { id: "T", conicId: "E", pointId: "P", branchId: "left" }).blockerCode).toBe("undeclared_entity_ref")
+  })
+  it("exposes branch-local references only within their branch while keeping shared points", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "S", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "P", x: 1, y: 0, branchId: "left" }).ok).toBe(true)
+    expect(session.referenceDirectory().materializedPoints).toEqual(["S"])
+    expect(session.referenceDirectory("left").materializedPoints).toEqual(["P", "S"])
+    expect(session.referenceDirectory("right").materializedPoints).toEqual(["S"])
+    expect(session.execute("declare_entity", { id: "L_ONLY", kind: "point", branchId: "left" }).ok).toBe(true)
+    expect(session.referenceDirectory("left").declaredOnly).toContain("L_ONLY")
+    expect(session.referenceDirectory("right").declaredOnly).not.toContain("L_ONLY")
+  })
+})
+
 describe("explicit planar line equation construction", () => {
   it("constructs the exact line 2x + 3y - 6 = 0 without inventing endpoint entities", () => {
     const schema = buildDsActionToolSchemas().find((tool) => tool.function.name === "construct_line")!.function.parameters

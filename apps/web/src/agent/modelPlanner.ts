@@ -655,6 +655,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       const newDsActionSession = () => createDsActionSession({ workspace: request.run.target.workspace, baseDocument: dsActionBaseDocument, runId, problemText: request.userMessage })
       let dsActionSession = intentMode === "ds_action" ? newDsActionSession() : null
       const dsActionHistory: Array<{ name: string; input: unknown }> = []
+      const referenceBranchId = (raw: unknown): string | undefined =>
+        raw !== null && typeof raw === "object" && !Array.isArray(raw) && typeof (raw as Record<string, unknown>).branchId === "string"
+          ? (raw as Record<string, string>).branchId : undefined
       /**
        * 用户按了停止 → 让 Rust 侧**真的**停下来。
        *
@@ -1032,7 +1035,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               stateChanged: accepted && res!.stateChanged, feedbackDelivered: true
             })
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
-              content: accepted ? boundedExcerpt(JSON.stringify(res), 4000) : JSON.stringify({ status, blockerCode,
+              content: accepted ? boundedExcerpt(JSON.stringify({ ...res, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) }), 4000) : JSON.stringify({ status, blockerCode, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)),
                 repairHint: mixed ? "Send read and terminal tools in separate turns" : res && !res.ok ? res.repairHint : "Entire batch rolled back; correct failing call and retry" }) })
           }
           continue
@@ -1159,7 +1162,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               role: "tool_result",
               toolCallId: toolCall.toolCallId,
               toolName: toolCall.toolId,
-              content: boundedExcerpt(JSON.stringify(execRes), 4000)
+              content: boundedExcerpt(JSON.stringify({ ...execRes, referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(toolCall.input)) }), 4000)
             })
             reportAction(true)
             continue

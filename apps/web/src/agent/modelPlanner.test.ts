@@ -1766,6 +1766,60 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     expect(declarations.every((event) => event.kind === "action" && event.resultStatus === "accepted" && event.primitiveCountAfter === 0 && event.feedbackDelivered)).toBe(true)
   })
 
+  it("reports branch-local materialized references in that branch tool result", async () => {
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; content: string; toolCallId?: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((message) => ({ ...message })) })
+        turn += 1
+        const tool = turn === 1 ? { toolId: "construct_point", input: { id: "P", x: 0, y: 0, branchId: "left" } }
+          : turn === 2 ? { toolId: "construct_line", input: { id: "L", from: "P", to: "Missing", branchId: "left" } }
+            : { toolId: "request_clarification", input: { reason: "need Missing" } }
+        return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`,
+          toolCallId: `call-${turn}`, ...tool }] }
+      }
+    })
+    const req = request({ userMessage: "Draw a line", budget: createBudget({ network: 5, generation: 5, tool: 12 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    await planner.plan(req)
+    const receipt = sent[2]?.messages.find((message) => message.role === "tool_result" && message.toolCallId === "call-2")
+    expect(JSON.parse(receipt?.content ?? "null")).toMatchObject({ blockerCode: "undeclared_entity_ref",
+      referenceDirectory: { materializedPoints: ["P"], materializedLines: [], declaredOnly: [] } })
+  })
+
+  it("returns only materialized reference names to the model after a failed line", async () => {
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; content: string; toolCallId?: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((message) => ({ ...message })) })
+        turn += 1
+        const tool = turn === 1 ? { toolId: "construct_point", input: { id: "P", x: 0, y: 0 } }
+          : turn === 2 ? { toolId: "construct_line", input: { id: "L", from: "P", to: "Missing" } }
+            : { toolId: "request_clarification", input: { reason: "need Missing" } }
+        return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`,
+          toolCallId: `call-${turn}`, ...tool }] }
+      }
+    })
+    const req = request({ userMessage: "Draw a line", budget: createBudget({ network: 5, generation: 5, tool: 12 }),
+      run: { ...request().run, target: { ...request().run.target, workspace: "conics" } } })
+    await planner.plan(req)
+    const receipt = sent[2]?.messages.find((message) => message.role === "tool_result" && message.toolCallId === "call-2")
+    expect(JSON.parse(receipt?.content ?? "null")).toMatchObject({ blockerCode: "undeclared_entity_ref",
+      referenceDirectory: { materializedPoints: ["P"], materializedLines: [], declaredOnly: [] } })
+  })
+
   it("stops repeated invalid ds_action batches without spending the full request budget", async () => {
     let turns = 0
     const planner = createModelPlanner({
