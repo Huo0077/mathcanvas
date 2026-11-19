@@ -47,6 +47,9 @@
 
 ### Block B — 工具参数 schema、别名和实体引用（优先于盲目加请求）
 
+**B1 非付费检查点（2026-11-18）**：五项最直接相关的平面工具已有模型可见封闭参数形状、真实内核正反例，曲线未知类型不再偷换为椭圆；见[Block B1 审计](../audit/2026-11-18-g3-f9-planar-schema-b1/README.md)。**仍有16项自由对象、缺字段码/实体目录/B2及新提交的真实 DS 复测未完成**，12道历史参数失败题分数不改。
+
+
 **Files**：`dsActionTools.ts`（逐族参数契约）、`modelPlanner.ts`（模型可读 schema/回执状态）、`packages/agent-core/src` 的动作与快照契约（如必要）；测试对应 `dsActionTools.test.ts`、`modelPlanner.test.ts`、`drawingContracts.test.ts`。
 
 - [ ] **先分型**：用审计里的工具序列按 `construct_conic/construct_point/construct_line/query_measurement/query_constraint_status` 提取脱敏 `missingFieldCodes` 与 `availableEntityIds` 的**有限白名单/摘要**；目前没有原始参数，不得臆测具体值或“重建失败输入”。

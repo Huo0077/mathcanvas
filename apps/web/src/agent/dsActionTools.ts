@@ -118,12 +118,12 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   add_relation: "Attach a named geometric relation (length/perpendicular/parallel/angle/ratio/tangent).",
   choose_strategy: "Select a geometric construction strategy for an entity.",
   construct_base: "Construct a base polygon or reference frame in 2D/3D.",
-  construct_point: "Construct a 2D/3D point by coordinates or ratio/midpoint host.",
-  construct_line: "Construct a 2D line through two points or line equation a*x+b*y+c=0.",
+  construct_point: "Construct a named point: id with 2D x,y or 3D x,y,z, or id with from,to,ratio referencing materialized points.",
+  construct_line: "Construct a 2D line through two existing named points using from and to. Equation coefficients are not supported.",
   construct_segment: "Construct a segment between two existing named points.",
   construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
   construct_circle: "Construct a circle by center and radius.",
-  construct_conic: "Construct an ellipse, parabola, or hyperbola from equation or semi-axes.",
+  construct_conic: "Construct an ellipse/hyperbola with positive radiusX and radiusY, or a parabola with nonzero focalParameter and axis. Give conicType and a named id; raw equation strings are not supported.",
   construct_tangent: "Construct a tangent line to a conic at a point.",
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line through a point parallel to a line.",
@@ -132,8 +132,8 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_circumsphere: "Derive a real circumsphere from an existing named solid; never provide center or radius.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
-  query_measurement: "Inspect distance/coordinates of currently staged entities.",
-  query_constraint_status: "Inspect satisfied or missing entities/constraints on current speculative candidate.",
+  query_measurement: "Use metric=distance with targets of exactly two materialized points, or metric=position/coordinates with target naming one materialized point.",
+  query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), or collinear to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
   finish_candidate: "Finalize all speculative actions into a plan envelope for independent verification.",
@@ -193,6 +193,40 @@ const CONSTRUCT_SOLID_PARAMETERS = {
   }
 } as const
 
+const PLANAR_ENTITY_FIELDS = {
+  id: { type: "string" }, output: { type: "string" }, label: { type: "string" },
+  scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" }
+} as const
+
+const CONSTRUCT_CONIC_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["id", "conicType"],
+  properties: { ...PLANAR_ENTITY_FIELDS, conicType: { type: "string", enum: ["ellipse", "hyperbola", "parabola"] },
+    radiusX: { type: "number", exclusiveMinimum: 0 }, radiusY: { type: "number", exclusiveMinimum: 0 },
+    focalParameter: { type: "number" }, axis: { type: "string", enum: ["x", "y"] },
+    vx: { type: "number" }, vy: { type: "number" }, cx: { type: "number" }, cy: { type: "number" }
+  }
+} as const
+const CONSTRUCT_POINT_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["id"],
+  properties: { ...PLANAR_ENTITY_FIELDS, x: { type: "number" }, y: { type: "number" }, z: { type: "number" },
+    from: { type: "string" }, to: { type: "string" }, ratio: { type: "number" } }
+} as const
+const CONSTRUCT_LINE_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["from", "to"],
+  properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" } }
+} as const
+const QUERY_MEASUREMENT_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["metric"],
+  properties: { metric: { type: "string", enum: ["distance", "position", "coordinates"] },
+    targets: { type: "array", items: { type: "string" } }, target: { type: "string" } }
+} as const
+const QUERY_CONSTRAINT_STATUS_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["targets"],
+  properties: { kind: { type: "string", enum: ["coplanar", "fixed_distance", "collinear"] },
+    targets: { type: "array", items: { type: "string" } }, expected: { type: "number", exclusiveMinimum: 0 },
+    value: { type: "number", exclusiveMinimum: 0 } }
+} as const
+
 export function buildDsActionToolSchemas(options: { includeUnimplemented?: boolean } = {}) {
   const names = options.includeUnimplemented ? DS_ACTION_TOOL_NAMES : IMPLEMENTED_DS_ACTION_TOOLS
   return names.map((name) => ({
@@ -202,7 +236,12 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
       description: DS_ACTION_DESCRIPTIONS[name],
       parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS
         : name === "construct_equal_edge_triangular_prism" ? CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS
-        : name === "construct_circumsphere" ? CONSTRUCT_CIRCUMSPHERE_PARAMETERS : {
+        : name === "construct_circumsphere" ? CONSTRUCT_CIRCUMSPHERE_PARAMETERS
+        : name === "construct_conic" ? CONSTRUCT_CONIC_PARAMETERS
+        : name === "construct_point" ? CONSTRUCT_POINT_PARAMETERS
+        : name === "construct_line" ? CONSTRUCT_LINE_PARAMETERS
+        : name === "query_measurement" ? QUERY_MEASUREMENT_PARAMETERS
+        : name === "query_constraint_status" ? QUERY_CONSTRAINT_STATUS_PARAMETERS : {
         type: "object",
         additionalProperties: true
       }
@@ -1187,6 +1226,10 @@ export function createDsActionSession(options: {
         const branchId = asString(input.branchId) ?? undefined
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const rawType = asString(input.conicType)?.toLowerCase()
+        if (!rawType) return failRepairable(name, "missing_required_parameter", "construct_conic requires conicType (ellipse | hyperbola | parabola)")
+        if (rawType !== "ellipse" && rawType !== "hyperbola" && rawType !== "parabola") {
+          return failRepairable(name, "unsupported_conic_kind", "construct_conic supports only ellipse, hyperbola, or parabola")
+        }
         if (rawType === "parabola") {
           const focalParameter = asFiniteNumber(input.focalParameter)
           const axis = input.axis === "x" ? "x" : "y"

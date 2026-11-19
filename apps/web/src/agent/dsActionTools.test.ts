@@ -291,6 +291,47 @@ describe("construct_solid model-visible contract", () => {
   })
 })
 
+describe("real DS planar tool schema fidelity", () => {
+  it("executes the published planar conic/point/line fields and refuses missing geometry", () => {
+    const scene = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(scene.execute("construct_conic", { id: "E", conicType: "ellipse", radiusX: 3, radiusY: 2 }).status).toBe("accepted")
+    expect(scene.execute("construct_conic", { id: "H", conicType: "hyperbola", radiusX: 3, radiusY: 2 }).status).toBe("accepted")
+    expect(scene.execute("construct_conic", { id: "P1", conicType: "parabola", focalParameter: 2, axis: "x" }).status).toBe("accepted")
+    expect(scene.execute("construct_point", { id: "A", x: 0, y: 0 }).status).toBe("accepted")
+    expect(scene.execute("construct_point", { id: "B", x: 3, y: 0 }).status).toBe("accepted")
+    expect(scene.execute("construct_line", { id: "L", from: "A", to: "B" }).status).toBe("accepted")
+    expect(scene.execute("query_measurement", { metric: "distance", targets: ["A", "B"] }).measurement?.value).toBe(3)
+    const count = scene.currentSnapshot().primitiveCount
+    expect(scene.execute("construct_conic", { id: "bad-kind", conicType: "circle", radiusX: 3, radiusY: 2 }).blockerCode).toBe("unsupported_conic_kind")
+    expect(scene.execute("construct_conic", { id: "missing-kind", radiusX: 3, radiusY: 2 }).blockerCode).toBe("missing_required_parameter")
+    expect(scene.execute("construct_conic", { id: "bad", conicType: "ellipse" }).blockerCode).toBe("missing_required_parameter")
+    expect(scene.execute("construct_line", { id: "bad-line", from: "A", to: "Unknown" }).blockerCode).toBe("undeclared_entity_ref")
+    expect(scene.currentSnapshot().primitiveCount).toBe(count)
+  })
+
+  it("publishes closed executable parameter names for conic, point, line and measurement", () => {
+    const tools = new Map(buildDsActionToolSchemas().map((tool) => [tool.function.name, tool.function]))
+    for (const name of ["construct_conic", "construct_point", "construct_line", "query_measurement", "query_constraint_status"] as const) {
+      expect(tools.get(name)?.parameters).toMatchObject({ type: "object", additionalProperties: false })
+    }
+    expect(tools.get("construct_conic")?.parameters).toMatchObject({
+      required: ["id", "conicType"],
+      properties: { conicType: { enum: ["ellipse", "hyperbola", "parabola"] },
+        radiusX: { type: "number", exclusiveMinimum: 0 }, radiusY: { type: "number", exclusiveMinimum: 0 },
+        focalParameter: { type: "number" } }
+    })
+    expect(tools.get("construct_conic")?.description).not.toMatch(/from equation/i)
+    expect(tools.get("construct_line")?.parameters).toMatchObject({ required: ["from", "to"],
+      properties: { from: { type: "string" }, to: { type: "string" } } })
+    expect(tools.get("construct_line")?.description).toMatch(/Equation coefficients are not supported/i)
+    expect(tools.get("construct_point")?.description).toMatch(/id.*x.*y/i)
+    expect(tools.get("query_measurement")?.description).toMatch(/metric.*distance.*targets/i)
+    expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
+    expect(tools.get("query_measurement")?.parameters).toMatchObject({ required: ["metric"],
+      properties: { metric: { enum: ["distance", "position", "coordinates"] }, targets: { type: "array" } } })
+  })
+})
+
 describe("dsActionTools (Task F2 closed action-level protocol)", () => {
   it("exposes all 24 closed DS actions matching @draw/agent-core and parses single-action tri-state calls", () => {
     expect(DS_ACTION_TOOL_NAMES).toEqual(DS_ACTION_CLOSED_SET)
