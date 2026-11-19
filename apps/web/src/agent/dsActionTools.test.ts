@@ -266,7 +266,8 @@ describe("construct_solid model-visible contract", () => {
 
   it("keeps all published solid kinds executable and rejects missing or negative dimensions", () => {
     const advertised = buildDsActionToolSchemas().find((schema) => schema.function.name === "construct_solid")!
-    const published = "properties" in advertised.function.parameters && "kind" in advertised.function.parameters.properties
+    const published = "properties" in advertised.function.parameters && "kind" in advertised.function.parameters.properties &&
+      "enum" in advertised.function.parameters.properties.kind
       ? advertised.function.parameters.properties.kind.enum : []
     expect(published).toEqual(Object.values(SOLID_KIND_FAMILIES).flat())
     const validByFamily: Record<string, Record<string, unknown>> = {
@@ -598,6 +599,26 @@ describe("real DS planar tool schema fidelity", () => {
     expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
     expect(tools.get("query_measurement")?.parameters).toMatchObject({ required: ["metric"],
       properties: { metric: { enum: ["distance", "position", "coordinates"] }, targets: { type: "array" } } })
+  })
+})
+
+describe("B7 declaration schema and execution agree", () => {
+  it("does not silently accept coordinates in declare_entity as if it drew a point", () => {
+    const schema = buildDsActionToolSchemas().find(tool => tool.function.name === "declare_entity")?.function.parameters
+    expect(schema).toMatchObject({ type: "object", additionalProperties: false, required: ["id"],
+      properties: { id: { type: "string" }, kind: { type: "string" }, branchId: { type: "string" } } })
+    expect(buildDsActionToolSchemas().find(tool => tool.function.name === "declare_entity")?.function.description).toMatch(/does not draw.*construct_point/i)
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    const before = session.currentSnapshot()
+    const invalid = session.execute("declare_entity", { id: "P", kind: "point", x: 2, y: 3 })
+    expect(invalid).toMatchObject({ status: "repairable", blockerCode: "invalid_schema" })
+    expect(session.currentSnapshot().candidateHash).toBe(before.candidateHash)
+    expect(session.referenceDirectory().declaredOnly).toEqual([])
+    expect(session.execute("declare_entity", { id: "P", kind: "point", branchId: "left" }).status).toBe("accepted")
+    expect(session.referenceDirectory("left").declaredOnly).toContain("P")
+    expect(session.referenceDirectory("left").materializedPoints).toEqual([])
+    expect(session.execute("construct_point", { id: "P", x: 2, y: 3, branchId: "left" }).status).toBe("accepted")
+    expect(session.referenceDirectory("left").materializedPoints).toContain("P")
   })
 })
 

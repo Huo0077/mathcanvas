@@ -124,7 +124,7 @@ export interface DsActionSession {
 }
 
 const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
-  declare_entity: "Declare a named entity (point/line/segment/conic/circle/solid/function) in scope/state.",
+  declare_entity: "Declare an entity name/kind in scope/state; this does not draw geometry. Use construct_point or another construction action to materialize it.",
   add_relation: "Attach a named geometric relation (length/perpendicular/parallel/angle/ratio/tangent).",
   choose_strategy: "Select a geometric construction strategy for an entity.",
   construct_base: "Construct a base polygon or reference frame in 2D/3D.",
@@ -208,6 +208,12 @@ const PLANAR_ENTITY_FIELDS = {
   scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" }
 } as const
 
+const DECLARE_ENTITY_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["id"],
+  properties: { id: { type: "string" }, kind: { type: "string" }, scopeId: { type: "string" },
+    stateId: { type: "string" }, branchId: { type: "string" } }
+} as const
+
 const CONSTRUCT_CONIC_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["id", "conicType"],
   properties: { ...PLANAR_ENTITY_FIELDS, conicType: { type: "string", enum: ["ellipse", "hyperbola", "parabola"] },
@@ -246,7 +252,8 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
     function: {
       name,
       description: DS_ACTION_DESCRIPTIONS[name],
-      parameters: name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS
+      parameters: name === "declare_entity" ? DECLARE_ENTITY_PARAMETERS
+        : name === "construct_solid" ? CONSTRUCT_SOLID_PARAMETERS
         : name === "construct_equal_edge_triangular_prism" ? CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS
         : name === "construct_circumsphere" ? CONSTRUCT_CIRCUMSPHERE_PARAMETERS
         : name === "construct_conic" ? CONSTRUCT_CONIC_PARAMETERS
@@ -835,6 +842,10 @@ export function createDsActionSession(options: {
       const stepSeq = ++monotonicActionSeq
 
       if (name === "declare_entity") {
+        if (Object.keys(input).some(key => !Object.hasOwn(DECLARE_ENTITY_PARAMETERS.properties, key)) ||
+          ["kind", "scopeId", "stateId", "branchId"].some(key => input[key] !== undefined && !asString(input[key]))) {
+          return failRepairable(name, "invalid_schema", "declare_entity only names an entity; use construct_point or another construction action to draw geometry")
+        }
         const id = asString(input.id)
         if (!id) return failRepairable(name, "missing_required_parameter", "declare_entity requires non-empty id")
         entities.set(id, {
