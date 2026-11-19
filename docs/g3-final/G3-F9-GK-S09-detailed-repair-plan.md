@@ -10,6 +10,8 @@
 
 **Spec:** [F9 总计划](G3-F9-kernel-action-repair-plan.md) Task 6–9、[最终实施档案](G3-DS-final-implementation-dossier.md)及[GK-S09 单题实测](../audit/2026-11-17-g3-f9-text-only-pilot/README.md)。如有冲突，证据优先于猜测，当前实时状态以 [current-status](../current-status.md) 为准。
 
+> **现行36题失败修复的统一实施入口**：[G3-F9 真实 DS 36题根因与实施档案](G3-F9-live-36-root-cause-and-repair-plan.md)。本文件以下保留此前单题的历史时序；涉及新增付费、批次协议与图文输入时以新档案的真实证据门禁为准。
+
 ## 36题原生全量实测后的执行停点（2026-11-18）
 
 - [x] 在源码 `aa17eb70`、冻结36题哈希与原生已保存 DeepSeek profile revision 2 上逐题实测，**每题最多10请求、整轮5美元**，实际共91请求/36题、每次都有 usage。合同1通过、26失败、9未完成评估；只有 GK-S09 的证书与隔离浏览器同候选画面通过，原生交付和主画布写入均未测。详见[36题真实审计](../audit/2026-11-18-g3-f9-native-36-10x/README.md)。

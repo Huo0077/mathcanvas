@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-18 真实 DS 失败深度研究 / Goal（规划阶段，未新增请求）**：依据固定36题原生91次调用建立[专项实施档案](g3-final/G3-F9-live-36-root-cause-and-repair-plan.md)，优先修同轮多工具事务和 Rust 多 ID 回执（8题）、逐族 schema/实体引用/完成候选，再补13题原图与原生确认交付。发现 GK-S09 的面积答案由现有 finish 路径提供特例，不能据此证明 DS 独立推导。Goal 已设为真实端到端可靠作图，文档完成**不是修复完成**；新增付费 DS 请求另获授权。
+
 > **2026-11-18 最新真实 DS 全量36题（每题最多10次；取代下方旧单题状态）**：固定提交 `aa17eb70`、冻结题集 SHA-256 `c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d`、保存的原生 DeepSeek profile revision 2 下，36/36题均实际发起请求，合计91次（91次 usage）；独立合同 **1 passed / 26 failed / 9 not_measured**，仅 GK-S09 同候选证书与隔离浏览器画面通过。13题引用原图但没有附经核验题图，只测了冻结文字；原生受控交付与主画布写入36题均未测，不宣称端到端通过率。实测定位8题同轮多构造工具调用被通用协议闸拒绝，9题未得到合同评估；保守估价上界 $0.5325891 < 整轮5美元，实际账单未知。后续只围绕真实断点修复，另获授权后才发新付费请求。见[36题脱敏审计](audit/2026-11-18-g3-f9-native-36-10x/README.md)。
 
 > **2026-11-18 Task 7 family-tool checkpoint (zero cost):** Added `construct_equal_edge_triangular_prism` with a simple closed schema requiring only a named id and positive displayScale; it reuses the existing `construct_solid` solver, enforces the symbolic source, and rejects unknown geometry fields. A mock native provider request sees the published schema; recorded product flow and exact-candidate browser rendering pass. This does not prove the remote DeepSeek service accepts the schema; no paid request was made.
