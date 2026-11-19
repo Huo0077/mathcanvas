@@ -90,6 +90,8 @@
 
 **C-T1 继续初核（2026-11-19）**：高考新增 GK-S16/GK-S17 原卷页核对，累计 6/8 有对应 PDF 页；旧23首核 GK-P09，另外22尚无原卷核对。发现两份“标题看似正确但题号内容不对”的 PDF，已按 `paper_question_mismatch` 拒收；数据集“棱雉/棱柱”差异须以后用正确原题重新锁定 hash。见[来源筛查审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新集依旧 `runnable=false`，不构成 DS 成功率。
 
+**C-T1 原卷检索续进（2026-11-19）**：GK-S10/GK-S15 已找到第三方试卷题页 JPEG 预览，可核对题号及随题附图情况，但**没有可核验原试卷 PDF**；其余6道高考候选仍只是 PDF 页初核。旧23题仅 GK-P09 原卷初核；没有任一题取得完整独立合同。见[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新版36继续 `runnable=false`，不因“8题都有图像页线索”而开放测试。
+
 ### Block D — 真实候选可见与原生受控交付
 
 **Files**：`apps/web/src/agent/agentRunner.ts`、`apps/web/src/agent/draftStore.ts`、`apps/web/src/canvasEvidence.ts`、`apps/web/src/components/agent/ConfirmationPanel.tsx`、`e2e/drawing-reliability-lifecycle.spec.ts`，以及受控原生测试入口。

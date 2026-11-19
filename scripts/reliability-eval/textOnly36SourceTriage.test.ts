@@ -11,9 +11,9 @@ type Triage = {
   excludedDuringPageReview: { sourceKey: string; reason: "embedded_figure_without_textual_cue" | "paper_question_mismatch"; sourceSha256: string; page: number }[]
   replacementCandidates: {
     slotId: string; category: "gaokao" | "joint"; sourceKey: string; sourceUrl: string; sourceSha256: string;
-    questionNumber: number; status: "transcript_only_needs_paper" | "pdf_page_checked_needs_independent_review";
+    questionNumber: number; status: "transcript_only_needs_paper" | "pdf_page_checked_needs_independent_review" | "page_preview_checked_needs_pdf_and_independent_review";
     originalPaperUrl?: string; originalPaperSha256?: string; originalPaperPage?: number;
-    page?: number; questionSha256?: string; notes: string
+    page?: number; questionSha256?: string; notes: string; previewImageUrl?: string; previewImageSha256?: string; previewPage?: number
   }[]
 }
 const triage = (): Triage => JSON.parse(readFileSync("test-fixtures/reliability/text-only-36-source-triage.json", "utf8")) as Triage
@@ -101,6 +101,22 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
     expect(triage().runnable).toBe(false)
   })
 
+  it("keeps two rendered page previews separate from verified original PDF evidence", () => {
+    const rows = triage().replacementCandidates.filter(row => row.category === "gaokao")
+    expect(rows.find(row => row.slotId === "GK-S10")).toMatchObject({
+      status: "page_preview_checked_needs_pdf_and_independent_review",
+      previewImageUrl: "https://cdn.att.tthaoke.com/testpaper/preview/8/8b0d7586467107bcc47c3e8d0a1cb0e2/p002.jpg",
+      previewImageSha256: "c55a6570ec1da8dcf1cf547b5560b73bba9ced867a9c68679a58fbc9f745cf86", previewPage: 2
+    })
+    expect(rows.find(row => row.slotId === "GK-S15")).toMatchObject({
+      status: "page_preview_checked_needs_pdf_and_independent_review",
+      previewImageUrl: "https://cdn.att.tthaoke.com/testpaper/preview/2/20fda96f61ae09480ea11dff410a071d/p003.jpg",
+      previewImageSha256: "b4f7535e0d3d2e421c0c701c397b64b54314ddc2a50a61712d8e2229ccacf7af", previewPage: 3
+    })
+    expect(rows.filter(row => row.status === "page_preview_checked_needs_pdf_and_independent_review").map(row => row.slotId)).toEqual(["GK-S10", "GK-S15"])
+    expect(rows.filter(row => row.status === "page_preview_checked_needs_pdf_and_independent_review" && row.originalPaperSha256)).toEqual([])
+  })
+
   it("rechecks retained GK-P09 from the matching 2020 national I science exam, not an unrelated scan", () => {
     const row = triage().retained.find(x => x.id === "GK-P09")
     expect(row).toMatchObject({
@@ -126,7 +142,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
         expect(candidate.status).toBe("pdf_page_checked_needs_independent_review")
       } else {
         expect(candidate.questionSha256 && sha(candidate.questionSha256)).toBe(true)
-        if (!["GK-S11", "GK-S12", "GK-S13", "GK-S14", "GK-S16", "GK-S17"].includes(candidate.slotId)) expect(candidate.status).toBe("transcript_only_needs_paper")
+        if (!["GK-S11", "GK-S12", "GK-S13", "GK-S14", "GK-S16", "GK-S17", "GK-S10", "GK-S15"].includes(candidate.slotId)) expect(candidate.status).toBe("transcript_only_needs_paper")
       }
     }
   })

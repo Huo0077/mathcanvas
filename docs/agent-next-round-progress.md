@@ -1,5 +1,8 @@
 # 下一轮工作导航
 
+> **2026-11-19 题页预览线索（0 DS 请求）**：GK-S10/GK-S15 已找到并目视核验第三方 JPEG 试卷题页预览（题号及配图归属），但**未取得原试卷 PDF，也无独立合同**；[来源清单](../test-fixtures/reliability/text-only-36-source-triage.json) 将预览状态与六道高考 PDF 页状态分开记录，[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)附字节 SHA。旧23只有 GK-P09 原卷初核，剩余22待复核；新版36保持 `runnable=false`，既有 DS 实测读数不变。
+
+
 > **2026-11-19 无图题来源复核增量（0 新增 DS）**：[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)与[清单](../test-fixtures/reliability/text-only-36-source-triage.json)现记录 6/8 道高考立体候选的 PDF 页级初核、旧23中 GK-P09 原卷初核；仍缺高考 GK-S10/GK-S15 和旧22原卷审查。两份标题正确但题号内容不符的下载件明确拒收；GK-S16 转录“棱雉/棱柱”待按原卷重锁文本。所有候选未独立审核、合同未冻结，`runnable=false`；不改变旧36合同1/26/9或原生交付未测，也未发起新 DS。
 
 

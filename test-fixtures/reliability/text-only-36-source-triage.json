@@ -179,8 +179,11 @@
       "questionSha256": "890a25763bbc09e95ede76ab5d85432d944660b8cd3f5adedf334d4bd46fe8fc",
       "year": "2014",
       "examCategory": "（新课标ⅱ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "page_preview_checked_needs_pdf_and_independent_review",
+      "notes": "2014 national II mathematics (arts) third-party rendered JPG preview p2 Q7 visually shows regular triangular prism and volume, no diagram attached to Q7. Preceding Q6 has geometric three-view diagrams and following Q8 a flowchart; do not misattribute. JPG is NOT original PDF and is not independently approved. Need original PDF, source verification and geometry contract.",
+      "previewImageUrl": "https://cdn.att.tthaoke.com/testpaper/preview/8/8b0d7586467107bcc47c3e8d0a1cb0e2/p002.jpg",
+      "previewImageSha256": "c55a6570ec1da8dcf1cf547b5560b73bba9ced867a9c68679a58fbc9f745cf86",
+      "previewPage": 2
     },
     {
       "slotId": "GK-S11",
@@ -256,8 +259,11 @@
       "questionSha256": "bcf70a0f1cc4bd394938fabf2cad0c47dfc82bcbe10f2ae6fb451c049a6c9635",
       "year": "2013",
       "examCategory": "（新课标ⅰ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "page_preview_checked_needs_pdf_and_independent_review",
+      "notes": "2013 national I mathematics (arts) third-party rendered JPG preview p3 Q15 visually shows H on sphere diameter AB, AH:HB=1:2 and plane section area pi, without attached diagram. Preceding Q11 has three-view diagrams; do not misattribute. JPG is NOT original PDF, and original-prompt transcription and independent math-contract review remain pending.",
+      "previewImageUrl": "https://cdn.att.tthaoke.com/testpaper/preview/2/20fda96f61ae09480ea11dff410a071d/p003.jpg",
+      "previewImageSha256": "b4f7535e0d3d2e421c0c701c397b64b54314ddc2a50a61712d8e2229ccacf7af",
+      "previewPage": 3
     },
     {
       "slotId": "GK-S16",
