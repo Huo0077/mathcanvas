@@ -31,7 +31,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       expect(row.inputHash).toBe(old?.inputHash)
       expect(row.source).toBe(old?.source)
       expect(row.textualFigureCue).toBe(false)
-      expect(row.status).toBe(["GK-P02", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : "needs_original_paper_review")
+      expect(row.status).toBe(["GK-P02", "GK-P05", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : "needs_original_paper_review")
     }
   })
 
@@ -130,7 +130,13 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       originalPaperUrl: "https://m.shsbnu.net/pluginfile.php/54461/mod_folder/content/0/2022%E5%B9%B4%E9%AB%98%E8%80%83%E7%9C%9F%E9%A2%98%E5%85%A8%E5%9B%BD%E4%B9%99%E5%8D%B7%E7%90%86%E7%A7%91%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7-%E5%AD%A6%E7%94%9F%E7%94%A8%E5%8D%B7.pdf",
       originalPaperSha256: "fb7509622fe55a681f6145067c0a91c6377aeb127f78cd3f60818c72551448dc", originalPaperPage: 5
     })
-    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P09"])
+    expect(triage().retained.find(x => x.id === "GK-P05")).toMatchObject({
+      status: "pdf_page_checked_needs_independent_review",
+      originalPaperUrl: "https://imgs.app.gaokaozhitongche.com/resource/pdf/paper/202203/20220330210833_JN29ez.pdf",
+      originalPaperSha256: "3318ba55310181e2320c92b46b2997a2d57d1547d21dea278d3f068975ba494d",
+      originalPaperPage: 4
+    })
+    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P05", "GK-P09"])
   })
 
   it("ties exactly 13 distinct provisional source records to the slots and requires source hashes", () => {

@@ -74,7 +74,10 @@
       "inputHash": "f3ba9cd9da4e1cbecfef565efbb6b1482cc29a305dacdb570b9aa9de5ef7f92a",
       "source": "2021年全国甲卷理科 第20题 (GAOKAO-Bench)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "pdf_page_checked_needs_independent_review",
+      "originalPaperUrl": "https://imgs.app.gaokaozhitongche.com/resource/pdf/paper/202203/20220330210833_JN29ez.pdf",
+      "originalPaperSha256": "3318ba55310181e2320c92b46b2997a2d57d1547d21dea278d3f068975ba494d",
+      "originalPaperPage": 4
     },
     {
       "id": "GK-P06",

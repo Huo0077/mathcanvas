@@ -1,5 +1,8 @@
 # Agent 发布前门禁
 
+> **2026-11-19 保留题 GK-P05 原卷核验（0 新增 DS）**：使用 2021 全国甲卷理科原卷 p4 第20题确认抛物线题与旁边第19题立体配图无关；旧23已有 GK-P02/GK-P05/GK-P09 共 **3/23 页级初核**，余20题待复核。[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)列出 PDF SHA；[新版清单](../../test-fixtures/reliability/text-only-36-source-triage.json)仍 `runnable=false`，独立合同/DS真实作图/原生交付未测，旧36成绩不变。
+
+
 > **2026-11-19 旧23题第二道原卷复核（0新增DS）**：GK-P02 已用 2022 全国乙卷理科学生试卷 p5 核对第20题椭圆题与附图归属；连同 GK-P09，旧23目前 2/23 仅页级初核，其余21题未核对。来源[审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)及[清单](../../test-fixtures/reliability/text-only-36-source-triage.json)保留具体 SHA。**不是独立合同批准，也不是新 DS 实测**；新36仍 `runnable=false`、旧实测读数不变。
 
 
