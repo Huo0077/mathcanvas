@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "g3-f9-native-gks09-fixed-retest.v1",
+  "caseId": "GK-S09",
+  "revision": "91549a9f624ad8ca91664542b0ea1b3d3b6dbd30",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "profile": {
+    "modelId": "deepseek-v4-flash",
+    "revision": 2
+  },
+  "authorization": {
+    "selectedCases": [
+      "GK-S09"
+    ],
+    "maxRequests": 3,
+    "maxUsd": 5,
+    "usedRequests": 3
+  },
+  "requests": [
+    {
+      "index": 1,
+      "toolNames": [
+        "construct_equal_edge_triangular_prism"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    },
+    {
+      "index": 2,
+      "toolNames": [
+        "construct_circumsphere"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    },
+    {
+      "index": 3,
+      "toolNames": [
+        "finish_candidate"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    }
+  ],
+  "actionReceipts": [
+    {
+      "requestIndex": 1,
+      "actionIndex": 1,
+      "toolName": "construct_equal_edge_triangular_prism",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 0,
+      "primitiveCountAfter": 21,
+      "candidateHashChanged": false,
+      "stateChanged": true,
+      "feedbackDelivered": true
+    },
+    {
+      "requestIndex": 2,
+      "actionIndex": 2,
+      "toolName": "construct_circumsphere",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 21,
+      "primitiveCountAfter": 22,
+      "candidateHashChanged": true,
+      "stateChanged": true,
+      "feedbackDelivered": true
+    },
+    {
+      "requestIndex": 3,
+      "actionIndex": 3,
+      "toolName": "finish_candidate",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 22,
+      "primitiveCountAfter": 22,
+      "candidateHashChanged": false,
+      "stateChanged": false,
+      "feedbackDelivered": false
+    }
+  ],
+  "firstFailure": null,
+  "contractStatus": "passed",
+  "candidateSet": [
+    {
+      "scopeId": "shared",
+      "candidateHash": "41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf",
+      "certificateStatus": "passed",
+      "failedCount": 0
+    }
+  ],
+  "candidateReady": true,
+  "nativeRenderStatus": "pending",
+  "nativeCommitStatus": "pending",
+  "browserRender": {
+    "candidateHash": "41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf",
+    "attributes": {
+      "data-document-hash": "41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf",
+      "data-candidate-hash": "41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf",
+      "data-canvas-evidence-status": "passed",
+      "data-canvas-evidence-accepted": "true",
+      "data-canvas-boxes": "21",
+      "data-canvas-labels": "6",
+      "data-canvas-hidden-labels": "",
+      "data-canvas-diagnostic-errors": ""
+    },
+    "screenshot": "GK-S09-fixed-retest.png",
+    "screenshotSha256": "143cbd3e8a2e330ccc8ec2303cb2cf32814946cfa7a0551466a5df1745e916ae",
+    "visuallyInspectedByAssistant": true,
+    "separateBrowserImport": true
+  },
+  "nativeControlledDelivery": "not_measured",
+  "nativeMainCanvasWrites": "not_measured",
+  "usage": {
+    "requests": 3,
+    "inputBytes": 31022,
+    "inputTokens": 8494,
+    "outputTokens": 252,
+    "usageEvents": 3
+  },
+  "actualCostUsd": null,
+  "costKnown": false,
+  "estimatedMaxUsd": 0.0523728,
+  "estimatedFromUsageUsd": 0.0028506,
+  "otherCasesUnrun": 35
+}

@@ -1,6 +1,6 @@
 # MathCanvas 当前状态
 
-> **2026-11-18 最新真实 DS 实测（取代下方过时的“授权未使用/尚未付费”提示）**：GK-S09 在固定源码 `44a5069e` 上原生调用 3/3 次已用尽授权：依次构造等棱三棱柱、派生外接球、完成候选，均 accepted；独立合同与生产证书 passed，候选 hash `8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6`。原版同候选截图发现不透明球遮挡棱柱；调用**之后**修改球壳材质并对同候选复拍可读版，不能视为修复后同版原生 DS 端到端复测。原生受控交付/主画布写入未测，35题未测，实际账单费用未知；不报告36题成功率。本轮后续**只聚焦真实 DS 调用、同候选真实画面和原生交付**，离线回放仅为历史记录，不充当新进度；任何新增付费请求须另获明确授权。证据：[GK-S09 原生实测](audit/2026-11-18-g3-f9-gks09-native-ds/README.md)。
+> **2026-11-18 修复后真实 DS 复测（当前优先状态）**：在固定源码 `91549a9f`、同一冻结题集及已保存 DeepSeek profile revision 2 下，仅对 GK-S09 发起 **3/3 次新授权的原生请求**：`construct_equal_edge_triangular_prism` → `construct_circumsphere` → `finish_candidate` 均 accepted，独立合同和生产证书 passed。新候选 `41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf` 在隔离浏览器导入后同 hash 渲染 passed，人工现场检查棱柱/球壳可辨；原生 harness 的 render/commit 仍为 pending，原生受控交付与主画布写入次数 **not_measured**。本轮 3 请求/5 美元授权已用尽；实际账单未知，其余35题未测，不能记 36 题成功率或端到端交付成功。之后只跟进真实模型、真实画面、交付证据，不用离线分数代替。详见[脱敏实测审计](audit/2026-11-18-g3-f9-gks09-native-ds/README.md)。
 
 > **2026-11-18 Task 7 family-tool checkpoint (zero cost):** Added `construct_equal_edge_triangular_prism` with a simple closed schema requiring only a named id and positive displayScale; it reuses the existing `construct_solid` solver, enforces the symbolic source, and rejects unknown geometry fields. A mock native provider request sees the published schema; recorded product flow and exact-candidate browser rendering pass. This does not prove the remote DeepSeek service accepts the schema; no paid request was made.
 

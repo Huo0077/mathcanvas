@@ -10,6 +10,14 @@
 
 **Spec:** [F9 总计划](G3-F9-kernel-action-repair-plan.md) Task 6–9、[最终实施档案](G3-DS-final-implementation-dossier.md)及[GK-S09 单题实测](../audit/2026-11-17-g3-f9-text-only-pilot/README.md)。如有冲突，证据优先于猜测，当前实时状态以 [current-status](../current-status.md) 为准。
 
+## 修复后实测进度（2026-11-18，美西时间）
+
+- [x] 固定修复提交 `91549a9f624ad8ca91664542b0ea1b3d3b6dbd30`、冻结题集 SHA-256 `c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d` 与已保存原生 DeepSeek profile revision 2；先做 0 请求预检，确认所需工具已发布。
+- [x] 获本轮“修复之后继续测”的新授权后，仅测 GK-S09：3/3 次原生请求均有 usage，动作依次为等棱三棱柱、派生外接球、完成候选，三次 accepted；独立合同及生产证书通过。候选 hash `41ea6da98bc0ba479f9bf3f39314ca9895d6aba012e15032846d7d5306787ccf`，不是前轮候选；实际费用未知、按官网峰值单价粗估 $0.0028506，不是账单。
+- [x] 将本轮真实模型候选导入隔离浏览器，核对 document/candidate hash 同上、画布证据 passed，保存截图并检查球壳、棱柱和六个标签可见。详见[本轮证据](../audit/2026-11-18-g3-f9-gks09-native-ds/README.md)。这是同源码版本下的同候选显示，但**不等于原生产品交付**。
+- [ ] 原生 harness 本次 `renderStatus=pending`、`commitStatus=pending`；确认前主画布写入次数和原生隔离交付尚未测量。下一步首先为真实候选建立原生预览/确认后交付证据；如需新增真实 DS 请求，必须取得**新的付费授权**，本轮 3 请求/5 美元已用尽。
+- [ ] 单题端到端真实交付和人工可读性签收后，再按每批独立明确授权扩至其他题型和重复轮次；其余35题目前未测，不给36题成功率。
+
 ## 当前执行优先级：真实 DS 实测（2026-11-18 更新）
 
 - [x] 在源码 `44a5069e` 上使用已保存原生 DeepSeek profile 运行 GK-S09：3/3 次付费请求依次执行 `construct_equal_edge_triangular_prism`、`construct_circumsphere`、`finish_candidate`，均获 accepted 回执；候选 `8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6` 的独立合同、生产证书通过。该次授权（3请求、最多5美元）**已用尽**；实际扣费未知，其余35题未测。
