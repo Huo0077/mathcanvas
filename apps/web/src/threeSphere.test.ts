@@ -32,6 +32,19 @@ describe("sphere rendering", () => {
     expect(group.children.filter((child) => child.userData.primitiveType === "edge3")).toHaveLength(0)
   })
 
+  it("renders a derived circumsphere as a translucent shell so the host prism stays readable", () => {
+    const derived = { ...SPHERE, derivedFrom: { kind: "circumsphere" as const, solidId: "prism" } }
+    const shell = createSolidMesh(derived, false)
+    const shellMaterial = shell.material as THREE.MeshStandardMaterial
+    const plainMaterial = createSolidMesh(SPHERE, false).material as THREE.MeshStandardMaterial
+    expect(shellMaterial.transparent).toBe(true)
+    expect(shellMaterial.opacity).toBeGreaterThan(0.1)
+    expect(shellMaterial.opacity).toBeLessThan(0.4)
+    expect(shellMaterial.depthWrite).toBe(false)
+    expect(plainMaterial.opacity).toBe(1)
+    expect(plainMaterial.depthWrite).toBe(true)
+  })
+
   it("keeps the wireframe away even when hidden edges or normals are switched on", () => {
     const group = createSolidGroup(SPHERE, false, { showHiddenEdges: true, showNormals: true })
 

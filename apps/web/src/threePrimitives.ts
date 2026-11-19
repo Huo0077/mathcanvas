@@ -285,7 +285,16 @@ export function createSolidMesh(primitive: SolidPrimitive, selected: boolean, op
    * 球没有 `height`，`center.y + undefined / 2` 直接是 NaN）。
    */
   if (primitive.type === "sphere") {
-    const sphereMesh = new THREE.Mesh(new THREE.SphereGeometry(primitive.radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS), solidMaterial(primitive, selected, options))
+    const material = solidMaterial(primitive, selected, options)
+    // A derived circumsphere surrounds its host. An opaque shell hides the actual
+    // prism edges and faces, making a mathematically correct diagram unreadable.
+    if (primitive.derivedFrom?.kind === "circumsphere") {
+      material.transparent = true
+      material.opacity = Math.min(material.opacity, 0.24)
+      material.depthWrite = false
+      material.side = THREE.FrontSide
+    }
+    const sphereMesh = new THREE.Mesh(new THREE.SphereGeometry(primitive.radius, SPHERE_WIDTH_SEGMENTS, SPHERE_HEIGHT_SEGMENTS), material)
     sphereMesh.position.set(primitive.center.x, primitive.center.y, primitive.center.z)
     sphereMesh.userData.primitiveId = primitive.id
     sphereMesh.userData.primitiveType = primitive.type

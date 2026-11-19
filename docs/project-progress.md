@@ -1,6 +1,6 @@
 # MathCanvas 项目过程日志
 
-> **2026-11-18 GK-S09 paid single-case authorization accepted (not yet spent):** User explicitly approved the previously proposed scope: saved DeepSeek profile, GK-S09 only, at most 3 native requests and $5 estimated cap, stop at first failure. Zero-cost prerequisite uncovered an oblique/right-prism mismatch; added an affirmative-rightness gate and negative tests before any paid request. Actual provider billing and acceptance remain unknown until the native pilot runs.
+> **2026-11-18 最新真实 DS 实测（取代下方过时的“授权未使用/尚未付费”提示）**：GK-S09 在固定源码 `44a5069e` 上原生调用 3/3 次已用尽授权：依次构造等棱三棱柱、派生外接球、完成候选，均 accepted；独立合同与生产证书 passed，候选 hash `8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6`。原版同候选截图发现不透明球遮挡棱柱；调用**之后**修改球壳材质并对同候选复拍可读版，不能视为修复后同版原生 DS 端到端复测。原生受控交付/主画布写入未测，35题未测，实际账单费用未知；不报告36题成功率。本轮后续**只聚焦真实 DS 调用、同候选真实画面和原生交付**，离线回放仅为历史记录，不充当新进度；任何新增付费请求须另获明确授权。证据：[GK-S09 原生实测](audit/2026-11-18-g3-f9-gks09-native-ds/README.md)。
 
 > **2026-11-18 Task 7 family-tool checkpoint (zero cost):** Added `construct_equal_edge_triangular_prism` with a simple closed schema requiring only a named id and positive displayScale; it reuses the existing `construct_solid` solver, enforces the symbolic source, and rejects unknown geometry fields. A mock native provider request sees the published schema; recorded product flow and exact-candidate browser rendering pass. This does not prove the remote DeepSeek service accepts the schema; no paid request was made.
 

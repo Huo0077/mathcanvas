@@ -10,6 +10,15 @@
 
 **Spec:** [F9 总计划](G3-F9-kernel-action-repair-plan.md) Task 6–9、[最终实施档案](G3-DS-final-implementation-dossier.md)及[GK-S09 单题实测](../audit/2026-11-17-g3-f9-text-only-pilot/README.md)。如有冲突，证据优先于猜测，当前实时状态以 [current-status](../current-status.md) 为准。
 
+## 当前执行优先级：真实 DS 实测（2026-11-18 更新）
+
+- [x] 在源码 `44a5069e` 上使用已保存原生 DeepSeek profile 运行 GK-S09：3/3 次付费请求依次执行 `construct_equal_edge_triangular_prism`、`construct_circumsphere`、`finish_candidate`，均获 accepted 回执；候选 `8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6` 的独立合同、生产证书通过。该次授权（3请求、最多5美元）**已用尽**；实际扣费未知，其余35题未测。
+- [x] 从上述真实模型候选导入隔离浏览器拍摄原始画面，发现不透明派生球遮住棱柱；随后在 `apps/web/src/threePrimitives.ts` 仅调整派生外接球材质，再以**同一个候选 hash**复拍可读图。真实调用与视觉修复不是同一源码版本；该浏览器检查不是原生受控交付。详见[脱敏审计和两张截图](../audit/2026-11-18-g3-f9-gks09-native-ds/README.md)。
+- [ ] 固定包含视觉修复的新提交；新授权后在**同一源码提交**下走原生 DS → 工具回执 → 合同/证书 → 同候选真实浏览器画面 → 用户确认前后主画布写入计数/隔离交付 → 人工可读性签收。任一环节未测就逐项记 `not_measured`；失败立刻记录首个断点与截图，停止扩批。
+- [ ] 单题完整闭环且成本可控后，另行明确授权扩展另一立体、二维、多状态，再到冻结36题；按真实题数和重复轮次分别报告，绝不将旧离线/录制回放当作本轮成功率，也不保证未经测量的100%。
+
+以下 Task 6–9 条目及旧证据保留为历史实施背景；若与本节状态冲突，以本节和链接审计为准。当前下一步不再围绕离线通过数安排工作。
+
 ## 固定证据、边界与验收定义
 
 - 固定题集哈希 `c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d`；旧真实请求 revision `89b00bcd6e8bed74389c8734499fc9efa3c13d65`。GK-S09 纯文字 `ds_action` **两次原生请求，两次选择 `construct_solid`，无候选**；具体输入字段和执行回执未记录，其他35题未测，实际账单未知。旧 GK-S08 缺题图澄清、旧版 accepted/0 均不是此两次请求的已证实原因。

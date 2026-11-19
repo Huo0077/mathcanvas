@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "g3-f9-native-gks09.v1",
+  "caseId": "GK-S09",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "revision": "44a5069ee3f0db960a924e1b0ce20527b46806cc",
+  "profile": {
+    "id": "deepseek-v4-flash",
+    "modelId": "deepseek-v4-flash",
+    "revision": 2
+  },
+  "authorization": {
+    "maxRequests": 3,
+    "maxUsd": 5,
+    "selectedCases": [
+      "GK-S09"
+    ],
+    "failureStopThreshold": 1
+  },
+  "requests": 3,
+  "transport": [
+    {
+      "index": 1,
+      "toolNames": [
+        "construct_equal_edge_triangular_prism"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    },
+    {
+      "index": 2,
+      "toolNames": [
+        "construct_circumsphere"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    },
+    {
+      "index": 3,
+      "toolNames": [
+        "finish_candidate"
+      ],
+      "responseKind": "tool_calls",
+      "usageKnown": true
+    }
+  ],
+  "actionReceipts": [
+    {
+      "requestIndex": 1,
+      "actionIndex": 1,
+      "toolName": "construct_equal_edge_triangular_prism",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 0,
+      "primitiveCountAfter": 21,
+      "candidateHashChanged": false,
+      "stateChanged": true,
+      "feedbackDelivered": true
+    },
+    {
+      "requestIndex": 2,
+      "actionIndex": 2,
+      "toolName": "construct_circumsphere",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 21,
+      "primitiveCountAfter": 22,
+      "candidateHashChanged": true,
+      "stateChanged": true,
+      "feedbackDelivered": true
+    },
+    {
+      "requestIndex": 3,
+      "actionIndex": 3,
+      "toolName": "finish_candidate",
+      "resultStatus": "accepted",
+      "primitiveCountBefore": 22,
+      "primitiveCountAfter": 22,
+      "candidateHashChanged": false,
+      "stateChanged": false,
+      "feedbackDelivered": false
+    }
+  ],
+  "firstFailure": null,
+  "modelInvoked": true,
+  "contractStatus": "passed",
+  "certificateStatus": "passed",
+  "candidateHash": "8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6",
+  "primitiveCount": 22,
+  "render": {
+    "status": "passed",
+    "candidateHash": "8cbc38117ef2301b6dbb417fe38478efd7fede093613dc7bc592dc63f933dbf6",
+    "boxes": 21,
+    "labels": 6,
+    "hiddenLabels": "",
+    "diagnosticErrors": "",
+    "imageSha256": "57a15f0097b3df9efc32d3fb49b73caa7dab31caff7da38c9ba90ea0655cb9b8"
+  },
+  "controlledDelivery": "not_measured",
+  "mainCanvasWrites": "not_measured",
+  "usage": {
+    "requests": 3,
+    "inputBytes": 31002,
+    "inputTokens": 8508,
+    "outputTokens": 235,
+    "usageEvents": 3
+  },
+  "actualCostUsd": null,
+  "costKnown": false,
+  "estimatedMaxUsd": 0.0523728,
+  "estimatedFromUsageUsd": 0.0028344,
+  "otherCasesUnrun": 35
+}
