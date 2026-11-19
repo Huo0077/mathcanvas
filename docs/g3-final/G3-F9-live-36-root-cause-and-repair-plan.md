@@ -70,6 +70,8 @@
 - [ ] 在现有 `images` 通道加入用户已授权且 profile vision 经当前修订验证的原图；文本与图像同请求，Rust 按 `image_url` 发送；新增尺寸/请求体/图像 tokens 上界和脱敏引用，不在审计中落 base64/图片隐私内容。旧纯文字配置不偷偷换成视觉模型。
 - [ ] 明确 `clarification` 的原因：真正缺图/不可判定优先停，完整纯文字题因模型不会构图不应伪装“题面不完整”，保留诚实拒绝与人工复核。图文证据和文本代用成绩双列，不直接覆盖旧实验。
 
+**C0 非付费检查点（2026-11-18）**：真实图像尚未进入冻结题原生 DS 请求链，已在带合同入口对13题图题全部于网络前标记 `input_figure_missing` 并拒绝调用模型；仅传确认引用也不能代替图像字节。[C0 审计](../audit/2026-11-18-g3-f9-figure-input-c0/README.md)。**C 块未退出**：原题图来源、SHA、区域、vision 能力与图像预算仍缺，不把旧13题文字试验改写为图文成功。
+
 ### Block D — 真实候选可见与原生受控交付
 
 **Files**：`apps/web/src/agent/agentRunner.ts`、`apps/web/src/agent/draftStore.ts`、`apps/web/src/canvasEvidence.ts`、`apps/web/src/components/agent/ConfirmationPanel.tsx`、`e2e/drawing-reliability-lifecycle.spec.ts`，以及受控原生测试入口。

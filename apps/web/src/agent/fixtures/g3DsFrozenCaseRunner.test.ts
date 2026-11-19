@@ -562,6 +562,47 @@ describe("g3DsFrozenCaseRunner (Task 4 unified multi-scope/state/branch entry, z
 })
 
 
+describe("figure-dependent native DS preflight (zero cost)", () => {
+  it.each(["GK-S01", "GK-S02", "JT-S07"])("refuses to call the model for missing image %s even when unsupportedReasons is empty", async (id) => {
+    const frozen = getCase(id)
+    let requests = 0
+    const traces: import("./g3DsCaseTrace").G3CaseTrace[] = []
+    const result = await runFrozenDsCaseTraced(
+      { id, prompt: frozen.prompt, workspace: frozen.workspace },
+      createBudget({ network: 10, generation: 10, tool: 10 }),
+      { intentMode: "ds_action", runModel: async () => { requests += 1; throw new Error("must not call provider") } },
+      { contract: frozen, revision: "image-gate", runId: `missing-${id}`, onTrace: (trace) => traces.push(trace) }
+    )
+    expect(requests).toBe(0)
+    expect(result).toMatchObject({ modelInvoked: false, contractStatus: "incomplete", candidateSet: [], renderStatus: "pending", commitStatus: "pending" })
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({ requests: [], firstFailure: { boundary: "contract", code: "input_figure_missing" } })
+  })
+  it("keeps all 13 figure-reference cases blocked until actual image transport exists", async () => {
+    const figureCases = suite.cases.filter((entry) => entry.inputMode === "text_with_figure_reference")
+    expect(figureCases).toHaveLength(13)
+    let calls = 0
+    for (const entry of figureCases) {
+      const result = await runFrozenDsCaseTraced(entry, createBudget(),
+        { intentMode: "ds_action", runModel: async () => { calls++; throw new Error("unexpected provider call") } },
+        { contract: entry, revision: "image-gate", runId: `blocked-${entry.id}`, onTrace: () => {} })
+      expect(result.modelInvoked, entry.id).toBe(false)
+      expect(result.contractStatus, entry.id).toBe("incomplete")
+    }
+    expect(calls).toBe(0)
+  })
+  it("does not treat untransmitted confirmedFigureRefs as image bytes", async () => {
+    const frozen = getCase("GK-S02")
+    let requests = 0
+    const result = await runFrozenDsCaseTraced({ id: frozen.id, prompt: frozen.prompt, workspace: frozen.workspace,
+      confirmedFigureRefs: [{ figureHash: "fake-hash", reviewed: true }] }, createBudget(),
+    { intentMode: "ds_action", runModel: async () => { requests++; throw new Error("unexpected model invocation") } },
+    { contract: frozen, revision: "image-gate", runId: "fake-ref", onTrace: () => {} })
+    expect(requests).toBe(0)
+    expect(result.modelInvoked).toBe(false)
+  })
+})
+
 describe("GK-S09 action receipt runner bridge (zero cost)", () => {
   it("captures terminal receipts without implying feedback was delivered", async () => {
     let n = 0

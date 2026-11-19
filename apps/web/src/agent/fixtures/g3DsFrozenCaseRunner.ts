@@ -664,6 +664,12 @@ export async function runFrozenDsCaseTraced(
     }
   })
   try {
+    // This runner sends only a text userMessage. Figure references are not image bytes:
+    // do not spend a provider request or claim a complete exam drawing from missing input.
+    if (options.contract?.inputMode === "text_with_figure_reference") {
+      trace = recordBoundary(trace, { boundary: "contract", code: "input_figure_missing" })
+      return { candidateSet: [], modelInvoked: false, contractStatus: "incomplete", renderStatus: "pending", commitStatus: "pending" }
+    }
     return await runFrozenDsCase(publicInput, planner, budget, {
       ...(options.contract === undefined ? {} : { contract: options.contract }),
       ...(options.onVerifiedCandidate === undefined ? {} : { onVerifiedCandidate: options.onVerifiedCandidate })
