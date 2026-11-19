@@ -1484,23 +1484,12 @@ export function createDsActionSession(options: {
         if (primaryActions.length === 0) {
           return failRepairable(name, "empty_candidate", "stage at least one geometric action before finish_candidate")
         }
-        const symbolicPrisms = primaryActions.filter((action): action is Extract<DraftAction, { actionId: "solid.create_prism" }> =>
-          action.actionId === "solid.create_prism" && symbolicDisplays.has(action.actionKey))
-        const derivedSpheres = primaryActions.filter((action): action is Extract<DraftAction, { actionId: "derived.create_circumsphere" }> =>
-          action.actionId === "derived.create_circumsphere")
-        // Draft actions carry an unresolved scoped alias until compilePlan resolves it to SceneReference.
-        const host = derivedSpheres[0]?.inputs.solidId as unknown as { scope?: string; alias?: string } | undefined
-        const boundSymbolicPrism = symbolicPrisms.length === 1 && derivedSpheres.length === 1 &&
-          host?.scope === "draft" && host.alias === symbolicPrisms[0]!.inputs.alias
         const plan: PlanEnvelope = {
           schemaVersion: PLAN_SCHEMA_VERSION,
           kind: "plan",
           goal: asString(input.goal) ?? "DS 动作级构图候选",
           factIds: [],
           actions: [...primaryActions],
-          ...(boundSymbolicPrism ? {
-            answer: "For a > 0, an equilateral right triangular prism with every edge a has base circumradius squared a^2/3 and half-height squared a^2/4. Thus R^2 = 7a^2/12 and sphere area = 4*pi*R^2 = 7/3*pi*a^2. The display scale is illustrative, not a value for a."
-          } : {}),
           ...(symbolicDisplays.size === 0 ? {} : {
             assumptions: primaryActions.flatMap((action) => {
               const display = symbolicDisplays.get(action.actionKey)

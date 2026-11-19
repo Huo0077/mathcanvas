@@ -126,6 +126,21 @@ describe("simple symbolic equal-edge prism tool", () => {
   })
 })
 
+describe("DS answer provenance is not geometry", () => {
+  it("never invents an exam answer while finishing a symbolic prism/sphere diagram", () => {
+    const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    expect(session.execute("construct_equal_edge_triangular_prism", { id: "prism", displayScale: 2 }).ok).toBe(true)
+    expect(session.execute("construct_circumsphere", { id: "sphere", solidId: "prism" }).ok).toBe(true)
+    const finished = session.execute("finish_candidate", { goal: "render prism and circumsphere" })
+    expect(finished.status).toBe("accepted")
+    expect(finished.terminated?.plan.kind).toBe("plan")
+    if (finished.terminated?.plan.kind !== "plan") return
+    expect(finished.terminated.plan.actions).toHaveLength(2)
+    expect(finished.terminated.plan.answer).toBeUndefined()
+  })
+})
+
 describe("GK-S09 derived circumsphere action", () => {
   it("refuses numeric side and height as unlabelled values for an all-edges-a prompt", () => {
     const prompt = drawingContracts36.cases.find((entry) => entry.id === "GK-S09")!.prompt
@@ -154,8 +169,7 @@ describe("GK-S09 derived circumsphere action", () => {
     expect(finished.terminated?.plan.kind).toBe("plan")
     if (finished.terminated?.plan.kind === "plan") {
       expect(finished.terminated.plan.assumptions).toEqual(expect.arrayContaining([expect.stringMatching(/a > 0.*display.*2/i)]))
-      expect(finished.terminated.plan.answer).toContain("7/3")
-      expect(finished.terminated.plan.answer).toContain("a^2")
+      expect(finished.terminated.plan.answer).toBeUndefined()
     }
     expect(session.execute("repair_entity", {}).status).toBe("accepted")
     const rolled = session.execute("repair_entity", {})
@@ -202,7 +216,7 @@ describe("GK-S09 derived circumsphere action", () => {
       expect(session.execute("construct_circumsphere", { solidId: "P", id: "S" }).status).toBe("accepted")
       const finished = session.execute("finish_candidate", { goal: "sphere area" })
       if (finished.terminated?.plan.kind !== "plan") throw new Error("no plan")
-      expect(finished.terminated.plan.answer).toContain("7/3*pi*a^2")
+      expect(finished.terminated.plan.answer).toBeUndefined()
       const compiled = compilePlan(finished.terminated.plan, { document: createEmptyDocument("geometry3d"), conversationId: "symbolic-test" })
       expect(compiled.ok).toBe(true)
       const sphere = compiled.draftDocument?.primitives.find((primitive) => primitive.type === "sphere")

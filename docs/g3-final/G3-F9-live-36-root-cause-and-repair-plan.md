@@ -68,6 +68,8 @@
 
 **B5 零费检查点（2026-11-19）**：GK-P02 真实“先两次构点、后构曲线缺参数”序列促成内核能力补全；`construct_conic` 可显式选 `throughPointIds`，内核从已物化的两点计算唯一椭圆/双曲线的半轴及轴向，退化/错族/错分支拒绝。证据见[B5 审计](../audit/2026-11-19-g3-conic-fit-b5/README.md)。旧回执不含原参数，**不声明模型当时使用过点拟合或历史成功率提高**。后续仍需焦点/离心率等其它输入族和同版真实复测。
 
+**B6 零费检查点（2026-11-19）**：移除 `finish_candidate` 对符号等棱三棱柱+外接球写死的面积答案；RED 证明它曾在模型未作答时自动出现，GREEN 后录制 GK-S09 作图合同/证书及画面仍过，证明原合同只要求画图、**不能证明模型答出球面积**。见[B6 审计](../audit/2026-11-19-g3-answer-provenance-b6/README.md)。今后图形与答案需分源归因和独立验收。
+
 ### Block C — 真题原图输入与诚实澄清
 
 **Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。
