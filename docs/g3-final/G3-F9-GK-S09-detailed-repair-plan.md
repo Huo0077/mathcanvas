@@ -10,6 +10,16 @@
 
 **Spec:** [F9 总计划](G3-F9-kernel-action-repair-plan.md) Task 6–9、[最终实施档案](G3-DS-final-implementation-dossier.md)及[GK-S09 单题实测](../audit/2026-11-17-g3-f9-text-only-pilot/README.md)。如有冲突，证据优先于猜测，当前实时状态以 [current-status](../current-status.md) 为准。
 
+## 36题原生全量实测后的执行停点（2026-11-18）
+
+- [x] 在源码 `aa17eb70`、冻结36题哈希与原生已保存 DeepSeek profile revision 2 上逐题实测，**每题最多10请求、整轮5美元**，实际共91请求/36题、每次都有 usage。合同1通过、26失败、9未完成评估；只有 GK-S09 的证书与隔离浏览器同候选画面通过，原生交付和主画布写入均未测。详见[36题真实审计](../audit/2026-11-18-g3-f9-native-36-10x/README.md)。
+- [ ] **第一优先：多工具批次真实失败（8题）**。在 `apps/web/src/agent/modelPlanner.ts` 已发布 `ds_action` 工具的执行分支之前，通用 `calls.length > 1` 把同轮多个合法构造动作当作 `mixed_read_plan` 拒绝，且逐动作回执没有机会产生；需用本轮脱敏工具序列复现 RED，设计全批先校验、逐动作反馈/原子拒绝与预算计算，避免把非只读的动作批次交给旧 read-tool 闸。不能用自动替模型选一个动作来掩盖失败，不能将不合法批次部分提交。
+- [ ] **第二优先：模型可见参数和引用修正**。按本轮 `missing_required_parameter`（12题首次）与中途 `undeclared_entity_ref` 分类，检查 `construct_conic/point/line/query_measurement` 等 schema、引用绑定及回执提示；以真实动作序列证明修正方向，不能用旧离线通过率抵消失败。
+- [ ] **输入保真**：13题题面引用图但冻结集未附经过核验的原始图像，补图/区域核验后才能称“完整真题图文输入实测”；只给文字的本轮13次实验保留作模型行为证据，不记完整图题成功。
+- [ ] **交付证据与复测授权**：真实候选须在原生产品中测确认前0主画布写入、用户确认后同 hash 交付与人工可读性。每个代码修正块独立测试/对齐文档/推送；下一轮 DS 调用必须重新取得明确费用和请求授权，不能沿用本轮已消费的授权。
+
+下列 GK-S09 单题检查点和旧 Task 6–9 保留为历史时序，当前状态以本节和36题审计为准。
+
 ## 修复后实测进度（2026-11-18，美西时间）
 
 - [x] 固定修复提交 `91549a9f624ad8ca91664542b0ea1b3d3b6dbd30`、冻结题集 SHA-256 `c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d` 与已保存原生 DeepSeek profile revision 2；先做 0 请求预检，确认所需工具已发布。

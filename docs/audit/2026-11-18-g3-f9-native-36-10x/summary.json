@@ -1,0 +1,2787 @@
+{
+  "schemaVersion": "g3-f9-live36-10x.v1",
+  "revision": "aa17eb70d0bb98371e8300cd4294b794646b1f7b",
+  "suiteHash": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "profile": {
+    "modelId": "deepseek-v4-flash",
+    "profileRevision": 2,
+    "tools": "verified"
+  },
+  "authorization": {
+    "maxRequestsPerCase": 10,
+    "maxTotalRequests": 360,
+    "maxUsdTotal": 5,
+    "requestedCases": 36
+  },
+  "coverage": {
+    "casesInvoked": 36,
+    "textOnlyCases": 23,
+    "figureReferenceCasesWithoutReviewedImages": 13,
+    "contractPassed": 1,
+    "contractFailed": 26,
+    "contractNotMeasured": 9,
+    "certificatePassed": 1,
+    "browserCandidateRenderedPassed": 1,
+    "nativeControlledDeliveryPassed": 0,
+    "nativeControlledDeliveryNotMeasured": 36
+  },
+  "failureCategories": {
+    "needsClarificationFirst": 17,
+    "missingRequiredParameterFirst": 12,
+    "telemetryMissingFirst": 5,
+    "symbolSourceMissingFirst": 1,
+    "noFirstFailure": 1,
+    "multiToolBatchRejected": 8,
+    "requestBudgetExhausted": 1
+  },
+  "usage": {
+    "requests": 91,
+    "usageEvents": 91,
+    "inputBytes": 1029825,
+    "inputTokens": 290029,
+    "outputTokens": 13637
+  },
+  "cost": {
+    "costKnown": false,
+    "actualCostUsd": null,
+    "estimatedUsagePeakCacheMissUsd": 0.1033731,
+    "conservativeUpperUsd": 0.5325891,
+    "pricingSource": "https://api-docs.deepseek.com/quick_start/pricing",
+    "note": "Estimates are not provider billing; conservative bound counts every input UTF-8 byte as one token and reserves 2048 output tokens per request."
+  },
+  "browserAnchor": {
+    "id": "GK-S09",
+    "candidateHash": "6e7fecf1adb35e44909fc416a44e41f9c623c53d4fcbed11e1ff758d972bbe52",
+    "attributes": {
+      "data-document-hash": "6e7fecf1adb35e44909fc416a44e41f9c623c53d4fcbed11e1ff758d972bbe52",
+      "data-candidate-hash": "6e7fecf1adb35e44909fc416a44e41f9c623c53d4fcbed11e1ff758d972bbe52",
+      "data-canvas-evidence-status": "passed",
+      "data-canvas-evidence-accepted": "true",
+      "data-canvas-boxes": "21",
+      "data-canvas-labels": "6",
+      "data-canvas-hidden-labels": "",
+      "data-canvas-diagnostic-errors": ""
+    },
+    "screenshot": "GK-S09-real-candidate.png",
+    "screenshotSha256": "fc09ca9a36129f74fc3c260e6dbe39ba745dc695c772597b319db5f1001cd279",
+    "separateBrowserImport": true,
+    "nativeDelivery": "not_measured"
+  },
+  "cases": [
+    {
+      "id": "GK-S01",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9523,
+        "inputTokens": 2571,
+        "outputTokens": 366,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053145
+      }
+    },
+    {
+      "id": "GK-S02",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9594,
+        "inputTokens": 2601,
+        "outputTokens": 330,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005335799999999999
+      }
+    },
+    {
+      "id": "GK-S03",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 2,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 2,
+        "inputBytes": 19984,
+        "inputTokens": 5396,
+        "outputTokens": 353,
+        "usageEvents": 2,
+        "conservativeUsd": 0.0109104
+      }
+    },
+    {
+      "id": "GK-S04",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9505,
+        "inputTokens": 2559,
+        "outputTokens": 202,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005309100000000001
+      }
+    },
+    {
+      "id": "GK-S05",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 5,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_solid"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "query_measurement"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "query_measurement"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "query_measurement"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "query_measurement"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_solid",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 27,
+          "candidateHashChanged": false,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "query_measurement",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 27,
+          "primitiveCountAfter": 27,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "query_measurement",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 27,
+          "primitiveCountAfter": 27,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "query_measurement",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 27,
+          "primitiveCountAfter": 27,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "query_measurement",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 27,
+          "primitiveCountAfter": 27,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 5,
+        "inputBytes": 56331,
+        "inputTokens": 15973,
+        "outputTokens": 414,
+        "usageEvents": 5,
+        "conservativeUsd": 0.029187299999999996
+      }
+    },
+    {
+      "id": "GK-S06",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9510,
+        "inputTokens": 2566,
+        "outputTokens": 271,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053106
+      }
+    },
+    {
+      "id": "GK-S07",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9567,
+        "inputTokens": 2584,
+        "outputTokens": 216,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053276999999999995
+      }
+    },
+    {
+      "id": "GK-S08",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 2,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_solid"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_solid",
+          "resultStatus": "blocked",
+          "blockerCode": "symbol_source_missing",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "symbol_source_missing"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 2,
+        "inputBytes": 19925,
+        "inputTokens": 5480,
+        "outputTokens": 510,
+        "usageEvents": 2,
+        "conservativeUsd": 0.010892699999999998
+      }
+    },
+    {
+      "id": "GK-S09",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 3,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_equal_edge_triangular_prism"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_circumsphere"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "finish_candidate"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_equal_edge_triangular_prism",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 21,
+          "candidateHashChanged": false,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_circumsphere",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 21,
+          "primitiveCountAfter": 22,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "finish_candidate",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 22,
+          "primitiveCountAfter": 22,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": null,
+      "contractStatus": "passed",
+      "candidateSet": [
+        {
+          "scopeId": "shared",
+          "candidateHash": "6e7fecf1adb35e44909fc416a44e41f9c623c53d4fcbed11e1ff758d972bbe52",
+          "certificateStatus": "passed",
+          "failedCount": 0
+        }
+      ],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 3,
+        "inputBytes": 31002,
+        "inputTokens": 8516,
+        "outputTokens": 242,
+        "usageEvents": 3,
+        "conservativeUsd": 0.016673399999999998
+      }
+    },
+    {
+      "id": "JT-S01",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9655,
+        "inputTokens": 2607,
+        "outputTokens": 289,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053541000000000005
+      }
+    },
+    {
+      "id": "JT-S02",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9653,
+        "inputTokens": 2607,
+        "outputTokens": 451,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053535
+      }
+    },
+    {
+      "id": "JT-S03",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9547,
+        "inputTokens": 2574,
+        "outputTokens": 284,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053216999999999995
+      }
+    },
+    {
+      "id": "JT-S04",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9669,
+        "inputTokens": 2610,
+        "outputTokens": 562,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005358299999999999
+      }
+    },
+    {
+      "id": "JT-S05",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9588,
+        "inputTokens": 2583,
+        "outputTokens": 279,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005334
+      }
+    },
+    {
+      "id": "JT-S06",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9499,
+        "inputTokens": 2560,
+        "outputTokens": 275,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005307299999999999
+      }
+    },
+    {
+      "id": "JT-S07",
+      "inputMode": "text_with_figure_reference",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9538,
+        "inputTokens": 2574,
+        "outputTokens": 309,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005319
+      }
+    },
+    {
+      "id": "JT-S08",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9588,
+        "inputTokens": 2587,
+        "outputTokens": 207,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005334
+      }
+    },
+    {
+      "id": "JT-S09",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9515,
+        "inputTokens": 2560,
+        "outputTokens": 184,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053121
+      }
+    },
+    {
+      "id": "GK-P01",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "declare_entity",
+            "declare_entity",
+            "declare_entity"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [],
+      "firstFailure": {
+        "boundary": "tool_protocol",
+        "code": "telemetry_missing"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "runner_error",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9524,
+        "inputTokens": 2574,
+        "outputTokens": 197,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005314799999999999
+      }
+    },
+    {
+      "id": "GK-P02",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 8,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 6,
+          "toolNames": [
+            "construct_segment"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 7,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 8,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": false,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 4,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 6,
+          "actionIndex": 6,
+          "toolName": "construct_segment",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 4,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 7,
+          "actionIndex": 7,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 5,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 8,
+          "actionIndex": 8,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 5,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 8,
+        "inputBytes": 98200,
+        "inputTokens": 28831,
+        "outputTokens": 907,
+        "usageEvents": 8,
+        "conservativeUsd": 0.0491208
+      }
+    },
+    {
+      "id": "GK-P03",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 7,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "choose_strategy"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "declare_entity"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "declare_entity"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 6,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 7,
+          "toolNames": [
+            "construct_point",
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "choose_strategy",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "declare_entity",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "declare_entity",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 6,
+          "actionIndex": 6,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 7,
+        "inputBytes": 83739,
+        "inputTokens": 23594,
+        "outputTokens": 689,
+        "usageEvents": 7,
+        "conservativeUsd": 0.0423249
+      }
+    },
+    {
+      "id": "GK-P04",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9535,
+        "inputTokens": 2588,
+        "outputTokens": 165,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0053181
+      }
+    },
+    {
+      "id": "GK-P05",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_point",
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [],
+      "firstFailure": {
+        "boundary": "tool_protocol",
+        "code": "telemetry_missing"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9724,
+        "inputTokens": 2681,
+        "outputTokens": 196,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005374799999999999
+      }
+    },
+    {
+      "id": "GK-P06",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic",
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [],
+      "firstFailure": {
+        "boundary": "tool_protocol",
+        "code": "telemetry_missing"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9649,
+        "inputTokens": 2631,
+        "outputTokens": 197,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005352299999999999
+      }
+    },
+    {
+      "id": "GK-P07",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9588,
+        "inputTokens": 2622,
+        "outputTokens": 231,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005334
+      }
+    },
+    {
+      "id": "GK-P08",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 2,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 2,
+        "inputBytes": 19740,
+        "inputTokens": 5447,
+        "outputTokens": 438,
+        "usageEvents": 2,
+        "conservativeUsd": 0.010837199999999998
+      }
+    },
+    {
+      "id": "GK-P09",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "request_clarification"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "request_clarification",
+          "resultStatus": "blocked",
+          "blockerCode": "needs_clarification",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "needs_clarification"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9452,
+        "inputTokens": 2569,
+        "outputTokens": 127,
+        "usageEvents": 1,
+        "conservativeUsd": 0.0052932
+      }
+    },
+    {
+      "id": "JT-P01",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 10,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 6,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 7,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 8,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 9,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 10,
+          "toolNames": [
+            "construct_perpendicular"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "construct_point",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 6,
+          "actionIndex": 6,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 4,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 7,
+          "actionIndex": 7,
+          "toolName": "construct_point",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 4,
+          "primitiveCountAfter": 4,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 8,
+          "actionIndex": 8,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 4,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 9,
+          "actionIndex": 9,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 5,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 10,
+          "actionIndex": 10,
+          "toolName": "construct_perpendicular",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 5,
+          "primitiveCountAfter": 5,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "budget_exhausted",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 10,
+        "inputBytes": 131103,
+        "inputTokens": 37900,
+        "outputTokens": 1057,
+        "usageEvents": 10,
+        "conservativeUsd": 0.06390689999999999
+      }
+    },
+    {
+      "id": "JT-P02",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 3,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_point",
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 3,
+        "inputBytes": 31242,
+        "inputTokens": 8679,
+        "outputTokens": 398,
+        "usageEvents": 3,
+        "conservativeUsd": 0.0167454
+      }
+    },
+    {
+      "id": "JT-P03",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 2,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 2,
+        "inputBytes": 19943,
+        "inputTokens": 5418,
+        "outputTokens": 202,
+        "usageEvents": 2,
+        "conservativeUsd": 0.0108981
+      }
+    },
+    {
+      "id": "JT-P04",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 2,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 2,
+        "inputBytes": 20295,
+        "inputTokens": 5520,
+        "outputTokens": 270,
+        "usageEvents": 2,
+        "conservativeUsd": 0.011003699999999998
+      }
+    },
+    {
+      "id": "JT-P05",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 10,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 6,
+          "toolNames": [
+            "add_relation"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 7,
+          "toolNames": [
+            "add_relation"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 8,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 9,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 10,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "construct_point",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 6,
+          "actionIndex": 6,
+          "toolName": "add_relation",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 7,
+          "actionIndex": 7,
+          "toolName": "add_relation",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 8,
+          "actionIndex": 8,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 9,
+          "actionIndex": 9,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 10,
+          "actionIndex": 10,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 10,
+        "inputBytes": 131532,
+        "inputTokens": 38177,
+        "outputTokens": 797,
+        "usageEvents": 10,
+        "conservativeUsd": 0.0640356
+      }
+    },
+    {
+      "id": "JT-P06",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 4,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "choose_strategy"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "construct_point",
+            "construct_point",
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "choose_strategy",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "construct_conic",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 4,
+        "inputBytes": 43143,
+        "inputTokens": 12109,
+        "outputTokens": 659,
+        "usageEvents": 4,
+        "conservativeUsd": 0.0227733
+      }
+    },
+    {
+      "id": "JT-P07",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_conic",
+            "construct_point",
+            "construct_point",
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [],
+      "firstFailure": {
+        "boundary": "tool_protocol",
+        "code": "telemetry_missing"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9658,
+        "inputTokens": 2606,
+        "outputTokens": 434,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005355
+      }
+    },
+    {
+      "id": "JT-P08",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 1,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "construct_point",
+            "construct_point",
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [],
+      "firstFailure": {
+        "boundary": "tool_protocol",
+        "code": "telemetry_missing"
+      },
+      "contractStatus": "not_measured",
+      "candidateSet": [],
+      "runnerErrorCode": "mixed_read_plan",
+      "nativeRenderStatus": "not_measured",
+      "nativeCommitStatus": "not_measured",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 1,
+        "inputBytes": 9568,
+        "inputTokens": 2589,
+        "outputTokens": 224,
+        "usageEvents": 1,
+        "conservativeUsd": 0.005328
+      }
+    },
+    {
+      "id": "JT-P09",
+      "inputMode": "text_only",
+      "figureProvided": false,
+      "requests": 9,
+      "transport": [
+        {
+          "index": 1,
+          "toolNames": [
+            "query_constraint_status"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 2,
+          "toolNames": [
+            "construct_conic"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 3,
+          "toolNames": [
+            "construct_circle"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 4,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 5,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 6,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 7,
+          "toolNames": [
+            "construct_point"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 8,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        },
+        {
+          "index": 9,
+          "toolNames": [
+            "construct_line"
+          ],
+          "responseKind": "tool_calls",
+          "usageKnown": true
+        }
+      ],
+      "actionReceipts": [
+        {
+          "requestIndex": 1,
+          "actionIndex": 1,
+          "toolName": "query_constraint_status",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 2,
+          "actionIndex": 2,
+          "toolName": "construct_conic",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 0,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 3,
+          "actionIndex": 3,
+          "toolName": "construct_circle",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 0,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 4,
+          "actionIndex": 4,
+          "toolName": "construct_point",
+          "resultStatus": "repairable",
+          "blockerCode": "missing_required_parameter",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 1,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 5,
+          "actionIndex": 5,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 1,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 6,
+          "actionIndex": 6,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 2,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 7,
+          "actionIndex": 7,
+          "toolName": "construct_point",
+          "resultStatus": "accepted",
+          "primitiveCountBefore": 2,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": true,
+          "stateChanged": true,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 8,
+          "actionIndex": 8,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": true
+        },
+        {
+          "requestIndex": 9,
+          "actionIndex": 9,
+          "toolName": "construct_line",
+          "resultStatus": "repairable",
+          "blockerCode": "undeclared_entity_ref",
+          "primitiveCountBefore": 3,
+          "primitiveCountAfter": 3,
+          "candidateHashChanged": false,
+          "stateChanged": false,
+          "feedbackDelivered": false
+        }
+      ],
+      "firstFailure": {
+        "boundary": "schema",
+        "code": "missing_required_parameter"
+      },
+      "contractStatus": "failed",
+      "candidateSet": [],
+      "runnerErrorCode": null,
+      "nativeRenderStatus": "pending",
+      "nativeCommitStatus": "pending",
+      "mainCanvasWrites": "not_measured",
+      "usage": {
+        "requests": 9,
+        "inputBytes": 112997,
+        "inputTokens": 31986,
+        "outputTokens": 705,
+        "usageEvents": 9,
+        "conservativeUsd": 0.056017500000000005
+      }
+    }
+  ]
+}
