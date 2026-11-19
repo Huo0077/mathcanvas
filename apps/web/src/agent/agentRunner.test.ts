@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createEmptyDocument } from "@draw/dsl"
 import drawingContracts36 from "../../../../test-fixtures/reliability/drawing-contracts-36.json"
-import { DS_INTENT_SCHEMA_VERSION, type PlanEnvelope, type PlannerPort, type PlanRequest } from "@draw/agent-core"
+import { canonicalContentHash, DS_INTENT_SCHEMA_VERSION, type PlanEnvelope, type PlannerPort, type PlanRequest } from "@draw/agent-core"
 
 import { useAgentStore } from "../agentStore"
 import { conversationRepository, MAX_SUMMARY_CHARS, setConversationRepository } from "../conversationRepository"
@@ -942,6 +942,86 @@ describe("the model-backed planner", () => {
     expect(draft?.candidate.primitives.some((p) => p.type === "sphere")).toBe(true)
     expect(runner.confirm().status).toBe("committed")
     expect(useSceneStore.getState().document.primitives.some((p) => p.type === "sphere")).toBe(true)
+  })
+
+  it("exposes an auditable product delivery receipt for a ds_action candidate without pre-confirm canvas writes", async () => {
+    const prompt = drawingContracts36.cases.find((item) => item.id === "GK-S09")!.prompt
+    const baseline = useSceneStore.getState().document
+    const baselineHash = canonicalContentHash(baseline)
+    const baselineHistory = useSceneStore.getState().history.length
+    let modelCalls = 0
+    let mainCanvasWrites = 0
+    const deliveryEvents: unknown[] = []
+    const originalCommit = useSceneStore.getState().commitCandidate
+    useSceneStore.setState({ commitCandidate: (candidate) => { mainCanvasWrites += 1; originalCommit(candidate) } })
+    const runner = createAgentRunner({ onDeliveryEvidence: (event) => deliveryEvents.push(event), modelPlanner: {
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        modelCalls += 1
+        const sequence = [
+          { toolId: "construct_equal_edge_triangular_prism", input: { id: "prism", displayScale: 2, vertexNames: ["A", "B", "C", "A1", "B1", "C1"] } },
+          { toolId: "construct_circumsphere", input: { id: "sphere", solidId: "prism" } },
+          { toolId: "finish_candidate", input: { goal: "right triangular prism and circumsphere" } }
+        ] as const
+        const selected = sequence[Math.min(modelCalls - 1, sequence.length - 1)]!
+        return { ok: true, events: [{ kind: "tool_call" as const, requestId: `r-${modelCalls}`, attemptId: `a-${modelCalls}`,
+          toolCallId: `tc-${modelCalls}`, toolId: selected.toolId, input: selected.input }] }
+      }
+    } })
+    try {
+      const result = await runAndWait(runner, prompt)
+      expect(result.phase).toBe("awaiting_confirmation")
+      const draft = runner.getActiveDraftCandidate()
+      expect(draft).not.toBeNull()
+      const candidateHash = canonicalContentHash(draft!.candidate)
+      const previewHash = useAgentStore.getState().activeConversation!.messages.at(-1)?.draft?.previewHash
+      expect(previewHash).toBe(candidateHash)
+      expect(mainCanvasWrites).toBe(0)
+      expect(deliveryEvents).toEqual([expect.objectContaining({ phase: "awaiting_confirmation", runId: draft!.runId, draftId: draft!.draftId, candidateHash, agentWrites: 0, sceneHash: baselineHash })])
+      expect(canonicalContentHash(useSceneStore.getState().document)).toBe(baselineHash)
+      expect(useSceneStore.getState().history).toHaveLength(baselineHistory)
+      const receipt = runner.confirm(draft!.runId)
+      expect(receipt.status).toBe("committed")
+      expect(mainCanvasWrites).toBe(1)
+      expect(canonicalContentHash(useSceneStore.getState().document)).toBe(candidateHash)
+      expect(useSceneStore.getState().history).toHaveLength(baselineHistory + 1)
+      expect(runner.confirm(draft!.runId).status).toBe("rejected")
+      expect(mainCanvasWrites).toBe(1)
+    } finally {
+      useSceneStore.setState({ commitCandidate: originalCommit })
+    }
+  })
+
+  it("ignores a throwing delivery observer without auto-confirming or suppressing a valid user commit", async () => {
+    const runner = createAgentRunner({ onDeliveryEvidence: () => { throw new Error("observer should not control consent") },
+      modelPlanner: { ...selectedProvider, runModel: async () => modelText(cubeEnvelope(3)) } })
+    expect((await runAndWait(runner, "建一个棱长 3 的立方体")).phase).toBe("awaiting_confirmation")
+    expect(useSceneStore.getState().document.primitives).toHaveLength(0)
+    expect(runner.confirm().status).toBe("committed")
+    expect(useSceneStore.getState().document.primitives.length).toBeGreaterThan(0)
+  })
+
+  it("records a rejected stale candidate without claiming a product commit or creating extra agent writes", async () => {
+    const events: import("./agentRunner").AgentDeliveryEvidence[] = []
+    const runner = createAgentRunner({ onDeliveryEvidence: (event) => events.push(event),
+      modelPlanner: { ...selectedProvider, runModel: async () => modelText(cubeEnvelope(3)) } })
+    expect((await runAndWait(runner, "建一个棱长 3 的立方体")).phase).toBe("awaiting_confirmation")
+    const draft = runner.getActiveDraftCandidate()!
+    expect(events).toHaveLength(1)
+    const changed = createEmptyDocument("geometry3d")
+    changed.primitives.push({ id: "user-point", type: "point3", label: "U", position: { x: 0, y: 0, z: 0 } })
+    useSceneStore.getState().replace(changed)
+    const outcome = runner.confirm(draft.runId)
+    expect(outcome.status).not.toBe("committed")
+    expect(events).toHaveLength(2)
+    expect(events[1]).toMatchObject({ phase: "confirmation_result", status: outcome.status,
+      candidateHash: canonicalContentHash(draft.candidate), agentWritesBeforeConfirmation: 0, agentWritesAfterConfirmation: 0,
+      actualDocumentHash: canonicalContentHash(useSceneStore.getState().document) })
+    expect(events[1]).not.toMatchObject({ actualDocumentHash: canonicalContentHash(draft.candidate) })
   })
 
   it("sends the prompt to the selected profile and turns its JSON into a real, confirmable draft", async () => {

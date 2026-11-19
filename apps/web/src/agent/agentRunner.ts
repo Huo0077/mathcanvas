@@ -413,6 +413,15 @@ function prepareWorkspaceFor(plan: PlanEnvelope): { ok: true; switched?: boolean
  * 就得有一个会说假设的规划器，而本地确定性规划器**从不声明假设**（它产出的是固定动作）。
  * 生产路径不传它，用的仍是下面 `selectPlanner` 自动选出来的那一份。
  */
+/** Optional, sanitized product delivery observations. This is not a model success certificate. */
+export type AgentDeliveryEvidence =
+  | { readonly phase: "awaiting_confirmation"; readonly runId: string; readonly draftId: string;
+      readonly candidateHash: string; readonly agentWrites: number; readonly sceneHash: string }
+  | { readonly phase: "confirmation_result"; readonly runId: string; readonly draftId: string;
+      readonly candidateHash: string; readonly status: CommitOutcome["status"];
+      readonly agentWritesBeforeConfirmation: number; readonly agentWritesAfterConfirmation: number;
+      readonly sceneHashBeforeConfirmation: string; readonly actualDocumentHash: string }
+
 export interface AgentRunnerDependencies {
   planner?: PlannerPort
   /**
@@ -423,6 +432,8 @@ export interface AgentRunnerDependencies {
    * "选中了模型服务就用模型"这条判据只能靠人去点。
    */
   modelPlanner?: ModelPlannerDependencies
+  /** Opt-in native audit hook; exceptions here never change commit/consent behavior. */
+  onDeliveryEvidence?: (event: AgentDeliveryEvidence) => void
 }
 
 /**
@@ -466,7 +477,12 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 会提交 **B** 的草稿，并把回执与事实写进 B（规格 §5.4 要的正是"确认时检查会话"）。
    * 现在每一轮都留着它自己的运行时与落点，界面上那块面板说哪一轮就确认哪一轮。
    */
-  const runs = new Map<string, { runtime: AgentRuntime; commit: PendingCommit }>()
+  const runs = new Map<string, { runtime: AgentRuntime; commit: PendingCommit;
+    delivery: { candidateHash: string | null; draftId: string | null; agentWrites: number } }>()
+  const emitDelivery = (event: AgentDeliveryEvidence) => {
+    try { dependencies.onDeliveryEvidence?.(event) }
+    catch { useAgentStore.getState().recordDiagnostic("[delivery] observer failed; commit unchanged", event.runId) }
+  }
   /** 最近一轮（老调用方不传 `runId` 时用它）。 */
   let lastRunId: string | null = null
 
@@ -477,7 +493,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
    * 另外，会话必须还是**当前**会话：面板挂在 A 的对话记录里，用户看得见它，
    * 而"当前会话"是 A 才算数（规格 §5.4 的会话检查）。
    */
-  function resolveRun(runId?: string): { runtime: AgentRuntime; commit: PendingCommit } | null {
+  function resolveRun(runId?: string): { runtime: AgentRuntime; commit: PendingCommit; delivery: { candidateHash: string | null; draftId: string | null; agentWrites: number } } | null {
     const id = runId ?? lastRunId
     if (id === null) return null
     const entry = runs.get(id)
@@ -574,6 +590,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       }
       // 这一轮的提交落点（运行结束之后确认时才用得上）。
       const commit: PendingCommit | null = pinned ? { runId, conversationId: pinned.conversationId, promptMessageId, messageId: pinned.messageId, createdObjects: [] } : null
+      const delivery = { candidateHash: null as string | null, draftId: null as string | null, agentWrites: 0 }
       const unresolved = imageEvidence?.uncertainties.filter((item, index) => item.impact !== "appearance" && !imageEvidence.reviewed.includes(index)) ?? []
       const unconfirmedCount = imageEvidence?.unconfirmedObservations ?? 0
       const selection: PlannerSelection = unresolved.length === 0 && unconfirmedCount === 0 ? await selectPlanner(prompt, imageNotes, eventRunId) : {
@@ -612,7 +629,11 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // 每次现取：句柄里的内容哈希就是 Compare-and-Swap 的依据。
         readDocument: () => useSceneStore.getState().document,
         // 提交成功后落盘。用 `commitCandidate`（压一步历史）而不是 `replace`（清历史）。
-        writeDocument: (candidate) => useSceneStore.getState().commitCandidate(candidate),
+        writeDocument: (candidate) => {
+          const beforeHash = canonicalContentHash(useSceneStore.getState().document)
+          useSceneStore.getState().commitCandidate(candidate)
+          if (canonicalContentHash(useSceneStore.getState().document) !== beforeHash) delivery.agentWrites += 1
+        },
         readSceneDocuments: () => {
           const live = useSceneStore.getState().document
           return [{ handle: handleOf(live), document: live }]
@@ -667,7 +688,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        * 登记之后，"确认/丢弃/停止"都能指回**用户点的那一轮**。
        */
       if (commit) {
-        runs.set(runId, { runtime: active, commit })
+        runs.set(runId, { runtime: active, commit, delivery })
         lastRunId = runId
       }
 
@@ -845,6 +866,11 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // 这次**创建出来的对象 id**（候选文档 vs 当前文档的差集）：提交成功之后它们要进事实。
         // **只取 id**：候选文档本身一个字节都不离开这一层。
         if (commit && preview.ok) {
+          delivery.candidateHash = canonicalContentHash(preview.artifact.candidate)
+          delivery.draftId = draftId
+          emitDelivery({ phase: "awaiting_confirmation", runId: commit.runId, draftId,
+            candidateHash: delivery.candidateHash, agentWrites: delivery.agentWrites,
+            sceneHash: canonicalContentHash(useSceneStore.getState().document) })
           const before = new Set(useSceneStore.getState().document.primitives.map((primitive) => primitive.id))
           commit.createdObjects = createdEntitiesOf(preview.artifact.candidate, before).slice(0, 24)
         }
@@ -1010,8 +1036,16 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
        */
       const entry = resolveRun(runId)
       if (!entry) return { status: "rejected", detail: runId === undefined ? "there is no run to confirm" : `run ${runId} is not waiting for a confirmation in the active conversation` }
-      const { runtime: run, commit } = entry
+      const { runtime: run, commit, delivery } = entry
+      const agentWritesBeforeConfirmation = delivery.agentWrites
+      const sceneHashBeforeConfirmation = canonicalContentHash(useSceneStore.getState().document)
       const outcome = run.confirmDraft()
+      if (delivery.candidateHash !== null && delivery.draftId !== null) emitDelivery({
+        phase: "confirmation_result", runId: commit.runId, draftId: delivery.draftId,
+        candidateHash: delivery.candidateHash, status: outcome.status,
+        agentWritesBeforeConfirmation, agentWritesAfterConfirmation: delivery.agentWrites,
+        sceneHashBeforeConfirmation, actualDocumentHash: canonicalContentHash(useSceneStore.getState().document)
+      })
       /**
        * **把"确认之后"那几步也回流进账本**（外部审查 A4）。
        *
