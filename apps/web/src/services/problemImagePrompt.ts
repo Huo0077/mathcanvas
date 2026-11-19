@@ -29,6 +29,7 @@ interface ImageEvidence {
   uncertainties: ImageReadingItem[]
   reviewed: number[]
   revision?: string
+  imageHashes?: string[]
   confirmations?: ConfirmedObservationProof[]
   unconfirmedObservations?: number
 }
@@ -71,13 +72,16 @@ export function imagePrompt(
   observations: readonly string[] | ProblemImageReading,
   reviewed: readonly number[] = [],
   confirmedLines: readonly number[] = [],
-  reviewMeta?: { revision?: string }
+  reviewMeta?: { revision?: string; imageHashes?: readonly string[] }
 ): string {
   const prompt = [problem.trim(), instructions.trim()].filter(Boolean).join("\n")
   if ("diagram" in observations) {
     const graphChoice = isGraphChoiceProblem(observations.problem)
-    const revision = computeReadingRevision(observations, problem)
-    const revisionValid = reviewMeta?.revision === undefined || reviewMeta.revision === revision
+    const imageHashes = reviewMeta?.imageHashes
+    const validImageHashes = imageHashes === undefined ||
+      (imageHashes.length >= 1 && imageHashes.length <= MAX_PROBLEM_IMAGES && imageHashes.every(hash => /^[a-f0-9]{64}$/.test(hash)))
+    const revision = computeReadingRevision(observations, problem, imageHashes)
+    const revisionValid = validImageHashes && (reviewMeta?.revision === undefined || reviewMeta.revision === revision)
     const effectiveReviewed = revisionValid ? [...reviewed] : []
     const effectiveConfirmed = revisionValid ? confirmedLines : []
     const duplicateIds = findDuplicateObservationIds(observations.diagram)
@@ -112,6 +116,7 @@ export function imagePrompt(
         : item),
       reviewed: effectiveReviewed,
       revision,
+      ...(validImageHashes && imageHashes !== undefined ? { imageHashes: [...imageHashes] } : {}),
       ...(confirmations.length > 0 ? { confirmations } : {})
     }
     return prompt + DIAGRAM_SECTION + JSON.stringify(evidence)
@@ -153,6 +158,11 @@ function readEvidence(notes: string): ImageEvidence | null {
     })
 
     const revision = typeof value.revision === "string" && value.revision.length > 0 ? value.revision : undefined
+    const imageHashes = value.imageHashes === undefined ? undefined :
+      Array.isArray(value.imageHashes) && value.imageHashes.length >= 1 && value.imageHashes.length <= MAX_PROBLEM_IMAGES &&
+        value.imageHashes.every((hash: unknown) => typeof hash === "string" && /^[a-f0-9]{64}$/.test(hash))
+        ? value.imageHashes as string[] : null
+    if (imageHashes === null) return null
     return {
       version: 1,
       transcriptEdited: value.transcriptEdited,
@@ -160,6 +170,7 @@ function readEvidence(notes: string): ImageEvidence | null {
       uncertainties,
       reviewed: value.reviewed,
       ...(revision === undefined ? {} : { revision }),
+      ...(imageHashes === undefined ? {} : { imageHashes }),
       ...(confirmations.length === 0 ? {} : { confirmations }),
       ...(unconfirmedObservations === 0 ? {} : { unconfirmedObservations })
     }

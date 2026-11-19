@@ -73,6 +73,22 @@ it("R07-B: invalidates prior confirmations when problem text changes or duplicat
   expect(edited.imageNotes).not.toContain("PA⊥BD")
 })
 
+it("binds reviewed diagram observations to the exact PNG digest, not only transcribed text", () => {
+  const reading = { problem: "Draw the diagram as shown.",
+    diagram: [{ id: "edge", text: "AB is a solid line", image: 1, box: [0.1, 0.1, 0.8, 0.2] as [number, number, number, number] }],
+    uncertainties: [] }
+  const firstImage = "1".repeat(64)
+  const replacementImage = "2".repeat(64)
+  const approved = computeReadingRevision(reading, reading.problem, [firstImage])
+  const stale = computeReadingRevision(reading, reading.problem, [replacementImage])
+  expect(stale).not.toBe(approved)
+  const same = splitImagePrompt(imagePrompt(reading.problem, "", reading, [], [0], { revision: approved, imageHashes: [firstImage] }))
+  expect(same.imageEvidence?.diagram.map(item => item.text)).toEqual(["AB is a solid line"])
+  expect(same.imageEvidence?.imageHashes).toEqual([firstImage])
+  const swapped = splitImagePrompt(imagePrompt(reading.problem, "", reading, [], [0], { revision: approved, imageHashes: [replacementImage] }))
+  expect(swapped.imageEvidence?.diagram).toEqual([])
+})
+
 it("R07-B: enforces confirmation gate at prompt parsing / agentRunner even against crafted unconfirmed diagram payloads", async () => {
   const crafted = [
     "如图，在几何体中求角。",

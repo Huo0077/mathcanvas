@@ -57,9 +57,10 @@ export function findDuplicateObservationIds(items: readonly ImageReadingItem[]):
   return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id))
 }
 
-export function computeReadingRevision(reading: ProblemImageReading, problemText?: string): string {
+export function computeReadingRevision(reading: ProblemImageReading, problemText?: string, imageHashes: readonly string[] = []): string {
   return fnv1a64(JSON.stringify({
     problem: (problemText ?? reading.problem).trim(),
+    imageHashes,
     diagram: reading.diagram.map(item => ({
       id: item.id ?? null,
       kind: item.kind ?? null,

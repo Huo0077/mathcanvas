@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type MouseEvent } from "react"
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react"
+import { sha256HexBytes } from "@draw/agent-core"
 
 import { cropProblemImage, MAX_PROBLEM_IMAGES, prepareProblemImage, type ProblemImage } from "../../services/problemImageFiles"
 import { imageReadingText, listImageReaders, readProblemImages, type ImageBox, type ProblemImageReading } from "../../services/problemImageReader"
@@ -193,7 +194,10 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
   const missingChoices = graphChoice ? missingGraphChoices(graphSupplement) : []
   const graphReady = !graphChoice || (missingChoices.length === 0 && graphReviewed)
   const duplicateObservationIds = reading ? findDuplicateObservationIds(reading.diagram) : new Set<string>()
-  const readingRevision = reading ? computeReadingRevision(reading, problem) : undefined
+  const imageHashes = useMemo(() => images.map(image => sha256HexBytes(
+    Uint8Array.from(atob(image.png), character => character.charCodeAt(0))
+  )), [images])
+  const readingRevision = reading ? computeReadingRevision(reading, problem, imageHashes) : undefined
   const needsReview = reading?.uncertainties.some((item, index) => item.impact !== "appearance" && !reviewed.includes(index)) ?? false
   const canUse = Boolean(problem.trim() || draft.value.trim()) && !/\[看不清\]|【看不清】|［看不清］/.test(problem)
     && !needsReview && !manualCrop && graphReady && (vectorReadings === 0 || hasVectorSupplement(vectorSupplement, vectorReadings))
@@ -209,7 +213,7 @@ export function ProblemImageComposer({ draft, onSend, busy, initialOpen = false 
         graphChoice ? `图形选项（用户核对）：\n${graphSupplement.trim()}` : "",
         draft.value
       ].filter(Boolean).join("\n")
-      const accepted = await onSend(imagePrompt(problem, instructions, reading, reviewed, confirmedLines, { revision: readingRevision }))
+      const accepted = await onSend(imagePrompt(problem, instructions, reading, reviewed, confirmedLines, { revision: readingRevision, imageHashes }))
       if (!accepted) throw new Error("题图识别结果未能发送，内容已保留，可以重试。")
       draft.onChange("")
       resetReading()

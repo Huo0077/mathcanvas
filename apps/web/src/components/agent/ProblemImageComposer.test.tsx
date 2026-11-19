@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
+import { sha256HexBytes } from "@draw/agent-core"
 import { splitImagePrompt } from "../../services/problemImagePrompt"
 import * as problemImageFiles from "../../services/problemImageFiles"
 import * as problemImageReader from "../../services/problemImageReader"
@@ -63,6 +64,9 @@ it("R07-B composer requires confirmation for disguised relations, blocks duplica
   fireEvent.click(screen.getByRole("button", { name: "发送给 Agent" }))
   await waitFor(() => expect(sentPayloads).toHaveLength(1))
   expect(splitImagePrompt(sentPayloads[0]).imageEvidence?.diagram.map(item => item.text)).toEqual(["高度 2"])
+  expect(splitImagePrompt(sentPayloads[0]).imageEvidence?.imageHashes).toEqual([
+    sha256HexBytes(Uint8Array.from(atob("iVBORw0KGgo="), character => character.charCodeAt(0)))
+  ])
 
   // Confirm relation, then edit the problem text -> old confirmation must be cleared.
   fireEvent.click(relationCheckbox)

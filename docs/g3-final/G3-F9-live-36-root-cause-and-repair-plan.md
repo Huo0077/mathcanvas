@@ -16,7 +16,7 @@
 | P1 引用/状态 | 9题有中间图元，只有 GK-S09 完成 `finish_candidate`；GK-P02 部分构造后 `undeclared_entity_ref`；`dsActionTools.ts:1073-1115,1182-1245` | 数量上涨不等于题意满足。需要输出模型可读的命名实体表和可解析引用，避免丢失已构造实体；不把失败对象偷偷补造成“正确”。 |
 | P1 过早澄清 | 17题首次 `needs_clarification`；13图题中12题澄清，23纯文字题中也有8题澄清；`dsActionTools.ts:1331` | 图题缺图应诚实澄清；纯文字澄清是否过早仍需逐题核查题意/必需条件，**不能直接禁止澄清让模型瞎猜**。 |
 | P1 答案真实性 | `dsActionTools.ts:1285-1330` 的 `finish_candidate` 对特定符号棱柱/球自动塞入固定面积答案 | GK-S09 的合同/图像确实通过，但**不能单凭此案例宣称 DS 自主推导了答案**。图像与答案分别验收；考虑剥离硬编码、让独立内核计算并标注来源。 |
-| P2 原图/多模态 | `modelClient.ts:20-27` 支持 `images?:string[]`，Rust `request.rs:394-407` 能打包 `image_url`；但 `modelPlanner.ts:542-553` 仅发送 `content` 文本，整题 runner 的 `confirmedFigureRefs` 未送图；本轮13题无原图 | 此批只能测文字代用品。后续应补来源可追溯的题图、校验能力、区域引用与图文同时输入；不能伪造/凭原图外的典型示意图代替。 |
+| P2 原图/多模态 | `modelClient.ts:20-27` 支持 `images?:string[]`，Rust `request.rs:394-407` 能打包 `image_url`；但 `modelPlanner.ts:542-553` 仅发送 `content` 文本，整题 runner 的 `confirmedFigureRefs` 未送图；本轮13题无原图 | 此批只能测文字代用品。后续先补来源可追溯的题图、校验视觉能力及区域引用；现有原生闸拒绝 images+tools 同请求，必须走独立视觉读取→人工核对→文本动作，两者合一需另行验证，不能伪造/凭典型示意图代替。 |
 | P2 交付 | `g3DsFrozenCaseRunner.ts:606-614` 固定返回 `renderStatus/commitStatus=pending`；`agentRunner.ts:614,1012-1065` 有真实确认路径 | 当前 harness 不连接原生用户确认/写入计数，隔离浏览器导入不等于原生交付，端到端真实成功率**未证实**。 |
 
 > **分母纪律**：36题都发起模型请求；只有1题完成合同并通过，不等于“35题几何判错”。26题合同 `failed` 是未完成/澄清后的合同结果，9题 `not_measured` 没有合同判定；批次/题图类别会重叠，不能累加为36。合同成功 `1/36` 与原生确认交付成功（未测）必须并列报告。
@@ -25,7 +25,7 @@
 
 1. [DeepSeek Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)：官方示例要求保存模型工具调用并按 `tool_call_id` 回填工具结果；strict 工具模式目前标为 Beta，需 `/beta`、每工具 `strict:true`，对象属性均 required 且 `additionalProperties:false`，并存在不支持的 JSON Schema 关键字。**因此不能仅给现有24个自由对象加 `strict:true` 宣称 schema 已被服务端验证**；先逐族收敛非 strict schema，并单独协议验证 Beta 可行性。
 2. [DeepSeek Chat Completion API](https://api-docs.deepseek.com/api/create-chat-completion/)：工具响应有对应 ID；实现按完整工具调用组建模，逐 ID 回传结果，工具请求和 usage 必须按 provider 实际事件计数。对于同轮相互依赖动作，本项目需自定义事务语义，不得假定并行调用有先后依赖保证。
-3. [DeepSeek Vision](https://api-docs.deepseek.com/guides/vision/)：Flash 支持 PNG/JPEG/GIF/WebP 图像，可作为 Chat Completions 文本与 `image_url` 内容块；本项目的 `images` 通道可复用，但题图来源、能力验证、图像 token/请求体预算与人工核对仍需另建证据链。
+3. [DeepSeek Vision](https://api-docs.deepseek.com/guides/vision/)：Flash 支持 PNG/JPEG/GIF/WebP 图像，可作为 Chat Completions 文本与 `image_url` 内容块；独立视觉读取的 `images` 通道可复用；不代表当前产品 images+tools 能同请求使用。题图来源、能力验证、图像 token/请求体预算与人工核对仍需另建证据链。
 4. [DeepSeek Pricing](https://api-docs.deepseek.com/quick_start/pricing/)：`deepseek-v4-flash` 为旧别名，实由新 Flash 服务；该页当时公布峰值输入 cache-miss $0.30/百万 tokens、输出 $1.20/百万 tokens。评测前必须重新查官方价，保留 usage 与实际账单未知口径；本地预算保护不是服务端硬账单保证。
 
 外部项目/文档提供**协议约束**，不会代替本仓的几何合同与真实 DS 回执；不得以外部 demo 的通过率推断本产品效果。
@@ -70,15 +70,19 @@
 
 **B6 零费检查点（2026-11-19）**：移除 `finish_candidate` 对符号等棱三棱柱+外接球写死的面积答案；RED 证明它曾在模型未作答时自动出现，GREEN 后录制 GK-S09 作图合同/证书及画面仍过，证明原合同只要求画图、**不能证明模型答出球面积**。见[B6 审计](../audit/2026-11-19-g3-answer-provenance-b6/README.md)。今后图形与答案需分源归因和独立验收。
 
-### Block C — 真题原图输入与诚实澄清
+### Block C — 真题原图输入、来源绑定与诚实澄清（当前产品采用两阶段）
 
-**Files**：`test-fixtures/reliability/drawing-contracts-36.json` 的外部图像资产/清单（不要改原冻结题面哈希；新增独立 image-manifest+hash）、`modelPlanner.ts`、`modelClient.ts`、Rust `request.rs`、`g3DsFrozenCaseRunner.ts`；测试图像传输/标注与题图缺失闸。
+**决定性架构约束**：`apps/desktop/src-tauri/src/commands/providers.rs` 的 `run_provider_request` 当前明确拒绝请求同时带 `images` 与非空 `tools`。`problemImageReader.ts` 是独立视觉读取流程，不能把“`modelClient` 有 images 字段”直接解释为动作请求可读原图。供应商分别支持视觉和工具调用，**不等于**已证明同一 profile、同一原生请求支持二者组合；不得为提高通过率直接删除安全闸。
 
-- [ ] 核对13题原题图版权与来源、图像 SHA-256、区域/标注/点线关系人工确认；缺失项保持 `input_figure_missing`，该题**不可记完整图文通过**。不要生成“猜测原图”替代。
-- [ ] 在现有 `images` 通道加入用户已授权且 profile vision 经当前修订验证的原图；文本与图像同请求，Rust 按 `image_url` 发送；新增尺寸/请求体/图像 tokens 上界和脱敏引用，不在审计中落 base64/图片隐私内容。旧纯文字配置不偷偷换成视觉模型。
-- [ ] 明确 `clarification` 的原因：真正缺图/不可判定优先停，完整纯文字题因模型不会构图不应伪装“题面不完整”，保留诚实拒绝与人工复核。图文证据和文本代用成绩双列，不直接覆盖旧实验。
+**Files**：独立 `image-manifest`（不改冻结题面哈希）、`ProblemImageComposer.tsx`、`problemImageReview.ts`、`problemImagePrompt.ts`、视觉读取 profile/提供商、`g3DsFrozenCaseRunner.ts`；仅在组合请求获证实后才改 `providers.rs` 与动作工具适配器。
 
-**C0 非付费检查点（2026-11-18）**：真实图像尚未进入冻结题原生 DS 请求链，已在带合同入口对13题图题全部于网络前标记 `input_figure_missing` 并拒绝调用模型；仅传确认引用也不能代替图像字节。[C0 审计](../audit/2026-11-18-g3-f9-figure-input-c0/README.md)。**C 块未退出**：原题图来源、SHA、区域、vision 能力与图像预算仍缺，不把旧13题文字试验改写为图文成功。
+- [x] **C1 编码后题图哈希绑定（2026-11-19 局部完成）**：对产品实际送给视觉读取器的 PNG 字节（经统一缩放/转码后的图，不是原始上传文件）做 SHA-256，按图片顺序纳入阅读 revision 与审阅 evidence；同 OCR 文本换图时旧确认失效。此处哈希只绑定所读字节，不是原始文件来源或人工真实性证明；来源 SHA 仍待 C2。组件 RED/GREEN 与脱敏审计见 [C1 审计](../audit/2026-11-19-g3-figure-digest-c1/README.md)。
+- [ ] **C2 原题资产**：逐题找回13题的合法原题图与来源、原始文件 SHA/尺寸/页码/区域坐标、题面匹配人工签字；仓内产品生成 PNG 不是原题图。缺图/来源不明保持 `input_figure_missing`，不得拿 AI 复刻图或典型示意图顶替。
+- [ ] **C3 两阶段证据协议**：先选 vision 已验证且修订未变的 profile，通过无工具图片请求获得逐区域结构化观察；人工逐项核对点、线、遮挡、方向、数量、标签与模糊处，保存图片 SHA + 模型/修订 + 框坐标 + 经人工确认的观察。后续动作请求只传最少量核对后的文本、图像哈希和引用，**不传未经确认的原图推断为事实**。图片换字节、换 OCR、换 profile 或修改题意须失效重核；无法判定则诚实澄清或 `blocked_input`。真实测试中额外计入视觉读取请求/费用，不能把“只读图”免费化。
+- [ ] **C4 原生冻结题接线**：在36题 runner 中以题目 ID 加载经核对的 manifest 并严格匹配 SHA；无图不发动作请求。脱敏逐请求回执分开记录视觉读取、人工复核、动作构图及总成本；不要落 base64/隐私题面。图文证据与旧文字代用品成绩双列，不覆盖旧91请求。
+- [ ] **可选研究路线（非当前交付）**：若官方契约与该账户/profile 的低费用原生探针明确证实 vision+tools 同请求有效，先按 RED/适配器/预算测试修订 Rust 拒绝闸，再与两阶段同题对比费用、稳定性和观测；**没有新付费授权不进行探针**。若不支持，维持两阶段，不阻塞 C2/C3。
+
+**C0 检查点（2026-11-18）**：带合同入口的13道缺图题会在网络前标记 `input_figure_missing`，不会调用模型；[C0 审计](../audit/2026-11-18-g3-f9-figure-input-c0/README.md)。**C 块未退出**：原图来源/双 SHA/人工区域复核、vision 能力与两阶段真实 DS 尚缺，旧36题结果不变。
 
 ### Block D — 真实候选可见与原生受控交付
 
