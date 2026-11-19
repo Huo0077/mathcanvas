@@ -77,6 +77,8 @@
 
 **B8 非付费检查点（2026-11-19）**：`construct_segment` 旧版公开自由对象、缺端点误报未知引用且多余几何字段被静默忽略；现发布封闭 `from/to` 必填 schema、拒绝无效字段并给明确缺字段码，2D/3D 合法构线仍可执行。[B8 审计](../audit/2026-11-19-g3-segment-schema-b8/README.md)。历史 DS 无原始参数，不能倒推旧题已修好；真实复测仍待新授权。
 
+**B9 非付费画面正确性检查点（2026-11-19）**：`construct_intersection` 曾在直线与圆锥曲线的两个交点中静默取第一个，造成模型无法选择左右/上下分支、回执却显示 accepted；现公开封闭 schema 与 `selection=min_x|max_x|min_y|max_y`，不唯一时拒绝而非画错，切点/双直线唯一交点旧路径保留。见[B9 审计](../audit/2026-11-19-g3-intersection-branch-b9/README.md)。历史真实模型参数未保存，不能倒填旧题分数。
+
 ### Block C — 纯文字36题准入与真题替换（取代旧视觉关键路径）
 
 - [x] **C-T0 清单**：保留旧23个 `text_only` 候选，新设高考立体8/联考立体5个空槽位；四象限各9题。`text-only-36-plan.json` 仅作规划、`runnable=false`；配额/旧集 SHA/图题排除守卫 RED→GREEN，不能拿槽位当真题或成功率。

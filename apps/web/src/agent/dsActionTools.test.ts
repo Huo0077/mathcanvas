@@ -622,6 +622,63 @@ describe("B7 declaration schema and execution agree", () => {
   })
 })
 
+describe("B9 line-conic intersection branch selection", () => {
+  it("never chooses an arbitrary first of two intersections and lets the model select left/right branches", () => {
+    const schema = buildDsActionToolSchemas().find(tool => tool.function.name === "construct_intersection")?.function.parameters
+    expect(schema).toMatchObject({ type: "object", additionalProperties: false,
+      properties: { lineA: { type: "string" }, conicId: { type: "string" },
+        selection: { enum: ["min_x", "max_x", "min_y", "max_y"] } } })
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: -3, y: 0 }).status).toBe("accepted")
+    expect(session.execute("construct_point", { id: "B", x: 3, y: 0 }).status).toBe("accepted")
+    expect(session.execute("construct_line", { id: "L", from: "A", to: "B" }).status).toBe("accepted")
+    expect(session.execute("construct_circle", { id: "C", radius: 2 }).status).toBe("accepted")
+    const before = session.currentSnapshot()
+    expect(session.execute("construct_intersection", { id: "P", lineA: "L", conicId: "C" })).toMatchObject({
+      status: "repairable", blockerCode: "ambiguous_intersection"
+    })
+    expect(session.currentSnapshot()).toMatchObject({ candidateHash: before.candidateHash, primitiveCount: before.primitiveCount })
+    expect(session.referenceDirectory().materializedPoints).not.toContain("P")
+    expect(session.execute("construct_intersection", { id: "P", lineA: "L", conicId: "C", selection: "min_x" })).toMatchObject({
+      status: "accepted", position: { x: -2, y: 0 }
+    })
+    expect(session.execute("construct_intersection", { id: "Q", lineA: "L", conicId: "C", selection: "max_x" })).toMatchObject({
+      status: "accepted", position: { x: 2, y: 0 }
+    })
+  })
+
+  it("refuses a tied coordinate or inapplicable selector rather than drawing a plausible wrong point", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    session.execute("construct_circle", { id: "C", radius: 2 })
+    session.execute("construct_line", { id: "V", a: 1, b: 0, c: 0 })
+    const before = session.currentSnapshot()
+    expect(session.execute("construct_intersection", { id: "P", lineA: "V", conicId: "C", selection: "min_x" })).toMatchObject({
+      status: "repairable", blockerCode: "ambiguous_intersection"
+    })
+    expect(session.execute("construct_intersection", { id: "P", lineA: "V", conicId: "C", selection: "highest" })).toMatchObject({
+      status: "repairable", blockerCode: "invalid_selection"
+    })
+    expect(session.execute("construct_intersection", { id: "P", lineA: "V", conicId: "C", lineB: "V", selection: "max_y" })).toMatchObject({
+      status: "repairable", blockerCode: "ambiguous_geometry_input"
+    })
+    expect(session.currentSnapshot()).toMatchObject({ candidateHash: before.candidateHash, primitiveCount: before.primitiveCount })
+    expect(session.referenceDirectory().materializedPoints).not.toContain("P")
+    expect(session.execute("construct_intersection", { id: "Q", lineA: "V", conicId: "C", selection: "max_y" })).toMatchObject({
+      status: "accepted", position: { x: 0, y: 2 }
+    })
+    expect(session.execute("construct_intersection", { id: "R", lineA: "V", conicId: "C", selection: "min_y" })).toMatchObject({
+      status: "accepted", position: { x: 0, y: -2 }
+    })
+    expect(session.execute("construct_line", { id: "T", a: 0, b: 1, c: -2 }).status).toBe("accepted")
+    expect(session.execute("construct_intersection", { id: "Top", lineA: "T", conicId: "C" })).toMatchObject({
+      status: "accepted", position: { x: 0, y: 2 }
+    })
+    expect(session.execute("construct_intersection", { id: "X", lineA: "T", lineB: "V" })).toMatchObject({
+      status: "accepted", position: { x: 0, y: 2 }
+    })
+  })
+})
+
 describe("B8 segment parameter contract", () => {
   it("requires materialized endpoint references and rejects geometry fields that the segment action cannot use", () => {
     const tool = buildDsActionToolSchemas().find(item => item.function.name === "construct_segment")?.function

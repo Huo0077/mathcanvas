@@ -131,7 +131,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_point: "Construct a named point: id with 2D x,y or 3D x,y,z, or id with from,to,ratio referencing materialized points.",
   construct_line: "Construct a named 2D line with id: use existing point names from and to, or finite equation coefficients a,b,c for a*x+b*y+c=0; never guess missing coefficients.",
   construct_segment: "Construct a segment between two existing named points; provide both from and to references.",
-  construct_intersection: "Compute intersection between two lines or a line and a conic/circle.",
+  construct_intersection: "Intersect lineA with either lineB or conicId. For two line-conic points select min_x, max_x, min_y or max_y; a tied coordinate is ambiguous, never choose an arbitrary branch.",
   construct_circle: "Construct a circle by center and radius.",
   construct_conic: "Give id and conicType. Ellipse/hyperbola require positive radiusX and radiusY, OR throughPointIds with exactly two existing points of a centered axis-aligned conic; never guess semi-axes. Optional center cx, cy (default origin). Hyperbola axis x or y. Parabola requires nonzero focalParameter and axis x or y (default y), optional vertex vx, vy. Raw equation strings are not supported.",
   construct_tangent: "Construct a tangent line to a conic at a point.",
@@ -237,6 +237,11 @@ const CONSTRUCT_LINE_PARAMETERS = {
   properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" },
     a: { type: "number" }, b: { type: "number" }, c: { type: "number" } }
 } as const
+const CONSTRUCT_INTERSECTION_PARAMETERS = {
+  type: "object", additionalProperties: false, required: ["lineA"],
+  properties: { ...PLANAR_ENTITY_FIELDS, lineA: { type: "string" }, lineB: { type: "string" },
+    conicId: { type: "string" }, selection: { type: "string", enum: ["min_x", "max_x", "min_y", "max_y"] } }
+} as const
 const QUERY_MEASUREMENT_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["metric"],
   properties: { metric: { type: "string", enum: ["distance", "position", "coordinates"] },
@@ -264,6 +269,7 @@ export function buildDsActionToolSchemas(options: { includeUnimplemented?: boole
         : name === "construct_point" ? CONSTRUCT_POINT_PARAMETERS
         : name === "construct_line" ? CONSTRUCT_LINE_PARAMETERS
         : name === "construct_segment" ? CONSTRUCT_SEGMENT_PARAMETERS
+        : name === "construct_intersection" ? CONSTRUCT_INTERSECTION_PARAMETERS
         : name === "query_measurement" ? QUERY_MEASUREMENT_PARAMETERS
         : name === "query_constraint_status" ? QUERY_CONSTRAINT_STATUS_PARAMETERS : {
         type: "object",
@@ -1292,6 +1298,21 @@ export function createDsActionSession(options: {
       }
 
       if (name === "construct_intersection") {
+        if (Object.keys(input).some(key => !Object.hasOwn(CONSTRUCT_INTERSECTION_PARAMETERS.properties, key))) {
+          return failRepairable(name, "invalid_schema", "construct_intersection accepts only its published fields")
+        }
+        if (input.selection !== undefined && !["min_x", "max_x", "min_y", "max_y"].includes(String(input.selection))) {
+          return failRepairable(name, "invalid_selection", "selection must be min_x, max_x, min_y or max_y")
+        }
+        if (input.lineB !== undefined && input.conicId !== undefined) {
+          return failRepairable(name, "ambiguous_geometry_input", "choose exactly one of lineB or conicId")
+        }
+        if (input.selection !== undefined && input.conicId === undefined) {
+          return failRepairable(name, "invalid_selection", "selection applies only to line-conic intersections")
+        }
+        if (!asString(input.lineA) || (!asString(input.lineB) && !asString(input.conicId))) {
+          return failRepairable(name, "missing_required_parameter", "lineA and exactly one of lineB or conicId are required")
+        }
         const outId = asString(input.output ?? input.id) ?? `X${stepSeq}`
         const scopeId = asString(input.scopeId) ?? "shared"
         const explicitStateId = asString(input.stateId) ?? undefined
@@ -1303,8 +1324,22 @@ export function createDsActionSession(options: {
         const conic = conicId ? readC2(conicId, branchId) : undefined
         if (lA && conic) {
           const res = intersectPlanarLineAndConicExact({ type: "line", a: lA.a, b: lA.b }, conic)
-          const pt = res.points[0]
-          if (!pt) return failRepairable(name, "no_intersection", "line does not intersect conic")
+          if (res.points.length === 0) return failRepairable(name, "no_intersection", "line does not intersect conic")
+          const selection = input.selection as "min_x" | "max_x" | "min_y" | "max_y" | undefined
+          if (res.points.length > 1 && !selection) {
+            return failRepairable(name, "ambiguous_intersection", "two intersections: specify selection min_x, max_x, min_y or max_y")
+          }
+          let pt = res.points[0]!
+          if (res.points.length > 1 && selection) {
+            const axis = selection.endsWith("x") ? "x" : "y"
+            const ascending = [...res.points].sort((a, b) => a[axis] - b[axis])
+            const chosen = selection.startsWith("min") ? ascending[0]! : ascending[ascending.length - 1]!
+            const runnerUp = selection.startsWith("min") ? ascending[1]! : ascending[ascending.length - 2]!
+            if (Math.abs(chosen[axis] - runnerUp[axis]) <= 1e-9) {
+              return failRepairable(name, "ambiguous_intersection", "selected coordinate is tied; select the other axis")
+            }
+            pt = chosen
+          }
           writeP2(outId, pt, branchId)
           return stageDraftAction(
             name,
