@@ -7,7 +7,7 @@ import plan from "../../test-fixtures/reliability/text-only-36-plan.json"
 type Triage = {
   suite: string
   runnable: false
-  retained: { id: string; inputHash: string; source: string; textualFigureCue: boolean; status: "needs_original_paper_review" | "pdf_page_checked_needs_independent_review" | "pdf_page_checked_source_mismatch_requires_new_manifest"; sourceCorrection?: string; originalPaperUrl?: string; originalPaperSha256?: string; originalPaperPage?: number }[]
+  retained: { id: string; inputHash: string; source: string; textualFigureCue: boolean; status: "needs_original_paper_review" | "pdf_page_checked_needs_independent_review" | "pdf_page_checked_source_mismatch_requires_new_manifest" | "page_preview_checked_needs_pdf_and_independent_review"; sourceCorrection?: string; originalPaperUrl?: string; originalPaperSha256?: string; originalPaperPage?: number; previewImageUrl?: string; previewImageSha256?: string; previewPage?: number }[]
   excludedDuringPageReview: { sourceKey: string; reason: "embedded_figure_without_textual_cue" | "paper_question_mismatch"; sourceSha256: string; page: number }[]
   replacementCandidates: {
     slotId: string; category: "gaokao" | "joint"; sourceKey: string; sourceUrl: string; sourceSha256: string;
@@ -31,7 +31,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       expect(row.inputHash).toBe(old?.inputHash)
       expect(row.source).toBe(old?.source)
       expect(row.textualFigureCue).toBe(false)
-      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : row.id === "GK-P07" ? "pdf_page_checked_source_mismatch_requires_new_manifest" : "needs_original_paper_review")
+      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : row.id === "GK-P07" ? "pdf_page_checked_source_mismatch_requires_new_manifest" : row.id === "GK-P04" ? "page_preview_checked_needs_pdf_and_independent_review" : "needs_original_paper_review")
     }
   })
 
@@ -144,6 +144,15 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       })
     }
     expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"])
+  })
+
+  it("keeps retained GK-P04 JPEG page preview below original-PDF admission level", () => {
+    const row = triage().retained.find(x => x.id === "GK-P04")
+    expect(row).toMatchObject({ status: "page_preview_checked_needs_pdf_and_independent_review",
+      previewImageUrl: "https://cdn.att.tthaoke.com/testpaper/preview/5/5825718b11b37a5d43894e2e0651b42e/p004.jpg",
+      previewImageSha256: "78abd05f2f737d146570ef29d64915c84285b8b41b722b7c0d9225603e64f04a", previewPage: 4 })
+    expect(row?.originalPaperSha256).toBeUndefined()
+    expect(triage().runnable).toBe(false)
   })
 
   it("flags GK-P07 as a wrong-year-paper attribution while preserving its frozen old prompt", () => {

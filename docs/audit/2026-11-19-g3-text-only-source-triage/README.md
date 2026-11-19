@@ -4,7 +4,7 @@
 
 旧冻结题库 [source](../../../test-fixtures/reliability/drawing-contracts-36.json)、新版[23+13规划清单](../../../test-fixtures/reliability/text-only-36-plan.json)均只读；本轮新增[来源筛查数据](../../../test-fixtures/reliability/text-only-36-source-triage.json)（无题面正文、无原卷文件）。8道高考线索最初来自 [GAOKAO-Bench 原始数据仓](https://github.com/OpenLMLab/GAOKAO-Bench/tree/6dbb24f8d8439041e5431c4c184a582182a6ce9c/Data) 固定修订的数学题 JSON，文件 SHA 与单题文本 SHA 均锁定，**但转录仅是线索，不等于原卷无图**。其中 GK-S11/GK-S12/GK-S13/GK-S14/GK-S16/GK-S17 后续已取得相应试题 PDF 并核验题号、题意和配图归属；GK-S10/GK-S15 是第三方**题页 JPEG 预览**，不是 PDF 原卷或独立审查。六道 PDF 初核题也未做独立第二审核与合同签收。5道联考线索来自第三方承载的试卷 PDF 真正字节，已核对文件头为 PDF、记录 SHA-256 并目视对应页；发布者并非命题方，题目来源仍需独立二次复核。临时原卷放系统临时目录，未进入仓库。
 
-原23条的 prompt/来源/哈希与旧合同逐项机械对齐且文本中没有“如图/见图”等显式图示词；其中 GK-P02/GK-P03/GK-P05/GK-P08/GK-P09 已核对相符原卷页，另外17条仍仅有旧文字来源；GK-P07 原卷找到但冻结来源标注错配；**不能推导原始卷面无图或画面唯一**，全部标为 `needs_original_paper_review`。13槽位全部保持 pending；本筛查文件 `runnable=false`，不能喂给 DS 或计算新版成功率。
+原23条的 prompt/来源/哈希与旧合同逐项机械对齐且文本中没有“如图/见图”等显式图示词；其中 GK-P02/GK-P03/GK-P05/GK-P08/GK-P09 已核对相符原卷页，另外16条仍仅有旧文字来源；GK-P07 原卷找到但冻结来源标注错配，GK-P04 只有页预览；**不能推导原始卷面无图或画面唯一**，全部标为 `needs_original_paper_review`。13槽位全部保持 pending；本筛查文件 `runnable=false`，不能喂给 DS 或计算新版成功率。
 
 ### 高考候选（8条：6 PDF 页初核、2 JPEG 题页预览；均未独立审核）
 
@@ -36,6 +36,8 @@
 **旧23题的2022全国甲卷理科两题增量**：[学生试卷 PDF](https://m.shsbnu.net/pluginfile.php/54461/mod_folder/content/0/2022%E5%B9%B4%E9%AB%98%E8%80%83%E7%9C%9F%E9%A2%98%E5%85%A8%E5%9B%BD%E7%94%B2%E5%8D%B7%E7%90%86%E7%A7%91%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7-%E5%AD%A6%E7%94%9F%E7%94%A8%E5%8D%B7.pdf) 字节 SHA-256 `f8362915a798b85da50ece7be83783264ed3c4920328cb5b5911910475862625`；GK-P08 p5 #14 双曲线与圆相切题、GK-P03 p6 #20 抛物线焦点/直线题均自身无附图，p6 #18 的四棱锥图属于**其他题**。先 RED 后 GREEN，旧23原卷页级初核 **5/23**；未做第二审核/新合同，也不改变旧实测通过率。最终 `npm.cmd run typecheck` 通过、文档测试8文件/22用例通过、定向回归4文件/74用例通过、lint 0错误/34条既有警告，`git diff --check` 通过。
 
 **GK-P07 原题出处错配（2026-11-19）**：旧冻结集的 `source` 写作“2021年新高考I卷 第21题”，而其抛物线 `x²=2py`、圆 `x²+(y+4)²=1` 及切线面积题对应[2021 全国乙卷理科数学 PDF](https://17094505.s21i.faiusr.com/61/ABUIABA9GAAgvrzahwYozMrcogY.pdf)，文件 SHA-256 `b634210a76e3fe59c084816466bfa2d134382b5c28d30e46dfa36a78b21e97c0`，p4 第21题无附图，同页前一题的立体图属于另一题。另行核验的新高考I卷第21题实际是不同题，故不是“同卷不同写法”。**不更改旧冻结 prompt/hash 或旧91次回执**；新集必须单独修正来源元数据并复核合同，否则 GK-P07 不得以旧 `approved` 标签通过新题集准入。清单状态 `pdf_page_checked_source_mismatch_requires_new_manifest`；新测试先 RED 后 GREEN。`npm.cmd run typecheck` 通过、`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过、新旧来源+合同定向3文件/56用例通过、`npm.cmd run lint` 0错误/34条既有警告、`git diff --check` 通过。旧23为5道普通页级初核+1道发现来源错配，余17道仍待原卷。
+
+**GK-P04 原卷预览初核（未达到 PDF 证据）**：[2022 全国甲卷文科数学预览 p4](https://cdn.att.tthaoke.com/testpaper/preview/5/5825718b11b37a5d43894e2e0651b42e/p004.jpg) JPEG SHA-256 `78abd05f2f737d146570ef29d64915c84285b8b41b722b7c0d9225603e64f04a`，p4 #20 的 `f(x)=x³-x, g(x)=x²+a` 与旧候选吻合、无随题附图；p4 #19 包装盒有图不属于 #20。**仅第三方页面预览，非可下载原卷 PDF 或独立合同**，故状态 `page_preview_checked_needs_pdf_and_independent_review`，不可写成第六道原卷 PDF 通过。测试先 RED 后 GREEN；`npm.cmd run typecheck` 通过、`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过、定向3文件/57用例通过、`npm.cmd run lint` 0错误/34条既有警告、`git diff --check` 通过。旧23现在5题普通PDF页级初核、1题旧来源错配、1题仅预览，另16题待核对。
 
 ### 联考候选（5条，页面已初核，无独立签收）
 

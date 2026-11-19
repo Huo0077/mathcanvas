@@ -1,5 +1,8 @@
 # 下一轮工作导航
 
+> **2026-11-19 GK-P04 题页预览（0 DS 请求）**：找到 2022 全国甲卷文科 #20 的第三方 JPEG p4，题面匹配、该题不附图；但非原 PDF，证据单列 `page_preview_checked_needs_pdf_and_independent_review`。旧23现5题PDF页级初核、GK-P07来源错配、GK-P04仅预览、其余16题待审；[审计](audit/2026-11-19-g3-text-only-source-triage/README.md)。新36 `runnable=false`，未发模型请求，旧真实成绩不变。
+
+
 > **2026-11-19 GK-P07 来源纠错（0 DS 请求）**：旧冻结合同 source 错写“2021 新高考I卷 #21”，实际相同题面在 **2021 全国乙卷理科 #21**，PDF p4 无附图。参见[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)；旧版 prompt/hash/91次请求不变，新清单保留 `source_mismatch_requires_new_manifest`，需纠正后另审合同。旧23有5题普通页级初核+该错配题、余17待核对；新版36 `runnable=false`，无新版 DS 成绩。
 
 

@@ -70,7 +70,10 @@
       "inputHash": "f5de7a2bc7071025dea8d5ff3f401c4ee55b78517c20b836074016f552815dc9",
       "source": "2022年全国甲卷文科 第20题 (GAOKAO-Bench)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "page_preview_checked_needs_pdf_and_independent_review",
+      "previewImageUrl": "https://cdn.att.tthaoke.com/testpaper/preview/5/5825718b11b37a5d43894e2e0651b42e/p004.jpg",
+      "previewImageSha256": "78abd05f2f737d146570ef29d64915c84285b8b41b722b7c0d9225603e64f04a",
+      "previewPage": 4
     },
     {
       "id": "GK-P05",
