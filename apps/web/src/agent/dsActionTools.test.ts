@@ -82,6 +82,30 @@ function plannerRequest(userMessage = "作线段 AB") {
 }
 
 describe("simple symbolic equal-edge prism tool", () => {
+  it("does not substitute a right prism when the prompt specifies an oblique triangular prism", () => {
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "An oblique triangular prism has all edges length a, where a>0; the lateral edges are not perpendicular to its base." })
+    const before = session.currentSnapshot()
+    for (const [tool, input] of [
+      ["construct_equal_edge_triangular_prism", { id: "P", displayScale: 2 }],
+      ["construct_solid", { id: "P", kind: "triangular_prism", symbol: "a", displayScale: 2 }]
+    ] as const) {
+      const result = session.execute(tool, input)
+      expect(result.ok).toBe(false)
+      expect(result.blockerCode).toBe("symbolic_prism_shape_mismatch")
+      expect(session.currentSnapshot().candidateHash).toBe(before.candidateHash)
+    }
+  })
+
+  it("does not infer rightness when the symbolic triangular prism has no orientation condition", () => {
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "A triangular prism has all edges length a, where a>0. Draw it." })
+    const result = session.execute("construct_equal_edge_triangular_prism", { id: "P", displayScale: 2 })
+    expect(result.ok).toBe(false)
+    expect(result.blockerCode).toBe("symbolic_prism_shape_mismatch")
+    expect(session.currentSnapshot().primitiveCount).toBe(0)
+  })
+
   it("publishes a small family-specific schema that can construct and name a real prism", () => {
     const tool = buildDsActionToolSchemas().find((item) => item.function.name === "construct_equal_edge_triangular_prism")
     expect(tool?.function.parameters).toMatchObject({

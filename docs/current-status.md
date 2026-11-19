@@ -1,5 +1,7 @@
 # MathCanvas 当前状态
 
+> **2026-11-18 GK-S09 paid single-case authorization accepted (not yet spent):** User explicitly approved the previously proposed scope: saved DeepSeek profile, GK-S09 only, at most 3 native requests and $5 estimated cap, stop at first failure. Zero-cost prerequisite uncovered an oblique/right-prism mismatch; added an affirmative-rightness gate and negative tests before any paid request. Actual provider billing and acceptance remain unknown until the native pilot runs.
+
 > **2026-11-18 Task 7 family-tool checkpoint (zero cost):** Added `construct_equal_edge_triangular_prism` with a simple closed schema requiring only a named id and positive displayScale; it reuses the existing `construct_solid` solver, enforces the symbolic source, and rejects unknown geometry fields. A mock native provider request sees the published schema; recorded product flow and exact-candidate browser rendering pass. This does not prove the remote DeepSeek service accepts the schema; no paid request was made.
 
 > **2026-11-18 GK-S09 symbolic-input hardening**: A RED test showed an all-edges-`a` prompt still accepted unlabelled numeric side/height values, allowing a guessed value to masquerade as the problem parameter. `construct_solid` now fails closed with `symbol_source_required` unless the model provides `symbol:"a"` plus a positive `displayScale`; the explicit symbolic path remains valid. Product ds_action and recorded replay regressions pass; no paid DS call.

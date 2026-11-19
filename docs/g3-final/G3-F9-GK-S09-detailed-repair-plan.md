@@ -67,6 +67,10 @@ type G3ActionReceiptTrace = {
 - A simple, closed `construct_equal_edge_triangular_prism` tool is now published for symbolic equal-edge right triangular prisms. Required fields: `id`, `displayScale`; optional `vertexNames` and slice identifiers. The action maps to the same `solveConstraint3d` and speculative canvas as `construct_solid`, with source validation and no hand vertices.
 - The mock native provider actually receives the simple schema; the recorded product runner and exact-candidate browser test use this tool successfully. Provider-side acceptance has **not** been established without an authorized native request; do not mark the full remote schema gate complete.
 
+### Task 7 rightness gate (2026-11-18)
+
+RED showed both symbolic construction tools would stage a right prism from an oblique or orientation-unspecified prompt. They now require an affirmative right-triangular-prism source and reject oblique/negated orientation with `symbolic_prism_shape_mismatch`, leaving the candidate hash unchanged. Frozen GK-S09 and English right-prism positive cases continue to pass.
+
 ## Task 8：符号 a、等棱长三棱柱、真正外接球
 
 **数学与数据边界**：题设 `a>0`，示意归一化选择 `a_display=1` 仅为**绘图坐标系**；底边三段和高均采用同一尺度，展示物体以注记标示 `a`，绝不能写成从题面得到了 `a=1`。单位构型六顶点可为 `A=(0,0,0), B=(1,0,0), C=(1/2,√3/2,0)`、顶点对应平移 `z=1`；球心 `(1/2,√3/6,1/2)`，半径 `√(7/12)`，一般尺度为 `R=a√(7/12)`。使用参数族的不变量证明一般性，不从一个数值通过推出任意 a 的数学结论。

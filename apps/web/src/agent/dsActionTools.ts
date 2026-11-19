@@ -356,6 +356,16 @@ function hasEqualEdgeSymbolA(text: string): boolean {
     /(?:edge(?:s)?\s+(?:have\s+)?length|all\s+edges).*\ba\b/i.test(text)
 }
 
+/** Constructing a right prism needs an affirmative rightness condition, not just equal edges. */
+function hasRightTriangularPrismSource(text: string): boolean {
+  if (/\b(?:oblique|non[- ]right|not\s+(?:a\s+)?right)\b/i.test(text) ||
+      /lateral\s+edges?\s+(?:are\s+)?not\s+perpendicular/i.test(text) ||
+      /(?:\u659c\u4e09\u68f1\u67f1|\u4fa7\u68f1\u4e0d\u5782\u76f4|\u4fa7\u68f1\u4e0d\u22a5)/.test(text)) return false
+  return /(?:\u4fa7\u68f1\s*\u5782\u76f4\u4e8e\s*\u5e95\u9762|\u76f4\u4e09\u68f1\u67f1|\u6b63\u4e09\u68f1\u67f1)/.test(text) ||
+    /\bright\s+triangular\s+prism\b/i.test(text) ||
+    /lateral\s+edges?\s+(?:are\s+)?perpendicular\s+to\s+(?:the\s+|its\s+)?base/i.test(text)
+}
+
 function resolveConstructSolidRequest(
   input: Record<string, unknown>,
   points3: ReadonlyMap<string, Vector3>
@@ -1355,6 +1365,9 @@ export function createDsActionSession(options: {
           const equalEdgeSource = hasEqualEdgeSymbolA(text)
           if (symbol !== "a" || !positiveSource || !equalEdgeSource) {
             return failBlocked(name, "symbol_source_missing", "symbolic display needs a confirmed source with positive edge parameter a")
+          }
+          if (!hasRightTriangularPrismSource(text)) {
+            return failBlocked(name, "symbolic_prism_shape_mismatch", "a right triangular prism requires an affirmative rightness condition in the prompt")
           }
           const scale = asPositiveNumber(input.displayScale)
           if (scale === null || !Number.isFinite(scale) || scale > 1e6 || input.height !== undefined || input.sideLength !== undefined || input.ab !== undefined || input.ac !== undefined || input.bc !== undefined) {
