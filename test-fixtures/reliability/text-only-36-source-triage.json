@@ -94,7 +94,11 @@
       "inputHash": "6eaa5b742714b6adc166784b6e50313d0046fe34706f5a1e9239ba31a4131464",
       "source": "2021年新高考I卷 第21题 (GAOKAO-Bench)",
       "textualFigureCue": false,
-      "status": "needs_original_paper_review"
+      "status": "pdf_page_checked_source_mismatch_requires_new_manifest",
+      "sourceCorrection": "2021 全国乙卷理科数学 第21题",
+      "originalPaperUrl": "https://17094505.s21i.faiusr.com/61/ABUIABA9GAAgvrzahwYozMrcogY.pdf",
+      "originalPaperSha256": "b634210a76e3fe59c084816466bfa2d134382b5c28d30e46dfa36a78b21e97c0",
+      "originalPaperPage": 4
     },
     {
       "id": "GK-P08",

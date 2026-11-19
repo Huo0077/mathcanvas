@@ -7,7 +7,7 @@ import plan from "../../test-fixtures/reliability/text-only-36-plan.json"
 type Triage = {
   suite: string
   runnable: false
-  retained: { id: string; inputHash: string; source: string; textualFigureCue: boolean; status: "needs_original_paper_review" | "pdf_page_checked_needs_independent_review"; originalPaperUrl?: string; originalPaperSha256?: string; originalPaperPage?: number }[]
+  retained: { id: string; inputHash: string; source: string; textualFigureCue: boolean; status: "needs_original_paper_review" | "pdf_page_checked_needs_independent_review" | "pdf_page_checked_source_mismatch_requires_new_manifest"; sourceCorrection?: string; originalPaperUrl?: string; originalPaperSha256?: string; originalPaperPage?: number }[]
   excludedDuringPageReview: { sourceKey: string; reason: "embedded_figure_without_textual_cue" | "paper_question_mismatch"; sourceSha256: string; page: number }[]
   replacementCandidates: {
     slotId: string; category: "gaokao" | "joint"; sourceKey: string; sourceUrl: string; sourceSha256: string;
@@ -31,7 +31,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       expect(row.inputHash).toBe(old?.inputHash)
       expect(row.source).toBe(old?.source)
       expect(row.textualFigureCue).toBe(false)
-      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : "needs_original_paper_review")
+      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : row.id === "GK-P07" ? "pdf_page_checked_source_mismatch_requires_new_manifest" : "needs_original_paper_review")
     }
   })
 
@@ -144,6 +144,19 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       })
     }
     expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"])
+  })
+
+  it("flags GK-P07 as a wrong-year-paper attribution while preserving its frozen old prompt", () => {
+    const row = triage().retained.find(x => x.id === "GK-P07")
+    expect(row).toMatchObject({
+      status: "pdf_page_checked_source_mismatch_requires_new_manifest",
+      sourceCorrection: "2021 全国乙卷理科数学 第21题",
+      originalPaperUrl: "https://17094505.s21i.faiusr.com/61/ABUIABA9GAAgvrzahwYozMrcogY.pdf",
+      originalPaperSha256: "b634210a76e3fe59c084816466bfa2d134382b5c28d30e46dfa36a78b21e97c0",
+      originalPaperPage: 4
+    })
+    expect(row?.source).toBe(legacy.cases.find(x => x.id === "GK-P07")?.source)
+    expect(triage().runnable).toBe(false)
   })
 
   it("ties exactly 13 distinct provisional source records to the slots and requires source hashes", () => {

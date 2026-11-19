@@ -94,6 +94,8 @@
 
 **C-T1 原卷检索续进（2026-11-19）**：GK-S10/GK-S15 已找到第三方试卷题页 JPEG 预览，可核对题号及随题附图情况，但**没有可核验原试卷 PDF**；其余6道高考候选仍只是 PDF 页初核。旧23题已有 GK-P02/GK-P03/GK-P05/GK-P08/GK-P09 共5题原卷初核；没有任一题取得完整独立合同。见[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新版36继续 `runnable=false`，不因“8题都有图像页线索”而开放测试。
 
+**C-T1 来源纠错（2026-11-19）**：旧保留题 GK-P07 冻结标注为“2021 新高考I卷 #21”，经对应题面原卷核对其实是“2021 全国乙卷理科 #21”。[审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)保留旧版数据不变，要求新清单纠正来源并重审合同，不能把旧 `approved` 直接继承为新准入。旧23现5题普通原卷初核、GK-P07一题出处错配待纠正、其余17题待核对。
+
 ### Block D — 真实候选可见与原生受控交付
 
 **Files**：`apps/web/src/agent/agentRunner.ts`、`apps/web/src/agent/draftStore.ts`、`apps/web/src/canvasEvidence.ts`、`apps/web/src/components/agent/ConfirmationPanel.tsx`、`e2e/drawing-reliability-lifecycle.spec.ts`，以及受控原生测试入口。
