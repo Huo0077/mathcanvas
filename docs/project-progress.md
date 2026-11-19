@@ -1,5 +1,8 @@
 # MathCanvas 项目过程日志
 
+> **2026-11-19 纯文字36题重规划（0 新增 DS）**：用户明确本轮跳过原题有图的题，不进行视觉实测。旧36题保留历史 91 请求、合同 1通过/26失败/9未测且原生交付未测；[新规格](g3-final/G3-F9-text-only-36-suite-spec.md)和[实施计划](g3-final/G3-F9-text-only-36-implementation-plan.md)确定保留23个纯文字候选、另补8道高考立体+5道联考立体无图真题。13个目前只是待审空槽位，[规划清单](../test-fixtures/reliability/text-only-36-plan.json) `runnable=false`，新36未凑齐/不可开始实测，旧成绩不进入新分母；C0/C1视觉工作保留但退出本轮关键路径。先来源/文本完整性/独立合同审查，再另获费用授权做 DS 真测。
+
+
 > **2026-11-19 C1 题图字节绑定（0 新增 DS）**：视觉阅读确认现按实际转码 PNG 的有序 SHA-256 绑定；同文字换图会使旧确认失效，发送内容携带脱敏哈希。当前原生请求仍禁止 images+tools 同请求，修正为视觉读取→人工核对→文本动作两阶段；13道原图、来源/原始 SHA、视觉 profile 与真实 DS 图文交付仍待补，旧36题合同 1/26/9 与原生交付未测不变。见 [C1 审计](audit/2026-11-19-g3-figure-digest-c1/README.md) 和 [主计划](g3-final/G3-F9-live-36-root-cause-and-repair-plan.md)。
 
 

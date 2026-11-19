@@ -1,0 +1,112 @@
+{
+  "suite": "g3-f9-text-only-36-plan.v1",
+  "status": "draft_unapproved",
+  "runnable": false,
+  "legacySuiteSha256": "c3671cc8196ebcded7e0bd53a6fd7160593506b6aad04719a636b5becb050a6d",
+  "retainedCaseIds": [
+    "GK-S09",
+    "JT-S01",
+    "JT-S03",
+    "JT-S08",
+    "JT-S09",
+    "GK-P01",
+    "GK-P02",
+    "GK-P03",
+    "GK-P04",
+    "GK-P05",
+    "GK-P06",
+    "GK-P07",
+    "GK-P08",
+    "GK-P09",
+    "JT-P01",
+    "JT-P02",
+    "JT-P03",
+    "JT-P04",
+    "JT-P05",
+    "JT-P06",
+    "JT-P07",
+    "JT-P08",
+    "JT-P09"
+  ],
+  "replacementSlots": [
+    {
+      "id": "GK-S10",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S11",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S12",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S13",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S14",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S15",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S16",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "GK-S17",
+      "examType": "gaokao",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "JT-S10",
+      "examType": "joint",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "JT-S11",
+      "examType": "joint",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "JT-S12",
+      "examType": "joint",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "JT-S13",
+      "examType": "joint",
+      "category": "solid",
+      "status": "pending_source_review"
+    },
+    {
+      "id": "JT-S14",
+      "examType": "joint",
+      "category": "solid",
+      "status": "pending_source_review"
+    }
+  ],
+  "notice": "Planning slots are NOT exam problems. Do not run or report results as a 36-case suite until all sources and contracts are independently reviewed."
+}
