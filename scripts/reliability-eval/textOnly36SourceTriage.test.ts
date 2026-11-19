@@ -47,7 +47,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
     expect(data.replacementCandidates.some(row => row.sourceKey === rejected?.sourceKey)).toBe(false)
   })
 
-  it("checks GK-S11 and GK-S13 against actual exam pages while independent approval remains pending", () => {
+  it("checks four GK-S candidates against actual exam pages while independent approval remains pending", () => {
     const rows = triage().replacementCandidates.filter(row => row.category === "gaokao")
     const confirmed = rows.find(row => row.slotId === "GK-S11")
     expect(confirmed).toMatchObject({
@@ -62,7 +62,19 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       originalPaperSha256: "fb7509622fe55a681f6145067c0a91c6377aeb127f78cd3f60818c72551448dc",
       originalPaperPage: 2
     })
-    expect(rows.filter(row => row.status === "pdf_page_checked_needs_independent_review").map(row => row.slotId)).toEqual(["GK-S11", "GK-S13"])
+    expect(rows.find(row => row.slotId === "GK-S12")).toMatchObject({
+      status: "pdf_page_checked_needs_independent_review",
+      originalPaperUrl: "https://www.gcyls.cn/file/upload/202403/08/185520771.pdf",
+      originalPaperSha256: "dcac3bb7e606f73710624313d119cce753e2d4eda25261dfd74e004b3f9ea36a",
+      originalPaperPage: 2
+    })
+    expect(rows.find(row => row.slotId === "GK-S14")).toMatchObject({
+      status: "pdf_page_checked_needs_independent_review",
+      originalPaperUrl: "https://jhcee.cn/upload/file/20180806/1533545060595329.pdf",
+      originalPaperSha256: "18119a7a31e9db6ed0c7afd23137b5d49e99c29adc281d43d1c3209f49078586",
+      originalPaperPage: 3
+    })
+    expect(rows.filter(row => row.status === "pdf_page_checked_needs_independent_review").map(row => row.slotId)).toEqual(["GK-S11", "GK-S12", "GK-S13", "GK-S14"])
     expect(triage().runnable).toBe(false)
   })
 
@@ -80,7 +92,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
         expect(candidate.status).toBe("pdf_page_checked_needs_independent_review")
       } else {
         expect(candidate.questionSha256 && sha(candidate.questionSha256)).toBe(true)
-        if (!["GK-S11", "GK-S13"].includes(candidate.slotId)) expect(candidate.status).toBe("transcript_only_needs_paper")
+        if (!["GK-S11", "GK-S12", "GK-S13", "GK-S14"].includes(candidate.slotId)) expect(candidate.status).toBe("transcript_only_needs_paper")
       }
     }
   })

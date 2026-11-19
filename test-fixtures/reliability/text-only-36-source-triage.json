@@ -205,8 +205,11 @@
       "questionSha256": "3b838399455cfd40357dc6447525880cc46fd9d603d81e13c7566efbc007a2ad",
       "year": "2018",
       "examCategory": "（新课标ⅰ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "pdf_page_checked_needs_independent_review",
+      "notes": "2018 national I mathematics (arts) PDF p2 Q5 visually checked: axial cross-section of cylinder is square with area 8; no attached figure. Q9 later on same page has a separate figure; no inference of relation to Q5. Independent review of OCR and drawing contract pending.",
+      "originalPaperUrl": "https://www.gcyls.cn/file/upload/202403/08/185520771.pdf",
+      "originalPaperSha256": "dcac3bb7e606f73710624313d119cce753e2d4eda25261dfd74e004b3f9ea36a",
+      "originalPaperPage": 2
     },
     {
       "slotId": "GK-S13",
@@ -234,8 +237,11 @@
       "questionSha256": "dd19cfe6692d2cde31f649f67ab20cd711b0d02853ff2b82d335787b184a7a00",
       "year": "2018",
       "examCategory": "（新课标ⅱ）",
-      "status": "transcript_only_needs_paper",
-      "notes": "GAOKAO-Bench fixed-revision transcription; no textual figure cue found; original exam page/image and drawing obligations not yet independently checked."
+      "status": "pdf_page_checked_needs_independent_review",
+      "notes": "2018 national II mathematics (science) exam PDF p3 Q16 visually checked: cone apex S, slant generators SA/SB and 45-degree base-plane angle; no attached figure. Dataset transcription contains 圆雉 OCR typo versus printed 圆锥; must normalize prompt only after independent source check and lock new hash. No certified contract yet.",
+      "originalPaperUrl": "https://jhcee.cn/upload/file/20180806/1533545060595329.pdf",
+      "originalPaperSha256": "18119a7a31e9db6ed0c7afd23137b5d49e99c29adc281d43d1c3209f49078586",
+      "originalPaperPage": 3
     },
     {
       "slotId": "GK-S15",
