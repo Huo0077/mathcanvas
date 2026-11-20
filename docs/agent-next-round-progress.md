@@ -1,5 +1,18 @@
 # 下一轮工作导航
 
+> **2026-11-20 首个正式版本里程碑定版（智能补线推面、全链路动点联动与工作台升级）**：在 44/44 真机实测全部通过后，完成常规题自动补全线段并由相交线与动点主动推测空间面（`面 AEC`）、动点与构造面 ID 复用联动、Agent 预览期左侧面元栏实时同步分组、往期对话恢复、13 种模型服务预设 + 自动获取模型名、偏好设置丰富与高级页移除、桌面图标与无黑框启动及面向用户的 [README](../README.md) 定版。`npm run typecheck`（exit 0）与桌面端真机 `deepseek-v4-flash` 专项测试均通过。
+
+> **2026-11-20 全面正确性二次根治修复与 `deepseek-v4-flash` 44 题全通过收口（基线 28/28 + 扩展 16/16 = 44/44 = 100.0%，0 离线测试）**：完成 `dsActionTools.ts`（内核最大内切球 `solveMaxInscribedBall3`、`construct_parallel` 平行偏移、`construct_intersection` 排他点、`(b, e)` 圆锥曲线反算）、`modelPlanner.ts`（同批 `undeclared_entity_ref` 依赖波次重排）与 `systemPrompt.ts` 批量/精确诱导优化，全仓 `npm run typecheck` 通过（exit 0）。真实 UI 复测 `EX-P01`（19 次通过，6/6 义务）、`EX-S05`（4 次通过，精确 `(4,2,1.5), r=1.5`）、`EX-P04`（6 次通过，精确 `√5`）、`EX-S06`（6 次通过）、`GK-S12`（2 次通过，精确 `r=√2`）与 `GK-S14/15`（各 5 次通过），**44/44（100.0%）** 通过落盘与 2D/3D 交互，累计估算上界费用 **\$3.1467 USD**（< \$5）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 全面正确性首轮快照（已被上方 44/44 二次根治复测替代）**：完成 `useDraftPersistence.ts`、`dsActionTools.ts`、`modelPlanner.ts`、`acceptance.ts` 与 `solidDrawingPlan.ts` 首轮修复（当时 43/44）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 扩展实测与收尾区块完成（阶段快照，已被上方全面正确性复测替代）**：完成正多边形棱台（`square_frustum`/`triangular_frustum`/`regular_frustum`/`frustum_pyramid`）精确多面体生成与命名截面（`"截面 △"`/`"截面△"`/`"截面三角形"`/`"截面四边形"`）词条豁免，前序区块 A/B/D 均已在纯文字主线完成收口。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 纯文字高考/模考题 `ds_action` 真机端到端实测通过（28/28 = 100%，0 离线测试）**：已完成区块 2 全部工具与产品链路收口并重建桌面端 `mathcanvas-desktop.exe`，使用用户已保存的 `deepseek-v4-flash` 在真实桌面 UI 完成 28 道纯文字高考/模考题（平面 18 题 + 立体 10 题）实测：**28/28 全部通过并确认写入主画布**，2D/3D 画布选中/缩放/拖拽旋转交互全部验证通过；单题最多 11 次请求（≤ 20 次上限），累计估算上界费用 **\$0.5340 USD**（< \$5 上限）；全仓 `npm run typecheck` 通过。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-19 GK-P01/GK-P06 原卷复核（0新增 DS）**：GK-P01 在2025新高考Ⅱ卷学生 PDF p3 确认第16题无附图；GK-P06 冻结标注为2019全国Ⅲ理科#21，实际同题为文科#21，已在[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)与[候选清单](../test-fixtures/reliability/text-only-36-source-triage.json)明确来源错配待新 manifest 纠正，旧 suite 不变。旧23现6题 PDF 页级初核、2题来源错配、1题仅预览、14题待查；新36 `runnable=false`、未发模型请求、旧成绩不变。
+
+
 > **2026-11-19 GK-P04 题页预览（0 DS 请求）**：找到 2022 全国甲卷文科 #20 的第三方 JPEG p4，题面匹配、该题不附图；但非原 PDF，证据单列 `page_preview_checked_needs_pdf_and_independent_review`。旧23现5题PDF页级初核、GK-P07来源错配、GK-P04仅预览、其余16题待审；[审计](audit/2026-11-19-g3-text-only-source-triage/README.md)。新36 `runnable=false`，未发模型请求，旧真实成绩不变。
 
 
@@ -122,7 +135,7 @@
 
 > **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
 
-最后更新：2026-11-17（真实候选渲染与确认链已闭环；下一区块为 36 题审阅包、桌面 UIA 与最终复核；DeepSeek 实测按用户指示保留后继）。
+最后更新：2026-11-20（首个正式版本里程碑定版，智能补线推面、全链路动点联动、工作台体验与面向用户 README 均已收口并实测通过）。
 
 **实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 

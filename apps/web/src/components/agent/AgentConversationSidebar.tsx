@@ -25,7 +25,13 @@ export function AgentConversationSidebar({ conversations, activeId, onSelect, on
       {conversations.map((conversation) => <li key={conversation.id} className="agent-conversation" data-active={conversation.id === activeId}>
         <button type="button" className="agent-conversation-open" aria-pressed={conversation.id === activeId} onClick={() => onSelect(conversation.id)}>
           <span className="agent-conversation-name">{conversation.title}</span>
-          <span className="agent-conversation-meta">{conversation.messages.length > 0 ? `${conversation.messages.filter((message) => message.role === "user").length} 轮` : "空对话"} · {formatConversationTime(conversation.updatedAt)}</span>
+          <span className="agent-conversation-meta">
+            {conversation.messages.length > 0
+              ? `${conversation.messages.filter((message) => message.role === "user").length} 轮`
+              : conversation.title !== "新对话"
+                ? "点击加载内容"
+                : "空对话"} · {formatConversationTime(conversation.updatedAt)}
+          </span>
         </button>
         <button type="button" className="agent-conversation-delete" aria-label={`删除对话：${conversation.title}`} title={`删除对话：${conversation.title}`} onClick={() => onDelete(conversation.id)}>×</button>
       </li>)}

@@ -1,4 +1,4 @@
-import { applyReducedMotion, loadReducedMotion } from "./uiPreferences"
+import { applyFontScale, applyReducedMotion, loadFontScale, loadReducedMotion } from "./uiPreferences"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 
@@ -12,6 +12,7 @@ import "./styles/settings.css"
 import "./styles/workspace-layout.css"
 
 applyReducedMotion(loadReducedMotion())
+applyFontScale(loadFontScale())
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

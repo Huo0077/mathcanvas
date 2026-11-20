@@ -16,6 +16,7 @@ import { isTextEditingTarget } from "./documentIds"
 import { loadRememberedCamera } from "./cameraMemory"
 import type { ThreeScenePreview } from "./threeScenePreview"
 import { prefersReducedMotion, nextUnfoldProgress } from "./threePrimitives"
+import type { ThreeViewOptionsState } from "./threeViewOptions"
 
 /**
  * 场景生命周期与其中搬出去的两个类型（`PointerState` / `DragSessionState`）都在 `./threeSceneEffect`。
@@ -58,9 +59,14 @@ export interface ThreeSceneViewProps {  document: GeometryDocument
   onTrackRadiusEnd?: (id: string, radius: number) => void
   /** 开启"以面为剖切面"后，点到的那个面就成为截面 `<id>` 的剖切面。 */
   onPickSectionFace?: (id: string, plane: { normal: Vector3; constant: number }) => void
+  /** 与右侧属性栏共享的三维视图开关状态（未传时退回组件局部状态，保持独立测试兼容）。 */
+  viewOptions?: ThreeViewOptionsState
+  onChangeViewOptions?: (next: ThreeViewOptionsState) => void
+  /** 点击「测量二面角」时尝试为当前选中的两个面创建或定位真实二面角测量，同步至右侧属性栏。 */
+  onMeasureDihedral?: () => "created" | "existing" | "missing-selection"
 }
 
-export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContextMenu, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, ghostActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace }: ThreeSceneViewProps) {
+export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContextMenu, creationSession = null, solidWizardOpen = false, solidPreviewActive = false, ghostActive = false, onOpenSolidWizard, onCreationAnchor, onCreationError, onFinishCreation, onCancelCreation, onStepBackCreation, onStatusPromptChange, previews = [], onPreviewHover, onPreviewClick, onDragEnd, onMoveSection, onHostDragEnd, onRotateEnd, onTrackRadiusEnd, onPickSectionFace, viewOptions, onChangeViewOptions, onMeasureDihedral }: ThreeSceneViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const renderTargetRef = useRef<HTMLDivElement>(null)
   const measurementOverlayRef = useRef<HTMLDivElement>(null)
@@ -124,24 +130,44 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
    * 由场景构建流程在 render 之后调用；也用于拖动自身的逐帧重画。
    */
   const resumeDragVisualRef = useRef<() => void>(() => undefined)
-  const [showHiddenEdges, setShowHiddenEdges] = useState(false)
-  /**
-   * 三色旋转环的**视图开关**（默认关，偏好记在本机）。
-   *
-   * 用户口径（选中一个正方体时截图）："把这个太空环删掉" —— 环是"抓着就转"的入口，
-   * 不能真删；但它默认糊在图上挡着图面。所以默认不画，要拖着转时在这里打开。
-   * 文档里那条待办写的就是这件事："三色旋转环会遮挡教学虚线，后续需提供**可见且不改几何的视图控制**"。
-   */
-  const [showRotationHandles, setShowRotationHandles] = useState(() => loadViewPreference3d().showRotationHandles)
+  const [localViewOptions, setLocalViewOptions] = useState<ThreeViewOptionsState>(() => {
+    const prefs = loadViewPreference3d()
+    return {
+      showHiddenEdges: false,
+      showRotationHandles: prefs.showRotationHandles,
+      showNormals: false,
+      transparentFaces: false,
+      unfolded: false,
+      showAngle: false,
+      autoFit: prefs.autoFit
+    }
+  })
+  const activeViewOptions = viewOptions ?? localViewOptions
+  const { showHiddenEdges, showRotationHandles, showNormals, transparentFaces, unfolded, showAngle, autoFit } = activeViewOptions
+  const updateViewOption = <K extends keyof ThreeViewOptionsState>(key: K, updater: ThreeViewOptionsState[K] | ((prev: ThreeViewOptionsState[K]) => ThreeViewOptionsState[K])) => {
+    const base = viewOptions ?? localViewOptions
+    const value = typeof updater === "function"
+      ? (updater as (prev: ThreeViewOptionsState[K]) => ThreeViewOptionsState[K])(base[key])
+      : updater
+    const next = { ...base, [key]: value }
+    if (onChangeViewOptions) onChangeViewOptions(next)
+    else setLocalViewOptions(next)
+    if (key === "autoFit" || key === "showRotationHandles") {
+      saveViewPreference3d({ autoFit: next.autoFit, showRotationHandles: next.showRotationHandles })
+    }
+    return next
+  }
+  const setShowHiddenEdges = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("showHiddenEdges", updater)
+  const setShowRotationHandles = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("showRotationHandles", updater)
   /** 解析曲线的细分档位（2 的幂）。相机缩放只改它，再由同步依赖触发重建——见 `syncCurveToleranceBucket`。 */
   const [curveToleranceBucket, setCurveToleranceBucket] = useState<number | null>(null)
   /** 渲染器只在挂载期建一次，`syncContent` 里的实时值一律经 ref 读——容差也一样。 */
   const curveToleranceBucketRef = useRef(0)
-  const [showNormals, setShowNormals] = useState(false)
-  const [transparentFaces, setTransparentFaces] = useState(false)
-  const [unfolded, setUnfolded] = useState(false)
+  const setShowNormals = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("showNormals", updater)
+  const setTransparentFaces = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("transparentFaces", updater)
+  const setUnfolded = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("unfolded", updater)
   const [unfoldProgress, setUnfoldProgress] = useState(0)
-  const [showAngle, setShowAngle] = useState(false)
+  const setShowAngle = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("showAngle", updater)
   const [panMode, setPanMode] = useState(false)
   const [dragMode, setDragMode] = useState(false)
   /** 「以面为剖切面」的一次性拾取模式：开启后下一次点击面即取该面为剖切面。 */
@@ -186,7 +212,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
   const sceneBuildsRef = useRef(0)
   const sceneSyncsRef = useRef(0)
   /** 自动取景：开关、用户是否动过相机（动过就不再抢视角）、已自动取景的次数、上一次的内容 AABB。 */
-  const [autoFit, setAutoFit] = useState(() => loadViewPreference3d().autoFit)
+  const setAutoFit = (updater: boolean | ((prev: boolean) => boolean)) => updateViewOption("autoFit", updater)
   const autoFitRef = useRef(autoFit)
   autoFitRef.current = autoFit
   const cameraFitRef = useRef(0)
@@ -205,6 +231,13 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
     statusPromptChangeRef.current?.(lastControlRef.current)
   }
   const toggleAngleDemo = () => {
+    const outcome = onMeasureDihedral?.()
+    if (outcome === "created" || outcome === "existing") {
+      setShowAngle(true)
+      lastControlRef.current = null
+      statusPromptChangeRef.current?.(null)
+      return
+    }
     const next = !showAngle
     lastControlRef.current = next ? "dihedral-demo" : lastControlRef.current === "dihedral-demo" ? null : lastControlRef.current
     setShowAngle(next)
@@ -393,6 +426,19 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
   /** 「以面为剖切面」需要有选中的截面作为目标。 */
   const hasSelectedSection = selectedIds.some((id) => document.primitives.some((primitive) => primitive.id === id && primitive.type === "section"))
   const angle = dihedralAngleDegrees({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
+  const activeSelectedDihedral = document.measurements.find((measurement) =>
+    measurement.metric === "dihedral" &&
+    measurement.status === "valid" &&
+    selectedIds.length >= 2 &&
+    measurement.sourceIds.every((id) => selectedIds.includes(id))
+  ) ?? document.measurements.find((measurement) =>
+    measurement.metric === "dihedral" &&
+    measurement.status === "valid" &&
+    selectedIds.some((id) => measurement.sourceIds.includes(id))
+  )
+  const activeDihedralDeg = activeSelectedDihedral?.value !== undefined && Number.isFinite(activeSelectedDihedral.value)
+    ? `${((activeSelectedDihedral.value * 180) / Math.PI).toFixed(1)}°`
+    : ""
   return <div className="three-canvas-shell" ref={containerRef} data-3d-scene="true" data-canvas-surface="graph-paper" data-pan-mode={panMode ? "true" : "false"} data-drag-mode={dragMode ? "true" : "false"} data-creation-tool={creationSession?.tool ?? ""} data-creation-anchors={String(creationSession?.anchors.length ?? 0)} data-work-plane={workPlaneName} data-solid-preview={solidPreviewActive ? "true" : "false"} data-ghost-active={ghostActive ? "true" : "false"} {...(canvasEvidence === null ? { "data-canvas-evidence-status": "pending", "data-canvas-evidence-accepted": "false" } : canvasEvidenceAttributes(canvasEvidence, true, document))} aria-label="3D 几何场景"
     onContextMenu={(event) => {
       if (!isCreationCanvasTarget(event.target)) return
@@ -436,5 +482,7 @@ export function ThreeSceneView({ document, selectedIds, onSelect, onCanvasContex
     {creationSession.anchors.length > 0 && <button type="button" onClick={onStepBackCreation}>撤回一点</button>}
     {creationSession.tool === "face3" && <button type="button" disabled={creationSession.anchors.length < 3} onClick={onFinishCreation}>完成空间面</button>}
     <button type="button" onClick={onCancelCreation}>取消绘制</button>
-  </div>}{webglAvailable && creationSession && creationReadout && <div className="creation-readout" data-creation-readout="true" role="presentation">{creationReadout}</div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} disabled={solidWizardOpen} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · Esc 或再点按钮退出 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · Esc 退出 · 滚轮缩放" : "左键拖动旋转 · 按住点直接拖动 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">二面角：{angle.toFixed(1)}°（示例法向量 X/Y）</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
+  </div>}{webglAvailable && creationSession && creationReadout && <div className="creation-readout" data-creation-readout="true" role="presentation">{creationReadout}</div>}{webglAvailable && <div className="three-camera-controls" aria-label="3D视角控制"><button type="button" aria-label="自由拖动" aria-pressed={dragMode} disabled={solidWizardOpen} title="开启后左键按住图形即整体拖动：实体、点、以及由点驱动的棱/线/面/平面都会跟着指针在屏幕平面内移动，其它对象不受影响" onClick={() => enterMode("drag")}>自由拖动</button><button type="button" aria-label="平移视角" aria-pressed={panMode} title="开启后左键拖动画布即平移视角，按 Ctrl 拖动沿视线前后移动" onClick={() => enterMode("pan")}>平移视角</button><button type="button" aria-label="适应视图" title="把视角调整到刚好框住当前图形，并把视角中心移回图形" onClick={() => fitCameraRef.current()}>适应视图</button><button type="button" aria-label="重置3D视角" title="回到默认视角" onClick={() => resetCameraRef.current()}>重置视角</button></div>}{webglAvailable && <p className="three-camera-hint" data-camera-hint="true">{creationSession ? "正在绘制：左键单击放点 · 中键或 Shift+左键拖动平移 · 滚轮缩放" : dragMode ? "自由拖动已开启：左键按住图形整体移动 · Esc 或再点按钮退出 · 滚轮缩放" : panMode ? "平移视角已开启：左键拖动平移 · 按 Ctrl 拖动沿视线前后移动 · Esc 退出 · 滚轮缩放" : "左键拖动旋转 · 按住点直接拖动 · 中键或 Shift+左键拖动平移 · Ctrl+拖动沿视线前后移动 · 滚轮缩放"}</p>}{showAngle && webglAvailable && <div className="three-angle-readout" role="status">{activeSelectedDihedral && activeSelectedDihedral.value !== undefined
+    ? `${activeSelectedDihedral.dihedralKind === "exterior" ? "二面角外角" : "二面角内角"}：${activeSelectedDihedral.value.toFixed(3)} rad${activeDihedralDeg ? ` · ${activeDihedralDeg}` : ""}`
+    : `二面角：${angle.toFixed(1)}°（示例法向量 X/Y · 先勾选两个面可实测）`}</div>}{!webglAvailable && <div className="three-scene-status" role="status">当前浏览器不支持 WebGL，无法显示 3D 场景。</div>}{webglAvailable && !hasGeometry && !creationSession && <div className="three-scene-status" role="status">添加点、线或面开始探索三维空间。</div>}</div>
 }

@@ -460,7 +460,24 @@ export interface CommitRequest {
   selectedScopeId?: string
   /** True on validating-phase repair re-staging so the unshown failed candidate draft is discarded before re-verifying from scratch. */
   replaceDraft?: boolean
+  /** True when staging a fresh standalone request with no selected targets or edit intent so stale canvas objects are cleared inside the staged draft. */
+  replaceExistingScene?: boolean
   signal: AbortSignal
+}
+
+const EDIT_OR_PRESERVE_SCENE_RE = /(?:选中|选中的|此点|该点|此线|该线|此面|该面|刚才|之前|已有|当前画布|原图|旧图|现有|修改|调整|删除|删掉|移除|去掉|隐藏|显示|锁定|解锁|在此基础上|在原图|在当前|在已有|保留原图|保留旧图|不要清|别删|不清除|再加|补充一条|添加一条|\bselected\b|\bthis point\b|\bthis line\b|\bmodify\b|\bedit\b|\bdelete\b|\bremove\b|\bkeep existing\b|\bpreserve existing\b)/i
+const STANDALONE_NEW_FIGURE_RE = /(?:^\s*\d+[．.\s]|三棱锥|四棱锥|棱锥|正方体|长方体|正四面体|四面体|三棱柱|棱柱|棱台|圆柱|圆锥|圆台|多面体|球体?|外接球|内切球|椭圆|双曲线|抛物线|函数|圆|三角形|正方形|矩形|菱形|梯形|平行四边形|在平面直角坐标系|已知|设|如图|画出?|作一个|构造|建立)/i
+
+/** Shared predicate telling whether a prompt modifies/keeps existing canvas items rather than asking for a clean new figure. */
+export function isEditOrPreserveScenePrompt(prompt: string): boolean {
+  return EDIT_OR_PRESERVE_SCENE_RE.test(prompt)
+}
+
+/** True when a prompt should proactively clear stale old primitives inside the staged draft and skip reading stale scene items. */
+export function shouldAutoClearSceneForPrompt(prompt: string, hasSelectedRefs: boolean): boolean {
+  if (isEditOrPreserveScenePrompt(prompt)) return false
+  if (!hasSelectedRefs) return true
+  return STANDALONE_NEW_FIGURE_RE.test(prompt)
 }
 
 export interface CommitterPort {

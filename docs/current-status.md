@@ -1,5 +1,20 @@
 # MathCanvas 当前状态
 
+## 2026-11-20 —— 首个正式版本里程碑定版（智能读题补线推面、全链路动点联动与工作台优化）
+
+> **首个正式版本里程碑收口（2026-11-20，0 离线测试）**：在纯文字 44/44（`deepseek-v4-flash` 真机全通过）基础上，完成用户全轮打磨与正式版定版交付——包括常规题不写平面名时的**自动补线（`materializePromptSegmentsInActions`）与「以线推面」（`materializePromptFacesInActions`）**、小写及分隔点名解析（`面ace`/`平面 A-C-E`）、构造面与棱上/面内动点 ID 复用实时联动、Agent 草稿预览态左侧对象栏即时同步与「面（构造 / 辅助）」独立分组、属性栏层次重组与角度 `sin`/`cos` 集中展示、往期对话完整回溯、`13` 种模型服务预设 + Rust `fetch_provider_models` 自动获取模型名、精简设置页（保留 `模型服务 | 偏好设置`）、更新桌面图标并隐藏 Windows 控制台黑框，以及面向用户的 [README](../README.md) 定版。全仓 `npm run typecheck` 退出码 `0`，桌面端真机 `deepseek-v4-flash` 端到端实测通过。
+
+> **2026-11-20 全面正确性二次根治修复与 `deepseek-v4-flash` 44 题全通过收口（基线 28/28 + 扩展 16/16 = 44/44 = 100.0%，0 离线测试）**：继第一轮正确性排查后，完成三项架构级高精度与同批容错修复：（1）`dsActionTools.ts` 为 `construct_solid(kind="sphere", inscribedIn)` 与 `construct_circumsphere(mode="insphere")` 实现 `solveInsphere3` + `solveMaxInscribedBall3`（Chebyshev 最大半径 + 非紧面最大化收口至精确内心），同时扩展 `construct_parallel` 支持 `offsetX/offsetY/distance`、`construct_intersection` 支持 `excludePointId` 与 `1e-2` 容差、`construct_conic` 支持 `(b, e)` 反算；（2）`modelPlanner.ts` 增加同批 `undeclared_entity_ref` 依赖波次重排与 `[ds_action_fail]` 诊断日志；（3）`systemPrompt.ts` 放开简短推导核对与同批多动作合并。`npm run typecheck`（exit 0）后实测修复重点项均已精确通过：`EX-P01`（19 次通过，6/6 义务全绿含精确 `C` 与 $B^*$）、`EX-S05`（4 次通过，精确内心 `O=(4,2,1.5), r=1.5`）、`EX-P04`（6 次通过，精确 `rx=2, ry=√5`）、`EX-S06`（6 次通过，2/2 义务全绿）、`GK-S12`（2 次通过，精确 `r=1.41421≈√2`）、`GK-S14`/`GK-S15`（各 5 次通过，并如实记录 `GK-S14` 示意 `r=5` 与 `GK-S15` 四顶点外接球近似边界）。基线 28/28 + 扩展 16/16 现 **44/44（100.0%）** 确认落盘主画布并通过 2D/3D 交互，两套累计估算上界费用 **\$3.1467 USD**（< \$5）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 全面正确性深度排查首轮快照（已被上方 44/44 二次根治复测替代）**：围绕工作区持久化（`useDraftPersistence.ts`）、线性方程递归下降解析、3D 禁圆、`construct_tangent` 切点、`AB ⊥ BC` 直角朝向及合同预检完成修复（当时 43/44，仅 `EX-P01` 未通过）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 扩展实测与收尾区块完成（阶段快照，已被上方全面正确性复测替代）**：针对扩展高考试题实测暴露的两个长尾断点完成根因修复：（1）`dsActionTools.ts` 为 `square_frustum` / `triangular_frustum` / `regular_frustum` / `frustum_pyramid` 新增精确多面体 `solid.create_polyhedron` 构图通道（解决正四棱台被误建为圆台）；（2）`acceptance.ts` 将 `"截面 △"` / `"截面△"` / `"截面三角形"` / `"截面四边形"` 命名截平面纳入豁免，避免高三正方体截面题误要求 `primitive: "section"`。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 纯文字高考/模考题 `ds_action` 真机端到端实测通过（28/28 = 100%，0 离线测试）**：继区块 1 修复后完成区块 2 收口与桌面端 Rust 重编译：（1）`agentRunner.ts` 对支持原生工具的已保存 provider 默认走 `ds_action` 与单题 `20` 次请求预算；`modelPlanner.ts` 解除 `solveRectangleFold` 抢占、将同轮批量工具上限从 8 提至 32 并对未发布工具名返回可修复 `tool_result` 自纠；（2）`dsActionTools.ts` 补齐直线/圆/圆锥曲线方程字符串解析、`a/b/c/e/p` 参数、默认中点、多交点自动决胜、`cube`/`cylinder`/`cone`/`round_frustum`/`sphere`/`sides`/梯形底面、`regular_pyramid` 含 `sides:3` 与外接圆半径推导、`construct_circumsphere` 自动匹配最新实体及禁止文字题误澄清；（3）`drawingCertificate.ts` 与 `draftStore.ts` 在有限图元无硬失败时放行未知自然语言残句；`acceptance.ts` 排除“截面是/轴截面/截面面积”描述性条件词误要求截面图元。在最新编译的桌面端通过真实 UI + 已保存 `deepseek-v4-flash` 实测 28 道纯文字高考/模考题（平面 18 题 + 立体 10 题），全部通过确认落盘与 2D/3D 画布交互操作（单题最多 11 次请求，累计估算上界 **\$0.5340 USD** < \$5 上限），全仓 `npm run typecheck` 通过。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-19 GK-P01/GK-P06 原卷复核（0新增 DS）**：GK-P01 在2025新高考Ⅱ卷学生 PDF p3 确认第16题无附图；GK-P06 冻结标注为2019全国Ⅲ理科#21，实际同题为文科#21，已在[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)与[候选清单](../test-fixtures/reliability/text-only-36-source-triage.json)明确来源错配待新 manifest 纠正，旧 suite 不变。旧23现6题 PDF 页级初核、2题来源错配、1题仅预览、14题待查；新36 `runnable=false`、未发模型请求、旧成绩不变。
+
+
 > **2026-11-19 GK-P04 题页预览（0 DS 请求）**：找到 2022 全国甲卷文科 #20 的第三方 JPEG p4，题面匹配、该题不附图；但非原 PDF，证据单列 `page_preview_checked_needs_pdf_and_independent_review`。旧23现5题PDF页级初核、GK-P07来源错配、GK-P04仅预览、其余16题待审；[审计](audit/2026-11-19-g3-text-only-source-triage/README.md)。新36 `runnable=false`，未发模型请求，旧真实成绩不变。
 
 
@@ -188,7 +203,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-18；产品版本：v4.3.0；产品代码基线：59ea36133c47971f4252e71f7a0f5ba003dd1028。
+最后更新：2026-11-20；产品版本：v4.3.0（首个正式发布版基线）；产品代码基线：5171942e。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

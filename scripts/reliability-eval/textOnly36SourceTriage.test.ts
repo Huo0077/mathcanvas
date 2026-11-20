@@ -31,7 +31,7 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       expect(row.inputHash).toBe(old?.inputHash)
       expect(row.source).toBe(old?.source)
       expect(row.textualFigureCue).toBe(false)
-      expect(row.status).toBe(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : row.id === "GK-P07" ? "pdf_page_checked_source_mismatch_requires_new_manifest" : row.id === "GK-P04" ? "page_preview_checked_needs_pdf_and_independent_review" : "needs_original_paper_review")
+      expect(row.status).toBe(["GK-P01", "GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"].includes(row.id) ? "pdf_page_checked_needs_independent_review" : ["GK-P06", "GK-P07"].includes(row.id) ? "pdf_page_checked_source_mismatch_requires_new_manifest" : row.id === "GK-P04" ? "page_preview_checked_needs_pdf_and_independent_review" : "needs_original_paper_review")
     }
   })
 
@@ -143,7 +143,12 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
         originalPaperSha256: "f8362915a798b85da50ece7be83783264ed3c4920328cb5b5911910475862625", originalPaperPage: page
       })
     }
-    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"])
+    expect(triage().retained.find(x => x.id === "GK-P01")).toMatchObject({
+      status: "pdf_page_checked_needs_independent_review",
+      originalPaperUrl: "https://img.gaokaozhitongche.com/resource/pdf/paper/202510/20251029063205_Oevl76.pdf",
+      originalPaperSha256: "c24ffbff5bc2428ede2d42080e4d061091d01feef686efc553b5d154b340d536", originalPaperPage: 3
+    })
+    expect(triage().retained.filter(x => x.status === "pdf_page_checked_needs_independent_review").map(x => x.id)).toEqual(["GK-P01", "GK-P02", "GK-P03", "GK-P05", "GK-P08", "GK-P09"])
   })
 
   it("keeps retained GK-P04 JPEG page preview below original-PDF admission level", () => {
@@ -152,6 +157,18 @@ describe("text-only 36 source triage is candidate evidence, not a runnable exam 
       previewImageUrl: "https://cdn.att.tthaoke.com/testpaper/preview/5/5825718b11b37a5d43894e2e0651b42e/p004.jpg",
       previewImageSha256: "78abd05f2f737d146570ef29d64915c84285b8b41b722b7c0d9225603e64f04a", previewPage: 4 })
     expect(row?.originalPaperSha256).toBeUndefined()
+    expect(triage().runnable).toBe(false)
+  })
+
+  it("flags GK-P06 science/arts misattribution without modifying the old frozen source", () => {
+    const row = triage().retained.find(x => x.id === "GK-P06")
+    expect(row).toMatchObject({
+      status: "pdf_page_checked_source_mismatch_requires_new_manifest",
+      sourceCorrection: "2019 全国Ⅲ卷文科数学 第21题",
+      originalPaperUrl: "https://cdn.att.tthaoke.com/testpaper/release/1/1c4234b0cc1d0cd90d51a2ddd99b1b02/2019%E5%B9%B4%E5%85%A8%E5%9B%BD%E7%BB%9F%E4%B8%80%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7%EF%BC%88%E6%96%87%E7%A7%91%EF%BC%89%EF%BC%88%E6%96%B0%E8%AF%BE%E6%A0%87%E2%85%B2%EF%BC%89%EF%BC%88%E5%90%AB%E8%A7%A3%E6%9E%90%E7%89%88%EF%BC%89.pdf",
+      originalPaperSha256: "644a83fda214c8d7b99ffffde95a3d02f3191da1436bc9acf39f93aa8cd43dee", originalPaperPage: 5
+    })
+    expect(row?.source).toBe(legacy.cases.find(x => x.id === "GK-P06")?.source)
     expect(triage().runnable).toBe(false)
   })
 

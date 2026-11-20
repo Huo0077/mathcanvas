@@ -57,7 +57,7 @@ function pointPositions(document: GeometryDocument, primitive: PrimitiveSpec): V
   return []
 }
 
-/** 立体几何画布的读数：数值 + 单位 + 精确 / 近似形式（与平面画布、属性栏同一份格式化）。 */
+/** 立体几何画布的读数：数值 + 单位 + 精确 / 近似形式（正余弦仅在右侧属性栏展示，保持画布简洁）。 */
 function measurementLabel(measurement: Measurement3): string {
   return `${measurementMetricLabel(measurement)}：${measurement.value?.toFixed(3) ?? "—"}${measurement.unit ?? ""}${measurementFormSuffix(measurement)}`
 }

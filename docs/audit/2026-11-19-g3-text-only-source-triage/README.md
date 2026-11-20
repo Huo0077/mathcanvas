@@ -39,6 +39,8 @@
 
 **GK-P04 原卷预览初核（未达到 PDF 证据）**：[2022 全国甲卷文科数学预览 p4](https://cdn.att.tthaoke.com/testpaper/preview/5/5825718b11b37a5d43894e2e0651b42e/p004.jpg) JPEG SHA-256 `78abd05f2f737d146570ef29d64915c84285b8b41b722b7c0d9225603e64f04a`，p4 #20 的 `f(x)=x³-x, g(x)=x²+a` 与旧候选吻合、无随题附图；p4 #19 包装盒有图不属于 #20。**仅第三方页面预览，非可下载原卷 PDF 或独立合同**，故状态 `page_preview_checked_needs_pdf_and_independent_review`，不可写成第六道原卷 PDF 通过。测试先 RED 后 GREEN；`npm.cmd run typecheck` 通过、`npm.cmd run test:docs -- --maxWorkers=1` 8文件/22用例通过、定向3文件/57用例通过、`npm.cmd run lint` 0错误/34条既有警告、`git diff --check` 通过。旧23现在5题普通PDF页级初核、1题旧来源错配、1题仅预览，另16题待核对。
 
+**GK-P01 原题页复核与 GK-P06 来源错配**：GK-P01 对照[2025 新高考Ⅱ卷数学学生卷 PDF](https://img.gaokaozhitongche.com/resource/pdf/paper/202510/20251029063205_Oevl76.pdf) SHA-256 `c24ffbff5bc2428ede2d42080e4d061091d01feef686efc553b5d154b340d536`，p3 第16题为椭圆离心率/弦长，未随题附图；同页第17题有图，不归属第16题。GK-P06 **旧 source 标为“2019 全国Ⅲ卷理科 #21”与原卷不符**：理科 #21 是另一题；对应曲线 `y=x²/2`、直线 `y=-1/2` 的切线题在[2019 全国Ⅲ卷文科 #21 PDF](https://cdn.att.tthaoke.com/testpaper/release/1/1c4234b0cc1d0cd90d51a2ddd99b1b02/2019%E5%B9%B4%E5%85%A8%E5%9B%BD%E7%BB%9F%E4%B8%80%E9%AB%98%E8%80%83%E6%95%B0%E5%AD%A6%E8%AF%95%E5%8D%B7%EF%BC%88%E6%96%87%E7%A7%91%EF%BC%89%EF%BC%88%E6%96%B0%E8%AF%BE%E6%A0%87%E2%85%B2%EF%BC%89%EF%BC%88%E5%90%AB%E8%A7%A3%E6%9E%90%E7%89%88%EF%BC%89.pdf)，文件 SHA-256 `644a83fda214c8d7b99ffffde95a3d02f3191da1436bc9acf39f93aa8cd43dee`，p5 无附图；同页第22题附图仅属于另一题。旧冻结 suite、91 次真实回执和成绩都不回写，**新版清单 GK-P06 必须纠正 source 并重新审查合同**，测试先 RED 后 GREEN。旧23现为6条 PDF 匹配页级初核、2条 source 错配待纠、1条仅 JPEG 预览、其余14条尚无原卷。
+
 ### 联考候选（5条，页面已初核，无独立签收）
 
 | 槽位 | 题号 | 来源原卷键 | 状态 |

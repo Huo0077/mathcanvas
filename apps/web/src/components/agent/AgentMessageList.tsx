@@ -76,27 +76,30 @@ export function AgentMessageList({ conversation, onExample, onRetry, onRevise, o
         : <ul className="agent-messages">
           {messages.map((message) => <li className="agent-message" key={message.id} data-message-role={message.role} data-pending={message.pending === true}>
             <div className="agent-message-head">
-              <span className="agent-avatar" aria-hidden="true">{message.role === "user" ? "我" : "∑"}</span>
-              <span className="agent-message-role">{message.role === "user" ? "你" : "Agent"}</span>
+              <span className="agent-avatar" aria-hidden="true">
+                {message.role === "user" ? "我" : (
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                    <path d="M12 2L14.3 9.7L22 12L14.3 14.3L12 22L9.7 14.3L2 12L9.7 9.7L12 2Z" />
+                  </svg>
+                )}
+              </span>
+              <span className="agent-message-role">{message.role === "user" ? "你" : "AI 助手"}</span>
               <time className="agent-message-time">{formatMessageTime(message.createdAt)}</time>
             </div>
-            {/* 运行状态卡放在气泡**外面**：它讲的是"这一步做到哪了"，不是"Agent 说了什么"。
-                在途消息（`pending`）也要渲染它 —— 否则用户只看到一个"正在生成"却看不到进度。
-                回调带上这条消息的 `runId`：面板是**按消息**渲染的，点它确认的就是**这一轮**
-                （Fix round 1 / C2 —— 少了它，点确认会提交最近那一轮，可能是另一条会话的草稿）。 */}
             {message.role === "assistant" && <RunStatus message={message} onRetry={onRetry} onRevise={onRevise} onStop={() => onStop?.(message.runId)} onConfirm={() => onConfirm?.(message.runId)} onDiscard={() => onDiscard?.(message.runId)} />}
-            {/* 有草稿时再给一块**确认面板**：它比状态卡里的摘要详细得多（精确计数、来源与目标、
-                假设、近似、导出省略、一步撤销声明）。计划把它与状态卡分开列，这里也分开渲染。 */}
+            {(message.pending || message.role === "user" || message.text.trim().length > 0) && (
+              <div className="agent-bubble">
+                {message.pending
+                  ? <div className="agent-bubble-pending-wrap">
+                      <div className="agent-gemini-shimmer" aria-hidden="true"><span /><span /><span /></div>
+                      <p className="agent-bubble-pending" role="status">正在生成回复…</p>
+                    </div>
+                  : message.role === "user"
+                    ? <UserBody text={message.text} />
+                    : <AssistantBody message={message} />}
+              </div>
+            )}
             {message.role === "assistant" && message.draft && <ConfirmationPanel draft={proofDraftForScene(message.draft, message.commit, document)} assumptions={message.draft.assumptions} onConfirm={message.commit ? undefined : () => onConfirm?.(message.runId)} onDiscard={message.commit ? undefined : () => onDiscard?.(message.runId)} />}
-            {/* 在途消息在气泡里**仍然**留一句带 `role="status"` 的短标签：屏幕阅读器靠它播报，
-                而状态卡负责说明"走到哪一步"。两者不重复，也不互相替代。 */}
-            <div className="agent-bubble">
-              {message.pending
-                ? <p className="agent-bubble-pending" role="status">正在生成回复…</p>
-                : message.role === "user"
-                  ? <UserBody text={message.text} />
-                  : <AssistantBody message={message} />}
-            </div>
           </li>)}
         </ul>}
     </div>

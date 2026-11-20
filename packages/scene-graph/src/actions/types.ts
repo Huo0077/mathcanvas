@@ -475,9 +475,11 @@ export interface DynamicCreateFacePointAction extends ActionBase {
   actionId: "dynamic.create_face_point"
   inputs: {
     alias: DraftAlias
-    /** 点落在哪一张面上（必须是 `face3`，且点要在该面内部） */
+    /** 点落在哪一张面上（可以是独立 `face3`，也可以是实体 + `faceSub` 子面下标） */
     face: SceneReference
-    /** 面上的归一化坐标（u、v 都在 [0,1] 内） */
+    /** 实体内部的面下标；给了就绑到 `${face.entityId}:f${faceSub}` 这张面上。 */
+    faceSub?: number
+    /** 面上的归一化/局部参数坐标 */
     uv: [number, number]
     /** 绑定到曲线参数的 id（u、v 各一条） */
     parameterIds?: [string, string]

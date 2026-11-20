@@ -62,8 +62,10 @@ export type RepositoryResult<T> = { ok: true; value: T } | RepositoryFailure
  * 判据是"**这次提交是什么**"（文档 + 内容哈希），不是"什么时候发的"——
  * 带时间戳的键会让重试变成一次新提交，而幂等键的全部价值就在于让重试**不是**新提交。
  */
-export function idempotencyKey(documentId: string, contentHash: string): string {
-  return `${documentId}@${contentHash}`
+export function idempotencyKey(documentId: string, contentHash: string, expectedGeneration?: number): string {
+  return expectedGeneration === undefined
+    ? `${documentId}@${contentHash}`
+    : `${documentId}:${expectedGeneration}@${contentHash}`
 }
 
 /** 把 IPC 抛出来的错误按**能照做的类别**切开。 */
@@ -143,7 +145,7 @@ export function createDocumentRepository(invoke: Invoke): DocumentRepository {
 
     commit: (projectId, document, expected, actions) =>
       call<CommitReceipt>("commit_document", {
-        idempotencyKey: idempotencyKey(document.metadata.id, contentFingerprint(document)),
+        idempotencyKey: idempotencyKey(document.metadata.id, contentFingerprint(document), expected.generation),
         projectId,
         documentId: document.metadata.id,
         expectedEpoch: expected.epoch,

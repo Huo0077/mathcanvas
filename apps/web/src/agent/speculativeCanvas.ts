@@ -56,6 +56,7 @@ export interface SpeculativeCanvas {
   revertToStep(targetStep: number): SpeculativeSnapshot
   discard(): SpeculativeSnapshot
   snapshot(): SpeculativeSnapshot
+  currentDocument(): GeometryDocument
   promoteToDraftStore(
     draftStore: DraftStore,
     baseHandle?: DocumentHandle,
@@ -133,6 +134,12 @@ export function createSpeculativeCanvas(
 
       const candidateActions = [...stagedActions, structuredClone(action) as DraftAction]
       const workingBase = structuredClone(initialDoc) as GeometryDocument
+      const needs3dWorkspace = candidateActions.some(
+        (act) => act.actionId.startsWith("solid.") || act.actionId.startsWith("derived.") || act.actionId.startsWith("section.")
+      )
+      if (needs3dWorkspace && workingBase.workspace !== "geometry3d") {
+        workingBase.workspace = "geometry3d"
+      }
       const allocator = createIdAllocator(workingBase.primitives.map((p) => p.id))
       const compiled = compilePlan(
         {
@@ -145,10 +152,11 @@ export function createSpeculativeCanvas(
         },
         {
           document: workingBase,
+          workspace: workingBase.workspace,
           capabilityRevision: "speculative",
           conversationId: runId,
           idAllocator: allocator,
-          ...(stepOptions?.prompt === undefined ? {} : { userMessage: stepOptions.prompt })
+          ...(stepOptions?.prompt === undefined ? {} : { prompt: stepOptions.prompt })
         }
       )
 
@@ -211,6 +219,10 @@ export function createSpeculativeCanvas(
     },
 
     snapshot,
+
+    currentDocument() {
+      return checkpoints[checkpoints.length - 1]!.candidateDocument
+    },
 
     async promoteToDraftStore(draftStore, baseHandle, promoteOptions) {
       const draft = draftStore.create(structuredClone(initialDoc) as GeometryDocument, baseHandle)

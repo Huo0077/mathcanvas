@@ -94,7 +94,7 @@ export function RunStatus({ message, onRetry, onRevise, onStop }: RunStatusProps
       * 这一段原先就地渲染一个 `<ol>`。抽出去的理由不是"少写几行"，而是"opt-in 的详细视图"
       * 需要一个**有状态的**容器（原生 `<details>`），而状态卡本身是无状态的展示组件。
       */}
-    <ToolTracePanel trace={message.trace} diagnostics={message.diagnostics} />
+    <ToolTracePanel trace={message.trace} diagnostics={message.diagnostics} pending={message.pending} failed={Boolean(message.failure)} />
 
     {/**
       * 这里**不再**渲染草稿摘要。

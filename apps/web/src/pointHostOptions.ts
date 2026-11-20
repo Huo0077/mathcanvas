@@ -1,4 +1,5 @@
 import type { Point3Binding, PrimitiveSpec } from "@draw/dsl"
+import { formatPrimitiveDisplayLabel } from "./primitiveDisplayName"
 
 /**
  * 「宿主绑定」下拉的候选与取值编码。
@@ -36,15 +37,21 @@ function hostLabel(primitive: PrimitiveSpec): string {
  * 用户自己搭的点驱动多面体则可以，因为它本身就是用户认得的一个实体。
  */
 export function pointHostOptions(primitives: PrimitiveSpec[]): PointHostOption[] {
+  const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   const options: PointHostOption[] = []
   for (const primitive of primitives) {
-    const label = primitive.label ?? primitive.id
+    const label = formatPrimitiveDisplayLabel(primitive, byId)
     if (["line3", "segment3", "ray3", "edge3", "circle3"].includes(primitive.type)) {
       options.push({ value: `host:${primitive.id}`, primitiveId: primitive.id, mode: "host", label: `${label}（${hostLabel(primitive)}）` })
       continue
     }
-    if (primitive.type === "face3") {
-      options.push({ value: `face:${primitive.id}`, primitiveId: primitive.id, mode: "face", label: `${label}（${MODE_LABELS.face}）` })
+    if (primitive.type === "face3" || primitive.type === "plane3") {
+      options.push({
+        value: `face:${primitive.id}`,
+        primitiveId: primitive.id,
+        mode: "face",
+        label: `${label}（${primitive.type === "plane3" ? "平面" : MODE_LABELS.face}）`
+      })
       continue
     }
     if (primitive.type === "cylinder" || primitive.type === "cone") {

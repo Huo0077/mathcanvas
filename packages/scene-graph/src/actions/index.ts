@@ -946,7 +946,8 @@ export function compileSolidFace(
   faceId: string,
   vertices: readonly Vector3[],
   label?: string,
-  vertexNames?: readonly string[]
+  vertexNames?: readonly string[],
+  existingPointIds?: readonly (string | undefined)[]
 ): { primitives: PrimitiveSpec[]; pointIds: string[]; edgeIds: string[]; diagnostics: ActionDiagnostic[] } {
   const refuse = (message: string) => ({ primitives: [] as PrimitiveSpec[], pointIds: [] as string[], edgeIds: [] as string[], diagnostics: [diagnostic(faceId, "degenerate_face", message)] })
   if (vertices.length < 3) return refuse("空间面至少需要三个顶点。")
@@ -969,11 +970,12 @@ export function compileSolidFace(
   })
   if (!hasArea) return refuse("空间面的顶点不能共线。")
 
-  const pointIds = vertices.map((_, index) => `${faceId}:v${index}`)
+  const pointIds = vertices.map((_, index) => existingPointIds?.[index] ?? `${faceId}:v${index}`)
   const edgeIds = vertices.map((_, index) => `${faceId}:e${index}`)
-  const points: PrimitiveSpec[] = vertices.map((position, index) => {
+  const points: PrimitiveSpec[] = vertices.flatMap((position, index) => {
+    if (existingPointIds?.[index]) return []
     const name = vertexNames?.[index]
-    return { id: pointIds[index]!, type: "point3", position: { ...position }, binding: { kind: "free" }, ...(name === undefined || name.length === 0 ? {} : { label: name }) }
+    return [{ id: pointIds[index]!, type: "point3", position: { ...position }, binding: { kind: "free" }, ...(name === undefined || name.length === 0 ? {} : { label: name }) }]
   })
   const edges: PrimitiveSpec[] = vertices.map((_, index) => ({ id: edgeIds[index]!, type: "edge3", pointIds: [pointIds[index]!, pointIds[(index + 1) % pointIds.length]!], faceIds: [faceId] }))
   const face: PrimitiveSpec = { id: faceId, type: "face3", pointIds, edgeIds, ...(label === undefined ? {} : { label }) }
@@ -1209,7 +1211,20 @@ function compileSolidFaceAction(action: Extract<DraftAction, { actionId: "solid.
     return { operations: [], diagnostics: [diagnostic(actionKey, "workspace_mismatch", "a planar face can only be created in the solid workspace")], aliasToId: {} }
   }
   const id = context.idAllocator.allocate("face", inputs.alias)
-  const built = compileSolidFace(id, inputs.vertices, inputs.label, inputs.vertexNames)
+  // 若场景里已存在同标签且坐标一致的 point3（例如正四面体顶点 A/C 或棱上动点 E），
+  // 直接复用它的 id 作为 face3 顶点，使面与动点实时联动而不造重复点标记。
+  const existingPointIds = inputs.vertexNames?.map((name, index) => {
+    const vertex = inputs.vertices[index]
+    if (!vertex) return undefined
+    const found = context.targetDocument.primitives.find(
+      (p): p is Extract<PrimitiveSpec, { type: "point3" }> =>
+        p.type === "point3"
+        && p.label === name
+        && Math.hypot(p.position.x - vertex.x, p.position.y - vertex.y, p.position.z - vertex.z) <= 1e-2
+    )
+    return found?.id
+  })
+  const built = compileSolidFace(id, inputs.vertices, inputs.label, inputs.vertexNames, existingPointIds)
   if (built.diagnostics.length > 0) return { operations: [], diagnostics: built.diagnostics.map((entry) => diagnostic(actionKey, entry.code, entry.message)), aliasToId: {} }
   return { operations: [{ op: "addPrimitives", primitives: built.primitives }], diagnostics: [], aliasToId: { [inputs.alias]: id } }
 }
@@ -1816,9 +1831,13 @@ function compileCreateFacePoint(action: Extract<DraftAction, { actionId: "dynami
       return { operations: [], diagnostics: [diagnostic(actionKey, "parameter_not_found", `no parameter ${missing[0]}`)], aliasToId: {} }
     }
   }
-  const face = findPrimitive(context.targetDocument, inputs.face.entityId)
+  if (inputs.faceSub !== undefined && (!Number.isInteger(inputs.faceSub) || inputs.faceSub < 0)) {
+    return { operations: [], diagnostics: [diagnostic(actionKey, "invalid_face_sub", "faceSub must be a non-negative integer")], aliasToId: {} }
+  }
+  const targetFaceId = inputs.faceSub === undefined ? inputs.face.entityId : `${inputs.face.entityId}:f${inputs.faceSub}`
+  const face = findPrimitive(context.targetDocument, targetFaceId)
   if (!face) {
-    return { operations: [], diagnostics: [diagnostic(actionKey, "face_not_found", `no face ${inputs.face.entityId}`)], aliasToId: {} }
+    return { operations: [], diagnostics: [diagnostic(actionKey, "face_not_found", `no face ${targetFaceId}`)], aliasToId: {} }
   }
   if (face.type !== "face3") {
     return { operations: [], diagnostics: [diagnostic(actionKey, "not_a_face", `face reference ${inputs.face.entityId} points to a ${face.type}`)], aliasToId: {} }

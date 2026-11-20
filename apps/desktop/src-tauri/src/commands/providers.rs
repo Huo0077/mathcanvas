@@ -338,6 +338,49 @@ pub fn provider_check(app: tauri::AppHandle, profile_id: String, profile_revisio
         .map_err(|error| error.to_json().to_string())
 }
 
+/// **自动获取该接口下的可用模型列表**。
+///
+/// 新建时使用当前输入的 `api_key`；编辑已保存服务时若留空 `api_key`，则按 `profile_id` 从凭据库借用密钥（密钥不出 Rust 侧）。
+#[tauri::command]
+pub async fn fetch_provider_models(
+    app: tauri::AppHandle,
+    protocol: String,
+    base_url: String,
+    network_policy: String,
+    api_key: Option<String>,
+    profile_id: Option<String>,
+) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let transport = providers::adapter::HttpTransport::new();
+        let inline_key = api_key
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        if let Some(secret) = inline_key {
+            return transport.fetch_models(&protocol, &base_url, &network_policy, Some(&secret));
+        }
+        if let Some(pid) = profile_id.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            let secret_ref = {
+                let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+                let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+                store.get(pid).and_then(|profile| profile.secret_ref).unwrap_or_else(|| pid.to_string())
+            };
+            let secrets = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
+            return secrets
+                .0
+                .with_secret(&secret_ref, |stored_secret| {
+                    transport.fetch_models(&protocol, &base_url, &network_policy, Some(stored_secret))
+                })
+                .map_err(|error| error.to_string())?
+                .unwrap_or_else(|| transport.fetch_models(&protocol, &base_url, &network_policy, None));
+        }
+        transport.fetch_models(&protocol, &base_url, &network_policy, None)
+    })
+    .await
+    .map_err(|_| "获取模型列表线程意外终止".to_string())?
+}
+
 /// **唯一的自述命令**（Task 1.1 Step 4）。
 ///
 /// 它回答"我现在跑在什么上面、哪些部件是好的"，供前端如实显示。

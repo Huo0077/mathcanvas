@@ -609,6 +609,110 @@ impl HttpTransport {
         }
         builder.build().map_err(|error| ProviderError::Transport { detail: error.to_string() })
     }
+
+    /// 获取接口公开模型目录（OpenAI `/models` / Anthropic `/models` / Ollama `/api/tags`）。
+    pub fn fetch_models(&self, protocol: &str, base_url: &str, network_policy: &str, api_key: Option<&str>) -> Result<Vec<String>, String> {
+        let trimmed = base_url.trim().trim_end_matches('/');
+        if trimmed.is_empty() {
+            return Err("请先填写接口地址（Base URL）".to_string());
+        }
+        let mut endpoints: Vec<String> = if protocol == "ollama" {
+            let root = trimmed.strip_suffix("/v1").unwrap_or(trimmed);
+            if trimmed.ends_with("/v1") {
+                vec![format!("{trimmed}/models"), format!("{root}/api/tags")]
+            } else {
+                vec![format!("{root}/api/tags"), format!("{trimmed}/v1/models")]
+            }
+        } else {
+            vec![format!("{trimmed}/models")]
+        };
+        endpoints.dedup();
+
+        let key = api_key.map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
+        let protocol_owned = protocol.to_string();
+        let policy_owned = network_policy.to_string();
+
+        drive(async move {
+            let mut last_error = "未能从接口获取到任何可用模型".to_string();
+            for endpoint in endpoints {
+                let client = match self.client_for(&endpoint, &policy_owned).await {
+                    Ok(client) => client,
+                    Err(error) => {
+                        last_error = error.message();
+                        continue;
+                    }
+                };
+                let mut builder = client.get(&endpoint).header("Accept", "application/json");
+                if let Some(secret) = key.as_deref() {
+                    if protocol_owned == "anthropic" {
+                        builder = builder
+                            .header("x-api-key", secret)
+                            .header("anthropic-version", "2023-06-01");
+                    } else {
+                        builder = builder.header("Authorization", format!("Bearer {secret}"));
+                    }
+                }
+                let response = match builder.send().await {
+                    Ok(response) => response,
+                    Err(error) => {
+                        last_error = format!("请求模型列表失败：{}", describe(&error));
+                        continue;
+                    }
+                };
+                let status = response.status();
+                if !status.is_success() {
+                    last_error = match status.as_u16() {
+                        401 => "认证失败（HTTP 401）：请检查 API Key 是否有效".to_string(),
+                        403 => "无权限访问（HTTP 403）".to_string(),
+                        404 => "该接口未提供 /models 列表端点（HTTP 404），请手动填写模型名".to_string(),
+                        429 => "请求过于频繁（HTTP 429），请稍后重试".to_string(),
+                        code => format!("服务返回 HTTP {code}"),
+                    };
+                    continue;
+                }
+                let bytes = match response.bytes().await {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        last_error = format!("读取响应失败：{error}");
+                        continue;
+                    }
+                };
+                if bytes.len() > 2 * 1024 * 1024 {
+                    last_error = "模型列表响应过大".to_string();
+                    continue;
+                }
+                let json: serde_json::Value = match serde_json::from_slice(&bytes) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        last_error = format!("解析模型列表 JSON 失败：{error}");
+                        continue;
+                    }
+                };
+                let mut ids: Vec<String> = Vec::new();
+                if let Some(items) = json.get("data").and_then(|v| v.as_array()).or_else(|| json.as_array()) {
+                    for item in items {
+                        if let Some(id) = item.get("id").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
+                            ids.push(id.to_string());
+                        }
+                    }
+                }
+                if let Some(models) = json.get("models").and_then(|v| v.as_array()) {
+                    for item in models {
+                        if let Some(name) = item.get("name").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
+                            ids.push(name.to_string());
+                        }
+                    }
+                }
+                ids.sort();
+                ids.dedup();
+                if !ids.is_empty() {
+                    return Ok(ids);
+                }
+                last_error = "接口返回成功但模型列表为空，请手动填写模型名".to_string();
+            }
+            Err(last_error)
+        })
+    }
 }
 
 /// 在**当前线程**上建一个只跑一个 future 的运行时。

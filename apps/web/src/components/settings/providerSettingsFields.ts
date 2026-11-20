@@ -33,11 +33,18 @@ export function reasonFor(code: string, detail: string): string {
  * 预设保存服务的协议、方言和基址。官方有明确推荐的模型 ID 时提供默认值。
  */
 export const PRESETS: { label: string; protocol: ProviderProtocol; dialect: ProviderProfile["dialect"]; baseUrl: string; networkPolicy: ProviderProfile["networkPolicy"]; defaultModelId?: string }[] = [
-  { label: "OpenAI", protocol: "openai_compatible", dialect: "openai_native", baseUrl: "https://api.openai.com/v1", networkPolicy: "cloud" },
-  { label: "DeepSeek", protocol: "openai_compatible", dialect: "deepseek", baseUrl: "https://api.deepseek.com", networkPolicy: "cloud", defaultModelId: "deepseek-flash" },
-  { label: "Moonshot", protocol: "openai_compatible", dialect: "moonshot", baseUrl: "https://api.moonshot.cn/v1", networkPolicy: "cloud" },
-  { label: "Anthropic", protocol: "anthropic", dialect: "anthropic_messages", baseUrl: "https://api.anthropic.com/v1", networkPolicy: "cloud" },
+  { label: "DeepSeek", protocol: "openai_compatible", dialect: "deepseek", baseUrl: "https://api.deepseek.com", networkPolicy: "cloud", defaultModelId: "deepseek-chat" },
+  { label: "OpenAI", protocol: "openai_compatible", dialect: "openai_native", baseUrl: "https://api.openai.com/v1", networkPolicy: "cloud", defaultModelId: "gpt-4o-mini" },
+  { label: "Anthropic (Claude)", protocol: "anthropic", dialect: "anthropic_messages", baseUrl: "https://api.anthropic.com/v1", networkPolicy: "cloud", defaultModelId: "claude-sonnet-4-20250514" },
+  { label: "Google Gemini (兼容接口)", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", networkPolicy: "cloud", defaultModelId: "gemini-2.5-flash" },
+  { label: "通义千问 Qwen (百炼)", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", networkPolicy: "cloud", defaultModelId: "qwen-plus" },
+  { label: "智谱清言 GLM", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://open.bigmodel.cn/api/paas/v4", networkPolicy: "cloud", defaultModelId: "glm-4-flash" },
+  { label: "Moonshot (Kimi)", protocol: "openai_compatible", dialect: "moonshot", baseUrl: "https://api.moonshot.cn/v1", networkPolicy: "cloud", defaultModelId: "moonshot-v1-8k" },
+  { label: "硅基流动 SiliconFlow", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://api.siliconflow.cn/v1", networkPolicy: "cloud", defaultModelId: "deepseek-ai/DeepSeek-V3" },
+  { label: "火山方舟 Doubao", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", networkPolicy: "cloud" },
+  { label: "OpenRouter", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "https://openrouter.ai/api/v1", networkPolicy: "cloud", defaultModelId: "openai/gpt-4o-mini" },
   { label: "Ollama（本机）", protocol: "ollama", dialect: "ollama_native", baseUrl: "http://127.0.0.1:11434/v1", networkPolicy: "local" },
+  { label: "LM Studio（本机）", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "http://127.0.0.1:1234/v1", networkPolicy: "local" },
   { label: "自定义（OpenAI 兼容）", protocol: "openai_compatible", dialect: "generic_compatible", baseUrl: "", networkPolicy: "cloud" }
 ]
 

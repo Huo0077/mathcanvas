@@ -1,5 +1,8 @@
 # Agent 发布前门禁
 
+> **2026-11-19 GK-P01/GK-P06 原卷复核（0新增 DS）**：GK-P01 在2025新高考Ⅱ卷学生 PDF p3 确认第16题无附图；GK-P06 冻结标注为2019全国Ⅲ理科#21，实际同题为文科#21，已在[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)与[候选清单](../../test-fixtures/reliability/text-only-36-source-triage.json)明确来源错配待新 manifest 纠正，旧 suite 不变。旧23现6题 PDF 页级初核、2题来源错配、1题仅预览、14题待查；新36 `runnable=false`、未发模型请求、旧成绩不变。
+
+
 > **2026-11-19 GK-P04 题页预览（0 DS 请求）**：找到 2022 全国甲卷文科 #20 的第三方 JPEG p4，题面匹配、该题不附图；但非原 PDF，证据单列 `page_preview_checked_needs_pdf_and_independent_review`。旧23现5题PDF页级初核、GK-P07来源错配、GK-P04仅预览、其余16题待审；[审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新36 `runnable=false`，未发模型请求，旧真实成绩不变。
 
 
@@ -107,7 +110,7 @@
 > **文档角色（2026-11-15 对齐）**：发布验收合同；不是第二份实时进度。实时状态仅维护在[当前状态](../current-status.md)；执行总顺序以[完整实施主计划](../superpowers/plans/2026-11-15-main-restart-master-plan.md)为准，[机器任务合同](../superpowers/plans/2026-11-15-implementation-task-ledger.json)只定义依赖/文件/验收，不另维护完成率。历史数字不能代替本轮证据。
 <!-- /progress-scope -->
 
-最后更新：2026-11-17（`G3-Math` 36/36 与浏览器端 290/290 E2E 已收口；待用户后续执行 DeepSeek 实测、交互式桌面走查、人工签收与 P8，发布仍阻断）。
+最后更新：2026-11-20（首个正式版本里程碑已完成 44/44 纯文字实测与交互/智能构图收口；实时进度见 ../current-status.md）。
 
 ## 本轮发布合同
 

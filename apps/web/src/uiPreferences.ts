@@ -1,20 +1,70 @@
-export function loadReducedMotion(): boolean {
+export type UiFontScale = "normal" | "comfortable"
+
+function safeReadBool(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem("mathcanvas.ui.reducedMotion") === "true"
+    const raw = localStorage.getItem(key)
+    if (raw === "true") return true
+    if (raw === "false") return false
+    return fallback
   } catch {
-    return false
+    return fallback
   }
 }
 
+function safeWriteString(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // 存储受限时保留当前会话生效
+  }
+}
+
+export function loadReducedMotion(): boolean {
+  return safeReadBool("mathcanvas.ui.reducedMotion", false)
+}
+
 export function applyReducedMotion(enabled: boolean) {
-  document.documentElement.dataset.reducedMotion = String(enabled)
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.reducedMotion = String(enabled)
+  }
 }
 
 export function saveReducedMotion(enabled: boolean) {
   applyReducedMotion(enabled)
+  safeWriteString("mathcanvas.ui.reducedMotion", String(enabled))
+}
+
+export function loadFontScale(): UiFontScale {
   try {
-    localStorage.setItem("mathcanvas.ui.reducedMotion", String(enabled))
+    return localStorage.getItem("mathcanvas.ui.fontScale") === "comfortable" ? "comfortable" : "normal"
   } catch {
-    // The visual preference still applies for this session when storage is unavailable.
+    return "normal"
   }
+}
+
+export function applyFontScale(scale: UiFontScale) {
+  if (typeof document !== "undefined") {
+    document.documentElement.dataset.fontScale = scale
+  }
+}
+
+export function saveFontScale(scale: UiFontScale) {
+  applyFontScale(scale)
+  safeWriteString("mathcanvas.ui.fontScale", scale)
+}
+
+export function loadAgentAutoClear(): boolean {
+  return safeReadBool("mathcanvas.agent.autoClearOld", true)
+}
+
+export function saveAgentAutoClear(enabled: boolean) {
+  safeWriteString("mathcanvas.agent.autoClearOld", String(enabled))
+}
+
+export function loadAutoOpenProperties(): boolean {
+  return safeReadBool("mathcanvas.ui.autoOpenProperties", true)
+}
+
+export function saveAutoOpenProperties(enabled: boolean) {
+  safeWriteString("mathcanvas.ui.autoOpenProperties", String(enabled))
 }

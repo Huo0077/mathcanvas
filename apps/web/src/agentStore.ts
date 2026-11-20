@@ -570,8 +570,17 @@ export const useAgentStore = create<AgentState>((set, get) => ({
          * 内存是投影，投影不该比真源活得更久 —— 这就是"删掉的会话从旧缓存里回来"的那条路。
          */
         if (!loaded) return
-        const conversation = get().conversations.find((candidate) => candidate.id === id) ?? loaded
-        set({ activeConversationId: id, activeConversation: conversation, pendingReplyId: null })
+        const existing = get().conversations.find((candidate) => candidate.id === id)
+        // 桌面端 loadList() 不带消息数组（按需读），所以必须保留从 read(id) 读回的 loaded.messages，
+        // 绝不能被列表中 messages=[] 的投影反向覆盖成空白对话。
+        const messages = loaded.messages.length >= (existing?.messages.length ?? 0)
+          ? loaded.messages
+          : existing!.messages
+        const conversation: AgentConversation = { ...(existing ?? loaded), ...loaded, messages }
+        const conversations = get().conversations.some((candidate) => candidate.id === id)
+          ? get().conversations.map((candidate) => (candidate.id === id ? conversation : candidate))
+          : [conversation, ...get().conversations]
+        set({ conversations, activeConversationId: id, activeConversation: conversation, pendingReplyId: null })
         switched = true
       }
     )

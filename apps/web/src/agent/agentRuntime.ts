@@ -22,6 +22,7 @@ import {
   type PlannerPort,
   type RunEvent,
   type SceneDocumentSnapshot,
+  type SelectedRef,
   type SkillCatalog,
   type ToolResult
 } from "@draw/agent-core"
@@ -141,6 +142,8 @@ export interface AgentRuntimeDependencies {
    * 之后用户切到别的会话，这一轮看到的仍然是它开始时的那一份（规格 §5.4）。
    */
   conversation?: () => ConversationContextSource
+  /** 界面当前选中的引用。由宿主按需提供，供协调器判断“继续操作选中对象” vs “新建独立图形”。 */
+  selectedRefs?: () => SelectedRef[]
 }
 
 /**
@@ -445,6 +448,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     },
     requestedSkillIds,
     availableActions,
+    ...(dependencies.selectedRefs === undefined ? {} : { selectedRefs: dependencies.selectedRefs }),
     consent: undefined // 同意凭据由宿主在用户确认后创建，协调器不构造它。
   })
 

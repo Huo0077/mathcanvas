@@ -1,6 +1,6 @@
 import { agentNextPhaseFlags } from "./featureFlags"
 import { candidateRenderEvidenceFromCanvas } from "./renderLayoutInput"
-import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, canonicalContentHash, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, routeDeterministicProblem, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type WorkspaceId } from "@draw/agent-core"
+import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, canonicalContentHash, createBudget, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, routeDeterministicProblem, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type SelectedRef, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
@@ -80,9 +80,13 @@ export interface RunPromptResult {
   draftId: string | null
 }
 
+export interface RunPromptOptions {
+  selectedIds?: readonly string[]
+}
+
 export interface AgentRunner {
   /** 跑一轮。事件会实时回流到 `useAgentStore`，所以界面不需要自己订阅。 */
-  run(prompt: string, promptMessageId: string): Promise<RunPromptResult>
+  run(prompt: string, promptMessageId: string, options?: RunPromptOptions): Promise<RunPromptResult>
   /**
    * 用户确认：真正落盘。
    *
@@ -96,7 +100,7 @@ export interface AgentRunner {
   /** 用户按了停止：取消当前运行（不再发事件，也不会写文档）。`runId` 语义同 `confirm`。 */
   stop(runId?: string): boolean
   /** 用户按了重试：用**同一句话**再跑一轮。 */
-  retry(prompt: string, promptMessageId: string): Promise<RunPromptResult>
+  retry(prompt: string, promptMessageId: string, options?: RunPromptOptions): Promise<RunPromptResult>
   /** 当前是否有一份等待确认的草稿（任意一轮）。 */
   hasDraft(): boolean
   getActiveDraftCandidate(runId?: string): { candidate: GeometryDocument; runId: string; draftId: string } | null
@@ -524,31 +528,37 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
 
-    /**
-     * **两个入口共用同一份确定性构造**（T7，2026-11-05）：
-     * 题面能被确定性构造识别、且题设已**独立核验**时，模型入口也直接用这份计划 ——
-     * 模型只负责结构/动作参数，不手算顶点坐标（见 `systemPrompt` 的那条纪律）。
-     * 识别不出或核验不过 ⇒ 返回 null，继续走原来的模型/兜底路径。
-     */
     // An explicitly selected action-level provider must not be replaced by a local plan.
-    const deterministic = dependencies.modelPlanner?.intentMode === "ds_action" ? null : routeDeterministicProblem(prompt)
-    if (deterministic) return {
-      planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
-      diagramPrompt: deterministic.diagramPrompt,
-      ...(deterministic.selectedScopeId === undefined ? {} : { selectedScopeId: deterministic.selectedScopeId }),
-      requestedSkillIds: deterministic.skillIds ? [...deterministic.skillIds] : [deterministic.family], textProfileId: "local-planner"
+    if (dependencies.modelPlanner?.intentMode === "legacy_actions") {
+      const deterministic = routeDeterministicProblem(prompt)
+      if (deterministic) return {
+        planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
+        diagramPrompt: deterministic.diagramPrompt,
+        ...(deterministic.selectedScopeId === undefined ? {} : { selectedScopeId: deterministic.selectedScopeId }),
+        requestedSkillIds: deterministic.skillIds ? [...deterministic.skillIds] : [deterministic.family], textProfileId: "local-planner"
+      }
     }
 
     const resolution = await (dependencies.modelPlanner?.resolveProvider ?? resolveActiveProvider)()
     if (!resolution.ok) {
+      const deterministic = routeDeterministicProblem(prompt)
+      if (deterministic) return {
+        planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
+        diagramPrompt: deterministic.diagramPrompt,
+        ...(deterministic.selectedScopeId === undefined ? {} : { selectedScopeId: deterministic.selectedScopeId }),
+        requestedSkillIds: deterministic.skillIds ? [...deterministic.skillIds] : [deterministic.family], textProfileId: "local-planner"
+      }
       // This opt-in path is only reachable after the user enables witness search;
       // a browser without a provider must not silently turn on diagram rescue.
       const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
       return { planner: createLocalPlanner(options), requestedSkillIds: localIntentSkillIds(prompt, options), textProfileId: "local-planner" }
     }
+    const effectiveIntentMode = dependencies.modelPlanner?.intentMode
+      ?? (resolution.provider.capabilities.tools === "verified" ? "ds_action" : undefined)
     return {
       planner: createModelPlanner({
         ...dependencies.modelPlanner,
+        ...(effectiveIntentMode === undefined ? {} : { intentMode: effectiveIntentMode }),
         imageNotes,
         resolveProvider: async () => resolution,
         sceneContext: dependencies.modelPlanner?.sceneContext ?? ((planReq) =>
@@ -573,7 +583,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
   }
 
   /** 实现在下面单独定义，`retry` 直接调它 —— 不依赖 `this`（对象字面量的方法里用 `this` 太脆）。 */
-  async function runPrompt(text: string, promptMessageId: string): Promise<RunPromptResult> {
+  async function runPrompt(text: string, promptMessageId: string, options?: RunPromptOptions): Promise<RunPromptResult> {
+      const requestedSelectedIds = options?.selectedIds ?? []
       const { prompt, imageNotes, imageEvidence } = splitImagePrompt(text)
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
@@ -640,6 +651,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         },
         // 这一轮由谁规划由 `selectPlanner` 决定（「使用中」的那份配置在它里面被消费）。
         planner: selection.planner,
+        ...(selection.textProfileId !== "local-planner"
+          ? { budget: createBudget({ generation: 28, network: 28, tool: 80, actions_per_run: 160 }) }
+          : {}),
         /**
          * **这条指令要用到的技能**（决定上下文里的可用动作）。
          *
@@ -663,6 +677,22 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         exportPreflight: { preflight: () => ({ error: "export preflight is not wired into the agent path yet" }) },
         // 会话上下文：**一次运行只取一次**（协调器在组装上下文时调它），两次尝试共用同一份。
         conversation: () => conversation,
+        selectedRefs: () => {
+          if (requestedSelectedIds.length === 0) return []
+          const live = useSceneStore.getState().document
+          const liveHandle = handleOf(live)
+          return requestedSelectedIds.flatMap((id): SelectedRef[] => {
+            const primitive = live.primitives.find((candidate) => candidate.id === id)
+            if (!primitive) return []
+            return [{
+              documentId: liveHandle.documentId,
+              entityId: primitive.id,
+              label: primitive.label ?? primitive.id,
+              contentHash: liveHandle.contentHash,
+              handle: liveHandle
+            }]
+          })
+        },
         /**
          * **观察层的诊断出口**（2026-09-21 派生诊断）。
          *
@@ -1143,8 +1173,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     },
 
     /** 重试 = 用同一句话再跑一轮。它**不**复用上一轮的草稿（那份已经作废了）。 */
-    async retry(prompt, promptMessageId) {
-      return runPrompt(prompt, promptMessageId)
+    async retry(prompt, promptMessageId, options) {
+      return runPrompt(prompt, promptMessageId, options)
     },
 
     getActiveDraftCandidate(runId) {

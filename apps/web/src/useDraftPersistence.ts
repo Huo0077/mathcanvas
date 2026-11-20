@@ -41,7 +41,7 @@ export interface DraftPersistenceDeps {
   /** 测试缝：直接给一个仓储适配器（默认按下面的方式真建一个）。 */
   persistence?: DocumentPersistence
   /** 测试缝：读"当前那一份"store。守卫必须读它，而不是 effect 闭包里的 `document`。 */
-  readLive?: () => { document: GeometryDocument }
+  readLive?: () => { document: GeometryDocument; documentChangeReason?: "user" | "agent" }
 }
 
 export interface DraftRecoveryAction {
@@ -266,7 +266,9 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
   useEffect(() => {
     const workspace = document.workspace
     if (!startupReady || hydratedWorkspacesRef.current.has(workspace) || restoringWorkspacesRef.current.has(workspace)) return
-    const baseline = readLive().document
+    const liveAtStart = readLive()
+    if (liveAtStart.documentChangeReason === "agent") return
+    const baseline = liveAtStart.document
     if (baseline.workspace !== workspace) return
     // Edits made before startup settled already belong to the user, not to recovery.
     if (baseline.revision > 0 || baseline.primitives.length > 0) {
@@ -286,8 +288,9 @@ export function useDraftPersistence({ document, replace, switchWorkspace, setFil
         setFileError(outcome.message)
       }
       const restored = await persistenceRef.current!.restoreWorkspace(workspace, fallback?.metadata.id)
-      const live = readLive().document
-      if (live.workspace !== workspace) return
+      const liveState = readLive()
+      const live = liveState.document
+      if (live.workspace !== workspace || liveState.documentChangeReason === "agent") return
       // Import, editing, undo or navigation may have changed this document while IO waited.
       if (live.metadata.id !== baseline.metadata.id || live.revision !== baseline.revision || contentFingerprint(live) !== baselineContent) return
       const recovered = restored.created ? fallback : restored.document

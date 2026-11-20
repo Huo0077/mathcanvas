@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { PrimitiveSpec, Vector3 } from "@draw/dsl"
+import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { dynamicPointPaths } from "../dynamicPointPaths"
 import { isTangentSource } from "../curveTangents"
 import { measurementOptionsFor } from "../spatialTools"
@@ -25,6 +25,8 @@ export interface InspectorModelInput {
   selectedPrimitive: PrimitiveSpec | null
   selectedIds: string[]
   onUpdatePrimitive: (patch: PrimitiveUpdatePatch) => void
+  documentOverride?: GeometryDocument
+  draftPreview?: boolean
 }
 
 export function useInspectorModel(props: InspectorModelInput) {
@@ -49,7 +51,8 @@ export function useInspectorModel(props: InspectorModelInput) {
   const selectedIntersectionSolid = selectedPrimitive?.type === "intersectionSolid" ? selectedPrimitive : null
   const selectedIntersectionFace = selectedPrimitive?.type === "intersectionFace" ? selectedPrimitive : null
   const selectedIntersectionPoint = selectedPrimitive?.type === "intersectionPoint3" ? selectedPrimitive : null
-  const sceneDocument = useSceneStore((state) => state.document)
+  const storeDocument = useSceneStore((state) => state.document)
+  const sceneDocument = props.documentOverride ?? storeDocument
   /** 交线 / 交面的来源在检查器里要显示成用户认得出的名字，而不是 id。 */
   const sourceLabel = (id: string) => sceneDocument.primitives.find((primitive) => primitive.id === id)?.label ?? id
 
@@ -57,7 +60,7 @@ export function useInspectorModel(props: InspectorModelInput) {
   const selectedIntersection = selectedPrimitive && ["intersection", "lineCircleIntersection", "circleIntersection", "curveIntersection", "intersectionSet"].includes(selectedPrimitive.type) ? selectedPrimitive as Extract<PrimitiveSpec, { type: "intersection" | "lineCircleIntersection" | "circleIntersection" | "curveIntersection" | "intersectionSet" }> : null
   const selectedSlope = selectedLinear ? lineSlope(selectedLinear) : null
   const showSlopeParameter = selectedLinear?.type === "line" && Boolean(selectedLinear.slopeParameter)
-  const editable = selectedPrimitive?.locked !== true
+  const editable = !props.draftPreview && selectedPrimitive?.locked !== true
   const [expressionDraft, setExpressionDraft] = useState(selectedFunction?.expression ?? "")
   /** The preset selector shows "自定义" unless the current expression is still exactly a preset's. */
   const selectedFunctionPresetId = functionPresets.find((preset) => preset.expression === selectedFunction?.expression)?.id ?? ""

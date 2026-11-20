@@ -92,7 +92,7 @@ export function point3ToolAvailability(point3Count: number, selectionSize: numbe
 /** Plain-language guidance shown in the toolbar: the tools need Shift-clicked points and nothing said so before. */
 export function point3ToolHint(point3Count: number, selectionSize = point3Count): string {
   if (point3Count > 0 && selectionSize !== point3Count) return `选中 ${selectionSize} 项，其中只有 ${point3Count} 个是空间点：请只保留空间点后再创建`
-  if (point3Count === 0) return "按住 Shift 依次点选空间点：选 1 个建圆轨道、选 2 个建直线、选 3 个建平面与空间面"
+  if (point3Count === 0) return "开启左侧「多选」或按住 Shift 点选空间点：选 1 个建圆轨道、选 2 个连线段/直线、选 3 个建平面与空间面"
   if (point3Count === 1) return "已选 1 个空间点：再选 1 个就能创建直线，或现在就建以它为圆心的圆轨道"
   if (point3Count === 2) return "已选 2 个空间点：现在可以创建直线，也可以建圆轨道（第二点定半径）"
   if (point3Count === 3) return "已选 3 个空间点：现在可以创建平面、空间面和圆轨道（三点定平面）"

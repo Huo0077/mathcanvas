@@ -307,6 +307,11 @@ export function parseActionInputs(actionId: ActionId, value: unknown, path: stri
         const face = readScopedReference(value.face, `${path}.face`, errors)
         if (face !== null) out.face = face
       }
+      if (value.faceSub !== undefined) {
+        if (typeof value.faceSub !== "number" || !Number.isInteger(value.faceSub) || value.faceSub < 0) {
+          errors.push(fail("invalid_face_sub", `${path}.faceSub`, "faceSub must be a non-negative integer"))
+        } else out.faceSub = value.faceSub
+      }
       if (!Array.isArray(value.uv) || value.uv.length !== 2) {
         errors.push(fail("invalid_type", `${path}.uv`, "uv must be an array of exactly two finite numbers"))
       } else {

@@ -98,6 +98,8 @@
 
 **C-T1 旧题预览分级（2026-11-19）**：GK-P04 在第三方 JPEG 题页预览 p4 找到对应第20题，未随题附图；但尚无原卷 PDF，不提升为正式题源。旧23现5题原卷初核、1题来源错配待纠、1题仅预览、另16题待核，见[初筛审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)。新36不可运行。
 
+**C-T1 2025/2019 原卷检查（2026-11-19）**：GK-P01 在学生卷 p3 核对无附图；GK-P06 冻结标注为 2019 全国Ⅲ理科第21题，实为同年全国Ⅲ文科第21题，须在新 manifest 纠错后重新审合同。旧23现6题普通 PDF 初核、GK-P06/GK-P07 两题 source 错配、GK-P04 仅 JPEG 预览，余14题待核。详见[来源审计](../audit/2026-11-19-g3-text-only-source-triage/README.md)，新版36继续 `runnable=false`。
+
 ### Block D — 真实候选可见与原生受控交付
 
 **Files**：`apps/web/src/agent/agentRunner.ts`、`apps/web/src/agent/draftStore.ts`、`apps/web/src/canvasEvidence.ts`、`apps/web/src/components/agent/ConfirmationPanel.tsx`、`e2e/drawing-reliability-lifecycle.spec.ts`，以及受控原生测试入口。

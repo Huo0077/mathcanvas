@@ -190,12 +190,11 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
         <strong>{item.sourceText}</strong>：{item.status === "passed" ? "通过" : item.status === "failed" ? "不满足" : "未核验"}。{describeCheckReason(item)}
         {describeCheckEvidence(item) !== null && <em data-evidence={item.evidence}>（证据：{describeCheckEvidence(item)}）</em>}
       </li>)}</ul>
-      {/*
-        **证据范围自己说清楚**（Task 15）：上面的"通过 N 条"说的是**一个实例**，
-        不是"对所有参数/整个定义域成立"。这两句话都由报告字段推出来，界面上不另写判断。
-      */}
-      <p role="note" data-proof-scope-note>证据范围：{PROOF_SCOPE_LABEL[draft.diagramVerification.proofScope]}。{draft.diagramVerification.proofScopeNote}{UNIVERSAL_CLAIMS_LABEL[draft.diagramVerification.universalClaims]}</p>
-      {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
+      <details className="agent-confirmation-footnote">
+        <summary>核验范围与示例参数</summary>
+        <p role="note" data-proof-scope-note>证据范围：{PROOF_SCOPE_LABEL[draft.diagramVerification.proofScope]}。{draft.diagramVerification.proofScopeNote}{UNIVERSAL_CLAIMS_LABEL[draft.diagramVerification.universalClaims]}</p>
+        {draft.diagramVerification.sampleValues.length > 0 && <div><h4>本图选用的示例值</h4><ul>{draft.diagramVerification.sampleValues.map((value) => <li key={value}>{value}</li>)}</ul></div>}
+      </details>
     </section>}
 
     {/*
@@ -260,7 +259,10 @@ export function ConfirmationPanel({ draft, assumptions = [], approximationNotes 
       只能用注入的假数据测＝弱证据"。等这两条之一变了再做。
       理由写在 `proofLevelStatus.ts` 的文件头与 `docs/current-status.md` §四 F。
     */}
-    <ProofLevelNotice wired={proofBackends} reviewedCount={proofReviewedCount} />
+    <details className="agent-confirmation-footnote">
+      <summary>技术与证明等级说明</summary>
+      <ProofLevelNotice wired={proofBackends} reviewedCount={proofReviewedCount} />
+    </details>
     {assumptions.length > 0 && <AssumptionList assumptions={assumptions} />}
 
     {approximationNotes.length > 0 && <div className="agent-confirmation-approximation">

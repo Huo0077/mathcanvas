@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from "react"
 
-import type { Measurement3, ParameterSpec, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
+import type { Face3Primitive, Measurement3, ParameterSpec, Polyhedron3Primitive, PrimitiveSpec, Workspace } from "@draw/dsl"
 
 import { isTessellationPrimitive } from "../primitiveVisibility"
+import { formatPrimitiveDisplayLabel } from "../primitiveDisplayName"
+import { measurementFormSuffix } from "../measurementForms"
 import { MEASUREMENT_METRIC_LABELS } from "../measurementLabels"
 
 interface AlgebraViewProps {
@@ -17,9 +19,13 @@ interface AlgebraViewProps {
   filter?: string
   className?: string
   id?: string
+  draftPreview?: boolean
   onSetParameter?: (id: string, patch: { value?: number; min?: number; max?: number; step?: number; label?: string }) => void
   onDeleteParameter?: (id: string) => void
   onAddParameter?: () => void
+  onSelectMany?: (ids: string[]) => void
+  onClearSelection?: () => void
+  onDeleteSelected?: () => void
 }
 
 const measurementLabels = MEASUREMENT_METRIC_LABELS
@@ -38,6 +44,7 @@ interface RowProps {
   visible: boolean
   locked: boolean
   selected: boolean
+  multiSelect?: boolean
   depth?: number
   expanded?: boolean
   onToggleExpand?: () => void
@@ -48,10 +55,10 @@ interface RowProps {
   bindingHostId?: string
 }
 
-function ObjectRow({ label, type, visible, locked, selected, depth = 0, expanded, onToggleExpand, onSelect, onToggle, bindingParameter, bindingHostId }: RowProps) {
+function ObjectRow({ label, type, visible, locked, selected, multiSelect = false, depth = 0, expanded, onToggleExpand, onSelect, onToggle, bindingParameter, bindingHostId }: RowProps) {
   return <div
     className={`object-row${selected ? " selected" : ""}${depth > 0 ? " object-row-child" : ""}`}
-    onClick={(event) => onSelect(event.shiftKey)}
+    onClick={(event) => onSelect(multiSelect || event.shiftKey)}
     /**
      * **宿主绑定的参数与宿主进 DOM**（Fix round 1 / I11）。
      *
@@ -62,6 +69,16 @@ function ObjectRow({ label, type, visible, locked, selected, depth = 0, expanded
     data-binding-host={bindingHostId}
   >
     <div className="object-meta">
+      {multiSelect && (
+        <input
+          type="checkbox"
+          className="object-select-checkbox"
+          checked={selected}
+          aria-label={`勾选 ${label}`}
+          onChange={() => onSelect(true)}
+          onClick={(event) => event.stopPropagation()}
+        />
+      )}
       {onToggleExpand && <button className="icon-button row-expand" aria-label={`${expanded ? "收起" : "展开"} ${label} 的子对象`} title={expanded ? "收起子对象" : "展开子对象"} onClick={(event) => { event.stopPropagation(); onToggleExpand() }}>{expanded ? "▾" : "▸"}</button>}
       <span className="object-dot" data-object-type={type} aria-hidden="true" />
       <span className="object-name">{label}</span>
@@ -85,9 +102,14 @@ function solidGroupLabel(solid: Polyhedron3Primitive, byId: Map<string, Primitiv
   return ownerId ? `${base} 拓扑` : base
 }
 
-export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], parameters, workspace, filter = "", className = "panel", id, onSetParameter, onDeleteParameter, onAddParameter }: AlgebraViewProps) {
+export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measurements = [], parameters, workspace, filter = "", className = "panel", id, draftPreview = false, onSetParameter, onDeleteParameter, onAddParameter, onSelectMany, onClearSelection, onDeleteSelected }: AlgebraViewProps) {
   const [search, setSearch] = useState("")
-  const [expandedSolids, setExpandedSolids] = useState<string[]>([])
+  const [expandOverrides, setExpandOverrides] = useState<Record<string, boolean>>({})
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const isNodeExpanded = (nodeId: string, defaultExpanded: boolean) => expandOverrides[nodeId] ?? defaultExpanded
+  const toggleNodeExpanded = (nodeId: string, defaultExpanded: boolean) => {
+    setExpandOverrides((current) => ({ ...current, [nodeId]: !(current[nodeId] ?? defaultExpanded) }))
+  }
   /**
    * 参数分组：动点自动生成的驱动参数带 `ownerId`，标注出它属于哪个对象，
    * 这样"这是谁在动"一眼可见；用户手工创建的参数则没有归属。
@@ -100,10 +122,45 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   }
   const byId = new Map(primitives.map((primitive) => [primitive.id, primitive]))
   const solids = workspace === "geometry3d" ? primitives.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3") : []
-  const childIds = new Set(solids.flatMap((solid) => [...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]))
+  const solidChildIds = new Set(solids.flatMap((solid) => [...solid.vertexIds, ...solid.edgeIds, ...solid.faceIds]))
+  const standaloneFaces = workspace === "geometry3d"
+    ? primitives.filter((primitive): primitive is Face3Primitive => primitive.type === "face3" && !solidChildIds.has(primitive.id))
+    : []
+  const faceChildIds = new Set(
+    standaloneFaces.flatMap((face) => [
+      ...face.pointIds.filter((pid) => pid.startsWith(`${face.id}:`)),
+      ...(face.edgeIds ?? []).filter((eid) => eid.startsWith(`${face.id}:`))
+    ])
+  )
+  const childIds = new Set([...solidChildIds, ...faceChildIds])
   const query = (filter || search).trim().toLowerCase()
-  const topLevel = (childIds.size > 0 ? primitives.filter((primitive) => !childIds.has(primitive.id)) : primitives)
-    .filter((primitive) => !query || (primitive.label ?? primitive.id).toLowerCase().includes(query))
+  const matchesQuery = (primitive: PrimitiveSpec): boolean => {
+    if (!query) return true
+    const display = formatPrimitiveDisplayLabel(primitive, byId).toLowerCase()
+    const raw = (primitive.label ?? primitive.id).toLowerCase()
+    return display.includes(query) || raw.includes(query)
+  }
+  const hasMatchingChild = (ids: readonly string[]): boolean =>
+    ids.some((cid) => {
+      const child = byId.get(cid)
+      return child !== undefined && !isTessellationPrimitive(child) && matchesQuery(child)
+    })
+  const baseTopLevel = childIds.size > 0 ? primitives.filter((primitive) => !childIds.has(primitive.id)) : primitives
+  const topLevel = baseTopLevel.filter((primitive) => {
+    if (!query) return true
+    if (matchesQuery(primitive)) return true
+    if (primitive.type === "polyhedron3") {
+      return hasMatchingChild([...primitive.vertexIds, ...primitive.edgeIds, ...primitive.faceIds])
+    }
+    if (primitive.type === "face3") {
+      return hasMatchingChild([
+        ...primitive.pointIds.filter((pid) => pid.startsWith(`${primitive.id}:`)),
+        ...(primitive.edgeIds ?? []).filter((eid) => eid.startsWith(`${primitive.id}:`))
+      ])
+    }
+    return false
+  })
+  const visiblePrimitiveCount = primitives.filter((primitive) => !isTessellationPrimitive(primitive)).length
 
   const renderRow = (primitive: PrimitiveSpec, depth = 0): ReactNode => {
     /** 宿主绑定（`onHost` / `onPath`）的参数与宿主：这是"这个点在哪里"的可断言事实。 */
@@ -111,11 +168,12 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
     const isBound = binding?.kind === "onHost" || binding?.kind === "onPath"
     return <ObjectRow
       key={primitive.id}
-      label={primitive.label ?? primitive.id}
+      label={formatPrimitiveDisplayLabel(primitive, byId)}
       type={primitive.type}
       visible={primitive.visible !== false}
       locked={Boolean(primitive.locked)}
       selected={selectedIds.includes(primitive.id)}
+      multiSelect={multiSelectMode}
       depth={depth}
       onSelect={(additive) => onSelect(primitive.id, additive)}
       onToggle={() => onToggle(primitive.id, primitive.visible === false)}
@@ -126,14 +184,15 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   const renderGroup = (label: string, ids: string[]): ReactNode => {
     const children = ids
       .map((id) => byId.get(id))
-      .filter((primitive): primitive is PrimitiveSpec => primitive !== undefined && !isTessellationPrimitive(primitive))
+      .filter((primitive): primitive is PrimitiveSpec => primitive !== undefined && !isTessellationPrimitive(primitive) && (!query || matchesQuery(primitive)))
     if (children.length === 0) return null
     return <div className="object-group" key={label}><div className="object-group-label">{label}</div>{children.map((child) => renderRow(child, 1))}</div>
   }
 
   const renderSolid = (solid: Polyhedron3Primitive): ReactNode => {
     const label = solidGroupLabel(solid, byId)
-    const expanded = expandedSolids.includes(solid.id)
+    const defaultExpanded = solid.construction?.kind !== "template"
+    const expanded = Boolean(query) || isNodeExpanded(solid.id, defaultExpanded)
     return <div className="object-tree" key={solid.id}>
       <ObjectRow
         label={label}
@@ -141,8 +200,9 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
         visible={solid.visible !== false}
         locked={Boolean(solid.locked)}
         selected={selectedIds.includes(solid.id)}
+        multiSelect={multiSelectMode}
         expanded={expanded}
-        onToggleExpand={() => setExpandedSolids((current) => current.includes(solid.id) ? current.filter((id) => id !== solid.id) : [...current, solid.id])}
+        onToggleExpand={() => toggleNodeExpanded(solid.id, defaultExpanded)}
         onSelect={(additive) => onSelect(solid.id, additive)}
         onToggle={() => onToggle(solid.id, solid.visible === false)}
       />
@@ -150,9 +210,91 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
     </div>
   }
 
-  return <aside id={id} className={className} data-mobile-dock="objects"><section className="panel-section algebra-panel"><div className="panel-heading"><div><h2 className="panel-title">对象</h2></div><span className="object-count">{primitives.length}</span></div><input className="clean-object-search" aria-label="查找对象" placeholder="查找对象…" value={search} onChange={(event) => setSearch(event.target.value)} /><div className="object-list">
-    {topLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : renderRow(primitive))}
-    {measurements.length > 0 && <div className="object-group"><div className="object-group-label">教学测量</div>{measurements.map((measurement) => <div className="object-row measurement-row" key={measurement.id}><div className="object-meta"><span className="object-dot" data-object-type="measurement3" aria-hidden="true" /><span className="object-name">{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurementLabels[measurement.metric]}测量`}</span><span className="measurement-status" data-status={measurement.status}>{measurement.status}</span></div><small className="measurement-source">{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small><small className="measurement-explanation">{measurement.explanation}</small></div>)}</div>}
+  const renderFaceTree = (face: Face3Primitive): ReactNode => {
+    const ownedVertices = face.pointIds.filter((pid) => pid.startsWith(`${face.id}:`))
+    const ownedEdges = (face.edgeIds ?? []).filter((eid) => eid.startsWith(`${face.id}:`))
+    if (ownedVertices.length === 0 && ownedEdges.length === 0) return renderRow(face)
+    const label = formatPrimitiveDisplayLabel(face, byId)
+    const expanded = Boolean(query) || isNodeExpanded(face.id, false)
+    return <div className="object-tree" key={face.id}>
+      <ObjectRow
+        label={label}
+        type={face.type}
+        visible={face.visible !== false}
+        locked={Boolean(face.locked)}
+        selected={selectedIds.includes(face.id)}
+        multiSelect={multiSelectMode}
+        expanded={expanded}
+        onToggleExpand={() => toggleNodeExpanded(face.id, false)}
+        onSelect={(additive) => onSelect(face.id, additive)}
+        onToggle={() => onToggle(face.id, face.visible === false)}
+      />
+      {expanded && <div className="object-subtree">{renderGroup("顶点", ownedVertices)}{renderGroup("棱", ownedEdges)}</div>}
+    </div>
+  }
+
+  const standaloneFaceIds = new Set(standaloneFaces.map((face) => face.id))
+  const visibleSolids = workspace === "geometry3d"
+    ? topLevel.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3")
+    : []
+  const visibleStandaloneFaces = workspace === "geometry3d"
+    ? topLevel.filter((primitive): primitive is Face3Primitive => primitive.type === "face3" && standaloneFaceIds.has(primitive.id))
+    : []
+  const otherTopLevel = workspace === "geometry3d"
+    ? topLevel.filter((primitive) => primitive.type !== "polyhedron3" && !standaloneFaceIds.has(primitive.id))
+    : topLevel
+
+  const allTopSelected = topLevel.length > 0 && topLevel.every((primitive) => selectedIds.includes(primitive.id))
+
+  return <aside id={id} className={className} data-mobile-dock="objects"><section className="panel-section algebra-panel"><div className="panel-heading"><div><h2 className="panel-title">对象</h2></div><div className="algebra-heading-actions">{draftPreview && <span className="object-draft-badge" title="AI 草稿预览（确认写入后落盘）">预览</span>}<button type="button" className={`algebra-multiselect-toggle${multiSelectMode ? " is-active" : ""}`} aria-pressed={multiSelectMode} title="开启后可直接用鼠标勾选多个图元" onClick={() => setMultiSelectMode((current) => !current)}>多选</button><span className="object-count" title={`共 ${visiblePrimitiveCount} 个可见图元（含基本点、线/棱、面）`}>{visiblePrimitiveCount}</span></div></div><input className="clean-object-search" aria-label="查找对象" placeholder="查找对象…" value={search} onChange={(event) => setSearch(event.target.value)} />{multiSelectMode && <div className="algebra-multiselect-bar" role="toolbar" aria-label="图元多选操作"><span className="algebra-multiselect-count">已选 {selectedIds.length} 项</span><div className="algebra-multiselect-actions"><button type="button" className="algebra-mini-btn" disabled={topLevel.length === 0} onClick={() => {
+    const topIds = topLevel.map((primitive) => primitive.id)
+    if (topIds.length === 0) return
+    if (allTopSelected) {
+      if (onClearSelection) onClearSelection()
+      else topIds.forEach((id) => onSelect(id, true))
+      return
+    }
+    if (onSelectMany) onSelectMany([...new Set([...selectedIds, ...topIds])])
+    else topIds.filter((id) => !selectedIds.includes(id)).forEach((id) => onSelect(id, true))
+  }}>{allTopSelected ? "取消全选" : "全选"}</button><button type="button" className="algebra-mini-btn" disabled={selectedIds.length === 0} onClick={() => {
+    if (onClearSelection) onClearSelection()
+    else selectedIds.forEach((id) => onSelect(id, true))
+  }}>清空</button>{onDeleteSelected && <button type="button" className="algebra-mini-btn is-danger" disabled={selectedIds.length === 0} onClick={onDeleteSelected}>删除所选</button>}</div></div>}<div className="object-list">
+    {workspace === "geometry3d" ? <>
+      {visibleSolids.map((solid) => renderSolid(solid))}
+      {visibleStandaloneFaces.length > 0 && (
+        <div className="object-group object-group-standalone-faces" data-face-group="true">
+          <div className="object-group-label">{`面（构造 / 辅助 · ${visibleStandaloneFaces.length}）`}</div>
+          {visibleStandaloneFaces.map((face) => renderFaceTree(face))}
+        </div>
+      )}
+      {otherTopLevel.map((primitive) => renderRow(primitive))}
+    </> : topLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : primitive.type === "face3" ? renderFaceTree(primitive) : renderRow(primitive))}
+    {measurements.length > 0 && <div className="object-group"><div className="object-group-label">教学测量</div>{measurements.map((measurement) => {
+      const valText = measurement.value !== undefined && Number.isFinite(measurement.value)
+        ? `${measurement.value.toFixed(3)}${measurement.unit ?? ""}${measurementFormSuffix(measurement)}`
+        : "—"
+      const angleDegText = (measurement.metric === "dihedral" || measurement.metric === "angle") && measurement.value !== undefined && Number.isFinite(measurement.value)
+        ? `${((measurement.value * 180) / Math.PI).toFixed(1)}°`
+        : ""
+      const isSelectedSources = measurement.sourceIds.length > 0 && measurement.sourceIds.every((id) => selectedIds.includes(id))
+      return <button
+        type="button"
+        className={`object-row measurement-row${isSelectedSources ? " selected" : ""}`}
+        key={measurement.id}
+        title="点击在画布与右侧属性栏定位该测量"
+        onClick={() => {
+          if (measurement.sourceIds.length === 0) return
+          if (onSelectMany) onSelectMany(measurement.sourceIds)
+          else onSelect(measurement.sourceIds[0]!, false)
+        }}
+      >
+        <div className="object-meta"><span className="object-dot" data-object-type="measurement3" aria-hidden="true" /><span className="object-name">{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurementLabels[measurement.metric]}测量`}</span><span className="measurement-status" data-status={measurement.status}>{measurement.status}</span></div>
+        <small className="measurement-value-line">{valText}{angleDegText ? ` (${angleDegText})` : ""}</small>
+        <small className="measurement-source">{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small>
+        {measurement.explanation && <small className="measurement-explanation">{measurement.explanation}</small>}
+      </button>
+    })}</div>}
     {parameters && <div className="object-group" data-parameter-group="true"><div className="object-group-label">参数</div>
       {parameterEntries.length === 0 && <div className="object-empty">还没有参数。拖动一个绑定到曲线上的点会自动生成它的驱动参数。</div>}
       {parameterEntries.map((parameter) => {

@@ -1,13 +1,15 @@
 import { useState, type ReactNode } from "react"
 import { tangentAnchorLabel } from "../curveTangents"
-import type { AnnotationFeature, EngineeringAnnotationKind, Measurement3Metric, PrimitiveSpec } from "@draw/dsl"
+import type { AnnotationFeature, EngineeringAnnotationKind, GeometryDocument, Measurement3Metric, PrimitiveSpec } from "@draw/dsl"
 import { functionPresets, host3FromPrimitive } from "@draw/geometry-kernel"
 import { type Alignment, type PrimitiveUpdatePatch } from "@draw/scene-graph"
 
 import { defaultStrokeFor } from "../primitiveStyle"
 import { pointHostValue } from "../pointHostOptions"
+import { formatPrimitiveDisplayLabel } from "../primitiveDisplayName"
 import { measurementMetricLabel } from "../measurementLabels"
-import { measurementFormText } from "../measurementForms"
+import { angleTrigValues, measurementFormText } from "../measurementForms"
+import type { ThreeViewOptionKey, ThreeViewOptionsState } from "../threeViewOptions"
 import { FormulaKeyboard } from "./FormulaKeyboard"
 import { EmptyStateArt } from "./EmptyStateArt"
 import { exactConicOf, sectionConicMetrics } from "../conicMetrics"
@@ -56,8 +58,17 @@ export interface PropertiesBarProps {
   onMaterializeSection?: () => void
   /** 空间点可以绑定的宿主（空间直线 / 棱 / 面 / 圆柱与圆锥侧面）。 */
   pointHostCandidates?: { id: string; label: string }[]
-  /** 绑定到宿主（传 null = 解绑为自由点）。 */
-  onBindPointHost?: (hostValue: string | null) => void
+  /** 绑定到宿主（传 null = 解绑为自由点；可选指定 pointId 用于多选一键绑定）。 */
+  onBindPointHost?: (hostValue: string | null, targetPointId?: string) => void
+  /** 在当前选中的空间面 / 平面 / 线棱上直接新建动点。 */
+  onCreatePointOnHost?: (hostId: string) => void
+  /** 多选空间点时的一键空间连线 / 建面快捷命令。 */
+  onConnectPoint3Segment?: () => void
+  onConnectPoint3Line?: () => void
+  onConnectPoint3Plane?: (pointIds?: string[]) => void
+  onConnectPoint3Face?: (pointIds?: string[]) => void
+  /** 在右侧直接跳转选中关联图元（例如点所属的面/平面）。 */
+  onSelectPrimitive?: (id: string) => void
   /** 改宿主参数：一维宿主只用 u，面与曲面用 (u, v)。 */
   onChangeHostParameter?: (u: number, v?: number, w?: number) => void
   onToggleSelectedVisibility: () => void
@@ -90,6 +101,13 @@ export interface PropertiesBarProps {
   onCreatePointTangent?: (pointId: string) => void
   /** 以这个点为**圆心**作圆（圆心跟着点走，半径可改、也可以跟随另一个动点）。 */
   onCreateCircleAtPoint?: (pointId: string) => void
+  /** 3D 视图选项与右侧属性栏联动状态（透明面 / 隐藏边 / 旋转环 / 法向量 / 展开 / 自动取景 / 二面角）。 */
+  threeViewOptions?: ThreeViewOptionsState
+  onToggleThreeViewOption?: (key: ThreeViewOptionKey) => void
+  onMeasureDihedralQuick?: () => void
+  onOpenSolidWizardQuick?: () => void
+  documentOverride?: GeometryDocument
+  draftPreview?: boolean
 }
 
 const alignments: { value: Alignment; label: string }[] = [
@@ -100,7 +118,7 @@ const alignments: { value: Alignment; label: string }[] = [
 
 export function PropertiesBar(props: PropertiesBarProps) {
   const {
-    value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onRotate3, onMaterializeSection, pointHostCandidates, onBindPointHost, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onCreateCircleAtPoint, onCreateCurveTangent, onCreatePointTangent, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, sections = allInspectorSections
+    value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onRotate3, onMaterializeSection, pointHostCandidates, onBindPointHost, onCreatePointOnHost, onConnectPoint3Segment, onConnectPoint3Line, onConnectPoint3Plane, onConnectPoint3Face, onSelectPrimitive, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onCreateCircleAtPoint, onCreateCurveTangent, onCreatePointTangent, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, threeViewOptions, onToggleThreeViewOption, onMeasureDihedralQuick, onOpenSolidWizardQuick, sections = allInspectorSections
   } = props
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({ data: true, appearance: false, constraints: false, engineering: true })
   const usesExternalSections = sections.length < allInspectorSections.length
@@ -109,10 +127,91 @@ export function PropertiesBar(props: PropertiesBarProps) {
   const {
     selectedPoint, selectedPoint3, point3Binding, selectedLinear, selectedLinear3, selectedPolyline, selectedParabola, selectedEllipseOrHyperbola, selectedFunction, selectedCircleOrArc, selectedPlacedCurve, selectedSolid, selectedPolyhedron3, polyhedron3Metrics, selectedPlane3, selectedSection, selectedIntersectionLine, selectedIntersectionSolid, selectedIntersectionFace, selectedIntersectionPoint, sourceLabel, selectedDerivedPoint, selectedIntersection, selectedSlope, showSlopeParameter, editable, expressionDraft, selectedFunctionPresetId, expressionError, logBase, setLogBase, formulaRef, annotationText, setAnnotationText, sceneDocument, selectedCircle3, selectedFace3, face3Metrics, objectOrientationNormal, applySceneOperation, derivedReadings, sphereDrawingFor, pointHasMovingCircle, annotationOptions, selectedAnnotations, pathPrimitives, selectedPointBinding, selectedPointWindow, pointTangentSource, selectedCenterDrivenCircle, radiusDriverCandidates, updateRadiusDriver, updateRadiusFactor, selectedCurveTangent, tangentAnchorParameters, tangentAnchorPoints, updateTangentParameter, updateTangentAnchorPoint, updateTangentLength, setTangentAnchorKind, selectedFacePair, visibleMeasurementOptions, engineeringAnnotationOptions, updatePoint, updatePoint3, updatePointBinding, updatePointParameter, createLocus, updateCenter, updateEndpoint, updateSlope, updatePolylinePoint, updateFunctionDomain, updateConicCenter, updateParabolaVertex, updateRotation, updatePlacementAngle, updatePlacementPivot, updateMovingRadius, parabolaFocus, conicFoci, ellipseMetrics, hyperbolaMetrics, arcAngle, updateFunctionExpression, applyFunctionPreset, insertFunctionTemplate, functionMetrics
   } = useInspectorModel(props)
+  const selectedDisplayLabel = selectedPrimitive
+    ? formatPrimitiveDisplayLabel(
+        selectedPrimitive,
+        new Map(sceneDocument.primitives.map((primitive) => [primitive.id, primitive]))
+      )
+    : ""
   const linearBinding = point3Binding?.kind === "onHost" || point3Binding?.kind === "onLine" ? point3Binding : null
-  const spatialHost = linearBinding && sceneDocument.primitives.find((primitive) =>
-    primitive.id === (linearBinding.kind === "onHost" ? linearBinding.hostId : linearBinding.lineId))
+  const faceBinding = point3Binding?.kind === "onFace" || point3Binding?.kind === "onPlane" || point3Binding?.kind === "onSurface" ? point3Binding : null
+  const spatialHost = (linearBinding ?? faceBinding) && sceneDocument.primitives.find((primitive) =>
+    primitive.id === (
+      linearBinding
+        ? (linearBinding.kind === "onHost" ? linearBinding.hostId : linearBinding.lineId)
+        : faceBinding!.kind === "onFace"
+          ? faceBinding!.faceId
+          : faceBinding!.kind === "onPlane"
+            ? faceBinding!.planeId
+            : faceBinding!.solidId
+    ))
+  const faceUv: [number, number] | null = faceBinding
+    ? (faceBinding.kind === "onPlane" ? faceBinding.coordinates : faceBinding.uv)
+    : null
+  const selectedPrimitives = selectedIds
+    .map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id))
+    .filter((primitive): primitive is NonNullable<typeof primitive> => Boolean(primitive))
+  const selectedPoint3Items = selectedPrimitives.filter((primitive) => primitive.type === "point3")
+  const batchHostLink = (() => {
+    if (selectedIds.length !== 2 || selectedPoint3Items.length !== 1) return null
+    const point = selectedPoint3Items[0]!
+    const other = selectedPrimitives.find((primitive) => primitive.id !== point.id)
+    if (!other) return null
+    if (other.type === "face3" || other.type === "plane3") {
+      return { point, host: other, value: `face:${other.id}`, buttonLabel: other.type === "plane3" ? "绑定点到该平面" : "绑定点到该面" }
+    }
+    if (["line3", "segment3", "ray3", "edge3", "circle3"].includes(other.type)) {
+      return { point, host: other, value: `host:${other.id}`, buttonLabel: other.type === "circle3" ? "绑定点到圆轨道" : "绑定点到该线/棱" }
+    }
+    if (other.type === "cylinder" || other.type === "cone") {
+      return { point, host: other, value: `surface:${other.id}`, buttonLabel: "绑定点到侧面" }
+    }
+    if (other.type === "cube" || other.type === "pyramid" || other.type === "polyhedron3") {
+      return { point, host: other, value: `solid:${other.id}`, buttonLabel: "绑定点到立体内" }
+    }
+    return null
+  })()
+  const purePoint3Batch = selectedPoint3Items.length >= 2 && selectedPoint3Items.length === selectedIds.length
+  const twoLinearPlaneInfo = (() => {
+    if (selectedPrimitives.length !== 2) return null
+    const extractEndpoints = (p: (typeof selectedPrimitives)[number]): string[] | null => {
+      if (p.type === "segment3" || p.type === "edge3") return [...p.pointIds]
+      if (p.type === "line3" && p.definition.kind === "throughPoints") return [...p.definition.pointIds]
+      if (p.type === "ray3") return [p.originId, p.throughId]
+      return null
+    }
+    const e1 = extractEndpoints(selectedPrimitives[0]!)
+    const e2 = extractEndpoints(selectedPrimitives[1]!)
+    if (!e1 || !e2) return null
+    const shared = e1.filter((id) => e2.includes(id))
+    if (shared.length === 0) return null
+    const uniqueIds = [...new Set([...e1, ...e2])]
+    if (uniqueIds.length !== 3) return null
+    const pts = uniqueIds.map((id) => sceneDocument.primitives.find((p) => p.id === id))
+    if (pts.some((p) => p?.type !== "point3")) return null
+    const ringLabel = pts.map((p) => (p?.label ?? "").trim()).filter(Boolean).join("")
+    return { pointIds: uniqueIds, ringLabel }
+  })()
+  const point3RelatedFaces = selectedPoint3
+    ? sceneDocument.primitives.filter((p) => {
+        if (p.type === "face3") {
+          const isVertex = p.pointIds.includes(selectedPoint3.id)
+          const isHost = point3Binding?.kind === "onFace" && point3Binding.faceId === p.id
+          return isVertex || isHost
+        }
+        if (p.type === "plane3") {
+          const isAnchor = p.definition.kind === "throughPoints" ? p.definition.pointIds.includes(selectedPoint3.id) : p.definition.pointId === selectedPoint3.id
+          const isHost = (point3Binding?.kind === "onFace" && point3Binding.faceId === p.id) || (point3Binding?.kind === "onPlane" && point3Binding.planeId === p.id)
+          return isAnchor || isHost
+        }
+        return false
+      })
+    : []
   const spatialDomain = spatialHost ? host3FromPrimitive(spatialHost, sceneDocument.primitives)?.domain : undefined
+  const faceUMin = spatialDomain && Number.isFinite(spatialDomain.u[0]) ? spatialDomain.u[0] : -5
+  const faceUMax = spatialDomain && Number.isFinite(spatialDomain.u[1]) ? spatialDomain.u[1] : 5
+  const faceVMin = spatialDomain?.v && Number.isFinite(spatialDomain.v[0]) ? spatialDomain.v[0] : -5
+  const faceVMax = spatialDomain?.v && Number.isFinite(spatialDomain.v[1]) ? spatialDomain.v[1] : 5
   const orbit = spatialDomain?.closedU === true
   const sliderMin = spatialDomain && Number.isFinite(spatialDomain.u[0]) ? spatialDomain.u[0] : Math.min(0, Math.floor(linearBinding?.parameter ?? 0))
   const sliderMax = spatialDomain && Number.isFinite(spatialDomain.u[1]) ? spatialDomain.u[1] : Math.max(1, Math.ceil(linearBinding?.parameter ?? 1))
@@ -144,37 +243,78 @@ export function PropertiesBar(props: PropertiesBarProps) {
       </Field>
     </div>}
 
-    {/* 2. 多选批量编辑：多选时置顶展示，优先响应连接、交点、分组、对齐与批量改色 */}
+    {/* 2. 多选批量编辑：优先显示语义化联动动作（点绑定到面/线、空间点连线/建面、求交），再收纳通用操作 */}
     {selectedCount > 1 && <div className="batch-properties">
-      <h3>批量编辑 · {selectedCount} 个对象</h3>
+      <div className="property-card-heading">
+        <div>
+          <span className="property-kicker">多选联动</span>
+          <h3>已选 {selectedCount} 个对象</h3>
+        </div>
+        <span className="property-type-badge">{purePoint3Batch ? "空间点集" : batchHostLink ? "点与宿主" : "多图元"}</span>
+      </div>
+      {batchHostLink && <div className="property-subcard property-subcard-highlight">
+        <span className="property-subheading">动点绑定联动</span>
+        <p className="footer-note">可将点「{batchHostLink.point.label ?? batchHostLink.point.id}」绑定到「{batchHostLink.host.label ?? batchHostLink.host.id}」，之后拖动会始终贴合宿主移动。</p>
+        <div className="property-actions">
+          <button type="button" className="btn-primary-inline" disabled={!editable} onClick={() => onBindPointHost?.(batchHostLink.value, batchHostLink.point.id)}>{batchHostLink.buttonLabel}</button>
+        </div>
+      </div>}
+      {purePoint3Batch && <div className="property-subcard property-subcard-highlight">
+        <span className="property-subheading">空间点关联作图</span>
+        <div className="property-actions">
+          {selectedPoint3Items.length === 2 && onConnectPoint3Segment && <button type="button" className="btn-primary-inline" disabled={!editable} onClick={onConnectPoint3Segment}>连接为线段</button>}
+          {selectedPoint3Items.length === 2 && onConnectPoint3Line && <button type="button" disabled={!editable} onClick={onConnectPoint3Line}>作空间直线</button>}
+          {selectedPoint3Items.length === 3 && onConnectPoint3Plane && <button type="button" className="btn-primary-inline" disabled={!editable} onClick={() => onConnectPoint3Plane()}>作空间平面</button>}
+          {selectedPoint3Items.length >= 3 && onConnectPoint3Face && <button type="button" disabled={!editable} onClick={() => onConnectPoint3Face()}>作空间面</button>}
+        </div>
+        <p className="footer-note">包含面上或棱上的动点时，连成的线段或面会实时随动点更新。</p>
+      </div>}
+      {twoLinearPlaneInfo && <div className="property-subcard property-subcard-highlight">
+        <span className="property-subheading">两线定面</span>
+        <div className="property-actions">
+          {onConnectPoint3Face && <button type="button" className="btn-primary-inline" disabled={!editable} onClick={() => onConnectPoint3Face(twoLinearPlaneInfo.pointIds)}>{`建空间面${twoLinearPlaneInfo.ringLabel ? ` ${twoLinearPlaneInfo.ringLabel}` : ""}`}</button>}
+          {onConnectPoint3Plane && <button type="button" disabled={!editable} onClick={() => onConnectPoint3Plane(twoLinearPlaneInfo.pointIds)}>{`建无限平面${twoLinearPlaneInfo.ringLabel ? ` ${twoLinearPlaneInfo.ringLabel}` : ""}`}</button>}
+        </div>
+        <p className="footer-note">将所选两条相交线段的三个顶点连成一个实时关联的空间面，方便添加面内动点或测二面角。</p>
+      </div>}
       <div className="batch-actions">
         {canCreateIntersection && (selectedPrimitive?.type === "point"
           ? <button aria-label={selectedCount === 3 ? "创建三点抛物线" : "连接选中点"} onClick={onCreateIntersection}>{selectedCount === 3 ? "创建三点抛物线" : "连接选中点"}</button>
           : <button aria-label="添加交点" onClick={onCreateIntersection}>添加交点</button>)}
         <button aria-label={selectedGroupId ? "取消分组" : "创建分组"} onClick={selectedGroupId ? onDeleteGroup : onCreateGroup}>{selectedGroupId ? "取消分组" : "创建分组"}</button>
         <button aria-label={allSelectedVisible ? "批量隐藏" : "批量显示"} onClick={onToggleBatchVisibility}>{allSelectedVisible ? "批量隐藏" : "批量显示"}</button>
-        {alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}
       </div>
-      {onUpdateSelectionStyle && <ColourField
-        label="批量线条颜色"
-        customLabel="批量线条颜色"
-        palette={PLANAR_PALETTE}
-        value={undefined}
-        fallback=""
-        disabled={!editable}
-        batch
-        onChange={(stroke) => onUpdateSelectionStyle({ stroke })}
-      />}
-      {onUpdateSelectionStyle && <ColourField
-        label="批量填充颜色"
-        customLabel="批量填充颜色"
-        palette={FILL_PALETTE}
-        value={undefined}
-        fallback=""
-        disabled={!editable}
-        batch
-        onChange={(fill) => onUpdateSelectionStyle({ fill: fill === NO_FILL ? undefined : fill })}
-      />}
+      {sceneDocument.workspace !== "geometry3d" && <details className="inspector-subdetails">
+        <summary>对齐分布</summary>
+        <div className="batch-actions">
+          {alignments.map((alignment) => <button key={alignment.value} aria-label={alignment.label} onClick={() => onAlign(alignment.value)}>{alignment.label}</button>)}
+        </div>
+      </details>}
+      {onUpdateSelectionStyle && <details className="inspector-subdetails">
+        <summary>批量外观样式</summary>
+        <div className="inspector-subdetails-body">
+          <ColourField
+            label="批量线条颜色"
+            customLabel="批量线条颜色"
+            palette={PLANAR_PALETTE}
+            value={undefined}
+            fallback=""
+            disabled={!editable}
+            batch
+            onChange={(stroke) => onUpdateSelectionStyle({ stroke })}
+          />
+          <ColourField
+            label="批量填充颜色"
+            customLabel="批量填充颜色"
+            palette={FILL_PALETTE}
+            value={undefined}
+            fallback=""
+            disabled={!editable}
+            batch
+            onChange={(fill) => onUpdateSelectionStyle({ fill: fill === NO_FILL ? undefined : fill })}
+          />
+        </div>
+      </details>}
     </div>}
 
     {/* 3. 二维点属性：先摆核心坐标与路径绑定，再放关联作图快捷命令 */}
@@ -299,11 +439,20 @@ export function PropertiesBar(props: PropertiesBarProps) {
           <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
         </div>
       </div>}
-      {(point3Binding?.kind === "onFace" || point3Binding?.kind === "onSurface") && <div className="property-subcard">
+      {faceBinding && faceUv && <div className="property-subcard">
         <span className="property-subheading">空间在面控制</span>
-        <Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), point3Binding.uv[1])} /></Field>
-        <Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={point3Binding.uv[1]} onChange={(event) => onChangeHostParameter?.(point3Binding.uv[0], numberValue(event))} /></Field>
+        <Field label="面上参数 u"><input aria-label="面上参数 u" type="number" step="0.1" disabled={!editable} value={faceUv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), faceUv[1])} /></Field>
+        <div className="inspector-slider-row">
+          <span>滑轨 u</span>
+          <input aria-label="面上滑轨 u" type="range" min={faceUMin} max={faceUMax} step="any" disabled={!editable} value={faceUv[0]} onChange={(event) => onChangeHostParameter?.(numberValue(event), faceUv[1])} />
+        </div>
+        <Field label="面上参数 v"><input aria-label="面上参数 v" type="number" step="0.1" disabled={!editable} value={faceUv[1]} onChange={(event) => onChangeHostParameter?.(faceUv[0], numberValue(event))} /></Field>
+        <div className="inspector-slider-row">
+          <span>滑轨 v</span>
+          <input aria-label="面上滑轨 v" type="range" min={faceVMin} max={faceVMax} step="any" disabled={!editable} value={faceUv[1]} onChange={(event) => onChangeHostParameter?.(faceUv[0], numberValue(event))} />
+        </div>
         <div className="property-actions">
+          <button type="button" aria-label="回到面中心" disabled={!editable} onClick={() => onChangeHostParameter?.(spatialHost?.type === "plane3" ? 0 : (faceUMin + faceUMax) / 2, spatialHost?.type === "plane3" ? 0 : (faceVMin + faceVMax) / 2)}>回到面中心</button>
           <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
         </div>
       </div>}
@@ -318,6 +467,20 @@ export function PropertiesBar(props: PropertiesBarProps) {
           <button type="button" aria-label="解绑为自由点" disabled={!editable} onClick={() => onBindPointHost?.(null)}>解绑为自由点</button>
         </div>
       </div>}
+      <div className="property-subcard">
+        <span className="property-subheading">关联所在平面</span>
+        {point3RelatedFaces.length > 0 && onSelectPrimitive ? (
+          <div className="property-actions">
+            {point3RelatedFaces.map((face) => (
+              <button key={face.id} type="button" onClick={() => onSelectPrimitive(face.id)}>
+                {face.label ?? face.id}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="footer-note">该点暂未归属独立的辅助面。开启左侧「多选」选中包括该点在内的 3 个点（或 2 条相交线段），即可一键生成关联平面图元。</p>
+        )}
+      </div>
       <p className="footer-note">绑定到空间线、棱、面或实体后，点坐标由宿主参数实时约束并随宿主联动。</p>
     </div>}
 
@@ -341,6 +504,13 @@ export function PropertiesBar(props: PropertiesBarProps) {
         <span>周长<strong>{face3Metrics.perimeter.toFixed(3)}</strong></span>
         <span>顶点环<strong>{face3Metrics.vertexLabels}</strong></span>
       </div>
+      {onCreatePointOnHost && <div className="property-subcard property-subcard-highlight">
+        <span className="property-subheading">面内动点联动</span>
+        <div className="property-actions">
+          <button type="button" className="btn-primary-inline" disabled={!editable} onClick={() => onCreatePointOnHost(selectedFace3.id)}>在此面添加动点</button>
+        </div>
+        <p className="footer-note">新建绑定在该面上的动点，或按住多选「点 + 本面」将已有空间点吸附到该面。</p>
+      </div>}
     </div>}
 
     {/* 7. 三维模板立体与多面体属性 */}
@@ -384,14 +554,15 @@ export function PropertiesBar(props: PropertiesBarProps) {
     </div>}
 
     {selectedPlane3 && <div className="primitive-properties">
-      <h3>平面大小</h3>
+      <h3>平面大小与动点</h3>
       <Field label="半边长（世界单位）">
         <input aria-label="平面半边长" type="number" min="0.1" step="0.5" placeholder="自动" disabled={!editable} value={selectedPlane3.halfSize ?? ""} onChange={(event) => onUpdatePrimitive({ halfSize: event.target.value === "" ? null : Math.max(0.1, numberValue(event)) })} />
       </Field>
       <div className="property-actions" aria-label="平面大小操作">
+        {onCreatePointOnHost && <button type="button" className="btn-primary-inline" disabled={!editable} onClick={() => onCreatePointOnHost(selectedPlane3.id)}>在该平面添加动点</button>}
         <button type="button" disabled={!editable || selectedPlane3.halfSize === undefined} onClick={() => onUpdatePrimitive({ halfSize: null })}>恢复自动</button>
       </div>
-      <p className="footer-note">留空表示按场景自动适配；填入数值后由该半边长决定显示范围。</p>
+      <p className="footer-note">留空表示按场景自动适配；也可直接在该平面上创建自由滑动的空间动点。</p>
     </div>}
 
     {selectedCircle3 && <div className="primitive-properties">
@@ -678,20 +849,38 @@ export function PropertiesBar(props: PropertiesBarProps) {
         </>}
     </div>}
 
-    {/* 10. 已关联测量读数与教学测量工具 */}
-    {selectedIds.length === 1 && sceneDocument.measurements.filter((measurement) => measurement.sourceIds.includes(selectedIds[0])).map((measurement) => {
+    {/* 10. 已关联测量读数与教学测量工具（支持单选与多选测量如二面角/线线角/距离） */}
+    {selectedIds.length > 0 && sceneDocument.measurements
+      .filter((measurement) => selectedIds.length === 1
+        ? measurement.sourceIds.includes(selectedIds[0]!)
+        : selectedIds.every((id) => measurement.sourceIds.includes(id)))
+      .map((measurement) => {
       const title = measurement.metric === "dihedral" ? measurementMetricLabel(measurement) : `${measurementMetricLabel(measurement)}测量`
       const form = measurementFormText(measurement)
-      return <div className="primitive-properties" key={measurement.id}>
-        <h3>{title}</h3>
-        <div className="metric-grid">
-          <span>结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}{form === null ? null : <>{` · `}<span className="metric-form">{form}</span></>}</strong></span>
-          <span>状态<strong>{measurement.status}</strong></span>
+      const trig = angleTrigValues(measurement)
+      return <div className="primitive-properties measurement-result-card" key={measurement.id}>
+        <div className="property-card-heading">
+          <div>
+            <span className="property-kicker">测量读数</span>
+            <h3>{title}</h3>
+          </div>
+          <span className="property-type-badge">{measurement.status}</span>
         </div>
-        <p className="footer-note">来源：{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</p>
+        <div className="metric-grid">
+          <span className="metric-span-full">测量结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}{form === null ? null : <>{` · `}<span className="metric-form">{form}</span></>}</strong></span>
+          {trig && <span>角度换算<strong>{trig.degreesText}</strong></span>}
+          <span>精度来源<strong>{measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</strong></span>
+        </div>
+        {trig && <div className="metric-trig-list" aria-label="三角函数值">
+          <div className="metric-trig-row"><span>正弦 sin</span><strong>{trig.sin.display}</strong></div>
+          <div className="metric-trig-row"><span>余弦 cos</span><strong>{trig.cos.display}</strong></div>
+        </div>}
+        <p className="footer-note">来源：{measurement.sourceIds.map((id) => sourceLabel(id)).join("、")}</p>
         {measurement.explanation && <p className="footer-note">{measurement.explanation}</p>}
         <div className="property-actions">
-          {form === null ? null : <button type="button" aria-label={`复制精确形式 ${title}`} data-exact-form-text={form} onClick={() => { void navigator.clipboard?.writeText(form) }}>复制 {form}</button>}
+          {form !== null && <button type="button" aria-label={`复制精确形式 ${title}`} data-exact-form-text={form} onClick={() => { void navigator.clipboard?.writeText(form) }}>复制精确值</button>}
+          {trig?.sin.exact && <button type="button" aria-label={`复制正弦值 ${title}`} onClick={() => { void navigator.clipboard?.writeText(trig.sin.exact!) }}>复制 sin</button>}
+          {trig?.cos.exact && <button type="button" aria-label={`复制余弦值 ${title}`} onClick={() => { void navigator.clipboard?.writeText(trig.cos.exact!) }}>复制 cos</button>}
           <button type="button" aria-label={`删除测量 ${measurement.id}`} onClick={() => onDeleteMeasurement(measurement.id)}>删除测量</button>
         </div>
       </div>
@@ -709,8 +898,8 @@ export function PropertiesBar(props: PropertiesBarProps) {
 
   const appearanceSectionContent = shows("appearance") && selectedPrimitive && <div className="primitive-properties">
     {usesExternalSections && <>
-      <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
-      <Field label="图元名称"><input aria-label="图元名称" type="text" value={selectedPrimitive.label ?? ""} placeholder={selectedPrimitive.id} onChange={(event) => onUpdatePrimitive({ label: event.target.value })} /></Field>
+      <div className="property-card-heading"><div><span className="property-kicker">当前图元</span><h3>{selectedDisplayLabel}</h3></div><span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span></div>
+      <Field label="图元名称"><input aria-label="图元名称" type="text" disabled={!editable} value={selectedPrimitive.label ?? ""} placeholder={selectedDisplayLabel || selectedPrimitive.id} onChange={(event) => onUpdatePrimitive({ label: event.target.value })} /></Field>
     </>}
     <ColourField
       label="线条颜色"
@@ -765,6 +954,37 @@ export function PropertiesBar(props: PropertiesBarProps) {
     </div>}
   </>
 
+  const activeThreeViewCount = threeViewOptions
+    ? Number(threeViewOptions.transparentFaces)
+      + Number(threeViewOptions.showHiddenEdges)
+      + Number(threeViewOptions.showNormals)
+      + Number(threeViewOptions.unfolded)
+      + Number(threeViewOptions.showRotationHandles)
+      + Number(threeViewOptions.autoFit)
+      + Number(threeViewOptions.showAngle)
+    : 0
+  const threeViewSyncCard = sceneDocument.workspace === "geometry3d" && threeViewOptions && onToggleThreeViewOption && (
+    <details className="primitive-properties view-sync-details" aria-label="三维视图联动">
+      <summary className="view-sync-summary">
+        <span>三维视图选项</span>
+        <span className="view-sync-badge">{activeThreeViewCount > 0 ? `已开 ${activeThreeViewCount} 项` : "默认"}</span>
+      </summary>
+      <div className="view-sync-body">
+        <div className="property-actions view-sync-actions">
+          <button type="button" aria-pressed={threeViewOptions.transparentFaces} onClick={() => onToggleThreeViewOption("transparentFaces")}>透明面</button>
+          <button type="button" aria-pressed={threeViewOptions.showHiddenEdges} onClick={() => onToggleThreeViewOption("showHiddenEdges")}>隐藏边</button>
+          <button type="button" aria-pressed={threeViewOptions.showNormals} onClick={() => onToggleThreeViewOption("showNormals")}>法向量</button>
+          <button type="button" aria-pressed={threeViewOptions.unfolded} onClick={() => onToggleThreeViewOption("unfolded")}>{threeViewOptions.unfolded ? "折叠" : "展开"}</button>
+          <button type="button" aria-pressed={threeViewOptions.showRotationHandles} onClick={() => onToggleThreeViewOption("showRotationHandles")}>旋转环</button>
+          <button type="button" aria-pressed={threeViewOptions.autoFit} onClick={() => onToggleThreeViewOption("autoFit")}>自动取景</button>
+          <button type="button" aria-pressed={threeViewOptions.showAngle} onClick={() => onMeasureDihedralQuick ? onMeasureDihedralQuick() : onToggleThreeViewOption("showAngle")}>测量二面角</button>
+          {onOpenSolidWizardQuick && <button type="button" onClick={onOpenSolidWizardQuick}>常用立体</button>}
+        </div>
+        <p className="footer-note">与画布左上角「视图选项」双向同步；多选两个面点「测量二面角」即可在此查看角度与 sin / cos。</p>
+      </div>
+    </details>
+  )
+
   return <section className="panel-section properties" aria-label="属性检查器">
     <div className="inspector-heading">
       <div>
@@ -777,21 +997,34 @@ export function PropertiesBar(props: PropertiesBarProps) {
       <div className="inspector-selected-identity">
         <div className="inspector-selected-meta">
           <span className="property-type-badge">{primitiveTypeLabels[selectedPrimitive.type]}</span>
+          {props.draftPreview && <span className="property-type-badge">草稿预览</span>}
         </div>
-        <h3>{selectedPrimitive.label ?? selectedPrimitive.id}</h3>
+        <h3>{selectedDisplayLabel}</h3>
       </div>
       <div className="inspector-quick-actions">
-        <button type="button" aria-label={selectedPrimitive.locked ? "解锁图元" : "锁定图元"} onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁" : "锁定"}</button>
-        <button type="button" aria-label="快速删除对象" disabled={selectedPrimitive.locked} onClick={onDeleteSelected}>删除</button>
+        <button type="button" aria-label={selectedPrimitive.locked ? "解锁图元" : "锁定图元"} disabled={Boolean(props.draftPreview)} onClick={onToggleSelectedLock}>{selectedPrimitive.locked ? "解锁" : "锁定"}</button>
+        <button type="button" aria-label="快速删除对象" disabled={Boolean(props.draftPreview) || selectedPrimitive.locked} onClick={onDeleteSelected}>删除</button>
       </div>
     </div>}
-    {!selectedPrimitive && selectedCount <= 1 && <div className="inspector-empty-state">
-      <div className="inspector-empty-icon" aria-hidden="true"><EmptyStateArt name="selection" /></div>
-      <strong>未选择任何图元</strong>
-      <span>在画布中点击点、直线或椭圆即可配置几何参数与外观参数</span>
-    </div>}
+    {!selectedPrimitive && selectedCount <= 1 && <>
+      <div className="inspector-empty-state">
+        <div className="inspector-empty-icon" aria-hidden="true"><EmptyStateArt name="selection" /></div>
+        <strong>未选择图元</strong>
+        <span>
+          {sceneDocument.workspace === "geometry3d"
+            ? "点击画布或左侧列表中的点、线棱、面或立体，可编辑坐标、添加面上动点与计算测量。"
+            : "点击画布中的点、函数、圆锥曲线或切线，即可调节参数、动点滑轨与联动关系。"}
+        </span>
+        <div className="inspector-empty-tips">
+          <span>单选 · 编辑参数 / 添加动点</span>
+          <span>{sceneDocument.workspace === "geometry3d" ? "多选 · 绑定点到面 / 连线 / 测二面角" : "多选 · 求交点 / 连线 / 统一样式"}</span>
+        </div>
+      </div>
+      {threeViewSyncCard}
+    </>}
     {(selectedPrimitive || selectedCount > 1) && <>
       {renderSection("data", "几何参数", dataSectionContent)}
+      {threeViewSyncCard}
       {selectedPrimitive && renderSection("appearance", "外观样式", appearanceSectionContent)}
       {(selectedPrimitive || engineeringAnnotationOptions.length > 0) && renderSection("engineering", "标注与工程", engineeringSectionContent)}
     </>}

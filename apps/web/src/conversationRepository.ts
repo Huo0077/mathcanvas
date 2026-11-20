@@ -595,22 +595,60 @@ function kindOf(message: AgentMessage): string {
   return "reply"
 }
 
+function restoredFailureOf(value: Record<string, unknown> | null): AgentMessage["failure"] | undefined {
+  const failure = value?.failure
+  if (!failure || typeof failure !== "object") return undefined
+  const rec = failure as Record<string, unknown>
+  if (typeof rec.code !== "string" || typeof rec.message !== "string") return undefined
+  return { code: rec.code, message: rec.message, retryable: Boolean(rec.retryable) }
+}
+
+function restoredCommitOf(value: Record<string, unknown> | null): AgentMessage["commit"] | undefined {
+  const commit = value?.commit
+  if (!commit || typeof commit !== "object") return undefined
+  const rec = commit as Record<string, unknown>
+  if (rec.status !== "committed" && rec.status !== "no_change" && rec.status !== "failed") return undefined
+  return typeof rec.detail === "string" ? { status: rec.status, detail: rec.detail } : { status: rec.status }
+}
+
+function restoredTraceOf(value: Record<string, unknown> | null): AgentMessage["trace"] | undefined {
+  if (!Array.isArray(value?.trace)) return undefined
+  const entries = value.trace.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return []
+    const rec = entry as Record<string, unknown>
+    if (typeof rec.phase !== "string" || typeof rec.summary !== "string" || typeof rec.at !== "number") return []
+    const status: "ok" | "warning" | "error" = rec.status === "warning" ? "warning" : rec.status === "error" ? "error" : "ok"
+    return [{ phase: rec.phase, status, summary: rec.summary, at: rec.at }]
+  })
+  return entries.length > 0 ? entries : undefined
+}
+
 /**
  * 从存下来的记录变回一条消息。
  *
- * **刻意保守**：只还原说完的那部分（id/角色/原文/时间），在途字段（`pending`）与
- * 运行期视图（轨迹、草稿、诊断）不还原 —— 一个跨重启还亮着的"确认草稿"按钮指向的
- * 是一份早就不存在的草稿。
+ * **刻意保守**：绝不还原 `pending` 与活草稿 `draft` —— 一个跨重启还亮着的"确认草稿"按钮
+ * 指向的是一份早就不存在的草稿；但保留 `failure` / `commit` / `trace` 让失败或已完成的
+ * 历史回复在重开应用后不会退化成空白消息。
  */
 function agentMessageOfLocal(record: LocalMessageRecord): AgentMessage {
   const content = record.contentJson
   const value = content && typeof content === "object" ? (content as Record<string, unknown>) : null
   const raw = value && typeof value.text === "string" ? value.text : typeof content === "string" ? content : ""
+  const failure = restoredFailureOf(value)
+  const commit = restoredCommitOf(value)
+  const trace = restoredTraceOf(value)
+  const diagnostics = Array.isArray(value?.diagnostics)
+    ? value.diagnostics.filter((item): item is string => typeof item === "string")
+    : undefined
   return {
     id: record.id,
     role: record.role === "assistant" ? "assistant" : "user",
     text: raw,
-    createdAt: record.createdAt
+    createdAt: record.createdAt,
+    ...(failure === undefined ? {} : { failure }),
+    ...(commit === undefined ? {} : { commit }),
+    ...(trace === undefined ? {} : { trace }),
+    ...(diagnostics === undefined || diagnostics.length === 0 ? {} : { diagnostics })
   }
 }
 

@@ -24,7 +24,7 @@ import type { GeometryDocument, PrimitiveSpec, Vector3 } from "@draw/dsl"
 import { host3FromPrimitive } from "@draw/geometry-kernel"
 import { sectionMaterialization, sectionPivot, sectionPlaneThroughSource, sectionSourceVertices, solidVolumeHostFor, type DomainOperation } from "@draw/scene-graph"
 
-import { nextPrimitiveId } from "./documentIds"
+import { nextPoint3Label, nextPrimitiveId } from "./documentIds"
 import { guidanceFor } from "./guidance"
 import { parsePointHostValue } from "./pointHostOptions"
 
@@ -93,11 +93,14 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
    *
    * 绑定的一刻先做一次反投影，所以"绑上去"这一步点不会跳，之后的移动完全由参数决定（参数是唯一真值）。
    */
-  const bindPointToHost = (value: string | null) => {
-    if (selectedPrimitive?.type !== "point3") return
+  const bindPointToHost = (value: string | null, targetPointId?: string) => {
+    const pointPrimitive = targetPointId
+      ? document.primitives.find((primitive) => primitive.id === targetPointId)
+      : selectedPrimitive
+    if (pointPrimitive?.type !== "point3") return
     const target = value ? parsePointHostValue(value) : null
     if (!target) {
-      apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { kind: "free" } } })
+      apply({ op: "updatePrimitive", id: pointPrimitive.id, patch: { binding3: { kind: "free" } } })
       setGuidance("已解绑为自由点：坐标仍由你直接编辑。")
       return
     }
@@ -106,13 +109,13 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
       ? host3FromPrimitive(host, document.primitives) ?? (target.mode === "solid" ? solidVolumeHostFor(new Map(document.primitives.map((primitive) => [primitive.id, primitive])), host.id) : null)
       : null
     if (!host || !constraint) {
-      setFileError("这个图元不能作为宿主动点：只有空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及实体的内部可以。")
+      setFileError("这个图元不能作为宿主动点：只有空间直线 / 线段 / 射线 / 棱 / 面 / 平面 / 圆柱与圆锥侧面，以及实体的内部可以。")
       return
     }
-    const projected = constraint.closestParameter(selectedPrimitive.position)
+    const projected = constraint.closestParameter(pointPrimitive.position)
     let parameterU = projected.u
     if (target.mode === "host" && host.type !== "circle3") {
-      const residual = constraint.residual(selectedPrimitive.position)
+      const residual = constraint.residual(pointPrimitive.position)
       if (residual > 1e-4 && (Math.abs(parameterU) < 1e-4 || Math.abs(parameterU - 1) < 1e-4)) {
         parameterU = 0.5
       }
@@ -124,10 +127,41 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
         : target.mode === "solid"
           ? { kind: "inSolid" as const, solidId: host.id, uvw: [projected.u, projected.v ?? 0, projected.w ?? 0] as [number, number, number] }
           : { kind: "onHost" as const, hostId: host.id, parameter: parameterU }
-    apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3 } })
+    apply({ op: "updatePrimitive", id: pointPrimitive.id, patch: { binding3 } })
+    if (targetPointId) setSelectedIds([pointPrimitive.id])
     setGuidance(target.mode === "solid"
       ? `已绑定到「${host.label ?? host.id}」的**内部**：点可以在实体内自由移动，但出不去——拖到外面会被夹回表面，实体移动时它跟着走。`
       : `已绑定到「${host.label ?? host.id}」：点由宿主参数算出坐标，之后拖动或改参数都沿宿主滑动。`)
+  }
+  /** 直接在选中的空间面 / 平面 / 线棱上创建一个新动点，并自动选中以便立即拖动或微调参数。 */
+  const createPointOnHost = (hostId: string) => {
+    const host = document.primitives.find((primitive) => primitive.id === hostId)
+    const constraint = host ? host3FromPrimitive(host, document.primitives) : null
+    if (!host || !constraint) {
+      setFileError("只能在空间面、平面、直线、线段、射线、棱或空间圆轨道上直接添加动点。")
+      return
+    }
+    const mid = (range: readonly [number, number] | undefined, fallback: number) =>
+      range && Number.isFinite(range[0]) && Number.isFinite(range[1]) ? (range[0] + range[1]) / 2 : fallback
+    const u = host.type === "face3" || host.type === "plane3"
+      ? (host.type === "plane3" ? 0 : mid(constraint.domain.u, 0.5))
+      : mid(constraint.domain.u, 0.5)
+    const v = host.type === "face3" || host.type === "plane3"
+      ? (host.type === "plane3" ? 0 : mid(constraint.domain.v, 0.5))
+      : mid(constraint.domain.v, 0.5)
+    const position = constraint.evaluate({ u, ...(constraint.domain.v ? { v } : {}) })
+    const id = nextPrimitiveId(document, "point3")
+    const label = nextPoint3Label(document)
+    const isSurface = host.type === "cylinder" || host.type === "cone"
+    const isFace = host.type === "face3" || host.type === "plane3"
+    const binding = isFace
+      ? { kind: "onFace" as const, faceId: host.id, uv: [u, v] as [number, number] }
+      : isSurface
+        ? { kind: "onSurface" as const, solidId: host.id, uv: [u, v] as [number, number] }
+        : { kind: "onHost" as const, hostId: host.id, parameter: u }
+    apply({ op: "addPrimitive", primitive: { id, type: "point3", position, binding, label } })
+    setSelectedIds([id])
+    setGuidance(`已在「${host.label ?? host.id}」上创建动点 ${label}：可在画布直接拖动，或在右侧调节宿主参数并与其他点连线。`)
   }
   /** 改宿主参数：一维宿主只用 u；面与曲面用 (u, v)；实体内用 (u, v, w)，只改给出的维度。 */
   const setPointHostParameter = (u: number, v?: number, w?: number) => {
@@ -137,6 +171,11 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
     if (binding.kind === "onHost" || binding.kind === "onLine") {
       if (!Number.isFinite(u)) return
       apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, parameter: u } } })
+      return
+    }
+    if (binding.kind === "onPlane") {
+      if (!Number.isFinite(u) || !Number.isFinite(v ?? binding.coordinates[1])) return
+      apply({ op: "updatePrimitive", id: selectedPrimitive.id, patch: { binding3: { ...binding, coordinates: [u, v ?? binding.coordinates[1]] } } })
       return
     }
     if (binding.kind === "inSolid") {
@@ -164,5 +203,5 @@ export function createSolidCommands({ document, selectedPrimitive, selectedId, a
     setGuidance(`已把截面物化为 ${primitives.length} 个独立图元（点 / 棱 / 面），它们不再随来源变化。`)
   }
 
-  return { addSection, rotateSelectedSection, rotateSelected3, applySectionFace, bindPointToHost, setPointHostParameter, materializeSelectedSection }
+  return { addSection, rotateSelectedSection, rotateSelected3, applySectionFace, bindPointToHost, createPointOnHost, setPointHostParameter, materializeSelectedSection }
 }

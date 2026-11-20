@@ -205,6 +205,8 @@ pub async fn lean_version(configuration: &LeanConfiguration, timeout_ms: u64) ->
     command.current_dir(&configuration.project_dir);
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     command.kill_on_drop(true);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x0800_0000);
 
     let child = command.spawn().ok()?;
     let output = tokio::time::timeout(Duration::from_millis(timeout_ms.max(1)), child.wait_with_output())
@@ -268,6 +270,8 @@ async fn spawn_and_wait(configuration: &LeanConfiguration, file: &Path, timeout_
     command.current_dir(&configuration.project_dir);
     command.stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
     command.kill_on_drop(true);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x0800_0000);
 
     let mut child = match command.spawn() {
         Ok(child) => child,

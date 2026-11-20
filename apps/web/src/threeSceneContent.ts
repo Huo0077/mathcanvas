@@ -223,7 +223,30 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     const unfoldedPolyhedra = document.primitives.filter((primitive): primitive is Polyhedron3Primitive =>
       primitive.type === "polyhedron3" && primitive.visible !== false && effectiveUnfoldProgress(primitive) > 0.001
     )
-    const unfoldedChildIds = new Set(unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]))
+    const visibleSpatialPoints = document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && isUserVisiblePrimitive(primitive))
+    const coordKeyOf = (pt: Point3Primitive) => `${pt.position.x.toFixed(3)},${pt.position.y.toFixed(3)},${pt.position.z.toFixed(3)}`
+    const primaryPointByCoord = new Map<string, Point3Primitive>()
+    for (const pt of visibleSpatialPoints) {
+      const key = coordKeyOf(pt)
+      const existing = primaryPointByCoord.get(key)
+      const ptHasLabel = Boolean(pt.label?.trim())
+      const exHasLabel = Boolean(existing?.label?.trim())
+      const ptSel = selectedIds.includes(pt.id)
+      const exSel = existing ? selectedIds.includes(existing.id) : false
+      if (!existing || (ptSel && !exSel) || (ptSel === exSel && ptHasLabel && !exHasLabel)) primaryPointByCoord.set(key, pt)
+    }
+    const shadowedDuplicatePointIds = new Set(
+      visibleSpatialPoints
+        .filter((pt) => {
+          const primary = primaryPointByCoord.get(coordKeyOf(pt))
+          if (!primary || primary.id === pt.id || selectedIds.includes(pt.id)) return false
+          const ptLabel = (pt.label ?? "").trim()
+          const primaryLabel = (primary.label ?? "").trim()
+          return ptLabel.length === 0 || ptLabel === primaryLabel
+        })
+        .map((pt) => pt.id)
+    )
+    const unfoldedChildIds = new Set([...unfoldedPolyhedra.flatMap((polyhedron) => [...polyhedron.edgeIds, ...polyhedron.faceIds]), ...shadowedDuplicatePointIds])
     document.primitives.filter(isUserVisiblePrimitive).forEach((primitive) => {
       if (unfoldedChildIds.has(primitive.id)) return
       const selected = selectedIds.includes(primitive.id)
@@ -352,7 +375,7 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     // 3D point labels: an HTML overlay above the canvas, so the classroom names A/B/C stay readable at any zoom.
     // The overlay never receives pointer events, so picking still goes through the renderer.
     visiblePointLabels.length = 0
-    visiblePointLabels.push(...document.primitives.filter((primitive): primitive is Point3Primitive => primitive.type === "point3" && isUserVisiblePrimitive(primitive)))
+    visiblePointLabels.push(...visibleSpatialPoints.filter((primitive) => !shadowedDuplicatePointIds.has(primitive.id)))
     let dihedralMarkerCount = 0
     let planeCount = 0
     document.measurements

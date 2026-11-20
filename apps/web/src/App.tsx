@@ -50,6 +50,8 @@ import { useDraftPersistence } from "./useDraftPersistence"
 import { DEFAULT_APP_MODULE, type AppModuleId } from "./shellModules"
 import { resolveIntersectionPreview } from "./intersectionPreview3d"
 import { ThreeSceneView } from "./threeScene"
+import { loadViewPreference3d, saveViewPreference3d } from "./persistence/draftStorage"
+import type { ThreeViewOptionKey, ThreeViewOptionsState } from "./threeViewOptions"
 import { resolveGeometryEdit, type GeometryEditRequest } from "./draftEditing"
 import { createFileExports } from "./persistence/fileExports"
 import { selectExportableDrawings } from "./persistence/exportableDrawings"
@@ -291,6 +293,27 @@ export function App() {
   const hoveredPreview = hoveredPreviewKey ? scenePreviews.find((item) => item.key === hoveredPreviewKey) ?? null : null
   const previewStatus = hoveredPreview ?? selectionPreview
   const [copilotOpen, setCopilotOpen] = useState(false)
+  const [threeViewOptions, setThreeViewOptions] = useState<ThreeViewOptionsState>(() => {
+    const prefs = loadViewPreference3d()
+    return {
+      transparentFaces: false,
+      showHiddenEdges: false,
+      showRotationHandles: prefs.showRotationHandles,
+      showNormals: false,
+      unfolded: false,
+      showAngle: false,
+      autoFit: prefs.autoFit
+    }
+  })
+  const toggleThreeViewOption = (key: ThreeViewOptionKey) => {
+    setThreeViewOptions((current) => {
+      const next = { ...current, [key]: !current[key] }
+      if (key === "autoFit" || key === "showRotationHandles") {
+        saveViewPreference3d({ autoFit: next.autoFit, showRotationHandles: next.showRotationHandles })
+      }
+      return next
+    })
+  }
   const activeGhostDraft = useActiveGhostDraft(document)
   /**
    * 顶级模块：A「传统工作区」（画布：CAD / 平面几何 / 立体几何）与 B「Agent 工作区」。
@@ -440,7 +463,7 @@ export function App() {
    * 否则界面行为与 `agentRunner` 的测试会慢慢分叉。
    */
   const runAgentPrompt = async (prompt: string, promptMessageId: string) => {
-    await agentRunner.run(prompt, promptMessageId)
+    await agentRunner.run(prompt, promptMessageId, { selectedIds })
   }
 
   /**
@@ -458,10 +481,12 @@ export function App() {
     const after = useAgentStore.getState()
     const userMessage = [...(after.activeConversation?.messages ?? [])].reverse().find((message) => message.role === "user")
     if (!userMessage) return
-    void agentRunner.retry(userMessage.text, userMessage.id)
+    void agentRunner.retry(userMessage.text, userMessage.id, { selectedIds })
   }
 
 
+
+  const displayDocument = activeGhostDraft ? activeGhostDraft.candidate : document
 
   /**
    * 新建出来的对象要**自动选中**，否则用户点完按钮什么都看不到（检查器里还是上一个对象）。
@@ -470,11 +495,18 @@ export function App() {
   const pendingSelectionRef = useRef<string | null>(null)
   useEffect(() => {
     const pending = pendingSelectionRef.current
-    if (!pending) return
-    if (!document.primitives.some((primitive) => primitive.id === pending)) return
-    pendingSelectionRef.current = null
-    setSelectedIds([pending])
-  }, [document])
+    if (pending && displayDocument.primitives.some((primitive) => primitive.id === pending)) {
+      pendingSelectionRef.current = null
+      setSelectedIds([pending])
+      return
+    }
+    const validIds = new Set(displayDocument.primitives.map((primitive) => primitive.id))
+    setSelectedIds((current) => {
+      if (current.length === 0) return current
+      const next = current.filter((id) => validIds.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [displayDocument])
 
   /**
    * 一次多步创建（直线/圆/圆弧/折线）画完就撤掉指引：已经完成的点击序列留着只会变成过期说明。
@@ -500,7 +532,7 @@ export function App() {
     canCreatePointConnection, canCreateIntersection, canCreateSection,
     allSelectedLocked, allSelectedVisible, cadActiveLayer, cadActiveLayerBlockedReason,
     canCreateLinearAnnotation, canCreateAngularAnnotation, rotationAnchor, canAnchorRotation
-  } = deriveAppViewState({ document, selectedIds })
+  } = deriveAppViewState({ document: displayDocument, selectedIds })
   const { selectedGroup, updateSelection, selectBox, toggleLock, createGroup, deleteGroup, alignSelection } = createSelectionCommands({ document, selectedIds, allSelectedLocked, apply, setSelectedIds, setCreationStep, setGuidance })
   const createIntersection = () => {
     if (!canCreateIntersection) return
@@ -519,11 +551,37 @@ export function App() {
     setSelectedIds([id])
   }
 
-  const { addSection, rotateSelectedSection, rotateSelected3, applySectionFace, bindPointToHost, setPointHostParameter, materializeSelectedSection } = createSolidCommands({ document, selectedPrimitive, selectedId, apply, setSelectedIds, setGuidance, setFileError })
+  const { addSection, rotateSelectedSection, rotateSelected3, applySectionFace, bindPointToHost, createPointOnHost, setPointHostParameter, materializeSelectedSection } = createSolidCommands({ document, selectedPrimitive, selectedId, apply, setSelectedIds, setGuidance, setFileError })
   const { createFromPreview, createIntersectionFromPreview } = createPreviewCommands({ document, apply, setSelectedIds, setLayerNotice, addSection })
-  const { addPoint, addPoint3, addLine3, addPlane3, addFace3, addCircle3Track } = createPoint3ToolCommands({ document, selectedPoint3Ids, canCreateLine3, canCreatePlane3, canCreateFace3, canCreateCircle3, apply, setSelectedIds, setGuidance, setFileError, cadLayerFields })
+  const { addPoint, addPoint3, addSegment3, addLine3, addPlane3, addFace3, addCircle3Track } = createPoint3ToolCommands({ document, selectedPoint3Ids, canCreateLine3, canCreatePlane3, canCreateFace3, canCreateCircle3, apply, setSelectedIds, setGuidance, setFileError, cadLayerFields })
   const { startCreation, handleCanvasCreationClick, handleCanvasDoubleClick } = createDraftingCommands({ document, creationStep, addLine3, addPlane3, addFace3, canCreateLine3, canCreatePlane3, canCreateFace3, selectedPoint3Ids, apply, applyBatch, setCreationStep, setSelectedIds, setGuidance, cadLayerFields })
   const { addAnnotation, addEngineeringAnnotation, addParameter, addMeasurement, deleteMeasurement } = createRecordCommands({ document, selectedPrimitive, selectedIds, apply, setGuidance, setFileError })
+  const measureDihedralLinked = (): "created" | "existing" | "missing-selection" => {
+    const selectedFaces = selectedIds
+      .map((id) => document.primitives.find((primitive) => primitive.id === id))
+      .filter((primitive): primitive is Extract<PrimitiveSpec, { type: "face3" }> => primitive?.type === "face3")
+    if (selectedFaces.length === 2 && selectedIds.length === 2) {
+      setRightDockOpen(true)
+      setMobileDock("properties")
+      setThreeViewOptions((current) => ({ ...current, showAngle: true }))
+      const existing = document.measurements.find(
+        (m) => m.metric === "dihedral" && m.sourceIds.length === 2 && selectedIds.every((id) => m.sourceIds.includes(id))
+      )
+      if (existing) {
+        setGuidance("已联动右侧属性栏展示当前二面角读数（弧度 / 角度 / sin / cos）。")
+        return "existing"
+      }
+      addMeasurement("dihedral", "interior")
+      return "created"
+    }
+    setRightDockOpen(true)
+    if (selectedFaces.length === 1) {
+      setGuidance("已选中 1 个空间面：请在左侧对象栏开启「多选」再勾选第 2 个面，即可同步计算二面角并在右侧查看 sin/cos。")
+    } else {
+      setGuidance("二面角需要两个面：在左侧对象栏开启「多选」勾选两个面（或按 Alt+Shift 在图中点选），再点「测量二面角」。")
+    }
+    return "missing-selection"
+  }
   /**
    * 拖动之后的提交。两件事：
    *
@@ -808,12 +866,12 @@ export function App() {
       ? "2D 绘图：在视口中创建对象，新对象写入当前图层。"
       : "工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} parameters={document.parameters} workspace={document.workspace} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onToggle={(id, visible) => apply({ op: "toggleVisibility", id, visible })} onSetParameter={(id, patch) => {
+  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={displayDocument.primitives} measurements={displayDocument.measurements} parameters={displayDocument.parameters} workspace={displayDocument.workspace} draftPreview={activeGhostDraft !== null} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onSelectMany={setSelectedIds} onClearSelection={() => setSelectedIds([])} onDeleteSelected={activeGhostDraft ? undefined : deleteSelected} onToggle={(id, visible) => { if (!activeGhostDraft) apply({ op: "toggleVisibility", id, visible }) }} onSetParameter={activeGhostDraft ? undefined : (id, patch) => {
     // 一次提交值 + 元数据。未给出的字段沿用现值（清空输入框暂时等于不改，见文档的已知限制）。
     const current = document.parameters[id]
     if (!current) return
     apply({ op: "setParameter", id, value: patch.value ?? current.value, min: patch.min ?? current.min, max: patch.max ?? current.max, step: patch.step ?? current.step, label: patch.label ?? current.label, ownerId: current.ownerId })
-  }} onDeleteParameter={(id) => apply({ op: "deleteParameter", id })} onAddParameter={addParameter} />
+  }} onDeleteParameter={activeGhostDraft ? undefined : (id) => apply({ op: "deleteParameter", id })} onAddParameter={activeGhostDraft ? undefined : addParameter} />
 
   /**
    * 空白画布上**不再有任何**说明文字或快捷按钮（用户口径：中间那块文字与四个按钮都去掉）。
@@ -824,7 +882,7 @@ export function App() {
   const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onCanvasContextMenu={handleCanvasContextMenu} onDoubleClickPrimitive={handleDoubleClickPrimitive} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
   const threeCanvas = <ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
     applyBatch(hostPointDragOperations(document, id, parameter))
-  }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} />
+  }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} viewOptions={threeViewOptions} onChangeViewOptions={setThreeViewOptions} onMeasureDihedral={measureDihedralLinked} />
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -835,7 +893,7 @@ export function App() {
     [document.primitives]
   )
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: addMeasurement, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onCreateCircleAtPoint: createCircleAtPoint, onCreateCurveTangent: addCurveTangent, onCreatePointTangent: addPointTangent, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onCreatePointOnHost: createPointOnHost, onConnectPoint3Segment: addSegment3, onConnectPoint3Line: addLine3, onConnectPoint3Plane: addPlane3, onConnectPoint3Face: addFace3, onSelectPrimitive: (id) => setSelectedIds([id]), onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: (metric, dihedralKind) => { setRightDockOpen(true); addMeasurement(metric, dihedralKind) }, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onCreateCircleAtPoint: createCircleAtPoint, onCreateCurveTangent: addCurveTangent, onCreatePointTangent: addPointTangent, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), threeViewOptions, onToggleThreeViewOption: toggleThreeViewOption, onMeasureDihedralQuick: () => { const res = measureDihedralLinked(); if (res === "missing-selection") toggleThreeViewOption("showAngle") }, onOpenSolidWizardQuick: openSolidWizard, value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }), ...(activeGhostDraft ? { documentOverride: activeGhostDraft.candidate, draftPreview: true } : {}) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 

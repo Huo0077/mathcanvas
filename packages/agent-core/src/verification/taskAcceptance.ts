@@ -107,6 +107,13 @@ function extentOf(document: AcceptanceDocument, id: string): number[] | null {
  * —— 否则门禁会拿一份非法报告当证据（`completionGate` 已经会拦住那种，
  * 但让非法报告根本不产生更省事）。
  */
+export function primitiveMatchesAcceptanceType(primitiveType: string, expectedType: string): boolean {
+  if (primitiveType === expectedType) return true
+  if (expectedType === "line" && (primitiveType === "tangent" || primitiveType === "normal" || primitiveType === "secant")) return true
+  if (expectedType === "tangent" && primitiveType === "line") return true
+  return false
+}
+
 export function runAcceptance(document: AcceptanceDocument | null, acceptance: readonly AcceptanceCheck[]): VerificationReport {
   if (acceptance.length === 0) {
     return { status: "not_supported", checks: [{ id: "acceptance:none", status: "not_supported", detail: "the run declared no acceptance criteria, so nothing proves the task was achieved" }], next_actions: ["declare at least one acceptance criterion before claiming the task is done"] }
@@ -119,7 +126,7 @@ export function runAcceptance(document: AcceptanceDocument | null, acceptance: r
 
     switch (entry.kind) {
       case "has_primitive": {
-        const found = document.primitives.some((primitive) => primitive.type === entry.type)
+        const found = document.primitives.some((primitive) => primitiveMatchesAcceptanceType(primitive.type, entry.type))
         return { id, status: found ? "passed" : "failed", detail: found ? `a ${entry.type} exists` : `no ${entry.type} exists` }
       }
       case "has_entity": {

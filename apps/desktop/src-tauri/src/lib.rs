@@ -154,6 +154,7 @@ pub fn run() {
             commands::providers::active_provider_profile,
             commands::providers::provider_run,
             commands::providers::provider_cancel,
+            commands::providers::fetch_provider_models,
             commands::repository::read_document_head,
             commands::repository::read_latest_document_head,
             commands::repository::create_document,

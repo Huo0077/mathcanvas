@@ -28,7 +28,7 @@
 
 import { useState } from "react"
 
-import type { ProviderHealth, ProviderProfile, ProviderProtocol } from "../../services/providerProfileClient"
+import { fetchProviderModels, type ProviderHealth, type ProviderProfile, type ProviderProtocol } from "../../services/providerProfileClient"
 import { PRESETS, slug } from "./providerSettingsFields"
 import { XIcon } from "./icons"
 
@@ -79,20 +79,53 @@ interface FieldErrors {
 
 export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCancel }: ProviderFormProps) {
   const [presetIndex, setPresetIndex] = useState(() => {
+    const byUrl = editing?.baseUrl
+      ? PRESETS.findIndex((preset) => preset.baseUrl && preset.baseUrl.replace(/\/+$/, "") === editing.baseUrl.replace(/\/+$/, ""))
+      : -1
+    if (byUrl >= 0) return byUrl
     const found = PRESETS.findIndex((preset) => preset.protocol === editing?.protocol && preset.dialect === editing.dialect)
     return found >= 0 ? found : 0
   })
   const [name, setName] = useState(editing?.name ?? "")
   const [baseUrl, setBaseUrl] = useState(editing?.baseUrl ?? PRESETS[0].baseUrl)
-  const [modelId, setModelId] = useState(editing?.modelId ?? "")
+  const [modelId, setModelId] = useState(editing?.modelId ?? PRESETS[0].defaultModelId ?? "")
   const [maxOutputTokens, setMaxOutputTokens] = useState(editing?.maxOutputTokens?.toString() ?? "")
   // 密钥只在内存里过一手：**从不**写进 profile、从不落盘、从不进日志。
   const [secret, setSecret] = useState("")
   const [errors, setErrors] = useState<FieldErrors>({})
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState("")
+  const [fetchingModels, setFetchingModels] = useState(false)
+  const [fetchedModels, setFetchedModels] = useState<string[]>([])
+  const [fetchModelsHint, setFetchModelsHint] = useState<string>("")
 
   const preset = PRESETS[presetIndex]
+
+  async function handleFetchModels() {
+    if (!baseUrl.trim()) {
+      setErrors((prev) => ({ ...prev, baseUrl: "请先填写接口地址，再获取模型列表" }))
+      return
+    }
+    setFetchingModels(true)
+    setFetchModelsHint("")
+    const res = await fetchProviderModels({
+      protocol: preset.protocol,
+      baseUrl: baseUrl.trim(),
+      networkPolicy: preset.networkPolicy,
+      ...(secret.trim() ? { apiKey: secret.trim() } : {}),
+      ...(editing?.id ? { profileId: editing.id } : {})
+    })
+    setFetchingModels(false)
+    if (!res.ok) {
+      setFetchModelsHint(res.code === "no_desktop_shell" ? "自动获取模型需要桌面客户端运行环境，请手动输入模型名。" : res.detail)
+      return
+    }
+    setFetchedModels(res.value)
+    setFetchModelsHint(`已获取 ${res.value.length} 个可用模型`)
+    if (!modelId.trim() && res.value.length > 0) {
+      setModelId(res.value[0]!)
+    }
+  }
 
   function validate(): FieldErrors {
     const found: FieldErrors = {}
@@ -166,9 +199,13 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
           onChange={(event) => {
             const next = Number(event.target.value)
             const chosen = PRESETS[next]
+            const prevPreset = preset
             setPresetIndex(next)
             setBaseUrl(chosen.baseUrl)
-            if (!modelId.trim() || modelId === preset.defaultModelId) setModelId(chosen.defaultModelId ?? "")
+            setFetchedModels([])
+            setFetchModelsHint("")
+            if (!editing && (!name.trim() || name === prevPreset.label)) setName(chosen.label)
+            if (!modelId.trim() || modelId === prevPreset.defaultModelId) setModelId(chosen.defaultModelId ?? "")
           }}
         >
           {PRESETS.map((candidate, index) => <option key={candidate.label} value={index}>{candidate.label}</option>)}
@@ -183,24 +220,52 @@ export function ProviderForm({ editing, hasSecret, submitLabel, onSubmit, onCanc
           onChange={(event) => setName(event.target.value)}
           aria-invalid={errors.name || errors.id ? true : undefined}
           aria-describedby={errors.name || errors.id ? "provider-name-error" : undefined}
-          placeholder="My OpenAI"
+          placeholder={preset.label}
         />
         {(errors.name || errors.id) && <small id="provider-name-error" className="provider-field-error" role="alert">{errors.name ?? errors.id}</small>}
       </label>
 
-      <label className="provider-field">
-        <span>模型名</span>
-        <input
-          value={modelId}
-          aria-label="模型名"
-          onChange={(event) => setModelId(event.target.value)}
-          aria-invalid={errors.modelId ? true : undefined}
-          aria-describedby={errors.modelId ? "provider-model-error" : preset.defaultModelId ? "provider-model-hint" : undefined}
-          placeholder={preset.defaultModelId ?? "gpt-4o-mini"}
-        />
+      <div className="provider-field">
+        <label htmlFor="provider-model-input"><span>模型名</span></label>
+        <div className="provider-model-input-row">
+          <input
+            id="provider-model-input"
+            value={modelId}
+            aria-label="模型名"
+            onChange={(event) => setModelId(event.target.value)}
+            aria-invalid={errors.modelId ? true : undefined}
+            aria-describedby={errors.modelId ? "provider-model-error" : "provider-model-hint"}
+            placeholder={preset.defaultModelId ?? "gpt-4o-mini"}
+          />
+          <button
+            type="button"
+            className="provider-fetch-models-btn"
+            disabled={busy || fetchingModels}
+            onClick={() => void handleFetchModels()}
+          >
+            {fetchingModels ? "获取中…" : "自动获取"}
+          </button>
+        </div>
+        {fetchedModels.length > 0 && (
+          <select
+            className="provider-fetched-models-select"
+            aria-label="从服务获取的模型列表"
+            value={fetchedModels.includes(modelId) ? modelId : ""}
+            onChange={(event) => {
+              if (event.target.value) setModelId(event.target.value)
+            }}
+          >
+            <option value="">选择已获取模型（{fetchedModels.length} 个）…</option>
+            {fetchedModels.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+        )}
         {errors.modelId && <small id="provider-model-error" className="provider-field-error" role="alert">{errors.modelId}</small>}
-        {!errors.modelId && preset.defaultModelId && <small id="provider-model-hint" className="provider-field-hint">DeepSeek 官方 Flash 模型 ID 为 {preset.defaultModelId}。</small>}
-      </label>
+        {!errors.modelId && (
+          <small id="provider-model-hint" className="provider-field-hint">
+            {fetchModelsHint || (preset.defaultModelId ? `推荐默认模型：${preset.defaultModelId}（也可点「自动获取」拉取列表）` : "填模型 ID，或填好地址和密钥后点击「自动获取」。")}
+          </small>
+        )}
+      </div>
 
       <label className="provider-field provider-field-wide">
         <span>接口地址</span>

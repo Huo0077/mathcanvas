@@ -273,8 +273,11 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
   const displayPrimitives = displayDocument.primitives
   const ghostPrimitives = useMemo(() => {
     if (!ghostCandidate) return []
-    const existingIds = new Set(document.primitives.map((p) => p.id))
-    return ghostCandidate.primitives.filter((p) => !existingIds.has(p.id))
+    const existingById = new Map(document.primitives.map((p) => [p.id, p]))
+    return ghostCandidate.primitives.filter((p) => {
+      const prev = existingById.get(p.id)
+      return !prev || JSON.stringify(prev) !== JSON.stringify(p)
+    })
   }, [document.primitives, ghostCandidate])
   /**
    * A saved intersection must hide only the solution it captured. Filtering the whole pair instead dropped the

@@ -287,7 +287,15 @@ function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveS
            * （不像自由拖动那样"叠加屏幕位移"，拖久了也不会漂离）。拖动期间只更新参数与受影响对象。
            */
           const binding = target.binding
-          const hostId = (binding.kind === "onHost" || binding.kind === "onLine") ? (binding.kind === "onHost" ? binding.hostId : binding.lineId) : binding.kind === "onFace" ? binding.faceId : binding.kind === "onSurface" || binding.kind === "inSolid" ? binding.solidId : null
+          const hostId = (binding.kind === "onHost" || binding.kind === "onLine")
+            ? (binding.kind === "onHost" ? binding.hostId : binding.lineId)
+            : binding.kind === "onFace"
+              ? binding.faceId
+              : binding.kind === "onPlane"
+                ? binding.planeId
+                : binding.kind === "onSurface" || binding.kind === "inSolid"
+                  ? binding.solidId
+                  : null
           const hostPrimitive = hostId ? documentRef.current.primitives.find((candidate) => candidate.id === hostId) : undefined
           // 实体内不是"投影到低维宿主"，而是体积约束：由实体的物化拓扑构造（见 `solidVolumeHostFor`）。
           const hostConstraint = hostPrimitive

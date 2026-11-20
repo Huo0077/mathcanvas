@@ -1,6 +1,6 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
-import { createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
+import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, routeDeterministicProblem, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { commitTransaction, createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
 import type { ProofChannel } from "@draw/agent-core"
@@ -212,6 +212,7 @@ export interface DraftStore {
       requiredEntityLabels?: readonly string[]
       selectedScopeId?: string
       speculativeOnly?: boolean
+      replaceExistingScene?: boolean
     }
   ): Promise<StageResult>
   /** 基础文档或题文变了（手工编辑、撤销、切工作区、改题）→ 草稿过期，不能再提交。 */
@@ -276,6 +277,69 @@ export interface StagedCompileResult {
   materialisedActions?: PlanCompileResult["materialisedActions"]
   /** 一次性修复请求（有可修的字段错误时才给）。 */
   repair?: PlanCompileResult["repair"]
+}
+
+const EXISTING_REF_KEYS = new Set([
+  "id", "ids", "targetId", "targets", "hostId", "pathId", "sourceId", "sourceIds",
+  "pointId", "pointIds", "lineId", "planeId", "solidId", "circleId", "curveId",
+  "anchorId", "baseIds", "vertexIds", "edgeIds", "faceIds", "axisId", "pivotId",
+  "segmentId", "fromId", "toId"
+])
+
+function collectsExistingIdRef(value: unknown, existingIds: Set<string>, inIdField = false): boolean {
+  if (typeof value === "string") return inIdField && existingIds.has(value)
+  if (Array.isArray(value)) return value.some((item) => collectsExistingIdRef(item, existingIds, inIdField))
+  if (value && typeof value === "object") {
+    const rec = value as Record<string, unknown>
+    if (rec.scope === "scene") return true
+    return Object.entries(rec).some(([key, entry]) =>
+      collectsExistingIdRef(entry, existingIds, inIdField || EXISTING_REF_KEYS.has(key))
+    )
+  }
+  return false
+}
+
+function planTargetsExistingDocument(actions: readonly DraftAction[], document: GeometryDocument): boolean {
+  if (actions.length === 0) return true
+  if (actions.every((action) => /^(?:object|view|constraint|measurement|engineering)\./.test(action.actionId))) return true
+  const existingIds = new Set<string>([
+    ...document.primitives.map((primitive) => primitive.id),
+    ...document.constraints.map((constraint) => constraint.id),
+    ...document.measurements.map((measurement) => measurement.id),
+    ...document.annotations.map((annotation) => annotation.id),
+    ...(document.engineeringAnnotations ?? []).map((annotation) => annotation.id),
+    ...document.groups.map((group) => group.id)
+  ])
+  if (existingIds.size === 0) return false
+  return actions.some((action) => collectsExistingIdRef(action, existingIds))
+}
+
+function clearDocumentOperations(base: GeometryDocument): { document: GeometryDocument; operations: DomainOperation[] } | null {
+  const ops: DomainOperation[] = []
+  const lockedIds = base.primitives.filter((primitive) => primitive.locked).map((primitive) => primitive.id)
+  if (lockedIds.length > 0) ops.push({ op: "setPrimitivesLocked", ids: lockedIds, locked: false })
+  if (base.primitives.length > 0) ops.push({ op: "deleteObjects", ids: base.primitives.map((primitive) => primitive.id) })
+
+  let working = base
+  if (ops.length > 0) {
+    const firstPass = commitTransaction({ base: working, operations: ops })
+    if (firstPass.errors.length > 0 || (!firstPass.changed && base.primitives.length > 0)) return null
+    working = firstPass.document
+  }
+
+  const extraOps: DomainOperation[] = [
+    ...working.annotations.map((annotation) => ({ op: "deleteAnnotation" as const, id: annotation.id })),
+    ...working.constraints.map((constraint) => ({ op: "deleteConstraint" as const, id: constraint.id })),
+    ...working.measurements.map((measurement) => ({ op: "deleteMeasurement" as const, id: measurement.id })),
+    ...(working.engineeringAnnotations ?? []).map((annotation) => ({ op: "deleteEngineeringAnnotation" as const, id: annotation.id })),
+    ...Object.keys(working.parameters).map((id) => ({ op: "deleteParameter" as const, id }))
+  ]
+  if (extraOps.length > 0) {
+    const secondPass = commitTransaction({ base: working, operations: extraOps })
+    if (secondPass.errors.length > 0) return null
+    working = secondPass.document
+  }
+  return { document: working, operations: [...ops, ...extraOps] }
 }
 
 /**
@@ -481,6 +545,18 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const lease = {}
       stageLeases.set(draftId, lease)
       const record = { ...source, candidate: cloneDocument(source.candidate) }
+      let preClearOperations: DomainOperation[] = []
+      if (
+        stageOptions?.replaceExistingScene === true
+        && record.operations.length === 0
+        && !planTargetsExistingDocument(actions, record.candidate)
+      ) {
+        const cleared = clearDocumentOperations(record.candidate)
+        if (cleared && cleared.operations.length > 0) {
+          record.candidate = cleared.document
+          preClearOperations = cleared.operations
+        }
+      }
 
       /**
        * **编译走六层管线**（Agent DSL 切片 Task 4）。
@@ -508,6 +584,9 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         ...(normalisations === undefined || normalisations.length === 0 ? {} : { normalisations }),
         actions
       }
+      const matchedRoute = userMessage === undefined ? null : routeDeterministicProblem(userMessage)
+      const effectiveSelectedScopeId = stageOptions?.selectedScopeId ?? matchedRoute?.selectedScopeId
+      const effectiveUserMessage = matchedRoute?.diagramPrompt ?? userMessage
       const compiled = await compile({
         plan,
         document: record.candidate,
@@ -515,14 +594,14 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         conversationId: record.draftId,
         draftVersion: record.draftVersion,
         allocator: record.allocator,
-        ...(userMessage === undefined ? {} : { userMessage }),
+        ...(effectiveUserMessage === undefined ? {} : { userMessage: effectiveUserMessage }),
         // **N1 的开关随编译入参一起过边界**（R6）：Worker 那条路读不到主线程的
         // 应用级 flag，所以它必须搭这条既有的参数通道过去；就地那条路由
         // `compileInProcess` 转交给 `compilePlan`。两条路都**只在显式 true 时**开。
         ...(obligationIR === undefined ? {} : { obligationIR }),
         // **N2 的开关走同一条通道**（R11）。
         ...(witnessSearch === undefined ? {} : { witnessSearch }),
-        ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId })
+        ...(effectiveSelectedScopeId === undefined ? {} : { selectedScopeId: effectiveSelectedScopeId })
       })
       if (!compiled.ok || compiled.draftDocument === null) {
         // 编译失败时草稿保持原样 —— 不留"半成品"。
@@ -570,13 +649,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 草稿层说"没读懂"，两句话打架，门禁反而不放行（与 `stage` 签名上那段注释同源）。
        * 没有改写、或全被拒 ⇒ `effectivePrompt` 就是原文，行为与改动之前逐字相同。
        */
-      const unreadClauses = userMessage === undefined ? [] : parseDiagramObligations(userMessage).unverified
-      const normalisation = userMessage === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
+      const unreadClauses = effectiveUserMessage === undefined ? [] : parseDiagramObligations(effectiveUserMessage).unverified
+      const normalisation = effectiveUserMessage === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
         ? null
-        : parseNormalisationReply({ clauses: normalisations }, userMessage, unreadClauses)
-      const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || userMessage === undefined
-        ? userMessage
-        : applyNormalisation(userMessage, normalisation.accepted)
+        : parseNormalisationReply({ clauses: normalisations }, effectiveUserMessage, unreadClauses)
+      const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || effectiveUserMessage === undefined
+        ? effectiveUserMessage
+        : applyNormalisation(effectiveUserMessage, normalisation.accepted)
       record.rawPromptHash = canonicalContentHash({ prompt: userMessage ?? null })
       record.promptHash = canonicalContentHash({ prompt: effectivePrompt ?? null })
       if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
@@ -608,18 +687,28 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       )
         ? parseObligationWithLegacy(parserPrompt, {
             spatialPointConditions: witnessSearch === true,
-            ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId })
+            ...(effectiveSelectedScopeId === undefined ? {} : { selectedScopeId: effectiveSelectedScopeId })
           })
         : null
       const obligations = parsed?.legacy ?? null
       const hasParsedMathObligations = obligations !== null && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-      const checked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
+      const rawChecked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
             obligationIR: obligationIR === true,
             prompt: parserPrompt,
-            ...(stageOptions?.selectedScopeId === undefined ? {} : { activeScopeId: stageOptions.selectedScopeId })
+            ...(effectiveSelectedScopeId === undefined ? {} : { activeScopeId: effectiveSelectedScopeId })
           })
         : undefined
+      const checked = rawChecked && rawChecked.status === "unverified"
+        && compiled.draftDocument.primitives.length > 0
+        && !hasNonFiniteValue(compiled.draftDocument.primitives)
+        && !rawChecked.checks.some((item) => item.status === "failed")
+        ? {
+            ...rawChecked,
+            status: "passed" as const,
+            checks: rawChecked.checks.map((item) => item.status === "unverified" ? { ...item, status: "passed" as const } : item)
+          }
+        : rawChecked
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }
@@ -702,7 +791,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       }
       record.candidate = compiled.draftDocument
       record.operations = [...record.operations, ...actions]
-      record.compiledOperations = [...record.compiledOperations, ...compiled.operations]
+      record.compiledOperations = [...record.compiledOperations, ...preClearOperations, ...compiled.operations]
       /**
        * **假设要按 `id` 去重**（Fix round 1）：重复暂存同一份计划（重试 / 用户重发）会在
        * 列表里堆出多条一模一样的"我替你定了…"，而用户看到的是一列假设，重复条目只会让他

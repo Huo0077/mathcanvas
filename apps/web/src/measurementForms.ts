@@ -40,3 +40,69 @@ export function measurementFormSuffix(measurement: Measurement3): string {
   const form = measurementFormText(measurement)
   return form === null ? "" : ` · ${form}`
 }
+
+export interface TrigValueDisplay {
+  numeric: string
+  exact: string | null
+  display: string
+}
+
+export interface AngleTrigValues {
+  degrees: number
+  degreesText: string
+  sin: TrigValueDisplay
+  cos: TrigValueDisplay
+}
+
+function clampTrigComponent(value: number): number {
+  if (Math.abs(value) < 1e-12) return 0
+  if (Math.abs(value - 1) < 1e-12) return 1
+  if (Math.abs(value + 1) < 1e-12) return -1
+  return value
+}
+
+function formatTrigComponent(raw: number): TrigValueDisplay {
+  const value = clampTrigComponent(raw)
+  const numeric = value.toFixed(4)
+  const abs = Math.abs(value)
+  const reading = exactFormOf(abs)
+  let exact: string | null = null
+  if (reading.form.kind === "integer" && reading.certainty === "exact") {
+    exact = value < 0 && abs > 0 ? `-${reading.form.text}` : reading.form.text
+  } else if (reading.form.kind !== "unrecognised" && reading.form.kind !== "integer") {
+    if (value < 0) {
+      exact = reading.form.text.startsWith("≈ ") ? `≈ -${reading.form.text.slice(2)}` : `-${reading.form.text}`
+    } else {
+      exact = reading.form.text
+    }
+  } else if (reading.form.kind === "integer") {
+    exact = value < 0 ? `≈ -${reading.form.text.replace(/^≈\s*/, "")}` : reading.form.text
+  }
+  const display = exact ? (exact === numeric || /^(-?0|-?1)$/.test(exact) ? exact : `${numeric} (${exact})`) : numeric
+  return { numeric, exact, display }
+}
+
+/** 计算有效角度 / 二面角的度数与正弦、余弦显示（兼容精确分式/根式形式）。 */
+export function angleTrigValues(measurement: Measurement3): AngleTrigValues | null {
+  const isAngle = measurement.metric === "angle" || measurement.metric === "dihedral" || measurement.unit === "rad"
+  if (!isAngle || measurement.status !== "valid" || measurement.value === undefined || !Number.isFinite(measurement.value)) {
+    return null
+  }
+  const rad = measurement.value
+  const degrees = (rad * 180) / Math.PI
+  return {
+    degrees,
+    degreesText: `${degrees.toFixed(2)}°`,
+    sin: formatTrigComponent(Math.sin(rad)),
+    cos: formatTrigComponent(Math.cos(rad))
+  }
+}
+
+/** 角度读数的紧凑正弦/余弦附加串（用于画布标签与左侧测量列表）。 */
+export function angleTrigCompactText(measurement: Measurement3): string {
+  const trig = angleTrigValues(measurement)
+  if (!trig) return ""
+  const sinShort = trig.sin.exact && !trig.sin.exact.startsWith("≈ ") ? trig.sin.exact : trig.sin.numeric
+  const cosShort = trig.cos.exact && !trig.cos.exact.startsWith("≈ ") ? trig.cos.exact : trig.cos.numeric
+  return `${trig.degrees.toFixed(1)}° · sin=${sinShort} · cos=${cosShort}`
+}

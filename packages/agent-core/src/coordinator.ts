@@ -1,6 +1,6 @@
 import { createBudget, type Budget, type BudgetLimits } from "./budget"
 import { buildContext, type ConversationContextSource, type Fact } from "./contextBuilder"
-import { buildPlanRequest, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
+import { buildPlanRequest, shouldAutoClearSceneForPrompt, type CancelReason, type CancelResult, type CommitterPort, type ConsentToken, type ObserverPort, type PlannerPort, type PlanRequest, type ToolPort } from "./coordinatorPorts"
 import { parsePlanEnvelope, repairRequestFor } from "./schemas"
 import { MAX_COMPILE_REPAIR_ATTEMPTS, MAX_REPAIR_ATTEMPTS, MAX_VALIDATION_REPAIR_ATTEMPTS, type PlanEnvelope, type RunContext, type VerificationReport } from "./contracts"
 import { describePlanFailureRepair, describeRepairPrompt, planFailureDetail, schemaFailureDetail } from "./outputParser"
@@ -688,7 +688,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}) })
+        const replaceExistingScene = shouldAutoClearSceneForPrompt(request.userMessage, planRequest.model.context.selectedRefs.length > 0)
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}), ...(replaceExistingScene ? { replaceExistingScene: true } : {}) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult

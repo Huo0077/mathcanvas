@@ -1,5 +1,20 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-20 —— 首个正式版本里程碑定版与全流程交互体验收口
+
+- **用户需求驱动的端到端体验与智能构图收口**：完成 44/44 纯文字题真机实测之后，继续围绕日常做题使用场景完成全面打磨：（1）实现正常题目（不显式点名平面）下自动补齐辅助线段并直接由相交线段与动点推测空间面（如仅写 `连结 AE、CE` 即自动构造 `面 AEC`），并支持小写/分隔写法（`面ace`/`平面 A-C-E`）与顶点 ID 复用联动；（2）Agent 草稿预览态即同步渲染左侧对象栏，独立面集中在 **「面（构造 / 辅助）」** 分组，支持两线定面与属性栏二面角 `sin`/`cos` 集中读取；（3）打通往期对话完整历史恢复、13 种模型预设 + Rust IPC 一键获取模型列表、精简设置面板（`模型服务 | 偏好设置`）、更新桌面图标与隐藏 Windows 启动黑框，并重写面向用户的 [README](../README.md)。最后一次改码后 `npm run typecheck` 通过（exit 0），桌面端 `deepseek-v4-flash` 实测全部通过。
+
+> **2026-11-20 全面正确性二次根治修复与 `deepseek-v4-flash` 44 题全通过收口（基线 28/28 + 扩展 16/16 = 44/44 = 100.0%，0 离线测试）**：完成 `dsActionTools.ts`（`solveMaxInscribedBall3` + `construct_solid(kind="sphere", inscribedIn)` / `construct_circumsphere(mode="insphere")`、`construct_parallel` `offsetX/offsetY/distance`、`construct_intersection` `excludePointId` 与 `1e-2` 排他容差、`construct_conic` `(b, e)` 反算）、`modelPlanner.ts`（同批 `undeclared_entity_ref` 依赖波次重排与失败诊断日志）及 `systemPrompt.ts` 优化，全仓 `npm run typecheck`（exit 0）。真实 UI + `deepseek-v4-flash` 复测 `EX-P01`（19 次，6/6 义务全绿）、`EX-S05`（4 次，精确内心 `O=(4,2,1.5), r=1.5`）、`EX-P04`（6 次，精确 `rx=2, ry=√5`）、`EX-S06`（6 次，2/2 义务全绿）、`GK-S12`（2 次，精确 `r=1.41421≈√2`）与 `GK-S14`/`GK-S15`（各 5 次，如实保留 `r=5` / 四点外接球示意近似边界说明）；两套全集 **44/44（100.0%）** 通过确认落盘及 2D/3D 交互，累计估算上界费用 **\$3.1467 USD**（< \$5）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 全面正确性首轮快照（已被上方 44/44 二次根治复测替代）**：完成 `useDraftPersistence.ts`、`dsActionTools.ts` 线性方程递归下降解析与 `AB ⊥ BC` 直角朝向等修复（当时 43/44）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 扩展实测与收尾区块完成（阶段快照，已被上方全面正确性复测替代）**：补充正多边形棱台（`square_frustum`/`triangular_frustum`/`regular_frustum`/`frustum_pyramid`）精确 `solid.create_polyhedron` 构造及命名截面（`"截面 △"`/`"截面△"`/`"截面三角形"`/`"截面四边形"`）词条豁免，完成前序 A/B/D 纯文字主线区块收尾。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-20 纯文字高考/模考题 `ds_action` 真机端到端实测通过（28/28 = 100%，0 离线测试）**：继区块 1 修复后完成区块 2 收口与桌面端 Rust 重编译：`agentRunner.ts` 默认走 `ds_action` 与单题 20 次请求预算；`modelPlanner.ts` 提升批量工具上限至 32 并对未发布工具名返回可修复反馈；`dsActionTools.ts` 扩展 2D 方程/中点/交点与 3D `cube`/`cylinder`/`cone`/`frustum`/`sphere`/`sides`/正三棱锥构造并拒绝文字题误澄清；`drawingCertificate.ts`、`draftStore.ts`、`acceptance.ts` 对齐有限图元通过门禁与描述性“截面”词条排除。在最新编译的桌面端通过真实 UI + `deepseek-v4-flash` 实测 28 道纯文字题（平面 18 + 立体 10），**28/28 确认提交并完成 2D/3D 画布交互验证**（单题最多 11 次请求 ≤ 20，累计估算上界 **\$0.5340 USD** < \$5），`npm run typecheck` 通过。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
+
+> **2026-11-19 GK-P01/GK-P06 原卷复核（0新增 DS）**：GK-P01 在2025新高考Ⅱ卷学生 PDF p3 确认第16题无附图；GK-P06 冻结标注为2019全国Ⅲ理科#21，实际同题为文科#21，已在[来源审计](audit/2026-11-19-g3-text-only-source-triage/README.md)与[候选清单](../test-fixtures/reliability/text-only-36-source-triage.json)明确来源错配待新 manifest 纠正，旧 suite 不变。旧23现6题 PDF 页级初核、2题来源错配、1题仅预览、14题待查；新36 `runnable=false`、未发模型请求、旧成绩不变。
+
+
 > **2026-11-19 GK-P04 题页预览（0 DS 请求）**：找到 2022 全国甲卷文科 #20 的第三方 JPEG p4，题面匹配、该题不附图；但非原 PDF，证据单列 `page_preview_checked_needs_pdf_and_independent_review`。旧23现5题PDF页级初核、GK-P07来源错配、GK-P04仅预览、其余16题待审；[审计](audit/2026-11-19-g3-text-only-source-triage/README.md)。新36 `runnable=false`，未发模型请求，旧真实成绩不变。
 
 

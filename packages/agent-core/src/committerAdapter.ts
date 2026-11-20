@@ -36,7 +36,7 @@ export interface DraftStoreLike {
    * **返回 `Promise`**（方案 3）：编译可以被交给几何 Worker，而 Worker 是异步的。
    * 这一层本来就是 `async`（`CommitterPort.stage` 返回 `Promise`），所以只是把 `await` 加到调用点。
    */
-  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean, proofExport?: boolean, normalisations?: PromptNormalisations, options?: { enableCompleteCertificate?: boolean; runId?: string; conversationId?: string }): Promise<
+  stage(draftId: string, actions: readonly unknown[], expectedDraftVersion: number, userMessage?: string, relations?: PlanRelations, obligationIR?: boolean, witnessSearch?: boolean, proofExport?: boolean, normalisations?: PromptNormalisations, options?: { enableCompleteCertificate?: boolean; runId?: string; conversationId?: string; replaceExistingScene?: boolean }): Promise<
     | {
         ok: true
         preview: {
@@ -181,13 +181,14 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
        * **那句话是错的**：草稿层没有自己的开关，它收的就是调用方传进来的这个布尔。
        * 于是"设置里打开形式证明导出"在主路上什么也不会发生（2026-10-10 §3-D 查实）。
        */
-      const stageOptions = (dependencies.enableCompleteCertificate === undefined && dependencies.runId === undefined && dependencies.conversationId === undefined && request.selectedScopeId === undefined)
+      const stageOptions = (dependencies.enableCompleteCertificate === undefined && dependencies.runId === undefined && dependencies.conversationId === undefined && request.selectedScopeId === undefined && request.replaceExistingScene !== true)
         ? undefined
         : {
             ...(dependencies.enableCompleteCertificate === undefined ? {} : { enableCompleteCertificate: dependencies.enableCompleteCertificate }),
             ...(dependencies.runId === undefined ? {} : { runId: dependencies.runId }),
             ...(dependencies.conversationId === undefined ? {} : { conversationId: dependencies.conversationId }),
-            ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId })
+            ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }),
+            ...(request.replaceExistingScene === true ? { replaceExistingScene: true } : {})
           }
       const staged = await dependencies.drafts.stage(
         draftId,

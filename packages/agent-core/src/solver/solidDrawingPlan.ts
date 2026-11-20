@@ -578,8 +578,8 @@ function tryBuildFoldedTetrahedronJTS01(prompt: string): DeterministicProblemRou
 
   return {
     family: "spatial-modeling",
-    plan: plan2,
-    diagramPrompt: prompt2,
+    plan: plan1ii,
+    diagramPrompt: prompt1,
     scopePlans: {
       "(1)(i)": { plan: plan1i, diagramPrompt: prompt1 },
       "(1)(ii)": { plan: plan1ii, diagramPrompt: prompt1 },

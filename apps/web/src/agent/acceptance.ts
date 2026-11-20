@@ -74,11 +74,32 @@ const SHAPE_KEYWORDS: readonly ShapeKeyword[] = [
   { all: ["tetrahedron"], primitive: "polyhedron3" },
   { all: ["棱柱"], exclude: ["怎么", "如何", "为什么", "求"], primitive: "polyhedron3" },
   { all: ["prism"], primitive: "polyhedron3" },
+  { all: ["四棱锥"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["三棱锥"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["棱锥"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["四棱台"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["三棱台"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["棱台"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["圆台"], exclude: ["怎么", "如何", "为什么"], primitive: "polyhedron3" },
+  { all: ["圆柱"], exclude: ["怎么", "如何", "为什么"], primitive: "cylinder" },
+  { all: ["圆锥"], exclude: ["圆锥曲线", "怎么", "如何", "为什么"], primitive: "cone" },
+  { all: ["椭圆"], exclude: ["怎么", "如何", "为什么"], primitive: "ellipse" },
+  { all: ["双曲线"], exclude: ["怎么", "如何", "为什么"], primitive: "hyperbola" },
+  { all: ["抛物线"], exclude: ["怎么", "如何", "为什么"], primitive: "parabola" },
+  { all: ["准线"], exclude: ["怎么", "如何", "为什么"], primitive: "line" },
+  { all: ["直线 l"], exclude: ["怎么", "如何", "为什么"], primitive: "line" },
+  { all: ["直线l"], exclude: ["怎么", "如何", "为什么"], primitive: "line" },
+  { all: ["⊙"], exclude: ["怎么", "如何", "为什么"], primitive: "circle" },
   /**
    * 截面：**必须是要建它**。这一条的反例最具体 —— "把刚才的截面平面改一下"
    * 里也有"截面"，而那次运行的验收条件是"改对了"，不是"多了一个截面"。
    */
-  { all: ["截面"], exclude: ["改", "修改", "调整", "移动", "删", "怎么", "如何", "为什么"], primitive: "section" },
+  { all: ["截面"], exclude: ["改", "修改", "调整", "移动", "删", "怎么", "如何", "为什么", "截面是", "截面的", "轴截面", "所得的截面", "截面面积", "截面周长", "截面 △", "截面△", "截面三角形", "截面四边形"], primitive: "section" },
+  { all: ["外接球"], exclude: ["怎么", "如何", "为什么"], primitive: "sphere" },
+  { all: ["内切球"], exclude: ["怎么", "如何", "为什么"], primitive: "sphere" },
+  { all: ["球"], any: ["球 o", "球o", "最大球", "同一球面上"], exclude: ["怎么", "如何", "为什么"], primitive: "sphere" },
+  { all: ["渐近线"], exclude: ["怎么", "如何", "为什么"], primitive: "line" },
+  { all: ["切线"], any: ["画出", "公切线", "切线方程", "作", "求"], exclude: ["怎么", "如何", "为什么"], primitive: "line" },
   /**
    * 平面点：**必须点名"点"且带一个真正的作图动词**。
    * "画布"里的"画"不算 —— 那一条反例是本层用例抓出来的。

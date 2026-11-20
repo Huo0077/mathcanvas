@@ -526,6 +526,11 @@ export function evaluateFrozenCandidateSet(
     if (effectiveCertStatus === "passed") validatedDocuments.push({
       scopeId: slice.scopeId, candidateHash: actualCandidateHash, document: doc
     })
+    const planAssumptions = slice.plan && slice.plan.kind === "plan" ? (slice.plan.assumptions ?? []).join("\n") : ""
+    const combinedDiagnosisText = `${slice.answerText ?? ""}\n${planAssumptions}`
+    const infeasibleDiagnosedSubquestions = (contract?.subquestions ?? [])
+      .filter((sq) => sq.feasible === false && /无实数解|无实数点解|不存在|不成立|矛盾|不可行|infeasible/i.test(combinedDiagnosisText))
+      .map((sq) => sq.id)
     evalSlices.push({
       scopeId: slice.scopeId,
       ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
@@ -534,9 +539,10 @@ export function evaluateFrozenCandidateSet(
       options: {
         verificationStatus: effectiveCertStatus === "passed" ? "passed" : "failed",
         answerText: slice.answerText ?? null,
-        scopeId: slice.scopeId,
+        ...(slice.scopeId === "shared" ? {} : { scopeId: slice.scopeId }),
         ...(slice.stateId === undefined ? {} : { stateId: slice.stateId }),
-        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId })
+        ...(slice.branchId === undefined ? {} : { branchId: slice.branchId }),
+        ...(infeasibleDiagnosedSubquestions.length > 0 ? { infeasibleDiagnosedSubquestions } : {})
       }
     })
   }

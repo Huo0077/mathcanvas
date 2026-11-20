@@ -187,7 +187,7 @@ export const FIELD_KINDS: Record<string, FieldKind> = {
   x: "number", factor: "number", parameter: "number", value: "number", min: "number",
   max: "number", step: "number", progress: "number",
   // 整数族（`segments` 是圆类的分段数：正整数，与 `sides` 同一档）
-  sides: "integer", hostSub: "integer", segments: "integer",
+  sides: "integer", hostSub: "integer", faceSub: "integer", segments: "integer",
   // 平面点 / 空间向量
   center: "point", vertex: "point",
   origin: "vector", baseCenter: "vector", size: "vector", vector: "vector",
@@ -254,6 +254,8 @@ export interface RawFieldTypes {
   origin?: "vector"
   /** `hostSub` 是宿主内部第几条棱：非负整数，不是普通数字。 */
   hostSub?: "integer"
+  /** `faceSub` 是宿主内部第几张面：非负整数。 */
+  faceSub?: "integer"
   /** `hostEdge` 是"哪两个点之间的棱"：两个点名（`{ from, to }`），不是数字。 */
   hostEdge?: "namePair"
   /**
@@ -669,9 +671,9 @@ export const ACTIONS = {
    * 审计不许把显式约束覆盖成默认值（`parameterAudit.test.ts` 钉住这条）。
    */
   "dynamic.create_face_point": {
-    inputFields: ["alias", "face", "uv", "parameterIds", "label"],
+    inputFields: ["alias", "face", "faceSub", "uv", "parameterIds", "label"],
     requiresAlias: true,
-    rawFieldTypes: { uv: "uv" },
+    rawFieldTypes: { uv: "uv", faceSub: "integer" },
     references: [{ field: "face", kind: "scoped" }],
     required: ["alias", "face", "uv"]
   },

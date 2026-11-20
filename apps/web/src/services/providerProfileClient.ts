@@ -209,6 +209,28 @@ export async function checkProviderCapabilities(profileId: string, profileRevisi
   }
 }
 
+/** 自动获取指定服务商当前接口下可用的模型 ID 列表（密钥留在 Rust 侧）。 */
+export async function fetchProviderModels(input: {
+  protocol: ProviderProtocol
+  baseUrl: string
+  networkPolicy: NetworkPolicy
+  apiKey?: string
+  profileId?: string
+}): Promise<ProviderResult<string[]>> {
+  try {
+    const models = await invokeDesktop<string[]>("fetch_provider_models", {
+      protocol: input.protocol,
+      baseUrl: input.baseUrl,
+      networkPolicy: input.networkPolicy,
+      ...(input.apiKey !== undefined ? { apiKey: input.apiKey } : {}),
+      ...(input.profileId !== undefined ? { profileId: input.profileId } : {})
+    })
+    return { ok: true, value: models }
+  } catch (error) {
+    return asResult(error)
+  }
+}
+
 /**
  * **能不能采信某个能力**（Task 1.4 Step 5）。
  *

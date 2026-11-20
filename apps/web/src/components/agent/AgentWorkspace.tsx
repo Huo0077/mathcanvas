@@ -66,6 +66,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
   const pendingMessage = pendingReplyId
     ? conversations.flatMap((conversation) => conversation.messages).find((message) => message.id === pendingReplyId)
     : undefined
+  const isGenerating = pendingMessage?.pending === true
 
   // 发起运行：只在**出现新的在途消息**时做一次。
   useEffect(() => {
@@ -98,7 +99,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
       <header className="agent-stage-head">
         <div className="agent-stage-title">
           <h1>{activeConversation?.title ?? "新对话"}</h1>
-          <p>{pendingMessage ? "正在运行…" : "Agent 工作区 · 对话式作图"}</p>
+          <p>{isGenerating ? "正在运行…" : "Agent 工作区 · 对话式作图"}</p>
         </div>
         <div className="agent-stage-actions">
           <button type="button" className="agent-back" onClick={onBackToWorkspace}>返回画布</button>
@@ -116,7 +117,7 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
       </div>
       <div className="agent-stage-composer">
         <ProblemImageComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
-          onSend={sendPrompt} busy={pendingMessage !== undefined} initialOpen={initialImageReaderOpen} />
+          onSend={sendPrompt} busy={isGenerating} initialOpen={initialImageReaderOpen} />
       </div>
     </div>
   </div>

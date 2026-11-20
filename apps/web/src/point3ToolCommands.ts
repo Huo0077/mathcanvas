@@ -65,6 +65,13 @@ export function createPoint3ToolCommands({ document, selectedPoint3Ids, canCreat
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "point", workspace: "geometry3d" }))
   }
+  function addSegment3() {
+    if (!canCreateLine3) return
+    const id = nextPrimitiveId(document, "segment3")
+    apply({ op: "addPrimitive", primitive: { id, type: "segment3", pointIds: selectedPoint3Ids as [string, string], label: `空间线段 ${id.split("-").at(-1)}` } })
+    setSelectedIds([id])
+    setGuidance("已用所选两点连接生成空间线段：当端点为面上或棱上的动点时，线段会实时随动点联动。")
+  }
   function addLine3() {
     if (!canCreateLine3) return
     const id = nextPrimitiveId(document, "line3")
@@ -72,17 +79,27 @@ export function createPoint3ToolCommands({ document, selectedPoint3Ids, canCreat
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "line", outcome: "created" }))
   }
-  function addPlane3() {
-    if (!canCreatePlane3) return
+  const labelForPointIds = (ids: readonly string[]) =>
+    ids
+      .map((id) => document.primitives.find((p) => p.id === id))
+      .map((p) => (p?.type === "point3" ? (p.label ?? "").trim() : ""))
+      .filter((l) => l.length > 0 && l.length <= 4)
+      .join("")
+  function addPlane3(customPointIds?: readonly string[]) {
+    const pts = customPointIds && customPointIds.length === 3 ? [...customPointIds] : canCreatePlane3 ? [...selectedPoint3Ids] : null
+    if (!pts || pts.length !== 3) return
     const id = nextPrimitiveId(document, "plane3")
-    apply({ op: "addPrimitive", primitive: { id, type: "plane3", definition: { kind: "throughPoints", pointIds: selectedPoint3Ids as [string, string, string] }, label: `空间平面 ${id.split("-").at(-1)}` } })
+    const ringLabel = labelForPointIds(pts)
+    apply({ op: "addPrimitive", primitive: { id, type: "plane3", definition: { kind: "throughPoints", pointIds: pts as [string, string, string] }, label: ringLabel ? `平面 ${ringLabel}` : `空间平面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "plane", outcome: "created" }))
   }
-  function addFace3() {
-    if (!canCreateFace3) return
+  function addFace3(customPointIds?: readonly string[]) {
+    const pts = customPointIds && customPointIds.length >= 3 ? [...customPointIds] : canCreateFace3 ? [...selectedPoint3Ids] : null
+    if (!pts || pts.length < 3) return
     const id = nextPrimitiveId(document, "face3")
-    apply({ op: "addPrimitive", primitive: { id, type: "face3", pointIds: [...selectedPoint3Ids], label: `空间面 ${id.split("-").at(-1)}` } })
+    const ringLabel = labelForPointIds(pts)
+    apply({ op: "addPrimitive", primitive: { id, type: "face3", pointIds: pts, label: ringLabel ? `面 ${ringLabel}` : `空间面 ${id.split("-").at(-1)}` } })
     setSelectedIds([id])
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "face", outcome: "created" }))
   }
@@ -127,5 +144,5 @@ export function createPoint3ToolCommands({ document, selectedPoint3Ids, canCreat
     setGuidance(guidanceFor({ kind: "point3Tool", tool: "circle", outcome: "created" }))
   }
 
-  return { addPoint, addPoint3, addLine3, addPlane3, addFace3, addCircle3Track }
+  return { addPoint, addPoint3, addSegment3, addLine3, addPlane3, addFace3, addCircle3Track }
 }
