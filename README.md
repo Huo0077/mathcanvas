@@ -115,7 +115,7 @@ npm run test:rust   # 桌面端 Rust 单元测试
 
 ## 文档与版本导航
 
-- **最新发布说明与版本信息**：最新版本标签为 **`v4.3.0`**（[发布说明](docs/release/v4.3.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
+- **最新发布说明与版本信息**：最新版本标签为 **`v5.0.0`**（[发布说明](docs/release/v5.0.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
 - **工程进度与技术文档**：
   - [当前状态（唯一实时状态入口）](docs/current-status.md)
   - [功能目录](docs/feature-catalog.md)
