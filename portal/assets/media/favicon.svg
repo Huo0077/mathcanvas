@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="mc-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4a6b96" />
+      <stop offset="100%" stop-color="#2c3e50" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#mc-bg)" stroke="#cfe0f5" stroke-opacity="0.22" stroke-width="1.2" />
+  <g transform="translate(5.6, 5.6) scale(1.65)">
+    <circle cx="16" cy="16.5" r="11.2" stroke="#93c5fd" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="2 1.8" />
+    <polygon points="16,6.2 24.6,11.2 16,16.2 7.4,11.2" fill="#bfdbfe" fill-opacity="0.34" />
+    <polygon points="7.4,11.2 16,16.2 16,26.2 7.4,21.2" fill="#60a5fa" fill-opacity="0.22" />
+    <polygon points="16,16.2 24.6,11.2 24.6,21.2 16,26.2" fill="#1e3a5f" fill-opacity="0.36" />
+    <path d="M7.4 21.2 L16 16.2 L24.6 21.2 M7.4 11.2 L24.6 11.2 L16 26.2 Z" stroke="#bae6fd" stroke-opacity="0.52" stroke-width="1" stroke-dasharray="1.6 1.5" stroke-linecap="round" stroke-linejoin="round" />
+    <polygon points="16,6.2 24.6,11.2 24.6,21.2 16,26.2 7.4,21.2 7.4,11.2" stroke="#f8fafc" stroke-width="1.5" stroke-linejoin="round" />
+    <path d="M7.4 11.2 L16 16.2 L24.6 11.2 M16 16.2 L16 26.2" stroke="#e0f2fe" stroke-opacity="0.95" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
+    <ellipse cx="16" cy="16.2" rx="13.4" ry="5.1" transform="rotate(-24 16 16.2)" stroke="#7dd3fc" stroke-opacity="0.92" stroke-width="1.3" />
+    <circle cx="7.4" cy="11.2" r="1.55" fill="#f8fafc" stroke="#172033" stroke-width="0.65" />
+    <circle cx="24.6" cy="11.2" r="1.55" fill="#f8fafc" stroke="#172033" stroke-width="0.65" />
+    <circle cx="16" cy="26.2" r="1.55" fill="#f8fafc" stroke="#172033" stroke-width="0.65" />
+    <circle cx="16" cy="16.2" r="1.75" fill="#bae6fd" stroke="#172033" stroke-width="0.7" />
+    <circle cx="27.3" cy="11.2" r="1.85" fill="#f59e0b" stroke="#172033" stroke-width="0.65" />
+    <path d="M16 1.8 L17.15 5.05 L20.4 6.2 L17.15 7.35 L16 10.6 L14.85 7.35 L11.6 6.2 L14.85 5.05 Z" fill="#ffffff" />
+  </g>
+</svg>

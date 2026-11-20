@@ -4,6 +4,26 @@
 
 MathCanvas 将**自然语言读题作图**、**动态几何约束联动**、**二维解析/函数分析**、**三维立体空间建模**与**工程制图投影**整合在同一个简洁流畅的桌面与浏览器工作台中。你可以像在传统几何软件里那样自由拖拽控制点、调节参数、测量距离与二面角，也可以直接输入一道完整的数学题，由内置 AI 助手为你自动理解题意、构造图形、联动辅助线与空间面，并在预览确认后写入画布继续探索。
 
+- **桌面端安装包下载（Windows x64 v5.0.0）**：[NSIS 安装程序 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe) · [绿色免安装版 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe) · [MSI 安装包](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi) · [全部 Releases](https://github.com/Huo0077/mathcanvas/releases)
+- **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及直链下载，可直接部署至任意静态 Web 服务器）。
+
+---
+
+## 软件界面展示
+
+### AI 同屏共创 · 立体几何与构造面自动联动
+![MathCanvas 立体几何与 AI 助手同屏共创界面](docs/media/hero-3d-ai-aec.png)
+
+### 四大专业工作区与设置中心
+
+| 立体几何多选与视图联动 | 平面圆锥曲线与渐近线求解 |
+| :---: | :---: |
+| ![立体几何交互与视图联动](docs/media/workbench-3d-dihedral.png) | ![平面圆锥曲线渐近线与切圆](docs/media/workbench-2d-conics.png) |
+
+| 工程制图（CAD 四视图自动投影） | 13 家模型预设与模型列表一键拉取 |
+| :---: | :---: |
+| ![工程制图四视图投影](docs/media/workbench-cad-views.png) | ![模型服务设置与预设](docs/media/settings-providers.png) |
+
 ---
 
 ## 核心特色

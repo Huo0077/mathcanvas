@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>MathCanvas v5.0.0 — AI 原生交互式数学工作台</title>
+  <meta name="description" content="MathCanvas 将自然语言 AI 读题作图、以线推面、动态几何约束、圆锥曲线解析、3D 立体探索与工程制图四视图融为一体。">
+  <link rel="icon" type="image/svg+xml" href="assets/media/favicon.svg">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳至正文内容</a>
+
+  <header class="site-header" id="top">
+    <div class="header-progress" aria-hidden="true"></div>
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="MathCanvas 首页">
+        <img src="assets/media/favicon.svg" alt="" width="28" height="28">
+        <span class="brand-name">MathCanvas</span>
+        <span class="brand-version">v5.0.0</span>
+      </a>
+      <nav class="site-nav" aria-label="主导航">
+        <a href="#features">核心特性</a>
+        <a href="#showcase">交互展示</a>
+        <a href="#video-demo">演示视频</a>
+        <a href="#guide">使用说明</a>
+        <a class="nav-cta" href="#downloads">下载软件</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- Layer 0-1: Blueprint Obsidian Hero with Asymmetric Depth Stage -->
+    <section class="hero-band">
+      <div class="blueprint-grid-backdrop" aria-hidden="true"></div>
+      <div class="hero-glow" aria-hidden="true"></div>
+
+      <div class="container hero-layout">
+        <div class="hero-copy">
+          <div class="hero-badge">
+            <span class="badge-dot" aria-hidden="true"></span>
+            <span>SPEC · RELEASE v5.0.0 · WINDOWS &amp; WEB WORKBENCH</span>
+          </div>
+
+          <h1 class="hero-title">
+            从一道数学题<br>
+            到<span class="accent-gradient">可拖拽的空间世界</span>
+          </h1>
+
+          <p class="hero-subtitle">
+            输入常规中学数学题或竞赛题，AI 助手自动识别题设、补全关键线段并<strong>「以线推面」生成动态平面</strong>；在方格纸质感画布上自由拖拽动点、实时测量二面角与导数切线，每一步都经过几何核验证书门禁校验。
+          </p>
+
+          <div class="hero-actions">
+            <a
+              class="btn btn-primary"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe"
+              rel="noopener"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>下载 Windows 安装版（v5.0.0）</span>
+            </a>
+            <a class="btn btn-secondary" href="#video-demo">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
+              <span>观看实机演示</span>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/Huo0077/mathcanvas" target="_blank" rel="noopener noreferrer">
+              <span>GitHub 源码</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+
+          <div class="prompt-ticker" aria-label="可直接运行的自然语言题干示例">
+            <div class="ticker-bar">
+              <span class="ticker-tag">PROMPT EXAMPLE</span>
+              <button type="button" class="ticker-next-btn" id="nextPromptBtn">切换示例 ↻</button>
+            </div>
+            <code id="heroPromptText">在四棱锥 P-ABCD 中，PA⊥平面 ABCD，E 为 PB 中点，连接 AE、CE → 自动推导「面 AEC」</code>
+          </div>
+
+          <dl class="hero-metrics">
+            <div>
+              <dt>四大工作区</dt>
+              <dd>平面 · 立体 · CAD · Agent</dd>
+            </div>
+            <div>
+              <dt>模型生态</dt>
+              <dd>13 家预设 · 一键获取模型</dd>
+            </div>
+            <div>
+              <dt>数学可信门禁</dt>
+              <dd>独立核验 · 一步 Ctrl+Z</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="hero-stage-wrap">
+          <div class="blueprint-frame">
+            <span class="corner tl" aria-hidden="true"></span>
+            <span class="corner tr" aria-hidden="true"></span>
+            <span class="corner bl" aria-hidden="true"></span>
+            <span class="corner br" aria-hidden="true"></span>
+            <div class="frame-chrome">
+              <div class="frame-dots" aria-hidden="true"><span /><span /><span /></div>
+              <span class="frame-caption">MathCanvas v5.0.0 · 立体几何与 AI 同屏共创</span>
+            </div>
+            <div class="blueprint-frame-media">
+              <img
+                class="hero-shot"
+                src="assets/media/hero-3d-ai-aec.png"
+                alt="MathCanvas v5.0.0 立体几何工作台与 AI 助手同屏共创界面：展示四棱锥 P-ABCD、动点与构造面、属性检查器及数学核验证书面板"
+                fetchpriority="high"
+                width="1440"
+                height="900"
+              >
+              <button
+                type="button"
+                class="shot-expand-btn"
+                data-lightbox-img="assets/media/hero-3d-ai-aec.png"
+                data-lightbox-title="AI 同屏共创：四棱锥构图、数学证书核验与「面 ABE / AEC」自动联动"
+              >全屏放大查看</button>
+            </div>
+          </div>
+
+          <div class="floating-spec floating-spec-top" aria-hidden="true">
+            <span class="spec-label">CERTIFIED · 数学核验证书</span>
+            <strong>7 / 7 题设约束通过</strong>
+          </div>
+          <div class="floating-spec floating-spec-bottom" aria-hidden="true">
+            <span class="spec-label">REACTIVE TOPOLOGY · 响应式联动</span>
+            <strong>拖动动点 E → 构造面实时重算</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layer 2: Staggered Bento Capabilities on Crisp Drafting Paper -->
+    <section class="paper-band" id="features">
+      <div class="container">
+        <header class="section-head reveal-card">
+          <span class="section-kicker">01 · ARCHITECTURE &amp; CAPABILITIES</span>
+          <h2>不止能画出来，<br>更是一个遵守数学法则的动态系统</h2>
+          <p>
+            v5.0.0 将大语言模型的题干理解与底层解析几何内核彻底打通：模型只负责规划语义，所有坐标、切点、交面、二面角均由确定性求解器算出并经独立证书检验。
+          </p>
+        </header>
+
+        <div class="bento-grid">
+          <article class="bento-card bento-wide reveal-card">
+            <div class="bento-meta">AGENT CO-PILOT · 以线推面</div>
+            <h3>输入正常题目，无需刻意“命令”作面</h3>
+            <p>
+              提问中只要提到动点与连线（如「E 为 PB 中点，连接 AE、CE」），Agent 会自动识别隐含空间面并生成 <code>面 AEC</code>，第一时间同步到左侧「面（构造 / 辅助）」与 3D 场景。
+            </p>
+            <div class="bento-pills">
+              <span>隔离草稿先预览</span>
+              <span>往期对话可追溯</span>
+              <span>新题自动清空旧图元（可关）</span>
+              <span>跨工作区自动路由</span>
+            </div>
+          </article>
+
+          <article class="bento-card reveal-card">
+            <div class="bento-meta">3D KERNEL · 立体几何</div>
+            <h3>点线面全链路动态绑定</h3>
+            <p>
+              支持点绑棱、点绑面、点绑实体，多选共端点两线一键「作空间面」，以及二面角角度与 <code>sin</code> / <code>cos</code> 精确值一键复制。
+            </p>
+          </article>
+
+          <article class="bento-card reveal-card">
+            <div class="bento-meta">2D ANALYTIC · 圆锥与函数</div>
+            <h3>从渐近线到导数切线</h3>
+            <p>
+              椭圆、双曲线、抛物线方程直出图形，自动补绘渐近线与相切圆，函数编辑器一键生成导函数与任意位置切线。
+            </p>
+          </article>
+
+          <article class="bento-card reveal-card">
+            <div class="bento-meta">CAD PROJECTION · 工程制图</div>
+            <h3>三维模型直出标准四视图</h3>
+            <p>
+              主视图、俯视图、左视图与轴测图一键由立体几何同步投影，配合图层与工程尺寸标注，支持 SVG / DXF / PDF / 交互式 HTML 导出。
+            </p>
+          </article>
+
+          <article class="bento-card bento-wide bento-dark reveal-card">
+            <div class="bento-meta">NATIVE DESKTOP · Tauri 2 + Rust</div>
+            <h3>13 家模型预设 + Windows 原生安全存储</h3>
+            <p>
+              内置 DeepSeek、OpenAI、Claude、Gemini、通义千问、智谱 GLM、Kimi、硅基流动、豆包、OpenRouter、Ollama、LM Studio 预设，API 密钥存放在 Windows 系统凭据管理器（绝不落明文文件），支持一键拉取服务下全部可用模型。
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layer 3: Interactive Tabbed Workbench Showcase -->
+    <section class="showcase-band" id="showcase">
+      <div class="container">
+        <header class="section-head reveal-card">
+          <span class="section-kicker">02 · INTERACTIVE GALLERY</span>
+          <h2>切换四大场景，细看每个工作区细节</h2>
+          <p>点击任意截图可全屏放大检视标注、对象树与属性检查器中的真实数值读数。</p>
+        </header>
+
+        <div class="showcase-tabs">
+          <div class="tablist" role="tablist" aria-label="功能界面展示切换">
+            <button type="button" role="tab" id="tab-ai" aria-selected="true">AI 同屏共创 · 以线推面</button>
+            <button type="button" role="tab" id="tab-3d" aria-selected="false">3D 交互 · 透明与测量</button>
+            <button type="button" role="tab" id="tab-2d" aria-selected="false">2D 圆锥曲线 · 渐近线切圆</button>
+            <button type="button" role="tab" id="tab-cad" aria-selected="false">工程制图 · 四视图投影</button>
+            <button type="button" role="tab" id="tab-settings" aria-selected="false">模型服务 · 13 家预设</button>
+          </div>
+
+          <div class="tabpanels-stack">
+            <div role="tabpanel" id="panel-ai" aria-labelledby="tab-ai" tabindex="0">
+              <div class="stage-panel-inner">
+                <div class="stage-shot-box">
+                  <img
+                    src="assets/media/hero-3d-ai-aec.png"
+                    alt="AI 助手同屏共创与构造面示例"
+                    loading="lazy"
+                    width="1440"
+                    height="900"
+                  >
+                  <button
+                    type="button"
+                    class="shot-expand-btn"
+                    data-lightbox-img="assets/media/hero-3d-ai-aec.png"
+                    data-lightbox-title="AI 同屏共创 · 数学核验证书与面 ABE/AEC 自动构建"
+                  >全屏放大查看</button>
+                </div>
+                <div class="stage-notes">
+                  <h3>边看图边对话：思考轨迹、数学证书、一键确认写入</h3>
+                  <ul>
+                    <li>左侧对象栏将构造面归入独立「面（构造 / 辅助）」分组，避免被淹没在基础拓扑下。</li>
+                    <li>右侧 AI 抽屉先逐条核验 <code>PA⊥平面 ABCD</code>、<code>E 是 PC 中点</code> 等题设再允许写入，提交后支持 <code>Ctrl+Z</code> 一步还原。</li>
+                    <li>点击属性栏「在此面添加动点」，即可在刚生成的空间面上直接继续探究。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div role="tabpanel" id="panel-3d" aria-labelledby="tab-3d" hidden="until-found">
+              <div class="stage-panel-inner">
+                <div class="stage-shot-box">
+                  <img
+                    src="assets/media/workbench-3d-dihedral.png"
+                    alt="立体几何透明面与多面勾选测量界面"
+                    loading="lazy"
+                    fetchpriority="low"
+                    width="1440"
+                    height="900"
+                  >
+                  <button
+                    type="button"
+                    class="shot-expand-btn"
+                    data-lightbox-img="assets/media/workbench-3d-dihedral.png"
+                    data-lightbox-title="立体几何交互 · 多选表面与视图选项双向联动"
+                  >全屏放大查看</button>
+                </div>
+                <div class="stage-notes">
+                  <h3>立体几何探究：多选联动、二面角与三维视图同步</h3>
+                  <ul>
+                    <li>左栏「多选」与属性栏「三维视图联动」实时同步：透明面、隐藏边、法向量、展开图、旋转环一键切换。</li>
+                    <li>勾选任意两个面或按 <code>Alt</code> 拾取实体表面，即可测量二面角并复制精确数值与 <code>sin</code> / <code>cos</code> 表达式。</li>
+                    <li>拖动绑定动点时，所有关联线段与构造面仅按局部拓扑重算，保持高帧率流畅。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div role="tabpanel" id="panel-2d" aria-labelledby="tab-2d" hidden="until-found">
+              <div class="stage-panel-inner">
+                <div class="stage-shot-box">
+                  <img
+                    src="assets/media/workbench-2d-conics.png"
+                    alt="平面圆锥曲线双曲线渐近线与相切圆界面"
+                    loading="lazy"
+                    fetchpriority="low"
+                    width="1440"
+                    height="900"
+                  >
+                  <button
+                    type="button"
+                    class="shot-expand-btn"
+                    data-lightbox-img="assets/media/workbench-2d-conics.png"
+                    data-lightbox-title="平面与圆锥曲线 · 渐近线与相切圆精确求解"
+                  >全屏放大查看</button>
+                </div>
+                <div class="stage-notes">
+                  <h3>圆锥曲线与函数分析：精确求解交点、切线与渐近线</h3>
+                  <ul>
+                    <li>识别高考题中的双曲线渐近线与圆相切条件（如 <code>y² - x²/m² = 1</code>），自动求出精确参数并绘制两条渐近线。</li>
+                    <li>支持 2D 动点沿曲线/圆滑轨拖动，过点切线与弦长实时联动。</li>
+                    <li>函数模块支持一次求导曲线与间断点分支隔离（如 <code>1/x</code>、<code>tan(x)</code> 不跨渐近线误连）。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div role="tabpanel" id="panel-cad" aria-labelledby="tab-cad" hidden="until-found">
+              <div class="stage-panel-inner">
+                <div class="stage-shot-box">
+                  <img
+                    src="assets/media/workbench-cad-views.png"
+                    alt="工程制图四视图投影工作区"
+                    loading="lazy"
+                    fetchpriority="low"
+                    width="1440"
+                    height="900"
+                  >
+                  <button
+                    type="button"
+                    class="shot-expand-btn"
+                    data-lightbox-img="assets/media/workbench-cad-views.png"
+                    data-lightbox-title="工程制图（CAD）· 一键投影 3D 立体四视图"
+                  >全屏放大查看</button>
+                </div>
+                <div class="stage-notes">
+                  <h3>工程制图（CAD）：立体几何直出 A4 标准四视图</h3>
+                  <ul>
+                    <li>点击「改为投影立体几何的模型」，即时将 3D 场景转换为标准主视图、俯视图、左视图与轴测图。</li>
+                    <li>支持模型树、图层树与图纸树切换，切换至「2D 绘图」模式即可在图纸上补画几何尺寸标注。</li>
+                    <li>支持导出 SVG、DXF、PDF 及自包含 HTML 交互快照。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" hidden="until-found">
+              <div class="stage-panel-inner">
+                <div class="stage-shot-box">
+                  <img
+                    src="assets/media/settings-providers.png"
+                    alt="模型服务配置与 13 家主流预设界面"
+                    loading="lazy"
+                    fetchpriority="low"
+                    width="1440"
+                    height="900"
+                  >
+                  <button
+                    type="button"
+                    class="shot-expand-btn"
+                    data-lightbox-img="assets/media/settings-providers.png"
+                    data-lightbox-title="设置中心 · 模型预设与一键拉取可用模型"
+                  >全屏放大查看</button>
+                </div>
+                <div class="stage-notes">
+                  <h3>设置精简重构：一键获取模型，偏好设置一目了然</h3>
+                  <ul>
+                    <li>内置 13 种国内外主流服务预设，填好地址和 Key 点「自动获取」，立即拉取模型下拉清单。</li>
+                    <li>桌面端采用 Windows 系统凭据管理器加密保存 API 密钥，配置文件不落明文。</li>
+                    <li>「偏好设置」集中管理字号密度、选中自动展开属性、3D 自动取景、新题自动清空旧图元及实验性开关。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layer 4: Real Product Walkthrough Video Theater -->
+    <section class="video-band" id="video-demo">
+      <div class="container">
+        <header class="section-head reveal-card">
+          <span class="section-kicker">03 · LIVE WORKFLOW VIDEO</span>
+          <h2>20 秒实机操作录屏：从输入题目到交互探索</h2>
+          <p>真实运行自 MathCanvas v5.0.0：演示 AI 自动构造四棱锥、3D 自由旋转、切换二维圆锥曲线及设置中心。</p>
+        </header>
+
+        <div class="video-theater reveal-card">
+          <div class="video-shell">
+            <video
+              id="demoVideo"
+              controls
+              loading="lazy"
+              preload="metadata"
+              playsinline
+              width="1280"
+              height="800"
+              poster="assets/media/hero-3d-ai-aec.png"
+            >
+              <source src="assets/media/demo-workflow.webm" type="video/webm">
+              你的浏览器暂不支持 WebM 视频播放，可前往 GitHub Release 下载完整桌面端体验。
+            </video>
+          </div>
+          <div class="video-chapters" aria-label="演示视频关键节点跳转">
+            <button type="button" class="chapter-btn" data-seek="0">
+              <span class="chapter-time">00:00</span>
+              <strong>AI 输入立体几何题</strong>
+              <small>识别 P-ABCD 与中点约束并预览</small>
+            </button>
+            <button type="button" class="chapter-btn" data-seek="4">
+              <span class="chapter-time">00:04</span>
+              <strong>确认写入与 3D 视角旋转</strong>
+              <small>左侧面元即时同步，画布流畅拖拽</small>
+            </button>
+            <button type="button" class="chapter-btn" data-seek="8">
+              <span class="chapter-time">00:08</span>
+              <strong>平面圆锥曲线切换与作图</strong>
+              <small>自动推导渐近线与相切圆位置</small>
+            </button>
+            <button type="button" class="chapter-btn" data-seek="11">
+              <span class="chapter-time">00:11</span>
+              <strong>模型服务与偏好中心</strong>
+              <small>13 家模型预设与密钥本地隔离管理</small>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layer 5: Quick Onboarding & Operation Manual -->
+    <section class="paper-band" id="guide">
+      <div class="container">
+        <header class="section-head reveal-card">
+          <span class="section-kicker">04 · USER MANUAL</span>
+          <h2>三步上手使用说明</h2>
+          <p>无需复杂配置，下载安装包即可使用本地手工全功能工作台；接入任意大模型 Key 即可开启 AI 共创。</p>
+        </header>
+
+        <div class="steps-grid">
+          <article class="step-card reveal-card">
+            <span class="step-num">01</span>
+            <h3>连接模型或直接打开画布</h3>
+            <p>
+              进入左侧 <strong>设置 → 模型服务</strong>，选择预设（如 DeepSeek / 通义 / Ollama），填入 API Key 后点击「自动获取」拉取模型名并保存验证；如仅作手工探究，无需密钥可直接使用全部几何工具。
+            </p>
+          </article>
+          <article class="step-card reveal-card">
+            <span class="step-num">02</span>
+            <h3>用正常题干驱动 AI 构图</h3>
+            <p>
+              打开右下角或顶部 <strong>✨ AI 助手</strong>，直接粘贴文字题或使用桌面端图片识题。Agent 会按需补全辅助线与构造面（如 <code>面 AEC</code>），先在隔离草稿确认核验结果，再点击「确认并提交」落盘。
+            </p>
+          </article>
+          <article class="step-card reveal-card">
+            <span class="step-num">03</span>
+            <h3>拖拽探究、测量与多格式导出</h3>
+            <p>
+              点击棱或面上的「添加动点」即可绑定拖拽；勾选两面点「测量二面角」可查看精确 <code>sin</code> / <code>cos</code>；顶部「文件」支持导出 <code>.mgeo</code>、SVG、DXF、PDF 与自包含 HTML 交互快照。
+            </p>
+          </article>
+        </div>
+
+        <div class="manual-table-card reveal-card">
+          <div class="manual-table-head">
+            <h3>高频快捷键与画布手势速查</h3>
+            <div class="prompt-copy-row">
+              <button type="button" class="copy-btn" data-copy-text="在四棱锥 P-ABCD 中，PA⊥平面 ABCD，AB⊥AD，AC⊥CD，∠ABC=60°，PA=AB=BC，E 是 PC 的中点。">
+                复制示例题干
+              </button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="shortcuts-table">
+              <thead>
+                <tr>
+                  <th scope="col">操作场景</th>
+                  <th scope="col">鼠标 / 快捷键方式</th>
+                  <th scope="col">功能说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>选中与多选图元</td>
+                  <td><code>左键单击</code> / <code>Shift + 单击</code> / 左侧「多选」</td>
+                  <td>单选在右侧修改坐标、标签与外观；多选两个面可测二面角，多选两线/三点可作空间面</td>
+                </tr>
+                <tr>
+                  <td>画布平移与 3D 旋转</td>
+                  <td>3D：<code>左键拖空白</code> 旋转 · <code>中键/右键/Shift+左键</code> 平移 · <code>滚轮</code> 缩放</td>
+                  <td>按住 <code>Ctrl</code> + 拖动可沿视线前后移动；按下 <code>Alt</code> 点击表面可穿透拾取内部或背面</td>
+                </tr>
+                <tr>
+                  <td>动点绑定与随动</td>
+                  <td>选中面/棱点 <strong>「在此面添加动点」</strong> 或拖住点直接移动</td>
+                  <td>动点仅沿宿主参数移动，相连线段与构造面自动保持几何关系重算</td>
+                </tr>
+                <tr>
+                  <td>命令面板与撤销重做</td>
+                  <td><code>Ctrl+K</code> 搜索命令 · <code>Ctrl+Z</code> / <code>Ctrl+Y</code> · <code>Esc</code> 退出模式</td>
+                  <td>AI 单轮写入的所有对象占一步完整撤销，一次 <code>Ctrl+Z</code> 即可干净退回</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layer 6: Download & Deployment Portal -->
+    <section class="download-band" id="downloads">
+      <div class="container">
+        <header class="section-head reveal-card">
+          <span class="section-kicker">05 · DOWNLOAD &amp; RELEASES</span>
+          <h2>立即获取 MathCanvas v5.0.0</h2>
+          <p>Windows 桌面版基于 Tauri 2 + Rust 原生打包，启动已加固 SQLite 锁容错与异常保护；也可在本地拉取源码运行网页版。</p>
+        </header>
+
+        <div class="download-grid">
+          <article class="download-card download-card-featured reveal-card">
+            <div class="dl-tag">推荐 · WINDOWS 64 位安装向导</div>
+            <h3>NSIS 标准安装程序</h3>
+            <p class="dl-filename"><code>MathCanvas_5.0.0_x64-setup.exe</code> · 约 5.4 MB</p>
+            <p class="dl-desc">含开始菜单快捷方式与标准卸载支持，使用系统原生 WebView2 渲染，内置凭据加密存储与桌面端图片识题。</p>
+            <a
+              class="btn btn-primary dl-btn"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe"
+              rel="noopener"
+            >
+              <span>直接下载安装版 (.exe)</span>
+              <span aria-hidden="true">↓</span>
+            </a>
+          </article>
+
+          <article class="download-card reveal-card">
+            <div class="dl-tag">PORTABLE · 免安装单文件</div>
+            <h3>Windows 便携版可执行程序</h3>
+            <p class="dl-filename"><code>MathCanvas_5.0.0_x64.exe</code> · 约 17.5 MB</p>
+            <p class="dl-desc">下载后双击即可运行，无需管理员安装权限，适合 U 盘携带与机房临时教学展示。</p>
+            <a
+              class="btn btn-secondary dl-btn"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe"
+              rel="noopener"
+            >
+              <span>下载绿色免安装版 (.exe)</span>
+              <span aria-hidden="true">↓</span>
+            </a>
+          </article>
+
+          <article class="download-card reveal-card">
+            <div class="dl-tag">ENTERPRISE · MSI 封装</div>
+            <h3>Windows MSI 安装包</h3>
+            <p class="dl-filename"><code>MathCanvas_5.0.0_x64_en-US.msi</code> · 约 8.4 MB</p>
+            <p class="dl-desc">适合学校机房域控批量分发或企业终端静默安装部署。</p>
+            <a
+              class="btn btn-secondary dl-btn"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi"
+              rel="noopener"
+            >
+              <span>下载 MSI 安装包</span>
+              <span aria-hidden="true">↓</span>
+            </a>
+          </article>
+        </div>
+
+        <div class="source-bar reveal-card">
+          <div class="source-bar-copy">
+            <strong>开发者本地源码运行 / 查看全版本归档</strong>
+            <p>需要 Node.js 22+；若仅作为静态门户部署本网页，直接将仓库内 <code>portal/</code> 目录上传至 Nginx / Caddy / 任意静态服务器即可。</p>
+            <pre><code>git clone https://github.com/Huo0077/mathcanvas.git &amp;&amp; cd mathcanvas &amp;&amp; npm install &amp;&amp; npm run dev</code></pre>
+          </div>
+          <div class="source-bar-actions">
+            <button type="button" class="copy-btn" data-copy-text="git clone https://github.com/Huo0077/mathcanvas.git && cd mathcanvas && npm install && npm run dev">
+              复制运行命令
+            </button>
+            <a class="btn btn-ghost" href="https://github.com/Huo0077/mathcanvas/releases" target="_blank" rel="noopener noreferrer">
+              全部 GitHub Releases ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <img src="assets/media/favicon.svg" alt="" width="22" height="22">
+        <span>MathCanvas v5.0.0 · AI 原生多模态数学工作台</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Huo0077/mathcanvas" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
+        <a href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.0.0" target="_blank" rel="noopener noreferrer">v5.0.0 发布页</a>
+        <a href="https://github.com/Huo0077/mathcanvas/issues" target="_blank" rel="noopener noreferrer">问题反馈</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Light-dismiss native <dialog> for full-size screenshot inspection -->
+  <dialog id="mediaLightbox" class="media-lightbox" closedby="any" aria-labelledby="lightboxTitle">
+    <form method="dialog" class="lightbox-surface">
+      <header class="lightbox-head">
+        <h2 id="lightboxTitle">界面细节预览</h2>
+        <button type="submit" class="lightbox-close" aria-label="关闭大图预览">关闭 ✕</button>
+      </header>
+      <figure class="lightbox-body">
+        <img id="lightboxImg" src="" alt="" width="1440" height="900">
+        <figcaption id="lightboxCaption"></figcaption>
+      </figure>
+    </form>
+  </dialog>
+
+  <script src="assets/app.js" defer></script>
+</body>
+</html>
