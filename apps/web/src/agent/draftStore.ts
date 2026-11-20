@@ -692,23 +692,13 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         : null
       const obligations = parsed?.legacy ?? null
       const hasParsedMathObligations = obligations !== null && (obligations.givens.length > 0 || obligations.unverified.length > 0)
-      const rawChecked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
+      const checked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
             obligationIR: obligationIR === true,
             prompt: parserPrompt,
             ...(effectiveSelectedScopeId === undefined ? {} : { activeScopeId: effectiveSelectedScopeId })
           })
         : undefined
-      const checked = rawChecked && rawChecked.status === "unverified"
-        && compiled.draftDocument.primitives.length > 0
-        && !hasNonFiniteValue(compiled.draftDocument.primitives)
-        && !rawChecked.checks.some((item) => item.status === "failed")
-        ? {
-            ...rawChecked,
-            status: "passed" as const,
-            checks: rawChecked.checks.map((item) => item.status === "unverified" ? { ...item, status: "passed" as const } : item)
-          }
-        : rawChecked
       if (checked?.status === "failed") {
         return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
       }

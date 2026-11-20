@@ -101,7 +101,7 @@ describe("engineering inspector", () => {
   it("keeps multi-selection on batch actions without single-object fields", () => {
     renderInspector({ properties: { selectedIds: ["a", "b"], selectedCount: 2 } })
 
-    expect(screen.getByText("批量编辑 · 2 个对象")).toBeTruthy()
+    expect(screen.getByText("已选 2 个对象")).toBeTruthy()
     expect(screen.queryByLabelText("线条颜色")).toBeNull()
   })
 

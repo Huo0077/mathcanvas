@@ -108,6 +108,8 @@ export interface CoordinatorDependencies {
    * 返回 `ok: false` 时协调器停在 `failed` 并把原因带出来（例如"这条指令需要先离开工程制图"）。
    */
   prepare?: (plan: PlanEnvelope) => { ok: true; switched?: boolean } | { ok: false; detail: string }
+  /** Only proactively wipe existing unreferenced geometry before staging when explicitly opted-in by host preferences. */
+  autoClearExistingScene?: boolean
 }
 
 export interface StartRequest {
@@ -688,7 +690,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
 
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
-        const replaceExistingScene = shouldAutoClearSceneForPrompt(request.userMessage, planRequest.model.context.selectedRefs.length > 0)
+        const replaceExistingScene = dependencies.autoClearExistingScene === true && shouldAutoClearSceneForPrompt(request.userMessage, planRequest.model.context.selectedRefs.length > 0)
         const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}), ...(replaceExistingScene ? { replaceExistingScene: true } : {}) })
         if (cancelled) return
         if (stagedResult.ok) {

@@ -38,7 +38,7 @@ import {
   type RetryDecision,
   type WorkspaceId
 } from "@draw/agent-core"
-import { createEmptyDocument, type GeometryDocument } from "@draw/dsl"
+import { createEmptyDocument } from "@draw/dsl"
 import { loadAgentAutoClear } from "../uiPreferences"
 
 import {
@@ -52,13 +52,11 @@ import { invokeDesktop } from "../services/desktopRuntime"
 import { cancelModelRun, startModelRun, type ModelChatMessage, type ModelClientStart } from "../services/modelClient"
 import {
   buildDsActionToolSchemas,
-  buildRouteSlicesAndPlan,
   createDsActionSession,
   NON_CONSTRUCTIVE_DS_ACTIONS,
   type DsActionExecutionResult,
   type DsActionStateSlice
 } from "./dsActionTools"
-import { deriveAcceptance } from "./acceptance"
 import { buildSystemPrompt, type PromptIntentMode } from "./systemPrompt"
 import {
   deriveSceneToolContextFromRequest,
@@ -684,7 +682,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       const channel = planned.channel
       // 只有原生工具通道带工具表。Rust 侧还会按**存下来的证据**再判一次
       //（`tools_verified`）：调用方说"这家支持工具"不算数，验过才算数。
-      const intentMode: PromptIntentMode = dependencies.intentMode ?? (provider.capabilities.tools === "verified" ? "ds_action" : "legacy_actions")
+      const intentMode: PromptIntentMode = dependencies.intentMode ?? "legacy_actions"
       const registeredReadTools = request.executeTool === undefined ? [] : request.model.tools.map(nativeReadToolSchema).filter((schema) => schema !== null)
       const planToolSchema = intentMode === "ds_intent" ? buildDsIntentToolSchema() : buildPlanToolSchema(request.model.context.availableActions)
       const planToolOfferedInRequest = request.model.tools.some((tool) => tool.id === PLAN_TOOL_ID)
@@ -781,28 +779,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             actions: [...s.actions]
           }
         }))
-      }
-
-      const tryRescueDsActionWithRoute = () => {
-        if (intentMode !== "ds_action" || structuredRequestIndex < 1 || request.userMessage.trim().length < 16) return null
-        const route = routeDeterministicProblem(request.userMessage)
-        if (!route || route.plan.kind !== "plan") return null
-        const checks = deriveAcceptance(request.userMessage)
-        if (checks.length > 0 && !route.plan.actions.some((a) => a.actionId === "derived.create_circumsphere" || a.actionId === "solid.create_sphere") &&
-            checks.some((c) => c.kind === "has_primitive" && c.type === "sphere")) {
-          return null
-        }
-        if (checks.some((c) => c.kind === "has_primitive" && c.type === "line") &&
-            !route.plan.actions.some((a) => a.actionId === "planar.create_line" || a.actionId === "function.create_tangent")) {
-          return null
-        }
-        const rescued = buildRouteSlicesAndPlan(route, effectiveWorkspace)
-        const candidateSlices = mapSlicesToCandidateSlices(rescued.slices, rescued.plan)
-        return {
-          plan: rescued.plan,
-          ...ids,
-          ...(candidateSlices === undefined ? {} : { candidateSlices })
-        }
       }
 
       for (;;) {
@@ -955,7 +931,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         const hasDeltaText = events.some((event) => event.kind === "delta" && event.text.length > 0)
         structuredRequestIndex += 1
         const lastUsage = usageEvents.at(-1)
-        dependencies.onDiagnostic?.(`[usage] req=${structuredRequestIndex} in=${lastUsage?.inputTokens ?? 0} out=${lastUsage?.outputTokens ?? 0} known=${hasUsageEvent} tools=${calls.map((c) => c.toolId).join(",") || "none"}`)
+        if (hasUsageEvent) {
+          dependencies.onDiagnostic?.(`[usage] req=${structuredRequestIndex} in=${lastUsage?.inputTokens ?? 0} out=${lastUsage?.outputTokens ?? 0} known=${hasUsageEvent} tools=${calls.map((c) => c.toolId).join(",") || "none"}`)
+        }
         dependencies.onStructuredDiagnostic?.({
           kind: "request",
           index: structuredRequestIndex,
@@ -1115,7 +1093,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           const mixed = (terminal && !trailingFinish) || destructive || (hasRead && hasConstruct)
           let trial: ReturnType<typeof newDsActionSession> | null = null
           let results: DsActionExecutionResult[] = []
-          let executedCalls: typeof calls = []
+          const executedCalls: typeof calls = []
           if (!mixed) {
             trial = newDsActionSession()
             for (const prior of dsActionHistory) trial.execute(prior.name, prior.input)
@@ -1164,7 +1142,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             results.at(-1)?.ok === true &&
             results.at(-1)?.terminated !== undefined
           ) {
-            dsActionSession = trial
             let prevCount = before.primitiveCount
             let prevHash = before.candidateHash
             for (const call of executedCalls) {
@@ -1205,9 +1182,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const signature = `batch:${calls.map((call) => call.toolId).join(",")}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
             const stalled = (dsActionSignatures.get(signature) ?? 0) + 1
             dsActionSignatures.set(signature, stalled)
-            if (stalled >= 3) {
-              const rescued = tryRescueDsActionWithRoute()
-              if (rescued) return rescued
+            if (stalled >= 2) {
               dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "no_progress" })
               for (const call of calls) dependencies.onStructuredDiagnostic?.({
                 kind: "action", requestIndex: structuredRequestIndex, actionIndex: ++dsActionIndex,
@@ -1221,13 +1196,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
           const externalNetworkGuard = request.beforeProviderRequest !== undefined
           if (request.budget.remaining("generation") < 1 || (!externalNetworkGuard && request.budget.remaining("network") < 1)) {
-            const rescued = tryRescueDsActionWithRoute()
-            if (rescued) return rescued
             throw new ModelPlannerError("provider_failed", "budget exhausted before ds_action batch feedback")
           }
           if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
-            const rescued = tryRescueDsActionWithRoute()
-            if (rescued) return rescued
             throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action batch")
           }
           if (accepted) {
@@ -1331,8 +1302,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const isConstructive = !NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action)
             if (isConstructive && execRes.ok && !execRes.stateChanged) {
               reportAction(false)
-              const rescued = tryRescueDsActionWithRoute()
-              if (rescued) return rescued
               return {
                 failure: createPlanFailure({
                   category: "unexpected_tool_call",
@@ -1350,10 +1319,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               const actionSig = execRes.progressSignature
               const nextCount = (dsActionSignatures.get(actionSig) ?? 0) + 1
               dsActionSignatures.set(actionSig, nextCount)
-              if (nextCount >= 3) {
+              if (nextCount >= 2) {
                 reportAction(false)
-                const rescued = tryRescueDsActionWithRoute()
-                if (rescued) return rescued
                 return {
                   failure: createPlanFailure({
                     category: "unexpected_tool_call",
@@ -1369,13 +1336,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
             const externalNetworkGuard = request.beforeProviderRequest !== undefined
             if (request.budget.remaining("generation") < 1 || (!externalNetworkGuard && request.budget.remaining("network") < 1)) {
-              const rescued = tryRescueDsActionWithRoute()
-              if (rescued) return rescued
               throw new ModelPlannerError("provider_failed", "budget exhausted during ds_action construction step")
             }
             if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
-              const rescued = tryRescueDsActionWithRoute()
-              if (rescued) return rescued
               throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action step")
             }
             messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
@@ -1405,10 +1368,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const nextCount = (dsActionSignatures.get(unknownSig) ?? 0) + 1
             dsActionSignatures.set(unknownSig, nextCount)
             const externalNetworkGuard = request.beforeProviderRequest !== undefined
-            if (nextCount < 3 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
+            if (nextCount < 2 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
               if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
-                const rescued = tryRescueDsActionWithRoute()
-                if (rescued) return rescued
                 throw new ModelPlannerError("provider_failed", "budget accounting failed during unknown tool feedback")
               }
               messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
@@ -1427,8 +1388,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               continue
             }
           }
-          const rescuedUnexpectedTool = tryRescueDsActionWithRoute()
-          if (rescuedUnexpectedTool) return rescuedUnexpectedTool
           /**
            * **其余情况一律拒绝**（T1 起改成结构化失败，而不是抛）。
            *
@@ -1459,8 +1418,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         const text = events.filter((event) => event.kind === "delta").map((event) => (event.kind === "delta" ? event.text : "")).join("")
         const effectiveChannel = channel === "native_tools" ? "fenced_text" : channel
         if (intentMode === "ds_action" && channel === "native_tools" && dsActionSession !== null) {
-          const rescuedTextReply = tryRescueDsActionWithRoute()
-          if (rescuedTextReply) return rescuedTextReply
           const externalNetworkGuard = request.beforeProviderRequest !== undefined
           if (dsActionTextRetries < 3 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
             if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
@@ -1501,8 +1458,6 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           }
         }
         if (!parsed.ok) {
-          const rescuedTextReply = tryRescueDsActionWithRoute()
-          if (rescuedTextReply) return rescuedTextReply
           // Check whether the model emitted a ds_intent JSON object via text channel.
           if (intentMode === "ds_intent" || text.includes(DS_INTENT_SCHEMA_VERSION)) {
             const stripped = text.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim()

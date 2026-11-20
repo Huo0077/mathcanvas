@@ -19,7 +19,7 @@ import { DS_INTENT_PROMPT_VERSION, SYSTEM_PROMPT_VERSION, buildPolicyText, build
 describe("DS batch action policy mirrors the runtime", () => {
   it("permits bounded independent construction but requires repair, read, and finish in separate turns", () => {
     const text = buildPolicyText({ channel: "native_tools", canPlan: true, intentMode: "ds_action", actionIds: [] })
-    expect(text).toContain("最多 8 个")
+    expect(text).toContain("最多 32 个")
     expect(text).toContain("相互独立")
     expect(text).toContain("repair_entity")
     expect(text).toContain("finish_candidate")

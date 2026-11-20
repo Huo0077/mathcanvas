@@ -1,4 +1,5 @@
 import { agentNextPhaseFlags } from "./featureFlags"
+import { loadAgentAutoClear } from "../uiPreferences"
 import { candidateRenderEvidenceFromCanvas } from "./renderLayoutInput"
 import { CAPABILITY_REGISTRY_REVISION, PLAN_SCHEMA_VERSION, SKILL_MANIFESTS, TOOL_REGISTRY_REVISION, canonicalContentHash, createBudget, describeSchemaFailureForUser, factBelongsToDocument, isPlanFailureDetail, routeDeterministicProblem, type CommitOutcome, type ConversationContextSource, type ConversationDraftView, type DocumentHandle, type PlanEnvelope, type PlannerPort, type RunContext, type SelectedRef, type WorkspaceId } from "@draw/agent-core"
 import type { GeometryDocument } from "@draw/dsl"
@@ -528,8 +529,8 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
     // 注入的规划器优先（测试用）：它一被给出来，就不该再去问 IPC。
     if (dependencies.planner) return { planner: dependencies.planner, requestedSkillIds: [], textProfileId: "local-planner" }
 
-    // An explicitly selected action-level provider must not be replaced by a local plan.
-    if (dependencies.modelPlanner?.intentMode === "legacy_actions") {
+    // 显式注入了测试用 modelPlanner（且未指定 ds_action）时，已知确定性题目先走本地规划器，避免误触 provider。
+    if (dependencies.modelPlanner !== undefined && dependencies.modelPlanner.intentMode !== "ds_action") {
       const deterministic = routeDeterministicProblem(prompt)
       if (deterministic) return {
         planner: { plan: async () => ({ plan: deterministic.plan, requestId: "deterministic-request", attemptId: "deterministic-attempt" }) },
@@ -553,8 +554,9 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
       const options = { enableFreeApex: agentNextPhaseFlags().witnessSearch }
       return { planner: createLocalPlanner(options), requestedSkillIds: localIntentSkillIds(prompt, options), textProfileId: "local-planner" }
     }
-    const effectiveIntentMode = dependencies.modelPlanner?.intentMode
-      ?? (resolution.provider.capabilities.tools === "verified" ? "ds_action" : undefined)
+    const effectiveIntentMode = dependencies.modelPlanner !== undefined
+      ? dependencies.modelPlanner.intentMode
+      : (resolution.provider.capabilities.tools === "verified" ? "ds_action" : undefined)
     return {
       planner: createModelPlanner({
         ...dependencies.modelPlanner,
@@ -677,6 +679,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         exportPreflight: { preflight: () => ({ error: "export preflight is not wired into the agent path yet" }) },
         // 会话上下文：**一次运行只取一次**（协调器在组装上下文时调它），两次尝试共用同一份。
         conversation: () => conversation,
+        autoClearExistingScene: loadAgentAutoClear(),
         selectedRefs: () => {
           if (requestedSelectedIds.length === 0) return []
           const live = useSceneStore.getState().document

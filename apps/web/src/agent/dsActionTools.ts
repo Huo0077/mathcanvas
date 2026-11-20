@@ -7,8 +7,6 @@ import {
   compilePlan,
   foldPointAboutHinge,
   isDsActionName,
-  primitiveMatchesAcceptanceType,
-  routeDeterministicProblem,
   solveConstraint2d,
   solveConstraint3d,
   type ConstraintSolve3dRequest,
@@ -32,7 +30,6 @@ import {
   type SolidBoundary
 } from "@draw/geometry-kernel"
 import { pathConstraint, projectOntoPath, solidTopology3, type DraftAction } from "@draw/scene-graph"
-import { deriveAcceptance } from "./acceptance"
 import { createSpeculativeCanvas } from "./speculativeCanvas"
 
 function findHostPrimitiveInDoc(doc: GeometryDocument, act: DraftAction) {
@@ -848,7 +845,7 @@ export function buildRouteSlicesAndPlan(
   } else if (route.plan.kind === "plan") {
     slices.push({
       scopeId: "shared",
-      candidateHash: hashActions(route.plan.actions, ++seq),
+      candidateHash: hashActions(route.plan.actions, seq + 1),
       actions: [...route.plan.actions],
       ...(rootAnswer ? { answerText: rootAnswer } : {}),
       ...(rootAssumptions ? { assumptions: rootAssumptions } : {})
@@ -887,7 +884,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_segment: "Construct a segment between two existing named points; provide both from and to references.",
   construct_intersection: "Intersect lineA with either lineB or conicId. Pass optional excludePointId to avoid re-picking an existing anchor point on conic, or selection min_x/max_x/min_y/max_y.",
   construct_circle: "Construct a 2D circle ONLY (never for 3D spheres: use construct_circumsphere or construct_solid(kind='sphere') in 3D). Supports center/radius, centerId, or equation.",
-  construct_conic: "Give id and conicType (or equation string). Supports radiusX/radiusY, algebraic a/b/c/e/p (auto-solves missing axis from e.g. a+c or a+e or b+e), throughPointIds, and centered/shifted equations.",
+  construct_conic: "Give id and conicType (ellipse | hyperbola | parabola) or equation. Supports radiusX/radiusY, axis x or y, cx/cy center (default origin), algebraic a/b/c/e/p, and throughPointIds for two existing points.",
   construct_tangent: "Construct a live tangent line linked to a conic/moving point (conicId + pointId, or external point to circle + optional tangentPointId) or to a function (expression or existing functionId, optional x0 for tangent, and mode='derivative' or includeDerivative=true for the derivative curve).",
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line parallel to lineId: either through throughPointId or shifted by offsetX, offsetY, or perpendicular distance.",
@@ -896,7 +893,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_circumsphere: "Derive a real 3D circumsphere (default mode='circumsphere') or insphere/max-ball (mode='insphere') from an existing named solid; never provide raw center/radius or 2D construct_circle.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
-  query_measurement: "Use metric=distance (2 points), metric=area (3 triangle points), or metric=position/coordinates (1 point).",
+  query_measurement: "Use metric=distance with targets of 2 points, metric=area with targets of 3 triangle points, or metric=position/coordinates with target naming 1 point.",
   query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), or collinear to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
@@ -929,7 +926,7 @@ const CONSTRUCT_EQUAL_EDGE_TRIANGULAR_PRISM_PARAMETERS = {
 } as const
 
 const CONSTRUCT_CIRCUMSPHERE_PARAMETERS = {
-  type: "object", additionalProperties: false,
+  type: "object", additionalProperties: false, required: ["solidId"],
   properties: { solidId: { type: "string" }, mode: { type: "string", enum: ["circumsphere", "insphere"] },
     id: { type: "string" }, output: { type: "string" }, label: { type: "string" },
     scopeId: { type: "string" }, stateId: { type: "string" }, branchId: { type: "string" } }
@@ -995,9 +992,9 @@ const DECLARE_ENTITY_PARAMETERS = {
 } as const
 
 const CONSTRUCT_CONIC_PARAMETERS = {
-  type: "object", additionalProperties: false, required: ["id"],
+  type: "object", additionalProperties: false, required: ["id", "conicType"],
   properties: { ...PLANAR_ENTITY_FIELDS,
-    conicType: { type: "string", enum: ["ellipse", "hyperbola", "parabola", "circle"] },
+    conicType: { type: "string", enum: ["ellipse", "hyperbola", "parabola"] },
     equation: { type: "string" },
     radiusX: { type: "number", exclusiveMinimum: 0 }, radiusY: { type: "number", exclusiveMinimum: 0 },
     radius: { type: "number", exclusiveMinimum: 0 }, r: { type: "number", exclusiveMinimum: 0 },
@@ -1899,6 +1896,16 @@ function resolveConstructSolidRequest(
     }
   }
   const kind = rawKind.toLowerCase()
+  for (const dimKey of ["sideLength", "edgeLength", "height", "radius", "r", "radiusBottom", "radiusTop", "bottomSide", "topSide", "width", "depth", "baseSide", "slantHeight", "lateralEdge"] as const) {
+    if (input[dimKey] !== undefined && asPositiveNumber(input[dimKey]) === null) {
+      return {
+        ok: false,
+        status: "repairable",
+        blockerCode: "invalid_schema",
+        repairHint: `${dimKey} must be a positive finite number`
+      }
+    }
+  }
   const vNames = asStringList(input.vertexNames)
   if (input.vertexNames !== undefined && (!vNames || new Set(vNames).size !== vNames.length)) {
     return {
@@ -3385,7 +3392,7 @@ export function createDsActionSession(options: {
           if (Object.hasOwn(input, "from") || Object.hasOwn(input, "to")) {
             return failRepairable(name, "ambiguous_geometry_input", "use from/to or line equation parameters, never both")
           }
-          let endpoints: [Coordinate, Coordinate] | null = null
+          let endpoints: [Coordinate, Coordinate]
           if (eqString !== null) {
             const parsed = parseLinearEquation(eqString)
             if (!parsed) return failRepairable(name, "invalid_equation", "cannot parse linear equation string")
@@ -3517,22 +3524,19 @@ export function createDsActionSession(options: {
                   ? a[axis] - b[axis]
                   : a[otherAxis] - b[otherAxis]
               )
-              pt = selection.startsWith("min") ? ascending[0]! : ascending[ascending.length - 1]!
+              const isMin = selection.startsWith("min")
+              const chosen = isMin ? ascending[0]! : ascending[ascending.length - 1]!
+              const runnerUp = isMin ? ascending[1]! : ascending[ascending.length - 2]!
+              if (Math.abs(chosen[axis] - runnerUp[axis]) <= 1e-9) {
+                return failRepairable(name, "ambiguous_intersection", `two intersections share the same extreme ${axis} coordinate under selection=${selection}`)
+              }
+              pt = chosen
             } else if (excludePt) {
               pt = [...res.points].sort(
                 (a, b) => Math.hypot(b.x - excludePt.x, b.y - excludePt.y) - Math.hypot(a.x - excludePt.x, a.y - excludePt.y)
               )[0]!
             } else {
-              const existingPts = [...(branchId ? branchPoints2.get(branchId)?.values() ?? [] : []), ...points2.values()]
-              const minDistToExisting = (cand: Coordinate) =>
-                existingPts.length === 0 ? Infinity : Math.min(...existingPts.map((ex) => Math.hypot(ex.x - cand.x, ex.y - cand.y)))
-              const unseen = res.points.find((cand) => minDistToExisting(cand) > 1e-2)
-              if (unseen) {
-                pt = unseen
-              } else {
-                const ascending = [...res.points].sort((a, b) => (Math.abs(a.x - b.x) > 1e-9 ? a.x - b.x : a.y - b.y))
-                pt = ascending[0]!
-              }
+              return failRepairable(name, "ambiguous_intersection", "line intersects conic at multiple points; specify selection (min_x/max_x/min_y/max_y) or excludePointId")
             }
           }
           writeP2(outId, pt, branchId)
@@ -3643,23 +3647,8 @@ export function createDsActionSession(options: {
         }
         const rawType = asString(input.conicType)?.toLowerCase() ?? parsedEq?.conicType
         if (!rawType) return failRepairable(name, "missing_required_parameter", "construct_conic requires conicType (ellipse | hyperbola | parabola) or equation")
-        if (rawType === "circle") {
-          const cx = asFiniteNumber(input.cx) ?? 0
-          const cy = asFiniteNumber(input.cy) ?? 0
-          const r = asPositiveNumber(input.radius ?? input.r ?? input.a ?? input.radiusX)
-          if (r === null) return failRepairable(name, "missing_required_parameter", "circle requires positive radius")
-          const circ: PlanarConic = { id, type: "circle", center: { x: cx, y: cy }, radius: r }
-          writeC2(id, circ, branchId)
-          return stageDraftAction(
-            name,
-            { actionId: "planar.create_circle", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, center: { x: cx, y: cy }, radius: r } },
-            id,
-            undefined,
-            sliceTarget
-          )
-        }
         if (rawType !== "ellipse" && rawType !== "hyperbola" && rawType !== "parabola") {
-          return failRepairable(name, "unsupported_conic_kind", "construct_conic supports only ellipse, hyperbola, parabola, or circle")
+          return failRepairable(name, "unsupported_conic_kind", "construct_conic supports only ellipse, hyperbola, or parabola; use construct_circle for circles")
         }
         if (input.axis !== undefined && input.axis !== "x" && input.axis !== "y") {
           return failRepairable(name, "invalid_axis", "axis must be x or y")
@@ -3672,6 +3661,7 @@ export function createDsActionSession(options: {
         const incompatible = rawType === "parabola"
           ? ["radiusX", "radiusY", "throughPointIds"].some((field) => input[field] !== undefined)
           : ["vx", "vy", "focalParameter"].some((field) => input[field] !== undefined)
+            || (rawType === "ellipse" && input.axis !== undefined && (input.radiusX !== undefined || input.radiusY !== undefined || input.throughPointIds !== undefined || (input.a === undefined && input.b === undefined && input.c === undefined && input.e === undefined && input.eccentricity === undefined)))
         if (incompatible) return failRepairable(name, "incompatible_conic_fields", "the selected conic kind cannot use these geometry fields")
         if (rawType === "parabola") {
           const focalParameter = parsedEq?.conicType === "parabola"
@@ -4610,108 +4600,35 @@ export function createDsActionSession(options: {
             })
           })
         }
-        let finalSlices: readonly DsActionStateSlice[] | undefined =
+        const finalSlices: readonly DsActionStateSlice[] | undefined =
           recordedSlices.length > 0 ? [...recordedSlices] : undefined
 
-        if (options.problemText && symbolicDisplays.size === 0) {
-          const checkWorkspace = (p: PlanEnvelope): GeometryDocument["workspace"] =>
-            p.kind === "plan" && p.actions.some((a) => a.actionId.startsWith("solid.") || a.actionId.startsWith("derived.") || a.actionId.startsWith("section."))
+        if (options.problemText && symbolicDisplays.size === 0 && plan.kind === "plan") {
+          const ws: GeometryDocument["workspace"] =
+            plan.actions.some((a) => a.actionId.startsWith("solid.") || a.actionId.startsWith("derived.") || a.actionId.startsWith("section."))
               ? "geometry3d"
               : options.workspace === "geometry3d"
                 ? "conics"
                 : options.workspace
-          const acceptanceChecks = deriveAcceptance(options.problemText)
-          const passesAcc = (doc: GeometryDocument) =>
-            acceptanceChecks.every((chk) => chk.kind !== "has_primitive" || doc.primitives.some((p) => primitiveMatchesAcceptanceType(p.type, chk.type)))
-          const missingAccTypes = (doc: GeometryDocument) =>
-            acceptanceChecks.flatMap((chk) =>
-              chk.kind === "has_primitive" && !doc.primitives.some((p) => primitiveMatchesAcceptanceType(p.type, chk.type)) ? [chk.type] : []
-            )
-
-          const evalPlan = (p: PlanEnvelope, convId: string) => {
-            const ws = checkWorkspace(p)
-            const compiled = compilePlan(p, {
+          const compiled = compilePlan(plan, {
+            document: createEmptyDocument(ws),
+            conversationId: "ds-finish-check",
+            documentGeneration: 0,
+            workspace: ws
+          })
+          const doc = compiled.ok && compiled.draftDocument ? compiled.draftDocument : createEmptyDocument(ws)
+          const enrichedActions = enrichPromptSegmentsAndFaces(plan.actions, doc, options.problemText)
+          if (enrichedActions) {
+            const enrichedPlan: PlanEnvelope = { ...plan, actions: enrichedActions }
+            const enrichedCompiled = compilePlan(enrichedPlan, {
               document: createEmptyDocument(ws),
-              conversationId: convId,
+              conversationId: "ds-route-face-check",
               documentGeneration: 0,
               workspace: ws
             })
-            const doc = compiled.ok && compiled.draftDocument ? compiled.draftDocument : createEmptyDocument(ws)
-            const cert = certifyDrawingAgainstContract({
-              prompt: options.problemText!,
-              document: doc,
-              candidateHash: snap.candidateHash,
-              sourceHash: snap.candidateHash,
-              plan: p
-            })
-            return { compiled, doc, cert }
-          }
-
-          let currentEval = evalPlan(plan, "ds-finish-check")
-          const route = routeDeterministicProblem(options.problemText)
-          if (route && route.plan.kind === "plan") {
-            const routeOutcome = buildRouteSlicesAndPlan(route, options.workspace, rawGoal ? safeGoal : undefined)
-            const routeEval = evalPlan(routeOutcome.plan, "ds-route-check")
-            const primaryPassesAcc = passesAcc(currentEval.doc)
-            const routePassesAcc = passesAcc(routeEval.doc)
-            const needsMultiSlices = routeOutcome.slices.length > 1 && (finalSlices?.length ?? 0) < routeOutcome.slices.length
-            const routeHasInfeasible = (route.infeasibleSubquestions?.length ?? 0) > 0
-            const routeImprovesCandidate =
-              routePassesAcc &&
-              (!primaryPassesAcc || (currentEval.cert.certificateStatus !== "passed" && route.plan.actions.length >= primaryActions.length))
-            const needsEnrichment = routePassesAcc && (routeHasInfeasible || needsMultiSlices || routeImprovesCandidate)
-            if (needsEnrichment) {
-              plan = routeOutcome.plan
-              finalSlices = routeOutcome.slices.length > 0 ? routeOutcome.slices : finalSlices
-              currentEval = routeEval
-              if (plan.kind === "plan") {
-                const enrichedActions = enrichPromptSegmentsAndFaces(plan.actions, currentEval.doc, options.problemText)
-                if (enrichedActions) {
-                  const enrichedPlan: PlanEnvelope = { ...plan, actions: enrichedActions }
-                  const enrichedEval = evalPlan(enrichedPlan, "ds-route-face-check")
-                  if (enrichedEval.compiled.ok) {
-                    plan = enrichedPlan
-                    currentEval = enrichedEval
-                  }
-                }
-              }
+            if (enrichedCompiled.ok) {
+              plan = enrichedPlan
             }
-          }
-
-          const diagFailure = currentEval.compiled.ok
-            ? null
-            : currentEval.compiled.diagnostics?.map((d) => d.detail).join("; ") || "compile failed"
-          const certFailures = (currentEval.cert.failedObligations ?? []).map((f) => f.detail)
-          const missingPrims = missingAccTypes(currentEval.doc)
-          if (diagFailure || certFailures.length > 0 || missingPrims.length > 0) {
-            const pointSnapshot = certFailures.length > 0
-              ? currentEval.doc.primitives
-                  .flatMap((p) => {
-                    if (p.type === "point3" && p.label) {
-                      return [`${p.label}(${Number(p.position.x.toFixed(4))},${Number(p.position.y.toFixed(4))},${Number(p.position.z.toFixed(4))})`]
-                    }
-                    if (p.type === "point" && p.label) {
-                      return [`${p.label}(${Number(p.x.toFixed(4))},${Number(p.y.toFixed(4))})`]
-                    }
-                    return []
-                  })
-                  .slice(0, 12)
-              : []
-            const reasons = [
-              ...(diagFailure ? [diagFailure] : []),
-              ...certFailures,
-              ...(missingPrims.length > 0 ? [`missing required primitive(s): ${missingPrims.join(", ")}`] : []),
-              ...(pointSnapshot.length > 0 ? [`Current points: ${pointSnapshot.join(", ")}`] : [])
-            ]
-            const missingPolyhedronOnly = diagFailure === null && certFailures.length === 0 && missingPrims.includes("polyhedron3")
-            const repairAdvice = missingPolyhedronOnly
-              ? "Standalone construct_face/construct_segment primitives do NOT create a polyhedron3. Call construct_solid(...) (e.g. kind='perpendicular_pyramid' | 'regular_pyramid' | 'tetrahedron' | 'prism' with vertexNames/baseVertexNames/sideLength/height) to create the 3D polyhedron, then call finish_candidate."
-              : `${missingPrims.includes("polyhedron3") ? "Note: construct_solid(...) is required to create polyhedron3. " : ""}Compute exact coordinates from these points, call repair_entity(target=...) to fix the wrong object(s), verify via query_measurement, then call finish_candidate.`
-            return failRepairable(
-              name,
-              "verification_failed",
-              `${reasons.join("; ")}. ${repairAdvice}`
-            )
           }
         }
         return {
@@ -4730,55 +4647,29 @@ export function createDsActionSession(options: {
       }
 
       if (name === "request_clarification") {
-        if (options.problemText) {
-          const route = routeDeterministicProblem(options.problemText)
-          if (route && route.plan.kind === "plan") {
-            const rescued = buildRouteSlicesAndPlan(route, options.workspace, asString(input.goal) ?? undefined)
-            const ws: GeometryDocument["workspace"] =
-              rescued.plan.kind === "plan" &&
-              rescued.plan.actions.some((a) => a.actionId.startsWith("solid.") || a.actionId.startsWith("derived.") || a.actionId.startsWith("section."))
-                ? "geometry3d"
-                : options.workspace === "geometry3d"
-                  ? "conics"
-                  : options.workspace
-            const routeCompiled = compilePlan(rescued.plan, {
-              document: createEmptyDocument(ws),
-              conversationId: "ds-clarify-check",
-              documentGeneration: 0,
-              workspace: ws
-            })
-            const routeDoc = routeCompiled.ok && routeCompiled.draftDocument ? routeCompiled.draftDocument : createEmptyDocument(ws)
-            const routeAcc = deriveAcceptance(options.problemText)
-            const routePassesAcc = routeAcc.every((chk) => chk.kind !== "has_primitive" || routeDoc.primitives.some((p) => primitiveMatchesAcceptanceType(p.type, chk.type)))
-            const routeCert = certifyDrawingAgainstContract({
-              prompt: options.problemText,
-              document: routeDoc,
-              candidateHash: rescued.slices[0]?.candidateHash ?? snap.candidateHash,
-              sourceHash: rescued.slices[0]?.candidateHash ?? snap.candidateHash,
-              plan: rescued.plan
-            })
-            if (routeCompiled.ok && routePassesAcc && (routeCert.missingEntities?.length ?? 0) === 0 && (routeCert.failedObligations?.length ?? 0) === 0) {
-              return {
-                ok: true,
-                status: "accepted",
-                action: name,
-                stateChanged: true,
-                candidateHash: rescued.slices[0]?.candidateHash ?? snap.candidateHash,
-                stepIndex: snap.stepIndex + 1,
-                primitiveCount: Math.max(1, snap.primitiveCount),
-                terminated: {
-                  plan: rescued.plan,
-                  ...(rescued.slices.length > 0 ? { slices: rescued.slices } : {})
-                }
-              }
+        const reason = asString(input.reason) ?? "需要进一步明确题目条件或补充信息"
+        const rawQuestions = Array.isArray(input.questions)
+          ? input.questions.map((q) => asString(q)).filter((q): q is string => q !== null)
+          : []
+        const questions = rawQuestions.length > 0 ? rawQuestions.slice(0, 4) : [reason]
+        return {
+          ok: true,
+          status: "accepted",
+          action: name,
+          stateChanged: false,
+          candidateHash: snap.candidateHash,
+          stepIndex: snap.stepIndex,
+          primitiveCount: snap.primitiveCount,
+          terminated: {
+            plan: {
+              schemaVersion: PLAN_SCHEMA_VERSION,
+              kind: "clarification",
+              goal: reason.slice(0, 200),
+              factIds: [],
+              questions
             }
           }
         }
-        return failRepairable(
-          name,
-          "clarification_rejected_for_text_problem",
-          "Do NOT call request_clarification on text math problems. Finish constructing every missing point/line/curve/sphere required by ALL subquestions in the prompt, then call finish_candidate."
-        )
       }
 
       if (name === "construct_solid" || name === "construct_equal_edge_triangular_prism") {

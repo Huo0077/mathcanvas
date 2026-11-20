@@ -144,6 +144,8 @@ export interface AgentRuntimeDependencies {
   conversation?: () => ConversationContextSource
   /** 界面当前选中的引用。由宿主按需提供，供协调器判断“继续操作选中对象” vs “新建独立图形”。 */
   selectedRefs?: () => SelectedRef[]
+  /** 是否在提出新题作图前自动清理旧图元（默认关闭，仅当用户在设置里明确开启时传入 true）。 */
+  autoClearExistingScene?: boolean
 }
 
 /**
@@ -449,6 +451,7 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
     requestedSkillIds,
     availableActions,
     ...(dependencies.selectedRefs === undefined ? {} : { selectedRefs: dependencies.selectedRefs }),
+    ...(dependencies.autoClearExistingScene === undefined ? {} : { autoClearExistingScene: dependencies.autoClearExistingScene }),
     consent: undefined // 同意凭据由宿主在用户确认后创建，协调器不构造它。
   })
 

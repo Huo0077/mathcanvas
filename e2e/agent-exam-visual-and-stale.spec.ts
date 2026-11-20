@@ -217,7 +217,10 @@ test("changing the statement draws a different figure, and the previous reading 
   await expect(page.getByText("已提交").last()).toBeVisible()
   await page.getByRole("button", { name: "返回画布" }).click()
 
-  await expect.poll(async () => (await canvasEvidence(page)).hash).not.toBe(first.hash)
+  await expect.poll(async () => {
+    const ev = await canvasEvidence(page)
+    return ev.status !== "pending" && Boolean(ev.hash) && ev.hash !== first.hash
+  }).toBe(true)
   const second = await canvasEvidence(page)
   expect(second.hash, "改题之后画布必须换成另一版内容").not.toBe(first.hash)
   // 画布自己报的哈希 == 测试自己算的这一份（改题后的那一份）。

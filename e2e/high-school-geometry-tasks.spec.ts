@@ -331,7 +331,7 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
   await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
   await (await commandButton(page, "由选中点创建空间平面")).click()
-  await expect(algebra.getByText("空间平面 1").first()).toBeVisible()
+  await expect(algebra.getByText("平面 ABC").first()).toBeVisible()
 
   const createLine = async (first: string, second: string) => {
     await algebra.getByText(first, { exact: true }).click()
@@ -392,7 +392,7 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   }
 
   // 顺序一：点 → 平面
-  await measureDistance("F", "空间平面 1")
+  await measureDistance("F", "平面 ABC")
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-measurement-labels", "1")
   await expect(distanceLabel).toHaveText(/距离：3\.000u/)
   // 这条读数是产品自己算出来的：它的来源与状态都在对象列表里可查
@@ -403,7 +403,7 @@ test("空间直线与平面的关系：线在面内与平行不共面由平面�
   await expect(distanceLabel).toHaveCount(0)
 
   // 顺序二：平面 → 点（修复前这里只会得到一条 invalid 读数、画布上什么都没有）
-  await measureDistance("空间平面 1", "F")
+  await measureDistance("平面 ABC", "F")
   await expect(page.locator("[data-3d-scene]")).toHaveAttribute("data-measurement-labels", "1")
   await expect(distanceLabel).toHaveText(/距离：3\.000u/)
   await expect(algebra.locator(".measurement-row .measurement-status")).toHaveAttribute("data-status", "valid")

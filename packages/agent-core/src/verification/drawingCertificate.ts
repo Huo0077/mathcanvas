@@ -231,14 +231,14 @@ function resolveCertificatePromptAndScope(
     if ((effectiveScopeId === undefined || effectiveScopeId === "shared") && route.selectedScopeId !== undefined) {
       effectiveScopeId = route.selectedScopeId
     }
-  }
-  const parserPrompt = normalizeGeometryPrompt(effectivePrompt)
-  if (effectiveScopeId === undefined || effectiveScopeId === "shared") {
-    const split = splitNumberedProblem(parserPrompt)
-    if (split && split.parts.length > 1) {
-      effectiveScopeId = subquestionScopeId(split.parts[split.parts.length - 1]!.number)
+    if (effectiveScopeId === undefined || effectiveScopeId === "shared") {
+      const split = splitNumberedProblem(normalizeGeometryPrompt(effectivePrompt))
+      if (split && split.parts.length > 1) {
+        effectiveScopeId = subquestionScopeId(split.parts[split.parts.length - 1]!.number)
+      }
     }
   }
+  const parserPrompt = normalizeGeometryPrompt(effectivePrompt)
   return { parserPrompt, selectedScopeId: effectiveScopeId }
 }
 
@@ -388,13 +388,10 @@ export function certifyDrawingAgainstContract(input: {
   const unresolvedSource: string[] = []
   const failedObligations: FailedObligationDetail[] = []
 
-  const hasValidFiniteFigure = input.document.primitives.length > 0 && !nonFiniteGeometry && missingEntityIds.length === 0
-  const hasNoFailedCheck = !report.checks.some((c) => c.status === "failed")
-
   report.checks.forEach((check, idx) => {
     const id = `obl-${idx}`
     requiredIds.push(id)
-    if (check.status === "passed" || (check.status === "unverified" && hasValidFiniteFigure && hasNoFailedCheck)) {
+    if (check.status === "passed") {
       checkedIds.push(id)
       evidence.push({ obligationId: id, status: "passed", candidateHash: input.candidateHash, detail: check.reason })
     } else if (check.status === "failed") {
@@ -503,18 +500,6 @@ export function certifyDrawingAgainstContract(input: {
       status: present && !nonFiniteGeometry ? "passed" : "failed",
       candidateHash: input.candidateHash,
       detail: present ? `必需实体 ${entityLabel} 已物化` : `必需实体 ${entityLabel} 缺失`
-    })
-  }
-
-  if (requiredIds.length === 0 && hasValidFiniteFigure) {
-    const id = "geometry:non_empty_finite"
-    requiredIds.push(id)
-    checkedIds.push(id)
-    evidence.push({
-      obligationId: id,
-      status: "passed",
-      candidateHash: input.candidateHash,
-      detail: `已物化 ${input.document.primitives.length} 个有限几何图元`
     })
   }
 

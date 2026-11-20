@@ -11,7 +11,10 @@ import { useSceneStore, withDocumentLayout } from "./store"
 
 /** Algebra View rows are the closest user-facing handle on a document object; scope by row label to stay unambiguous. */
 function algebraRow(label: string): HTMLElement {
-  const row = Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).find((candidate) => candidate.querySelector(".object-name")?.textContent === label)
+  const row = Array.from(globalThis.document.querySelectorAll(".algebra-panel .object-row")).find((candidate) => {
+    const text = candidate.querySelector(".object-name")?.textContent
+    return text === label || (text?.startsWith(`${label} · `) ?? false)
+  })
   if (!row) throw new Error(`missing algebra row ${label}`)
   return row as HTMLElement
 }
@@ -59,8 +62,8 @@ describe("MathCanvas workbench", () => {
   it("shows a focused empty Inspector before an object is selected", () => {
     render(<App />)
 
-    expect(screen.getByText("未选择任何图元")).toBeTruthy()
-    expect(screen.getByText("在画布中点击点、直线或椭圆即可配置几何参数与外观参数")).toBeTruthy()
+    expect(screen.getByText("未选择图元")).toBeTruthy()
+    expect(screen.getByText(/点击画布中的点、函数、圆锥曲线或切线/)).toBeTruthy()
     expect(screen.queryByRole("slider", { name: "直线斜率" })).toBeNull()
     expect(screen.queryByRole("button", { name: "播放动画" })).toBeNull()
   })
@@ -1959,7 +1962,7 @@ describe("MathCanvas workbench", () => {
     useSceneStore.getState().replace(current)
     render(<App />)
     fireEvent.click(algebraRow("A"))
-    expect(screen.queryByText("未选择任何图元")).toBeNull()
+    expect(screen.queryByText("未选择图元")).toBeNull()
 
     const opened = createEmptyDocument("conics")
     opened.metadata = { ...opened.metadata, name: "opened" }
@@ -1982,7 +1985,7 @@ describe("MathCanvas workbench", () => {
       fireEvent.change(input)
 
       await waitFor(() => expect(useSceneStore.getState().document.metadata.name).toBe("opened"))
-      expect(screen.getByText("未选择任何图元")).toBeTruthy()
+      expect(screen.getByText("未选择图元")).toBeTruthy()
     } finally {
       if (originalText) proto.text = originalText
       else delete proto.text

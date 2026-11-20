@@ -100,6 +100,7 @@ test.beforeEach(async ({ page }) => {
 test("verifies live rendered evidence & hash alignment across planar, conic, function, and 3D solid families", async ({ page }) => {
   // 1. Conic family
   await runAndCommit(page, CONIC, "平面几何")
+  await expect.poll(async () => (await readCanvasEvidence(page)).status).not.toBe("pending")
   const conicEv = await readCanvasEvidence(page)
   const conicDoc = await readCommittedDoc(page, "conics")
   expect(conicEv.status).toBe("passed")

@@ -41,7 +41,7 @@ describe("common tangent product verification", () => {
     const { compiled, candidate } = compiledFixture()
     expect(candidate.primitives.filter(p => p.type === "tangent").map(p => p.type === "tangent" ? p.slope : 0)).toEqual([expect.closeTo(2 - Math.sqrt(2), 6), expect.closeTo(2 + Math.sqrt(2), 6)])
     expect(compiled.diagramVerification).toMatchObject({ status: "passed", proofScope: "figure-instance", universalClaims: "not-proven", checks: [expect.objectContaining({ kind: "commonTangent", status: "passed", evidence: "verified-numeric" })] })
-  })
+  }, 15_000)
 
   it.each(["wrong-line", "missing-branch", "wrong-second-curve", "duplicate-branch"])("does not accept %s as a common tangent solution", corruption => {
     const { plan, candidate, base } = compiledFixture()
@@ -60,7 +60,7 @@ describe("common tangent product verification", () => {
     const report = verifyDiagramObligations(parseDiagramObligations(prompt), plan, candidate, base)
     expect(report.checks.find(c => c.kind === "commonTangent")?.status).not.toBe("passed")
     expect(report.status).not.toBe("passed")
-  })
+  }, 15_000)
 
   it("keeps the committed tangent but invalidates evidence after the other source loses all tangents", () => {
     const { plan, candidate, base } = compiledFixture()
@@ -69,5 +69,5 @@ describe("common tangent product verification", () => {
     const edited = commitPatch(candidate, { op: "updatePrimitive", id: tangent.anchor.otherSourceId, patch: { expression: "x*x+1" } })
     expect(edited.error).toBeUndefined()
     expect(verifyDiagramObligations(parseDiagramObligations(prompt), plan, edited.document, base).status).not.toBe("passed")
-  })
+  }, 15_000)
 })

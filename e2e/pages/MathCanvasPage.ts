@@ -37,10 +37,8 @@ export class MathCanvasPage {
 
   async openExperimentalSettings(): Promise<void> {
     await this.openModelSettings()
-    await this.page.getByRole("group", { name: "设置分类" }).getByRole("button", { name: "高级" }).click()
-    const summary = this.page.locator("details.settings-advanced summary", { hasText: "实验性功能" })
-    const isOpen = await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement | null)?.open ?? false)
-    if (!isOpen) await summary.click()
+    await this.page.getByRole("group", { name: "设置分类" }).getByRole("button", { name: "偏好设置" }).click()
+    await this.page.getByRole("region", { name: "实验性功能" }).waitFor({ state: "visible" })
   }
 
   async switchWorkspace(name: CanvasWorkspaceName): Promise<void> {

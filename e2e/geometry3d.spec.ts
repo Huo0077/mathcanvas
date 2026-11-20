@@ -182,7 +182,7 @@ test("deletes a solid together with the topology it generated", async ({ page })
   await expect(algebra.getByText("立方体 1 拓扑")).toBeVisible()
   await expect(algebra.locator(".object-count")).toHaveText("28")
   await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
-  await expect(algebra.getByText("棱 12", { exact: true })).toBeVisible()
+  await expect(algebra.locator(".object-name", { hasText: /^棱 12( ·|$)/ })).toBeVisible()
   await expect(algebra.getByText("A", { exact: true })).toBeVisible()
 })
 
@@ -224,10 +224,10 @@ test("builds a visible plane from three selected points", async ({ page }) => {
   await planeCommand.click()
 
   await expect(page.getByRole("alert")).toHaveCount(0)
-  await expect(algebra.getByText("空间平面 1")).toBeVisible()
+  await expect(algebra.getByText("平面 ABC")).toBeVisible()
   // The plane used to exist only in the document; now the scene actually draws it.
   await expect(scene).toHaveAttribute("data-plane-count", "1")
-  await algebra.getByText("空间平面 1").first().click()
+  await algebra.getByText("平面 ABC").first().click()
   await page.getByRole("region", { name: "属性检查器" }).getByRole("button", { name: "外观样式" }).click()
   await expect(page.getByLabel("填充颜色")).toBeEnabled()
 })
@@ -452,7 +452,7 @@ test("resizes a plane patch by hand from the property inspector", async ({ page 
   await algebra.getByText("B", { exact: true }).click({ modifiers: ["Shift"] })
   await algebra.getByText("C", { exact: true }).click({ modifiers: ["Shift"] })
   await (await commandButton(page, "由选中点创建空间平面")).click()
-  await algebra.getByText("空间平面 1").first().click()
+  await algebra.getByText("平面 ABC").first().click()
 
   const scene = page.locator("[data-3d-scene]")
   const width = async () => Number((await scene.getAttribute("data-content-bounds"))!.split("size ")[1].split(",")[0])
@@ -557,8 +557,8 @@ test("explains a dihedral angle with its common edge and canvas markers", async 
 
   const algebra = page.locator(".algebra-panel")
   await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
-  await algebra.getByText("面 1", { exact: true }).click()
-  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+  await algebra.locator(".object-name", { hasText: /^面 1( ·|$)/ }).click()
+  await algebra.locator(".object-name", { hasText: /^面 3( ·|$)/ }).click({ modifiers: ["Shift"] })
 
   await page.getByRole("button", { name: "二面角内角", exact: true }).click()
 
@@ -588,8 +588,8 @@ test("explains the normal and sample-angle controls in the status bar", async ({
 
   const algebra = page.locator(".algebra-panel")
   await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
-  await algebra.getByText("面 1", { exact: true }).click()
-  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+  await algebra.locator(".object-name", { hasText: /^面 1( ·|$)/ }).click()
+  await algebra.locator(".object-name", { hasText: /^面 3( ·|$)/ }).click({ modifiers: ["Shift"] })
   await page.getByRole("button", { name: "二面角内角", exact: true }).click()
   await expect(algebra.getByText("二面角内角", { exact: true })).toBeVisible()
 
@@ -692,8 +692,8 @@ test("shows a small bottom-left guide only after a feature button is clicked", a
   await expect(hint).toHaveCount(0)
 
   await algebra.getByRole("button", { name: "展开 立方体 1 拓扑 的子对象" }).click()
-  await algebra.getByText("面 1", { exact: true }).click()
-  await algebra.getByText("面 3", { exact: true }).click({ modifiers: ["Shift"] })
+  await algebra.locator(".object-name", { hasText: /^面 1( ·|$)/ }).click()
+  await algebra.locator(".object-name", { hasText: /^面 3( ·|$)/ }).click({ modifiers: ["Shift"] })
   // 只选对象不产生新的指引。
   await expect(hint).toHaveCount(0)
 

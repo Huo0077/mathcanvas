@@ -105,9 +105,9 @@ export function SettingsWorkspace({ unavailableReason, onBack }: { unavailableRe
           </label>
         </section>
 
-        <section className="settings-preferences" aria-label="实验性功能">
+        <div className="settings-preferences">
           <ExperimentalFeatures />
-        </section>
+        </div>
       </div>
     </div>
   </div>

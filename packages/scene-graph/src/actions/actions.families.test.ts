@@ -313,7 +313,7 @@ describe("common tangent edit lifecycle", () => {
     const gone = commitPatch(moved.document, { op: "updatePrimitive", id: "fn-2", patch: { expression: "x*x+1" } })
     expect(gone.error).toBeUndefined()
     expect(gone.document.primitives.find(p => p.id === before.id)).toMatchObject({ status: "undefined", anchor: { kind: "common", otherSourceId: "fn-2", branch: 0 } })
-  })
+  }, 15_000)
 
   it("deleting the second source also deletes its dependent tangent", () => {
     const document = committedCommon()

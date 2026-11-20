@@ -866,12 +866,12 @@ export function App() {
       ? "2D 绘图：在视口中创建对象，新对象写入当前图层。"
       : "工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={displayDocument.primitives} measurements={displayDocument.measurements} parameters={displayDocument.parameters} workspace={displayDocument.workspace} draftPreview={activeGhostDraft !== null} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onSelectMany={setSelectedIds} onClearSelection={() => setSelectedIds([])} onDeleteSelected={activeGhostDraft ? undefined : deleteSelected} onToggle={(id, visible) => { if (!activeGhostDraft) apply({ op: "toggleVisibility", id, visible }) }} onSetParameter={activeGhostDraft ? undefined : (id, patch) => {
+  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} parameters={document.parameters} workspace={document.workspace} draftPreview={false} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onSelectMany={setSelectedIds} onClearSelection={() => setSelectedIds([])} onDeleteSelected={deleteSelected} onToggle={(id, visible) => { apply({ op: "toggleVisibility", id, visible }) }} onSetParameter={(id, patch) => {
     // 一次提交值 + 元数据。未给出的字段沿用现值（清空输入框暂时等于不改，见文档的已知限制）。
     const current = document.parameters[id]
     if (!current) return
     apply({ op: "setParameter", id, value: patch.value ?? current.value, min: patch.min ?? current.min, max: patch.max ?? current.max, step: patch.step ?? current.step, label: patch.label ?? current.label, ownerId: current.ownerId })
-  }} onDeleteParameter={activeGhostDraft ? undefined : (id) => apply({ op: "deleteParameter", id })} onAddParameter={activeGhostDraft ? undefined : addParameter} />
+  }} onDeleteParameter={(id) => apply({ op: "deleteParameter", id })} onAddParameter={addParameter} />
 
   /**
    * 空白画布上**不再有任何**说明文字或快捷按钮（用户口径：中间那块文字与四个按钮都去掉）。

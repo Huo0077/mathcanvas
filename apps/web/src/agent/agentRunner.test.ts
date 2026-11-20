@@ -115,6 +115,7 @@ describe("answer delivery independently of document changes", () => {
   ])("builds and commits the scoped pyramid from a transcribed problem", async (problem) => {
     const document = createEmptyDocument("geometry3d")
     document.primitives.push({ id: "existing-a", type: "point3", label: "A", position: { x: 5, y: 5, z: 5 } })
+    localStorage.setItem("mathcanvas.agent.autoClearOld", "false")
     useSceneStore.setState({ document, workspaceDocuments: { geometry3d: document } })
     const resolveProvider = vi.fn(async () => { throw new Error("this problem should be planned locally") })
     const runner = createAgentRunner({ modelPlanner: { resolveProvider } })

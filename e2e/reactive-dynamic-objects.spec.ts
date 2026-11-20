@@ -188,10 +188,10 @@ test("refreshes a solid section when one of its vertices is moved", async ({ pag
   await expect.poll(async () => (await sectionPoints(page)).length).toBeGreaterThanOrEqual(3)
   const before = await sectionPoints(page)
 
-  // 选中顶点 D：对象树初始是折叠的（面板里第一个按钮就是展开箭头），展开后点 D 那一行，
+  // 选中顶点 D：对象树初始是折叠的，先点“展开 四面体 的子对象”按钮，展开后点 D 那一行，
   // 再用数值编辑把它沿 Z 挪走 —— 与拖动等价的一条"移动点"路径，而且完全走 DOM，不受 3D 拾取影响。
   const algebra = page.locator(".algebra-panel")
-  await algebra.locator("button").first().click()
+  await algebra.getByRole("button", { name: "展开 四面体 的子对象" }).click()
   const vertexRow = algebra.locator(".object-row").filter({ hasText: /^D\b/ }).first()
   await expect(vertexRow).toBeVisible()
   await vertexRow.click()

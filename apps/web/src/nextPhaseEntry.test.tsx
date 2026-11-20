@@ -29,8 +29,7 @@ describe("N3 产品入口：设置 → 实验性功能 → 约束拖动", () => 
     render(<App />)
 
     fireEvent.click(screen.getByRole("button", { name: "模型服务" }))
-    fireEvent.click(screen.getByRole("button", { name: "高级" }))
-    fireEvent.click(screen.getByText("实验性功能", { selector: "summary" }))
+    fireEvent.click(screen.getByRole("button", { name: "偏好设置" }))
 
     expect(document.querySelector('.app-module[data-module="settings"]')).toBeTruthy()
     expect(screen.getByRole("switch", { name: /约束拖动/ })).toBeTruthy()
@@ -39,8 +38,7 @@ describe("N3 产品入口：设置 → 实验性功能 → 约束拖动", () => 
   it("在这个开关上打开之后，生产接线读到的 `constrainedDrag` 就是开的", () => {
     render(<App />)
     fireEvent.click(screen.getByRole("button", { name: "模型服务" }))
-    fireEvent.click(screen.getByRole("button", { name: "高级" }))
-    fireEvent.click(screen.getByText("实验性功能", { selector: "summary" }))
+    fireEvent.click(screen.getByRole("button", { name: "偏好设置" }))
 
     fireEvent.click(screen.getByRole("switch", { name: /约束拖动/ }))
 

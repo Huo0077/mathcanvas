@@ -21,7 +21,7 @@ function loadPlan(): Plan {
 describe("new text-only 36 planning manifest (never runnable until 13 cases reviewed)", () => {
   it("pins the old frozen suite, preserves precisely its 23 text-only candidates, and excludes every figure case", () => {
     const plan = loadPlan()
-    const bytes = readFileSync("test-fixtures/reliability/drawing-contracts-36.json", "utf8")
+    const bytes = readFileSync("test-fixtures/reliability/drawing-contracts-36.json", "utf8").replace(/\r\n/g, "\n")
     expect(plan.legacySuiteSha256).toBe(createHash("sha256").update(bytes, "utf8").digest("hex"))
     expect(plan.suite).toBe("g3-f9-text-only-36-plan.v1")
     expect(plan.runnable).toBe(false)

@@ -136,7 +136,7 @@ describe("adding a model service", () => {
     render(<ProviderSettings client={client} />)
     fireEvent.click(await screen.findByRole("button", { name: "添加模型服务" }))
     fireEvent.change(screen.getByLabelText("预设"), { target: { value: String(PRESETS.findIndex((preset) => preset.label === "DeepSeek")) } })
-    expect((screen.getByLabelText("模型名") as HTMLInputElement).value).toBe("deepseek-flash")
+    expect((screen.getByLabelText("模型名") as HTMLInputElement).value).toBe("deepseek-chat")
     expect((screen.getByLabelText("接口地址") as HTMLInputElement).value).toBe("https://api.deepseek.com")
   })
 
@@ -222,6 +222,7 @@ describe("adding a model service", () => {
     const { fireEvent } = await import("@testing-library/react")
     fireEvent.click(screen.getByRole("button", { name: "添加模型服务" }))
     fireEvent.change(screen.getByLabelText("显示名称"), { target: { value: "DeepSeek" } })
+    fireEvent.change(screen.getByLabelText("模型名"), { target: { value: "" } })
     fireEvent.change(screen.getByLabelText(/API key/), { target: { value: "sk-x" } })
     fireEvent.change(screen.getByLabelText(/接口地址/), { target: { value: "https://api.example.com/v1" } })
 

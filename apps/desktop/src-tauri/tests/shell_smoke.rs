@@ -164,6 +164,7 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "active_provider_profile",
         "provider_run",
         "provider_cancel",
+        "fetch_provider_models",
         "read_document_head",
         // **有意加的一个**（2026-09-22 / 外部审查 X1）：按 `document_id` 精确探测落空时的兜底。
         // 它只读"这个项目里最近更新的那一份 head"，参数只有一个 `project_id` ——

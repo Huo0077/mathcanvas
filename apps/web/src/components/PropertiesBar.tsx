@@ -870,6 +870,7 @@ export function PropertiesBar(props: PropertiesBarProps) {
           <span className="metric-span-full">测量结果<strong>{measurement.value === undefined ? "—" : `${measurement.value.toFixed(3)} ${measurement.unit ?? ""}`}{form === null ? null : <>{` · `}<span className="metric-form">{form}</span></>}</strong></span>
           {trig && <span>角度换算<strong>{trig.degreesText}</strong></span>}
           <span>精度来源<strong>{measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</strong></span>
+          <span>状态<strong>{measurement.status}</strong></span>
         </div>
         {trig && <div className="metric-trig-list" aria-label="三角函数值">
           <div className="metric-trig-row"><span>正弦 sin</span><strong>{trig.sin.display}</strong></div>

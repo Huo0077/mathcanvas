@@ -274,7 +274,12 @@ describe("construct_solid model-visible contract", () => {
       regular_pyramid: { sideLength: 2, height: 3 },
       tetrahedron: { edgeLength: 2 },
       prism: { sideLength: 2, height: 3 },
-      perpendicular_pyramid: { sideLength: 2, height: 3 }
+      perpendicular_pyramid: { sideLength: 2, height: 3 },
+      pyramidal_frustum: { bottomSide: 4, topSide: 2, height: 3 },
+      cylinder: { radius: 2, height: 3 },
+      cone: { radius: 2, height: 3 },
+      round_frustum: { radiusBottom: 3, radiusTop: 1, height: 3 },
+      sphere: { radius: 2 }
     }
     for (const [family, names] of Object.entries(SOLID_KIND_FAMILIES)) {
       for (const kind of names) {
@@ -598,7 +603,7 @@ describe("real DS planar tool schema fidelity", () => {
     expect(tools.get("query_measurement")?.description).toMatch(/metric.*distance.*targets/i)
     expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
     expect(tools.get("query_measurement")?.parameters).toMatchObject({ required: ["metric"],
-      properties: { metric: { enum: ["distance", "position", "coordinates"] }, targets: { type: "array" } } })
+      properties: { metric: { enum: ["distance", "position", "coordinates", "area"] }, targets: { type: "array" } } })
   })
 })
 

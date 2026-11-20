@@ -712,6 +712,26 @@ export function tryBuildPlanarDrawingPlan(prompt: string): PlanarDrawingPlanResu
     if (tangent) linesToCreate.push({ label: "切线", a: tangent.line.a, b: tangent.line.b })
   }
 
+  // Hyperbola asymptotes ("渐近线")
+  if (conic?.type === "hyperbola" && /渐近线/.test(normalized) && !linesToCreate.some((line) => line.label.startsWith("渐近线"))) {
+    const theta = conic.rotation ?? 0
+    const cos = Math.cos(theta)
+    const sin = Math.sin(theta)
+    const addAsymptote = (sx: 1 | -1, sy: 1 | -1, label: string) => {
+      const vx = sx * conic.radiusX
+      const vy = sy * conic.radiusY
+      const dx = vx * cos - vy * sin
+      const dy = vx * sin + vy * cos
+      linesToCreate.push({
+        label,
+        a: { x: conic.center.x + dx * 1.2, y: conic.center.y + dy * 1.2 },
+        b: { x: conic.center.x + dx * 2.2, y: conic.center.y + dy * 2.2 }
+      })
+    }
+    addAsymptote(-1, -1, "l₁")
+    addAsymptote(1, -1, "l₂")
+  }
+
   // JT-P06 subquestion (2): P on ellipse with PF₁⊥PF₂
   if (conic?.type === "ellipse" && /P\s*为\s*[A-Z]\s*上一点[^。]*PF₁\s*⊥\s*PF₂/.test(normalized)) {
     const a = Math.max(conic.radiusX, conic.radiusY)

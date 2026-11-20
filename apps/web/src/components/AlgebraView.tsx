@@ -191,7 +191,7 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
 
   const renderSolid = (solid: Polyhedron3Primitive): ReactNode => {
     const label = solidGroupLabel(solid, byId)
-    const defaultExpanded = solid.construction?.kind !== "template"
+    const defaultExpanded = false
     const expanded = Boolean(query) || isNodeExpanded(solid.id, defaultExpanded)
     return <div className="object-tree" key={solid.id}>
       <ObjectRow
@@ -234,14 +234,11 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
   }
 
   const standaloneFaceIds = new Set(standaloneFaces.map((face) => face.id))
-  const visibleSolids = workspace === "geometry3d"
-    ? topLevel.filter((primitive): primitive is Polyhedron3Primitive => primitive.type === "polyhedron3")
-    : []
   const visibleStandaloneFaces = workspace === "geometry3d"
     ? topLevel.filter((primitive): primitive is Face3Primitive => primitive.type === "face3" && standaloneFaceIds.has(primitive.id))
     : []
-  const otherTopLevel = workspace === "geometry3d"
-    ? topLevel.filter((primitive) => primitive.type !== "polyhedron3" && !standaloneFaceIds.has(primitive.id))
+  const mainTopLevel = workspace === "geometry3d"
+    ? topLevel.filter((primitive) => !standaloneFaceIds.has(primitive.id))
     : topLevel
 
   const allTopSelected = topLevel.length > 0 && topLevel.every((primitive) => selectedIds.includes(primitive.id))
@@ -261,14 +258,13 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
     else selectedIds.forEach((id) => onSelect(id, true))
   }}>清空</button>{onDeleteSelected && <button type="button" className="algebra-mini-btn is-danger" disabled={selectedIds.length === 0} onClick={onDeleteSelected}>删除所选</button>}</div></div>}<div className="object-list">
     {workspace === "geometry3d" ? <>
-      {visibleSolids.map((solid) => renderSolid(solid))}
+      {mainTopLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : renderRow(primitive))}
       {visibleStandaloneFaces.length > 0 && (
         <div className="object-group object-group-standalone-faces" data-face-group="true">
           <div className="object-group-label">{`面（构造 / 辅助 · ${visibleStandaloneFaces.length}）`}</div>
           {visibleStandaloneFaces.map((face) => renderFaceTree(face))}
         </div>
       )}
-      {otherTopLevel.map((primitive) => renderRow(primitive))}
     </> : topLevel.map((primitive) => primitive.type === "polyhedron3" ? renderSolid(primitive) : primitive.type === "face3" ? renderFaceTree(primitive) : renderRow(primitive))}
     {measurements.length > 0 && <div className="object-group"><div className="object-group-label">教学测量</div>{measurements.map((measurement) => {
       const valText = measurement.value !== undefined && Number.isFinite(measurement.value)

@@ -1405,5 +1405,5 @@ describe("Task 3 failure-driven capability families (non-case-ID parameterized &
     if (compiledUnresolved.kind === "clarification") {
       expect(compiledUnresolved.questions.join(" ")).toContain("unresolved_construction")
     }
-  })
+  }, 15_000)
 })

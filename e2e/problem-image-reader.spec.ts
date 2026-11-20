@@ -119,6 +119,7 @@ test("replays the original image handoff and commits one verified prism draft", 
   await page.addInitScript((draft) => {
     localStorage.setItem("mathcanvas:active-workspace", "geometry3d")
     localStorage.setItem("mathcanvas:draft:geometry3d", draft)
+    localStorage.setItem("mathcanvas.agent.autoClearOld", "false")
   }, encodeMgeo(document))
   await page.goto("/")
   await page.getByRole("button", { name: "Agent 工作区" }).click()
