@@ -33,6 +33,8 @@ pub mod secrets;
 pub mod proof;
 /// IPC 命令的分组（按"它碰的是哪一份托管状态"分文件）：代理、密钥，其余仍在根模块。
 pub mod commands;
+/// 启动诊断与崩溃日志（防止 Windows GUI 静默闪退）。
+pub mod startup_diagnostics;
 
 use repository::projects::ProjectRepository;
 use repository::provider_profiles::ProviderProfileStore;
@@ -68,12 +70,13 @@ pub struct BlobState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    startup_diagnostics::install_panic_hook();
     // **受闸的评测跑**（Task 20，用户选 B）：`--exam-run <报告路径>`。
     //
     // 参数在**起窗口之前**读一次，之后只读不改（`ExamRunState` 里没有写入口）——
     // 前端能问"要不要跑、报告写到哪"，但**决定不了路径**，也就拿不到"写任意文件"的能力。
     let exam_run = commands::exam::ExamRunState::from_args(std::env::args().skip(1));
-    tauri::Builder::default()
+    let app_result = tauri::Builder::default()
         .setup(move |app| {
             app.manage(exam_run);
             if let (Some(window), Some(icon)) = (
@@ -83,11 +86,11 @@ pub fn run() {
                 let _ = window.set_icon(icon);
             }
             if cfg!(debug_assertions) {
-                app.handle().plugin(
+                let _ = app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
                         .build(),
-                )?;
+                );
             }
             // **只初始化一次**：Windows 上这一步会去碰系统凭据管理器。
             app.manage(commands::secrets::SecretStoreState(secrets::create_store()));
@@ -187,6 +190,9 @@ pub fn run() {
             commands::exam::exam_run_target,
             commands::exam::exam_run_finish
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+    if let Err(error) = app_result {
+        startup_diagnostics::report_fatal_startup_error(&error.to_string());
+        std::process::exit(1);
+    }
 }

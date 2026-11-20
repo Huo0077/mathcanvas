@@ -394,14 +394,32 @@ export function useThreeSceneEffect(deps: ThreeSceneEffectDeps) {
     // 场景重建后把进行中的拖动偏移补画回去，避免拖动中途回弹（见 resumeDragVisualRef）。
     resumeDragVisualRef.current()
     const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      if (container.clientWidth <= 0 || container.clientHeight <= 0) return
       const next = viewportSize()
-    viewport.height = next.height
+      viewport.height = next.height
       camera.aspect = next.width / next.height
       camera.updateProjectionMatrix()
       renderer.setSize(next.width, next.height, false)
       render()
     })
     resizeObserver?.observe(container)
+
+    const handleWebglContextLost = (event: Event) => {
+      event.preventDefault()
+      cancelFitAnimation()
+      setWebglAvailable(false)
+    }
+    const handleWebglContextRestored = () => {
+      setWebglAvailable(true)
+      try {
+        syncContent()
+        render()
+      } catch (error) {
+        console.error("[MathCanvas] WebGL context restore sync failed:", error)
+      }
+    }
+    renderer.domElement.addEventListener("webglcontextlost", handleWebglContextLost)
+    renderer.domElement.addEventListener("webglcontextrestored", handleWebglContextRestored)
 
     /**
      * 拖动期间的画面（半径预览 / 手柄落位 / 场景重建后补画）在 `./threeSceneDragVisuals`。
@@ -575,6 +593,8 @@ cameraStateRef, panModeRef, dragModeRef, pointerStateRef, dragSessionRef, select
       renderer.domElement.removeEventListener("pointerleave", handlePointerLeaveForPreview)
       renderer.domElement.removeEventListener("wheel", handleWheel)
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu)
+      renderer.domElement.removeEventListener("webglcontextlost", handleWebglContextLost)
+      renderer.domElement.removeEventListener("webglcontextrestored", handleWebglContextRestored)
       globalThis.removeEventListener("keydown", handleKeyDown)
       resizeObserver?.disconnect()
       disposeScene(scene)

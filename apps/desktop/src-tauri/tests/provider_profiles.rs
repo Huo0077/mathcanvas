@@ -725,3 +725,20 @@ fn native_update_without_a_new_secret_preserves_the_versioned_binding() {
     assert_eq!(update.profile.credential_endpoint, committed.profile.credential_endpoint);
     assert_eq!(secrets.read("native-v1:6:openai:1").as_deref(), Some("NEW"));
 }
+
+#[test]
+fn opens_utf8_bom_and_empty_provider_files_without_panicking() {
+    let dir = TempDir::new("bom-and-empty");
+    let empty_file = dir.file("empty.json");
+    std::fs::write(&empty_file, "   \n").expect("write empty file");
+    let empty_store = ProviderProfileStore::open(&empty_file).expect("empty file recovers cleanly");
+    assert!(empty_store.list().is_empty());
+
+    let bom_file = dir.file("bom.json");
+    std::fs::write(
+        &bom_file,
+        "\u{feff}{\"schemaVersion\":1,\"profiles\":[],\"health\":{},\"activeProfileId\":null}"
+    ).expect("write bom file");
+    let bom_store = ProviderProfileStore::open(&bom_file).expect("bom file opens cleanly");
+    assert!(bom_store.list().is_empty());
+}

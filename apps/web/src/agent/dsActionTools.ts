@@ -4281,7 +4281,7 @@ export function createDsActionSession(options: {
             // 1. Edge / segment bindings
             for (const target of edgeTargets) {
               const seenKeys = new Set<string>()
-              while (true) {
+              for (let iter = 0; iter <= working.length + 2; iter++) {
                 const ptIdx = working.findIndex((a) =>
                   !seenKeys.has(a.actionKey) &&
                   (a.actionId === "solid.create_point" || a.actionId === "planar.create_point") &&
@@ -4418,7 +4418,7 @@ export function createDsActionSession(options: {
             // 2. Plane / face bindings (e.g. M 在平面 ABCD 内)
             for (const target of faceTargets) {
               const seenFaceKeys = new Set<string>()
-              while (true) {
+              for (let iter = 0; iter <= working.length + 2; iter++) {
                 const ptIdx = working.findIndex((a) =>
                   !seenFaceKeys.has(a.actionKey) &&
                   a.actionId === "solid.create_point" &&

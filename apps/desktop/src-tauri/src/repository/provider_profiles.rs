@@ -184,8 +184,12 @@ impl ProviderProfileStore {
         if !path.exists() {
             return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new(), active_profile_id: None, pending_credentials: Vec::new() } });
         }
-        let text = fs::read_to_string(&path).map_err(|error| StoreError::Io { detail: format!("cannot read {}: {error}", path.display()) })?;
-        let file: ProfilesFile = serde_json::from_str(&text).map_err(|error| StoreError::Io { detail: format!("the provider configuration is not valid JSON ({error}); fix or move {}", path.display()) })?;
+        let raw = fs::read_to_string(&path).map_err(|error| StoreError::Io { detail: format!("cannot read {}: {error}", path.display()) })?;
+        let text = raw.trim_start_matches('\u{feff}');
+        if text.trim().is_empty() {
+            return Ok(Self { path, file: ProfilesFile { schema_version: PROFILES_SCHEMA_VERSION, profiles: Vec::new(), health: HashMap::new(), active_profile_id: None, pending_credentials: Vec::new() } });
+        }
+        let file: ProfilesFile = serde_json::from_str(text).map_err(|error| StoreError::Io { detail: format!("the provider configuration is not valid JSON ({error}); fix or move {}", path.display()) })?;
         if file.schema_version != PROFILES_SCHEMA_VERSION {
             return Err(StoreError::Io { detail: format!("the provider configuration was written by a newer version (schema {}), this build understands {}", file.schema_version, PROFILES_SCHEMA_VERSION) });
         }

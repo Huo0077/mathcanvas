@@ -712,6 +712,7 @@ impl HttpTransport {
             }
             Err(last_error)
         })
+        .unwrap_or_else(|error| Err(error))
     }
 }
 
@@ -722,12 +723,12 @@ impl HttpTransport {
 /// 为什么不用 `Handle::current().block_on`：在 tokio 工作线程上会 panic
 ///（"cannot block the current thread"）。这里的契约是"调用方在**自己的线程**上调用"，
 /// 所以自己建一个运行时最直白，也不与调用方的运行时互相牵制。
-fn drive<F: std::future::Future>(future: F) -> F::Output {
+fn drive<F: std::future::Future>(future: F) -> Result<F::Output, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .expect("a current-thread runtime must build");
-    runtime.block_on(future)
+        .map_err(|error| format!("cannot initialize async runtime: {error}"))?;
+    Ok(runtime.block_on(future))
 }
 
 impl Transport for HttpTransport {
@@ -805,7 +806,9 @@ impl Transport for HttpTransport {
                 on_update(TransportUpdate::Body(bytes.to_vec()));
             }
             Ok(())
-        });
+        })
+        .map_err(|detail| ProviderError::Transport { detail })
+        .and_then(|inner| inner);
 
         // 不管成功失败都要把"结束"交给上层：它据此 flush 剩下的半帧。
         on_update(TransportUpdate::End);

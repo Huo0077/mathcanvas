@@ -132,90 +132,94 @@ export function createThreeSceneRender({ renderer, scene, camera, cameraStateRef
   }
 
   const render = () => {
-    syncPointHandleScales()
-    // 缩放会改变曲线的误差容差：档位一变就让同步重算（跨不到一档就不重建）。
-    syncCurveToleranceBucket()
-    // HTML overlays project before renderer.render() updates camera matrices. Do not rely on
-    // a visible grid to refresh the camera: the last pointer move must paint the final view.
-    camera.updateMatrixWorld()
-    applyGridPlacement()
-    const bounds = renderer.domElement.getBoundingClientRect()
-    const overlay = measurementOverlayRef.current
-    if (overlay) {
-      syncOverlay(
-        overlay,
-        measurementVisuals.map((visual) => {
-          const projected = new THREE.Vector3(visual.position.x, visual.position.y, visual.position.z).project(camera)
-          return {
-            key: visual.id,
-            text: visual.label,
-            visible: projected.z >= -1 && projected.z <= 1,
-            left: (projected.x * 0.5 + 0.5) * bounds.width,
-            top: (-projected.y * 0.5 + 0.5) * bounds.height,
-            // 选中这条测量时标签高亮：常驻之后"我选中的是哪一条"必须还看得出（`data-selected` 由 CSS 用）。
-            dataset: { measurementId: visual.id, selected: String(visual.sourceIds.some((id) => selectedIdsRef.current.includes(id))) }
+    try {
+      syncPointHandleScales()
+      // 缩放会改变曲线的误差容差：档位一变就让同步重算（跨不到一档就不重建）。
+      syncCurveToleranceBucket()
+      // HTML overlays project before renderer.render() updates camera matrices. Do not rely on
+      // a visible grid to refresh the camera: the last pointer move must paint the final view.
+      camera.updateMatrixWorld()
+      applyGridPlacement()
+      const bounds = renderer.domElement.getBoundingClientRect()
+      const overlay = measurementOverlayRef.current
+      if (overlay) {
+        syncOverlay(
+          overlay,
+          measurementVisuals.map((visual) => {
+            const projected = new THREE.Vector3(visual.position.x, visual.position.y, visual.position.z).project(camera)
+            return {
+              key: visual.id,
+              text: visual.label,
+              visible: projected.z >= -1 && projected.z <= 1,
+              left: (projected.x * 0.5 + 0.5) * bounds.width,
+              top: (-projected.y * 0.5 + 0.5) * bounds.height,
+              // 选中这条测量时标签高亮：常驻之后"我选中的是哪一条"必须还看得出（`data-selected` 由 CSS 用）。
+              dataset: { measurementId: visual.id, selected: String(visual.sourceIds.some((id) => selectedIdsRef.current.includes(id))) }
+            }
+          }),
+          () => {
+            const label = globalThis.document.createElement("div")
+            label.className = "three-measurement-label"
+            label.setAttribute("role", "status")
+            return label
           }
-        }),
-        () => {
-          const label = globalThis.document.createElement("div")
-          label.className = "three-measurement-label"
-          label.setAttribute("role", "status")
-          return label
-        }
-      )
-    }
-    const labelOverlay = pointLabelOverlayRef.current
-    if (labelOverlay) {
-      const placements = pointLabelPlacements(
-        visiblePointLabels.filter((point) => typeof point.label === "string" && point.label.length > 0),
-        (id) => objectIndex.get(id),
-        camera,
-        bounds
-      )
-      const adjusted = adjustLayoutWithoutMutatingMath(bounds, placements.filter((placement) => placement.visible).map((placement) => ({
-        id: `point:${placement.key}`,
-        kind: "label" as const,
-        x: placement.left,
-        y: placement.top,
-        ...LABEL_BOX_SIZE
-      })))
-      const adjustedByKey = new Map(adjusted.boxes.map((box) => [box.id, box]))
-      syncOverlay(
-        labelOverlay,
-        placements.map((placement) => {
-          const adjustedBox = adjustedByKey.get(`point:${placement.key}`)
-          return adjustedBox ? { ...placement, left: adjustedBox.x, top: adjustedBox.y } : placement
-        }),
-        () => {
-          const label = globalThis.document.createElement("span")
-          label.className = "three-point-label"
-          return label
-        }
-      )
-    }
-    if (sceneShell) {
-      sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
-      sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
-      // 自动取景开关的状态：e2e 与排查都靠它读，不靠肉眼。
-      sceneShell.dataset.autofit = autoFitRef.current ? "true" : "false"
-      // 视角角度的读数：旋转不改变视点中心，所以"有没有转"只能从这里看出来。
-      sceneShell.dataset.cameraAzimuth = cameraStateRef.current.azimuth.toFixed(2)
-      sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
-      const renderedDocument = documentRef?.current
-      sceneShell.dataset.renderObjectsReady = renderedDocument ? "true" : "false"
-      if (renderedDocument) {
-        const objects = projectObjectLayoutBoxes(renderedDocument, objectIndex, camera, bounds)
-        sceneShell.dataset.renderObjectBoxes = JSON.stringify(objects)
-        sceneShell.dataset.cameraHash = canonicalContentHash({
-          matrixWorld: camera.matrixWorld.elements,
-          viewport: { width: bounds.width, height: bounds.height }
-        })
+        )
       }
+      const labelOverlay = pointLabelOverlayRef.current
+      if (labelOverlay) {
+        const placements = pointLabelPlacements(
+          visiblePointLabels.filter((point) => typeof point.label === "string" && point.label.length > 0),
+          (id) => objectIndex.get(id),
+          camera,
+          bounds
+        )
+        const adjusted = adjustLayoutWithoutMutatingMath(bounds, placements.filter((placement) => placement.visible).map((placement) => ({
+          id: `point:${placement.key}`,
+          kind: "label" as const,
+          x: placement.left,
+          y: placement.top,
+          ...LABEL_BOX_SIZE
+        })))
+        const adjustedByKey = new Map(adjusted.boxes.map((box) => [box.id, box]))
+        syncOverlay(
+          labelOverlay,
+          placements.map((placement) => {
+            const adjustedBox = adjustedByKey.get(`point:${placement.key}`)
+            return adjustedBox ? { ...placement, left: adjustedBox.x, top: adjustedBox.y } : placement
+          }),
+          () => {
+            const label = globalThis.document.createElement("span")
+            label.className = "three-point-label"
+            return label
+          }
+        )
+      }
+      if (sceneShell) {
+        sceneShell.dataset.cameraDistance = cameraStateRef.current.distance.toFixed(2)
+        sceneShell.dataset.cameraTarget = `${cameraStateRef.current.target.x.toFixed(2)},${cameraStateRef.current.target.y.toFixed(2)},${cameraStateRef.current.target.z.toFixed(2)}`
+        // 自动取景开关的状态：e2e 与排查都靠它读，不靠肉眼。
+        sceneShell.dataset.autofit = autoFitRef.current ? "true" : "false"
+        // 视角角度的读数：旋转不改变视点中心，所以"有没有转"只能从这里看出来。
+        sceneShell.dataset.cameraAzimuth = cameraStateRef.current.azimuth.toFixed(2)
+        sceneShell.dataset.cameraElevation = cameraStateRef.current.elevation.toFixed(2)
+        const renderedDocument = documentRef?.current
+        sceneShell.dataset.renderObjectsReady = renderedDocument ? "true" : "false"
+        if (renderedDocument) {
+          const objects = projectObjectLayoutBoxes(renderedDocument, objectIndex, camera, bounds)
+          sceneShell.dataset.renderObjectBoxes = JSON.stringify(objects)
+          sceneShell.dataset.cameraHash = canonicalContentHash({
+            matrixWorld: camera.matrixWorld.elements,
+            viewport: { width: bounds.width, height: bounds.height }
+          })
+        }
+      }
+      renderer.render(scene, camera)
+      // Camera/drag frames live outside React. Notify evidence consumers only after
+      // both overlays and WebGL have painted; a React-only effect misses final frames.
+      sceneShell?.dispatchEvent(new Event("mathcanvas:three-frame"))
+    } catch (error) {
+      console.error("[MathCanvas] 3D frame render failed:", error)
     }
-    renderer.render(scene, camera)
-    // Camera/drag frames live outside React. Notify evidence consumers only after
-    // both overlays and WebGL have painted; a React-only effect misses final frames.
-    sceneShell?.dispatchEvent(new Event("mathcanvas:three-frame"))
   }
 
   /** `syncPointHandleScales` 也要给出去：内容同步在算包围盒之前要先把手柄缩放到位。 */

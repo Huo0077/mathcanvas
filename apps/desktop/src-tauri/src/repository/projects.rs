@@ -169,10 +169,19 @@ impl ProjectRepository {
             std::fs::create_dir_all(parent).map_err(|error| RepositoryError::Io { detail: format!("cannot create {}: {error}", parent.display()) })?;
         }
         let mut connection = Connection::open(path).map_err(|error| RepositoryError::Io { detail: format!("cannot open {}: {error}", path.display()) })?;
-        // 外键与 WAL：WAL 让"写的时候还能读"，而崩溃恢复靠它。
         connection
-            .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
+            .busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|error| RepositoryError::Io { detail: format!("cannot configure database busy timeout: {error}") })?;
+        // 外键与 WAL：WAL 让"写的时候还能读"，而崩溃恢复靠它；先配 busy_timeout 避免双开/退出竞争即刻 SQLITE_BUSY 闪退，
+        // 若特殊文件系统不支持 WAL，降级回 DELETE 日志模式保证可打开。
+        connection
+            .execute_batch("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;")
             .map_err(|error| RepositoryError::Io { detail: format!("cannot configure the database: {error}") })?;
+        if connection.execute_batch("PRAGMA journal_mode = WAL;").is_err() {
+            connection
+                .execute_batch("PRAGMA journal_mode = DELETE;")
+                .map_err(|error| RepositoryError::Io { detail: format!("cannot configure database journal mode: {error}") })?;
+        }
         migrate(&mut connection)?;
         Ok(Self { connection })
     }

@@ -273,21 +273,22 @@ export function AlgebraView({ primitives, selectedIds, onSelect, onToggle, measu
       const angleDegText = (measurement.metric === "dihedral" || measurement.metric === "angle") && measurement.value !== undefined && Number.isFinite(measurement.value)
         ? `${((measurement.value * 180) / Math.PI).toFixed(1)}°`
         : ""
-      const isSelectedSources = measurement.sourceIds.length > 0 && measurement.sourceIds.every((id) => selectedIds.includes(id))
+      const sourceIds = measurement.sourceIds ?? []
+      const isSelectedSources = sourceIds.length > 0 && sourceIds.every((id) => selectedIds.includes(id))
       return <button
         type="button"
         className={`object-row measurement-row${isSelectedSources ? " selected" : ""}`}
         key={measurement.id}
         title="点击在画布与右侧属性栏定位该测量"
         onClick={() => {
-          if (measurement.sourceIds.length === 0) return
-          if (onSelectMany) onSelectMany(measurement.sourceIds)
-          else onSelect(measurement.sourceIds[0]!, false)
+          if (sourceIds.length === 0) return
+          if (onSelectMany) onSelectMany(sourceIds)
+          else onSelect(sourceIds[0]!, false)
         }}
       >
         <div className="object-meta"><span className="object-dot" data-object-type="measurement3" aria-hidden="true" /><span className="object-name">{measurement.metric === "dihedral" ? (measurement.dihedralKind === "exterior" ? "二面角外角" : "二面角内角") : `${measurementLabels[measurement.metric]}测量`}</span><span className="measurement-status" data-status={measurement.status}>{measurement.status}</span></div>
         <small className="measurement-value-line">{valText}{angleDegText ? ` (${angleDegText})` : ""}</small>
-        <small className="measurement-source">{measurement.sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small>
+        <small className="measurement-source">{sourceIds.join("、")} · {measurement.precision === "numeric-approximation" ? "数值近似" : "输入精确"}</small>
         {measurement.explanation && <small className="measurement-explanation">{measurement.explanation}</small>}
       </button>
     })}</div>}
