@@ -64,8 +64,8 @@ describe("文件卫生：编码（BOM / UTF-8）", () => {
   it("**受跟踪的文本文件都是合法 UTF-8**（切坏的多字节字符会让下游 JSON 化失败）", () => {
     const decoder = new TextDecoder("utf-8", { fatal: true })
     const offenders: string[] = []
-    // 二进制类（图片 / 字体 / 压缩包）不做文本判据。
-    const binaryLike = [".png", ".jpg", ".jpeg", ".gif", ".ico", ".icns", ".webp", ".woff", ".woff2", ".ttf", ".zip", ".gz", ".exe", ".dll", ".so", ".dylib", ".pdf"]
+    // 二进制类（图片 / 音视频 / 字体 / 压缩包）不做文本判据。
+    const binaryLike = [".png", ".jpg", ".jpeg", ".gif", ".ico", ".icns", ".webp", ".webm", ".mp4", ".woff", ".woff2", ".ttf", ".zip", ".gz", ".exe", ".dll", ".so", ".dylib", ".pdf"]
     for (const file of trackedFiles()) {
       if (binaryLike.includes(path.extname(file).toLowerCase())) continue
       const bytes = readFileSync(path.join(process.cwd(), file))
