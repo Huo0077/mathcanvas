@@ -1087,7 +1087,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), collinear, perpendicular (3 targets [A,B,C] for AB⊥BC or 4 targets [A,B,C,D] for AB⊥CD), or parallel (4 targets [A,B,C,D]) to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
-  finish_candidate: "Finalize all speculative actions into a plan envelope for independent verification.",
+  finish_candidate: "Finalize all speculative actions into a plan envelope for independent verification. Optionally pass normalisations: [{ original, normalized }] to rewrite non-standard phrasing in the prompt into canonical geometry notation.",
   request_clarification: "ONLY use when an image-based prompt omits a required figure or a critical dimension is genuinely missing/contradictory. NEVER use on self-contained pure-text geometry problems with convex polygons (e.g. planar quad), moving points, or folded triangles: use standard convex orientation and a representative fold position satisfying the given perpendicular/parallel conditions."
 }
 
@@ -1288,7 +1288,23 @@ const REPAIR_ACTION_PARAMETERS = {
 } as const
 const FINISH_CANDIDATE_PARAMETERS = {
   type: "object", additionalProperties: false,
-  properties: { goal: { type: "string" }, scopeId: { type: "string" }, answer: { type: "string" } }
+  properties: {
+    goal: { type: "string" },
+    scopeId: { type: "string" },
+    answer: { type: "string" },
+    normalisations: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["original", "normalized"],
+        properties: {
+          original: { type: "string" },
+          normalized: { type: "string" }
+        }
+      }
+    }
+  }
 } as const
 const REQUEST_CLARIFICATION_PARAMETERS = {
   type: "object", additionalProperties: false,
@@ -5576,6 +5592,15 @@ export function createDsActionSession(options: {
         }
         const rawGoal = asString(input.goal)?.trim();
         const rawAnswer = asString(input.answer)?.trim();
+        const rawNorms = Array.isArray(input.normalisations)
+          ? input.normalisations.flatMap((entry) => {
+              if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return []
+              const obj = entry as Record<string, unknown>
+              const original = asString(obj.original)
+              const normalized = asString(obj.normalized)
+              return original && normalized ? [{ original, normalized }] : []
+            })
+          : []
         const safeGoal = rawGoal ? (rawGoal.length > 200 ? `${rawGoal.slice(0, 197)}...` : rawGoal) : "DS 动作级构图候选";
         let plan: PlanEnvelope = {
           schemaVersion: PLAN_SCHEMA_VERSION,
@@ -5584,6 +5609,7 @@ export function createDsActionSession(options: {
           factIds: [],
           actions: [...primaryActions],
           ...(rawAnswer ? { answer: rawAnswer } : {}),
+          ...(rawNorms.length > 0 ? { normalisations: rawNorms } : {}),
           ...(symbolicDisplays.size === 0 ? {} : {
             assumptions: primaryActions.flatMap((action) => {
               const display = symbolicDisplays.get(action.actionKey)

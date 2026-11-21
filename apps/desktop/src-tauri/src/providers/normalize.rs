@@ -119,6 +119,28 @@ struct PartialToolCall {
     arguments: String,
 }
 
+fn parse_tool_arguments(raw: &str) -> Value {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Value::Object(serde_json::Map::new());
+    }
+    let unfenced = if trimmed.starts_with("```") {
+        trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```JSON")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim()
+    } else {
+        trimmed
+    };
+    match serde_json::from_str::<Value>(unfenced) {
+        Ok(Value::String(inner)) => serde_json::from_str::<Value>(inner.trim()).unwrap_or(Value::String(inner)),
+        Ok(value) => value,
+        Err(_) => Value::String(raw.to_string()),
+    }
+}
+
 impl ToolCallAccumulator {
     /// 吃掉一帧（或一整份非流式正文）里的工具调用；返回是否吃到了。
     ///
@@ -235,12 +257,8 @@ impl ToolCallAccumulator {
                 // 拼完之后**仍然**不是合法 JSON（流被截断，或者服务本身就发了坏参数）就原样当字符串 ——
                 // 丢掉会让"模型想调工具"变成"模型什么都没说"。
                 // 一个**完全空**的参数（Anthropic 起手就是 `{}`）按空对象处理：那是合法的"无参数工具"，
-                // 不该被当成一段坏 JSON 字符串。
-                let input = if call.arguments.trim().is_empty() {
-                    Value::Object(serde_json::Map::new())
-                } else {
-                    serde_json::from_str::<Value>(&call.arguments).unwrap_or(Value::String(call.arguments))
-                };
+                // 不该被当成一段坏 JSON 字符串；双重编码的字符串 JSON 也在此安全解开一层。
+                let input = parse_tool_arguments(&call.arguments);
                 ModelEvent::ToolCall { tool_call_id: id, tool_id: call.name, input }
             })
             .collect()
@@ -492,4 +510,74 @@ pub fn strip_sse_event_lines(frame: &str) -> String {
 /// 只是这一个多带一份身份。顺序不一致会让"复制粘贴一个调用再改名字"变成一次静默的错位。
 pub fn normalize_to_json(protocol: &str, body: &str, event: Option<&str>, stream: bool, ids: &EventIds) -> Vec<Value> {
     normalize_response(protocol, body, event, stream).iter().map(|event| event.to_json(ids)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn accumulator_unwraps_double_encoded_and_fenced_tool_arguments() {
+        let mut acc = ToolCallAccumulator::default();
+        assert!(acc.absorb(&json!({
+            "choices": [{
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_double",
+                            "function": {
+                                "name": "construct_point",
+                                "arguments": "\"{\\\"id\\\":\\\"A\\\",\\\"x\\\":1,\\\"y\\\":2}\""
+                            }
+                        },
+                        {
+                            "index": 1,
+                            "id": "call_fenced",
+                            "function": {
+                                "name": "finish_candidate",
+                                "arguments": "```json\n{\"goal\":\"done\"}\n```"
+                            }
+                        },
+                        {
+                            "index": 2,
+                            "id": "call_broken",
+                            "function": {
+                                "name": "construct_point",
+                                "arguments": "{\"id\":\"B\",\"x\":"
+                            }
+                        }
+                    ]
+                }
+            }]
+        })));
+
+        let drained = acc.drain();
+        assert_eq!(drained.len(), 3);
+        match &drained[0] {
+            ModelEvent::ToolCall { tool_call_id, tool_id, input } => {
+                assert_eq!(tool_call_id, "call_double");
+                assert_eq!(tool_id, "construct_point");
+                assert_eq!(input, &json!({ "id": "A", "x": 1, "y": 2 }));
+            }
+            other => panic!("expected ToolCall, got {other:?}"),
+        }
+        match &drained[1] {
+            ModelEvent::ToolCall { tool_call_id, tool_id, input } => {
+                assert_eq!(tool_call_id, "call_fenced");
+                assert_eq!(tool_id, "finish_candidate");
+                assert_eq!(input, &json!({ "goal": "done" }));
+            }
+            other => panic!("expected ToolCall, got {other:?}"),
+        }
+        match &drained[2] {
+            ModelEvent::ToolCall { tool_call_id, tool_id, input } => {
+                assert_eq!(tool_call_id, "call_broken");
+                assert_eq!(tool_id, "construct_point");
+                assert_eq!(input, &Value::String("{\"id\":\"B\",\"x\":".to_string()));
+            }
+            other => panic!("expected ToolCall, got {other:?}"),
+        }
+    }
 }

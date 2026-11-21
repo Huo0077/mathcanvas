@@ -1224,8 +1224,10 @@ function normalizeStatedExpression(raw: string): string | null {
     .replace(/√(?=\s*\()/g, "sqrt")
     .replace(/(?<![A-Za-z_])\\?(sin|cos|tan)\^\s*([2-4])\s*x\b/g, "$1(x)^$2")
     .replace(/(?<![A-Za-z_])\\?(sin|cos|tan)\s*(\d+(?:\.\d+)?)\s*x(?![\w(]|\s*\^)/g, "$1($2*x)")
-    .replace(/(?<![A-Za-z_])(sin|cos|tan)\s*x(?![\w(]|\s*\^)/g, "$1(x)")
-    .replace(/(?<=[\d)])\s*(?=(?:sin|cos|tan|sqrt)\s*\()/g, "*")
+    .replace(/(?<![A-Za-z_])(sin|cos|tan|ln|log)\s*x(?![\w(]|\s*\^)/g, "$1(x)")
+    .replace(/(?<![A-Za-z_])lg\s*\(/gi, "log10(")
+    .replace(/(?<![A-Za-z_])lg\s*x(?![\w(]|\s*\^)/gi, "log10(x)")
+    .replace(/(?<=[\d)])\s*(?=(?:sin|cos|tan|ln|log|log10|exp|abs|sqrt)\s*\()/g, "*")
     .replace(/(^|[^A-Za-z_\d.])(\d+(?:\.\d+)?)\s*(?=\(|pi\b)/g, "$1$2*")
     .replace(/\)\s*(?=\(|x\b|pi\b)/g, ")*")
     .replace(/(\d)\s*x/g, "$1*x")
@@ -1330,6 +1332,39 @@ function chordDraft(
         ? "single"
         : "none"
   return { kind: "conicChord", targets, line, expectation }
+}
+
+function buildQuadObligations(
+  verticesRaw: string,
+  shape: string,
+  statedSideRaw?: string
+): ObligationDraft | ObligationDraft[] | null {
+  const [a, b, c, d] = names(verticesRaw)
+  if (a === undefined || b === undefined || c === undefined || d === undefined) return null
+  const statedSide = statedSideRaw === undefined ? null : finitePositive(statedSideRaw)
+  const equalEdges = [
+    { kind: "equalLength" as const, targets: [a, b, b, c] },
+    { kind: "equalLength" as const, targets: [b, c, c, d] },
+    { kind: "equalLength" as const, targets: [c, d, d, a] }
+  ]
+  const statedLength = statedSide === null ? [] : [{ kind: "fixedLength" as const, targets: [a, b], value: statedSide }]
+  const rightAngles = [
+    { kind: "perpendicular" as const, targets: [a, b, b, c] },
+    { kind: "perpendicular" as const, targets: [b, c, c, d] },
+    { kind: "perpendicular" as const, targets: [c, d, d, a] }
+  ]
+  if (shape === "菱形") return [...equalEdges, ...statedLength]
+  if (shape === "矩形" || shape === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
+  if (shape !== "正方形") return rightAngles
+  return [...equalEdges, ...rightAngles, ...statedLength]
+}
+
+const GENERIC_SHAPE_DRAW_RE =
+  /^(?:请)?(?:帮我)?(?:画|作|做|绘|绘制|生成|构造|构建)(?:一个|个|一条)?\s*(?:锐角|直角|钝角|等腰|等边|正)?(?:三角形|矩形|长方形|菱形|正方形)\s*[。.]?$/
+
+function isGenericShapeDrawInstruction(text: string): boolean {
+  const trimmed = text.trim()
+  return !/[A-Z0-9=⊥∥<>∠:]/.test(trimmed) && GENERIC_SHAPE_DRAW_RE.test(trimmed)
 }
 
 export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
@@ -1685,8 +1720,13 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       if (expression === null || !isSingleVariableXExpression(expression)) return null
       return { kind: "functionGraph", targets: [], expression }
     }
-  },  {
+  },
+  {
     pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*锐角三角形/g,
+    read: (m) => ({ kind: "acuteTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
+    pattern: /锐角三角形\s*△?\s*([A-Z])([A-Z])([A-Z])(?![A-Z])/g,
     read: (m) => ({ kind: "acuteTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
@@ -1694,8 +1734,20 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "rightTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
+    pattern: /(?:(?:Rt|直角)\s*△|(?:等腰)?直角三角形)\s*([A-Z])([A-Z])([A-Z])(?![A-Z])/g,
+    read: (m) => ({ kind: "rightTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
     pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*钝角三角形/g,
     read: (m) => ({ kind: "obtuseTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
+    pattern: /钝角三角形\s*△?\s*([A-Z])([A-Z])([A-Z])(?![A-Z])/g,
+    read: (m) => ({ kind: "obtuseTriangle", targets: names(`${m[1]}${m[2]}${m[3]}`) })
+  },
+  {
+    pattern: /(?<![A-Z])(?:正三角形|等边三角形)\s*△?\s*([A-Z])([A-Z])([A-Z])(?![A-Z])/g,
+    read: (m) => ({ kind: "equilateral", targets: names(`${m[1]}${m[2]}${m[3]}`) })
   },
   {
     pattern: /点?\s*([A-Z])\s*在\s*△?\s*([A-Z])([A-Z])([A-Z])\s*(?:内部|内)/g,
@@ -1920,38 +1972,13 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
      */
     pattern: new RegExp(`(?:侧面|底面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(?:边长为\\s*([0-9.]+)\\s*的)?\\s*(正方形|矩形|长方形|菱形)`, "g"),
+    read: (m) => buildQuadObligations(m[1]!, m[3]!, m[2])
+  },
+  {
+    pattern: new RegExp(`(?:正方形|菱形)\\s*((?:${POINT_NAME}){4})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`, "g"),
     read: (m) => {
-      const [a, b, c, d] = names(m[1])
-      if (a === undefined || b === undefined || c === undefined || d === undefined) return null
-      const shape = m[3]
-      const statedSide = m[2] === undefined ? null : finitePositive(m[2])
-      /**
-       * **同一句话的三种形状，判据全是已有的两种**（2026-10-15）：只按词分派，各写一条读取器
-       * 就等于把"四边形是什么形状"这件事抄三遍。
-       *
-       * - **矩形 / 长方形**：三个相邻直角（三个直角才定死一个四边形）；
-       * - **菱形**：四条边等长（取三对相邻边即可）；
-       * - **正方形**：两者都要。
-       *
-       * **T4（2026-11-05）补了两处**：`底面` 这个前缀（联考卷写 `底面ABCD是边长为2的菱形`）
-       * 与 `边长为 N 的` 这个定语 —— 缺了它，Case 3 的那一句整条落进"未核验"。
-       * 边长给了就再补一条 `fixedLength`（否则"边长 2"这句话没有任何判据量得到它）。
-       */
-      const equalEdges = [
-        { kind: "equalLength" as const, targets: [a, b, b, c] },
-        { kind: "equalLength" as const, targets: [b, c, c, d] },
-        { kind: "equalLength" as const, targets: [c, d, d, a] }
-      ]
-      const statedLength = statedSide === null ? [] : [{ kind: "fixedLength" as const, targets: [a, b], value: statedSide }]
-      const rightAngles = [
-        { kind: "perpendicular" as const, targets: [a, b, b, c] },
-        { kind: "perpendicular" as const, targets: [b, c, c, d] },
-        { kind: "perpendicular" as const, targets: [c, d, d, a] }
-      ]
-      if (shape === "菱形") return [...equalEdges, ...statedLength]
-      if (shape === "矩形" || shape === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
-      if (shape !== "正方形") return rightAngles
-      return [...equalEdges, ...rightAngles]
+      const shape = m[0].startsWith("正方形") ? "正方形" : "菱形"
+      return buildQuadObligations(m[1]!, shape)
     }
   },
   {
@@ -3389,7 +3416,8 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       const clause = [...givenText.matchAll(/[^，,。；;\n]+/g)]
         .find((entry) => (entry.index ?? 0) <= match.index && match.index < (entry.index ?? 0) + entry[0].length)
       const sourceText = clause?.[0].trim() ?? match[0]
-    unverified.push({ sourceText, reason: unverifiedClauseReason(sourceText) })
+      if (isGenericShapeDrawInstruction(sourceText)) continue
+      unverified.push({ sourceText, reason: unverifiedClauseReason(sourceText) })
   }
 
   if (options.spatialPointConditions === true) {
@@ -3461,7 +3489,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
     const originalClause = clause[0].trim()
     const goalQuestion = /^(?:则|求)[^，,。;；]*=\s*[.。]?$/.test(maskedLeftover)
       || (!/['′’]/.test(maskedLeftover) && /^(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求\s*二面角\s*[A-Z]-[A-Z]{2}-[A-Z]\s*的(?:余弦|正弦|正切)?值$/.test(maskedLeftover))
-    if (!goalQuestion && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)|渐近线|相切/.test(maskedLeftover) || unknownPointCondition)) {
+    if (!goalQuestion && !isGenericShapeDrawInstruction(originalClause) && (/[=⊥∥]|二面角|等边|等长|长度相等|线段相等|边相等|相等|中点|垂直|平行|共面|之比|比值|比例|共线|菱形|圆周|(?<!椭)圆上|母线|底面圆|(?:椭圆|双曲线|抛物线|圆)外|上一点|上的点|上任意一点|(?:点?[A-Z]\s*在\s*平面)|角平分线|中位线|中线|内心|旁心|弦心距|弧长|弧.{0,3}的长|轴截面|展开图|仰角|俯角|坡度|坡角|棱数|(?:内切|外接)球的?(?:半径|表面积|面积)|球的(?:半径|表面积|面积)|渐近线|相切/.test(maskedLeftover) || unknownPointCondition)) {
       const classified = classifyUnverifiedResidual(maskedLeftover, recognizedEntities)
       unverified.push({
         sourceText: originalClause,

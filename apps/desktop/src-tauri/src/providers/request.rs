@@ -328,7 +328,7 @@ pub fn build_request(profile: &ProviderProfile, messages: Vec<ChatMessage>, stre
     let sends_tools = options.allow_tools && !options.tools.is_empty();
     let official_deepseek_v4 = profile.protocol == "openai_compatible"
         && matches!(base, "https://api.deepseek.com" | "https://api.deepseek.com/v1")
-        && matches!(profile.model_id.as_str(), "deepseek-flash" | "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" | "deepseek-v4-pro");
+        && matches!(profile.model_id.as_str(), "deepseek-flash" | "deepseek-v4-flash" | "deepseek-v4-flash-vision-exp" | "deepseek-v4-pro" | "deepseek-reasoner");
     if official_deepseek_v4 && (sends_tools || messages.iter().any(|message| !message.images.is_empty())) {
         // The tool probe forces a tool, and the Agent's tool history doesn't carry
         // reasoning_content. Image reads transcribe the source under a fixed output limit.

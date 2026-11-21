@@ -303,11 +303,10 @@ impl RunStream {
         if !self.stream && !self.looks_like_sse() {
             return;
         }
-        let separator: &[u8] = if self.ndjson { b"\n" } else { b"\n\n" };
-        while let Some(index) = find(&self.buffer, separator) {
+        while let Some((index, sep_len)) = next_frame_delimiter(&self.buffer, self.ndjson) {
             let frame: Vec<u8> = self.buffer.drain(..index).collect();
-            // 丢掉分隔符本身。
-            self.buffer.drain(..separator.len());
+            // 丢掉分隔符本身（支持 `\n\n` 与代理常见的 `\r\n\r\n`）。
+            self.buffer.drain(..sep_len);
             self.absorb(&String::from_utf8_lossy(&frame));
         }
     }
@@ -348,6 +347,24 @@ impl RunStream {
 
     fn take(&mut self) -> Vec<ModelEvent> {
         std::mem::take(&mut self.events)
+    }
+}
+
+/// 在字节切片里找下一个帧分隔符及长度：NDJSON 为 `\n`（含 `\r\n`），SSE 同时支持 `\n\n` 与 `\r\n\r\n`。
+fn next_frame_delimiter(haystack: &[u8], ndjson: bool) -> Option<(usize, usize)> {
+    if ndjson {
+        let crlf = find(haystack, b"\r\n").map(|idx| (idx, 2));
+        let lf = find(haystack, b"\n").map(|idx| (idx, 1));
+        return match (crlf, lf) {
+            (Some(a), Some(b)) => Some(if a.0 < b.0 { a } else { b }),
+            (a, b) => a.or(b),
+        };
+    }
+    let crlf_crlf = find(haystack, b"\r\n\r\n").map(|idx| (idx, 4));
+    let lf_lf = find(haystack, b"\n\n").map(|idx| (idx, 2));
+    match (crlf_crlf, lf_lf) {
+        (Some(a), Some(b)) => Some(if a.0 <= b.0 { a } else { b }),
+        (a, b) => a.or(b),
     }
 }
 
@@ -571,7 +588,8 @@ impl HttpTransport {
             .redirect(reqwest::redirect::Policy::none())
             .no_proxy()
             .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(120))
+            .read_timeout(Duration::from_secs(60))
+            .timeout(Duration::from_secs(180))
     }
 
     async fn client_for(&self, endpoint: &str, network_policy: &str) -> Result<reqwest::Client, ProviderError> {
@@ -850,4 +868,35 @@ pub fn run_with_profile<S: SecretSource + ?Sized>(
     // `options` 是**透明传下去**的：允许发工具表与否由调用方按已验证证据决定
     //（`allow_tools`），这一层不替它猜，也不替它放宽。
     ProviderAdapter::new(secrets, transport, profile).send_with(messages, stream, options, stop)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn run_stream_decodes_crlf_sse_frames_across_chunks() {
+        let mut stream = RunStream::new("openai", true);
+        let payload = concat!(
+            "data: {\"model\":\"deepseek-chat\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\r\n\r\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"construct_point\",\"arguments\":\"{\\\"id\\\":\\\"P\\\"\"}}]}}]}\r\n",
+            "\r\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\",\\\"x\\\":0,\\\"y\\\":0}\"}}]},\"finish_reason\":\"tool_calls\"}]}\r\n\r\n",
+            "data: [DONE]\r\n\r\n"
+        );
+        // Feed in small chunks cutting straight through \r\n\r\n and JSON tokens.
+        for chunk in payload.as_bytes().chunks(17) {
+            stream.feed(chunk);
+        }
+        stream.flush();
+        let events = stream.take();
+        assert!(events.iter().any(|event| matches!(event, ModelEvent::Delta { text } if text == "hi")));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ModelEvent::ToolCall { tool_call_id, tool_id, input }
+                if tool_call_id == "c1" && tool_id == "construct_point" && input == &json!({ "id": "P", "x": 0, "y": 0 })
+        )));
+        assert!(!events.iter().any(|event| matches!(event, ModelEvent::Failed { .. })));
+    }
 }

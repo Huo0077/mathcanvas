@@ -293,6 +293,76 @@ type ChatMessage = ModelChatMessage
  * 名字用下划线而不是点号：点号在部分兼容服务上会被拒，而拒的形状是 400 ——
  * 那会被读成"这家不支持工具"，正是最不该误报的地方。
  */
+function coerceDsToolInput(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>
+  }
+  if (typeof raw !== "string") return null
+  let current: unknown = raw.trim()
+  for (let depth = 0; depth < 2 && typeof current === "string"; depth += 1) {
+    const cleaned = current
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .replace(/,\s*([}\]])/g, "$1")
+      .trim()
+    if (!cleaned) return null
+    try {
+      current = JSON.parse(cleaned)
+    } catch {
+      return null
+    }
+  }
+  return typeof current === "object" && current !== null && !Array.isArray(current)
+    ? (current as Record<string, unknown>)
+    : null
+}
+
+function extractTextualDsToolCalls(
+  text: string,
+  baseId: string
+): Array<{ kind: "tool_call"; toolCallId: string; toolId: string; input: Record<string, unknown> }> {
+  const candidates: string[] = []
+  for (const match of text.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)) {
+    if (match[1]) candidates.push(match[1].trim())
+  }
+  if (candidates.length === 0) {
+    for (const match of text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)) {
+      if (match[1]) candidates.push(match[1].trim())
+    }
+  }
+  const out: Array<{ kind: "tool_call"; toolCallId: string; toolId: string; input: Record<string, unknown> }> = []
+  for (const rawJson of candidates) {
+    try {
+      const parsed: unknown = JSON.parse(rawJson.replace(/,\s*([}\]])/g, "$1"))
+      const items = Array.isArray(parsed) ? parsed : [parsed]
+      for (const item of items) {
+        if (typeof item !== "object" || item === null || Array.isArray(item)) continue
+        const obj = item as Record<string, unknown>
+        const fnObj = typeof obj.function === "object" && obj.function !== null && !Array.isArray(obj.function)
+          ? (obj.function as Record<string, unknown>)
+          : null
+        const toolName =
+          typeof obj.name === "string" ? obj.name
+            : typeof obj.tool === "string" ? obj.tool
+              : typeof fnObj?.name === "string" ? fnObj.name
+                : null
+        if (!toolName || !isDsActionName(toolName)) continue
+        const args = coerceDsToolInput(obj.arguments ?? obj.input ?? obj.parameters ?? fnObj?.arguments)
+        if (args === null) continue
+        out.push({
+          kind: "tool_call",
+          toolCallId: `${baseId}-txt-${out.length + 1}`,
+          toolId: toolName,
+          input: args
+        })
+      }
+    } catch {
+      // Ignore malformed prose/JSON snippets and fall back to text nudge.
+    }
+  }
+  return out
+}
+
 export const PLAN_TOOL_NAME = "plan_set_plan"
 
 export function buildPlanToolSchema(actionIds: readonly string[]) {
@@ -963,7 +1033,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         attempts = 0
         lastSignature = null
         const events: readonly ModelEvent[] = result.ok ? result.events : []
-        const calls = events.filter((event) => event.kind === "tool_call")
+        const rawCalls = events.filter((event) => event.kind === "tool_call")
+        const text = events.filter((event) => event.kind === "delta").map((event) => (event.kind === "delta" ? event.text : "")).join("")
+        const calls = rawCalls.length === 0 && channel === "native_tools" && intentMode === "ds_action" && dsActionSession !== null && text.length > 0
+          ? extractTextualDsToolCalls(text, `ds-${structuredRequestIndex + 1}`)
+          : rawCalls
         const usageEvents = events.filter((event): event is Extract<ModelEvent, { kind: "usage" }> => event.kind === "usage")
         const hasUsageEvent = usageEvents.length > 0
         const hasDeltaText = events.some((event) => event.kind === "delta" && event.text.length > 0)
@@ -1111,12 +1185,51 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           }
           const published = new Set(tools.map((tool) => String((tool as { function?: { name?: string } }).function?.name ?? "")))
           const batchCallIds = calls.map((call) => call.toolCallId)
-          if (calls.length > 32 || batchCallIds.some((id, index) => !id || seenCalls.has(id) || batchCallIds.indexOf(id) !== index) ||
-            calls.some((call) => typeof call.input !== "object" || call.input === null || Array.isArray(call.input))) {
+          if (calls.length > 32 || batchCallIds.some((id, index) => !id || seenCalls.has(id) || batchCallIds.indexOf(id) !== index)) {
             dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "invalid_action_batch" })
             throw new ModelPlannerError("unexpected_tool_call", "invalid ds_action batch: IDs, names, input objects or size")
           }
-          const unknownToolCalls = calls.filter((call) => !published.has(call.toolId) || !isDsActionName(call.toolId))
+          const coercedInputs = calls.map((call) => coerceDsToolInput(call.input))
+          const badArgIndices = coercedInputs.flatMap((obj, idx) => obj === null ? [idx] : [])
+          if (badArgIndices.length > 0) {
+            const badSig = `bad_args:${calls.map((c) => c.toolId).join(",")}:${badArgIndices.join(",")}`
+            const nextBad = (dsActionSignatures.get(badSig) ?? 0) + 1
+            dsActionSignatures.set(badSig, nextBad)
+            if (nextBad >= 2) {
+              dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "invalid_action_batch" })
+              throw new ModelPlannerError("unexpected_tool_call", "invalid ds_action batch: IDs, names, input objects or size")
+            }
+            const externalNetworkGuard = request.beforeProviderRequest !== undefined
+            if (request.budget.remaining("generation") < 1 || (!externalNetworkGuard && request.budget.remaining("network") < 1)) {
+              throw new ModelPlannerError("provider_failed", "budget exhausted during ds_action invalid argument recovery")
+            }
+            if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
+              throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action invalid argument recovery")
+            }
+            dsActionTurnCount += 1
+            for (const [idx, call] of calls.entries()) {
+              seenCalls.add(call.toolCallId)
+              messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: coercedInputs[idx] ?? {} })
+            }
+            for (const [idx, call] of calls.entries()) {
+              messages.push({
+                role: "tool_result",
+                toolCallId: call.toolCallId,
+                toolName: call.toolId,
+                content: JSON.stringify({
+                  status: "repairable",
+                  blockerCode: coercedInputs[idx] === null ? "invalid_tool_arguments" : "batch_rolled_back",
+                  repairHint: coercedInputs[idx] === null
+                    ? `Arguments for tool "${call.toolId}" must be a valid non-null JSON object (not truncated or stringified). Resend valid JSON arguments.`
+                    : `Batch rolled back because "${calls[badArgIndices[0]!]!.toolId}" had malformed JSON arguments.`,
+                  referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(coercedInputs[idx]))
+                })
+              })
+            }
+            continue
+          }
+          const normalizedCalls = calls.map((call, idx) => ({ ...call, input: coercedInputs[idx]! }))
+          const unknownToolCalls = normalizedCalls.filter((call) => !published.has(call.toolId) || !isDsActionName(call.toolId))
           if (unknownToolCalls.length > 0) {
             const unknownSig = `unknown_batch:${unknownToolCalls.map((c) => c.toolId).sort().join(",")}:${dsActionSession.currentSnapshot().candidateHash}`
             const nextCount = (dsActionSignatures.get(unknownSig) ?? 0) + 1
@@ -1134,11 +1247,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
             dsActionTurnCount += 1
             dependencies.onDiagnostic?.(`[ds_action_batch_fail] req=${structuredRequestIndex} code=unknown_tool detail=${unknownToolCalls.map((c) => c.toolId).join(",")}`)
-            for (const call of calls) {
+            for (const call of normalizedCalls) {
               seenCalls.add(call.toolCallId)
               messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
             }
-            for (const call of calls) {
+            for (const call of normalizedCalls) {
               const isUnknown = !published.has(call.toolId) || !isDsActionName(call.toolId)
               messages.push({
                 role: "tool_result",
@@ -1157,7 +1270,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             continue
           }
           dsActionTurnCount += 1
-          if (dsActionTurnCount > MAX_DS_ACTION_TURNS_PER_ATTEMPT && !calls.some((call) => call.toolId === "finish_candidate")) {
+          if (dsActionTurnCount > MAX_DS_ACTION_TURNS_PER_ATTEMPT && !normalizedCalls.some((call) => call.toolId === "finish_candidate")) {
             return {
               failure: createPlanFailure({
                 category: "unexpected_tool_call",
@@ -1168,25 +1281,25 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               ...ids
             }
           }
-          if (calls.some((call) => call.toolId === "repair_entity" || call.toolId === "repair_constraint")) {
+          if (normalizedCalls.some((call) => call.toolId === "repair_entity" || call.toolId === "repair_constraint")) {
             dsActionRepairCount += 1
           }
           const before = dsActionSession.currentSnapshot()
-          const terminal = calls.some((call) => call.toolId === "finish_candidate" || call.toolId === "request_clarification")
+          const terminal = normalizedCalls.some((call) => call.toolId === "finish_candidate" || call.toolId === "request_clarification")
           // A repair mutates prior state. If batched with another action, the trial
           // can report accepted construction even after repair removes its geometry.
-          const destructive = calls.some((call) => call.toolId === "repair_entity" || call.toolId === "repair_constraint")
-          const hasRead = calls.some((call) => call.toolId === "query_measurement" || call.toolId === "query_constraint_status")
-          const hasConstruct = calls.some((call) => isDsActionName(call.toolId) && !NON_CONSTRUCTIVE_DS_ACTIONS.has(call.toolId))
+          const destructive = normalizedCalls.some((call) => call.toolId === "repair_entity" || call.toolId === "repair_constraint")
+          const hasRead = normalizedCalls.some((call) => call.toolId === "query_measurement" || call.toolId === "query_constraint_status")
+          const hasConstruct = normalizedCalls.some((call) => isDsActionName(call.toolId) && !NON_CONSTRUCTIVE_DS_ACTIONS.has(call.toolId))
           const trailingFinish =
             !destructive &&
             !(hasRead && hasConstruct) &&
-            calls.slice(0, -1).every((call) => call.toolId !== "finish_candidate" && call.toolId !== "request_clarification") &&
-            calls.at(-1)?.toolId === "finish_candidate"
+            normalizedCalls.slice(0, -1).every((call) => call.toolId !== "finish_candidate" && call.toolId !== "request_clarification") &&
+            normalizedCalls.at(-1)?.toolId === "finish_candidate"
           const mixed = (terminal && !trailingFinish) || destructive || (hasRead && hasConstruct)
           let trial: ReturnType<typeof newDsActionSession> | null = null
           let results: DsActionExecutionResult[] = []
-          const executedCalls: typeof calls = []
+          const executedCalls: typeof normalizedCalls = []
           if (!mixed) {
             trial = newDsActionSession()
             for (const prior of dsActionHistory) trial.execute(prior.name, prior.input)
@@ -1194,14 +1307,14 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             if (replay.candidateHash !== before.candidateHash || replay.primitiveCount !== before.primitiveCount) {
               throw new ModelPlannerError("provider_failed", "ds_action batch snapshot drift")
             }
-            results = new Array<DsActionExecutionResult>(calls.length)
-            const workIndices = trailingFinish ? calls.slice(0, -1).map((_, i) => i) : calls.map((_, i) => i)
+            results = new Array<DsActionExecutionResult>(normalizedCalls.length)
+            const workIndices = trailingFinish ? normalizedCalls.slice(0, -1).map((_, i) => i) : normalizedCalls.map((_, i) => i)
             let pending = [...workIndices]
             while (pending.length > 0) {
               const deferred: number[] = []
               let progressed = false
               for (const idx of pending) {
-                const call = calls[idx]!
+                const call = normalizedCalls[idx]!
                 const res = trial.execute(call.toolId, call.input)
                 if (!res.ok && res.blockerCode === "undeclared_entity_ref" && pending.length > 1) {
                   deferred.push(idx)
@@ -1213,7 +1326,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               }
               if (!progressed) {
                 for (const idx of deferred) {
-                  const call = calls[idx]!
+                  const call = normalizedCalls[idx]!
                   results[idx] = trial.execute(call.toolId, call.input)
                   executedCalls.push(call)
                 }
@@ -1222,8 +1335,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               pending = deferred
             }
             if (trailingFinish) {
-              const lastIdx = calls.length - 1
-              const lastCall = calls[lastIdx]!
+              const lastIdx = normalizedCalls.length - 1
+              const lastCall = normalizedCalls[lastIdx]!
               results[lastIdx] = trial.execute(lastCall.toolId, lastCall.input)
               executedCalls.push(lastCall)
             }
@@ -1240,7 +1353,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             for (const call of executedCalls) {
               dsActionHistory.push({ name: call.toolId, input: call.input })
             }
-            for (const [idx, call] of calls.entries()) {
+            for (const [idx, call] of normalizedCalls.entries()) {
               seenCalls.add(call.toolCallId)
               const res = results[idx]!
               dependencies.onStructuredDiagnostic?.({
@@ -1253,7 +1366,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
                 primitiveCountAfter: res.primitiveCount,
                 candidateHashChanged: res.candidateHash !== prevHash,
                 stateChanged: res.stateChanged,
-                feedbackDelivered: idx < calls.length - 1
+                feedbackDelivered: idx < normalizedCalls.length - 1
               })
               prevCount = res.primitiveCount
               prevHash = res.candidateHash
@@ -1283,12 +1396,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             : undefined)
           const accepted = !mixed && failure === undefined && trial !== null
           if (!accepted) {
-            const signature = `batch:${JSON.stringify(calls.map((call) => [call.toolId, call.input]))}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
+            const signature = `batch:${JSON.stringify(normalizedCalls.map((call) => [call.toolId, call.input]))}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
             const stalled = (dsActionSignatures.get(signature) ?? 0) + 1
             dsActionSignatures.set(signature, stalled)
             if (stalled >= 2) {
               dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: "no_progress" })
-              for (const call of calls) dependencies.onStructuredDiagnostic?.({
+              for (const call of normalizedCalls) dependencies.onStructuredDiagnostic?.({
                 kind: "action", requestIndex: structuredRequestIndex, actionIndex: ++dsActionIndex,
                 toolName: call.toolId, resultStatus: "repairable", blockerCode: "no_progress",
                 primitiveCountBefore: before.primitiveCount, primitiveCountAfter: before.primitiveCount,
@@ -1315,11 +1428,11 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             dependencies.onDiagnostic?.(`[ds_action_batch_fail] req=${structuredRequestIndex} code=${mixed ? "unsupported_action_batch_mix" : failure?.blockerCode ?? "no_progress"} detail=${boundedExcerpt(failure?.repairHint ?? "", 180)}`)
             dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: mixed ? "unsupported_action_batch_mix" : failure?.blockerCode ?? "batch_rolled_back" })
           }
-          for (const call of calls) {
+          for (const call of normalizedCalls) {
             seenCalls.add(call.toolCallId)
             messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
           }
-          for (const [index, call] of calls.entries()) {
+          for (const [index, call] of normalizedCalls.entries()) {
             const res = results[index]
             const status = accepted ? "accepted" : res && !res.ok ? res.status : "repairable"
             const blockerCode = accepted ? undefined : res && !res.ok ? res.blockerCode ?? "batch_rolled_back" : mixed ? "unsupported_action_batch_mix" : "batch_rolled_back"
@@ -1330,7 +1443,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               candidateHashChanged: accepted && res!.candidateHash !== before.candidateHash,
               stateChanged: accepted && res!.stateChanged, feedbackDelivered: true
             })
-            const budgetWarning = index === calls.length - 1 ? dsSessionBudgetWarning() : undefined
+            const budgetWarning = index === normalizedCalls.length - 1 ? dsSessionBudgetWarning() : undefined
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
               content: accepted
                 ? boundedExcerpt(JSON.stringify({ ...res, ...(budgetWarning ? { sessionBudgetWarning: budgetWarning } : {}), referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) }), 4000)
@@ -1374,11 +1487,47 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             }
             seenCalls.add(toolCall.toolCallId)
             if (request.signal.aborted) throw new ModelPlannerError("cancelled", "run cancelled", false)
+            const coercedInput = coerceDsToolInput(toolCall.input)
+            if (coercedInput === null) {
+              const badSig = `bad_args:${toolCall.toolId}`
+              const nextBad = (dsActionSignatures.get(badSig) ?? 0) + 1
+              dsActionSignatures.set(badSig, nextBad)
+              const externalNetworkGuard = request.beforeProviderRequest !== undefined
+              if (nextBad < 2 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
+                if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
+                  throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action invalid argument recovery")
+                }
+                dsActionTurnCount += 1
+                messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: {} })
+                messages.push({
+                  role: "tool_result",
+                  toolCallId: toolCall.toolCallId,
+                  toolName: toolCall.toolId,
+                  content: JSON.stringify({
+                    ok: false,
+                    status: "repairable",
+                    blockerCode: "invalid_tool_arguments",
+                    repairHint: `Arguments for tool "${toolCall.toolId}" must be a valid non-null JSON object (not truncated or stringified). Resend valid JSON arguments.`,
+                    referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(null))
+                  })
+                })
+                continue
+              }
+              return {
+                failure: createPlanFailure({
+                  category: "unexpected_tool_call",
+                  channel,
+                  detail: `invalid ds_action tool arguments for ${toolCall.toolId}: expected JSON object`,
+                  ...(stopReason === undefined ? {} : { stopReason })
+                }),
+                ...ids
+              }
+            }
             const primitiveCountBefore = lastDsPrimitiveCount
             const previousCandidateHash = lastDsCandidateHash
             const actionIndex = ++dsActionIndex
-            const execRes = dsActionSession.execute(toolCall.toolId, toolCall.input)
-            dsActionHistory.push({ name: toolCall.toolId, input: toolCall.input })
+            const execRes = dsActionSession.execute(toolCall.toolId, coercedInput)
+            dsActionHistory.push({ name: toolCall.toolId, input: coercedInput })
             lastDsPrimitiveCount = execRes.primitiveCount
             lastDsCandidateHash = execRes.candidateHash
             const reportAction = (feedbackDelivered: boolean) => dependencies.onStructuredDiagnostic?.({
@@ -1471,12 +1620,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               dsActionRepairCount += 1
             }
             const singleBudgetWarning = dsSessionBudgetWarning()
-            messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
+            messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: coercedInput })
             messages.push({
               role: "tool_result",
               toolCallId: toolCall.toolCallId,
               toolName: toolCall.toolId,
-              content: boundedExcerpt(JSON.stringify({ ...execRes, ...(singleBudgetWarning ? { sessionBudgetWarning: singleBudgetWarning } : {}), referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(toolCall.input)) }), 4000)
+              content: boundedExcerpt(JSON.stringify({ ...execRes, ...(singleBudgetWarning ? { sessionBudgetWarning: singleBudgetWarning } : {}), referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(coercedInput)) }), 4000)
             })
             reportAction(true)
             continue
@@ -1494,6 +1643,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               throw new ModelPlannerError("unexpected_tool_call", "missing or duplicate tool call id")
             }
             seenCalls.add(toolCall.toolCallId)
+            const coercedUnknownInput = coerceDsToolInput(toolCall.input) ?? {}
             const unknownSig = `unknown_tool:${toolCall.toolId}`
             const nextCount = (dsActionSignatures.get(unknownSig) ?? 0) + 1
             dsActionSignatures.set(unknownSig, nextCount)
@@ -1502,7 +1652,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
                 throw new ModelPlannerError("provider_failed", "budget accounting failed during unknown tool feedback")
               }
-              messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: toolCall.input })
+              messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: coercedUnknownInput })
               messages.push({
                 role: "tool_result",
                 toolCallId: toolCall.toolCallId,
@@ -1512,7 +1662,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
                   status: "repairable",
                   blockerCode: "unknown_tool",
                   repairHint: `Tool "${toolCall.toolId}" is not in the published tool set. Use valid geometry tools (e.g. construct_solid, construct_point, construct_line, construct_conic, construct_circumsphere) and finish_candidate.`,
-                  referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(toolCall.input))
+                  referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(coercedUnknownInput))
                 })
               })
               continue
@@ -1545,21 +1695,21 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         // 取消已经置位：不再产出任何东西（协调器也不会再收事件）。
         if (request.signal.aborted) throw new ModelPlannerError("cancelled", "这次运行已取消。", false)
 
-        const text = events.filter((event) => event.kind === "delta").map((event) => (event.kind === "delta" ? event.text : "")).join("")
         const effectiveChannel = channel === "native_tools" ? "fenced_text" : channel
         if (intentMode === "ds_action" && channel === "native_tools" && dsActionSession !== null) {
           const externalNetworkGuard = request.beforeProviderRequest !== undefined
-          if (dsActionTextRetries < 3 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
+          if (dsActionTextRetries < 4 && request.budget.remaining("generation") >= 1 && (externalNetworkGuard || request.budget.remaining("network") >= 1)) {
             if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
               throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action text nudge")
             }
             dsActionTextRetries += 1
             dependencies.onDiagnostic?.(`[ds_action_text_nudge] attempt=${dsActionTextRetries} model returned text instead of tool calls`)
             messages.push({ role: "assistant", content: boundedExcerpt(text || "(empty text)", 600) })
+            const stagedDir = dsActionSession.referenceDirectory()
             messages.push({
               role: "user",
               content:
-                "当前处于 ds_action 原生工具模式，禁止直接输出文字推导或 JSON envelope（不要输出 envelope 包装）。请立即直接调用几何构图工具（如 construct_point / construct_solid / construct_face / construct_segment / construct_line / construct_conic）完成作图，并最终调用 finish_candidate({ goal })。"
+                `当前处于 ds_action 原生工具模式，禁止直接输出文字推导、Markdown 代码块或 JSON envelope。当前已暂存实体：${boundedExcerpt(JSON.stringify(stagedDir), 600)}。请立即通过原生 tool_call 调用几何构图工具（如 construct_point / construct_solid / construct_face / construct_segment / construct_line / construct_conic）或调用 finish_candidate({ goal }) 结束作图。`
             })
             continue
           }

@@ -2065,4 +2065,53 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     expect(JSON.parse(dupResult?.content ?? "{}").repairHint).toMatch(/already materialized/i)
   })
 
+  it("coerces stringified ds_action arguments, recovers from malformed batch JSON args, and parses <tool_call> text fallback", async () => {
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; toolCallId?: string; content: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "deepseek-chat", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((m) => ({ ...m })) })
+        turn += 1
+        if (turn === 1) {
+          // Batch where one call has malformed JSON arguments -> recoverable invalid_tool_arguments
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-ok", toolId: "construct_point", input: "{\"id\":\"A\",\"x\":0,\"y\":0}" as unknown as Record<string, unknown> },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-bad", toolId: "construct_point", input: "{\"id\":\"B\",\"x\":" as unknown as Record<string, unknown> }
+          ] }
+        }
+        if (turn === 2) {
+          // Model resends stringified & fenced JSON arguments -> automatically coerced and executed
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "pt-a2", toolId: "construct_point", input: "```json\n{\"id\":\"A\",\"x\":0,\"y\":0,\"z\":0}\n```" as unknown as Record<string, unknown> },
+            { kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "pt-b2", toolId: "construct_point", input: "\"{\\\"id\\\":\\\"B\\\",\\\"x\\\":3,\\\"y\\\":0,\\\"z\\\":0}\"" as unknown as Record<string, unknown> }
+          ] }
+        }
+        // Turn 3: Model leaks <tool_call> block in plain text delta instead of structured tool_calls
+        return { ok: true, events: [
+          {
+            kind: "delta" as const,
+            requestId: "r-3",
+            attemptId: "a-3",
+            text: "<tool_call>\n{\"name\":\"finish_candidate\",\"arguments\":{\"goal\":\"built AB from stringified and XML tool calls\"}}\n</tool_call>"
+          },
+          { kind: "completed" as const, requestId: "r-3", attemptId: "a-3", stopReason: "stop" }
+        ] }
+      }
+    })
+
+    const outcome = await planner.plan(request({
+      userMessage: "绘制点 A 与点 B",
+      budget: createBudget({ network: 8, generation: 8, tool: 16 })
+    }))
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    expect(turn).toBe(3)
+    const badRes = sent[1]?.messages.find((m) => m.role === "tool_result" && m.toolCallId === "pt-bad")
+    expect(JSON.parse(badRes?.content ?? "{}").blockerCode).toBe("invalid_tool_arguments")
+  })
+
 })

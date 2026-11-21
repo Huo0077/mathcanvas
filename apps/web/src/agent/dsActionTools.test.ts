@@ -1559,5 +1559,22 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
       expect((a1?.inputs as { label?: string }).label).toBe("A₁")
       expect((a2?.inputs as { label?: string }).label).toBe("A₂")
     }
+
+    // 5. finish_candidate forwards validated normalisations onto the returned plan envelope
+    const sNorm = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(sNorm.execute("construct_point", { id: "A", x: 0, y: 0 }).ok).toBe(true)
+    const finNorm = sNorm.execute("finish_candidate", {
+      goal: "square with normalised phrasing",
+      normalisations: [
+        { original: "正四边", normalized: "正方形" },
+        { original: "", normalized: "ignored" }
+      ]
+    })
+    expect(finNorm.ok).toBe(true)
+    if (finNorm.terminated?.plan.kind === "plan") {
+      expect(finNorm.terminated.plan.normalisations).toEqual([
+        { original: "正四边", normalized: "正方形" }
+      ])
+    }
   })
 })

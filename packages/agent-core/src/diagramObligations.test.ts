@@ -1117,5 +1117,44 @@ describe("T03 — 角等式链与类型/单位边界", () => {
       const parsed = parseDiagramObligations(nonFunction)
       expect(parsed.givens.some((g) => g.kind === "functionGraph"), nonFunction).toBe(false)
     }
+
+    const lgFn = parseDiagramObligations("绘制函数 y = lg(x) + ln(x + 1)")
+    expect(lgFn.unverified).toEqual([])
+    expect(lgFn.givens).toContainEqual(expect.objectContaining({
+      kind: "functionGraph",
+      expression: "log10(x) + ln(x + 1)"
+    }))
+  })
+
+  it("parses pre-vertex triangles, squares/rhombi, and generic bare shape draw prompts without false unverified failures", () => {
+    const rtTri = parseDiagramObligations("在直角三角形 ABC 中，∠C=90°，AC=3，BC=4")
+    expect(rtTri.unverified).toEqual([])
+    expect(rtTri.givens.some((g) => g.kind === "rightTriangle")).toBe(true)
+
+    const rtPrefix = parseDiagramObligations("Rt△ABC 中")
+    expect(rtPrefix.unverified).toEqual([])
+    expect(rtPrefix.givens).toContainEqual(expect.objectContaining({ kind: "rightTriangle" }))
+
+    const eqTri = parseDiagramObligations("在正三角形 ABC 中")
+    expect(eqTri.unverified).toEqual([])
+    expect(eqTri.givens).toContainEqual(expect.objectContaining({ kind: "equilateral" }))
+
+    const isoRtTri = parseDiagramObligations("等腰直角三角形 ABC")
+    expect(isoRtTri.unverified).toEqual([])
+    expect(isoRtTri.givens).toContainEqual(expect.objectContaining({ kind: "rightTriangle", targets: ["A", "B", "C"] }))
+
+    const square = parseDiagramObligations("正方形 ABCD")
+    expect(square.unverified).toEqual([])
+    expect(square.givens.filter((g) => g.kind === "equalLength").length).toBeGreaterThanOrEqual(3)
+    expect(square.givens.filter((g) => g.kind === "perpendicular").length).toBeGreaterThanOrEqual(2)
+
+    const rhombus = parseDiagramObligations("菱形 ABCD")
+    expect(rhombus.unverified).toEqual([])
+    expect(rhombus.givens.filter((g) => g.kind === "equalLength").length).toBeGreaterThanOrEqual(3)
+
+    for (const bare of ["画一个直角三角形", "请绘制一个菱形", "画正方形", "做一个矩形"]) {
+      const parsed = parseDiagramObligations(bare)
+      expect(parsed.unverified, bare).toEqual([])
+    }
   })
 })
