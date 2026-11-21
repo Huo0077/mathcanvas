@@ -72,19 +72,24 @@ npm run dev
 
 > Windows PowerShell 下若策略限制直接调用 `npm`，请使用 `npm.cmd install` 与 `npm.cmd run dev`。
 
-### 方式二：运行或构建 Windows 桌面应用（Tauri 2）
+### 方式二：运行或构建多端原生应用（Windows / Linux / Android，Tauri 2）
 
-桌面版使用与浏览器端同一套前端交互引擎，并额外提供 **Windows 凭据管理器安全存密**、**本地 SQLite 文档持久化**、**模型列表一键自动获取** 与 **无控制台黑框原生启动** 体验（需 Rust 1.77.2+ 工具链）：
+原生应用与浏览器端共用同一套 `apps/web` 前端交互引擎，并额外提供 **原生安全凭据存密**（Windows 凭据管理器 / Linux Secret Service 优先并自动回退应用私有 `ChaCha20 + HMAC-SHA256` 加密凭据库 / Android 应用私有加密凭据库）、**本地 SQLite 文档持久化** 与 **模型列表一键自动获取** 体验（需 Rust 1.77.2+ 工具链）：
 
 ```bash
-# 启动桌面端开发调试
+# 启动桌面端开发调试（Windows / Linux）
 npm run dev --workspace @draw/desktop
 
-# 构建桌面端安装包 / 可执行程序
+# 构建 Windows 安装包 / Linux（.deb / .AppImage）安装包
 npx tauri build
+npm run linux:bundle --workspace @draw/desktop   # 在 Linux 上直接输出 .deb 与 .AppImage
+
+# 构建 Android ARM64 APK（需 JDK 17、Android SDK/NDK 及 aarch64-linux-android Rust target）
+npm run android:init --workspace @draw/desktop
+npm run android:build --workspace @draw/desktop
 ```
 
-更多桌面端技术细节见 [桌面端说明](apps/desktop/README.md)。
+触控端（Android 手机 / 平板）支持 **2D 平面画布与 3D 立体空间的双指捏合缩放 + 同步平移**、`env(safe-area-inset-*)` 安全区避让、`44×44` 粗指针触控热区及软键盘自适应缩放。更多宿主壳技术细节见 [桌面端说明](apps/desktop/README.md)。
 
 ---
 
@@ -95,7 +100,7 @@ npx tauri build
 | 选择与联动编辑 | 单击图元选中，直接拖动点或控制点；`Shift` 点击多选 |
 | 绑定动点到线 / 面 / 立体 | 左侧或画布多选「点 + 目标宿主」后在右侧属性栏一键绑定；也可选中面/棱后点 **「在此面添加动点」** |
 | 两线定面 | 在立体几何中多选两条共端点相交线段/棱，右侧属性栏点击 **「作空间面」** |
-| 移动与缩放画布 | 中键拖动（或 2D 下 `Space`+左键拖动）；滚轮缩放；3D 下左键拖空白旋转、右键平移 |
+| 移动与缩放画布 | 中键拖动（或 2D 下 `Space`+左键拖动）；滚轮缩放；3D 下左键拖空白旋转、右键平移；触屏支持 2D/3D 双指捏合缩放与同步拖动 |
 | 测量二面角与角度三角值 | 选中两个面（或按 `Alt` 选中实体表面），在右侧属性栏点击 **「测量二面角」**，即可查看角度、`sin`/`cos` 与精确复制按钮 |
 | 快速搜索工具与命令 | 按 `Ctrl+K` 调起命令与工具搜索 |
 | 撤销 / 重做 / 取消当前操作 | `Ctrl+Z` / `Ctrl+Y` / `Esc` |
@@ -130,7 +135,7 @@ npm run test:e2e    # Playwright 浏览器端到端测试
 npm run test:rust   # 桌面端 Rust 单元测试
 ```
 
-自动化流水线配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
+自动化流水线配置见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 与多平台打包工作流 [`.github/workflows/multiplatform-build.yml`](.github/workflows/multiplatform-build.yml)（自动产出 Linux `.deb`/`.AppImage` 与 Android `aarch64` APK）。
 
 ---
 

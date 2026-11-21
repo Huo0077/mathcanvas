@@ -104,6 +104,12 @@ describe("GitHub Actions least-privilege policy", () => {
     expect(policyErrors(readFileSync(".github/workflows/ci.yml", "utf8"), true)).toEqual([])
   })
 
+  it("holds the multiplatform build workflow to the reviewed action identities and token boundary", () => {
+    expect(
+      policyErrors(readFileSync(".github/workflows/multiplatform-build.yml", "utf8"), false)
+    ).toEqual([])
+  })
+
   it("accepts a read-only workflow with an immutable checkout and no persisted token", () => {
     expect(policyErrors(validWorkflow)).toEqual([])
   })

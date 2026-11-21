@@ -1,6 +1,7 @@
+import * as THREE from "three"
 import { describe, expect, it } from "vitest"
 
-import { cameraDragMode } from "./threeCamera"
+import { cameraDragMode, createCameraState, pinchCameraState } from "./threeCamera"
 
 /**
  * 体检发现的真缺陷：3D 视口把 Shift 记在 **pointerdown 的快照**里（`pointerState.shiftKey`），
@@ -29,5 +30,17 @@ describe("camera drag mode", () => {
     expect(cameraDragMode(base, true)).toBe("screen-pan")
     expect(cameraDragMode({ ...base, ctrlKey: true }, false)).toBe("depth-pan")
     expect(cameraDragMode({ ...base, metaKey: true }, true)).toBe("depth-pan")
+  })
+})
+
+describe("touch pinch camera control", () => {
+  it("zooms inward when fingers spread apart and pans within scene bounds", () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-4, -4, -4), new THREE.Vector3(4, 4, 4))
+    const initial = createCameraState()
+
+    const pinched = pinchCameraState(initial, 0.1, -0.05, 2, bounds)
+
+    expect(pinched.distance).toBeCloseTo(initial.distance / 2, 6)
+    expect(pinched.target).not.toEqual(initial.target)
   })
 })

@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-21 —— Linux 与 Android 多端适配及自动打包工作流
+
+- **跨平台原生加密凭据库与宿主壳适配**（[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[mod.rs](apps/desktop/src-tauri/src/secrets/mod.rs)、[linux.rs](apps/desktop/src-tauri/src/secrets/linux.rs)、[vault.rs](apps/desktop/src-tauri/src/secrets/vault.rs)、[providers.rs](apps/desktop/src-tauri/src/commands/providers.rs)、[lib.rs](apps/desktop/src-tauri/src/lib.rs)）：
+  - 在 `apps/desktop/src-tauri` 新增 `VaultSecretStore`（应用私有目录 `.vault.key` + 每条目随机 salt/nonce、`HMAC-SHA256` 派生密钥、`ChaCha20` + Encrypt-then-MAC、`subtle` 常量时间校验、`0o600` 权限与 `zeroize` 清零）；
+  - 新增 `LinuxKeyringSecretStore`（优先使用 DBus Secret Service 并在无头/无守护进程环境自动回退加密本地库）与 Android 持久化加密本地库，`get_runtime_info` 统一按 `SecretStore::is_persistent()` 上报能力状态；`window.set_icon` 收敛至 `#[cfg(desktop)]`；新增 `vault` 防篡改与跨重启持久化 Rust 集成测试（[secrets.rs](apps/desktop/src-tauri/tests/secrets.rs)）。
+- **触控与移动端画布交互及布局适配**（[viewport.ts](apps/web/src/viewport.ts)、[GraphicsView.tsx](apps/web/src/components/GraphicsView.tsx)、[threeCamera.ts](apps/web/src/threeCamera.ts)、[threeSceneInteraction.ts](apps/web/src/threeSceneInteraction.ts)、[desktopRuntime.ts](apps/web/src/services/desktopRuntime.ts)、[App.tsx](apps/web/src/App.tsx)、[index.html](apps/web/index.html)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：
+  - 为 2D SVG 画布与 3D 场景新增双指捏合缩放与同步平移（`applyPinchGesture` / `pinchCameraState`）；
+  - 为移动 WebView 增加 `viewport-fit=cover`、`100dvh`、`env(safe-area-inset-*)` 安全区留白、`pointer: coarse` 44px 触控热区、`scroll-padding-bottom` 及 Linux WebKitGTK / Android WebView 运行时标识。
+- **Linux（`.deb` / `.AppImage`）与 Android（ARM64 `.apk`）构建配置与 CI 工作流**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[apps/desktop/package.json](apps/desktop/package.json)、[android-post-init.mjs](scripts/android-post-init.mjs)、[multiplatform-build.yml](.github/workflows/multiplatform-build.yml)、[workflowPolicy.test.ts](scripts/ci/workflowPolicy.test.ts)）：
+  - 补充 Linux `.deb`/`.AppImage` 与 Android `minSdkVersion: 24` 配置、`android:windowSoftInputMode="adjustResize"` 自动修补脚本及最小权限 SHA 固定多平台构建流水线。
+
 ## 2026-11-21 —— v5.0.0 系统性根治修复（纯文字真题 24/24 `--reset` 全过）、官网升级、识图 UI 暂隐与 E2E 门禁修复
 
 - **系统性架构根治与纯文字真题 24/24 全通过**（`4a71d3e8`，[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts)、[draftStore.ts](apps/web/src/agent/draftStore.ts)、[agentRunner.ts](apps/web/src/agent/agentRunner.ts)、[agentRuntime.ts](apps/web/src/agent/agentRuntime.ts)、[systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[diagramVerification.ts](packages/agent-core/src/diagramVerification.ts)、[coordinator.ts](packages/agent-core/src/coordinator.ts)、[reliabilityDiagnostics.ts](packages/agent-core/src/reliabilityDiagnostics.ts)、[repairProgress.ts](packages/agent-core/src/repairProgress.ts)、[drawingCertificate.ts](packages/agent-core/src/verification/drawingCertificate.ts)）：

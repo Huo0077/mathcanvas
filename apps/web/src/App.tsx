@@ -341,7 +341,7 @@ export function App() {
     })
     return () => { alive = false }
   }, [])
-  const desktopRuntimeHint = desktopInfo ? undefined : "密钥保存在 Windows 凭据管理器里，需要桌面版（Windows 应用）；当前在浏览器里运行，配置无法保存。"
+  const desktopRuntimeHint = desktopInfo ? undefined : "密钥保存在原生端安全凭据库中，需要桌面版（Windows / Linux）或 Android 应用；当前在浏览器里运行，配置无法保存。"
   const slope = document.parameters.slope
   const slopeLine = useMemo(() => document.primitives.find((primitive) => primitive.id === "line-slope"), [document.primitives])
   // Projection geometry is derived once per revision and shared by the four viewports and every exporter.

@@ -45,10 +45,19 @@ tower = "0.5"
 # 而"为什么这个随机数够随机"这件事不该由我来论证。
 rand = "0.9"
 
+# 跨平台加密本地凭据库（Linux 无桌面钥匙串回退 & Android 私有存储）：均使用 Cargo.lock 既定宽松依赖。
+chacha20 = "0.10.2"
+cipher = "0.5.2"
+hmac = "0.13.0"
+sha2 = "0.11.0"
+subtle = "2.6.1"
+zeroize = "1.9.0"
+
 # WebView2 版本只有注册表知道真值。**只在 Windows 上编**：这个依赖的存在本身就是
 # "我们不假装知道别的平台"的落点（`runtime.rs` 里的非 Windows 分支直接回 `unknown`）。
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
-# Windows 凭据管理器后端（Task 1.2 的生产后端）。`v1` 是它的兼容模式（默认开启）：
-# `Entry::new(service, user)` + set/get/delete_password。
+
+# 桌面端系统凭据管理器（Windows 凭据管理器 / Linux Secret Service）。
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
 keyring = "4.2.0"

@@ -8,6 +8,11 @@
     "dev": "node ../../scripts/toolchain.mjs tauri dev",
     "build": "node ../../scripts/toolchain.mjs tauri build --no-bundle",
     "bundle": "node ../../scripts/toolchain.mjs tauri build",
+    "linux:bundle": "node ../../scripts/toolchain.mjs tauri build --bundles deb,appimage",
+    "android:init": "node ../../scripts/toolchain.mjs tauri android init --ci --skip-targets-install && node ../../scripts/android-post-init.mjs",
+    "android:build": "node ../../scripts/toolchain.mjs tauri android build --apk --target aarch64",
+    "android:build:universal": "node ../../scripts/toolchain.mjs tauri android build --apk",
+    "android:build:debug": "node ../../scripts/toolchain.mjs tauri android build --apk --debug --target aarch64",
     "typecheck": "tsc -p tsconfig.json",
     "test:rust": "node ../../scripts/toolchain.mjs cargo test --manifest-path src-tauri/Cargo.toml"
   },

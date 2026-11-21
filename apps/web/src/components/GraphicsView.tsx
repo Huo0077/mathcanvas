@@ -17,7 +17,7 @@ import { clipFunctionSegmentsToBounds } from "../functionGraph"
 import { computeIntersectionPreviews, nearestPreview, PREVIEW_HIT_RADIUS, type IntersectionPreview } from "../intersectionPreview"
 import { dashFor, fillFor, opacityFor, strokeFor, strokeWidthFor } from "../primitiveStyle"
 import { planarMeasurementVisuals } from "../planarMeasurementVisuals"
-import { DEFAULT_VIEWPORT, VIEWBOX, fitViewportToPoints, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
+import { DEFAULT_VIEWPORT, VIEWBOX, applyPinchGesture, fitViewportToPoints, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt, type Viewport } from "../viewport"
 import { GRID_CELL, GRID_MAJOR_EVERY } from "../sceneGrid"
 import { isTextEditingTarget } from "../documentIds"
 import type { CreationMode, CreationStep } from "../draftingCommands"
@@ -135,6 +135,8 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
    * 而"加选"的语义是**切换** —— 同一个对象被加了又删，选择最终变成空集，命令一直禁用。
    */
   const selectionHandled = useRef(false)
+  const touchPointersRef = useRef(new Map<number, { clientX: number; clientY: number }>())
+  const pinchStateRef = useRef<{ centroid: Coordinate; distance: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   /** 上一次算出的交点（含被"已保存交点"过滤掉的那些），作为拖动时增量计算的基准。 */
   const previousPreviewsRef = useRef<IntersectionPreview[]>([])
@@ -485,8 +487,18 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     if (suppressClick.current) return
     onSelect(id, event.shiftKey)
   }
+  const touchPinchMetrics = (svg: SVGSVGElement) => {
+    const entries = [...touchPointersRef.current.values()]
+    if (entries.length < 2) return null
+    const a = pointToSvg(svg, entries[0]!.clientX, entries[0]!.clientY)
+    const b = pointToSvg(svg, entries[1]!.clientX, entries[1]!.clientY)
+    return {
+      centroid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      distance: Math.hypot(a.x - b.x, a.y - b.y)
+    }
+  }
   const beginDrag = (event: ReactPointerEvent<SVGElement>, id: string) => {
-    if (event.button === 1 || (event.button === 0 && spacePressed)) return
+    if (event.button === 1 || (event.button === 0 && spacePressed) || pinchStateRef.current !== null || touchPointersRef.current.size >= 2) return
     event.stopPropagation()
     if (creationMode) return
     const primitive = document.primitives.find((candidate) => candidate.id === id)
@@ -502,7 +514,22 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     const tangentGrab = tangentTargetOf(primitive, document.primitives, document.parameters, eventToWorld(event, viewport))
     setDragState({ id, handle, origin: eventToWorld(event, viewport), pointerId: event.pointerId, tangentOffset: tangentGrab?.parameterOffset ?? 0 })
   }
+  const handlePointerDownCapture = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.pointerType !== "touch") return
+    touchPointersRef.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+    if (touchPointersRef.current.size < 2) return
+    const metrics = svgRef.current ? touchPinchMetrics(svgRef.current) : null
+    if (!metrics) return
+    pinchStateRef.current = metrics
+    suppressClick.current = true
+    setDragStart(null)
+    setDragCurrent(null)
+    setDragState(null)
+    setPanState(null)
+    transientTraceRef.current.clear()
+  }
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (pinchStateRef.current || touchPointersRef.current.size >= 2) return
     if (creationMode || dragState) return
     if (event.button === 1 || (event.button === 0 && spacePressed)) {
       event.preventDefault()
@@ -515,6 +542,18 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     setDragCurrent(coordinate)
   }
   const handlePointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.pointerType === "touch" && touchPointersRef.current.has(event.pointerId)) {
+      touchPointersRef.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY })
+      if (pinchStateRef.current && touchPointersRef.current.size >= 2 && svgRef.current) {
+        const next = touchPinchMetrics(svgRef.current)
+        const prev = pinchStateRef.current
+        if (next) {
+          setViewport((current) => applyPinchGesture(current, prev.centroid, next.centroid, prev.distance, next.distance))
+          pinchStateRef.current = next
+        }
+        return
+      }
+    }
     if (panState && event.pointerId === panState.pointerId) {
       const current = eventToSvg(event)
       setViewport({ ...viewport, center: { x: panState.center.x + (panState.start.x - current.x) / viewport.scale, y: panState.center.y + (current.y - panState.start.y) / viewport.scale } })
@@ -529,6 +568,12 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     if (dragStart) setDragCurrent(coordinate)
   }
   const finishDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.pointerType === "touch") {
+      const wasPinching = pinchStateRef.current !== null
+      touchPointersRef.current.delete(event.pointerId)
+      if (touchPointersRef.current.size < 2) pinchStateRef.current = null
+      if (wasPinching) return
+    }
     if (panState && event.pointerId === panState.pointerId) {
       event.currentTarget.releasePointerCapture?.(event.pointerId)
       setPanState(null)
@@ -703,7 +748,7 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
   const targetElement = (event.target as Element).closest("[data-primitive-id]")
   const targetId = targetElement?.getAttribute("data-primitive-id") ?? null
   onCanvasContextMenu?.({ clientX: event.clientX, clientY: event.clientY, targetId })
-}} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => {
+}} onPointerDownCapture={handlePointerDownCapture} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerLeave={() => { setHoverCoordinate(null); setHoverPrimitiveType(null); onPointerCoordinate?.(null) }} onPointerUp={finishDrag} onPointerCancel={finishDrag} onDoubleClick={(event) => {
   if (creationMode === "polyline") {
     onCanvasDoubleClick(snapCoordinate(eventToWorld(event, viewport)))
     return

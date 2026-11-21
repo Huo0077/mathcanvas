@@ -88,6 +88,31 @@ export function zoomViewport(viewport: Viewport, factor: number, anchorSvg: Coor
   return zoomViewportAt(viewport, factor, anchorSvg)
 }
 
+/**
+ * Apply a two-finger touch pinch/pan gesture in SVG coordinates so the world point initially at
+ * `prevCentroidSvg` tracks `nextCentroidSvg` while zooming by `nextDistance / prevDistance`.
+ */
+export function applyPinchGesture(
+  viewport: Viewport,
+  prevCentroidSvg: Coordinate,
+  nextCentroidSvg: Coordinate,
+  prevDistance: number,
+  nextDistance: number
+): Viewport {
+  const ratio = prevDistance > 1 && nextDistance > 1 && Number.isFinite(nextDistance / prevDistance)
+    ? nextDistance / prevDistance
+    : 1
+  const scale = DEFAULT_VIEWPORT.scale * clampZoom((viewport.scale / DEFAULT_VIEWPORT.scale) * ratio)
+  const anchor = svgToWorld(prevCentroidSvg, viewport)
+  return {
+    center: {
+      x: anchor.x - (nextCentroidSvg.x - svgCenter.x) / scale,
+      y: anchor.y + (nextCentroidSvg.y - svgCenter.y) / scale
+    },
+    scale
+  }
+}
+
 /** 平面画布网格线的条数上限：极端缩小理论上会要求上万条线，超过就干脆不画（宁可没有网格，
  * 也不要把画布冻住）。在当前缩放范围（0.05×～40×）内远达不到这个数。 */
 export const MAX_GRID_LINES = 4000

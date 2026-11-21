@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_VIEWPORT, MAX_GRID_LINES, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, fitViewportToPoints, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
+import { DEFAULT_VIEWPORT, MAX_GRID_LINES, MAX_ZOOM, MIN_ZOOM, WORLD_SCALE, applyPinchGesture, fitViewportToPoints, gridLinePositions, rayToViewport, svgToWorld, visibleWorldBounds, worldToSvg, zoomViewport, zoomViewportAt } from "./viewport"
 import { GRID_CELL } from "./sceneGrid"
 
 describe("shared viewport mapping", () => {
@@ -105,6 +105,19 @@ describe("canvas zoom", () => {
     expect(gridLinePositions(5, 5, 0)).toEqual([])
     expect(gridLinePositions(Number.NaN, 1)).toEqual([])
     expect(gridLinePositions(0, MAX_GRID_LINES * 2)).toEqual([])
+  })
+
+  it("tracks both pinch scale and simultaneous two-finger pan in world coordinates", () => {
+    const start = { center: { x: 2, y: -1 }, scale: WORLD_SCALE }
+    const prevCentroid = { x: 300, y: 200 }
+    const nextCentroid = { x: 360, y: 170 }
+    const worldUnderFinger = svgToWorld(prevCentroid, start)
+
+    const next = applyPinchGesture(start, prevCentroid, nextCentroid, 100, 150)
+
+    expect(next.scale).toBeCloseTo(WORLD_SCALE * 1.5, 6)
+    expect(worldToSvg(worldUnderFinger, next).x).toBeCloseTo(nextCentroid.x, 6)
+    expect(worldToSvg(worldUnderFinger, next).y).toBeCloseTo(nextCentroid.y, 6)
   })
 })
 

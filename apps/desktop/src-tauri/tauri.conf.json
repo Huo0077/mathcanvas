@@ -36,14 +36,26 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "category": "Education",
+    "shortDescription": "Interactive 2D/3D geometry and AI math drawing workbench",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.png",
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "linux": {
+      "deb": {
+        "section": "math"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
     "android": {
+      "minSdkVersion": 24,
       "debugApplicationIdSuffix": ".debug"
     }
   }

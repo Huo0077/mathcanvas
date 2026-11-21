@@ -8,7 +8,7 @@ import type { SectionPrimitive, Vector3 } from "@draw/dsl"
 import { host3FromPrimitive, reactive, type Host3, type Host3Parameter } from "@draw/geometry-kernel"
 import { solidVolumeHostFor } from "@draw/scene-graph"
 import { getAffectedPrimitiveIds, isFreeDraggable3, planeThroughPoints, templateTopologyIds } from "@draw/scene-graph"
-import { cameraDragMode, clampCameraTarget, panCameraState, rotateCameraState } from "./threeCamera"
+import { cameraDragMode, clampCameraTarget, panCameraState, pinchCameraState, rotateCameraState } from "./threeCamera"
 import { advanceRotationDrag, beginRotationDrag, dragFamilyIds, dragOffsetDrift, dragWorldPoint, hasRotationMovement, lineParameterAtRay, orbitParameterAt, rotationAngleAt, rotationDragDegrees, rotationHandleAxisAt, ROTATION_SNAP_DEGREES, trackRadiusAt, trackRadiusHandleHit } from "./threeDrag"
 import { pickRaycastHit3, pickSectionAt, resolveSelectableHit, previewBeatsPick, type RaycastHit3 } from "./threePicking"
 import { sectionUnitNormal } from "./threePrimitives"
@@ -116,11 +116,36 @@ function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveS
     let rotationFrames = 0
     /** 缩放拖动期间的重画帧数（同上）。 */
     let scaleFrames = 0
+    /** 触屏双指缩放与平移手势状态（Android / 平板端）。 */
+    const activeTouches = new Map<number, { x: number; y: number }>()
+    let touchPinchState: { center: { x: number; y: number }; span: number } | null = null
+
+    const currentTouchMetrics = () => {
+      const pointsList = [...activeTouches.values()]
+      if (pointsList.length < 2) return null
+      const a = pointsList[0]!
+      const b = pointsList[1]!
+      return {
+        center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        span: Math.hypot(a.x - b.x, a.y - b.y)
+      }
+    }
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0 && event.button !== 1) return
       event.preventDefault()
       const point = pointFromEvent(event)
+      if (event.pointerType === "touch") {
+        activeTouches.set(event.pointerId, point)
+        if (activeTouches.size >= 2) {
+          pointerStateRef.current = null
+          dragSessionRef.current = null
+          if (sceneShell) delete sceneShell.dataset.dragging
+          touchPinchState = currentTouchMetrics()
+          try { renderer.domElement.setPointerCapture(event.pointerId) } catch { /* Touch pointer capture optional */ }
+          return
+        }
+      }
       pointerStateRef.current = { pointerId: event.pointerId, x: point.x, y: point.y, lastX: point.x, lastY: point.y, button: event.button, moved: false }
       dragSessionRef.current = null
       if (sceneShell) sceneShell.dataset.dragTarget = ""
@@ -348,6 +373,23 @@ function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveS
       renderer.domElement.setPointerCapture(event.pointerId)
     }
     const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch" && activeTouches.has(event.pointerId)) {
+        const touchPoint = pointFromEvent(event)
+        activeTouches.set(event.pointerId, touchPoint)
+        if (activeTouches.size >= 2) {
+          const next = currentTouchMetrics()
+          if (touchPinchState && next) {
+            const ratio = touchPinchState.span > 1e-4 && next.span > 1e-4 ? next.span / touchPinchState.span : 1
+            const deltaX = next.center.x - touchPinchState.center.x
+            const deltaY = next.center.y - touchPinchState.center.y
+            setCameraState(pinchCameraState(cameraStateRef.current, deltaX, deltaY, ratio, sceneBounds))
+            touchPinchState = next
+          } else if (next) {
+            touchPinchState = next
+          }
+          return
+        }
+      }
       const pointerState = pointerStateRef.current
       if (!pointerState) {
         if (sceneShell) {
@@ -559,6 +601,13 @@ function buildHostPointGraph(pointId: string, host: Host3, primitive: PrimitiveS
       setCameraState({ ...moved, target: clampCameraTarget(moved.target, sceneBounds) })
     }
     const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType === "touch") {
+        const wasPinching = touchPinchState !== null || activeTouches.size >= 2
+        activeTouches.delete(event.pointerId)
+        if (activeTouches.size < 2) touchPinchState = null
+        try { renderer.domElement.releasePointerCapture(event.pointerId) } catch { /* Release optional */ }
+        if (wasPinching) return
+      }
       const pointerState = pointerStateRef.current
       if (!pointerState || pointerState.pointerId !== event.pointerId) return
       const point = pointFromEvent(event)

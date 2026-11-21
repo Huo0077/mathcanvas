@@ -17,11 +17,15 @@
 //! 3. **空 id / 空密钥当场拒**。空 profile id 会让两个 provider 抢同一格；
 //!    空密钥会把"没填"变成"存了一个空密钥"，于是界面显示已配置、而请求必然 401。
 
+#[cfg(target_os = "linux")]
+pub mod linux;
 pub mod memory;
+pub mod vault;
 #[cfg(windows)]
 pub mod windows;
 
 use std::fmt;
+use std::path::Path;
 
 /// 密钥的**状态**。这是唯一会跨 IPC 边界回到前端的"关于密钥"的信息。
 ///
@@ -74,12 +78,19 @@ pub trait SecretStore: Send + Sync {
 
     /// 这个后端把密钥放在哪。会进界面与诊断，所以**只描述形态，不含任何密钥信息**。
     fn backend(&self) -> &'static str;
+
+    /// 该后端是否在重启应用后仍保留已配置的密钥（Windows 凭据管理器 / Linux Secret Service / 本地加密凭据库为 `true`，纯内存后端为 `false`）。
+    fn is_persistent(&self) -> bool;
 }
 
-/// 当前生效的后端名。
+/// 当前平台默认优先使用的持久化后端名。
 #[cfg(windows)]
 pub const ACTIVE_BACKEND: &str = "windows-credential-manager";
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+pub const ACTIVE_BACKEND: &str = "linux-secret-service";
+#[cfg(target_os = "android")]
+pub const ACTIVE_BACKEND: &str = "encrypted-local-vault";
+#[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
 pub const ACTIVE_BACKEND: &str = "memory";
 
 /// 内存后端必须被如实描述的那句话（会显示给用户）。
@@ -109,6 +120,9 @@ pub(crate) fn validate(profile_id: &str, secret: Option<&str>) -> Result<(), Sec
 ///（`match` 必须穷尽），而 trait object 会默默走到某个默认实现上去。
 pub enum Store {
     Memory(memory::MemorySecretStore),
+    Vault(vault::VaultSecretStore),
+    #[cfg(target_os = "linux")]
+    Linux(linux::LinuxKeyringSecretStore),
     #[cfg(windows)]
     Windows(windows::WindowsSecretStore),
 }
@@ -117,6 +131,9 @@ impl SecretStore for Store {
     fn put(&self, profile_id: &str, secret: &str) -> Result<SecretState, SecretError> {
         match self {
             Store::Memory(store) => store.put(profile_id, secret),
+            Store::Vault(store) => store.put(profile_id, secret),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.put(profile_id, secret),
             #[cfg(windows)]
             Store::Windows(store) => store.put(profile_id, secret),
         }
@@ -125,6 +142,9 @@ impl SecretStore for Store {
     fn remove(&self, profile_id: &str) -> Result<(), SecretError> {
         match self {
             Store::Memory(store) => store.remove(profile_id),
+            Store::Vault(store) => store.remove(profile_id),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.remove(profile_id),
             #[cfg(windows)]
             Store::Windows(store) => store.remove(profile_id),
         }
@@ -133,6 +153,9 @@ impl SecretStore for Store {
     fn has(&self, profile_id: &str) -> Result<bool, SecretError> {
         match self {
             Store::Memory(store) => store.has(profile_id),
+            Store::Vault(store) => store.has(profile_id),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.has(profile_id),
             #[cfg(windows)]
             Store::Windows(store) => store.has(profile_id),
         }
@@ -141,6 +164,9 @@ impl SecretStore for Store {
     fn with_secret<T>(&self, profile_id: &str, f: impl FnOnce(&str) -> T) -> Result<Option<T>, SecretError> {
         match self {
             Store::Memory(store) => store.with_secret(profile_id, f),
+            Store::Vault(store) => store.with_secret(profile_id, f),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.with_secret(profile_id, f),
             #[cfg(windows)]
             Store::Windows(store) => store.with_secret(profile_id, f),
         }
@@ -149,22 +175,62 @@ impl SecretStore for Store {
     fn backend(&self) -> &'static str {
         match self {
             Store::Memory(store) => store.backend(),
+            Store::Vault(store) => store.backend(),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.backend(),
             #[cfg(windows)]
             Store::Windows(store) => store.backend(),
         }
     }
+
+    fn is_persistent(&self) -> bool {
+        match self {
+            Store::Memory(store) => store.is_persistent(),
+            Store::Vault(store) => store.is_persistent(),
+            #[cfg(target_os = "linux")]
+            Store::Linux(store) => store.is_persistent(),
+            #[cfg(windows)]
+            Store::Windows(store) => store.is_persistent(),
+        }
+    }
 }
 
-/// 造一个当前平台该用的后端。
-///
-/// Windows 上用凭据管理器；它不可用时（极少见：企业策略可能禁用）**退到内存后端而不是崩**，
-/// 但 `backend()` 会说 `memory`，界面据此告诉用户"这次会话有效，重启要重新填"。
+/// 造一个不依赖数据目录的凭据后端（主要用于测试或早期无数据目录上下文）。
 pub fn create_store() -> Store {
     #[cfg(windows)]
     {
         if let Ok(store) = windows::create() {
             return Store::Windows(store);
         }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(store) = linux::create() {
+            return Store::Linux(store);
+        }
+    }
+    Store::Memory(memory::create())
+}
+
+/// 在给定应用私有数据目录下构造当前平台最佳凭据后端：
+/// - Windows：系统凭据管理器 → 失败时退至应用私有加密凭据库 → 仍失败才退至内存；
+/// - Linux：系统 Secret Service → 无守护进程时自动退至应用私有加密凭据库 → 仍失败才退至内存；
+/// - Android / 其它沙盒平台：直接使用应用私有加密凭据库 → 仅当存储不可写时才退至内存。
+pub fn create_store_in(data_root: &Path) -> Store {
+    #[cfg(windows)]
+    {
+        if let Ok(store) = windows::create() {
+            return Store::Windows(store);
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(store) = linux::create() {
+            return Store::Linux(store);
+        }
+    }
+    if let Ok(store) = vault::create(data_root) {
+        return Store::Vault(store);
     }
     Store::Memory(memory::create())
 }

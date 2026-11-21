@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-21 Linux 与 Android 多端适配及自动打包工作流就绪**：已完成 Linux（Secret Service + 加密凭据库回退、`.deb`/`.AppImage`）与 Android（应用私有加密凭据库、2D/3D 双指捏合缩放平移、`env(safe-area-inset-*)` 安全区、`adjustResize` 软键盘自适应与 ARM64 `.apk`）全套代码、配置及独立 SHA 固定 CI 工作流 [multiplatform-build.yml](../.github/workflows/multiplatform-build.yml)。推送并确认 Linux/Android CI 产物后，可将该批多端包纳入 Release 下载并继续后续识图能力开发。
+
 > **2026-11-21 v5.0.0 持续加固、官网上线打包、识图 UI 暂隐与全量 E2E 闭环（`4195ff87`）**：已完成系统性几何内核与会话内自修根治（24 道纯文本真题 `--reset` 实机 `deepseek-v4-flash` **24/24 通过**）、官网更新（持续升级说明 + `dogf9066@gmail.com` 反馈入口 + GitHub Releases 直链下载）与识图 UI 特性开关暂隐（`IMAGE_READER_UI_ENABLED = false`，保留底层代码待后续开发正式识图后一键开启），并修复 `draftStore` 唯一前置条件小问提升条件使全量 Playwright E2E **331 passed / 1 skipped / 0 failed**。后续演进方向：① 收集 `dogf9066@gmail.com` 反馈的真实疑难题与 Bug 持续迭代内核；② 正式开发识图/OCR 能力并重新开启 `IMAGE_READER_UI_ENABLED`。实时读数与验收边界统一见 [当前状态](current-status.md)。
 
 > **2026-11-20 首个正式版本里程碑定版（智能补线推面、全链路动点联动与工作台升级）**：在 44/44 真机实测全部通过后，完成常规题自动补全线段并由相交线与动点主动推测空间面（`面 AEC`）、动点与构造面 ID 复用联动、Agent 预览期左侧面元栏实时同步分组、往期对话恢复、13 种模型服务预设 + 自动获取模型名、偏好设置丰富与高级页移除、桌面图标与无黑框启动及面向用户的 [README](../README.md) 定版。`npm run typecheck`（exit 0）与桌面端真机 `deepseek-v4-flash` 专项测试均通过。

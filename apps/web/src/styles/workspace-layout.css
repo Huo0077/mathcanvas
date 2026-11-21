@@ -271,3 +271,60 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
 @media (prefers-reduced-motion: reduce) {
   .clean-chrome *, .clean-header *, .app-rail * { animation: none; transition: none; }
 }
+
+/* Android / Linux Touch & Safe-Area Adaptation (modern-web-guidance: form-factor-adaptation & responsive-design) */
+html {
+  scroll-padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+.app-shell {
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.app-shell > .app-rail,
+.agent-stage-composer,
+.settings-page {
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+@media (pointer: coarse) {
+  :root { --target-size: 44px; }
+  .clean-button,
+  .clean-icon-button,
+  .clean-workspaces button,
+  .workbench-mobile-controls button,
+  .three-camera-controls button,
+  .canvas-viewport-controls button,
+  .agent-workspace .agent-send,
+  .app-rail .app-rail-button {
+    min-block-size: var(--target-size);
+    min-inline-size: var(--target-size);
+  }
+  .three-camera-hint { display: none; }
+  .app-shell .three-camera-controls {
+    bottom: max(14px, env(safe-area-inset-bottom, 0px));
+    right: max(12px, env(safe-area-inset-right, 0px));
+    flex-wrap: wrap;
+    max-width: calc(100% - 24px);
+  }
+}
+@media (max-width: 680px) {
+  .app-shell .agent-workspace .agent-stage-composer {
+    padding: 12px max(12px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  }
+  .app-shell .agent-candidate-preview {
+    flex: 0 0 34dvh;
+    min-height: 210px;
+  }
+  .app-shell .three-scene-options {
+    top: 10px;
+    left: 10px;
+  }
+  .app-shell .three-camera-controls {
+    bottom: 10px;
+    right: 10px;
+  }
+  .app-shell .three-camera-hint {
+    display: none;
+  }
+}

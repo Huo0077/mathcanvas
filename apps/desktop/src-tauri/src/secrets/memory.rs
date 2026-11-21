@@ -54,6 +54,10 @@ impl SecretStore for MemorySecretStore {
     fn backend(&self) -> &'static str {
         "memory"
     }
+
+    fn is_persistent(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

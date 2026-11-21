@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-21 —— Linux 与 Android 多端适配与多平台 CI 构建基线
+
+> **2026-11-21 多平台扩展现状与本机可验证范围**：
+> 1. **Rust 多平台安全凭据库与 Tauri 宿主适配**：已完成 [vault.rs](../apps/desktop/src-tauri/src/secrets/vault.rs)（`ChaCha20` + Encrypt-then-MAC `HMAC-SHA256`、`0o600` 文件权限与 `zeroize`）、[linux.rs](../apps/desktop/src-tauri/src/secrets/linux.rs)（Linux Secret Service 探测与加密库自动回退）、Android 持久化加密库接线、`SecretStore::is_persistent()` 统一能力识别及 `#[cfg(desktop)]` 图标隔离。`npm run test:rust --workspace @draw/desktop` 全套单元测试与集成测试（含 `vault` 篡改拒收与重开持久化及 `shell_smoke`）在本机 Windows 全部通过；`licences.test.ts` 核对 `550 === 550`。
+> 2. **2D/3D 触控手势与移动端适配**：已完成 2D SVG 与 3D 场景双指捏合缩放/同步平移（`applyPinchGesture` / `pinchCameraState`）、`viewport-fit=cover`、`100dvh`、`env(safe-area-inset-*)` 安全区、`pointer: coarse` 44px 触控热区、Linux/Android 运行时文案及 `android:windowSoftInputMode="adjustResize"` 后处理脚本 [android-post-init.mjs](../scripts/android-post-init.mjs)。
+> 3. **Linux（`.deb`/`.AppImage`）与 Android（ARM64 `.apk`）自动化打包**：新增独立最小权限工作流 [multiplatform-build.yml](../.github/workflows/multiplatform-build.yml) 与政策测试 [workflowPolicy.test.ts](../scripts/ci/workflowPolicy.test.ts)（13/13 通过）；当前 Windows 本机已完成 `@draw/web` 构建、`typecheck`、`lint`（0 errors）、核心 Vitest（7 文件 164/164）、`test:docs`（8 文件 22/22）及响应式/工作台 Playwright E2E（13/13），Linux 与 Android 真实产包编译由 `multiplatform-build.yml` 在 GitHub Ubuntu Runner 上执行。
+
 ## 2026-11-21 —— v5.0.0 系统性根治加固（24/24 纯文字真题 `--reset` 全过）、官网升级、识图 UI 暂隐与全量 E2E 闭环
 
 > **2026-11-21 最新交付与验证基线（`4195ff87` / `v5.0.0` 持续更新升级中）**：

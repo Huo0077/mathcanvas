@@ -89,6 +89,24 @@ export function zoomCameraState(state: CameraState, factor: number): CameraState
   return { ...state, distance: Math.max(FIT_MIN_DISTANCE, Math.min(FIT_MAX_DISTANCE, state.distance * factor)) }
 }
 
+/**
+ * Apply a two-finger touch pinch/pan gesture on the 3D scene canvas: spread/pinch adjusts camera
+ * distance while centroid movement pans along the camera screen plane within `bounds`.
+ */
+export function pinchCameraState(
+  state: CameraState,
+  deltaXNorm: number,
+  deltaYNorm: number,
+  scaleRatio: number,
+  bounds: THREE.Box3
+): CameraState {
+  const zoomFactor = Number.isFinite(scaleRatio) && scaleRatio > 0.05 ? 1 / scaleRatio : 1
+  const zoomed = zoomCameraState(state, zoomFactor)
+  const panScale = zoomed.distance * 1.5
+  const panned = panCameraState(zoomed, -deltaXNorm * panScale, deltaYNorm * panScale, 0)
+  return { ...panned, target: clampCameraTarget(panned.target, bounds) }
+}
+
 export function resetCameraState(): CameraState {
   return createCameraState()
 }

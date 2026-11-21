@@ -1,5 +1,11 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-21 —— Linux 与 Android 多端适配、加密本地凭据库及 GitHub 多平台打包流水线
+
+- **Rust 跨平台加密凭据库与 Tauri 适配**：新增 [vault.rs](../apps/desktop/src-tauri/src/secrets/vault.rs)（基于 `Cargo.lock` 既有 `chacha20` / `hmac` / `sha2` / `subtle` / `zeroize` 实现应用私有加密凭据存储与篡改检验，零新增许可证风险，`licences.test.ts` 保持 `550 === 550`）与 [linux.rs](../apps/desktop/src-tauri/src/secrets/linux.rs)（Linux Secret Service 探测 + 加密本地库回退），接入 Android 默认持久化加密库并由 `SecretStore::is_persistent()` 驱动 `get_runtime_info`。
+- **2D/3D 双指触控手势与移动端自适应**：实现 [viewport.ts](../apps/web/src/viewport.ts) `applyPinchGesture`、[threeCamera.ts](../apps/web/src/threeCamera.ts) `pinchCameraState`、[GraphicsView.tsx](../apps/web/src/components/GraphicsView.tsx) 与 [threeSceneInteraction.ts](../apps/web/src/threeSceneInteraction.ts) 双指捏合缩放+同步平移，更新 [workspace-layout.css](../apps/web/src/styles/workspace-layout.css) 安全区与 `pointer: coarse` 热区及 [desktopRuntime.ts](../apps/web/src/services/desktopRuntime.ts) 运行时自述。
+- **Linux & Android 打包配置与本机门禁验证**：扩展 [tauri.conf.json](../apps/desktop/src-tauri/tauri.conf.json) 与 [apps/desktop/package.json](../apps/desktop/package.json)，新增 [android-post-init.mjs](../scripts/android-post-init.mjs) 与独立 SHA 固定构建工作流 [multiplatform-build.yml](../.github/workflows/multiplatform-build.yml)。本机 Windows 已通过 `@draw/web` 构建、`test:rust`、`typecheck`、`lint`（0 errors）、核心 Vitest 164/164、`test:docs` 22/22 及响应式/工作台 E2E 13/13，下一步推送后在 GitHub Actions 核验 Linux（`.deb`/`.AppImage`）与 Android（ARM64 `.apk`）实机打包流水线。
+
 ## 2026-11-21 —— v5.0.0 系统性根治修复（24/24 纯文字真题 `--reset` 全过）、官网升级、识图 UI 暂隐与全量 E2E 闭环
 
 - **系统性架构根治与 24/24 纯文字真题 `--reset` 全通过（`4a71d3e8`）**：深入排查高频易错题（含 `USER-16`、`JT-S01`、`JT-P01`、`GK-P06`、`JT-P06`、`JT-P08` 等）后完成多项底层架构修复：补齐圆锥曲线定比弦精确闭式求解、`A-BCD` 六边四面体与 Cayley-Menger 可行性诊断、任意 $k$ 棱锥/棱柱顶点组装、`construct_circumsphere` 球心注册 `points3`、`finish_candidate` 会话内至多 2 轮预检自修、失败签名输入哈希区分、`ds_action` 28 轮/96 网络预算与 `agentRuntime.confirmDraft()` 失败终态拒收。桌面端 `mathcanvas-desktop.exe` + `deepseek-v4-flash` 下 24 道纯文本高考/联考与用户实测题单轮 `--reset` 串行实测 **24/24（100%）通过**。

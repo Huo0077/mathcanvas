@@ -388,7 +388,7 @@ pub async fn fetch_provider_models(
 /// 取数据根用的是 `app.path().app_data_dir()`（Tauri 自己按应用标识算出来的那一个），
 /// 再交给 `build_runtime_info` 只取目录名 —— 于是**绝对路径不会离开 Rust 侧**。
 ///
-/// 密钥库的状态**现问后端**（而不是写死）：只有 `windows-credential-manager`
+/// 密钥库的状态**现问后端**（而不是写死）：仅持久化后端（Windows 凭据管理器 / Linux Secret Service / 本地加密凭据库）
 /// 才是"关掉应用之后还在"；退到内存后端时必须如实说"还没实现"（界面据此提醒用户）。
 #[tauri::command]
 pub fn get_runtime_info(app: tauri::AppHandle) -> Result<runtime::DesktopRuntimeInfo, String> {
@@ -404,7 +404,7 @@ pub fn get_runtime_info(app: tauri::AppHandle) -> Result<runtime::DesktopRuntime
     // 靠 `runtime.rs` 里那条改成"三字段各自跟输入走"的用例才发现。
     let secret_store_ready = app
         .try_state::<SecretStoreState>()
-        .is_some_and(|state| state.0.backend() == "windows-credential-manager");
+        .is_some_and(|state| state.0.is_persistent());
     let repository_ready = app.try_state::<RepositoryState>().is_some();
     let transport_ready = app
         .try_state::<ProxyState>()

@@ -1,0 +1,130 @@
+name: Multiplatform Packages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/desktop/**
+      - apps/web/**
+      - packages/**
+      - scripts/android-post-init.mjs
+      - scripts/toolchain.mjs
+      - package.json
+      - package-lock.json
+      - .github/workflows/multiplatform-build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multiplatform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Linux Tauri build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf file xdg-utils
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Build Linux .deb and .AppImage bundles
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npm run linux:bundle --workspace @draw/desktop
+      - name: Collect Linux bundle artifacts
+        run: |
+          mkdir -p artifacts/linux
+          find apps/desktop/src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp -v {} artifacts/linux/ \;
+          ls -lh artifacts/linux
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mathcanvas-linux-bundles
+          path: artifacts/linux/
+          retention-days: 14
+
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: android-aarch64
+      - name: Configure Java, Android SDK, and NDK environment
+        run: |
+          JAVA17="${JAVA_HOME_17_X64:-/usr/lib/jvm/temurin-17-jdk-amd64}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          NDK_VER="$(ls -1 "$SDK/ndk" | sort -V | tail -n 1)"
+          NDK="$SDK/ndk/$NDK_VER"
+          LLVM_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "$JAVA17/bin" >> "$GITHUB_PATH"
+          echo "$LLVM_BIN" >> "$GITHUB_PATH"
+          echo "CC_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android24-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$LLVM_BIN/llvm-ar" >> "$GITHUB_ENV"
+          echo "RANLIB_aarch64_linux_android=$LLVM_BIN/llvm-ranlib" >> "$GITHUB_ENV"
+      - name: Initialize Tauri Android project
+        run: |
+          npm run build --workspace @draw/web
+          npm run android:init --workspace @draw/desktop
+      - name: Build Android ARM64 APK
+        run: npm run android:build --workspace @draw/desktop
+      - name: Align and sign release APK for direct installation
+        run: |
+          mkdir -p artifacts/android
+          BUILD_TOOLS_VER="$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VER"
+          RAW_APK="$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk" | head -n 1)"
+          if [ -z "$RAW_APK" ]; then
+            echo "::error::No APK produced by tauri android build"
+            exit 1
+          fi
+          echo "Found APK: $RAW_APK"
+          if [[ "$RAW_APK" == *-unsigned.apk ]]; then
+            KEYSTORE="/tmp/mathcanvas-ci-debug.keystore"
+            "$JAVA_HOME/bin/keytool" -genkeypair -v -keystore "$KEYSTORE" -storepass android \
+              -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=MathCanvas CI,O=MathCanvas,C=CN"
+            "$BUILD_TOOLS/zipalign" -f -p 4 "$RAW_APK" artifacts/android/mathcanvas-aligned.apk
+            "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
+              --out artifacts/android/MathCanvas-android-arm64.apk artifacts/android/mathcanvas-aligned.apk
+            rm -f artifacts/android/mathcanvas-aligned.apk "$KEYSTORE"
+          else
+            cp -v "$RAW_APK" artifacts/android/MathCanvas-android-arm64.apk
+          fi
+          ls -lh artifacts/android
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mathcanvas-android-apk
+          path: artifacts/android/
+          retention-days: 14

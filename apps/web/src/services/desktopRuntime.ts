@@ -123,14 +123,21 @@ const HEALTH_LABELS: Record<DesktopComponentHealth, string> = {
   not_implemented: "还没实现"
 }
 
+function describeWebview(info: DesktopRuntimeInfo): string {
+  if (info.platform === "windows") return `WebView2 ${info.webviewVersion}`
+  if (info.platform === "android") return info.webviewVersion === "unknown" ? "Android WebView" : `Android WebView ${info.webviewVersion}`
+  if (info.platform === "linux") return info.webviewVersion === "unknown" ? "Linux WebKitGTK" : `Linux WebKitGTK ${info.webviewVersion}`
+  return info.webviewVersion === "unknown" ? `${info.platform} WebView` : `${info.platform} WebView ${info.webviewVersion}`
+}
+
 /**
  * 给界面用的一句话。**三态各有各的词** —— 把 `not_implemented` 说成"不可用"，
  * 用户会以为是机器的问题，而实际是软件还没做。
  */
 export function describeRuntime(info: DesktopRuntimeInfo | null): string {
-  if (!info) return "在浏览器里运行，没有桌面外壳（本地密钥库与项目仓库不可用）。"
+  if (!info) return "在浏览器里运行，没有原生外壳（本地密钥库与项目仓库不可用）。"
   return [
-    `桌面外壳 ${info.appVersion} · ${info.platform} · WebView2 ${info.webviewVersion}`,
+    `原生外壳 ${info.appVersion} · ${info.platform} · ${describeWebview(info)}`,
     `数据目录 ${info.dataRoot}`,
     `密钥库 ${HEALTH_LABELS[info.secretStore]} · 项目仓库 ${HEALTH_LABELS[info.repository]} · 本地代理 ${HEALTH_LABELS[info.transport]}`
   ].join("\n")

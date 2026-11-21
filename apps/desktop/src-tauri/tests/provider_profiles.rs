@@ -531,6 +531,10 @@ impl SecretStore for FakeSecrets {
     fn backend(&self) -> &'static str {
         "fake-memory"
     }
+
+    fn is_persistent(&self) -> bool {
+        false
+    }
 }
 
 #[test]

@@ -109,4 +109,16 @@ describe("runtime description for the interface", () => {
     expect(text).not.toContain(":\\")
     expect(text).not.toContain("Users")
   })
+
+  it("formats Linux and Android runtime descriptions without claiming WebView2", () => {
+    const linuxText = describeRuntime({ ...sample, platform: "linux", webviewVersion: "unknown", secretStore: "ready" })
+    const androidText = describeRuntime({ ...sample, platform: "android", webviewVersion: "unknown", secretStore: "ready" })
+
+    expect(linuxText).toContain("Linux WebKitGTK")
+    expect(linuxText).not.toContain("WebView2")
+    expect(linuxText).toContain("密钥库 可用")
+    expect(androidText).toContain("Android WebView")
+    expect(androidText).not.toContain("WebView2")
+    expect(androidText).toContain("密钥库 可用")
+  })
 })

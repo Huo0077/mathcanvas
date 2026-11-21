@@ -184,8 +184,73 @@ fn refuses_an_empty_profile_id_or_an_empty_secret() {
 #[test]
 fn declares_which_backend_is_active() {
     assert!(!ACTIVE_BACKEND.is_empty());
-    #[cfg(not(windows))]
-    assert_eq!(ACTIVE_BACKEND, "memory", "only Windows has the credential manager backend");
+    #[cfg(windows)]
+    assert_eq!(ACTIVE_BACKEND, "windows-credential-manager");
+    #[cfg(target_os = "linux")]
+    assert_eq!(ACTIVE_BACKEND, "linux-secret-service");
+    #[cfg(target_os = "android")]
+    assert_eq!(ACTIVE_BACKEND, "encrypted-local-vault");
+}
+
+#[test]
+fn encrypted_vault_persists_across_reopen_and_rejects_tampering() {
+    use mathcanvas_desktop_lib::secrets::vault;
+
+    let temp_dir = std::env::temp_dir().join(format!(
+        "mathcanvas-vault-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    struct CleanupDir(std::path::PathBuf);
+    impl Drop for CleanupDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _cleanup = CleanupDir(temp_dir.clone());
+
+    let store = vault::create(&temp_dir).expect("create vault");
+    assert_eq!(store.backend(), "encrypted-local-vault");
+    assert!(store.is_persistent());
+
+    let secret = "sk-vault-super-secret-value-42";
+    assert_eq!(store.put("deepseek", secret).expect("put"), SecretState::Saved);
+    assert!(store.has("deepseek").expect("has"));
+    assert_eq!(
+        store.with_secret("deepseek", |s| s.to_string()).expect("read"),
+        Some(secret.to_string())
+    );
+
+    // 磁盘密文不得包含明文。
+    let vault_disk = std::fs::read_to_string(temp_dir.join("secrets.vault")).expect("read vault file");
+    assert!(!vault_disk.contains(secret), "plaintext secret leaked onto disk");
+
+    // 重新打开应用数据目录，仍能解出最新密钥。
+    let rotated = "sk-vault-rotated-99";
+    assert_eq!(store.put("deepseek", rotated).expect("rotate"), SecretState::Saved);
+    drop(store);
+
+    let reopened = vault::create(&temp_dir).expect("reopen vault");
+    assert_eq!(
+        reopened.with_secret("deepseek", |s| s.to_string()).expect("read reopened"),
+        Some(rotated.to_string())
+    );
+
+    // 删除幂等。
+    reopened.remove("deepseek").expect("remove");
+    assert!(!reopened.has("deepseek").expect("has after remove"));
+    reopened.remove("deepseek").expect("remove idempotent");
+
+    // 篡改 MAC 后必须拒绝且不泄密。
+    reopened.put("tamper-target", rotated).expect("put tamper target");
+    let raw = std::fs::read_to_string(temp_dir.join("secrets.vault")).expect("read vault");
+    let tampered = raw.replacen("\"macHex\": \"", "\"macHex\": \"ff", 1);
+    std::fs::write(temp_dir.join("secrets.vault"), tampered).expect("write tampered vault");
+    let err = reopened.has("tamper-target").expect_err("tampered vault must fail integrity check");
+    assert!(!err.to_string().contains(rotated));
 }
 
 /// 两条后端实现的是**同一套语义**（计划要求内存后端用于测试、凭据管理器用于生产）。

@@ -92,4 +92,8 @@ impl SecretStore for WindowsSecretStore {
     fn backend(&self) -> &'static str {
         "windows-credential-manager"
     }
+
+    fn is_persistent(&self) -> bool {
+        true
+    }
 }

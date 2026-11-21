@@ -79,6 +79,7 @@ pub fn run() {
     let app_result = tauri::Builder::default()
         .setup(move |app| {
             app.manage(exam_run);
+            #[cfg(desktop)]
             if let (Some(window), Some(icon)) = (
                 app.get_webview_window("main"),
                 app.default_window_icon().cloned(),
@@ -92,16 +93,18 @@ pub fn run() {
                         .build(),
                 );
             }
-            // **只初始化一次**：Windows 上这一步会去碰系统凭据管理器。
-            app.manage(commands::secrets::SecretStoreState(secrets::create_store()));
+            let app_data_root = app
+                .path()
+                .app_data_dir()
+                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?;
+            std::fs::create_dir_all(&app_data_root)
+                .map_err(|error| format!("cannot create the app data directory at {}: {error}", app_data_root.display()))?;
+            // **只初始化一次**：Windows/Linux 探测系统钥匙串，Linux 无钥匙串及 Android 启用应用私有加密凭据库。
+            app.manage(commands::secrets::SecretStoreState(secrets::create_store_in(&app_data_root)));
             // Provider 配置放在应用数据根下的 `providers.json`（Task 1.3）。
             // 打不开时**如实失败**：设置界面的所有写入都会因此报错，
             // 而不是让用户以为"存好了"。
-            let path = app
-                .path()
-                .app_data_dir()
-                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
-                .join("providers.json");
+            let path = app_data_root.join("providers.json");
             let mut store = ProviderProfileStore::open(&path).map_err(|error| format!("cannot open the provider configuration at {}: {error}", path.display()))?;
             {
                 let secrets = app.state::<commands::secrets::SecretStoreState>();
@@ -111,20 +114,12 @@ pub fn run() {
             // 项目仓储放在应用数据根下的 `projects.db`（Task 1.6）。
             // **打不开就如实失败**：前端会退回到"只在会话内保存"，并在界面上说明原因 ——
             // 那比"以为存住了、关掉才发现没了"好得多。
-            let database = app
-                .path()
-                .app_data_dir()
-                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
-                .join("projects.db");
+            let database = app_data_root.join("projects.db");
             let repository = ProjectRepository::open(&database).map_err(|error| format!("cannot open the project repository at {}: {error}", database.display()))?;
             app.manage(RepositoryState { repository: Mutex::new(repository) });
             // **附件仓库**放在应用数据根下的 `attachments/`（Task 1.6 Step 4）。
             // 与库分开的理由：几十兆的字节塞进 SQLite 会让每次备份与每次读 head 都变贵。
-            let blob_root = app
-                .path()
-                .app_data_dir()
-                .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
-                .join("attachments");
+            let blob_root = app_data_root.join("attachments");
             let blobs = BlobStore::open(&blob_root).map_err(|error| format!("cannot open the attachment store at {}: {error}", blob_root.display()))?;
             app.manage(BlobState { blobs });
             // **起回环代理**（Task 1.5）。
