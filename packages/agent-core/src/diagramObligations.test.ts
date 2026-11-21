@@ -1092,4 +1092,30 @@ describe("T03 — 角等式链与类型/单位边界", () => {
     expect(onConic[0]).toMatchObject({ kind: "pointOnConic", targets: ["A"], entityLabel: "C", conicKind: "parabola" })
     expect(onConic[1]).toMatchObject({ kind: "pointOnConic", targets: ["B"], entityLabel: "C", conicKind: "parabola" })
   })
+
+  it("parses explicit y = <expr> function prompts like 绘制函数 y = 0.1x³ − 0.7x without mistaking lines or symbolic equations", () => {
+    const cubic = parseDiagramObligations("绘制函数 y = 0.1x³ − 0.7x")
+    expect(cubic.unverified).toEqual([])
+    expect(cubic.givens).toContainEqual(expect.objectContaining({
+      kind: "functionGraph",
+      expression: "0.1*x^3 - 0.7*x"
+    }))
+
+    const quintic = parseDiagramObligations("绘制函数：y = x⁵ − sin(2x)")
+    expect(quintic.unverified).toEqual([])
+    expect(quintic.givens).toContainEqual(expect.objectContaining({
+      kind: "functionGraph",
+      expression: "x^5 - sin(2*x)"
+    }))
+
+    for (const nonFunction of [
+      "椭圆 x²/9+y²/4=1，直线 y=x+1 相交于 A、B 两点",
+      "渐近线 y=±2x",
+      "A. y=-2x-1",
+      "设 y = kx + b"
+    ]) {
+      const parsed = parseDiagramObligations(nonFunction)
+      expect(parsed.givens.some((g) => g.kind === "functionGraph"), nonFunction).toBe(false)
+    }
+  })
 })

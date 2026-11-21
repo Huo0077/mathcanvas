@@ -353,7 +353,7 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
   doc = trackedReplace(doc, /\\infty\b/g, "∞")
   doc = trackedReplace(doc, /\\circ\b/g, "°")
 
-  doc = trackedReplace(doc, /([fgh]\s*\(\s*x\s*\)\s*=\s*)([^，,。；;\n\u4e00-\u9fff]+)/g, (match) => {
+  doc = trackedReplace(doc, /((?:[fgh]\s*\(\s*x\s*\)|(?<![A-Za-z0-9_])y)\s*=\s*)([^，,。；;\n\u4e00-\u9fff]+)/g, (match) => {
     const prefixLength = match[1]!.length
     const exprTracked = sliceTracked(doc, match.index + prefixLength, match.index + match[0].length)
     const lowered = lowerMathGroupsTracked(exprTracked, true)

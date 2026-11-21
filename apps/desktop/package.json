@@ -5,6 +5,7 @@
   "type": "module",
   "description": "MathCanvas 桌面外壳（Tauri 2）—— 前端仍是 apps/web 那一份，不重复实现",
   "scripts": {
+    "tauri": "node ../../scripts/toolchain.mjs tauri",
     "dev": "node ../../scripts/toolchain.mjs tauri dev",
     "build": "node ../../scripts/toolchain.mjs tauri build --no-bundle",
     "bundle": "node ../../scripts/toolchain.mjs tauri build",

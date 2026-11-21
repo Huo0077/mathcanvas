@@ -703,7 +703,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const materialised = compiled.materialisedActions === undefined ? plan : { ...plan, actions: compiled.materialisedActions }
       const onlyParameterActions = materialised.actions.length > 0 && materialised.actions.every((action) => action.actionId.startsWith("parameter."))
       const explicitSolidDeclared = parserPrompt !== undefined && (hasExplicitSolidConditions(parserPrompt) || solidDimensionGate(parserPrompt, materialised.actions))
-      const hasMathContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|f\s*\(|切线|椭圆|双曲线|抛物线|二面角|最长弦|最短弦|[A-Z]{2}\s*=|⊥|∥)/.test(parserPrompt)
+      const hasMathContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|f\s*\(|(?<![A-Za-z0-9_])y\s*=|切线|椭圆|双曲线|抛物线|二面角|最长弦|最短弦|[A-Z]{2}\s*=|⊥|∥)/.test(parserPrompt)
+      const hasExplicitRelationalContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|(?<![A-Za-z0-9_])[fgh]\s*\(|(?<![A-Za-z0-9_])y\s*=|=|⊥|∥|∠|切线|二面角|最长弦|最短弦|[A-Z]{2}\s*=)/.test(parserPrompt)
       const verifiedUniquePremiseScopeId = (() => {
         if (effectiveSelectedScopeId !== undefined || parserPrompt === undefined) return undefined
         const inferredScopeId = inferUniquePremiseScopeId(parserPrompt)
@@ -809,7 +810,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const nextDocumentHash = canonicalContentHash(compiled.draftDocument)
       if (userMessage !== undefined || stageOptions?.enableCompleteCertificate === false || stageOptions?.requiredEntityLabels !== undefined) {
         const sourceHash = record.rawPromptHash ?? canonicalContentHash({ prompt: userMessage ?? "" })
-        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined || hasMathContractSignal
+        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined || hasExplicitRelationalContractSignal
         if (stageOptions?.enableCompleteCertificate === false) {
           record.drawingCertificate = certifyDrawingAgainstContract({
             prompt: effectivePrompt ?? "",

@@ -811,12 +811,23 @@ function selectStatedCurve(item: DiagramObligation, curves: readonly FigureFunct
   if (names.length > 1) {
     return { code: "function_binding_ambiguous", reason: `题面语句同时点到了多条函数（${names.join("、")}），无法唯一绑定目标曲线。` }
   }
+  const primaryCurves = curves.filter((curve) => !/['′]/.test(curve.label ?? ""))
+  const pool = primaryCurves.length > 0 ? primaryCurves : curves
   const name = names[0] ?? fallbackName
-  const named = name === undefined ? [] : curves.filter(curve => functionLabel(curve.label ?? "") === name)
-  const singleton = curves.length === 1 && (name === undefined || functionLabel(curves[0].label ?? "") === undefined)
-  const curve = named.length === 1 ? named[0] : singleton ? curves[0] : undefined
+  const named = name === undefined ? [] : pool.filter(curve => functionLabel(curve.label ?? "") === name)
+  const yLabeled = name === undefined && /^\s*y\s*=/.test(item.sourceText)
+    ? pool.filter((curve) => /^y(?:\s*=.*)?$/i.test((curve.label ?? "").trim()))
+    : []
+  const singleton = pool.length === 1 && (name === undefined || functionLabel(pool[0].label ?? "") === undefined)
+  const curve = named.length === 1
+    ? named[0]
+    : yLabeled.length === 1
+      ? yLabeled[0]
+      : singleton
+        ? pool[0]
+        : undefined
   if (curve) return { curve }
-  if (curves.length > 1) {
+  if (pool.length > 1) {
     return { code: "function_binding_ambiguous", reason: `无法唯一找到题面的 ${name ?? "目标函数"}。请为主函数保留题面标签，并给辅助曲线使用不同标签。` }
   }
   return { code: "function_missing", reason: `候选图里缺少题面的 ${name ?? "目标函数"}。` }

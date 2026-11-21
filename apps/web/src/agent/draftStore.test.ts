@@ -658,4 +658,43 @@ describe("DS3 production certificate integrity: block prompt:'' bypass and incom
       expect(staged.preview.certificateBinding?.scopeId).toBe("subquestion:2")
     }
   })
+
+  it("certifies y = 0.1x³ − 0.7x plots cleanly and allows qualitative open conic requests without empty_required_contract", async () => {
+    const store = createDraftStore()
+    const fnDraft = store.create(baseDocument())
+    const fnStaged = await store.stage(
+      fnDraft.draftId,
+      [{
+        actionId: "function.create_graph",
+        actionKey: "fn-cubic",
+        factIds: [],
+        inputs: { alias: "f", label: "y", expression: "0.1*x^3-0.7*x", domain: [-4, 4] }
+      }] as never,
+      fnDraft.draftVersion,
+      "绘制函数 y = 0.1x³ − 0.7x"
+    )
+    expect(fnStaged.ok).toBe(true)
+    if (fnStaged.ok) {
+      expect(fnStaged.preview.diagramVerification?.status).toBe("passed")
+      expect(fnStaged.preview.drawingCertificate?.certificateStatus).toBe("passed")
+      expect(fnStaged.preview.drawingCertificate?.gate.status).toBe("passed")
+    }
+
+    const openDraft = store.create(baseDocument())
+    const openStaged = await store.stage(
+      openDraft.draftId,
+      [{
+        actionId: "planar.create_conic",
+        actionKey: "conic-open",
+        factIds: [],
+        inputs: { alias: "ellipse", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 3, radiusY: 2, label: "椭圆" }
+      }] as never,
+      openDraft.draftVersion,
+      "画一个椭圆"
+    )
+    expect(openStaged.ok).toBe(true)
+    if (openStaged.ok) {
+      expect(openStaged.preview.drawingCertificate?.gate.status).toBe("not_applicable")
+    }
+  })
 })

@@ -1,5 +1,6 @@
 import {
   canonicalPointName,
+  compileExpression,
   evaluateExpressionWithDomain,
   fitOriginConicThroughPoints,
   parseRelationConstraint,
@@ -7,6 +8,7 @@ import {
   POINT_NAME_SOURCE,
   solveSymbolicConicContract,
   splitPointNames,
+  type ExpressionNode,
   type SymbolicConicMetricConstraint
 } from "@draw/geometry-kernel"
 
@@ -1186,11 +1188,35 @@ function resolveExplicitSolidConditions(
  *
  * 只补已知因子之间的乘号，例如 `3x`、`4sin(x)` 和 `sin(x)cos(x)`。
  */
+const SUPERSCRIPT_DIGITS: Record<string, string> = {
+  "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
+  "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"
+}
+
+function isSingleVariableXExpression(expr: string): boolean {
+  let ast: ExpressionNode
+  try {
+    ast = compileExpression(expr)
+  } catch {
+    return false
+  }
+  const hasOnlySupportedVars = (node: ExpressionNode): boolean => {
+    if (node.type === "variable") {
+      const lower = node.name.toLowerCase()
+      return node.name === "x" || lower === "pi" || lower === "e"
+    }
+    if (node.type === "unary" || node.type === "call") return hasOnlySupportedVars(node.argument)
+    if (node.type === "binary") return hasOnlySupportedVars(node.left) && hasOnlySupportedVars(node.right)
+    return true
+  }
+  return hasOnlySupportedVars(ast)
+}
+
 function normalizeStatedExpression(raw: string): string | null {
   const trimmed = raw.trim()
   if (trimmed.length === 0) return null
   const normalized = trimmed
-    .replace(/²/g, "^2").replace(/³/g, "^3").replace(/⁴/g, "^4")
+    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (digits) => `^${[...digits].map((ch) => SUPERSCRIPT_DIGITS[ch] ?? ch).join("")}`)
     .replace(/[−–—]/g, "-")
     .replace(/[×·⋅]/g, "*")
     .replace(/π/g, "pi")
@@ -1632,9 +1658,32 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     // 否则 `match[0]`（也就是报告里的 `sourceText`）会变成 `f(x)=x³−3x 的`，
     // 而题面引文多一个字，用户在报告里看不出来，只会让断言莫名其妙地失败。
     pattern: /[fgh]\s*\(\s*x\s*\)\s*=\s*([^，,。；;\u4e00-\u9fff]*[^，,。；;\u4e00-\u9fff\s])/g,
+    allowAfterLabelColon: true,
     read: (m) => {
       const expression = normalizeStatedExpression(m[1])
       return expression === null ? null : { kind: "functionGraph", targets: [], expression }
+    }
+  },
+  /**
+   * **显式 `y = ...` 函数定义**：例如 `绘制函数 y = 0.1x³ − 0.7x`、`y = sin(x) + 1`。
+   *
+   * 排在标准圆锥曲线（`y = kx²`、`y = x²/k`）与带交点条件的 `直线 y = kx+m` 之后；
+   * 拒绝 `直线/切线/渐近线/准线 y = ...`、选择题选项 `A. y = ...` 与含待定系数的符号式 `y = kx + b`。
+   */
+  {
+    pattern: /(?<![A-Za-z0-9_])y\s*=\s*([^，,。；;？?！!∈\u4e00-\u9fff]*[^，,。；;？?！!∈\u4e00-\u9fff\s])/g,
+    allowAfterLabelColon: true,
+    read: (m) => {
+      const start = m.index ?? 0
+      const prefix = (m.input ?? "").slice(Math.max(0, start - 24), start)
+      if (/(?:(?:直|切|渐近|准|对称)线(?:\s*[A-Za-z]\s*[:：])?|[A-D]\s*[.．、]|\([A-D]\))\s*$/.test(prefix)) {
+        return null
+      }
+      const rawExpr = m[1]
+      if (/[yY=±]/.test(rawExpr)) return null
+      const expression = normalizeStatedExpression(rawExpr)
+      if (expression === null || !isSingleVariableXExpression(expression)) return null
+      return { kind: "functionGraph", targets: [], expression }
     }
   },  {
     pattern: /△?\s*([A-Z])([A-Z])([A-Z])\s*(?:是|为)\s*锐角三角形/g,

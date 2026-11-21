@@ -248,6 +248,10 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
         next_actions: diagram.checks.filter((check) => check.status !== "passed").map((check) => `${check.sourceText}：${check.reason}`)
       }
       const firstDiagramIssue = diagramReport?.checks.find((check) => check.status !== "passed")?.detail
+      const hasDiagramIssueInChecks = Boolean(diagramReport?.checks.some((check) => check.status !== "passed"))
+      const certDetail = hasDiagramIssueInChecks || !firstDiagramIssue
+        ? certificate?.summary ?? ""
+        : `${firstDiagramIssue}；${certificate?.summary ?? ""}`
       const certificateReport: VerificationReport | undefined =
         certificate === undefined || certificate.gate.status === "not_applicable"
           ? undefined
@@ -262,9 +266,9 @@ export function createCommitterAdapter(dependencies: CommitterAdapterDependencie
                 checks: [{
                   id: "drawingCertificate",
                   status: certificate.certificateStatus === "blocked" ? "failed" : "not_supported",
-                  detail: firstDiagramIssue ? `${firstDiagramIssue}；${certificate.summary}` : certificate.summary
+                  detail: certDetail
                 }],
-                next_actions: [firstDiagramIssue ? `${firstDiagramIssue}；${certificate.summary}` : certificate.summary]
+                next_actions: [certDetail]
               }
       const checks = [...(acceptanceReport?.checks ?? []), ...(diagramReport?.checks ?? []), ...(certificateReport?.checks ?? [])]
       const verification: VerificationReport | undefined = checks.length === 0 && acceptanceReport === undefined && diagramReport === undefined && certificateReport === undefined

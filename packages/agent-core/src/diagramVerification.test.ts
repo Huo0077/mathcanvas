@@ -1133,4 +1133,31 @@ describe("Task 15: function-family premises", () => {
     expect(areaCheck?.status).toBe("failed")
     expect(areaCheck?.reason).toContain("点 A 与 B 重合")
   })
+
+  it("verifies and certifies explicit y = <expr> plots (绘制函数 y = 0.1x³ − 0.7x) even alongside a derivative curve", () => {
+    const prompt = "绘制函数 y = 0.1x³ − 0.7x"
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "fn-1", type: "function", label: "y", expression: "0.1*x^3-0.7*x", domain: [-4, 4] },
+      { id: "fn-1_deriv", type: "function", label: "f'(x)", expression: "0.3*x^2-0.7", domain: [-4, 4] }
+    )
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: prompt,
+      factIds: [],
+      actions: [
+        { actionId: "function.create_graph", actionKey: "fn1", factIds: [], inputs: { alias: "y", label: "y", expression: "0.1*x^3-0.7*x", domain: [-4, 4] } }
+      ]
+    } as unknown as PlanEnvelope
+    const cert = certifyDrawingAgainstContract({
+      prompt,
+      document: doc,
+      plan,
+      candidateHash: "h-fn",
+      sourceHash: "s-fn"
+    })
+    expect(cert.certificateStatus, cert.summary).toBe("passed")
+    expect(cert.gate.status).toBe("passed")
+  })
 })
