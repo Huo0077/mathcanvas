@@ -38,25 +38,29 @@ pub struct ChatMessage {
     pub tool_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_input: Option<serde_json::Value>,
+    /// DeepSeek thinking/reasoner models require replaying `reasoning_content` on
+    /// historical assistant tool-call turns within the same user turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 impl ChatMessage {
     /// 纯文本的一条。绝大多数调用点要的是这个，所以给它一个不用写 `images: Vec::new()` 的写法。
     pub fn text(role: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: role.into(), content: content.into(), images: Vec::new(), tool_call_id: None, tool_name: None, tool_input: None }
+        Self { role: role.into(), content: content.into(), images: Vec::new(), tool_call_id: None, tool_name: None, tool_input: None, reasoning_content: None }
     }
 
     /// 一条带图的用户消息。`images` 是 base64（不带 `data:` 前缀）。
     pub fn with_images(role: impl Into<String>, content: impl Into<String>, images: Vec<String>) -> Self {
-        Self { role: role.into(), content: content.into(), images, tool_call_id: None, tool_name: None, tool_input: None }
+        Self { role: role.into(), content: content.into(), images, tool_call_id: None, tool_name: None, tool_input: None, reasoning_content: None }
     }
 
     pub fn tool_call(id: impl Into<String>, name: impl Into<String>, input: serde_json::Value) -> Self {
-        Self { role: "tool_call".into(), content: String::new(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: Some(input) }
+        Self { role: "tool_call".into(), content: String::new(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: Some(input), reasoning_content: None }
     }
 
     pub fn tool_result(id: impl Into<String>, name: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: "tool_result".into(), content: content.into(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: None }
+        Self { role: "tool_result".into(), content: content.into(), images: Vec::new(), tool_call_id: Some(id.into()), tool_name: Some(name.into()), tool_input: None, reasoning_content: None }
     }
 }
 
@@ -381,6 +385,14 @@ fn ollama_message(message: &ChatMessage) -> serde_json::Value {
     }
 }
 
+fn serialize_tool_arguments(input: &Option<serde_json::Value>) -> String {
+    input
+        .as_ref()
+        .filter(|value| !value.is_null())
+        .and_then(|value| serde_json::to_string(value).ok())
+        .unwrap_or_else(|| "{}".into())
+}
+
 /// Consecutive tool calls from one provider response are a single assistant message.
 /// The matching tool results follow as separate messages with their original IDs.
 fn openai_dialog(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
@@ -389,9 +401,19 @@ fn openai_dialog(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
     while index < messages.len() {
         if messages[index].role == "tool_call" {
             let mut calls = Vec::new();
+            let mut turn_content: Option<String> = None;
+            let mut turn_reasoning: Option<String> = None;
             while index < messages.len() && messages[index].role == "tool_call" {
                 let message = &messages[index];
-                let args = serde_json::to_string(&message.tool_input).unwrap_or_else(|_| "{}".into());
+                if turn_content.is_none() && !message.content.is_empty() {
+                    turn_content = Some(message.content.clone());
+                }
+                if turn_reasoning.is_none() {
+                    if let Some(reasoning) = message.reasoning_content.as_deref().filter(|r| !r.is_empty()) {
+                        turn_reasoning = Some(reasoning.to_string());
+                    }
+                }
+                let args = serialize_tool_arguments(&message.tool_input);
                 calls.push(serde_json::json!({
                     "id": message.tool_call_id.as_deref().unwrap_or_default(),
                     "type": "function",
@@ -399,7 +421,18 @@ fn openai_dialog(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
                 }));
                 index += 1;
             }
-            dialog.push(serde_json::json!({"role": "assistant", "content": serde_json::Value::Null, "tool_calls": calls}));
+            let content_value = match turn_content {
+                Some(text) => serde_json::Value::String(text),
+                None => serde_json::Value::Null,
+            };
+            let mut assistant = serde_json::Map::new();
+            assistant.insert("role".into(), serde_json::json!("assistant"));
+            assistant.insert("content".into(), content_value);
+            if let Some(reasoning) = turn_reasoning {
+                assistant.insert("reasoning_content".into(), serde_json::Value::String(reasoning));
+            }
+            assistant.insert("tool_calls".into(), serde_json::Value::Array(calls));
+            dialog.push(serde_json::Value::Object(assistant));
         } else {
             dialog.push(openai_message(&messages[index]));
             index += 1;
@@ -412,15 +445,34 @@ fn openai_message(message: &ChatMessage) -> serde_json::Value {
     if message.role == "tool_call" {
         let id = message.tool_call_id.as_deref().unwrap_or_default();
         let name = message.tool_name.as_deref().unwrap_or_default();
-        let args = serde_json::to_string(&message.tool_input).unwrap_or_else(|_| "{}".into());
-        return serde_json::json!({ "role": "assistant", "content": serde_json::Value::Null,
-            "tool_calls": [{ "id": id, "type": "function", "function": { "name": name, "arguments": args } }] });
+        let args = serialize_tool_arguments(&message.tool_input);
+        let content_value = if message.content.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String(message.content.clone())
+        };
+        let mut assistant = serde_json::Map::new();
+        assistant.insert("role".into(), serde_json::json!("assistant"));
+        assistant.insert("content".into(), content_value);
+        if let Some(reasoning) = message.reasoning_content.as_deref().filter(|r| !r.is_empty()) {
+            assistant.insert("reasoning_content".into(), serde_json::Value::String(reasoning.to_string()));
+        }
+        assistant.insert("tool_calls".into(), serde_json::json!([{ "id": id, "type": "function", "function": { "name": name, "arguments": args } }]));
+        return serde_json::Value::Object(assistant);
     }
     if message.role == "tool_result" {
         return serde_json::json!({ "role": "tool", "tool_call_id": message.tool_call_id, "content": message.content });
     }
     if message.images.is_empty() {
-        return serde_json::json!({ "role": message.role, "content": message.content });
+        let mut entry = serde_json::Map::new();
+        entry.insert("role".into(), serde_json::json!(message.role));
+        entry.insert("content".into(), serde_json::json!(message.content));
+        if message.role == "assistant" {
+            if let Some(reasoning) = message.reasoning_content.as_deref().filter(|r| !r.is_empty()) {
+                entry.insert("reasoning_content".into(), serde_json::Value::String(reasoning.to_string()));
+            }
+        }
+        return serde_json::Value::Object(entry);
     }
     let mut parts: Vec<serde_json::Value> = vec![serde_json::json!({ "type": "text", "text": message.content })];
     for image in &message.images {
@@ -493,5 +545,19 @@ mod batch_tool_tests {
         assert_eq!(dialog[1]["tool_calls"][1]["id"], "c-q");
         assert_eq!(dialog[2]["tool_call_id"], "c-p");
         assert_eq!(dialog[3]["tool_call_id"], "c-q");
+    }
+
+    #[test]
+    fn preserves_reasoning_content_and_derivation_text_and_never_emits_null_arguments() {
+        let mut call = ChatMessage::tool_call("c-1", "finish_candidate", json!({"goal": "ok"}));
+        call.content = "step 1: compute coordinates".into();
+        call.reasoning_content = Some("chain of thought".into());
+        let mut empty_call = ChatMessage::tool_call("c-2", "finish_candidate", serde_json::Value::Null);
+        empty_call.tool_input = None;
+        let dialog = openai_dialog(&[call, empty_call]);
+        assert_eq!(dialog.len(), 1);
+        assert_eq!(dialog[0]["content"], "step 1: compute coordinates");
+        assert_eq!(dialog[0]["reasoning_content"], "chain of thought");
+        assert_eq!(dialog[0]["tool_calls"][1]["function"]["arguments"], "{}");
     }
 }

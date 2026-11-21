@@ -1237,7 +1237,7 @@ const CONSTRUCT_TANGENT_PARAMETERS = {
   properties: { ...PLANAR_ENTITY_FIELDS, conicId: { type: "string" }, pointId: { type: "string" }, throughPointId: { type: "string" },
     tangentPointId: { type: "string" }, branch: { type: "number" },
     selection: { type: "string", enum: ["min_x", "max_x", "min_y", "max_y"] },
-    functionId: { type: "string" }, functionLabel: { type: "string" }, expression: { type: "string" }, x0: { type: "number" },
+    functionId: { type: "string" }, functionLabel: { type: "string" }, expression: { type: "string" }, x0: { type: "number" }, x: { type: "number" },
     domain: { type: "array", items: { type: "number" } },
     mode: { type: "string", enum: ["tangent", "derivative", "integral", "graph"] },
     includeDerivative: { type: "boolean" } }
@@ -1254,14 +1254,19 @@ const CONSTRUCT_PARALLEL_PARAMETERS = {
 const CONSTRUCT_BASE_PARAMETERS = {
   type: "object", additionalProperties: false,
   properties: { ...PLANAR_ENTITY_FIELDS, shape: { type: "string" }, kind: { type: "string" },
-    sideLength: { type: "number", exclusiveMinimum: 0 }, width: { type: "number", exclusiveMinimum: 0 },
-    depth: { type: "number", exclusiveMinimum: 0 }, ab: { type: "number", exclusiveMinimum: 0 },
-    bc: { type: "number", exclusiveMinimum: 0 }, ac: { type: "number", exclusiveMinimum: 0 },
+    sideLength: { type: "number", exclusiveMinimum: 0 }, baseSide: { type: "number", exclusiveMinimum: 0 },
+    edgeLength: { type: "number", exclusiveMinimum: 0 }, sides: { type: "number", exclusiveMinimum: 0 },
+    radius: { type: "number", exclusiveMinimum: 0 }, upperBase: { type: "number", exclusiveMinimum: 0 },
+    lowerBase: { type: "number", exclusiveMinimum: 0 }, baseHeight: { type: "number", exclusiveMinimum: 0 },
+    width: { type: "number", exclusiveMinimum: 0 }, depth: { type: "number", exclusiveMinimum: 0 },
+    ab: { type: "number", exclusiveMinimum: 0 }, bc: { type: "number", exclusiveMinimum: 0 },
+    ac: { type: "number", exclusiveMinimum: 0 },
     vertexNames: { type: "array", items: { type: "string" } } }
 } as const
 const CONSTRUCT_FACE_PARAMETERS = {
-  type: "object", additionalProperties: false, required: ["vertexNames"],
-  properties: { ...PLANAR_ENTITY_FIELDS, vertexNames: { type: "array", items: { type: "string" } } }
+  type: "object", additionalProperties: false,
+  properties: { ...PLANAR_ENTITY_FIELDS, vertexNames: { type: "array", items: { type: "string" } },
+    pointIds: { type: "array", items: { type: "string" } } }
 } as const
 const CONSTRUCT_FOLD_STATE_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["vertexNames", "hinge", "apex", "apexAs", "angle"],
@@ -1422,9 +1427,9 @@ function asStringList(v: unknown): string[] | null {
 }
 
 function parseScalarExpr(raw: string): number | null {
-  let s = raw.trim().replaceAll(/\$/g, "").replaceAll(/−/g, "-").replaceAll(/\s+/g, "")
+  let s = raw.trim().replaceAll(/\$/g, "").replaceAll(/−/g, "-").replaceAll(/\\cdot|·|×/g, "*").replaceAll(/\s+/g, "")
   if (!s) return null
-  s = s.replaceAll(/\\left|\\right/g, "")
+  s = s.replaceAll(/\\left|\\right/g, "").replaceAll(/\\pi|π/gi, "pi").replaceAll(/²/g, "^2").replaceAll(/³/g, "^3")
   for (let i = 0; i < 4 && /\\frac\{/.test(s); i++) {
     s = s.replaceAll(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "(($1)/($2))")
   }
@@ -1443,12 +1448,12 @@ function parseScalarExpr(raw: string): number | null {
     return left
   }
   const parseTerm = (): number | null => {
-    let left = parseFactor()
+    let left = parsePower()
     if (left === null) return null
     while (true) {
       if (peek() === "*" || peek() === "/") {
         const op = s[pos++]!
-        const right = parseFactor()
+        const right = parsePower()
         if (right === null) return null
         if (op === "/") {
           if (Math.abs(right) <= 1e-12) return null
@@ -1456,8 +1461,8 @@ function parseScalarExpr(raw: string): number | null {
         } else {
           left *= right
         }
-      } else if (peek() === "(" || s.startsWith("sqrt(", pos)) {
-        const right = parseFactor()
+      } else if (peek() === "(" || s.startsWith("sqrt(", pos) || s.startsWith("pi", pos)) {
+        const right = parsePower()
         if (right === null) return null
         left *= right
       } else {
@@ -1466,9 +1471,25 @@ function parseScalarExpr(raw: string): number | null {
     }
     return left
   }
+  const parsePower = (): number | null => {
+    let base = parseFactor()
+    if (base === null) return null
+    if (peek() === "^") {
+      pos++
+      const exp = parsePower()
+      if (exp === null) return null
+      base = Math.pow(base, exp)
+      if (!Number.isFinite(base)) return null
+    }
+    return base
+  }
   const parseFactor = (): number | null => {
     if (peek() === "+") { pos++; return parseFactor() }
-    if (peek() === "-") { pos++; const v = parseFactor(); return v === null ? null : -v }
+    if (peek() === "-") { pos++; const v = parsePower(); return v === null ? null : -v }
+    if (s.startsWith("pi", pos)) {
+      pos += 2
+      return Math.PI
+    }
     if (s.startsWith("sqrt(", pos)) {
       pos += 5
       const inner = parseExpr()
@@ -1636,10 +1657,22 @@ type ParsedConicEquation =
   | { conicType: "parabola"; vx: number; vy: number; focalParameter: number; axis: "x" | "y" }
 
 function parseConicEquation(raw: string): ParsedConicEquation | null {
-  let cleaned = raw.trim().replaceAll(/\$/g, "").replaceAll(/\s+/g, "").replaceAll(/²/g, "^2").replaceAll(/−/g, "-")
+  let cleaned = raw
+    .trim()
+    .replaceAll(/\$/g, "")
+    .replaceAll(/\\left|\\right/g, "")
+    .replaceAll(/\\cdot|·|×/g, "*")
+    .replaceAll(/\s+/g, "")
+    .replaceAll(/²/g, "^2")
+    .replaceAll(/−/g, "-")
   for (let i = 0; i < 4 && /\\frac\{/.test(cleaned); i++) {
     cleaned = cleaned.replaceAll(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)")
   }
+  // Unwrap redundant parens around squared variable monomials created by `\frac{x^2}{4}` -> `(x^2)/(4)`
+  cleaned = cleaned
+    .replaceAll(/\(([xy]\^2)\)/g, "$1")
+    .replaceAll(/\((\([xy][+-][^()]+\)\^2)\)/g, "$1")
+    .replaceAll(/\/\((\d+(?:\.\d+)?)\)/g, "/$1")
   const eqParts = cleaned.split("=")
   if (eqParts.length !== 2 || !eqParts[0] || !eqParts[1]) return null
   const [lhsRaw, rhsRaw] = [eqParts[0]!, eqParts[1]!]
@@ -2409,6 +2442,32 @@ function resolveConstructSolidRequest(
     const isCubeLike = kind === "cube" || kind === "cuboid" || kind === "box"
     const edge = asPositiveNumber(input.edgeLength ?? input.sideLength ?? input.baseSide)
     const height = asPositiveNumber(input.height) ?? (isCubeLike ? edge ?? asPositiveNumber(input.width ?? input.ab) : null)
+    // Support materialized prism vertices (e.g. 6 points for triangular_prism or 8 points for cuboid/quadrilateral prism)
+    // when all 2*n vertices have already been constructed via construct_point.
+    if (height === null && vNames && vNames.length >= 6 && vNames.length % 2 === 0 && new Set(vNames).size === vNames.length) {
+      const matPts = vNames.map((vn) => points3.get(vn))
+      if (matPts.every((p): p is Vector3 => p !== undefined)) {
+        const n = vNames.length / 2
+        const bottomFace = Array.from({ length: n }, (_, i) => n - 1 - i)
+        const topFace = Array.from({ length: n }, (_, i) => n + i)
+        const sideFaces = Array.from({ length: n }, (_, i) => {
+          const next = (i + 1) % n
+          return [i, next, n + next, n + i]
+        })
+        const pointRegistry: Record<string, Vector3> = {}
+        for (let i = 0; i < vNames.length; i += 1) {
+          pointRegistry[vNames[i]!] = matPts[i]!
+        }
+        return {
+          ok: true,
+          mode: "polyhedron",
+          pointRegistry,
+          vertices: matPts,
+          vertexNames: [...vNames],
+          faces: [bottomFace, topFace, ...sideFaces]
+        }
+      }
+    }
     if (height === null) {
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive height (or edgeLength/sideLength for cube)` }
     }
@@ -4007,11 +4066,17 @@ export function createDsActionSession(options: {
         }
         const eqString = name === "construct_line" ? asString(input.equation) : null
         const slopeVal = name === "construct_line" ? asFiniteNumber(input.slope ?? input.k) : null
-        const throughPtId = name === "construct_line" ? asString(input.throughPointId ?? input.pointId) : null
-        const interceptVal = name === "construct_line" ? asFiniteNumber(input.intercept) : null
         const chordConicId = name === "construct_line" ? asString(input.conicId) : null
         const chordRatioVal = name === "construct_line" ? asPositiveNumber(input.chordRatio) : null
         const hasAbcEquation = name === "construct_line" && ["a", "b", "c"].some((key) => Object.hasOwn(input, key))
+        const rawThroughPtId = name === "construct_line" ? asString(input.throughPointId ?? input.pointId) : null
+        // Allow `{ from: "A", slope: 1 }` (without `to`) as a natural alias for `throughPointId: "A"`
+        const throughPtId =
+          rawThroughPtId ??
+          (name === "construct_line" && !Object.hasOwn(input, "to") && fromId !== null && (slopeVal !== null || chordRatioVal !== null || Object.hasOwn(input, "dx") || Object.hasOwn(input, "dy"))
+            ? fromId
+            : null)
+        const interceptVal = name === "construct_line" ? asFiniteNumber(input.intercept) : null
         if (eqString !== null || hasAbcEquation || slopeVal !== null || throughPtId !== null || chordRatioVal !== null) {
           const hasExplicitEndpointConflict =
             Object.hasOwn(input, "to") ||
@@ -6130,7 +6195,8 @@ export function createDsActionSession(options: {
         const shape = asString(input.shape ?? input.kind)?.toLowerCase() ?? "rectangle"
         const mappedKind = shape === "triangle" ? "triangular_prism" : shape
         const scopeId = asString(input.scopeId) ?? "shared"
-        const stateId = asString(input.stateId) ?? "before_fold"
+        const problemHasFold = typeof options.problemText === "string" && /(?:翻折|折叠|折起|翻起)/.test(options.problemText)
+        const stateId = asString(input.stateId) ?? (problemHasFold ? "before_fold" : undefined)
         const branchId = asString(input.branchId) ?? undefined
         const base = resolveBasePolygonFromParams(mappedKind, input, points3, options.problemText)
         if (!base.ok) {
@@ -6215,7 +6281,7 @@ export function createDsActionSession(options: {
         }
         const id = asString(input.id ?? input.output) ?? `FACE_${stepSeq}`
         const label = asString(input.label) ?? `面 ${vertexNames.join("")}`
-        const targetCanvas = getTargetCanvas(branchId)
+        const targetCanvas = getTargetCanvas(branchId ?? undefined)
         const canvasSnap = targetCanvas.snapshot()
         const existingSameFace = findMatchingFaceInDoc(targetCanvas.currentDocument(), canvasSnap.actions, verts)
         if (existingSameFace && existingSameFace.faceVerts.length === verts.length && verts.every((v) => existingSameFace.faceVerts.some((ev) => distanceVector3(ev, v) <= 1e-2))) {
@@ -6356,19 +6422,25 @@ export function createDsActionSession(options: {
     const points = new Set<string>()
     const lines = new Set<string>()
     const conics = new Set<string>()
+    const VALID_DIR_ID = /^[\p{L}\p{N}_\u2080-\u2089\u2032'-]+$/u
     const add = (target: Set<string>, name: unknown, materialized: (key: string) => boolean) => {
       const id = asString(name)
-      if (id && id.length <= 48 && /^[\p{L}\p{N}_\u2080-\u2089-]+$/u.test(id) && materialized(id)) target.add(id)
+      if (id && id.length <= 48 && VALID_DIR_ID.test(id) && materialized(id)) target.add(id)
     }
     for (const action of actions) {
       const inputs = action.inputs as Record<string, unknown>
       const names = [inputs.alias, inputs.label]
-      if (action.actionId === "planar.create_point" || action.actionId === "solid.create_point") {
+      if (
+        action.actionId === "planar.create_point" ||
+        action.actionId === "solid.create_point" ||
+        action.actionId === "dynamic.create_bound_point" ||
+        action.actionId === "dynamic.create_face_point"
+      ) {
         for (const name of names) add(points, name, (key) => readP2(key, branchId) !== undefined || readP3(key, branchId) !== undefined)
       } else if (action.actionId === "planar.create_line" || action.actionId === "planar.create_segment") {
         for (const name of names) add(lines, name, (key) => readL2(key, branchId) !== undefined)
-      } else if (action.actionId === "planar.create_conic" || action.actionId === "planar.create_circle") {
-        for (const name of names) add(conics, name, (key) => readC2(key, branchId) !== undefined)
+      } else if (action.actionId === "planar.create_conic" || action.actionId === "planar.create_circle" || action.actionId === "function.create_graph") {
+        for (const name of names) add(conics, name, (key) => readC2(key, branchId) !== undefined || action.actionId === "function.create_graph")
       }
       if (action.actionId === "solid.create_face" || action.actionId === "solid.create_prism" || action.actionId === "solid.create_polyhedron") {
         for (const vertex of Array.isArray(inputs.vertexNames) ? inputs.vertexNames : []) {
@@ -6386,7 +6458,7 @@ export function createDsActionSession(options: {
     const sorted = (values: Set<string>) => [...values].sort()
     const materialized = new Set([...points, ...lines, ...conics])
     const visibleDeclarations = [...(explicitDeclarations.get("") ?? []), ...(branchId ? explicitDeclarations.get(branchId) ?? [] : [])]
-    const declared = sorted(new Set(visibleDeclarations.filter((name) => !materialized.has(name) && name.length <= 48 && /^[\p{L}\p{N}_\u2080-\u2089-]+$/u.test(name))))
+    const declared = sorted(new Set(visibleDeclarations.filter((name) => !materialized.has(name) && name.length <= 48 && VALID_DIR_ID.test(name))))
     const pointIds = sorted(points), lineIds = sorted(lines), conicIds = sorted(conics)
     const materializedPoints = take(pointIds)
     const materializedLines = take(lineIds)
@@ -6405,17 +6477,33 @@ export function createDsActionSession(options: {
       const before = snapshotRefs()
       const branchId = rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
         ? asString((rawInput as Record<string, unknown>).branchId) : null
-      const beforeBranchStep = branchId ? getTargetCanvas(branchId).snapshot().stepIndex : null
+      const targetCanvas = getTargetCanvas(branchId ?? undefined)
+      const beforeCanvasStep = targetCanvas.snapshot().stepIndex
+      const beforeBranchStep = branchId ? beforeCanvasStep : null
       const beforeBranchSlices = branchId ? recordedSlices.filter((slice) => slice.branchId === branchId).map((slice) => ({ ...slice, actions: [...slice.actions] })) : []
       const beforeBranchBuckets = branchId ? [...branchActionBuckets.entries()]
         .filter(([key]) => key.endsWith(`::${branchId}`))
         .map(([key, bucket]): [string, typeof bucket] => [key, { ...bucket, actions: [...bucket.actions] }]) : []
+      const beforePointHistoryLen = pointHistory.length
+      const beforeSliceHistoryLen = sliceHistory.length
+      const beforeRecordedSlices = recordedSlices.map((slice) => ({ ...slice, actions: [...slice.actions] }))
+      const beforeSharedActions = [...sharedBranchlessActions]
       const beforeSeq = monotonicActionSeq
       const result = executeRaw(toolName, rawInput)
       if (!result.ok || !result.stateChanged) {
         monotonicActionSeq = beforeSeq
       }
-      if (!result.ok) restoreRefs(before)
+      if (!result.ok) {
+        const afterCanvasStep = targetCanvas.snapshot().stepIndex
+        if (afterCanvasStep > beforeCanvasStep) {
+          targetCanvas.rollback(afterCanvasStep - beforeCanvasStep)
+        }
+        pointHistory.length = beforePointHistoryLen
+        sliceHistory.length = beforeSliceHistoryLen
+        recordedSlices.splice(0, recordedSlices.length, ...beforeRecordedSlices)
+        sharedBranchlessActions.splice(0, sharedBranchlessActions.length, ...beforeSharedActions)
+        restoreRefs(before)
+      }
       else if (branchId && beforeBranchStep !== null && result.stateChanged && toolName !== "repair_entity" && toolName !== "repair_constraint") {
         let history = branchHistory.get(branchId)
         if (!history) { history = []; branchHistory.set(branchId, history) }

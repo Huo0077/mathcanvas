@@ -670,18 +670,19 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 草稿层说"没读懂"，两句话打架，门禁反而不放行（与 `stage` 签名上那段注释同源）。
        * 没有改写、或全被拒 ⇒ `effectivePrompt` 就是原文，行为与改动之前逐字相同。
        */
-      const unreadClauses = effectiveUserMessage === undefined
+      const basePromptForNorm = effectiveUserMessage === undefined ? undefined : normalizeGeometryPrompt(effectiveUserMessage)
+      const unreadClauses = basePromptForNorm === undefined
         ? []
         : parseDiagramObligations(
-            effectiveUserMessage,
+            basePromptForNorm,
             effectiveSelectedScopeId === undefined ? {} : { selectedScopeId: effectiveSelectedScopeId }
           ).unverified
-      const normalisation = effectiveUserMessage === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
+      const normalisation = basePromptForNorm === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
         ? null
-        : parseNormalisationReply({ clauses: normalisations }, effectiveUserMessage, unreadClauses)
-      const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || effectiveUserMessage === undefined
+        : parseNormalisationReply({ clauses: normalisations }, basePromptForNorm, unreadClauses)
+      const effectivePrompt = normalisation === null || normalisation.accepted.length === 0 || basePromptForNorm === undefined
         ? effectiveUserMessage
-        : applyNormalisation(effectiveUserMessage, normalisation.accepted)
+        : applyNormalisation(basePromptForNorm, normalisation.accepted)
       record.rawPromptHash = canonicalContentHash({ prompt: userMessage ?? null })
       record.promptHash = canonicalContentHash({ prompt: effectivePrompt ?? null })
       if (normalisation !== null && (normalisation.accepted.length > 0 || normalisation.rejected.length > 0)) record.promptNormalisation = normalisation
@@ -743,10 +744,24 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         : null
       const obligations = parsed?.legacy ?? null
       const hasParsedMathObligations = obligations !== null && (obligations.givens.length > 0 || obligations.unverified.length > 0)
+      const baseEntityIds = new Set(record.candidate.primitives.map((p) => p.id))
+      const labelCounts = new Map<string, string[]>()
+      for (const primitive of compiled.draftDocument.primitives) {
+        if (baseEntityIds.has(primitive.id)) continue
+        const label = (primitive as { label?: unknown }).label
+        if (typeof label === "string" && label.length > 0) {
+          labelCounts.set(label, [...(labelCounts.get(label) ?? []), primitive.id])
+        }
+      }
+      const entityBindings: Record<string, string> = {}
+      for (const [label, ids] of labelCounts) {
+        if (ids.length === 1) entityBindings[label] = ids[0]!
+      }
       const checked = obligations && (hasParsedMathObligations || readFoldTransformations(parserPrompt ?? "").length > 0 || namedFoldDeclared)
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
             obligationIR: obligationIR === true,
             prompt: parserPrompt,
+            ...(Object.keys(entityBindings).length > 0 ? { entityBindings } : {}),
             ...(resolvedFallbackScopeId === undefined ? {} : { activeScopeId: resolvedFallbackScopeId })
           })
         : undefined

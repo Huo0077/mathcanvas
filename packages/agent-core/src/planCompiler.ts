@@ -833,7 +833,7 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
   for (const [label, ids] of labelCounts) {
     if (ids.length === 1) entityBindings[label] = ids[0]!
   }
-  const diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0)
+  let diagramVerification = obligations && (obligations.givens.length > 0 || obligations.unverified.length > 0 || readFoldTransformations(parserPrompt ?? "").length > 0)
     ? verifyDiagramObligations(obligations, plan, working, context.document, {
         obligationIR: context.diagramObligationIR === true,
         prompt: parserPrompt,
@@ -841,6 +841,34 @@ function compileOnce(input: unknown, context: PlanCompileContext): CompileOnceOu
         ...(context.selectedScopeId === undefined ? {} : { activeScopeId: context.selectedScopeId })
       })
     : undefined
+  // Mirror draftStore's unique-premise scope inference when a multi-part exam prompt has
+  // only one subquestion carrying extra geometric constraints AND the drawn figure satisfies it completely.
+  if (
+    diagramVerification?.status === "unverified" &&
+    context.selectedScopeId === undefined &&
+    context.selectedSubquestion === undefined &&
+    obligations?.parts &&
+    obligations.parts.length > 1 &&
+    obligations.unverified.some((u) => u.sourceText === "各小问的条件")
+  ) {
+    const baseCount = obligations.givens.length
+    const premiseParts = obligations.parts.filter(
+      (part) => part.obligations.givens.length > baseCount || part.obligations.unverified.length > 0
+    )
+    if (premiseParts.length === 1) {
+      const onlyPart = premiseParts[0]!
+      const probeScopeId = `subquestion:${onlyPart.number}`
+      const probeReport = verifyDiagramObligations(onlyPart.obligations, plan, working, context.document, {
+        obligationIR: context.diagramObligationIR === true,
+        prompt: parserPrompt,
+        ...(Object.keys(entityBindings).length > 0 ? { entityBindings } : {}),
+        activeScopeId: probeScopeId
+      })
+      if (probeReport.status === "passed") {
+        diagramVerification = probeReport
+      }
+    }
+  }
   for (const check of diagramVerification?.checks ?? []) {
     if (check.status === "failed") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_failed", "envelope.actions", `${check.sourceText}：${check.reason}`))
     if (check.status === "unverified") diagnostics.push(planDiagnostic("geometry_validation", check.code ?? "diagram_condition_unverified", "envelope.actions", `${check.sourceText}：${check.reason}`, "warning"))

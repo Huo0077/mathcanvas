@@ -247,22 +247,38 @@ function buildDsIntentPolicyText(input: SystemPromptPolicyInput): string {
   return sections.join("\n")
 }
 
+function sanitizeDsActionRepairHint(hint: string): string {
+  if (/plan_set_plan|JSON\s*信封|只返回一个\s*JSON\s*对象|计划工具/.test(hint)) {
+    return "上一轮工具调用未完成或返回了无效格式。当前处于 ds_action 原生工具模式，严禁输出 JSON 信封或调用 plan_set_plan；请直接调用已发布的几何构图工具（construct_* / query_*）逐步构造，并在全部题设核对通过后调用 finish_candidate({ goal })。"
+  }
+  return hint
+}
+
 function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
+  if (!input.canPlan) {
+    const observeSections: string[] = [
+      `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。`,
+      "当前处于只读观察阶段：只能调用已发布的只读场景观察工具读取当前画布状态，严禁调用任何 construct_* 或 finish_candidate 工具，也不要直接输出 JSON 信封。"
+    ]
+    if (input.repair) {
+      observeSections.push("", "## 上一轮的输出没有被接受", sanitizeDsActionRepairHint(input.repair.hint), ...repairDetailSections(input.repair))
+    }
+    return observeSections.join("\n")
+  }
   const sections: string[] = [
-    `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。**强烈建议同轮批量提交多个相互独立的构造（或同轮批量提交多个 query_measurement，最多 32 个）以减少轮次**；注意 construct_* 构造动作与 query_measurement 查询动作**不能混在同一批 tool calls 中**（先完成构造 batch，下一轮再单独批量 query_measurement），repair_entity/repair_constraint、finish_candidate/request_clarification 也必须各自单独成轮。调用构图工具前可先在消息正文写出简短分步代数推导以核对解析式与根式数值（小数点后保留至少 7 位小数，如 √2≈1.4142136、√3≈1.7320508、2√3≈3.4641016、2√10≈6.3245553，严禁凑整或盲猜试错；中间推导文本不会替代画布）。`,
-    "`repair_entity`/`repair_constraint` 以及 `finish_candidate`/`request_clarification` 必须各自单独调用；同一批修复后几何会被撤销，不得声称已画出。",
+    `你是 MathCanvas 的动作级几何构造代理（协议 ${DS_ACTION_PROMPT_VERSION}）。**强烈建议同轮批量提交多个相互独立的构造（或同轮批量提交多个 query_measurement，最多 32 个）以减少轮次**；注意 construct_* 构造动作与 query_measurement 查询动作**不能混在同一批 tool calls 中**（先完成构造 batch，下一轮再单独批量 query_measurement），repair_entity/repair_constraint、request_clarification 也必须各自单独成轮。可在调用工具时在消息正文写出简短分步代数推导以核对解析式与根式数值（小数点后保留至少 7 位小数，如 √2≈1.4142136、√3≈1.7320508、2√3≈3.4641016、2√10≈6.3245553，严禁凑整或盲猜试错；但每轮必须发起实际工具调用，不得只回纯文本）。`,
+    "`repair_entity` 采用栈式回滚（会一并撤销目标实体及其之后创建的依赖动作），修复后须重新补建后续实体；`request_clarification` 必须单独调用。",
     "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
-    "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（缺题图或无解时调用 `request_clarification`）。",
-    "**禁止手算立体顶点与手猜内切/外接球心**：构建立体只传参数规格；外接球调用 `construct_circumsphere({ solidId })`；**内切球 / 最大球**直接调用 `construct_solid({ kind: \"sphere\", id: \"O\", inscribedIn: \"<solidId>\" })`（或 `construct_circumsphere({ solidId, mode: \"insphere\" })`），由内核精确解算内心与半径。",
+    "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（无解或缺失必要信息时调用 `request_clarification`）。",
+    "**函数图像绘制**：纯绘制单变量函数图像（如 `y = 0.1x³ - 0.7x`、`f(x) = e^x - 2x`）直接调用 `construct_tangent({ id: \"f\", mode: \"graph\", expression: \"0.1*x^3 - 0.7*x\", domain: [-4, 4] })`；带切线时传 `x0` 生成曲线与切线。圆锥曲线（椭圆/双曲线/抛物线）传标准 `equation` 字符串或半轴/焦点参数，严禁把 `a²/b²` 当作 `radiusX/radiusY`。",
+    "**禁止手算立体顶点与手猜内切/外接球心**：构建立体优先传参数规格（`tetrahedron` 顶点顺序顶点在前 `[\"P\",\"A\",\"B\",\"C\"]`，`regular_pyramid`/`perpendicular_pyramid` 底面顶点在前、顶点在最后如 `[\"A\",\"B\",\"C\",\"D\",\"P\"]`）；外接球调用 `construct_circumsphere({ solidId })`；**内切球 / 最大球**直接调用 `construct_solid({ kind: \"sphere\", id: \"O\", inscribedIn: \"<solidId>\" })`（或 `construct_circumsphere({ solidId, mode: \"insphere\" })`），由内核精确解算内心与半径。",
     "For all equal-edge right triangular prisms with symbolic edge length a, prefer construct_equal_edge_triangular_prism({ id, displayScale, vertexNames }); displayScale is only a positive rendering scale, not a solved value for a. Follow with construct_circumsphere({solidId:id}) then finish_candidate. Do not guess a numeric edge length.",
     "For construct_solid use the published kind enum and positive dimensions. triangular_prism needs kind, sideLength (or ab/ac/bc), and height; for an all-edges-equal symbolic a prompt, use symbol:a plus a positive displayScale only after the prompt establishes that all edges equal a. vertexNames is optional; never send raw vertices, invented dimensions, or a guessed value for a.",
     "多小问题目若用户未指定按哪一问作图：优先选择带有具体数值或明确几何构造条件的主作图小问（如第 `(1)` 问仅为「求方程/证明」，第 `(2)` 问给出具体参数或点线条件，则按 `(2)` 构图），并在调用 `finish_candidate` 时传入 `scopeId: \"subquestion:2\"`（或对应的 `\"subquestion:1\"` / `\"subquestion:3\"`）；不要只因多小问就调 `request_clarification`。",
-    input.canPlan
-      ? "1.实体全覆盖与命名：完整构造题干/各小问全部对象（点/直线/曲线/圆/切线/导函数/渐近线/准线/面片/外接球/内切球）；下标（如 `F₁, F₂, A₁`）与题面曲线字母（`C/E/G/M/f`）必须完全一致（圆心与圆同名如 `M` 时均传 `\"M\"`；函数切线务必调 `construct_tangent({ id: \"t1\", functionId: \"f\"/\"g\", expression, domain, x0 })`，表达式不含待定参数 `a/k`，切线另取 `id: \"t1\"`，勿用 `construct_line` 替代；动点 `M` 的轨迹圆须实际构出并命名 `\"M\"` 或 `\"⊙M\"`）。禁止重复构造同类型 `id`（修改须先 `repair_entity`）。\n2.圆锥曲线与平面：优先用 `throughPointIds: [\"A\",\"B\"]`（或 `c/e`+1点，或传 `equation` 字符串如 `\"x^2/3+y^2/4=1\"`），严禁把 `a²/b²` 当 `radiusX/radiusY`。水平/竖直线用 `construct_line({ throughPointId, slope: 0 })` / `{ dx: 0, dy: 1 }`；含根号参数留 8 位小数或 `construct_line(equation)`；`MT=TH` 先取坐标再用 `2*T-M` 建 `H`。外点作割线遇 `no_intersection` 则在曲线内先建点 `Q` 连 `P,Q`；交点用 `construct_line + construct_intersection`（勿手算近似点，遇 `parallel_lines` 换斜率，遇线上点需核实坐标落在线段区间内）。定比共线弦（如 `EC=2CF`）须先按韦达定理配平斜率、实测比值（若互为倒数则互换两点命名）。定面积点用 `construct_parallel({ lineId: \"l_AP\", offsetY: ±2*S₀/|x_P-x_A| })`。切线 `construct_tangent` 过外点作两切线分两次传 `tangentPointId`；从曲线上点 `A₁` 向圆作双切线再交曲线时先建 `A₁`（`|A₁M|>r`）、用 `branch: 0/1` 作切线再 `excludePointId: \"A1\"` 求 `A₂,A₃`。若第(2)问无解（如椭圆 `b > c` 时不存在 `PF₁⊥PF₂` 的 `P`），保留第(1)问与题干全部实体、省略无解 `P`，以 `scopeId: \"subquestion:1\"` + `answer` 说明。\n3.立体几何与核验：3D 球用 `construct_circumsphere` / `construct_solid(sphere)`，禁调 2D `construct_circle`。画直线只选 `{from,to}`、或 `{throughPointId,slope/dx,dy}`、或 `{equation}` 之一，切勿混传。三棱锥/四面体若 6 边长已知优先直接传 `construct_solid({ kind: \"tetrahedron\", id: \"pyr\", vertexNames, ab, ac, bc, pa, pb, pc })` 由内核精确解坐标再建 `E,F`，切勿先手算四顶点 `construct_point` 坐标；缺边长或 5 顶点直角梯形棱锥先建 4/5 顶点再立刻调 `construct_solid({ kind: \"tetrahedron\" | \"perpendicular_pyramid\", id: \"pyr\", vertexNames })`（勿只用散装线段/面替代多面体），再建棱上/面上动点（如 `E` 在棱 `BD` 上传 `from, to, ratio`）、补辅助线段（如 `AE, CE`）与 `construct_face` 截面（如 `面 AEC`）。多解只取一组分支并用原字母（如 `E,F`）命名。纯文字题按凸多边形与典型方位理解，严禁调 `request_clarification` 或仅发文本；提交 `finish_candidate` 前务必用 `query_measurement` 核对长度/面积/比值。"
-      : "当前处于观察阶段，只能先调用已发布的只读场景工具。"
+    "1.实体全覆盖与命名：完整构造题干/各小问全部对象（点/直线/曲线/圆/切线/导函数/渐近线/准线/面片/外接球/内切球）；下标（如 `F₁, F₂, A₁`）与题面曲线字母（`C/E/G/M/f`）必须完全一致（圆心与圆同名如 `M` 时均传 `\"M\"`；函数切线务必调 `construct_tangent({ id: \"t1\", functionId: \"f\"/\"g\", expression, domain, x0 })`，表达式不含待定参数 `a/k`，切线另取 `id: \"t1\"`，勿用 `construct_line` 替代；动点 `M` 的轨迹圆须实际构出并命名 `\"M\"` 或 `\"⊙M\"`）。禁止重复构造同类型 `id`（修改须先 `repair_entity`）。\n2.圆锥曲线与平面：优先用 `throughPointIds: [\"A\",\"B\"]`（或 `c/e`+1点，或传 `equation` 字符串如 `\"x^2/3+y^2/4=1\"`），严禁把 `a²/b²` 当 `radiusX/radiusY`。水平/竖直线用 `construct_line({ throughPointId, slope: 0 })` / `{ dx: 0, dy: 1 }`；含根号参数留 8 位小数或 `construct_line(equation)`；`MT=TH` 先取坐标再用 `2*T-M` 建 `H`。外点作割线遇 `no_intersection` 则在曲线内先建点 `Q` 连 `P,Q`；交点用 `construct_line + construct_intersection`（勿手算近似点，遇 `parallel_lines` 换斜率，遇线上点需核实坐标落在线段区间内）。定比共线弦（如 `EC=2CF`）须先按韦达定理配平斜率、实测比值（若互为倒数则互换两点命名）。定面积点用 `construct_parallel({ lineId: \"l_AP\", offsetY: ±2*S₀/|x_P-x_A| })`。切线 `construct_tangent` 过外点作两切线分两次传 `tangentPointId`；从曲线上点 `A₁` 向圆作双切线再交曲线时先建 `A₁`（`|A₁M|>r`）、用 `branch: 0/1` 作切线再 `excludePointId: \"A1\"` 求 `A₂,A₃`。若第(2)问无解（如椭圆 `b > c` 时不存在 `PF₁⊥PF₂` 的 `P`），保留第(1)问与题干全部实体、省略无解 `P`，以 `scopeId: \"subquestion:1\"` + `answer` 说明。\n3.立体几何与核验：3D 球用 `construct_circumsphere` / `construct_solid(sphere)`，禁调 2D `construct_circle`。画直线只选 `{from,to}`、或 `{throughPointId,slope/dx,dy}`、或 `{equation}` 之一，切勿混传。三棱锥/四面体若 6 边长已知优先直接传 `construct_solid({ kind: \"tetrahedron\", id: \"pyr\", vertexNames, ab, ac, bc, pa, pb, pc })` 由内核精确解坐标再建 `E,F`，切勿先手算四顶点 `construct_point` 坐标；缺边长或 5 顶点直角梯形棱锥先建 4/5 顶点再立刻调 `construct_solid({ kind: \"tetrahedron\" | \"perpendicular_pyramid\", id: \"pyr\", vertexNames })`（勿只用散装线段/面替代多面体），再建棱上/面上动点（如 `E` 在棱 `BD` 上传 `from, to, ratio`）、补辅助线段（如 `AE, CE`）与 `construct_face` 截面（如 `面 AEC`）。多解只取一组分支并用原字母（如 `E,F`）命名。纯文字题按凸多边形与典型方位理解，严禁调 `request_clarification` 或仅发文本；提交 `finish_candidate` 前务必用 `query_measurement` 核对长度/面积/比值。"
   ]
   if (input.repair) {
-    sections.push("", "## 上一轮的输出没有被接受", input.repair.hint, ...repairDetailSections(input.repair))
+    sections.push("", "## 上一轮的输出没有被接受", sanitizeDsActionRepairHint(input.repair.hint), ...repairDetailSections(input.repair))
   }
   return sections.join("\n")
 }

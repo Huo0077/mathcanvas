@@ -260,7 +260,7 @@ export interface ModelPlannerDependencies {
   /** 现取「使用中」的那一份。缺省走真实 IPC（`resolveActiveProvider`）。 */
   resolveProvider?: () => Promise<ProviderResolution>
   /** 发一次请求。缺省走 `provider_run`。第二个参数是"这次还能不能继续"的判据（取消用）。 */
-  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
+  runModel?: (request: { runId: string; profileId: string; profileRevision: number; messages: ModelChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number; toolChoice?: "auto" | "required" }, signal: { isCancelled: () => boolean }) => Promise<ModelClientStart>
   /** 让 Rust 侧真的停下来（缺省走 `provider_cancel`）。 */
   cancelRun?: (runId: string) => Promise<boolean>
   /**
@@ -321,6 +321,41 @@ function extractTextualDsToolCalls(
   text: string,
   baseId: string
 ): Array<{ kind: "tool_call"; toolCallId: string; toolId: string; input: Record<string, unknown> }> {
+  const out: Array<{ kind: "tool_call"; toolCallId: string; toolId: string; input: Record<string, unknown> }> = []
+
+  // 1. DeepSeek V3/R1 native leaked token format:
+  //    <｜tool▁call▁begin｜>function<｜tool▁sep｜>TOOL_NAME\n```json\n{...}\n```<｜tool▁call▁end｜>
+  for (const match of text.matchAll(/<[｜|]tool[▁_]call[▁_]begin[｜|]>\s*(?:function\s*)?<[｜|]tool[▁_]sep[｜|]>\s*([a-zA-Z0-9_]+)\s*([\s\S]*?)<[｜|]tool[▁_]call[▁_]end[｜|]>/gi)) {
+    const toolName = match[1]?.trim() ?? ""
+    if (!isDsActionName(toolName)) continue
+    const args = coerceDsToolInput(match[2] ?? "")
+    if (args === null) continue
+    out.push({ kind: "tool_call", toolCallId: `${baseId}-ds-${out.length + 1}`, toolId: toolName, input: args })
+  }
+  if (out.length > 0) return out
+
+  // 2. DeepSeek V3.2 DSML leaked XML format:
+  //    <｜DSML｜invoke name="TOOL_NAME"><｜DSML｜parameter name="k">v</｜DSML｜parameter></｜DSML｜invoke>
+  for (const match of text.matchAll(/<[｜|]DSML[｜|]invoke\s+name=["']([a-zA-Z0-9_]+)["'][^>]*>([\s\S]*?)<\/[｜|]DSML[｜|]invoke>/gi)) {
+    const toolName = match[1]?.trim() ?? ""
+    if (!isDsActionName(toolName)) continue
+    const body = match[2] ?? ""
+    const args: Record<string, unknown> = {}
+    for (const p of body.matchAll(/<[｜|]DSML[｜|]parameter\s+name=["']([^"']+)["'][^>]*>([\s\S]*?)<\/[｜|]DSML[｜|]parameter>/gi)) {
+      const key = p[1]?.trim()
+      const rawVal = (p[2] ?? "").trim()
+      if (!key) continue
+      try {
+        args[key] = JSON.parse(rawVal)
+      } catch {
+        args[key] = rawVal
+      }
+    }
+    out.push({ kind: "tool_call", toolCallId: `${baseId}-dsml-${out.length + 1}`, toolId: toolName, input: args })
+  }
+  if (out.length > 0) return out
+
+  // 3. Generic <tool_call>...</tool_call>, fenced ```json ... ```, or bare JSON object/array
   const candidates: string[] = []
   for (const match of text.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)) {
     if (match[1]) candidates.push(match[1].trim())
@@ -330,7 +365,12 @@ function extractTextualDsToolCalls(
       if (match[1]) candidates.push(match[1].trim())
     }
   }
-  const out: Array<{ kind: "tool_call"; toolCallId: string; toolId: string; input: Record<string, unknown> }> = []
+  if (candidates.length === 0) {
+    const trimmed = text.trim()
+    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      candidates.push(trimmed)
+    }
+  }
   for (const rawJson of candidates) {
     try {
       const parsed: unknown = JSON.parse(rawJson.replace(/,\s*([}\]])/g, "$1"))
@@ -835,6 +875,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let structuredRequestIndex = 0
       let dsActionIndex = 0
       let dsActionTextRetries = 0
+      let dsStreamRetries = 0
+      let dsForceNextToolCall = false
       let lastDsPrimitiveCount = 0
       let lastDsCandidateHash: string | null = null
       let lastSignature: string | null = null
@@ -968,9 +1010,12 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
            *   后者的结构化由工具 schema 保证，再叠一个 `response_format` 只会让部分服务 400。
            */
           const outputMode = channel === "strict_json" ? "json_mode" : undefined
+          const tokenCap = intentMode === "ds_action" ? 8192 : 4096
           const maxOutputTokens = provider.maxOutputTokens === undefined ? undefined
-            : request.repair?.reason === "response_incomplete" ? provider.maxOutputTokens : Math.min(4096, provider.maxOutputTokens)
-          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }), ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }) }, { isCancelled: () => request.signal.aborted })
+            : request.repair?.reason === "response_incomplete" ? provider.maxOutputTokens : Math.min(tokenCap, provider.maxOutputTokens)
+          const toolChoice = dsForceNextToolCall && tools.length > 0 ? ("required" as const) : undefined
+          dsForceNextToolCall = false
+          result = await runModel({ runId, profileId: provider.id, profileRevision: provider.revision, messages, tools, ...(outputMode === undefined ? {} : { outputMode }), ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }), ...(toolChoice === undefined ? {} : { toolChoice }) }, { isCancelled: () => request.signal.aborted })
         } finally {
           request.signal.removeEventListener("abort", onAbort)
         }
@@ -997,25 +1042,32 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             remaining: { network: request.budget.remaining("network"), generation: request.budget.remaining("generation") },
             maxAttempts: MAX_TRANSPORT_ATTEMPTS
           })
-          if (decision.action !== "retry") {
+          const allowDsStreamRetry =
+            intentMode === "ds_action" &&
+            decision.action === "refresh_context" &&
+            dsStreamRetries < 2 &&
+            request.budget.remaining("generation") >= 1 &&
+            (request.beforeProviderRequest !== undefined || request.budget.remaining("network") >= 1)
+          if (decision.action !== "retry" && !allowDsStreamRetry) {
             dependencies.onStructuredDiagnostic?.({
               kind: "boundary",
               boundary: "provider",
               code: failure.failure
             })
-            /**
-             * **把底层那句话带上**（2026-09-21 修）。
-             *
-             * 原先这里只抛 `decision.detail`，而那句话说清的是**决定**（"传输失败已尝试 3 次，
-             * 停下并如实报告"），不是**原因**（`the provider could not be reached: …`）。
-             * 后果在一次真实运行里立刻显现：界面上只有"传输失败已尝试 3 次"，而排查需要知道
-             * 到底是 DNS、TLS、超时还是连接被拒 —— 那句话本来就在 `failure.message` 里，
-             * 却在决策文字里丢掉了。
-             */
             throw new ModelPlannerError("provider_failed", `${decision.detail}（底层原因：${failure.message}）`, failure.retryable)
           }
           // 取消优先于重试：用户按了停止就不该再发一次。
           if (request.signal.aborted) throw new ModelPlannerError("cancelled", "这次运行已取消。", false)
+          if (allowDsStreamRetry) {
+            dsStreamRetries += 1
+            const extGuard = request.beforeProviderRequest !== undefined
+            if (!request.budget.consume("generation").ok || (!extGuard && !request.budget.consume("network").ok)) {
+              throw new ModelPlannerError("provider_failed", `预算已不足以再试一次（stream retry；底层原因：${failure.message}）`, true)
+            }
+            dependencies.onDiagnostic?.(`[ds_stream_retry] attempt=${dsStreamRetries} retrying after transient stream error: ${boundedExcerpt(failure.message, 160)}`)
+            lastSignature = `${error.class}:${error.status ?? "none"}:${error.message}`
+            continue
+          }
           if (!spend(request.budget, decision)) {
             dependencies.onStructuredDiagnostic?.({
               kind: "boundary",
@@ -1031,13 +1083,28 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         // A successful response ended this transport attempt. Subsequent read-tool
         // continuations are new requests and get their own bounded retry window.
         attempts = 0
+        dsStreamRetries = 0
         lastSignature = null
         const events: readonly ModelEvent[] = result.ok ? result.events : []
         const rawCalls = events.filter((event) => event.kind === "tool_call")
         const text = events.filter((event) => event.kind === "delta").map((event) => (event.kind === "delta" ? event.text : "")).join("")
-        const calls = rawCalls.length === 0 && channel === "native_tools" && intentMode === "ds_action" && dsActionSession !== null && text.length > 0
+        const turnReasoning = events
+          .filter((event): event is Extract<ModelEvent, { kind: "started" }> => event.kind === "started")
+          .map((event) => (typeof event.metadata?.reasoning === "string" ? event.metadata.reasoning : ""))
+          .join("")
+        const rawOrExtractedCalls = rawCalls.length === 0 && channel === "native_tools" && intentMode === "ds_action" && dsActionSession !== null && text.length > 0
           ? extractTextualDsToolCalls(text, `ds-${structuredRequestIndex + 1}`)
           : rawCalls
+        // Auto-uniquify synthetic fallback IDs (`tool-call-0`) emitted by providers that omit tool_calls[].id
+        // across turns, while keeping duplicate-ID rejection intact for explicit duplicate provider IDs.
+        const calls = rawOrExtractedCalls.map((call, idx) =>
+          /^tool-call-\d+$/.test(call.toolCallId) && seenCalls.has(call.toolCallId)
+            ? { ...call, toolCallId: `${call.toolCallId}-t${structuredRequestIndex + 1}-${idx}` }
+            : call
+        )
+        if (calls.length > 0) {
+          dsActionTextRetries = 0
+        }
         const usageEvents = events.filter((event): event is Extract<ModelEvent, { kind: "usage" }> => event.kind === "usage")
         const hasUsageEvent = usageEvents.length > 0
         const hasDeltaText = events.some((event) => event.kind === "delta" && event.text.length > 0)
@@ -1316,7 +1383,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               for (const idx of pending) {
                 const call = normalizedCalls[idx]!
                 const res = trial.execute(call.toolId, call.input)
-                if (!res.ok && res.blockerCode === "undeclared_entity_ref" && pending.length > 1) {
+                if (!res.ok && (res.blockerCode === "undeclared_entity_ref" || res.blockerCode === "missing_host") && pending.length > 1) {
                   deferred.push(idx)
                 } else {
                   results[idx] = res
@@ -1383,6 +1450,15 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               ...(candidateSlices === undefined ? {} : { candidateSlices })
             }
           }
+          // When all preceding constructive calls succeeded and ONLY a trailing finish_candidate
+          // returned a repairable pre-cert rejection, preserve the valid preceding constructions
+          // instead of rolling back the whole batch.
+          const trailingFinishPartialCommit =
+            trailingFinish &&
+            trial !== null &&
+            results.slice(0, -1).every((res) => res.ok && res.terminated === undefined) &&
+            results.at(-1)?.ok === false &&
+            results.at(-1)?.status === "repairable"
           const hardFailure = results.find((res) => !res.ok || res.terminated !== undefined)
           const batchProgressed = trial !== null && (
             trial.currentSnapshot().candidateHash !== before.candidateHash ||
@@ -1395,7 +1471,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             ? results.find((res) => !NON_CONSTRUCTIVE_DS_ACTIONS.has(res.action) && !res.stateChanged)
             : undefined)
           const accepted = !mixed && failure === undefined && trial !== null
-          if (!accepted) {
+          if (!accepted && !trailingFinishPartialCommit) {
             const signature = `batch:${JSON.stringify(normalizedCalls.map((call) => [call.toolId, call.input]))}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
             const stalled = (dsActionSignatures.get(signature) ?? 0) + 1
             dsActionSignatures.set(signature, stalled)
@@ -1418,36 +1494,50 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
             throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action batch")
           }
-          if (accepted) {
+          if (accepted || trailingFinishPartialCommit) {
             dsActionSession = trial
-            for (const call of executedCalls) dsActionHistory.push({ name: call.toolId, input: call.input })
+            const committedCalls = trailingFinishPartialCommit ? executedCalls.slice(0, -1) : executedCalls
+            for (const call of committedCalls) dsActionHistory.push({ name: call.toolId, input: call.input })
             lastDsPrimitiveCount = trial!.currentSnapshot().primitiveCount
             lastDsCandidateHash = trial!.currentSnapshot().candidateHash
             dsActionSignatures.clear()
+            dsActionCodeStreaks.clear()
           } else {
             dependencies.onDiagnostic?.(`[ds_action_batch_fail] req=${structuredRequestIndex} code=${mixed ? "unsupported_action_batch_mix" : failure?.blockerCode ?? "no_progress"} detail=${boundedExcerpt(failure?.repairHint ?? "", 180)}`)
             dependencies.onStructuredDiagnostic?.({ kind: "boundary", boundary: "tool_protocol", code: mixed ? "unsupported_action_batch_mix" : failure?.blockerCode ?? "batch_rolled_back" })
           }
-          for (const call of normalizedCalls) {
+          const preservedBatchText = text.trim() ? boundedExcerpt(text.trim(), 1200) : ""
+          for (const [callIdx, call] of normalizedCalls.entries()) {
             seenCalls.add(call.toolCallId)
-            messages.push({ role: "tool_call", content: "", toolCallId: call.toolCallId, toolName: call.toolId, toolInput: call.input })
+            messages.push({
+              role: "tool_call",
+              content: callIdx === 0 ? preservedBatchText : "",
+              toolCallId: call.toolCallId,
+              toolName: call.toolId,
+              toolInput: call.input,
+              ...(callIdx === 0 && turnReasoning ? { reasoningContent: turnReasoning } : {})
+            })
           }
           for (const [index, call] of normalizedCalls.entries()) {
             const res = results[index]
-            const status = accepted ? "accepted" : res && !res.ok ? res.status : "repairable"
-            const blockerCode = accepted ? undefined : res && !res.ok ? res.blockerCode ?? "batch_rolled_back" : mixed ? "unsupported_action_batch_mix" : "batch_rolled_back"
+            const isLast = index === normalizedCalls.length - 1
+            const callAccepted = accepted || (trailingFinishPartialCommit && !isLast)
+            const status = callAccepted ? "accepted" : res && !res.ok ? res.status : "repairable"
+            const blockerCode = callAccepted ? undefined : res && !res.ok ? res.blockerCode ?? "batch_rolled_back" : mixed ? "unsupported_action_batch_mix" : "batch_rolled_back"
             dependencies.onStructuredDiagnostic?.({
               kind: "action", requestIndex: structuredRequestIndex, actionIndex: ++dsActionIndex, toolName: call.toolId,
               resultStatus: status, ...(blockerCode === undefined ? {} : { blockerCode }),
-              primitiveCountBefore: before.primitiveCount, primitiveCountAfter: accepted ? res!.primitiveCount : before.primitiveCount,
-              candidateHashChanged: accepted && res!.candidateHash !== before.candidateHash,
-              stateChanged: accepted && res!.stateChanged, feedbackDelivered: true
+              primitiveCountBefore: before.primitiveCount, primitiveCountAfter: callAccepted ? res!.primitiveCount : before.primitiveCount,
+              candidateHashChanged: callAccepted && res!.candidateHash !== before.candidateHash,
+              stateChanged: callAccepted && res!.stateChanged, feedbackDelivered: true
             })
-            const budgetWarning = index === normalizedCalls.length - 1 ? dsSessionBudgetWarning() : undefined
+            const budgetWarning = isLast ? dsSessionBudgetWarning() : undefined
+            const includeDir = isLast || normalizedCalls.length <= 4
+            const dirField = includeDir ? { referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) } : {}
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
-              content: accepted
-                ? boundedExcerpt(JSON.stringify({ ...res, ...(budgetWarning ? { sessionBudgetWarning: budgetWarning } : {}), referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) }), 4000)
-                : JSON.stringify({ status, blockerCode, ...(budgetWarning ? { sessionBudgetWarning: budgetWarning } : {}), referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)),
+              content: callAccepted
+                ? boundedExcerpt(JSON.stringify({ ...res, ...(budgetWarning ? { sessionBudgetWarning: budgetWarning } : {}), ...dirField }), 4000)
+                : JSON.stringify({ status, blockerCode, ...(budgetWarning ? { sessionBudgetWarning: budgetWarning } : {}), ...dirField,
                     repairHint: mixed ? "Send read, repair, and terminal tools in separate turns" : res && !res.ok ? res.repairHint : res?.repairHint ?? failure?.repairHint ?? "Entire batch rolled back; correct failing call and retry" }) })
           }
           continue
@@ -1527,7 +1617,9 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             const previousCandidateHash = lastDsCandidateHash
             const actionIndex = ++dsActionIndex
             const execRes = dsActionSession.execute(toolCall.toolId, coercedInput)
-            dsActionHistory.push({ name: toolCall.toolId, input: coercedInput })
+            if (execRes.ok && (execRes.stateChanged || execRes.action === "repair_entity" || execRes.action === "repair_constraint")) {
+              dsActionHistory.push({ name: toolCall.toolId, input: coercedInput })
+            }
             lastDsPrimitiveCount = execRes.primitiveCount
             lastDsCandidateHash = execRes.candidateHash
             const reportAction = (feedbackDelivered: boolean) => dependencies.onStructuredDiagnostic?.({
@@ -1580,7 +1672,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               const codeKey = `${execRes.action}:${execRes.blockerCode ?? execRes.status}`
               const codeStreak = !execRes.ok ? (dsActionCodeStreaks.get(codeKey) ?? 0) + 1 : 0
               if (!execRes.ok) dsActionCodeStreaks.set(codeKey, codeStreak)
-              if (nextCount >= 2 || codeStreak >= 5) {
+              const stallLimit = execRes.ok && NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action) ? 4 : 2
+              if (nextCount >= stallLimit || codeStreak >= 5) {
                 reportAction(false)
                 return {
                   failure: createPlanFailure({
@@ -1620,7 +1713,15 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               dsActionRepairCount += 1
             }
             const singleBudgetWarning = dsSessionBudgetWarning()
-            messages.push({ role: "tool_call", content: "", toolCallId: toolCall.toolCallId, toolName: toolCall.toolId, toolInput: coercedInput })
+            const preservedSingleText = text.trim() ? boundedExcerpt(text.trim(), 1200) : ""
+            messages.push({
+              role: "tool_call",
+              content: preservedSingleText,
+              toolCallId: toolCall.toolCallId,
+              toolName: toolCall.toolId,
+              toolInput: coercedInput,
+              ...(turnReasoning ? { reasoningContent: turnReasoning } : {})
+            })
             messages.push({
               role: "tool_result",
               toolCallId: toolCall.toolCallId,
@@ -1703,6 +1804,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action text nudge")
             }
             dsActionTextRetries += 1
+            dsForceNextToolCall = true
             dependencies.onDiagnostic?.(`[ds_action_text_nudge] attempt=${dsActionTextRetries} model returned text instead of tool calls`)
             messages.push({ role: "assistant", content: boundedExcerpt(text || "(empty text)", 600) })
             const stagedDir = dsActionSession.referenceDirectory()

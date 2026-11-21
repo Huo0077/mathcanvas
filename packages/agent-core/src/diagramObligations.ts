@@ -424,7 +424,7 @@ const finitePositive = (value: string): number | null => {
  * 它必须定义在 `DIAGRAM_OBLIGATION_MATCHERS` **之前**：那张表在模块初始化时就构造正则，
  * 放到后面会是一个 `Cannot access … before initialization`（本轮实测踩到）。
  */
-const RADICAL_NUMBER_SOURCE = String.raw`(\d+(?:\.\d+)?\s*√\s*\d+(?:\.\d+)?|√\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?)`
+const RADICAL_NUMBER_SOURCE = String.raw`((?:\d+(?:\.\d+)?\s*√\s*\d+(?:\.\d+)?|√\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?)(?:\s*\/\s*\d+(?:\.\d+)?)?)`
 
 function ellipseAxes(denominatorX: number, denominatorY: number): Pick<DiagramObligation, "kind" | "targets" | "conic"> | null {
   if (!Number.isFinite(denominatorX) || !Number.isFinite(denominatorY) || denominatorX <= 0 || denominatorY <= 0) return null
@@ -580,8 +580,21 @@ function resolveSymbolicConics(
 
     const kindHint = match[1]
     const entityLabel = match[2]
-    const sentenceEndMatch = /[。；;\n]/.exec(givenText.slice(eqEnd))
-    const windowEnd = Math.min(givenText.length, eqEnd + Math.min(sentenceEndMatch?.index ?? 260, 260))
+    const restAfterEq = givenText.slice(eqEnd)
+    const sentenceEndMatch = /[。；;\n]/.exec(restAfterEq)
+    const firstSentence = restAfterEq.slice(0, Math.min(sentenceEndMatch?.index ?? 260, 260))
+    const hasFirstSentenceClue = /(?:离心率|焦距|长轴|短轴|实轴|虚轴|焦点|渐近线|过点|经过|顶点|准线)/.test(firstSentence)
+    let windowEnd = Math.min(givenText.length, eqEnd + firstSentence.length)
+    if (!hasFirstSentenceClue && sentenceEndMatch !== null) {
+      // Only spill into a second stem sentence when the first sentence gave zero conic parameters,
+      // and never cross into numbered subquestions or goal clauses.
+      const secondStart = sentenceEndMatch.index + 1
+      const hardStopMatch = /(?:[。；;\n]|[（(]\s*[1-9ⅠⅡ]\s*[)）]|[①-⑳]|求证|试?证明|(?<=[，,。；;])\s*求)/.exec(restAfterEq.slice(secondStart))
+      const secondEnd = secondStart + Math.min(hardStopMatch?.index ?? 140, 140)
+      if (secondEnd <= 260) {
+        windowEnd = Math.min(givenText.length, eqEnd + secondEnd)
+      }
+    }
     const windowText = givenText.slice(eqEnd, windowEnd)
 
     const domainStrings: string[] = []
@@ -1227,8 +1240,10 @@ function normalizeStatedExpression(raw: string): string | null {
     .replace(/(?<![A-Za-z_])(sin|cos|tan|ln|log)\s*x(?![\w(]|\s*\^)/g, "$1(x)")
     .replace(/(?<![A-Za-z_])lg\s*\(/gi, "log10(")
     .replace(/(?<![A-Za-z_])lg\s*x(?![\w(]|\s*\^)/gi, "log10(x)")
-    .replace(/(?<=[\d)])\s*(?=(?:sin|cos|tan|ln|log|log10|exp|abs|sqrt)\s*\()/g, "*")
-    .replace(/(^|[^A-Za-z_\d.])(\d+(?:\.\d+)?)\s*(?=\(|pi\b)/g, "$1$2*")
+    .replace(/\|([^|]+)\|/g, "abs($1)")
+    .replace(/(?<=[\d)x])\s*(?=(?:sin|cos|tan|ln|log|log10|exp|abs|sqrt)\s*\()/g, "*")
+    .replace(/(?<=\bx)\s*(?=e\s*\^)/g, "*")
+    .replace(/(^|[^A-Za-z_\d.])(\d+(?:\.\d+)?)\s*(?=\(|pi\b|e\s*\^)/g, "$1$2*")
     .replace(/\)\s*(?=\(|x\b|pi\b)/g, ")*")
     .replace(/(\d)\s*x/g, "$1*x")
   return normalized.length === 0 ? null : normalized
@@ -1341,7 +1356,7 @@ function buildQuadObligations(
 ): ObligationDraft | ObligationDraft[] | null {
   const [a, b, c, d] = names(verticesRaw)
   if (a === undefined || b === undefined || c === undefined || d === undefined) return null
-  const statedSide = statedSideRaw === undefined ? null : finitePositive(statedSideRaw)
+  const statedSide = statedSideRaw === undefined ? null : (radicalValue(statedSideRaw) ?? finitePositive(statedSideRaw))
   const equalEdges = [
     { kind: "equalLength" as const, targets: [a, b, b, c] },
     { kind: "equalLength" as const, targets: [b, c, c, d] },
@@ -1353,6 +1368,14 @@ function buildQuadObligations(
     { kind: "perpendicular" as const, targets: [b, c, c, d] },
     { kind: "perpendicular" as const, targets: [c, d, d, a] }
   ]
+  if (shape === "平行四边形") {
+    return [
+      { kind: "parallel" as const, targets: [a, b, c, d] },
+      { kind: "parallel" as const, targets: [a, d, b, c] },
+      { kind: "equalLength" as const, targets: [a, b, c, d] },
+      { kind: "equalLength" as const, targets: [a, d, b, c] }
+    ]
+  }
   if (shape === "菱形") return [...equalEdges, ...statedLength]
   if (shape === "矩形" || shape === "长方形") return { kind: "rectangle" as const, targets: [a, b, c, d] }
   if (shape !== "正方形") return rightAngles
@@ -1462,6 +1485,19 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
    * 右端写成 `=4` 也收（`x²+y²=4` 就是半径 2 的圆），常数项按 `多出来的数` 扣掉。
    */
   {
+    /** 标准圆方程：`(x - a)² + (y - b)² = r²` / `(x - a)² + y² = r²` / `x² + (y - b)² = r²`。 */
+    pattern: /(?:\(\s*x\s*([-−–+])\s*(\d+(?:\.\d+)?)\s*\)|x)\s*(?:\^2|²)\s*\+\s*(?:\(\s*y\s*([-−–+])\s*(\d+(?:\.\d+)?)\s*\)|y)\s*(?:\^2|²)\s*=\s*(\d+(?:\.\d+)?)(?![\d.])/g,
+    allowAfterLabelColon: true,
+    read: (m) => {
+      const rSq = finitePositive(m[5])
+      if (rSq === null) return null
+      const cx = m[2] === undefined ? 0 : (isMinus(m[1]) ? 1 : -1) * Number(m[2])
+      const cy = m[4] === undefined ? 0 : (isMinus(m[3]) ? 1 : -1) * Number(m[4])
+      if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null
+      return { kind: "conicAxes", targets: [], conic: { kind: "circle", centerX: cx, centerY: cy, radius: Math.sqrt(rSq) } }
+    }
+  },
+  {
     pattern: /x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)\s*([^=]*)=\s*(-?\d+(?:\.\d+)?)(?![\d.])/g,
     allowAfterLabelColon: true,
     read: (m) => circleFromGeneralEquation(m[1] ?? "", Number(m[2]))
@@ -1498,7 +1534,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: new RegExp(`(${POINT_NAME})\\s*(?:是|为|在)\\s*(椭圆|双曲线|抛物线)(?:\\s*([A-Z]))?\\s*上(?:\\s*(?:任意|任取)\\s*一点|\\s*任意点|\\s*一点|\\s*的点|\\s*动点)?`, "g"),
+    pattern: new RegExp(`(${POINT_NAME})\\s*(?:是|为|在)\\s*(椭圆|双曲线|抛物线|圆)(?:\\s*([A-Z]))?\\s*(?:左支|右支|上支|下支)?上(?:\\s*(?:任意|任取)\\s*一点|\\s*任意点|\\s*一点|\\s*的点|\\s*动点)?`, "g"),
     read: (m) => {
       const targets = names(m[1])
       // 恰好一个点名：`PA 是椭圆上…` 那种连写读不出（读一半比读不出更坏）。
@@ -1507,7 +1543,7 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return {
         kind: "pointOnConic",
         targets,
-        conicKind: m[2] === "椭圆" ? "ellipse" : m[2] === "双曲线" ? "hyperbola" : "parabola",
+        conicKind: m[2] === "椭圆" ? "ellipse" : m[2] === "双曲线" ? "hyperbola" : m[2] === "抛物线" ? "parabola" : "circle",
         ...(entityLabel === undefined ? {} : { entityLabel })
       }
     }
@@ -1804,8 +1840,11 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: /二面角\s*([A-Z])\s*[-−]\s*([A-Z])([A-Z])\s*[-−]\s*([A-Z])\s*(?:=|[为為])\s*(\d+(?:\.\d+)?)\s*°/g,
-    read: (m) => { const value = finitePositive(m[5]); return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5), value } }
+    pattern: new RegExp(`二面角\\s*(${POINT_NAME})\\s*[-−]\\s*(${POINT_NAME})(${POINT_NAME})\\s*[-−]\\s*(${POINT_NAME})\\s*(?:的大小)?(?:=|[为為]|是)\\s*(?:(\\d+(?:\\.\\d+)?)\\s*°|(直二面角))`, "g"),
+    read: (m) => {
+      const value = m[6] ? 90 : finitePositive(m[5])
+      return value === null || value >= 180 ? null : { kind: "dihedral", targets: m.slice(1, 5).map(canonicalPointName), value }
+    }
   },
   {
     /**
@@ -1856,14 +1895,15 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * 范围是 **(0°, 90°)**：`0°` 不是角（`finitePositive` 已经挡掉），`90°` 是"侧棱躺进底面"。
      */
-    pattern: new RegExp(`(${SEGMENT_NAME})\\s*与\\s*(?:平面\\s*)?(${PLANE_NAME}|底面)\\s*所成(?:的)?角\\s*(?:为|=|是)\\s*(\\d+(?:\\.\\d+)?)\\s*°`, "g"),
+    pattern: new RegExp(`(?:直线\\s*)?(${SEGMENT_NAME})\\s*与\\s*(?:(?:平面|底面)\\s*(${PLANE_NAME})|(底面)|(${PLANE_NAME}))\\s*所成(?:的)?角\\s*(?:的大小)?(?:为|=|是)\\s*(\\d+(?:\\.\\d+)?)\\s*°`, "g"),
     read: (m) => {
-      const value = finitePositive(m[3])
+      const value = finitePositive(m[5])
       if (value === null || value >= 90) return null
       const line = names(m[1])
       if (line.length !== 2) return null
-      const stated = m[2]
-      if (stated === "底面") return { kind: "linePlaneAngle", targets: [...line, STATED_BASE], value, planeLengths: [2, 1] }
+      if (m[3] === "底面") return { kind: "linePlaneAngle", targets: [...line, STATED_BASE], value, planeLengths: [2, 1] }
+      const stated = m[2] ?? m[4]
+      if (!stated) return null
       const plane = names(stated)
       if (plane.length < 3 || new Set(plane).size !== plane.length) return null
       return { kind: "linePlaneAngle", targets: [...line, ...plane], value, planeLengths: [2, plane.length] }
@@ -1971,14 +2011,52 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      *
      * **必须排在那条"面 XX"通用模式之前**：先具体的、再笼统的。
      */
-    pattern: new RegExp(`(?:侧面|底面|面)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(?:边长为\\s*([0-9.]+)\\s*的)?\\s*(正方形|矩形|长方形|菱形)`, "g"),
+    pattern: new RegExp(`(?:侧面|底面|面|四边形)\\s*((?:${POINT_NAME}){4})\\s*(?:为|是)\\s*(?:边长为\\s*${RADICAL_NUMBER_SOURCE}\\s*的)?\\s*(正方形|矩形|长方形|菱形|平行四边形)`, "g"),
     read: (m) => buildQuadObligations(m[1]!, m[3]!, m[2])
   },
   {
-    pattern: new RegExp(`(?:正方形|菱形)\\s*((?:${POINT_NAME}){4})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`, "g"),
+    pattern: new RegExp(`(正方形|菱形|平行四边形)\\s*((?:${POINT_NAME}){4})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`, "g"),
+    read: (m) => buildQuadObligations(m[2]!, m[1]!)
+  },
+  {
+    /** 正方体棱长：`棱长为 2 的正方体 ABCD-A₁B₁C₁D₁` / `正方体 ABCD-A₁B₁C₁D₁ 的棱长为 2`。 */
+    pattern: new RegExp(`(?:棱长为\\s*${RADICAL_NUMBER_SOURCE}\\s*的\\s*正方体\\s*((?:${POINT_NAME}){4})\\s*[-−–]\\s*((?:${POINT_NAME}){4})|正方体\\s*((?:${POINT_NAME}){4})\\s*[-−–]\\s*((?:${POINT_NAME}){4})\\s*的?\\s*棱长\\s*(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE})`, "g"),
     read: (m) => {
-      const shape = m[0].startsWith("正方形") ? "正方形" : "菱形"
-      return buildQuadObligations(m[1]!, shape)
+      const side = radicalValue(m[1] ?? m[6] ?? "")
+      const bottom = names(m[2] ?? m[4] ?? "")
+      const top = names(m[3] ?? m[5] ?? "")
+      if (side === null || bottom.length !== 4 || top.length !== 4) return null
+      return [
+        { kind: "fixedLength" as const, targets: [bottom[0]!, bottom[1]!], value: side },
+        { kind: "fixedLength" as const, targets: [bottom[1]!, bottom[2]!], value: side },
+        { kind: "fixedLength" as const, targets: [bottom[0]!, top[0]!], value: side }
+      ]
+    }
+  },
+  {
+    /** 正三棱锥：`正三棱锥 P-ABC`（底面等边 + 三条侧棱等长）。 */
+    pattern: new RegExp(`正三棱锥\\s*(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`, "g"),
+    read: (m) => {
+      const [p, a, b, c] = [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName) as [string, string, string, string]
+      return [
+        { kind: "equilateral" as const, targets: [a, b, c] },
+        { kind: "equalLength" as const, targets: [p, a, p, b] },
+        { kind: "equalLength" as const, targets: [p, b, p, c] }
+      ]
+    }
+  },
+  {
+    /** 圆锥/圆柱：`圆锥的底面半径为 2，高为 3` / `圆柱的底面半径为 2，高为 3`。 */
+    pattern: new RegExp(`(圆锥|圆柱)\\s*的?\\s*底面半径\\s*(?:为|是|=)?\\s*${RADICAL_NUMBER_SOURCE}\\s*[，,且]?\\s*高\\s*(?:为|是|=)?\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
+    read: (m) => {
+      const radius = radicalValue(m[2] ?? "")
+      const height = radicalValue(m[3] ?? "")
+      if (radius === null || height === null) return null
+      const shape = m[1] === "圆锥" ? "cone" as const : "cylinder" as const
+      return [
+        { kind: "solidDimension" as const, targets: [], value: radius, solid: { shape, metric: "radius" } },
+        { kind: "solidDimension" as const, targets: [], value: height, solid: { shape, metric: "height" } }
+      ]
     }
   },
   {
@@ -2011,10 +2089,10 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     read: (m) => ({ kind: "planePerpendicular", targets: [...names(m[1]), ...names(m[2])], planeLengths: [names(m[1]).length, names(m[2]).length] })
   },
   {
-    pattern: new RegExp(`(?:△|三角形|侧面|底面)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为([0-9.]+)的)?\\s*(?:等边|正)三角形`, "g"),
+    pattern: new RegExp(`(?:△|三角形|侧面|底面)\\s*(${TRIANGLE_NAME})\\s*(?:为|是)?\\s*(?:边长为\\s*${RADICAL_NUMBER_SOURCE}\\s*的)?\\s*(?:等边|正)三角形`, "g"),
     read: (m) => {
       const targets = names(m[1])
-      const side = m[2] === undefined ? null : finitePositive(m[2])
+      const side = m[2] === undefined ? null : (radicalValue(m[2]) ?? finitePositive(m[2]))
       if (targets.length !== 3 || side === null) return { kind: "equilateral", targets }
       return [
         { kind: "equilateral", targets },
@@ -2025,46 +2103,31 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    /**
-     * **并列写法**：`E、F 分别为 AC 和 CC₁ 的中点`（2026-10-14 用户现场，直三棱柱那道题）。
-     *
-     * 卷面上这是**最常见**的写法之一，而原先只认单写法（下一条）⇒ 整句落进
-     * "原题出现了尚未被可靠解析的几何条件"，于是 E、F 两个点谁也没被点名，
-     * 最后卡在"点名缺失：F"那道门上（用户当场读数）。
-     *
-     * 一句话读出**两条**题设：本文件的读取器契约本来就允许返回数组
-     *（`ObligationDraft | ObligationDraft[]`），所以这里不需要为"并列"另造判据 ——
-     * 两条 `midpoint`，与单写法走**同一个**判据。
-     *
-     * **必须排在下一条单写法之前**：先长的、再短的（与 `segmentRatio` 那两条同一个道理）。
-     *
-     * **`棱` / `边` 是可选的量词**（2026-10-15 用户现场，四棱锥那道题）：卷面写的是
-     * `E、F 分别为**棱** AB、PB 的中点`，而上面这条原先只认紧跟着线段名的写法 ⇒ 整句落进
-     * "尚未被可靠解析" ⇒ E、F 两个点谁也没被点名 ⇒ 补点的入口直接断掉。两种量词都收，
-     * 但**只收这两个**（`面 AB` / `对角线 AC` 之类的说法要各自有判据才收，不顺手放行）。
-     */
-    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    /** 三点及以上并列中点：`E、F、G 分别为 AB、BC、CD 的中点`。 */
+    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
     read: (m) => [
-      { kind: "midpoint", targets: [m[1], ...names(m[3])] },
-      { kind: "midpoint", targets: [m[2], ...names(m[4])] }
+      { kind: "midpoint", targets: [canonicalPointName(m[1]!), ...names(m[4]!)] },
+      { kind: "midpoint", targets: [canonicalPointName(m[2]!), ...names(m[5]!)] },
+      { kind: "midpoint", targets: [canonicalPointName(m[3]!), ...names(m[6]!)] }
+    ]
+  },
+  {
+    pattern: new RegExp(`(${POINT_NAME})\\s*[、,，和与]\\s*(${POINT_NAME})\\s*(?:分别)?\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*[和与、,，]\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
+    read: (m) => [
+      { kind: "midpoint", targets: [canonicalPointName(m[1]!), ...names(m[3]!)] },
+      { kind: "midpoint", targets: [canonicalPointName(m[2]!), ...names(m[4]!)] }
     ]
   },
   {
     pattern: new RegExp(`(${POINT_NAME})\\s*(?:为|是)\\s*(?:棱|边|线段)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点`, "g"),
-    read: (m) => ({ kind: "midpoint", targets: [m[1], ...names(m[2])] })
+    read: (m) => ({ kind: "midpoint", targets: [canonicalPointName(m[1]!), ...names(m[2]!)] })
   },
   {
-    /**
-     * **点写在后面**：`AB 的中点为 M`（2026-10-20 探针，联考 `joint-19` 那一类）。
-     *
-     * 前置量词同样收「线段 / 边 / 棱」。段名前面加 `(?<![A-Z])`：否则
-     * `△ABC 的中点为 M` 会被读成「BC 的中点 M」—— 那是把一个三角形的重心说成一条边的中点。
-     */
-    pattern: new RegExp(`(?<![A-Z])(?:线段|边|棱)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点\\s*(?:为|是)\\s*(${POINT_NAME})`, "g"),
+    pattern: new RegExp(`(?<![A-Z])(?:取\\s*)?(?:线段|边|棱)?\\s*(${SEGMENT_NAME})\\s*的?\\s*中点\\s*(?:为|是)?\\s*(${POINT_NAME})`, "g"),
     read: (m) => {
       const segment = names(m[1])
       if (segment.length !== 2) return null
-      return { kind: "midpoint", targets: [m[2]!, segment[0]!, segment[1]!] }
+      return { kind: "midpoint", targets: [canonicalPointName(m[2]!), segment[0]!, segment[1]!] }
     }
   },
   {
@@ -2472,14 +2535,22 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
   }
 ]
 
-/** 把 `5√3` / `√3` / `5` 求值；畸形写法返回 `null`（**不猜**）。 */
+/** 把 `5√3` / `√3` / `5` / `3/2` / `√3/2` / `2√3/3` 求值；畸形写法返回 `null`（**不猜**）。 */
 function radicalValue(text: string): number | null {
   const normalized = text.replace(/\s+/g, "")
-  const match = /^(?:(\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)|√(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?))$/.exec(normalized)
+  const parts = normalized.split("/")
+  if (parts.length > 2) return null
+  const match = /^(?:(\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)|√(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?))$/.exec(parts[0]!)
   if (match === null) return null
-  const value = match[1] !== undefined
+  let value = match[1] !== undefined
     ? Number(match[1]) * Math.sqrt(Number(match[2]))
     : match[3] !== undefined ? Math.sqrt(Number(match[3])) : Number(match[4])
+  if (parts.length === 2) {
+    if (!/^\d+(?:\.\d+)?$/.test(parts[1]!)) return null
+    const denom = Number(parts[1]!)
+    if (!Number.isFinite(denom) || denom <= 0) return null
+    value /= denom
+  }
   // 与 `finitePositive` 同一条口径：必须是有限正数，否则这条条件不成立。
   return Number.isFinite(value) && value > 0 ? value : null
 }
@@ -2701,8 +2772,11 @@ export function parseDiagramObligations(prompt: string, options: DiagramParseOpt
       return { ...part, obligations: parseDiagramScope(scopedPrompt, options, part.start) }
     })
     const hasPartPremise = (part: ProblemPart & { obligations: DiagramObligationSet }): boolean => {
-      const boundary = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/.exec(part.text)
-      const premiseText = (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim()
+      const boundary = /(?:求证|试?证明|^\s*(?:试?求|判断|问|说明|写出|指出)|(?<=[，,。；;\n])\s*(?:试?求|判断|问))/.exec(part.text)
+      const rawPremise = (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim()
+      const premiseText = rawPremise
+        .replace(/^(?:在\s*[（(]?\s*[1-9ⅠⅡ一二]\s*[)）]?\s*的条件下|在此条件下|承上|接第\s*[（(]?\s*[1-9ⅠⅡ一二]\s*[)）]?\s*问)[，,：:\s]*/u, "")
+        .trim()
       return premiseText.length > 0
         || part.obligations.givens.length > shared.givens.length
         || part.obligations.freeChoices.length > shared.freeChoices.length
@@ -3256,10 +3330,10 @@ function resolvePlanarConstructions(
 }
 
 function parseDiagramScope(prompt: string, options: DiagramParseOptions, partStart?: number): DiagramObligationSet {
-  const partPattern = /(?:求证|试?证明|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?求|(?<=[，,。；;\n])\s*求|切线方程为\s*(?:[（(]\s*[)）])?)/
+  const partPattern = /(?:求证|试?证明|^\s*(?:[（(]\s*[1-9\d一二三ⅠⅡⅢ]+\s*[)）]\s*)?(?:试?求|判断|问)|(?<=[，,。；;\n])\s*(?:试?求|判断|问)|切线方程为\s*(?:[（(]\s*[)）])?)/
   const boundaryMatch = partStart !== undefined
     ? partPattern.exec(prompt.slice(partStart))
-    : /(?:求证|试?证明|切线方程为\s*(?:[（(]\s*[)）])?|(?<=^|[，,。；;\n])\s*则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
+    : /(?:求证|试?证明|(?<=[，,。；;\n])\s*(?:试?求(?!证)|判断|是否存在)|(?<=\n)\s*A\s*[.．、]|切线方程为\s*(?:[（(]\s*[)）])?|(?<=^|[，,。；;\n])\s*则[^，,。；\n]*?(?:[（(]\s*[）)]|为\s*[（(]?\s*[）)]?\s*A\.))/.exec(prompt)
   const boundaryIndex = boundaryMatch === null ? -1 : (partStart ?? 0) + boundaryMatch.index
   const givenText = boundaryMatch === null ? prompt : prompt.slice(0, boundaryIndex)
   const goalRawStart = boundaryMatch === null ? -1 : boundaryIndex + boundaryMatch[0].length
@@ -3327,10 +3401,16 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       const end = start + match[0].length
-      // A suffix of ∠ABC=60° is not the segment condition BC=60.
-      if (start > 0 && /[A-Z∠:：]/.test(givenText[start - 1])) {
-        const afterLabelColon = allowAfterLabelColon === true && /[：:]/.test(givenText[start - 1])
-        if (!afterLabelColon) continue
+      // A suffix of ∠ABC=60° is not the segment condition BC=60; ratio colon `AE:AD=2:5` is not `AD=2`,
+      // whereas intro label colons like `已知：AB=2` or `其中：PA⊥平面ABCD` are allowed.
+      if (start > 0) {
+        const prevCh = givenText[start - 1]!
+        if (/[A-Z∠]/.test(prevCh)) continue
+        if (/[：:]/.test(prevCh)) {
+          const beforeColon = start >= 2 ? givenText[start - 2]! : ""
+          const isRatioColon = /[A-Z0-9]/.test(beforeColon)
+          if (isRatioColon && allowAfterLabelColon !== true) continue
+        }
       }
       const next = /^\s*(\S)/.exec(givenText.slice(end))?.[1]
       if (next && /[A-Z°+*/√π^%]/.test(next)) continue

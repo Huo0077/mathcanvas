@@ -209,11 +209,16 @@ describe("parseDiagramObligations", () => {
      * 这一条要守的一直是"**不支持**的代数式不许被读成它的前缀"（`AB=1/2` 不许读成 `AB=1`）。
      * 根号那一位现在守的是同一件事的另一半：`AB=2√3` 必须读成 `2√3`，**不许**读成 `2`。
      */
-    for (const expression of ["AB=1/2", "AB=AD+1", "DE=2EA/3"]) {
+    for (const expression of ["AB=1/2/3", "AB=AD+1", "DE=2EA/3"]) {
       const parsed = parseDiagramObligations(`在四棱锥P-ABCD中，${expression}，画示意图`)
       expect(parsed.givens, expression).toEqual([])
       expect(parsed.unverified.some((item) => item.sourceText.includes(expression)), expression).toBe(true)
     }
+
+    const rational = parseDiagramObligations("在四棱锥 P-ABCD 中，AB=1/2，PA=√3/2")
+    expect(rational.unverified).toEqual([])
+    expect(rational.givens).toContainEqual(expect.objectContaining({ kind: "fixedLength", targets: ["A", "B"], value: 0.5 }))
+    expect(rational.givens.find((g) => g.kind === "fixedLength" && g.targets.join("") === "PA")?.value).toBeCloseTo(Math.sqrt(3) / 2, 10)
     // 根号那一位：读的是**整个** `2√3`，不是它的前缀 `2`。
     const radical = parseDiagramObligations("在四棱锥P-ABCD中，AB=2√3，画示意图")
     expect(radical.givens).toHaveLength(1)

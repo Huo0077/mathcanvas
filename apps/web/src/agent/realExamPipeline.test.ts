@@ -1,0 +1,512 @@
+import {
+  certifyDrawingAgainstContract,
+  compilePlan,
+  createBudget,
+  normalizeGeometryPrompt,
+  parseDiagramObligations,
+  verifyDiagramObligations
+} from "@draw/agent-core"
+import { createEmptyDocument, type Workspace } from "@draw/dsl"
+import { describe, expect, it } from "vitest"
+
+import { createDsActionSession } from "./dsActionTools"
+import { createDraftStore } from "./draftStore"
+import { createModelPlanner } from "./modelPlanner"
+import { buildSystemPrompt } from "./systemPrompt"
+
+interface DsActionStep {
+  tool: string
+  input: Record<string, unknown>
+}
+
+interface RealExamCase {
+  id: string
+  category: "planar" | "solid"
+  workspace: Workspace
+  prompt: string
+  steps: DsActionStep[]
+  goal: string
+}
+
+async function runRealExamFullPipeline(testCase: RealExamCase) {
+  const normalized = normalizeGeometryPrompt(testCase.prompt)
+  const obligations = parseDiagramObligations(normalized)
+  const baseDoc = createEmptyDocument(testCase.workspace)
+  const session = createDsActionSession({
+    workspace: testCase.workspace,
+    baseDocument: baseDoc,
+    problemText: testCase.prompt
+  })
+
+  for (const [idx, step] of testCase.steps.entries()) {
+    const res = session.execute(step.tool, step.input)
+    if (!res.ok) {
+      throw new Error(`[${testCase.id}] step ${idx} (${step.tool}) failed: ${res.blockerCode ?? res.status} — ${res.repairHint ?? ""}`)
+    }
+  }
+
+  const finished = session.execute("finish_candidate", { goal: testCase.goal })
+  if (!finished.ok || finished.terminated?.plan.kind !== "plan") {
+    throw new Error(`[${testCase.id}] finish_candidate failed: ${finished.blockerCode ?? finished.status} — ${finished.repairHint ?? ""}`)
+  }
+
+  const plan = finished.terminated.plan
+  const compiled = compilePlan(plan, {
+    document: baseDoc,
+    workspace: testCase.workspace,
+    conversationId: `real-exam-${testCase.id}`,
+    documentGeneration: 0
+  })
+  if (!compiled.ok || !compiled.draftDocument) {
+    throw new Error(`[${testCase.id}] compilePlan failed: ${JSON.stringify(compiled.diagnostics)}`)
+  }
+
+  const verification = verifyDiagramObligations(obligations, plan, compiled.draftDocument, baseDoc, {
+    prompt: normalized
+  })
+
+  const certificate = certifyDrawingAgainstContract({
+    prompt: testCase.prompt,
+    document: compiled.draftDocument,
+    baseDocument: baseDoc,
+    plan,
+    candidateHash: finished.candidateHash,
+    sourceHash: finished.candidateHash
+  })
+
+  const store = createDraftStore()
+  const record = store.create(baseDoc)
+  const staged = await store.stage(
+    record.draftId,
+    plan.actions,
+    record.draftVersion,
+    testCase.prompt
+  )
+
+  return { normalized, obligations, plan, compiled, verification, certificate, staged }
+}
+
+const FRESH_REAL_EXAM_CASES: readonly RealExamCase[] = [
+  // =========================================================================
+  // 8 Fresh Plane / Analytic / Function Gaokao & Mock Exam Problems
+  // (Zero overlap with drawing-contracts-36 / dev-smoke / explicit-solid)
+  // =========================================================================
+  {
+    id: "EX-P01",
+    category: "planar",
+    workspace: "conics",
+    prompt: "已知椭圆 C：x²/9 + y²/5 = 1，左、右焦点分别为 F₁、F₂，过 F₂ 且倾斜角为 60° 的直线 l 交椭圆 C 于 A、B 两点，求 △ABF₁ 的周长。",
+    goal: "绘制椭圆 C: x²/9+y²/5=1、焦点 F₁/F₂ 及过 F₂ 倾斜角 60° 的焦点弦 AB",
+    steps: [
+      { tool: "construct_conic", input: { id: "C", conicType: "ellipse", equation: "\\frac{x^2}{9} + \\frac{y^2}{5} = 1" } },
+      { tool: "construct_point", input: { id: "F₁", x: -2, y: 0 } },
+      { tool: "construct_point", input: { id: "F₂", x: 2, y: 0 } },
+      { tool: "construct_line", input: { id: "l", from: "F₂", slope: Math.sqrt(3) } },
+      { tool: "construct_intersection", input: { id: "A", lineA: "l", conicId: "C", selection: "max_x" } },
+      { tool: "construct_intersection", input: { id: "B", lineA: "l", conicId: "C", excludePointId: "A" } },
+      { tool: "construct_segment", input: { id: "AF₁", from: "A", to: "F₁" } },
+      { tool: "construct_segment", input: { id: "BF₁", from: "B", to: "F₁" } }
+    ]
+  },
+  {
+    id: "EX-P02",
+    category: "planar",
+    workspace: "conics",
+    prompt: "已知抛物线 C：y² = 8x，原点为 O，过点 P(8, 0) 的直线交抛物线 C 于 A、B 两点，且 OA⊥OB，求直线 AB 的方程。",
+    goal: "绘制抛物线 y²=8x 与过 (8,0) 满足 OA⊥OB 的垂直弦 AB",
+    steps: [
+      { tool: "construct_conic", input: { id: "C", conicType: "parabola", equation: "y^2 = 8x" } },
+      { tool: "construct_point", input: { id: "O", x: 0, y: 0 } },
+      { tool: "construct_point", input: { id: "P", x: 8, y: 0 } },
+      { tool: "construct_line", input: { id: "l", equation: "x - y - 8 = 0" } },
+      { tool: "construct_intersection", input: { id: "A", lineA: "l", conicId: "C", selection: "max_y" } },
+      { tool: "construct_intersection", input: { id: "B", lineA: "l", conicId: "C", excludePointId: "A" } },
+      { tool: "construct_segment", input: { id: "OA", from: "O", to: "A" } },
+      { tool: "construct_segment", input: { id: "OB", from: "O", to: "B" } }
+    ]
+  },
+  {
+    id: "EX-P03",
+    category: "planar",
+    workspace: "conics",
+    prompt: "已知双曲线 C：x²/4 - y²/5 = 1 的左、右焦点分别为 F₁、F₂，点 P 为双曲线右支上一点，且 PF₁⊥PF₂，求 △PF₁F₂ 的面积。",
+    goal: "绘制双曲线 x²/4-y²/5=1、焦点 F₁/F₂ 及右支上满足 PF₁⊥PF₂ 的点 P",
+    steps: [
+      { tool: "construct_conic", input: { id: "C", conicType: "hyperbola", equation: "\\frac{x^2}{4} - \\frac{y^2}{5} = 1" } },
+      { tool: "construct_point", input: { id: "F₁", x: -3, y: 0 } },
+      { tool: "construct_point", input: { id: "F₂", x: 3, y: 0 } },
+      // On x²/4 - y²/5 = 1 and x² + y² = 9 => 9x²/20 = 14/5 => x² = 56/9, y² = 25/9
+      { tool: "construct_point", input: { id: "P", x: Math.sqrt(56) / 3, y: 5 / 3 } },
+      { tool: "construct_segment", input: { id: "PF₁", from: "P", to: "F₁" } },
+      { tool: "construct_segment", input: { id: "PF₂", from: "P", to: "F₂" } }
+    ]
+  },
+  {
+    id: "EX-P04",
+    category: "planar",
+    workspace: "conics",
+    prompt: "已知圆 C：(x - 2)² + (y + 1)² = 5，直线 l：x - 2y - 1 = 0 与圆 C 交于 A、B 两点，求弦 AB 的长。",
+    goal: "绘制圆 C:(x-2)²+(y+1)²=5 及直线 x-2y-1=0 与圆的交点 A、B",
+    steps: [
+      { tool: "construct_circle", input: { id: "C", cx: 2, cy: -1, radius: Math.sqrt(5) } },
+      { tool: "construct_line", input: { id: "l", equation: "x - 2y - 1 = 0" } },
+      { tool: "construct_intersection", input: { id: "A", lineA: "l", conicId: "C", selection: "min_x" } },
+      { tool: "construct_intersection", input: { id: "B", lineA: "l", conicId: "C", excludePointId: "A" } },
+      { tool: "construct_segment", input: { id: "AB", from: "A", to: "B" } }
+    ]
+  },
+  {
+    id: "EX-P05",
+    category: "planar",
+    workspace: "conics",
+    prompt: "在 △ABC 中，AB = 4，AC = 3，∠BAC = 60°，点 D 在边 BC 上，BD = 2DC，求 AD 的长。",
+    goal: "绘制满足 AB=4, AC=3, ∠BAC=60° 的 △ABC 及边 BC 上的三等分点 D",
+    steps: [
+      { tool: "construct_point", input: { id: "A", x: 0, y: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 4, y: 0 } },
+      { tool: "construct_point", input: { id: "C", x: 1.5, y: 1.5 * Math.sqrt(3) } },
+      { tool: "construct_point", input: { id: "D", from: "B", to: "C", ratio: 2 / 3 } },
+      { tool: "construct_segment", input: { id: "AB", from: "A", to: "B" } },
+      { tool: "construct_segment", input: { id: "AC", from: "A", to: "C" } },
+      { tool: "construct_segment", input: { id: "BC", from: "B", to: "C" } },
+      { tool: "construct_segment", input: { id: "AD", from: "A", to: "D" } }
+    ]
+  },
+  {
+    id: "EX-P06",
+    category: "planar",
+    workspace: "conics",
+    prompt: "在平行四边形 ABCD 中，AB = 4，AD = 2，∠BAD = 60°，点 E 为 CD 的中点，求 AE 的长。",
+    goal: "绘制平行四边形 ABCD 及边 CD 的中点 E",
+    steps: [
+      { tool: "construct_point", input: { id: "A", x: 0, y: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 4, y: 0 } },
+      { tool: "construct_point", input: { id: "D", x: 1, y: Math.sqrt(3) } },
+      { tool: "construct_point", input: { id: "C", x: 5, y: Math.sqrt(3) } },
+      { tool: "construct_point", input: { id: "E", from: "C", to: "D", ratio: 0.5 } },
+      { tool: "construct_segment", input: { id: "AB", from: "A", to: "B" } },
+      { tool: "construct_segment", input: { id: "BC", from: "B", to: "C" } },
+      { tool: "construct_segment", input: { id: "CD", from: "C", to: "D" } },
+      { tool: "construct_segment", input: { id: "DA", from: "D", to: "A" } },
+      { tool: "construct_segment", input: { id: "AE", from: "A", to: "E" } }
+    ]
+  },
+  {
+    id: "EX-P07",
+    category: "planar",
+    workspace: "calculus",
+    prompt: "已知函数 $f(x) = e^x - 2x$，求曲线 $y = f(x)$ 在点 $(0, 1)$ 处的切线方程。",
+    goal: "绘制函数 f(x) = exp(x) - 2*x 及在 x=0 处的切线",
+    steps: [
+      { tool: "construct_tangent", input: { id: "t1", functionId: "f", expression: "exp(x) - 2*x", domain: [-3, 3], x0: 0 } }
+    ]
+  },
+  {
+    id: "EX-P08",
+    category: "planar",
+    workspace: "calculus",
+    prompt: "绘制函数 $y = \\ln(x + 2) + 0.5x$",
+    goal: "绘制函数 y = ln(x + 2) + 0.5*x",
+    steps: [
+      { tool: "construct_tangent", input: { id: "y", mode: "graph", expression: "ln(x + 2) + 0.5*x", domain: [-1.8, 6] } }
+    ]
+  },
+
+  // =========================================================================
+  // 8 Fresh 3D Solid Geometry Gaokao & Mock Exam Problems
+  // =========================================================================
+  {
+    id: "EX-S01",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在长方体 ABCD-A₁B₁C₁D₁ 中，AB = 2，AD = 3，AA₁ = 4，点 E 为棱 CC₁ 的中点，求点 C 到平面 BDE 的距离。",
+    goal: "绘制长方体 ABCD-A₁B₁C₁D₁ 及棱 CC₁ 中点 E 与截面 BDE",
+    steps: [
+      { tool: "construct_solid", input: { id: "BOX", kind: "cuboid", width: 2, depth: 3, height: 4, vertexNames: ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"] } },
+      { tool: "construct_point", input: { id: "E", from: "C", to: "C₁", ratio: 0.5 } },
+      { tool: "construct_face", input: { id: "F_BDE", vertexNames: ["B", "D", "E"] } }
+    ]
+  },
+  {
+    id: "EX-S02",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在正三棱锥 P-ABC 中，AB = 2，PA = 3，点 M 为 BC 的中点，求侧棱 PA 与底面 ABC 所成角的余弦值。",
+    goal: "绘制正三棱锥 P-ABC 及底边 BC 中点 M",
+    steps: [
+      { tool: "construct_solid", input: { id: "PYR", kind: "tetrahedron", vertexNames: ["P", "A", "B", "C"], ab: 2, ac: 2, bc: 2, pa: 3, pb: 3, pc: 3 } },
+      { tool: "construct_point", input: { id: "M", from: "B", to: "C", ratio: 0.5 } },
+      { tool: "construct_segment", input: { id: "PM", from: "P", to: "M" } },
+      { tool: "construct_segment", input: { id: "AM", from: "A", to: "M" } }
+    ]
+  },
+  {
+    id: "EX-S03",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在直三棱柱 ABC-A₁B₁C₁ 中，AC⊥BC，AC = 2，BC = 2，AA₁ = 3，点 D 为 AB 的中点，求证：AC₁∥平面 B₁CD。",
+    goal: "绘制直三棱柱 ABC-A₁B₁C₁、底边 AB 中点 D 及截面 B₁CD",
+    steps: [
+      { tool: "construct_point", input: { id: "C", x: 0, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "A", x: 2, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 0, y: 2, z: 0 } },
+      { tool: "construct_point", input: { id: "C₁", x: 0, y: 0, z: 3 } },
+      { tool: "construct_point", input: { id: "A₁", x: 2, y: 0, z: 3 } },
+      { tool: "construct_point", input: { id: "B₁", x: 0, y: 2, z: 3 } },
+      { tool: "construct_solid", input: { id: "PRISM", kind: "triangular_prism", vertexNames: ["A", "B", "C", "A₁", "B₁", "C₁"] } },
+      { tool: "construct_point", input: { id: "D", from: "A", to: "B", ratio: 0.5 } },
+      { tool: "construct_face", input: { id: "F_B1CD", vertexNames: ["B₁", "C", "D"] } }
+    ]
+  },
+  {
+    id: "EX-S04",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在四棱锥 P-ABCD 中，底面 ABCD 是边长为 2 的正方形，PA⊥平面 ABCD，PA = 2，E 为 PD 的中点，求证：PB∥平面 EAC。",
+    goal: "绘制四棱锥 P-ABCD、正方形底面 ABCD 及棱 PD 中点 E",
+    steps: [
+      { tool: "construct_point", input: { id: "A", x: 0, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 2, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "C", x: 2, y: 2, z: 0 } },
+      { tool: "construct_point", input: { id: "D", x: 0, y: 2, z: 0 } },
+      { tool: "construct_point", input: { id: "P", x: 0, y: 0, z: 2 } },
+      { tool: "construct_solid", input: { id: "PYR", kind: "perpendicular_pyramid", vertexNames: ["A", "B", "C", "D", "P"] } },
+      { tool: "construct_point", input: { id: "E", from: "P", to: "D", ratio: 0.5 } },
+      { tool: "construct_face", input: { id: "F_EAC", vertexNames: ["E", "A", "C"] } }
+    ]
+  },
+  {
+    id: "EX-S05",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在四棱锥 P-ABCD 中，底面 ABCD 是菱形，AB = 2，∠BAD = 60°，△PAD 是等边三角形，平面 PAD⊥平面 ABCD，M 为 PB 的中点，求二面角 M-AD-C 的大小。",
+    goal: "绘制菱形底面与等边垂直侧面四棱锥 P-ABCD 及 PB 中点 M",
+    steps: [
+      { tool: "construct_point", input: { id: "A", x: 0, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "D", x: 2, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 1, y: Math.sqrt(3), z: 0 } },
+      { tool: "construct_point", input: { id: "C", x: 3, y: Math.sqrt(3), z: 0 } },
+      { tool: "construct_point", input: { id: "P", x: 1, y: 0, z: Math.sqrt(3) } },
+      { tool: "construct_solid", input: { id: "PYR", kind: "perpendicular_pyramid", vertexNames: ["A", "B", "C", "D", "P"] } },
+      { tool: "construct_point", input: { id: "M", from: "P", to: "B", ratio: 0.5 } }
+    ]
+  },
+  {
+    id: "EX-S06",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "在棱长为 2 的正方体 ABCD-A₁B₁C₁D₁ 中，E、F 分别为棱 AB、BC 的中点，求证：EF⊥平面 BB₁D₁D。",
+    goal: "绘制棱长为 2 的正方体 ABCD-A₁B₁C₁D₁ 及棱中点 E、F",
+    steps: [
+      { tool: "construct_solid", input: { id: "CUBE", kind: "cube", edgeLength: 2, vertexNames: ["A", "B", "C", "D", "A₁", "B₁", "C₁", "D₁"] } },
+      { tool: "construct_point", input: { id: "E", from: "A", to: "B", ratio: 0.5 } },
+      { tool: "construct_point", input: { id: "F", from: "B", to: "C", ratio: 0.5 } },
+      { tool: "construct_segment", input: { id: "EF", from: "E", to: "F" } }
+    ]
+  },
+  {
+    id: "EX-S07",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "已知圆锥的底面半径为 2，高为 3，求该圆锥的母线长与侧面积。",
+    goal: "绘制底面半径为 2、高为 3 的圆锥",
+    steps: [
+      { tool: "construct_solid", input: { id: "CONE", kind: "cone", radius: 2, height: 3 } }
+    ]
+  },
+  {
+    id: "EX-S08",
+    category: "solid",
+    workspace: "geometry3d",
+    prompt: "已知：在三棱锥 $P-ABC$ 中，$PA \\perp$ 平面 $ABC$，$AB = \\frac{3}{2}$，$AC = 2$，$\\angle BAC = 90^\\circ$，$PA = \\frac{\\sqrt{3}}{2}$，取 $BC$ 的中点 $M$，求 $PM$ 的长。",
+    goal: "绘制含分数与根号棱长的 LaTeX 三棱锥 P-ABC 及中点 M",
+    steps: [
+      { tool: "construct_point", input: { id: "A", x: 0, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "B", x: 1.5, y: 0, z: 0 } },
+      { tool: "construct_point", input: { id: "C", x: 0, y: 2, z: 0 } },
+      { tool: "construct_point", input: { id: "P", x: 0, y: 0, z: Math.sqrt(3) / 2 } },
+      { tool: "construct_solid", input: { id: "PYR", kind: "tetrahedron", vertexNames: ["P", "A", "B", "C"] } },
+      { tool: "construct_point", input: { id: "M", from: "B", to: "C", ratio: 0.5 } },
+      { tool: "construct_segment", input: { id: "PM", from: "P", to: "M" } }
+    ]
+  }
+]
+
+describe("Real Gaokao & Mock Exam Generalization (16 Fresh Plane + Solid Problems)", () => {
+  for (const testCase of FRESH_REAL_EXAM_CASES) {
+    it(`${testCase.id} (${testCase.category}): passes obligations, verification, certificate, and draftStore stage`, async () => {
+      const result = await runRealExamFullPipeline(testCase)
+      expect(result.obligations.unverified, `${testCase.id} unverified`).toEqual([])
+      expect(result.verification.status, `${testCase.id} verification checks: ${JSON.stringify(result.verification.checks)}`).toBe("passed")
+      expect(result.certificate.certificateStatus, `${testCase.id} certificate: ${result.certificate.summary}`).toBe("passed")
+      expect(result.staged.ok, `${testCase.id} staged`).toBe(true)
+      if (result.staged.ok) {
+        expect(result.staged.preview.diagramVerification?.status).toBe("passed")
+        expect(result.staged.preview.drawingCertificate?.certificateStatus).toBe("passed")
+      }
+    })
+  }
+})
+
+describe("DeepSeek ds_action instability hardening (real failure modes)", () => {
+  it("recovers from DeepSeek leaked native tokens, DSML tags, text-only drift with toolChoice=required, and preserves constructions on trailing finish_candidate rejection", async () => {
+    let turn = 0
+    const capturedRequests: Array<{ toolChoice?: string; maxOutputTokens?: number; messages: Array<{ role: string; content: string; reasoningContent?: string }> }> = []
+
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({
+        ok: true,
+        provider: {
+          id: "ds-live-sim",
+          modelId: "deepseek-chat",
+          dialect: "openai",
+          revision: 1,
+          maxOutputTokens: 8192,
+          capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+        }
+      }),
+      runModel: async (req) => {
+        capturedRequests.push({
+          ...(req.toolChoice === undefined ? {} : { toolChoice: req.toolChoice }),
+          ...(req.maxOutputTokens === undefined ? {} : { maxOutputTokens: req.maxOutputTokens }),
+          messages: req.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            ...(m.reasoningContent ? { reasoningContent: m.reasoningContent } : {})
+          }))
+        })
+        turn += 1
+        if (turn === 1) {
+          // Turn 1: DeepSeek returns plain derivation text with zero tool calls -> triggers nudge + toolChoice="required"
+          return {
+            ok: true,
+            events: [
+              { kind: "delta" as const, requestId: "r-1", attemptId: "a-1", text: "我们先设 A(0,0), B(4,0), C(0,3)。" },
+              { kind: "completed" as const, requestId: "r-1", attemptId: "a-1", stopReason: "stop" }
+            ]
+          }
+        }
+        if (turn === 2) {
+          // Turn 2: DeepSeek leaks native V3/R1 tool tokens in text delta with reasoning metadata
+          return {
+            ok: true,
+            events: [
+              { kind: "started" as const, requestId: "r-2", attemptId: "a-2", model: "deepseek-chat", metadata: { reasoning: "construct triangle vertices first" } },
+              {
+                kind: "delta" as const,
+                requestId: "r-2",
+                attemptId: "a-2",
+                text:
+                  "<｜tool▁call▁begin｜>function<｜tool▁sep｜>construct_point\n```json\n{\"id\":\"A\",\"x\":0,\"y\":0}\n```<｜tool▁call▁end｜>\n" +
+                  "<｜tool▁call▁begin｜>function<｜tool▁sep｜>construct_point\n```json\n{\"id\":\"B\",\"x\":4,\"y\":0}\n```<｜tool▁call▁end｜>"
+              },
+              { kind: "completed" as const, requestId: "r-2", attemptId: "a-2", stopReason: "stop" }
+            ]
+          }
+        }
+        if (turn === 3) {
+          // Turn 3: DeepSeek emits DSML XML invoke to construct C and segments
+          return {
+            ok: true,
+            events: [
+              {
+                kind: "delta" as const,
+                requestId: "r-3",
+                attemptId: "a-3",
+                text:
+                  "<｜DSML｜invoke name=\"construct_point\"><｜DSML｜parameter name=\"id\">C</｜DSML｜parameter><｜DSML｜parameter name=\"x\">0</｜DSML｜parameter><｜DSML｜parameter name=\"y\">3</｜DSML｜parameter></｜DSML｜invoke>" +
+                  "<｜DSML｜invoke name=\"finish_candidate\"><｜DSML｜parameter name=\"goal\">直角三角形 ABC</｜DSML｜parameter></｜DSML｜invoke>"
+              },
+              { kind: "completed" as const, requestId: "r-3", attemptId: "a-3", stopReason: "stop" }
+            ]
+          }
+        }
+        return {
+          ok: true,
+          events: [
+            { kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`, toolCallId: `fin-${turn}`, toolId: "finish_candidate", input: { goal: "直角三角形 ABC" } }
+          ]
+        }
+      }
+    })
+
+    const outcome = await planner.plan({
+      run: {
+        runId: "ds-hardening-1",
+        conversationId: "conv-ds-1",
+        promptMessageId: "msg-1",
+        target: { projectId: "local", documentId: "doc-1", workspace: "conics", epoch: "e-1", generation: 0, contentHash: "h" },
+        sources: [],
+        textProfileId: "ds-live-sim",
+        capabilityRevision: "2026-09-19.1",
+        policyRevision: "local"
+      },
+      userMessage: "在直角三角形 ABC 中，∠A=90°，AB=4，AC=3。",
+      budget: createBudget({ network: 10, generation: 10, tool: 20 }),
+      signal: new AbortController().signal,
+      model: {
+        tools: [{ id: "plan.set_plan", kind: "control", effect: "propose_plan", description: "Propose plan", phases: ["planning"], workspaces: [] }],
+        context: {
+          preamble: "MathCanvas",
+          handles: { target: { projectId: "local", documentId: "doc-1", workspace: "conics", epoch: "e-1", generation: 0, contentHash: "h" }, sources: [] },
+          binding: { conversationId: "conv-ds-1", projectId: "local", documentId: "doc-1", generation: 0 },
+          workspace: "conics",
+          facts: [],
+          derived: [],
+          selectedRefs: [],
+          skills: [],
+          availableActions: ["planar.create_point", "planar.create_segment"],
+          warnings: [],
+          estimatedCharacters: 64
+        }
+      },
+      conversation: {
+        binding: { conversationId: "conv-ds-1", projectId: "local", documentId: "doc-1", workspace: "conics", generation: 0 },
+        summary: "",
+        facts: [],
+        messages: [],
+        observation: { facts: [], summary: "" },
+        warnings: [],
+        estimatedCharacters: 0
+      }
+    })
+
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    expect(capturedRequests[0]?.maxOutputTokens).toBe(8192)
+    expect(capturedRequests[1]?.toolChoice).toBe("required")
+    // Reasoning content from Turn 2 is preserved in Turn 3 message history for DeepSeek thinking models.
+    expect(capturedRequests[2]?.messages.some((m) => m.role === "tool_call" && m.reasoningContent === "construct triangle vertices first")).toBe(true)
+  })
+
+  it("never injects legacy plan_set_plan / JSON-envelope repair hints into ds_action repair prompts", () => {
+    const prompt = buildSystemPrompt({
+      channel: "native_tools",
+      canPlan: true,
+      intentMode: "ds_action",
+      repair: {
+        reason: "invalid_json",
+        attempt: 1,
+        hint: "请只返回一个 JSON 对象，如果这一轮发布了「plan_set_plan」，就直接调用它，否则用文本返回 JSON 信封。",
+        errors: [{ code: "invalid_json", path: "envelope", detail: "not json" }],
+        allowedChanges: ["envelope.actions"]
+      },
+      context: {
+        preamble: "MathCanvas",
+        handles: { target: { projectId: "local", documentId: "doc-1", workspace: "conics", epoch: "e-1", generation: 0, contentHash: "h" }, sources: [] },
+        binding: { conversationId: "conv-1", projectId: "local", documentId: "doc-1", generation: 0 },
+        workspace: "conics",
+        facts: [],
+        derived: [],
+        selectedRefs: [],
+        skills: [],
+        availableActions: ["planar.create_point"],
+        warnings: [],
+        estimatedCharacters: 64
+      }
+    })
+
+    expect(prompt.policy).not.toMatch(/就直接调用它，否则用文本返回 JSON 信封/)
+    expect(prompt.policy).toMatch(/严禁输出 JSON 信封或调用 plan_set_plan/)
+  })
+})

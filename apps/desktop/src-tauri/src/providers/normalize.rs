@@ -119,6 +119,46 @@ struct PartialToolCall {
     arguments: String,
 }
 
+fn strip_trailing_json_commas(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut i = 0;
+    while i < bytes.len() {
+        let ch = input[i..].chars().next().unwrap();
+        let ch_len = ch.len_utf8();
+        if in_string {
+            out.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            i += ch_len;
+            continue;
+        }
+        if ch == '"' {
+            in_string = true;
+            out.push(ch);
+            i += ch_len;
+            continue;
+        }
+        if ch == ',' {
+            let rest = input[i + ch_len..].trim_start();
+            if rest.starts_with('}') || rest.starts_with(']') {
+                i += ch_len;
+                continue;
+            }
+        }
+        out.push(ch);
+        i += ch_len;
+    }
+    out
+}
+
 fn parse_tool_arguments(raw: &str) -> Value {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -134,8 +174,21 @@ fn parse_tool_arguments(raw: &str) -> Value {
     } else {
         trimmed
     };
-    match serde_json::from_str::<Value>(unfenced) {
-        Ok(Value::String(inner)) => serde_json::from_str::<Value>(inner.trim()).unwrap_or(Value::String(inner)),
+    let parsed = serde_json::from_str::<Value>(unfenced)
+        .or_else(|_| serde_json::from_str::<Value>(&strip_trailing_json_commas(unfenced)))
+        .or_else(|_| {
+            // DeepSeek occasionally concatenates two JSON objects (`{...}{...}`) in one tool stream.
+            let mut de = serde_json::Deserializer::from_str(unfenced).into_iter::<Value>();
+            match de.next() {
+                Some(Ok(first)) if first.is_object() => Ok(first),
+                _ => Err(serde_json::Error::io(std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid json"))),
+            }
+        });
+    match parsed {
+        Ok(Value::String(inner)) => {
+            let cleaned = strip_trailing_json_commas(inner.trim());
+            serde_json::from_str::<Value>(&cleaned).unwrap_or(Value::String(inner))
+        }
         Ok(value) => value,
         Err(_) => Value::String(raw.to_string()),
     }
@@ -577,6 +630,46 @@ mod tests {
                 assert_eq!(tool_id, "construct_point");
                 assert_eq!(input, &Value::String("{\"id\":\"B\",\"x\":".to_string()));
             }
+            other => panic!("expected ToolCall, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accumulator_recovers_trailing_commas_and_concatenated_json_objects() {
+        let mut acc = ToolCallAccumulator::default();
+        assert!(acc.absorb(&json!({
+            "choices": [{
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_trailing",
+                            "function": {
+                                "name": "construct_point",
+                                "arguments": "{\"id\":\"A\",\"x\":1,\"y\":2,}"
+                            }
+                        },
+                        {
+                            "index": 1,
+                            "id": "call_concat",
+                            "function": {
+                                "name": "construct_point",
+                                "arguments": "{\"id\":\"B\",\"x\":3,\"y\":4}{\"id\":\"B\",\"x\":3,\"y\":4}"
+                            }
+                        }
+                    ]
+                }
+            }]
+        })));
+
+        let drained = acc.drain();
+        assert_eq!(drained.len(), 2);
+        match &drained[0] {
+            ModelEvent::ToolCall { input, .. } => assert_eq!(input, &json!({ "id": "A", "x": 1, "y": 2 })),
+            other => panic!("expected ToolCall, got {other:?}"),
+        }
+        match &drained[1] {
+            ModelEvent::ToolCall { input, .. } => assert_eq!(input, &json!({ "id": "B", "x": 3, "y": 4 })),
             other => panic!("expected ToolCall, got {other:?}"),
         }
     }

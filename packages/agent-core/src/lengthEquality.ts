@@ -56,9 +56,17 @@ const TERM = new RegExp(`^${TERM_SOURCE}$`)
 const MAX_CHAIN_LENGTH = 200
 const MAX_TERMS = 16
 
-/** 支持既有写法：`5`、`2.5`、`√5`、`2√5`、`2\sqrt{5}`、`\sqrt{5}`。 */
+/** 支持既有写法及分数：`5`、`2.5`、`3/2`、`√5`、`2√5`、`√3/2`、`2\sqrt{5}`、`\sqrt{5}`。 */
 function parseValue(text: string): number | null {
   const trimmed = text.trim()
+  const fracParts = trimmed.split(/[/⁄]/)
+  if (fracParts.length === 2) {
+    const num = parseValue(fracParts[0]!)
+    const den = parseValue(fracParts[1]!)
+    if (num !== null && den !== null && den > 0) return num / den
+    return null
+  }
+  if (fracParts.length > 2) return null
   const latex = /^([0-9]+(?:\.[0-9]+)?)?\s*\\sqrt\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}$/.exec(trimmed)
   if (latex) {
     const coefficient = latex[1] === undefined ? 1 : Number(latex[1])

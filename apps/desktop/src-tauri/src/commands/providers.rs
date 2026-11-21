@@ -62,10 +62,11 @@ pub async fn provider_run(
     output_mode: Option<String>,
     response_schema: Option<serde_json::Value>,
     max_output_tokens: Option<u32>,
+    tool_choice: Option<String>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     // Keep the Tauri event loop available during model inference.
     tauri::async_runtime::spawn_blocking(move || {
-        run_provider_request(app, run_id, profile_id, profile_revision, messages, stream, tools, output_mode, response_schema, max_output_tokens)
+        run_provider_request(app, run_id, profile_id, profile_revision, messages, stream, tools, output_mode, response_schema, max_output_tokens, tool_choice)
     }).await.map_err(|_| missing_state("the provider request worker"))?
 }
 
@@ -81,6 +82,7 @@ fn run_provider_request(
     output_mode: Option<String>,
     response_schema: Option<serde_json::Value>,
     max_output_tokens: Option<u32>,
+    tool_choice: Option<String>,
 ) -> Result<Vec<serde_json::Value>, serde_json::Value> {
     let proxy = app.try_state::<ProxyState>().ok_or_else(|| missing_state("the proxy"))?;
     let cancel = proxy.session.lock().map_err(|_| missing_state("the proxy state is poisoned"))?
@@ -129,9 +131,10 @@ fn run_provider_request(
     let output_mode = providers::request::OutputMode::parse(output_mode.as_deref());
     let max_output_tokens = max_output_tokens.or(profile.max_output_tokens);
     if max_output_tokens.is_some_and(|limit| limit == 0 || limit > 131072 || profile.max_output_tokens.is_some_and(|cap| limit > cap)) {
-        return Err(serde_json::json!({ "failure": "malformed_output", "message": "output token limit exceeds the configured limit", "retryable": false }));
+        return Err(serde_json::json!({ "kind": "failed", "failure": "malformed_output", "message": "output token limit exceeds the configured limit", "retryable": false }));
     }
-    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool: false, tool_choice_field: None, output_mode, response_schema, max_output_tokens };
+    let force_tool = allow_tools && matches!(tool_choice.as_deref(), Some("required"));
+    let options = providers::request::RequestOptions { allow_tools, tools: requested_tools, force_tool, tool_choice_field: None, output_mode, response_schema, max_output_tokens };
     let outcome = providers::adapter::run_with_profile(&secrets.0, &transport, profile, profile_revision, messages, stream.unwrap_or(true), options, cancel.as_ref())
         .map_err(|error| error.to_json())?;
     let events: Vec<serde_json::Value> = match outcome {

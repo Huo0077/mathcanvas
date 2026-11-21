@@ -721,13 +721,21 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
                   failureSignature: check.id
                 }))
               })
+              const numericResiduals = failingChecks
+                .map((check) => {
+                  const m = /(?:偏差|误差|残差|residual|gap|error)[^0-9.-]{0,8}(\d+(?:\.\d+)?(?:e[+-]?\d+)?)/i.exec(check.detail)
+                  return m ? Number(m[1]) : Number.NaN
+                })
+                .filter((v) => Number.isFinite(v) && v >= 0)
+              const maxResidual = numericResiduals.length > 0 ? Math.max(...numericResiduals) : undefined
               const targeted = targetedRepair.evaluate({
                 candidateHash,
                 checks: (stagedVerification?.checks ?? []).map((check) => ({
                   id: check.id,
                   status: check.status,
                   detail: check.detail
-                }))
+                })),
+                ...(maxResidual === undefined ? {} : { maxResidual })
               })
               ledger.recordRepairProgress(targeted)
               if (!unrepairableCallerCheck && !stagnation.shouldStop && targeted.allowRepair && validationRepairs < MAX_VALIDATION_REPAIR_ATTEMPTS) {

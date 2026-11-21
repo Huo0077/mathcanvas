@@ -69,7 +69,7 @@ export interface DrawingCertificateResult {
 }
 
 const DRAWING_KEYWORDS_RE =
-  /([=<>]|椭圆|双曲线|抛物线|圆锥曲线|四面体|三棱锥|四棱锥|三棱柱|直棱柱|正方体|立方体|多面体|翻折|折叠|切线|公切线|焦点|准线|离心率|函数|导数|图像|作出|画出|画一个|作一个|绘制)/
+  /([=<>]|椭圆|双曲线|抛物线|圆锥曲线|圆锥|圆柱|圆台|棱台|四面体|三棱锥|四棱锥|三棱柱|直棱柱|正方体|长方体|立方体|多面体|平行四边形|梯形|正方形|菱形|翻折|折叠|切线|公切线|焦点|准线|离心率|函数|导数|图像|作出|画出|画一个|作一个|绘制)/
 const NON_DRAWING_QUERY_RE = /(画布上有几个|有多少个|是什么|天气|你好|怎么样|为什么|怎么算|概念)/
 
 export function isDrawingRequestContract(prompt: string): boolean {
@@ -246,6 +246,7 @@ function hasVerifiedFunctionTangentInDocument(document: GeometryDocument): boole
   const fns = document.primitives.filter((p) => p.type === "function") as unknown as Array<{
     id: string
     expression?: string
+    domain?: [number, number]
   }>
   if (fns.length === 0) return false
   if (document.primitives.some((p) => p.type === "tangent")) return true
@@ -253,8 +254,18 @@ function hasVerifiedFunctionTangentInDocument(document: GeometryDocument): boole
     a?: { x: number; y: number }
     b?: { x: number; y: number }
   }>
+  const docPointXs = document.primitives
+    .filter((p): p is Extract<GeometryDocument["primitives"][number], { type: "point" }> => p.type === "point" && Number.isFinite(p.x))
+    .map((p) => p.x)
   for (const fn of fns) {
     if (typeof fn.expression !== "string") continue
+    const [dLow, dHigh] = Array.isArray(fn.domain) && fn.domain.length === 2 && Number.isFinite(fn.domain[0]) && Number.isFinite(fn.domain[1]) && fn.domain[1] > fn.domain[0]
+      ? fn.domain
+      : [-10, 10]
+    const sampleXs = new Set<number>([-2, -1, -0.5, 0, 0.5, 1, 1.5, 2, ...docPointXs])
+    for (let i = 0; i <= 40; i += 1) {
+      sampleXs.add(dLow + ((dHigh - dLow) * i) / 40)
+    }
     for (const line of lines) {
       if (!line.a || !line.b) continue
       const dx = line.b.x - line.a.x
@@ -262,14 +273,14 @@ function hasVerifiedFunctionTangentInDocument(document: GeometryDocument): boole
       if (Math.hypot(dx, dy) <= 1e-9 || Math.abs(dx) <= 1e-9) continue
       const slope = dy / dx
       const intercept = line.a.y - slope * line.a.x
-      for (const xTry of [-2, -1, -0.5, 0, 0.5, 1, 1.5, 2]) {
+      for (const xTry of [line.a.x, line.b.x, ...sampleXs]) {
         const yRes = evaluateFunctionWithDomain(fn.expression, xTry)
         const dRes = evaluateSymbolicDerivative(fn.expression, xTry)
         if (
           yRes.ok &&
           dRes.ok &&
-          Math.abs(dRes.value - slope) <= 1e-2 &&
-          Math.abs(yRes.value - (slope * xTry + intercept)) <= 1e-2
+          Math.abs(dRes.value - slope) <= 1e-2 * Math.max(1, Math.abs(slope)) &&
+          Math.abs(yRes.value - (slope * xTry + intercept)) <= 1e-2 * Math.max(1, Math.abs(yRes.value))
         ) {
           return true
         }

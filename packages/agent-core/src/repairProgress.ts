@@ -141,17 +141,25 @@ export function createTargetedRepairTracker(options: { maxRounds?: number } = {}
       }
       seenSignatures.add(signature)
 
+      // Exclude the synthetic aggregate `drawingCertificate` summary check from failure-count
+      // progress gating whenever individual failing checks exist, so 1 failing obligation is
+      // counted as 1 rather than 2 (restoring the round-2 second-chance repair path).
+      const substantiveFailingChecks = failingChecks.some((c) => c.id !== "drawingCertificate")
+        ? failingChecks.filter((c) => c.id !== "drawingCertificate")
+        : failingChecks
+      const effectiveFailingCount = substantiveFailingChecks.length
+
       // 4. Require monotonic decrease in failing count or maxResidual.
       // Exception: when verification emits no numeric residual (`!hasResidual`) and only 1 obligation
       // remains failing on the very first retry (`round === 2 <= maxRounds`), allow that targeted second attempt
       // so the model can add a missing entity (e.g., construct_tangent) before terminating.
       const hasResidual = typeof input.maxResidual === "number" && Number.isFinite(input.maxResidual)
       if (bestFailingCount !== undefined) {
-        const countImproved = failingChecks.length < bestFailingCount
+        const countImproved = effectiveFailingCount < bestFailingCount
         const residualImproved =
           hasResidual && bestMaxResidual !== undefined && input.maxResidual! < bestMaxResidual - 1e-9
         const singleNoResidualSecondChance =
-          !hasResidual && failingChecks.length === 1 && bestFailingCount === 1 && round === 2
+          !hasResidual && effectiveFailingCount === 1 && bestFailingCount === 1 && round === 2
         if (!countImproved && !residualImproved && !singleNoResidualSecondChance) {
           return {
             allowRepair: false,
@@ -161,13 +169,13 @@ export function createTargetedRepairTracker(options: { maxRounds?: number } = {}
             targetConstraintIds,
             preservedObligationIds,
             signature,
-            summary: `no monotonic repair progress (failing=${failingChecks.length}, best=${bestFailingCount})`
+            summary: `no monotonic repair progress (failing=${effectiveFailingCount}, best=${bestFailingCount})`
           }
         }
       }
 
       bestFailingCount =
-        bestFailingCount === undefined ? failingChecks.length : Math.min(bestFailingCount, failingChecks.length)
+        bestFailingCount === undefined ? effectiveFailingCount : Math.min(bestFailingCount, effectiveFailingCount)
       if (hasResidual) {
         bestMaxResidual =
           bestMaxResidual === undefined ? input.maxResidual! : Math.min(bestMaxResidual, input.maxResidual!)

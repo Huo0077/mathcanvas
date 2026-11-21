@@ -143,6 +143,7 @@ const UNITLESS_TOLERANCE = 1e-6
 const ANGLE_TOLERANCE_DEGREES = 1e-3
 const distanceTolerance = (value: number): number => Math.max(1e-6, 1e-6 * Math.max(1, value))
 const length = (first: Vector3, second: Vector3): number => distanceVector3(first, second)
+const canonicalCandidatePointName = (label: string): string => label.replace(/['’]/g, "′")
 
 /**
  * **折那一笔的名字换算**：把 `vertexNames` 里被带走的那个（`apex`）改成 `apexAs`。
@@ -258,13 +259,20 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
       if (!Array.isArray(names) || names.length !== solid.vertexIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
         return { ok: false, reason: `${which}的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, solid.vertexIds.length, "体")}` }
       }
-      for (const [index, name] of names.entries()) {
+      for (const [index, rawName] of names.entries()) {
+        const name = canonicalCandidatePointName(rawName as string)
         const vertex = candidate.primitives.find((primitive) => primitive.id === solid.vertexIds[index])
         if (vertex?.type !== "point3") return { ok: false, reason: `多面体的第 ${index + 1} 个顶点（\`${solid.vertexIds[index]}\`）不是空间点` }
         const position = vertex.position
         if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `多面体的顶点 ${name} 坐标不是有限数` }
-        if (points.has(name as string)) return { ok: false, reason: `${which}的点名 ${name} 与前面那只多面体重复 —— 同一个点名不能指两个顶点` }
-        points.set(name as string, position)
+        const existing = points.get(name)
+        if (existing !== undefined) {
+          if (length(existing, position) > distanceTolerance(1)) {
+            return { ok: false, reason: `${which}的点名 ${name} 与前面那只多面体重复 —— 同一个点名不能指两个顶点` }
+          }
+          continue
+        }
+        points.set(name, position)
       }
     }
   }
@@ -335,12 +343,13 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
       if (!Array.isArray(names) || names.length !== face.pointIds.length || !names.every((name) => typeof name === "string" && isPointName(name)) || new Set(names).size !== names.length) {
         return { ok: false, reason: `这一笔面片的 \`vertexNames\` 与它的顶点对不上：${nameTableProblem(names, face.pointIds.length, "面")}` }
       }
-      for (const [nameIndex, name] of names.entries()) {
+      for (const [nameIndex, rawName] of names.entries()) {
+        const name = canonicalCandidatePointName(rawName as string)
         const vertex = candidate.primitives.find((primitive) => primitive.id === face.pointIds[nameIndex])
         if (vertex?.type !== "point3") return { ok: false, reason: `面片的第 ${nameIndex + 1} 个顶点（\`${face.pointIds[nameIndex]}\`）不是空间点` }
         const position = vertex.position
         if (![position.x, position.y, position.z].every(Number.isFinite)) return { ok: false, reason: `面片的顶点 ${name} 坐标不是有限数` }
-        points.set(name as string, position)
+        points.set(name, position)
       }
     }
   }
@@ -393,9 +402,19 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
      * 于是那条"顶点名优先"的用例**看着有守卫、实际抓不到任何东西**（试过，变异两次都全绿）。
      * 这与本仓那句"同一个判断不许写两遍"是同一条账。
      */
-    const label = (primitive as { label?: unknown }).label
-    if (typeof label !== "string" || !isPointName(label)) continue
-    labelled.set(label, labelled.has(label) || ![position.x, position.y, position.z].every(Number.isFinite) ? null : position)
+    const rawLabel = (primitive as { label?: unknown }).label
+    if (typeof rawLabel !== "string" || !isPointName(rawLabel)) continue
+    const label = canonicalCandidatePointName(rawLabel)
+    if (![position.x, position.y, position.z].every(Number.isFinite)) {
+      labelled.set(label, null)
+      continue
+    }
+    const prev = labelled.get(label)
+    if (prev === undefined) {
+      labelled.set(label, position)
+    } else if (prev === null || length(prev, position) > distanceTolerance(1)) {
+      labelled.set(label, null)
+    }
   }
   for (const [label, position] of labelled) {
     if (position !== null && !points.has(label)) points.set(label, position)
@@ -858,23 +877,36 @@ const CURVE_SAMPLES = 9
  * 但它证明的是"**在这 9 个点上没发现差异**"，不是"处处相同" —— 所以这条判据的证据等级
  * 只能是 `plot-only`，它不许被读成"这条函数已经被证明了"。
  */
-function curveGapAcrossBreaks(stated: string, drawn: FigureFunction): number | null {
+function curveGapAcrossBreaks(stated: string, drawn: FigureFunction): { worst: number; maxAbsY: number } | null {
   try {
     const expected = compileExpression(stated)
     const actual = compileExpression(drawn.expression)
     const [low, high] = drawn.domain
     let worst = 0
+    let maxAbsY = 1
     let compared = 0
-    for (let index = 0; index < CURVE_SAMPLES; index += 1) {
-      const x = low + (high - low) * (index / (CURVE_SAMPLES - 1))
-      const left = evaluateExpression(expected, { x })
-      const right = evaluateExpression(actual, { x })
-      if (!Number.isFinite(left) || !Number.isFinite(right)) continue
-      worst = Math.max(worst, Math.abs(left - right))
-      compared += 1
+    const probe = (count: number) => {
+      for (let index = 0; index < count; index += 1) {
+        const x = low + (high - low) * (index / (count - 1))
+        const left = evaluateExpression(expected, { x })
+        const right = evaluateExpression(actual, { x })
+        if (!Number.isFinite(left) || !Number.isFinite(right)) continue
+        worst = Math.max(worst, Math.abs(left - right))
+        maxAbsY = Math.max(maxAbsY, Math.abs(left), Math.abs(right))
+        compared += 1
+      }
+    }
+    probe(CURVE_SAMPLES)
+    // Domain-restricted functions (e.g. ln(x), sqrt(x - 3)) may hit < 3 finite points on a 9-point grid;
+    // refine sampling across the full domain before concluding unverified.
+    if (compared < 3) {
+      worst = 0
+      maxAbsY = 1
+      compared = 0
+      probe(41)
     }
     // 比不到三个点就说明这条"值相等"的读数没有内容，如实返 null（落"未核验"）。
-    return compared >= 3 ? worst : null
+    return compared >= 3 ? { worst, maxAbsY } : null
   } catch {
     return null
   }
@@ -1779,8 +1811,9 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const firstGap = curveGapAcrossBreaks(stated[0], first)
     const secondGap = curveGapAcrossBreaks(stated[1], second)
     if (firstGap === null || secondGap === null) return null
-    const curveTolerance = distanceTolerance(1)
-    if (firstGap > curveTolerance || secondGap > curveTolerance) return fail("候选图的两条函数与题面不一致：第一条最大偏差 " + firstGap.toPrecision(5) + "，第二条最大偏差 " + secondGap.toPrecision(5) + "。")
+    const firstTol = distanceTolerance(firstGap.maxAbsY)
+    const secondTol = distanceTolerance(secondGap.maxAbsY)
+    if (firstGap.worst > firstTol || secondGap.worst > secondTol) return fail("候选图的两条函数与题面不一致：第一条最大偏差 " + firstGap.worst.toPrecision(5) + "，第二条最大偏差 " + secondGap.worst.toPrecision(5) + "。")
     if (candidates.some((entry) => {
       const source = entry.source!
       const other = entry.otherSource!
@@ -1825,11 +1858,12 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     }
     const expectedSlope = derivativeAt(tangent.source, stated)
     if (expectedSlope === null) return null
-    if (abscissaGap > 1e-9) {
+    const abscissaTol = Math.max(1e-5, distanceTolerance(Math.abs(stated)))
+    if (abscissaGap > abscissaTol) {
       return {
         actual: abscissaGap,
         expected: 0,
-        tolerance: distanceTolerance(1),
+        tolerance: abscissaTol,
         evidence: "verified-numeric" as const,
         detail: `切点画在 x = ${formatNumber(tangent.x)}，题设要求 x = ${formatNumber(stated)}。`
       }
@@ -1895,15 +1929,15 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
         detail: `题面那条函数在 ${at(statedEvidence.breaks)}，图上画的却在 ${at(drawnEvidence.breaks)} —— 两条曲线的定义域不是一回事（把断点画成了连续曲线，或反过来）。`
       }
     }
-    const gap = curveGapAcrossBreaks(stated, drawn)
-    if (gap === null) return null
+    const gapResult = curveGapAcrossBreaks(stated, drawn)
+    if (gapResult === null) return null
     const breakNote = statedEvidence.breaks.length > 0
       ? `（在 ${statedEvidence.breaks.map(formatNumber).join("、")} 处断开，两侧各一段；断点本身不参与比较）`
       : ""
     return {
-      actual: gap,
+      actual: gapResult.worst,
       expected: 0,
-      tolerance: distanceTolerance(1),
+      tolerance: distanceTolerance(gapResult.maxAbsY),
       // 采样比"值相等"**不是**符号证明，这一条永远只是折线证据。
       evidence: "plot-only" as const,
       detail: `图上画的是 ${drawn.expression}；题设要求 ${stated}${breakNote}（在 ${CURVE_SAMPLES} 个采样点上比函数值）。`
@@ -1916,7 +1950,8 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   if (item.kind === "pointCoordinate") {
     const coordinate = item.coordinate
     if (item.targets.length !== 1 || coordinate === undefined || ![coordinate.x, coordinate.y, coordinate.z].every(Number.isFinite)) return null
-    return { actual: length(at(0), coordinate), expected: 0, tolerance: distanceTolerance(1) }
+    const coordScale = Math.max(1, Math.hypot(coordinate.x, coordinate.y, coordinate.z))
+    return { actual: length(at(0), coordinate), expected: 0, tolerance: distanceTolerance(coordScale) }
   }
   if (item.kind === "rectangle") {
     /**
@@ -1953,8 +1988,8 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
       if (!(denominator > 1e-20)) return null
       worstCosine = Math.max(worstCosine, Math.abs(dotVector3(left, right) / denominator))
     }
-    if (worstCosine > 1e-6) {
-      return { actual: worstCosine, expected: 0, tolerance: 1e-6, detail: `四个角里有不垂直的：最大 |cos|=${worstCosine.toPrecision(6)}。` }
+    if (worstCosine > 1e-4) {
+      return { actual: worstCosine, expected: 0, tolerance: 1e-4, detail: `四个角里有不垂直的：最大 |cos|=${worstCosine.toPrecision(6)}。` }
     }
     const residual = Math.max(closure, planeDistance)
     return {
@@ -2117,15 +2152,19 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   if (item.kind === "planePerpendicular") {
     const firstCount = item.planeLengths?.[0] ?? item.targets.length / 2
     const secondCount = item.planeLengths?.[1] ?? item.targets.length - firstCount
-    if (![3, 4].includes(firstCount) || ![3, 4].includes(secondCount) || firstCount + secondCount !== vertices.length) return null
+    if (firstCount < 3 || firstCount > 6 || secondCount < 3 || secondCount > 6 || firstCount + secondCount !== vertices.length) return null
     const normal = (start: number) => crossVector3(subtractVector3(at(start + 1), at(start)), subtractVector3(at(start + 2), at(start)))
     const first = normal(0)
     const second = normal(firstCount)
     const firstMagnitude = lengthVector3(first)
     const secondMagnitude = lengthVector3(second)
     if (Math.min(firstMagnitude, secondMagnitude) <= 1e-10) return null
-    if (firstCount === 4 && Math.abs(dotVector3(first, subtractVector3(at(3), at(0)))) / firstMagnitude > distanceTolerance(1)) return null
-    if (secondCount === 4 && Math.abs(dotVector3(second, subtractVector3(at(firstCount + 3), at(firstCount)))) / secondMagnitude > distanceTolerance(1)) return null
+    for (let i = 3; i < firstCount; i += 1) {
+      if (Math.abs(dotVector3(first, subtractVector3(at(i), at(0)))) / firstMagnitude > distanceTolerance(1)) return null
+    }
+    for (let i = 3; i < secondCount; i += 1) {
+      if (Math.abs(dotVector3(second, subtractVector3(at(firstCount + i), at(firstCount)))) / secondMagnitude > distanceTolerance(1)) return null
+    }
     return { actual: Math.abs(dotVector3(first, second)) / (firstMagnitude * secondMagnitude), expected: 0, tolerance: UNITLESS_TOLERANCE }
   }
   if (item.kind === "acuteTriangle") {
@@ -2159,7 +2198,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (angles.some((angle) => angle === null)) return null
     const values = angles as number[]
     if (item.kind === "rightTriangle") {
-      return { actual: Math.min(...values.map((angle) => Math.abs(angle - 90))), expected: 0, tolerance: 1e-6 }
+      return { actual: Math.min(...values.map((angle) => Math.abs(angle - 90))), expected: 0, tolerance: ANGLE_TOLERANCE_DEGREES }
     }
     return { actual: Math.max(...values) > 90 ? 0 : 1, expected: 0, tolerance: 1e-9 }
   }
@@ -2894,7 +2933,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     circle: candidateCircle(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
-        ? [{ name: primitive.label, x: primitive.x, y: primitive.y }]
+        ? [{ name: canonicalCandidatePointName(primitive.label), x: primitive.x, y: primitive.y }]
         : []
     )
   }

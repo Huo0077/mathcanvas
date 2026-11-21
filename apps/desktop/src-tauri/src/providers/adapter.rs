@@ -276,24 +276,31 @@ impl RunStream {
         if trimmed.is_empty() {
             return;
         }
-        // SSE 的结束标记：认它才能让界面停下转圈。
-        if super::events::parse_sse_line(trimmed) == super::events::SseLine::Done {
+        // SSE 的结束标记可能与 `: keep-alive` 注释或最后一条 `data:` 同帧到达（DeepSeek 网关常见）。
+        // 逐行检查 `Done`，先把非 Done 行解码完，再置位 `done` / `saw_terminal`，避免误报断流。
+        let mut saw_done_line = false;
+        let mut kept_lines = Vec::new();
+        for line in trimmed.lines() {
+            if super::events::parse_sse_line(line) == super::events::SseLine::Done {
+                saw_done_line = true;
+            } else {
+                kept_lines.push(line);
+            }
+        }
+        if !kept_lines.is_empty() {
+            let joined = kept_lines.join("\n");
+            let name = super::normalize::sse_event_name(&joined);
+            let payload = super::normalize::strip_sse_event_lines(&joined);
+            let decoded = super::normalize::normalize_response_with(&self.protocol, &payload, name.as_deref(), !self.ndjson, &mut self.tool_calls);
+            if decoded.iter().any(|event| matches!(event, ModelEvent::Completed { .. })) {
+                self.saw_terminal = true;
+            }
+            self.events.extend(decoded);
+        }
+        if saw_done_line {
             self.done = true;
             self.saw_terminal = true;
-            return;
         }
-        // 命名事件（Anthropic 的 `content_block_delta` 等）在 `event:` 行里。
-        // 归一化器本来就接受一个 `event` 参数，这里把它从帧里取出来传下去 ——
-        // 否则 `content_block_delta` 与 `content_block_start` 会被看成同一个东西。
-        let name = super::normalize::sse_event_name(trimmed);
-        let payload = super::normalize::strip_sse_event_lines(trimmed);
-        let decoded = super::normalize::normalize_response_with(&self.protocol, &payload, name.as_deref(), !self.ndjson, &mut self.tool_calls);
-        // Anthropic / Ollama 的结束标记是一个**事件**（`message_stop` / `done:true`），
-        // 不在 SSE 的 `[DONE]` 行里 —— 所以两条路都要记进 `saw_terminal`。
-        if decoded.iter().any(|event| matches!(event, ModelEvent::Completed { .. })) {
-            self.saw_terminal = true;
-        }
-        self.events.extend(decoded);
     }
 
     fn feed(&mut self, chunk: &[u8]) {
@@ -588,8 +595,8 @@ impl HttpTransport {
             .redirect(reqwest::redirect::Policy::none())
             .no_proxy()
             .connect_timeout(Duration::from_secs(15))
-            .read_timeout(Duration::from_secs(60))
-            .timeout(Duration::from_secs(180))
+            .read_timeout(Duration::from_secs(90))
+            .timeout(Duration::from_secs(240))
     }
 
     async fn client_for(&self, endpoint: &str, network_policy: &str) -> Result<reqwest::Client, ProviderError> {
@@ -896,6 +903,25 @@ mod tests {
             event,
             ModelEvent::ToolCall { tool_call_id, tool_id, input }
                 if tool_call_id == "c1" && tool_id == "construct_point" && input == &json!({ "id": "P", "x": 0, "y": 0 })
+        )));
+        assert!(!events.iter().any(|event| matches!(event, ModelEvent::Failed { .. })));
+    }
+
+    #[test]
+    fn run_stream_handles_keepalive_and_done_in_same_sse_frame() {
+        let mut stream = RunStream::new("openai", true);
+        let payload = concat!(
+            ": keep-alive\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"k1\",\"function\":{\"name\":\"construct_point\",\"arguments\":\"{\\\"id\\\":\\\"A\\\",\\\"x\\\":1,\\\"y\\\":2}\"}}]}}]}\n",
+            "data: [DONE]\n\n"
+        );
+        stream.feed(payload.as_bytes());
+        stream.flush();
+        let events = stream.take();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ModelEvent::ToolCall { tool_call_id, tool_id, input }
+                if tool_call_id == "k1" && tool_id == "construct_point" && input == &json!({ "id": "A", "x": 1, "y": 2 })
         )));
         assert!(!events.iter().any(|event| matches!(event, ModelEvent::Failed { .. })));
     }

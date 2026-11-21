@@ -340,7 +340,7 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
   doc = trackedReplace(doc, /\\(?:,|;|!|quad|qquad)\s*/g, "")
   doc = trackedReplace(doc, /~/g, "")
 
-  doc = trackedReplace(doc, /\\triangle\s*/g, "△")
+  doc = trackedReplace(doc, /\\(?:triangle|Delta)\s*/g, "△")
   doc = trackedReplace(doc, /\\angle\s*/g, "∠")
   doc = trackedReplace(doc, /\\pi\b/g, "π")
   doc = trackedReplace(doc, /\\perp\b/g, "⊥")
@@ -352,9 +352,24 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
   doc = trackedReplace(doc, /\\geq\b/g, "≥")
   doc = trackedReplace(doc, /\\infty\b/g, "∞")
   doc = trackedReplace(doc, /\\circ\b/g, "°")
+  doc = trackedReplace(doc, /\\odot\b/g, "⊙")
+  doc = trackedReplace(doc, /\\pm\b/g, "±")
+  doc = trackedReplace(doc, /\\mp\b/g, "∓")
+  doc = trackedReplace(doc, /\\in\b/g, "∈")
+  doc = trackedReplace(doc, /\\cong\b/g, "≌")
+  doc = trackedReplace(doc, /\\sim\b/g, "∽")
+  doc = trackedReplace(doc, /\\(?:lvert|rvert)\b/g, "|")
+  doc = trackedReplace(doc, /\^\s*(?:\{\s*\\prime\s*\}|\\prime\b)/g, "′")
 
   doc = trackedReplace(doc, /((?:[fgh]\s*\(\s*x\s*\)|(?<![A-Za-z0-9_])y)\s*=\s*)([^，,。；;\n\u4e00-\u9fff]+)/g, (match) => {
     const prefixLength = match[1]!.length
+    const exprRaw = match[2]!.trim()
+    // Keep horizontal lines (`y = -\frac{1}{2}`) and standard parabola fractions (`y = \frac{x^2}{4}`)
+    // out of function-mode parenthesization so conic/line matchers keep recognizing them verbatim.
+    const isYEquation = !/[fgh]\s*\(\s*x\s*\)/.test(match[1]!)
+    if (isYEquation && (!/x/.test(exprRaw) || /^\\frac\{\s*x\s*\^\s*\{?\s*2\s*\}?\s*\}\{\s*\d+(?:\.\d+)?\s*\}$/.test(exprRaw))) {
+      return [{ sliceFrom: match.index, sliceTo: match.index + match[0].length }]
+    }
     const exprTracked = sliceTracked(doc, match.index + prefixLength, match.index + match[0].length)
     const lowered = lowerMathGroupsTracked(exprTracked, true)
     return [
@@ -369,7 +384,7 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
 
   doc = lowerMathGroupsTracked(doc, false)
 
-  doc = trackedReplace(doc, /\\(?:mathrm|text|mathbf|operatorname)\s*\{([^{}]+)\}/g, (match) => {
+  doc = trackedReplace(doc, /\\(?:mathrm|text|mathbf|operatorname|overline|widehat)\s*\{([^{}]+)\}/g, (match) => {
     const group = captureRange(match, 1)
     return group === null ? match[1] ?? "" : [{ sliceFrom: group.from, sliceTo: group.to }]
   })
@@ -381,9 +396,8 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
     const group = captureRange(match, 1)
     return group === null ? match[1] ?? "" : [{ sliceFrom: group.from, sliceTo: group.to }]
   })
-  doc = trackedReplace(doc, /\\arctan\b/g, "arctan")
-  doc = trackedReplace(doc, /\\(sin|cos|tan)\s*x(?![\w(]|\s*\^)/g, (_match) => `${_match[1]}(x)`)
-  doc = trackedReplace(doc, /\\(sin|cos|tan)(?=\s*\()/g, (match) => {
+  doc = trackedReplace(doc, /\\(sin|cos|tan|ln|log|lg)\s*x(?![\w(]|\s*\^)/g, (match) => `${match[1]}(x)`)
+  doc = trackedReplace(doc, /\\(sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|ln|log|lg|exp)\b/g, (match) => {
     const name = match[1]!
     const at = match.index + 1
     return [{ sliceFrom: at, sliceTo: at + name.length }]
@@ -398,11 +412,26 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
   doc = expandExamShorthandTracked(doc)
 
   const snapshot = doc
-  doc = trackedReplace(doc, /\s+/g, (match) =>
-    /[\r\n]/.test(match[0]) && /^(?:[（(]\s*[1-9]\d*\s*[）)]|[①-⑳])/.test(snapshot.text.slice(match.index + match[0].length))
-      ? "\n"
-      : ""
-  )
+  doc = trackedReplace(doc, /\s+/g, (match) => {
+    const after = snapshot.text.slice(match.index + match[0].length)
+    if (/[\r\n]/.test(match[0]) && /^(?:[（(]\s*[1-9]\d*\s*[）)]|[①-⑳])/.test(after)) {
+      return "\n"
+    }
+    const prevCh = match.index > 0 ? snapshot.text[match.index - 1]! : ""
+    const nextCh = after[0] ?? ""
+    // Keep a separating space when:
+    // 1. Two separate `$...$` math spans sit adjacent with only whitespace between them (`$AB=2$ $BC=3$`), or
+    // 2. A trig/log function precedes its argument (`\sin 2x` -> `sin 2x`).
+    if (/[A-Za-z0-9°′₀-₉]/.test(prevCh) && /[A-Za-z0-9∠△]/.test(nextCh)) {
+      const origFrom = snapshot.starts[match.index] ?? 0
+      const origTo = snapshot.ends[Math.min(snapshot.ends.length - 1, match.index + match[0].length - 1)] ?? origFrom
+      const origGap = prompt.slice(Math.max(0, origFrom - 2), Math.min(prompt.length, origTo + 2))
+      if (/\$\s+\$/.test(origGap)) return " "
+      const beforeWord = snapshot.text.slice(Math.max(0, match.index - 8), match.index)
+      if (/(?:^|[^A-Za-z])(?:sin|cos|tan|cot|sec|csc|ln|log|lg)$/i.test(beforeWord)) return " "
+    }
+    return ""
+  })
 
   const trimStart = doc.text.length - doc.text.trimStart().length
   const trimEnd = doc.text.trimEnd().length
