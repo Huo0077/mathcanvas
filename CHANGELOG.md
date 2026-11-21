@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-21 —— v5.0.0 系统性根治修复（纯文字真题 24/24 `--reset` 全过）、官网升级、识图 UI 暂隐与 E2E 门禁修复
+
+- **系统性架构根治与纯文字真题 24/24 全通过**（`4a71d3e8`，[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[modelPlanner.ts](apps/web/src/agent/modelPlanner.ts)、[draftStore.ts](apps/web/src/agent/draftStore.ts)、[agentRunner.ts](apps/web/src/agent/agentRunner.ts)、[agentRuntime.ts](apps/web/src/agent/agentRuntime.ts)、[systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[diagramVerification.ts](packages/agent-core/src/diagramVerification.ts)、[coordinator.ts](packages/agent-core/src/coordinator.ts)、[reliabilityDiagnostics.ts](packages/agent-core/src/reliabilityDiagnostics.ts)、[repairProgress.ts](packages/agent-core/src/repairProgress.ts)、[drawingCertificate.ts](packages/agent-core/src/verification/drawingCertificate.ts)）：
+  - **2D/3D 几何内核与求解补强**：新增 `construct_line({ throughPointId, conicId, chordRatio })` 圆锥曲线定比弦精确闭式求解（覆盖椭圆/圆/双曲线/抛物线）；原生支持 `A-BCD` 六边四面体字段（`ab/ac/ad/bc/bd/cd`）与三维圆 Cayley-Menger 可行区间/二面角 90° 诊断；泛化 `promoteStandalonePolyhedronVertices` 支持任意 $k$ 棱锥/棱柱并在无覆盖底面尺寸时保留已物化 3D 顶点；`construct_circumsphere` 球心同步注册 `points3`；`construct_intersection` 拒收重合/相切伪交点；禁止 2D 画布误调 3D `construct_face`；收紧 `request_clarification` 护栏并规范化 LaTeX 下标点名；
+  - **会话内预检自修与预算/停滞修复**：`finish_candidate` 增加至多 2 轮会话内证书/缺失实体自修反馈；失败 `progressSignature` 纳入规范输入哈希防策略切换误杀；多工具批内未知工具名转可修复反馈；提升 `ds_action` 轮次上限至 `28`、共享预算至 `generation: 96 / network: 96 / tool: 300 / actions_per_run: 360`；修复 `agentRuntime.confirmDraft()` 在失败终态返回 `rejected`；修复 `resolveInfeasibleEllipseFallbackScope` 作用域标识。24 道纯文本高考/联考与用户真题在实机桌面端 `deepseek-v4-flash` 下单轮 `--reset` 串行实测 **24/24（100%）通过**。
+- **官网门户更新与独立部署打包**（`034b0836`，[portal/index.html](portal/index.html)、[portal/assets/styles.css](portal/assets/styles.css)）：明确标注软件仍在持续更新升级中，首屏与页脚显眼展示问题反馈邮箱 `dogf9066@gmail.com`（支持 `mailto:` 与一键复制），全部下载入口直链 GitHub Releases 以零消耗自有服务器下载流量，并同步产出独立静态部署包（含 Nginx / Caddy 配置模板与宝塔部署说明）。
+- **识图 UI 特性开关暂隐与小问防误放行 E2E 修复**（`4195ff87`，[featureFlags.ts](apps/web/src/featureFlags.ts)、[AgentWorkspace.tsx](apps/web/src/components/agent/AgentWorkspace.tsx)、[ribbonCommands.ts](apps/web/src/ribbonCommands.ts)、[GeometryToolbar.tsx](apps/web/src/components/GeometryToolbar.tsx)、[App.tsx](apps/web/src/App.tsx)、[draftStore.ts](apps/web/src/agent/draftStore.ts)、[problem-image-reader.spec.ts](e2e/problem-image-reader.spec.ts)）：
+  - 新增 `IMAGE_READER_UI_ENABLED = false` 统一隐藏前端识图 UI 入口（功能区「图片识题」、Agent 对话栏「图片识题」按钮与题图面板、工具栏「拍照识题」及官网对应文案），底层识别代码与单测完整保留便于后续开发恢复；
+  - 将 [draftStore.ts](apps/web/src/agent/draftStore.ts) 的唯一前置条件小问自动推断改为“仅当候选图数学核验 `passed` 才提升 `scopeId`”，恢复 R01-A `agent-subquestion-guard.spec.ts` 5/5 阻断保护。
+- **全量验证与发版同步**：`npm run typecheck`、`npm run lint`（0 errors）、`npm run test:docs`（22/22）、`eval:reliability -- --offline`（3/3）、`eval:explicit-solid -- --offline`（2/2）、全量 Playwright `npm run test:e2e`（**331 passed / 1 skipped / 0 failed**）与桌面端三件套重建（`MathCanvas_5.0.0_x64-setup.exe` / `MathCanvas_5.0.0_x64.exe` / `MathCanvas_5.0.0_x64_en-US.msi`）全部通过并已覆盖同步至 GitHub Release `v5.0.0` 与 [docs/release/v5.0.0.md](docs/release/v5.0.0.md)。
+
 ## 2026-11-20 —— 首个正式版本里程碑定版（智能读题补线推面、全链路动点联动与工作台体验升级）
 
 - **智能读题自动补线与「以线推面」**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)）：

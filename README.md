@@ -4,8 +4,9 @@
 
 MathCanvas 将**自然语言读题作图**、**动态几何约束联动**、**二维解析/函数分析**、**三维立体空间建模**与**工程制图投影**整合在同一个简洁流畅的桌面与浏览器工作台中。你可以像在传统几何软件里那样自由拖拽控制点、调节参数、测量距离与二面角，也可以直接输入一道完整的数学题，由内置 AI 助手为你自动理解题意、构造图形、联动辅助线与空间面，并在预览确认后写入画布继续探索。
 
-- **桌面端安装包下载（Windows x64 v5.0.0）**：[NSIS 安装程序 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe) · [绿色免安装版 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe) · [MSI 安装包](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi) · [全部 Releases](https://github.com/Huo0077/mathcanvas/releases)
-- **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及直链下载，可直接部署至任意静态 Web 服务器）。
+- **桌面端安装包下载（Windows x64 v5.0.0，托管于 GitHub Releases）**：[NSIS 安装程序 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe) · [绿色免安装版 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe) · [MSI 安装包](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi) · [全部 Releases](https://github.com/Huo0077/mathcanvas/releases)
+- **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及 GitHub Releases 直链下载，可直接部署至任意静态 Web 服务器）。
+- **持续更新与问题反馈**：MathCanvas 目前仍在持续更新升级中。使用过程中如遇到 Bug 或有题目无法正确画出，请附上原题文本或截图联系 **[dogf9066@gmail.com](mailto:dogf9066@gmail.com)**。
 
 ---
 
@@ -29,7 +30,7 @@ MathCanvas 将**自然语言读题作图**、**动态几何约束联动**、**�
 ## 核心特色
 
 ### 1. 智能 AI 读题构图，输入正常题目即可出图
-- **自然题干直接理解**：只需输入常见高中或竞赛数学题目（支持纯文字题、多小问递进题及桌面端图片识题），无需手写特殊构图命令，也无需刻意注明「作出某平面」。
+- **自然题干直接理解**：只需输入常见高中或竞赛纯文字数学题目（支持单问与多小问递进题），无需手写特殊构图命令，也无需刻意注明「作出某平面」。（*说明：识图能力将在后续版本正式接入，当前版本已通过特性开关 `IMAGE_READER_UI_ENABLED = false` 暂时隐藏前端识图 UI 入口。*）
 - **主动补线与「以线推面」**：Agent 会自动提取并补全题中给出的线段与动点约束（如棱上定比分点、中点、动点连线 `AE`、`CE`），并直接由相交辅助线与动点自动推测生成对应空间面（如 `面 AEC`），第一时间显示在左侧对象栏的 **「面（构造 / 辅助）」** 分组与三维画布中。
 - **同屏共创、隔离预览与一键确认**：AI 构图与计算思考过程分步折叠展示，先在隔离草稿画布预览全部图元与题设核验结果；左侧对象栏同步亮出「预览」清单供核查，点击 **「确认写入」** 原子落盘（支持 `Ctrl+Z` 一步完整撤销）。
 - **往期对话完整回溯**：右上角 **「往期」** 支持随时翻阅并恢复之前的完整问答、推理轨迹与构图上下文，互不串扰。
@@ -73,7 +74,7 @@ npm run dev
 
 ### 方式二：运行或构建 Windows 桌面应用（Tauri 2）
 
-桌面版使用与浏览器端同一套前端交互引擎，并额外提供 **Windows 凭据管理器安全存密**、**本地 SQLite 文档持久化**、**桌面题图识别**、**模型列表一键自动获取** 与 **无控制台黑框原生启动** 体验（需 Rust 1.77.2+ 工具链）：
+桌面版使用与浏览器端同一套前端交互引擎，并额外提供 **Windows 凭据管理器安全存密**、**本地 SQLite 文档持久化**、**模型列表一键自动获取** 与 **无控制台黑框原生启动** 体验（需 Rust 1.77.2+ 工具链）：
 
 ```bash
 # 启动桌面端开发调试

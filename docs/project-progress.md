@@ -1,5 +1,11 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-21 —— v5.0.0 系统性根治修复（24/24 纯文字真题 `--reset` 全过）、官网升级、识图 UI 暂隐与全量 E2E 闭环
+
+- **系统性架构根治与 24/24 纯文字真题 `--reset` 全通过（`4a71d3e8`）**：深入排查高频易错题（含 `USER-16`、`JT-S01`、`JT-P01`、`GK-P06`、`JT-P06`、`JT-P08` 等）后完成多项底层架构修复：补齐圆锥曲线定比弦精确闭式求解、`A-BCD` 六边四面体与 Cayley-Menger 可行性诊断、任意 $k$ 棱锥/棱柱顶点组装、`construct_circumsphere` 球心注册 `points3`、`finish_candidate` 会话内至多 2 轮预检自修、失败签名输入哈希区分、`ds_action` 28 轮/96 网络预算与 `agentRuntime.confirmDraft()` 失败终态拒收。桌面端 `mathcanvas-desktop.exe` + `deepseek-v4-flash` 下 24 道纯文本高考/联考与用户实测题单轮 `--reset` 串行实测 **24/24（100%）通过**。
+- **官网门户升级与服务器静态打包（`034b0836`）**：更新 [portal/index.html](../portal/index.html) 与 [portal/assets/styles.css](../portal/assets/styles.css)，增加「持续更新升级中」说明与显眼反馈邮箱 `dogf9066@gmail.com`（含一键复制），全部下载入口直链 GitHub Releases，并整理宝塔/Nginx/Caddy 可直接上传的静态部署包。
+- **识图 UI 特性开关暂隐与小问阻断 E2E 修复（`4195ff87`）**：通过 [featureFlags.ts](../apps/web/src/featureFlags.ts) 的 `IMAGE_READER_UI_ENABLED = false` 统一隐藏识图 UI 入口并同步清理官网对应文案，底层代码与单测保留供后续开发恢复；修复 [draftStore.ts](../apps/web/src/agent/draftStore.ts) 唯一前置条件小问自动推断仅在数学核验 `passed` 时生效，彻底解决 CI 中 `e2e/agent-subquestion-guard.spec.ts` 4 条失败。最终验证：`typecheck`、`lint`（0 errors）、`test:docs`（22/22）、`eval:reliability -- --offline`（3/3）、`eval:explicit-solid -- --offline`（2/2）及全量 Playwright `npm run test:e2e`（**331 passed / 1 skipped / 0 failed**）全部通过；重新打包三件套并更新 GitHub Release `v5.0.0` 与 [v5.0.0.md](release/v5.0.0.md)。
+
 ## 2026-11-20 —— 首个正式版本里程碑定版与全流程交互体验收口
 
 - **用户需求驱动的端到端体验与智能构图收口**：完成 44/44 纯文字题真机实测之后，继续围绕日常做题使用场景完成全面打磨：（1）实现正常题目（不显式点名平面）下自动补齐辅助线段并直接由相交线段与动点推测空间面（如仅写 `连结 AE、CE` 即自动构造 `面 AEC`），并支持小写/分隔写法（`面ace`/`平面 A-C-E`）与顶点 ID 复用联动；（2）Agent 草稿预览态即同步渲染左侧对象栏，独立面集中在 **「面（构造 / 辅助）」** 分组，支持两线定面与属性栏二面角 `sin`/`cos` 集中读取；（3）打通往期对话完整历史恢复、13 种模型预设 + Rust IPC 一键获取模型列表、精简设置面板（`模型服务 | 偏好设置`）、更新桌面图标与隐藏 Windows 启动黑框，并重写面向用户的 [README](../README.md)。最后一次改码后 `npm run typecheck` 通过（exit 0），桌面端 `deepseek-v4-flash` 实测全部通过。

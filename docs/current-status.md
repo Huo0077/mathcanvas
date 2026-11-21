@@ -1,5 +1,13 @@
 # MathCanvas 当前状态
 
+## 2026-11-21 —— v5.0.0 系统性根治加固（24/24 纯文字真题 `--reset` 全过）、官网升级、识图 UI 暂隐与全量 E2E 闭环
+
+> **2026-11-21 最新交付与验证基线（`4195ff87` / `v5.0.0` 持续更新升级中）**：
+> 1. **系统性根治修复与 24 题纯文字真题全通过（`4a71d3e8`）**：围绕圆锥曲线定比弦闭式求解、`A-BCD` 六边四面体与 Cayley-Menger 可行域诊断、任意 $k$ 棱锥/棱柱顶点自动组装、外接球球心注册 `points3`、会话内 `finish_candidate` 证书预检自修、失败签名输入哈希区分与 `ds_action` 预算/轮次扩容完成根治修复；在桌面实机 + `deepseek-v4-flash` 下，24 道纯文本高考/联考与用户真题（跳过附图题）单轮 `--reset` 串行实测 **24/24（100%）通过**。
+> 2. **官网门户升级与服务器打包（`034b0836`）**：[portal/index.html](../portal/index.html) 显眼标注「持续更新升级中」并附上 Bug/难题反馈邮箱 `dogf9066@gmail.com`（支持 `mailto:` 与一键复制），全部下载入口直链 GitHub Releases（不消耗自有服务器下载带宽），并输出独立静态部署包（总计 2.06 MB，含宝塔/Nginx/Caddy 配置与说明）。
+> 3. **识图 UI 特性开关暂隐与小问 E2E 门禁修复（`4195ff87`）**：由于正式识图服务尚待后续开发，新增 [featureFlags.ts](../apps/web/src/featureFlags.ts)（`IMAGE_READER_UI_ENABLED = false`）集中隐藏所有前端识图 UI 入口（功能区「图片识题」、Agent 输入栏「图片识题」与题图识别面板、工具栏「拍照识题」及官网对应文案），底层识别组件与单测保留；同步修复 [draftStore.ts](../apps/web/src/agent/draftStore.ts) 唯一前置条件小问仅在候选数学核验 `passed` 时才自动提升 `scopeId`，恢复 R01-A `agent-subquestion-guard` 阻断门禁。
+> 4. **全量验证与 Release 同步**：最终代码改动后本地验证全部通过——`npm run typecheck`、`npm run lint`（0 errors / 34 pre-existing warnings）、`npm run test:docs`（8 文件 / 22/22）、`eval:reliability -- --offline`（3/3）、`eval:explicit-solid -- --offline`（2/2）、相关核心单测（`draftStore` / `agentRuntime` / `ribbonCommands` / `ProblemImageComposer` 69/69 + `AgentWorkspace` / `App` 127/127）、全量 Playwright E2E（**331 passed / 1 skipped（`IMAGE_READER_UI_ENABLED = false` 门控）/ 0 failed**，其中 `agent-subquestion-guard.spec.ts` 5/5 通过）；已重打 Windows 三件套并覆盖上传至 GitHub Release `v5.0.0`，最新 SHA-256 同步记录于 [v5.0.0 发布说明](release/v5.0.0.md)。
+
 ## 2026-11-20 —— 首个正式版本里程碑定版（智能读题补线推面、全链路动点联动与工作台优化）
 
 > **首个正式版本里程碑收口（2026-11-20，0 离线测试）**：在纯文字 44/44（`deepseek-v4-flash` 真机全通过）基础上，完成用户全轮打磨与正式版定版交付——包括常规题不写平面名时的**自动补线（`materializePromptSegmentsInActions`）与「以线推面」（`materializePromptFacesInActions`）**、小写及分隔点名解析（`面ace`/`平面 A-C-E`）、构造面与棱上/面内动点 ID 复用实时联动、Agent 草稿预览态左侧对象栏即时同步与「面（构造 / 辅助）」独立分组、属性栏层次重组与角度 `sin`/`cos` 集中展示、往期对话完整回溯、`13` 种模型服务预设 + Rust `fetch_provider_models` 自动获取模型名、精简设置页（保留 `模型服务 | 偏好设置`）、更新桌面图标并隐藏 Windows 控制台黑框，以及面向用户的 [README](../README.md) 定版。全仓 `npm run typecheck` 退出码 `0`，桌面端真机 `deepseek-v4-flash` 端到端实测通过。
@@ -203,7 +211,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-20；产品版本：v5.0.0（首个正式发布版）；产品代码基线：5171942e。
+最后更新：2026-11-21；产品版本：v5.0.0（持续更新升级中）；产品代码基线：4195ff87。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

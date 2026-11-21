@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-21 v5.0.0 持续加固、官网上线打包、识图 UI 暂隐与全量 E2E 闭环（`4195ff87`）**：已完成系统性几何内核与会话内自修根治（24 道纯文本真题 `--reset` 实机 `deepseek-v4-flash` **24/24 通过**）、官网更新（持续升级说明 + `dogf9066@gmail.com` 反馈入口 + GitHub Releases 直链下载）与识图 UI 特性开关暂隐（`IMAGE_READER_UI_ENABLED = false`，保留底层代码待后续开发正式识图后一键开启），并修复 `draftStore` 唯一前置条件小问提升条件使全量 Playwright E2E **331 passed / 1 skipped / 0 failed**。后续演进方向：① 收集 `dogf9066@gmail.com` 反馈的真实疑难题与 Bug 持续迭代内核；② 正式开发识图/OCR 能力并重新开启 `IMAGE_READER_UI_ENABLED`。实时读数与验收边界统一见 [当前状态](current-status.md)。
+
 > **2026-11-20 首个正式版本里程碑定版（智能补线推面、全链路动点联动与工作台升级）**：在 44/44 真机实测全部通过后，完成常规题自动补全线段并由相交线与动点主动推测空间面（`面 AEC`）、动点与构造面 ID 复用联动、Agent 预览期左侧面元栏实时同步分组、往期对话恢复、13 种模型服务预设 + 自动获取模型名、偏好设置丰富与高级页移除、桌面图标与无黑框启动及面向用户的 [README](../README.md) 定版。`npm run typecheck`（exit 0）与桌面端真机 `deepseek-v4-flash` 专项测试均通过。
 
 > **2026-11-20 全面正确性二次根治修复与 `deepseek-v4-flash` 44 题全通过收口（基线 28/28 + 扩展 16/16 = 44/44 = 100.0%，0 离线测试）**：完成 `dsActionTools.ts`（内核最大内切球 `solveMaxInscribedBall3`、`construct_parallel` 平行偏移、`construct_intersection` 排他点、`(b, e)` 圆锥曲线反算）、`modelPlanner.ts`（同批 `undeclared_entity_ref` 依赖波次重排）与 `systemPrompt.ts` 批量/精确诱导优化，全仓 `npm run typecheck` 通过（exit 0）。真实 UI 复测 `EX-P01`（19 次通过，6/6 义务）、`EX-S05`（4 次通过，精确 `(4,2,1.5), r=1.5`）、`EX-P04`（6 次通过，精确 `√5`）、`EX-S06`（6 次通过）、`GK-S12`（2 次通过，精确 `r=√2`）与 `GK-S14/15`（各 5 次通过），**44/44（100.0%）** 通过落盘与 2D/3D 交互，累计估算上界费用 **\$3.1467 USD**（< \$5）。详见 [当前进度总表](g3-final/G3-F9-current-progress-and-remaining-work.md)。
@@ -135,7 +137,7 @@
 
 > **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
 
-最后更新：2026-11-20（首个正式版本里程碑定版，智能补线推面、全链路动点联动、工作台体验与面向用户 README 均已收口并实测通过）。
+最后更新：2026-11-21（`v5.0.0` 系统性根治修复与 24/24 纯文本真题全过、官网升级、识图 UI 暂隐及全量 E2E 331/332 闭环）。
 
 **实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 
