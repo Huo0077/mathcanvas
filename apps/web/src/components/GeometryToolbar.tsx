@@ -1,6 +1,8 @@
 import { useState } from "react"
 import type { Workspace } from "@draw/dsl"
 
+import { IMAGE_READER_UI_ENABLED } from "../featureFlags"
+
 interface GeometryToolbarProps {
   onExportSvg: (format?: "svg" | "dxf" | "pdf") => void
   onExportHtml: () => void
@@ -101,7 +103,7 @@ export function GeometryToolbar(props: GeometryToolbarProps) {
     </section>
     <section className="toolbar-group multimodal-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">输入</span><strong>多模态输入</strong></div></div>
-      <div className="toolbar-inline-actions"><ToolButton label="文本输入" icon="text" onClick={() => undefined} /><ToolButton label="拍照识题" icon="camera" onClick={() => undefined} /><ToolButton label="画笔标注" icon="brush" onClick={() => undefined} /></div>
+      <div className="toolbar-inline-actions"><ToolButton label="文本输入" icon="text" onClick={() => undefined} />{IMAGE_READER_UI_ENABLED && <ToolButton label="拍照识题" icon="camera" onClick={() => undefined} />}<ToolButton label="画笔标注" icon="brush" onClick={() => undefined} /></div>
     </section>
     <section className="toolbar-group editing-tools">
       <div className="toolbar-group-heading"><div><span className="toolbar-kicker">编辑</span><strong>画布操作</strong></div></div>

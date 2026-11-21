@@ -23,6 +23,7 @@ import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWork
 import type { InspectorTab } from "./components/InspectorTabs"
 import { GraphicsView } from "./components/GraphicsView"
 import { GuidanceHint } from "./components/GuidanceHint"
+import { IMAGE_READER_UI_ENABLED } from "./featureFlags"
 import { guidanceFor } from "./guidance"
 import { LayerTree } from "./components/LayerTree"
 import { PropertiesBar, type PropertiesBarProps } from "./components/PropertiesBar"
@@ -751,6 +752,7 @@ export function App() {
    */
   const handleRibbonCommand = (commandId: string) => {
     if (commandId === "input-image-conversion") {
+      if (!IMAGE_READER_UI_ENABLED) return
       setOpenImageReader(true)
       setActiveModule("agent")
       return
@@ -1206,7 +1208,7 @@ export function App() {
       <div className="agent-run-layout">
         <AgentWorkspace
           onBackToWorkspace={() => { setOpenImageReader(false); setActiveModule(DEFAULT_APP_MODULE) }}
-          initialImageReaderOpen={openImageReader}
+          initialImageReaderOpen={IMAGE_READER_UI_ENABLED && openImageReader}
           onRun={runAgentPrompt}
           // 点的是哪块面板就确认哪一轮（`runId` 来自那条消息；Fix round 1 / C2）。
           onConfirm={(runId) => { agentRunner.confirm(runId) }}

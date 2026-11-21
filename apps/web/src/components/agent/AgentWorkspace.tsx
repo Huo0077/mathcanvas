@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import { useAgentStore } from "../../agentStore"
+import { IMAGE_READER_UI_ENABLED } from "../../featureFlags"
+import { AgentComposer } from "./AgentComposer"
 import { ProblemImageComposer } from "./ProblemImageComposer"
 import { AgentConversationSidebar } from "./AgentConversationSidebar"
 import { AgentMessageList } from "./AgentMessageList"
@@ -116,8 +118,11 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
         />
       </div>
       <div className="agent-stage-composer">
-        <ProblemImageComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
-          onSend={sendPrompt} busy={isGenerating} initialOpen={initialImageReaderOpen} />
+        {IMAGE_READER_UI_ENABLED
+          ? <ProblemImageComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
+              onSend={sendPrompt} busy={isGenerating} initialOpen={initialImageReaderOpen} />
+          : <AgentComposer key={activeConversation?.id ?? activeConversationId} draft={{ value: draft, onChange: setDraft }}
+              onSend={sendPrompt} busy={isGenerating} />}
       </div>
     </div>
   </div>

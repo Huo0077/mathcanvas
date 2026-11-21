@@ -607,7 +607,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       }
       const matchedRoute = userMessage === undefined ? null : routeDeterministicProblem(userMessage)
       const effectiveUserMessage = matchedRoute?.diagramPrompt ?? userMessage
-      const effectiveSelectedScopeId = stageOptions?.selectedScopeId ?? matchedRoute?.selectedScopeId ?? inferUniquePremiseScopeId(effectiveUserMessage)
+      const effectiveSelectedScopeId = stageOptions?.selectedScopeId ?? matchedRoute?.selectedScopeId
       const compiled = await compile({
         plan,
         document: record.candidate,
@@ -704,15 +704,30 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const onlyParameterActions = materialised.actions.length > 0 && materialised.actions.every((action) => action.actionId.startsWith("parameter."))
       const explicitSolidDeclared = parserPrompt !== undefined && (hasExplicitSolidConditions(parserPrompt) || solidDimensionGate(parserPrompt, materialised.actions))
       const hasMathContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|f\s*\(|切线|椭圆|双曲线|抛物线|二面角|最长弦|最短弦|[A-Z]{2}\s*=|⊥|∥)/.test(parserPrompt)
+      const verifiedUniquePremiseScopeId = (() => {
+        if (effectiveSelectedScopeId !== undefined || parserPrompt === undefined) return undefined
+        const inferredScopeId = inferUniquePremiseScopeId(parserPrompt)
+        if (inferredScopeId === undefined) return undefined
+        const probeObligations = parseObligationWithLegacy(parserPrompt, {
+          spatialPointConditions: witnessSearch === true,
+          selectedScopeId: inferredScopeId
+        }).legacy
+        const probeReport = verifyDiagramObligations(probeObligations, materialised, compiled.draftDocument, record.candidate, {
+          prompt: parserPrompt,
+          activeScopeId: inferredScopeId
+        })
+        return probeReport.status === "passed" ? inferredScopeId : undefined
+      })()
+      const candidateScopeId = effectiveSelectedScopeId ?? verifiedUniquePremiseScopeId
       const resolvedFallbackScopeId = parserPrompt !== undefined
         ? resolveInfeasibleEllipseFallbackScope({
             prompt: parserPrompt,
             document: compiled.draftDocument,
             plan: materialised,
             baseDocument: record.candidate,
-            ...(effectiveSelectedScopeId === undefined ? {} : { requestedScopeId: effectiveSelectedScopeId })
+            ...(candidateScopeId === undefined ? {} : { requestedScopeId: candidateScopeId })
           })
-        : effectiveSelectedScopeId
+        : candidateScopeId
       const parsed = parserPrompt && !onlyParameterActions && (
         planHasVerifiableFigure(materialised.actions)
         || explicitSolidDeclared

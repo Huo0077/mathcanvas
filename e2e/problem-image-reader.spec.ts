@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { expect, test } from "@playwright/test"
 import { createEmptyDocument, decodeMgeo, encodeMgeo } from "@draw/dsl"
+import { IMAGE_READER_UI_ENABLED } from "../apps/web/src/featureFlags"
 import { commandButton } from "./command-menu"
 
 const png = readFileSync("apps/desktop/src-tauri/src/providers/vision_probe.b64", "utf8").trim()
@@ -8,7 +9,17 @@ const PRISM = String.raw`15. 如图，在直三棱柱 $ABC-A_1B_1C_1$ 中，$\an
 （1）证明：$DE\parallel$ 平面 $BCC_1B_1$；
 （2）设 $CC_1=2$，直线 $DE$ 与平面 $ACC_1A_1$ 所成的角为 $45^\circ$，求直线 $DE$ 到平面 $BCC_1B_1$ 的距离。`
 
+test("hides image-recognition UI entry points while IMAGE_READER_UI_ENABLED is false", async ({ page }) => {
+  test.skip(IMAGE_READER_UI_ENABLED, "识图功能 UI 已开启")
+  await page.goto("/")
+  await expect(page.getByRole("button", { name: "图片识题" })).toHaveCount(0)
+  await page.getByRole("button", { name: "Agent 工作区" }).click()
+  await expect(page.getByRole("button", { name: "图片识题" })).toHaveCount(0)
+  await expect(page.getByRole("region", { name: "题图识别" })).toHaveCount(0)
+})
+
 test("reads two images and sends the corrected problem with optional diagram references", async ({ page }) => {
+  test.skip(!IMAGE_READER_UI_ENABLED, "识图功能 UI 暂未开启，待后续识图能力完成后恢复")
   await page.addInitScript((problem) => {
     let requestCount = 0
     let conversation: Record<string, unknown> | undefined

@@ -1,6 +1,7 @@
 import type { Workspace } from "@draw/dsl"
 
 import type { CadMode } from "./components/EngineeringWorkbench"
+import { IMAGE_READER_UI_ENABLED } from "./featureFlags"
 import type { RibbonGroup, RibbonIcon } from "./uiState"
 
 export interface RibbonCommandContext {
@@ -162,7 +163,9 @@ export function createRibbonGroups(context: RibbonCommandContext): RibbonGroup[]
       : spatialPrefix),
     { id: "multimodal", label: "多模态输入", commands: [
       command("input-text-conversion", "文字转换", "text", { disabled: true, disabledReason: "文字转换服务尚未接入，暂不可用" }),
-      command("input-image-conversion", "图片识题", "image", { prompt: "上传题干截图和几何配图" })
+      ...(IMAGE_READER_UI_ENABLED
+        ? [command("input-image-conversion", "图片识题", "image", { prompt: "上传题干截图和几何配图" })]
+        : [])
     ] },
     { id: "edit", label: "作业操作", commands: editCommands },
     { id: "export", label: "文件输出", commands: exportCommands }

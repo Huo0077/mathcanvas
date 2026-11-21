@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { IMAGE_READER_UI_ENABLED } from "./featureFlags"
 import { createRibbonGroups, type RibbonCommandContext } from "./ribbonCommands"
 
 const emptyContext: RibbonCommandContext = {
@@ -83,12 +84,17 @@ describe("ribbon command configuration", () => {
     expect(construct.commands.every((command) => command.disabled === true)).toBe(true)
     expect(construct.commands.find((command) => command.id === "create-line3")?.disabledReason).toContain("Shift")
   })
-  it("offers image reading alongside the unavailable text conversion", () => {
+  it("respects the image reader UI feature flag alongside text conversion", () => {
     const multimodal = createRibbonGroups(emptyContext).find((group) => group.id === "multimodal")
 
-    expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion", "input-image-conversion"])
-    expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字转换", "图片识题"])
+    if (IMAGE_READER_UI_ENABLED) {
+      expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion", "input-image-conversion"])
+      expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字转换", "图片识题"])
+      expect(multimodal?.commands[1]?.disabled).toBeFalsy()
+    } else {
+      expect(multimodal?.commands.map((command) => command.id)).toEqual(["input-text-conversion"])
+      expect(multimodal?.commands.map((command) => command.label)).toEqual(["文字转换"])
+    }
     expect(multimodal?.commands[0]?.disabledReason).toBe("文字转换服务尚未接入，暂不可用")
-    expect(multimodal?.commands[1]?.disabled).toBeFalsy()
   })
 })
