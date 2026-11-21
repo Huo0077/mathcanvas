@@ -107,12 +107,11 @@ jobs:
         if: failure()
         run: |
           if [ -f android-build.log ]; then
-            rust_err=$(grep -E '^error(\[E[0-9]+\])?:' android-build.log | head -n 10 | tr '\n' ' ' | cut -c1-900)
-            gradle_err=$(grep -A 18 'FAILURE: Build failed with an exception.' android-build.log | tr '\n' ' ' | cut -c1-900)
-            mid_tail=$(tail -n 55 android-build.log | head -n 30 | tr '\n' ' ' | cut -c1-900)
-            echo "::error title=Android rust errors::${rust_err:-none}"
-            echo "::error title=Android Gradle failure::${gradle_err:-none}"
-            echo "::error title=Android log context::${mid_tail:-empty}"
+            ndks=$(ls -1 "$ANDROID_HOME/ndk" 2>/dev/null | tr '\n' ' ')
+            before_fail=$(grep -B 28 'FAILURE: Build failed with an exception.' android-build.log | head -n 28 | tr '\n' ' ' | cut -c1-950)
+            after_fail=$(grep -A 12 'FAILURE: Build failed with an exception.' android-build.log | tr '\n' ' ' | cut -c1-950)
+            echo "::error title=Android NDKs (${ndks:-none})::${before_fail:-empty}"
+            echo "::error title=Android Gradle detail::${after_fail:-none}"
           fi
       - name: Align and sign release APK for direct installation
         run: |
