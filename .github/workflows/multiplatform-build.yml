@@ -81,7 +81,11 @@ jobs:
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           echo "Installed SDK platforms / build-tools / NDKs:"
           ls -1 "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" || true
-          NDK_VER="$(ls -1 "$SDK/ndk" | sort -V | tail -n 1)"
+          NDK_VER="$(ls -1 "$SDK/ndk" | grep -E '^(27|28)\.' | sort -V | tail -n 1 || true)"
+          if [ -z "$NDK_VER" ]; then
+            NDK_VER="$(ls -1 "$SDK/ndk" | sort -V | tail -n 1)"
+          fi
+          echo "Selected NDK: $NDK_VER"
           NDK="$SDK/ndk/$NDK_VER"
           LLVM_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
           echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
@@ -108,9 +112,9 @@ jobs:
         run: |
           if [ -f android-build.log ]; then
             ndks=$(ls -1 "$ANDROID_HOME/ndk" 2>/dev/null | tr '\n' ' ')
-            before_fail=$(grep -B 28 'FAILURE: Build failed with an exception.' android-build.log | head -n 28 | tr '\n' ' ' | cut -c1-950)
+            before_fail=$(grep -B 20 'FAILURE: Build failed with an exception.' android-build.log | tr '\n' ' ' | tail -c 950)
             after_fail=$(grep -A 12 'FAILURE: Build failed with an exception.' android-build.log | tr '\n' ' ' | cut -c1-950)
-            echo "::error title=Android NDKs (${ndks:-none})::${before_fail:-empty}"
+            echo "::error title=Android before FAILURE (NDK ${NDK_HOME:-unknown})::${before_fail:-empty}"
             echo "::error title=Android Gradle detail::${after_fail:-none}"
           fi
       - name: Align and sign release APK for direct installation

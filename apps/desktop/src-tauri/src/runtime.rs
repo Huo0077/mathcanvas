@@ -24,6 +24,7 @@ use serde::Serialize;
 /// 一台机器上**可能安装**的 WebView2 运行时版本键（三处：64 位、32 位视图、当前用户）。
 ///
 /// Edge WebView2 Evergreen 的固定 GUID 是 `{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}`。
+#[cfg(windows)]
 const WEBVIEW2_KEYS: [&str; 3] = [
     r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
     r"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
