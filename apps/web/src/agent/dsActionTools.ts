@@ -7,6 +7,8 @@ import {
   compilePlan,
   foldPointAboutHinge,
   isDsActionName,
+  normalizeGeometryPrompt,
+  resolveInfeasibleEllipseFallbackScope,
   solveConstraint2d,
   solveConstraint3d,
   type ConstraintSolve3dRequest,
@@ -15,6 +17,7 @@ import {
   type NamedVertex3,
   type PlanEnvelope
 } from "@draw/agent-core"
+import { deriveAcceptance } from "./acceptance"
 import {
   distanceVector3,
   evaluateFunctionWithDomain,
@@ -478,6 +481,192 @@ function enrichPromptSegmentsAndFaces(
   return changed ? working : null
 }
 
+function buildCoplanarPyramidPolyAction(
+  apexEntry: { idx: number; action: DraftAction; label: string; pos: Vector3 },
+  baseEntries: Array<{ idx: number; action: DraftAction; label: string; pos: Vector3 }>
+): { polyAction: DraftAction; dropSet: Set<number>; insertAt: number } | null {
+  if (baseEntries.length < 3) return null
+  const basePts = baseEntries.map((e) => e.pos)
+  const bPlane = planeFromPoints(basePts[0]!, basePts[1]!, basePts[2]!)
+  if (!bPlane) return null
+  const maxBaseDev = Math.max(...basePts.map((p) =>
+    Math.abs(bPlane.normal.x * p.x + bPlane.normal.y * p.y + bPlane.normal.z * p.z + bPlane.constant)
+  ))
+  const apexDist = Math.abs(
+    bPlane.normal.x * apexEntry.pos.x + bPlane.normal.y * apexEntry.pos.y + bPlane.normal.z * apexEntry.pos.z + bPlane.constant
+  )
+  if (maxBaseDev > 1e-3 || !(apexDist > 1e-5)) return null
+
+  const nVec = bPlane.normal
+  const centroid = basePts.reduce(
+    (acc, p) => ({ x: acc.x + p.x / basePts.length, y: acc.y + p.y / basePts.length, z: acc.z + p.z / basePts.length }),
+    { x: 0, y: 0, z: 0 }
+  )
+  const firstOff = { x: basePts[0]!.x - centroid.x, y: basePts[0]!.y - centroid.y, z: basePts[0]!.z - centroid.z }
+  const uLen = Math.hypot(firstOff.x, firstOff.y, firstOff.z)
+  if (!(uLen > 1e-9)) return null
+  const u = { x: firstOff.x / uLen, y: firstOff.y / uLen, z: firstOff.z / uLen }
+  const v = {
+    x: nVec.y * u.z - nVec.z * u.y,
+    y: nVec.z * u.x - nVec.x * u.z,
+    z: nVec.x * u.y - nVec.y * u.x
+  }
+  const allEntries = [apexEntry, ...baseEntries]
+  const baseIndices = baseEntries.map((_, i) => i + 1)
+  const orderedBase = [...baseIndices].sort((ia, ib) => {
+    const da = { x: allEntries[ia]!.pos.x - centroid.x, y: allEntries[ia]!.pos.y - centroid.y, z: allEntries[ia]!.pos.z - centroid.z }
+    const db = { x: allEntries[ib]!.pos.x - centroid.x, y: allEntries[ib]!.pos.y - centroid.y, z: allEntries[ib]!.pos.z - centroid.z }
+    return Math.atan2(da.x * v.x + da.y * v.y + da.z * v.z, da.x * u.x + da.y * u.y + da.z * u.z) -
+      Math.atan2(db.x * v.x + db.y * v.y + db.z * v.z, db.x * u.x + db.y * u.y + db.z * u.z)
+  })
+  const apexOff = { x: apexEntry.pos.x - centroid.x, y: apexEntry.pos.y - centroid.y, z: apexEntry.pos.z - centroid.z }
+  const dotApex = nVec.x * apexOff.x + nVec.y * apexOff.y + nVec.z * apexOff.z
+  const baseFace = dotApex > 0 ? [...orderedBase].reverse() : orderedBase
+  const lateralFaces = baseFace.map((bi, idx) => [0, baseFace[(idx + baseFace.length - 1) % baseFace.length]!, bi])
+
+  const dropSet = new Set(allEntries.map((s) => s.idx))
+  const insertAt = Math.min(...dropSet)
+  const polyAction: DraftAction = {
+    actionId: "solid.create_polyhedron",
+    actionKey: `${apexEntry.action.actionKey}-poly`,
+    factIds: [],
+    inputs: {
+      alias: "pyr",
+      label: "pyr",
+      vertices: allEntries.map((s) => s.pos),
+      vertexNames: allEntries.map((s) => s.label),
+      faces: [baseFace, ...lateralFaces]
+    }
+  } as unknown as DraftAction
+  return { polyAction, dropSet, insertAt }
+}
+
+function promoteStandalonePolyhedronVertices(
+  actions: DraftAction[],
+  workspace: GeometryDocument["workspace"],
+  problemText?: string
+): DraftAction[] | null {
+  if (workspace !== "geometry3d") return null
+  const hasRealSolid = actions.some((a) =>
+    (a.actionId === "solid.create_polyhedron" && Array.isArray((a.inputs as { faces?: unknown[] }).faces) && (a.inputs as { faces: unknown[] }).faces.length > 1) ||
+    a.actionId === "solid.create_prism" ||
+    a.actionId === "solid.create_template"
+  )
+  if (hasRealSolid) return null
+
+  const ptEntries: Array<{ idx: number; action: DraftAction; label: string; pos: Vector3 }> = []
+  for (let i = 0; i < actions.length; i += 1) {
+    const act = actions[i]!
+    if (act.actionId !== "solid.create_point") continue
+    const inp = act.inputs as { label?: unknown; alias?: unknown; position?: unknown; points?: unknown } | undefined
+    const lbl = typeof inp?.label === "string" && inp.label.trim() ? inp.label.trim() : typeof inp?.alias === "string" ? inp.alias.trim() : ""
+    const rawPos = (Array.isArray(inp?.points) ? inp.points[0] : inp?.position) as Vector3 | undefined
+    if (!lbl || !rawPos || typeof rawPos.x !== "number" || typeof rawPos.y !== "number" || typeof rawPos.z !== "number") continue
+    ptEntries.push({ idx: i, action: act, label: lbl, pos: rawPos })
+  }
+  if (ptEntries.length < 4) return null
+
+  const byLabel = new Map(ptEntries.map((entry) => [entry.label, entry]))
+  const tryCommitPoly = (built: { polyAction: DraftAction; dropSet: Set<number>; insertAt: number } | null): DraftAction[] | null => {
+    if (!built) return null
+    const rebuilt: DraftAction[] = []
+    for (let i = 0; i < actions.length; i += 1) {
+      if (i === built.insertAt) rebuilt.push(built.polyAction)
+      if (!built.dropSet.has(i)) rebuilt.push(actions[i]!)
+    }
+    const compiled = compilePlan(
+      { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "promote-polyhedron", factIds: [], actions: rebuilt },
+      { document: createEmptyDocument(workspace), workspace, capabilityRevision: "draft", conversationId: "ds-promote-polyhedron" }
+    )
+    return compiled.ok && compiled.draftDocument ? rebuilt : null
+  }
+
+  // 1. Named pyramid in prompt: e.g. 三棱锥 P-ABC, 四棱锥 P-ABCD, 五棱锥 S-ABCDE, 四面体 P-ABC
+  if (problemText) {
+    const pyrMatch = /(?:三棱锥|四棱锥|五棱锥|六棱锥|棱锥|四面体)\s*([A-Z])\s*[-−–—]?\s*([A-Z]{3,6})/.exec(problemText)
+    if (pyrMatch) {
+      const apexName = pyrMatch[1]!
+      const baseNames = [...pyrMatch[2]!]
+      const allNames = [apexName, ...baseNames]
+      if (new Set(allNames).size === allNames.length && allNames.every((n) => byLabel.has(n))) {
+        const res = tryCommitPoly(buildCoplanarPyramidPolyAction(byLabel.get(apexName)!, baseNames.map((n) => byLabel.get(n)!)))
+        if (res) return res
+      }
+    }
+    // 2. Named prism / cuboid / cube in prompt: e.g. 三棱柱 ABC-A₁B₁C₁, 正方体 ABCD-A₁B₁C₁D₁
+    const prismMatch = /(?:正三棱柱|直三棱柱|三棱柱|正四棱柱|直四棱柱|四棱柱|直棱柱|棱柱|长方体|正方体)\s*([A-Z]{3,4})\s*[-−–—]\s*((?:[A-Z](?:[₁1'′])?){3,4})/.exec(problemText)
+    if (prismMatch) {
+      const bottomNames = [...prismMatch[1]!]
+      const topTokens = [...prismMatch[2]!.matchAll(/[A-Z](?:[₁1'′])?/g)].map((m) => m[0]!)
+      const resolveVert = (tok: string) => byLabel.get(tok) ?? byLabel.get(tok.replace("1", "₁")) ?? byLabel.get(tok.replace("₁", "1")) ?? byLabel.get(tok.replace("'", "′"))
+      if (bottomNames.length === topTokens.length && bottomNames.length >= 3) {
+        const botEntries = bottomNames.map((n) => byLabel.get(n))
+        const topEntries = topTokens.map(resolveVert)
+        if (botEntries.every((e): e is typeof ptEntries[number] => e !== undefined) && topEntries.every((e): e is typeof ptEntries[number] => e !== undefined)) {
+          const k = botEntries.length
+          const allEntries = [...botEntries, ...topEntries]
+          if (new Set(allEntries.map((e) => e.idx)).size === 2 * k) {
+            const bPlane = planeFromPoints(botEntries[0]!.pos, botEntries[1]!.pos, botEntries[2]!.pos)
+            const tPlane = planeFromPoints(topEntries[0]!.pos, topEntries[1]!.pos, topEntries[2]!.pos)
+            if (bPlane && tPlane) {
+              const sep = Math.abs(bPlane.normal.x * topEntries[0]!.pos.x + bPlane.normal.y * topEntries[0]!.pos.y + bPlane.normal.z * topEntries[0]!.pos.z + bPlane.constant)
+              if (sep > 1e-5) {
+                const bottomFace = Array.from({ length: k }, (_, i) => i)
+                const topFace = Array.from({ length: k }, (_, i) => k + i)
+                const lateralFaces = Array.from({ length: k }, (_, i) => [i, (i + 1) % k, k + ((i + 1) % k), k + i])
+                const dropSet = new Set(allEntries.map((e) => e.idx))
+                const insertAt = Math.min(...dropSet)
+                const polyAction: DraftAction = {
+                  actionId: "solid.create_polyhedron",
+                  actionKey: `${botEntries[0]!.action.actionKey}-poly`,
+                  factIds: [],
+                  inputs: {
+                    alias: "prism",
+                    label: "prism",
+                    vertices: allEntries.map((e) => e.pos),
+                    vertexNames: allEntries.map((e) => e.label),
+                    faces: [bottomFace, topFace, ...lateralFaces]
+                  }
+                } as unknown as DraftAction
+                const res = tryCommitPoly({ polyAction, dropSet, insertAt })
+                if (res) return res
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fallback: 3+ triangle faces referencing 4 unique vertices (tetrahedron)
+  const triNames = new Set<string>()
+  const faceActs = actions.filter((a) => a.actionId === "solid.create_face")
+  if (faceActs.length >= 3) {
+    for (const fa of faceActs) {
+      const vns = (fa.inputs as { vertexNames?: unknown }).vertexNames
+      if (Array.isArray(vns) && vns.length === 3 && vns.every((v): v is string => typeof v === "string")) {
+        vns.forEach((v) => triNames.add(v))
+      }
+    }
+    if (triNames.size === 4 && [...triNames].every((n) => byLabel.has(n))) {
+      const sel = [...triNames].map((n) => byLabel.get(n)!)
+      const res = tryCommitPoly(buildCoplanarPyramidPolyAction(sel[0]!, sel.slice(1)))
+      if (res) return res
+    }
+  }
+
+  // 4. Fallback: exact 4 or 5 standalone 3D points forming a pyramid (1 apex + 3 or 4 coplanar base points)
+  if (ptEntries.length === 4 || ptEntries.length === 5) {
+    for (let apexIdx = 0; apexIdx < ptEntries.length; apexIdx += 1) {
+      const apex = ptEntries[apexIdx]!
+      const base = ptEntries.filter((_, i) => i !== apexIdx)
+      const res = tryCommitPoly(buildCoplanarPyramidPolyAction(apex, base))
+      if (res) return res
+    }
+  }
+  return null
+}
+
 function consolidateSolidScaffolding(
   actions: DraftAction[],
   workspace: GeometryDocument["workspace"]
@@ -706,6 +895,7 @@ export interface DsActionExecutionResult {
   readonly terminated?: {
     readonly plan: PlanEnvelope
     readonly slices?: readonly DsActionStateSlice[]
+    readonly selectedScopeId?: string
   }
 }
 
@@ -880,25 +1070,25 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   choose_strategy: "Select a geometric construction strategy for an entity.",
   construct_base: "Construct a base polygon or reference frame in 2D/3D.",
   construct_point: "Construct a named point: id with x,y or x,y,z for free vertices, or bind a moving point onto a host entity via hostId (+ parameter / u / v / x,y,z), planePoints (point in plane/face), or from,to,ratio (point on segment/edge).",
-  construct_line: "Construct a named 2D line with id: use existing point names from and to, or finite equation coefficients a,b,c for a*x+b*y+c=0; never guess missing coefficients.",
+  construct_line: "Construct a named 2D line with id: use existing point names from and to, equation (also supports sqrt(...) like 'y=sqrt(6)/2*x-2'), throughPointId+slope/dx,dy, exact conic chord-ratio solver throughPointId+conicId+chordRatio (for vector EC = λ·CF on a conic!), or finite equation coefficients a,b,c for a*x+b*y+c=0.",
   construct_segment: "Construct a segment between two existing named points; provide both from and to references.",
   construct_intersection: "Intersect lineA with either lineB or conicId. Pass optional excludePointId to avoid re-picking an existing anchor point on conic, or selection min_x/max_x/min_y/max_y.",
   construct_circle: "Construct a 2D circle ONLY (never for 3D spheres: use construct_circumsphere or construct_solid(kind='sphere') in 3D). Supports center/radius, centerId, or equation.",
-  construct_conic: "Give id and conicType (ellipse | hyperbola | parabola) or equation. Supports radiusX/radiusY, axis x or y, cx/cy center (default origin), algebraic a/b/c/e/p, and throughPointIds for two existing points.",
-  construct_tangent: "Construct a live tangent line linked to a conic/moving point (conicId + pointId, or external point to circle + optional tangentPointId) or to a function (expression or existing functionId, optional x0 for tangent, and mode='derivative' or includeDerivative=true for the derivative curve).",
+  construct_conic: "Construct ellipse/hyperbola/parabola. STRONGLY PREFER passing equation (e.g. 'x^2/3+y^2/4=1') OR throughPointIds for two existing points (or 1 point with c/e) whenever passing points or irrational semi-axes are involved — NEVER pass a² or b² as radiusX/radiusY (radiusX/radiusY MUST be semi-axes a, b, NOT denominators!). Also supports axis x|y, cx/cy center, and algebraic a/b/c/e/p.",
+  construct_tangent: "Construct a live tangent line linked to a conic/moving point (conicId + pointId — works both ON and OUTSIDE a parabola, ellipse, hyperbola, or circle, with optional tangentPointId and branch 0|1) or to a function (functionId like 'f'/'g', expression, optional x0 for tangent, and mode='derivative' or includeDerivative=true).",
   construct_perpendicular: "Construct a line through a point perpendicular to a line.",
   construct_parallel: "Construct a line parallel to lineId: either through throughPointId or shifted by offsetX, offsetY, or perpendicular distance.",
-  construct_solid: "Construct a named parametric solid via kernel solver (never raw hand vertices). Supports regular_pyramid, prism, cube, tetrahedron, perpendicular_pyramid, square_frustum, triangular_frustum, regular_frustum, cylinder, cone, round_frustum (height or slantHeight), sphere (pass inscribedIn=<solidId> to auto-compute exact inscribed sphere / max-volume ball).",
+  construct_solid: "Construct a named parametric solid via kernel solver (never raw hand vertices). Supports regular_pyramid, prism, cube, tetrahedron (accepts 6 edges pa,pb,pc,ab,ac,bc for P-ABC OR ab,ac,ad,bc,bd,cd for A-BCD, or 4 materialized vertexNames), perpendicular_pyramid, square_frustum, triangular_frustum, regular_frustum, cylinder, cone, round_frustum (height or slantHeight), sphere (pass inscribedIn=<solidId> to auto-compute exact inscribed sphere / max-volume ball).",
   construct_equal_edge_triangular_prism: "For a right triangular prism whose every edge has symbolic length a: give a named solid id and a positive displayScale; the kernel builds all geometry, not a numeric value for a.",
   construct_circumsphere: "Derive a real 3D circumsphere (default mode='circumsphere') or insphere/max-ball (mode='insphere') from an existing named solid; never provide raw center/radius or 2D construct_circle.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
   query_measurement: "Use metric=distance with targets of 2 points, metric=area with targets of 3 triangle points, or metric=position/coordinates with target naming 1 point.",
-  query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), or collinear to inspect constraint status.",
+  query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), collinear, perpendicular (3 targets [A,B,C] for AB⊥BC or 4 targets [A,B,C,D] for AB⊥CD), or parallel (4 targets [A,B,C,D]) to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
   finish_candidate: "Finalize all speculative actions into a plan envelope for independent verification.",
-  request_clarification: "Stop construction honestly when a required figure or parameter cannot be determined."
+  request_clarification: "ONLY use when an image-based prompt omits a required figure or a critical dimension is genuinely missing/contradictory. NEVER use on self-contained pure-text geometry problems with convex polygons (e.g. planar quad), moving points, or folded triangles: use standard convex orientation and a representative fold position satisfying the given perpendicular/parallel conditions."
 }
 
 /** The public geometry vocabulary is shared with the kernel dispatch below. */
@@ -906,7 +1096,7 @@ export const SOLID_KIND_FAMILIES = {
   regular_pyramid: ["regular_pyramid", "square_pyramid", "regular_triangular_pyramid"],
   tetrahedron: ["tetrahedron", "regular_tetrahedron", "triangular_pyramid"],
   prism: ["prism", "triangular_prism", "rectangular_prism", "square_prism", "right_prism", "regular_prism", "hexagonal_prism", "cube", "cuboid", "box"],
-  perpendicular_pyramid: ["perpendicular_pyramid"],
+  perpendicular_pyramid: ["perpendicular_pyramid", "quadrilateral_pyramid", "pyramid"],
   pyramidal_frustum: ["square_frustum", "triangular_frustum", "regular_frustum", "frustum_pyramid"],
   cylinder: ["cylinder"],
   cone: ["cone"],
@@ -961,8 +1151,10 @@ const CONSTRUCT_SOLID_PARAMETERS = {
     aa1: { type: "number", exclusiveMinimum: 0 },
     sides: { type: "number" },
     ab: { type: "number", exclusiveMinimum: 0 }, ac: { type: "number", exclusiveMinimum: 0 },
-    bc: { type: "number", exclusiveMinimum: 0 }, pa: { type: "number", exclusiveMinimum: 0 },
-    pb: { type: "number", exclusiveMinimum: 0 }, pc: { type: "number", exclusiveMinimum: 0 },
+    ad: { type: "number", exclusiveMinimum: 0 }, bc: { type: "number", exclusiveMinimum: 0 },
+    bd: { type: "number", exclusiveMinimum: 0 }, cd: { type: "number", exclusiveMinimum: 0 },
+    pa: { type: "number", exclusiveMinimum: 0 }, pb: { type: "number", exclusiveMinimum: 0 },
+    pc: { type: "number", exclusiveMinimum: 0 },
     width: { type: "number", exclusiveMinimum: 0 }, depth: { type: "number", exclusiveMinimum: 0 },
     upperBase: { type: "number", exclusiveMinimum: 0 }, lowerBase: { type: "number", exclusiveMinimum: 0 },
     baseHeight: { type: "number", exclusiveMinimum: 0 },
@@ -1023,6 +1215,8 @@ const CONSTRUCT_LINE_PARAMETERS = {
   properties: { ...PLANAR_ENTITY_FIELDS, from: { type: "string" }, to: { type: "string" },
     equation: { type: "string" }, slope: { type: "number" }, k: { type: "number" }, intercept: { type: "number" },
     throughPointId: { type: "string" }, pointId: { type: "string" }, dx: { type: "number" }, dy: { type: "number" },
+    conicId: { type: "string" }, chordRatio: { type: "number", exclusiveMinimum: 0 },
+    branch: { type: "number" },
     a: { type: "number" }, b: { type: "number" }, c: { type: "number" } }
 } as const
 const CONSTRUCT_INTERSECTION_PARAMETERS = {
@@ -1040,9 +1234,10 @@ const CONSTRUCT_CIRCLE_PARAMETERS = {
 } as const
 const CONSTRUCT_TANGENT_PARAMETERS = {
   type: "object", additionalProperties: false,
-  properties: { ...PLANAR_ENTITY_FIELDS, conicId: { type: "string" }, pointId: { type: "string" },
-    tangentPointId: { type: "string" },
-    functionId: { type: "string" }, expression: { type: "string" }, x0: { type: "number" },
+  properties: { ...PLANAR_ENTITY_FIELDS, conicId: { type: "string" }, pointId: { type: "string" }, throughPointId: { type: "string" },
+    tangentPointId: { type: "string" }, branch: { type: "number" },
+    selection: { type: "string", enum: ["min_x", "max_x", "min_y", "max_y"] },
+    functionId: { type: "string" }, functionLabel: { type: "string" }, expression: { type: "string" }, x0: { type: "number" },
     domain: { type: "array", items: { type: "number" } },
     mode: { type: "string", enum: ["tangent", "derivative", "integral", "graph"] },
     includeDerivative: { type: "boolean" } }
@@ -1093,7 +1288,7 @@ const REPAIR_ACTION_PARAMETERS = {
 } as const
 const FINISH_CANDIDATE_PARAMETERS = {
   type: "object", additionalProperties: false,
-  properties: { goal: { type: "string" } }
+  properties: { goal: { type: "string" }, scopeId: { type: "string" }, answer: { type: "string" } }
 } as const
 const REQUEST_CLARIFICATION_PARAMETERS = {
   type: "object", additionalProperties: false,
@@ -1107,7 +1302,7 @@ const QUERY_MEASUREMENT_PARAMETERS = {
 } as const
 const QUERY_CONSTRAINT_STATUS_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["targets"],
-  properties: { kind: { type: "string", enum: ["coplanar", "fixed_distance", "collinear"] },
+  properties: { kind: { type: "string", enum: ["coplanar", "fixed_distance", "collinear", "perpendicular", "parallel"] },
     targets: { type: "array", items: { type: "string" } }, expected: { type: "number", exclusiveMinimum: 0 },
     value: { type: "number", exclusiveMinimum: 0 } }
 } as const
@@ -1547,6 +1742,24 @@ function parseConicEquation(raw: string): ParsedConicEquation | null {
       return { conicType: "hyperbola", cx, cy, radiusX: Math.sqrt(-1 / sx), radiusY: Math.sqrt(1 / sy), axis: "y" }
     }
   }
+  if (Math.abs(ax) > 1e-12 && Math.abs(ay) <= 1e-12 && Math.abs(dy) > 1e-12) {
+    const vx = lq.shiftCx ?? rq.shiftCx ?? -dx / (2 * ax)
+    const remC = c - (lq.shiftCx !== null || rq.shiftCx !== null ? 0 : ax * vx * vx)
+    const vy = -remC / dy
+    const focalParameter = (-dy / ax) / 2
+    if (Number.isFinite(vx) && Number.isFinite(vy) && Math.abs(focalParameter) > 1e-12) {
+      return { conicType: "parabola", vx, vy, focalParameter, axis: "y" }
+    }
+  }
+  if (Math.abs(ay) > 1e-12 && Math.abs(ax) <= 1e-12 && Math.abs(dx) > 1e-12) {
+    const vy = lq.shiftCy ?? rq.shiftCy ?? -dy / (2 * ay)
+    const remC = c - (lq.shiftCy !== null || rq.shiftCy !== null ? 0 : ay * vy * vy)
+    const vx = -remC / dx
+    const focalParameter = (-dx / ay) / 2
+    if (Number.isFinite(vx) && Number.isFinite(vy) && Math.abs(focalParameter) > 1e-12) {
+      return { conicType: "parabola", vx, vy, focalParameter, axis: "x" }
+    }
+  }
   return null
 }
 
@@ -1886,7 +2099,12 @@ function resolveConstructSolidRequest(
   if (unknownField !== undefined) {
     return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `construct_solid does not accept field "${unknownField}"` }
   }
-  const rawKind = asString(input.kind ?? input.shape)
+  const preVertexNames = asStringList(input.vertexNames)
+  const rawKind =
+    asString(input.kind ?? input.shape) ??
+    (preVertexNames && preVertexNames.length >= 4 && preVertexNames.every((vn) => points3.has(vn))
+      ? preVertexNames.length === 4 ? "tetrahedron" : "pyramid"
+      : null)
   if (!rawKind) {
     return {
       ok: false,
@@ -1973,7 +2191,69 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if ((SOLID_KIND_FAMILIES.regular_pyramid as readonly string[]).includes(kind)) {
+  const buildPyramidFromPoints3 = (candidateNames: readonly string[], preferredApex?: string): SolidResolution | null => {
+    if (candidateNames.length < 4 || new Set(candidateNames).size !== candidateNames.length) return null
+    const pts = candidateNames.map((vn) => points3.get(vn))
+    if (!pts.every((p): p is Vector3 => p !== undefined)) return null
+    const apexCandidates = preferredApex && candidateNames.includes(preferredApex)
+      ? [candidateNames.indexOf(preferredApex)]
+      : [0, candidateNames.length - 1]
+    for (const apexIdx of apexCandidates) {
+      const baseIndices = candidateNames.map((_, idx) => idx).filter((idx) => idx !== apexIdx)
+      if (baseIndices.length < 3) continue
+      const bPlane = planeFromPoints(pts[baseIndices[0]!]!, pts[baseIndices[1]!]!, pts[baseIndices[2]!]!)
+      if (!bPlane) continue
+      const maxBaseDev = Math.max(...baseIndices.map((idx) => {
+        const p = pts[idx]!
+        return Math.abs(bPlane.normal.x * p.x + bPlane.normal.y * p.y + bPlane.normal.z * p.z + bPlane.constant)
+      }))
+      const apexPt = pts[apexIdx]!
+      const apexDist = Math.abs(bPlane.normal.x * apexPt.x + bPlane.normal.y * apexPt.y + bPlane.normal.z * apexPt.z + bPlane.constant)
+      if (maxBaseDev > 1e-3 || apexDist <= 1e-5) continue
+      const nVec = bPlane.normal
+      const centroid = baseIndices.reduce(
+        (acc, idx) => ({
+          x: acc.x + pts[idx]!.x / baseIndices.length,
+          y: acc.y + pts[idx]!.y / baseIndices.length,
+          z: acc.z + pts[idx]!.z / baseIndices.length
+        }),
+        { x: 0, y: 0, z: 0 }
+      )
+      const firstOff = { x: pts[baseIndices[0]!]!.x - centroid.x, y: pts[baseIndices[0]!]!.y - centroid.y, z: pts[baseIndices[0]!]!.z - centroid.z }
+      const uLen = Math.hypot(firstOff.x, firstOff.y, firstOff.z)
+      if (!(uLen > 1e-9)) continue
+      const u = { x: firstOff.x / uLen, y: firstOff.y / uLen, z: firstOff.z / uLen }
+      const v = {
+        x: nVec.y * u.z - nVec.z * u.y,
+        y: nVec.z * u.x - nVec.x * u.z,
+        z: nVec.x * u.y - nVec.y * u.x
+      }
+      const orderedBase = [...baseIndices].sort((ia, ib) => {
+        const da = { x: pts[ia]!.x - centroid.x, y: pts[ia]!.y - centroid.y, z: pts[ia]!.z - centroid.z }
+        const db = { x: pts[ib]!.x - centroid.x, y: pts[ib]!.y - centroid.y, z: pts[ib]!.z - centroid.z }
+        return Math.atan2(da.x * v.x + da.y * v.y + da.z * v.z, da.x * u.x + da.y * u.y + da.z * u.z) -
+          Math.atan2(db.x * v.x + db.y * v.y + db.z * v.z, db.x * u.x + db.y * u.y + db.z * u.z)
+      })
+      const apexOffset = { x: apexPt.x - centroid.x, y: apexPt.y - centroid.y, z: apexPt.z - centroid.z }
+      const dotApex = nVec.x * apexOffset.x + nVec.y * apexOffset.y + nVec.z * apexOffset.z
+      const baseFace = dotApex > 0 ? [...orderedBase].reverse() : orderedBase
+      const lateralFaces = baseFace.map((bi, idx) => [apexIdx, baseFace[(idx + baseFace.length - 1) % baseFace.length]!, bi])
+      const pointRegistry: Record<string, Vector3> = {}
+      candidateNames.forEach((vn, idx) => { pointRegistry[vn] = pts[idx]! })
+      return {
+        ok: true,
+        mode: "polyhedron",
+        pointRegistry,
+        vertices: pts,
+        vertexNames: [...candidateNames],
+        faces: [baseFace, ...lateralFaces]
+      }
+    }
+    return null
+  }
+
+  const wantsTrapezoidBase = input.upperBase !== undefined || input.lowerBase !== undefined || input.baseHeight !== undefined
+  if ((SOLID_KIND_FAMILIES.regular_pyramid as readonly string[]).includes(kind) && !wantsTrapezoidBase) {
     const baseRefs = asStringList(input.baseVertexNames ?? input.baseLabels)
     const sides = asPositiveNumber(input.sides)
     const isTriangular = kind === "regular_triangular_pyramid" || sides === 3 || vNames?.length === 4 || baseRefs?.length === 3
@@ -1981,6 +2261,14 @@ function resolveConstructSolidRequest(
     const side = asPositiveNumber(input.sideLength ?? input.baseSide ?? input.ab)
       ?? (r !== null ? (isTriangular ? r * Math.sqrt(3) : r * Math.SQRT2) : null)
     if (side === null) {
+      const explicitApex = asString(input.apexName) ?? undefined
+      const matNames = vNames && vNames.length >= 4
+        ? vNames
+        : baseRefs && baseRefs.length >= 3
+          ? [explicitApex ?? "P", ...baseRefs]
+          : null
+      const built = matNames ? buildPyramidFromPoints3(matNames, explicitApex) : null
+      if (built) return built
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive sideLength, baseSide, or base circumradius radius` }
     }
     const directLat = asPositiveNumber(input.lateralEdge)
@@ -2023,12 +2311,22 @@ function resolveConstructSolidRequest(
 
   if ((SOLID_KIND_FAMILIES.tetrahedron as readonly string[]).includes(kind)) {
     const edge = asPositiveNumber(input.edgeLength ?? input.sideLength)
-    const ab = asPositiveNumber(input.ab) ?? edge
-    const ac = asPositiveNumber(input.ac) ?? edge
-    const bc = asPositiveNumber(input.bc) ?? edge
-    const pa = asPositiveNumber(input.pa) ?? edge
-    const pb = asPositiveNumber(input.pb) ?? edge
-    const pc = asPositiveNumber(input.pc) ?? edge
+    const abIn = asPositiveNumber(input.ab) ?? edge
+    const acIn = asPositiveNumber(input.ac) ?? edge
+    const bcIn = asPositiveNumber(input.bc) ?? edge
+    const adIn = asPositiveNumber(input.ad)
+    const bdIn = asPositiveNumber(input.bd)
+    const cdIn = asPositiveNumber(input.cd)
+    const paIn = asPositiveNumber(input.pa) ?? edge
+    const pbIn = asPositiveNumber(input.pb) ?? edge
+    const pcIn = asPositiveNumber(input.pc) ?? edge
+    const hasAbcdSix = edge === null && adIn !== null && bdIn !== null && cdIn !== null && abIn !== null && acIn !== null && bcIn !== null
+    const ab = hasAbcdSix ? bcIn : abIn
+    const ac = hasAbcdSix ? bdIn : acIn
+    const bc = hasAbcdSix ? cdIn : bcIn
+    const pa = hasAbcdSix ? abIn : paIn
+    const pb = hasAbcdSix ? acIn : pbIn
+    const pc = hasAbcdSix ? adIn : pcIn
     const baseRefs = asStringList(input.baseVertexNames ?? input.baseLabels)
     const candidateNames =
       vNames && vNames.length === 4
@@ -2036,6 +2334,10 @@ function resolveConstructSolidRequest(
         : baseRefs && baseRefs.length === 3
           ? [asString(input.apexName) ?? "A", baseRefs[0]!, baseRefs[1]!, baseRefs[2]!]
           : null
+    if (vNames && vNames.length >= 5 && ab === null && ac === null && bc === null && pa === null && pb === null && pc === null) {
+      const built = buildPyramidFromPoints3(vNames, asString(input.apexName) ?? undefined)
+      if (built) return built
+    }
     if (candidateNames && ab === null && ac === null && bc === null && pa === null && pb === null && pc === null) {
       const pts = candidateNames.map((vn) => points3.get(vn))
       if (pts.every((p): p is Vector3 => p !== undefined)) {
@@ -2044,7 +2346,12 @@ function resolveConstructSolidRequest(
           ? Math.abs(basePlane.normal.x * pts[0]!.x + basePlane.normal.y * pts[0]!.y + basePlane.normal.z * pts[0]!.z + basePlane.constant)
           : 0
         if (!basePlane || !(apexDist > 1e-6)) {
-          return { ok: false, status: "blocked", blockerCode: "infeasible", repairHint: "tetrahedron vertices must be 4 non-coplanar 3D points" }
+          return {
+            ok: false,
+            status: "blocked",
+            blockerCode: "infeasible",
+            repairHint: "tetrahedron vertices must be 4 non-coplanar 3D points (do NOT put a point on a base edge like E on BD as a vertex; include the out-of-plane apex z != 0, or repair and pass 6 positive edge lengths pa,pb,pc,ab,ac,bc or ab,ac,ad,bc,bd,cd)"
+          }
         }
         const pointRegistry: Record<string, Vector3> = {}
         candidateNames.forEach((vn, idx) => { pointRegistry[vn] = pts[idx]! })
@@ -2059,19 +2366,26 @@ function resolveConstructSolidRequest(
       }
     }
     if (ab === null || ac === null || bc === null || pa === null || pb === null || pc === null) {
-      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "tetrahedron requires edgeLength, all six positive edge lengths (ab, ac, bc, pa, pb, pc), or 4 materialized 3D vertexNames" }
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "tetrahedron requires edgeLength, 6 positive edge lengths (pa,pb,pc,ab,ac,bc for P-ABC OR ab,ac,ad,bc,bd,cd for A-BCD), or 4 materialized 3D vertexNames" }
     }
     if (vNames && vNames.length !== 4) {
       return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: "tetrahedron vertexNames must have length 4" }
     }
-    const names = vNames
-      ? ([vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const)
-      : (["P", "A", "B", "C"] as const)
+    // Align permutations of [P, A, B, C] when using pa/pb/pc/ab/ac/bc, and [A, B, C, D] when using ab/ac/ad/bc/bd/cd.
+    const alignedNames = (() => {
+      if (hasAbcdSix) return ["A", "B", "C", "D"] as const
+      if (!vNames) return ["P", "A", "B", "C"] as const
+      const hasExplicitSix = edge === null && new Set(vNames).size === 4
+      if (hasExplicitSix && vNames.includes("P") && vNames.includes("A") && vNames.includes("B") && vNames.includes("C")) {
+        return ["P", "A", "B", "C"] as const
+      }
+      return [vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const
+    })()
     return {
       ok: true,
       mode: "constraint3d",
-      request: { kind: "tetrahedron", names, ab, ac, bc, pa, pb, pc },
-      ...(vNames ? { explicitNames: vNames } : {})
+      request: { kind: "tetrahedron", names: alignedNames, ab, ac, bc, pa, pb, pc },
+      ...(vNames || hasAbcdSix ? { explicitNames: [...alignedNames] } : {})
     }
   }
 
@@ -2104,10 +2418,33 @@ function resolveConstructSolidRequest(
     }
   }
 
-  if ((SOLID_KIND_FAMILIES.perpendicular_pyramid as readonly string[]).includes(kind)) {
+  if ((SOLID_KIND_FAMILIES.perpendicular_pyramid as readonly string[]).includes(kind) || wantsTrapezoidBase) {
+    const baseRefs = asStringList(input.baseVertexNames ?? input.baseLabels)
+    const explicitApex = asString(input.apexName) ?? undefined
+    const hasExplicitBaseDims =
+      input.upperBase !== undefined ||
+      input.lowerBase !== undefined ||
+      input.baseHeight !== undefined ||
+      input.sideLength !== undefined ||
+      input.baseSide !== undefined ||
+      input.ab !== undefined ||
+      input.bc !== undefined ||
+      input.radius !== undefined ||
+      input.r !== undefined
+    const matNames = vNames && vNames.length >= 4
+      ? vNames
+      : baseRefs && baseRefs.length >= 3
+        ? [explicitApex ?? "P", ...baseRefs]
+        : null
+    if (!hasExplicitBaseDims && matNames) {
+      const built = buildPyramidFromPoints3(matNames, explicitApex)
+      if (built) return built
+    }
     const height = asPositiveNumber(input.height ?? input.pa)
     if (height === null) {
-      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "perpendicular_pyramid requires positive height" }
+      const built = matNames ? buildPyramidFromPoints3(matNames, explicitApex) : null
+      if (built) return built
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: "perpendicular_pyramid requires positive height or materialized vertexNames" }
     }
     const base = resolveBasePolygonFromParams(kind, input, points3, problemText)
     if (!base.ok) return base
@@ -2231,7 +2568,38 @@ export function createDsActionSession(options: {
   const points2 = new Map<string, Coordinate>()
   const points3 = new Map<string, Vector3>()
   const pointLabelByKey = new Map<string, string>()
-  const resolvePointLabel = (key: string): string => pointLabelByKey.get(key) ?? key
+  const statedSubscriptPoints = new Map<string, string>()
+  if (options.problemText) {
+    const normalizedPromptForSubscripts = normalizeGeometryPrompt(options.problemText)
+    const SUB_DIGITS = "₀₁₂₃₄₅₆₇₈₉"
+    for (const m of normalizedPromptForSubscripts.matchAll(/([A-Z])([′']*)([₀-₉]+)/g)) {
+      const unicodeToken = `${m[1]}${m[2]!.replace(/'/g, "′")}${m[3]}`
+      const asciiDigits = [...m[3]!].map((ch) => String(SUB_DIGITS.indexOf(ch))).join("")
+      const primeAscii = m[2]!.replace(/′/g, "'")
+      statedSubscriptPoints.set(`${m[1]}${primeAscii}${asciiDigits}`, unicodeToken)
+      statedSubscriptPoints.set(`${m[1]}${primeAscii}_${asciiDigits}`, unicodeToken)
+      statedSubscriptPoints.set(`${m[1]}${primeAscii}_{${asciiDigits}}`, unicodeToken)
+      statedSubscriptPoints.set(unicodeToken, unicodeToken)
+    }
+    for (const m of normalizedPromptForSubscripts.matchAll(/([A-Z])([′']+)/g)) {
+      const unicodeToken = `${m[1]}${m[2]!.replace(/'/g, "′")}`
+      const primeAscii = m[2]!.replace(/′/g, "'")
+      statedSubscriptPoints.set(`${m[1]}${primeAscii}`, unicodeToken)
+      statedSubscriptPoints.set(unicodeToken, unicodeToken)
+    }
+  }
+  const canonicalizePointLabel = (raw: string): string => {
+    const trimmed = raw.trim()
+    const exact = statedSubscriptPoints.get(trimmed)
+    if (exact) return exact
+    const cleaned = trimmed.replaceAll("'", "′").replaceAll("’", "′")
+    return statedSubscriptPoints.get(cleaned) ?? (/^[A-Z]′{1,2}$/.test(cleaned) ? cleaned : trimmed)
+  }
+  const resolvePointLabel = (key: string): string => pointLabelByKey.get(key) ?? pointLabelByKey.get(canonicalizePointLabel(key)) ?? canonicalizePointLabel(key)
+  let sawInfeasibleConicPerp = false
+  let inSessionCertRejections = 0
+  let lastPreCertRejectedHash: string | null = null
+  const intersectionRecords: Array<{ branch: string; pairKey: string; id: string; label: string; pt: Coordinate }> = []
   const lines2 = new Map<string, { a: Coordinate; b: Coordinate }>()
   const conics2 = new Map<string, PlanarConic>()
   const branchPoints2 = new Map<string, Map<string, Coordinate>>()
@@ -2340,10 +2708,22 @@ export function createDsActionSession(options: {
     m.set(key, val)
   }
 
-  const readP2 = (key: string, branchId?: string) => branchMapGet(points2, branchPoints2, key, branchId)
-  const writeP2 = (key: string, val: Coordinate, branchId?: string) => branchMapSet(points2, branchPoints2, key, val, branchId)
-  const readP3 = (key: string, branchId?: string) => branchMapGet(points3, branchPoints3, key, branchId)
-  const writeP3 = (key: string, val: Vector3, branchId?: string) => branchMapSet(points3, branchPoints3, key, val, branchId)
+  const readP2 = (key: string, branchId?: string) =>
+    branchMapGet(points2, branchPoints2, key, branchId) ??
+    branchMapGet(points2, branchPoints2, canonicalizePointLabel(key), branchId)
+  const writeP2 = (key: string, val: Coordinate, branchId?: string) => {
+    branchMapSet(points2, branchPoints2, key, val, branchId)
+    const canon = canonicalizePointLabel(key)
+    if (canon !== key) branchMapSet(points2, branchPoints2, canon, val, branchId)
+  }
+  const readP3 = (key: string, branchId?: string) =>
+    branchMapGet(points3, branchPoints3, key, branchId) ??
+    branchMapGet(points3, branchPoints3, canonicalizePointLabel(key), branchId)
+  const writeP3 = (key: string, val: Vector3, branchId?: string) => {
+    branchMapSet(points3, branchPoints3, key, val, branchId)
+    const canon = canonicalizePointLabel(key)
+    if (canon !== key) branchMapSet(points3, branchPoints3, canon, val, branchId)
+  }
   const readL2 = (key: string, branchId?: string) => branchMapGet(lines2, branchLines2, key, branchId)
   const writeL2 = (key: string, val: { a: Coordinate; b: Coordinate }, branchId?: string) => branchMapSet(lines2, branchLines2, key, val, branchId)
   const readC2 = (key: string, branchId?: string) => branchMapGet(conics2, branchConics2, key, branchId)
@@ -2400,21 +2780,32 @@ export function createDsActionSession(options: {
     }
     const canvas = getTargetCanvas(sliceTarget?.branchId)
     const before = canvas.snapshot()
-    if (
-      !sliceTarget?.stateId &&
-      entityId &&
-      new Set<DsActionName>([
-        "construct_point",
-        "construct_line",
-        "construct_segment",
-        "construct_circle",
-        "construct_conic",
-        "construct_perpendicular",
-        "construct_parallel",
-        "construct_solid"
-      ]).has(actionName) &&
-      before.actions.some((a) => (a.inputs as Record<string, unknown> | undefined)?.alias === entityId)
-    ) {
+    const familyOfActionId = (actId: string): string =>
+      actId === "planar.create_point" || actId === "solid.create_point" || actId === "dynamic.create_bound_point" || actId === "dynamic.create_face_point"
+        ? "point"
+        : actId === "planar.create_circle" || actId === "planar.create_conic"
+          ? "conic"
+          : actId === "planar.create_line" || actId === "planar.create_segment" || actId === "planar.create_ray"
+            ? "line"
+            : "solid"
+    const draftFamily = familyOfActionId(draftAction.actionId)
+    const guardedSet = new Set<DsActionName>([
+      "construct_point",
+      "construct_line",
+      "construct_segment",
+      "construct_circle",
+      "construct_conic",
+      "construct_perpendicular",
+      "construct_parallel",
+      "construct_solid"
+    ])
+    const sameFamilyDup = !sliceTarget?.stateId && entityId && guardedSet.has(actionName) &&
+      before.actions.some((a) => {
+        if (familyOfActionId(a.actionId) !== draftFamily) return false
+        const inp = a.inputs as Record<string, unknown> | undefined
+        return inp?.alias === entityId || inp?.label === entityId
+      })
+    if (sameFamilyDup) {
       if (!sliceTarget?.branchId) {
         const snapshotPts = pointHistory[Math.min(before.stepIndex, pointHistory.length - 1)]
         if (snapshotPts) restoreRefs(snapshotPts)
@@ -2425,7 +2816,21 @@ export function createDsActionSession(options: {
         `Entity "${entityId}" is already materialized on the canvas. Do not recreate it; use a distinct id or call repair_entity({ target: "${entityId}" }) first to replace it.`
       )
     }
-    const step = canvas.applyAction(draftAction)
+    let resolvedDraftAction = draftAction
+    const draftAlias = (draftAction.inputs as Record<string, unknown> | undefined)?.alias
+    if (typeof draftAlias === "string" && before.actions.some((a) => (a.inputs as Record<string, unknown> | undefined)?.alias === draftAlias)) {
+      const prefix = draftFamily === "point" ? "pt" : draftFamily
+      let uniqueAlias = `${prefix}_${draftAlias}`
+      let suffix = 2
+      while (before.actions.some((a) => (a.inputs as Record<string, unknown> | undefined)?.alias === uniqueAlias)) {
+        uniqueAlias = `${prefix}_${draftAlias}_${suffix++}`
+      }
+      resolvedDraftAction = {
+        ...draftAction,
+        inputs: { ...(draftAction.inputs as Record<string, unknown>), alias: uniqueAlias }
+      } as DraftAction
+    }
+    const step = canvas.applyAction(resolvedDraftAction)
     if (!step.ok) {
       return {
         ok: false,
@@ -2452,7 +2857,7 @@ export function createDsActionSession(options: {
         }
         branchActionBuckets.set(bKey, bucket)
       }
-      bucket.actions.push(draftAction)
+      bucket.actions.push(resolvedDraftAction)
       upsertSlice({
         scopeId: sliceTarget.scopeId,
         ...(sliceTarget.stateId === undefined ? {} : { stateId: sliceTarget.stateId }),
@@ -2461,7 +2866,7 @@ export function createDsActionSession(options: {
         actions: [...bucket.actions]
       })
     } else {
-      sharedBranchlessActions.push(draftAction)
+      sharedBranchlessActions.push(resolvedDraftAction)
       if (sliceTarget !== undefined) {
         const curSnap = canvas.snapshot()
         upsertSlice({
@@ -2627,6 +3032,57 @@ export function createDsActionSession(options: {
         ? { ...parsed.input, kind: "triangular_prism", symbol: "a" }
         : parsed.input
       const stepSeq = ++monotonicActionSeq
+      const computeCircumsphereFromVerts = (pts: readonly Vector3[]): { center: Vector3; radius: number } | null => {
+        for (let i = 0; i < pts.length - 3; i += 1) {
+          for (let j = i + 1; j < pts.length - 2; j += 1) {
+            for (let k = j + 1; k < pts.length - 1; k += 1) {
+              for (let l = k + 1; l < pts.length; l += 1) {
+                const p0 = pts[i]!
+                const u = { x: pts[j]!.x - p0.x, y: pts[j]!.y - p0.y, z: pts[j]!.z - p0.z }
+                const v = { x: pts[k]!.x - p0.x, y: pts[k]!.y - p0.y, z: pts[k]!.z - p0.z }
+                const w = { x: pts[l]!.x - p0.x, y: pts[l]!.y - p0.y, z: pts[l]!.z - p0.z }
+                const vxw = { x: v.y * w.z - v.z * w.y, y: v.z * w.x - v.x * w.z, z: v.x * w.y - v.y * w.x }
+                const denom = 2 * (u.x * vxw.x + u.y * vxw.y + u.z * vxw.z)
+                if (Math.abs(denom) <= 1e-6) continue
+                const wxu = { x: w.y * u.z - w.z * u.y, y: w.z * u.x - w.x * u.z, z: w.x * u.y - w.y * u.x }
+                const uxv = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x }
+                const u2 = u.x * u.x + u.y * u.y + u.z * u.z
+                const v2 = v.x * v.x + v.y * v.y + v.z * v.z
+                const w2 = w.x * w.x + w.y * w.y + w.z * w.z
+                const off = {
+                  x: (u2 * vxw.x + v2 * wxu.x + w2 * uxv.x) / denom,
+                  y: (u2 * vxw.y + v2 * wxu.y + w2 * uxv.y) / denom,
+                  z: (u2 * vxw.z + v2 * wxu.z + w2 * uxv.z) / denom
+                }
+                const radius = Math.hypot(off.x, off.y, off.z)
+                const center = { x: p0.x + off.x, y: p0.y + off.y, z: p0.z + off.z }
+                if (Number.isFinite(radius) && radius > 1e-6) return { center, radius }
+              }
+            }
+          }
+        }
+        return null
+      }
+      const hostVerticesOfAction = (act: DraftAction | undefined): Vector3[] => {
+        if (!act) return []
+        const inp = act.inputs as Record<string, unknown> | undefined
+        if (act.actionId === "solid.create_polyhedron" && Array.isArray(inp?.vertices)) {
+          return (inp.vertices as unknown[]).filter(
+            (v): v is Vector3 => Boolean(v && typeof v === "object" && typeof (v as Vector3).x === "number" && typeof (v as Vector3).y === "number" && typeof (v as Vector3).z === "number")
+          )
+        }
+        if (act.actionId === "solid.create_prism" && Array.isArray(inp?.basePolygon)) {
+          const base = (inp.basePolygon as unknown[]).filter(
+            (v): v is Vector3 => Boolean(v && typeof v === "object" && typeof (v as Vector3).x === "number" && typeof (v as Vector3).y === "number" && typeof (v as Vector3).z === "number")
+          )
+          const vec = inp.vector as Vector3 | undefined
+          if (vec && typeof vec.x === "number") {
+            return [...base, ...base.map((b) => ({ x: b.x + vec.x, y: b.y + vec.y, z: b.z + vec.z }))]
+          }
+          return base
+        }
+        return []
+      }
 
       if (name === "declare_entity") {
         if (Object.keys(input).some(key => !Object.hasOwn(DECLARE_ENTITY_PARAMETERS.properties, key)) ||
@@ -2666,9 +3122,28 @@ export function createDsActionSession(options: {
       }
 
       if (name === "query_measurement") {
-        const metric = asString(input.metric)
+        const rawMetric = asString(input.metric)
+        const metric = rawMetric === "positions" || rawMetric === "coords" ? "position" : rawMetric
         if (!metric) {
           return failRepairable(name, "missing_required_parameter", "query_measurement requires metric (distance | position)")
+        }
+        const resolveSphereCenter3 = (targetId: string, branchOpt?: string): Vector3 | undefined => {
+          const actions = getTargetCanvas(branchOpt).snapshot().actions
+          for (let i = actions.length - 1; i >= 0; i -= 1) {
+            const act = actions[i]!
+            const inp = act.inputs as Record<string, unknown> | undefined
+            if (inp?.alias !== targetId && inp?.label !== targetId) continue
+            if (act.actionId === "solid.create_sphere" && inp?.center && typeof (inp.center as Vector3).x === "number") {
+              return inp.center as Vector3
+            }
+            if (act.actionId === "derived.create_circumsphere") {
+              const hostRef = (inp?.solidId as { alias?: string } | undefined)?.alias
+              const hostAct = hostRef ? actions.find((a) => (a.inputs as Record<string, unknown> | undefined)?.alias === hostRef) : undefined
+              const circ = computeCircumsphereFromVerts(hostVerticesOfAction(hostAct))
+              if (circ) return circ.center
+            }
+          }
+          return undefined
         }
         if (metric === "distance") {
           const targets = asStringList(input.targets)
@@ -2676,8 +3151,8 @@ export function createDsActionSession(options: {
             return failRepairable(name, "missing_required_parameter", "distance query requires exactly two named targets")
           }
           const [tA, tB] = [targets[0]!, targets[1]!]
-          const p3A = readP3(tA, branchHint)
-          const p3B = readP3(tB, branchHint)
+          const p3A = readP3(tA, branchHint) ?? resolveSphereCenter3(tA, branchHint)
+          const p3B = readP3(tB, branchHint) ?? resolveSphereCenter3(tB, branchHint)
           if (p3A && p3B) {
             return {
               ok: true,
@@ -2694,8 +3169,8 @@ export function createDsActionSession(options: {
               }
             }
           }
-          const p2A = readP2(tA, branchHint)
-          const p2B = readP2(tB, branchHint)
+          const p2A = readP2(tA, branchHint) ?? (() => { const c = readC2(tA, branchHint); return c?.type === "circle" ? c.center : undefined })()
+          const p2B = readP2(tB, branchHint) ?? (() => { const c = readC2(tB, branchHint); return c?.type === "circle" ? c.center : undefined })()
           if (p2A && p2B) {
             return {
               ok: true,
@@ -2712,6 +3187,32 @@ export function createDsActionSession(options: {
               }
             }
           }
+          const lineA = !p2A ? readL2(tA, branchHint) : undefined
+          const lineB = !p2B ? readL2(tB, branchHint) : undefined
+          const ptForLine = p2A ?? p2B
+          const lineForDist = lineB ?? lineA
+          if (ptForLine && lineForDist) {
+            const dx = lineForDist.b.x - lineForDist.a.x
+            const dy = lineForDist.b.y - lineForDist.a.y
+            const len = Math.hypot(dx, dy)
+            if (len > 1e-12) {
+              const dist = Math.abs(dy * ptForLine.x - dx * ptForLine.y + lineForDist.b.x * lineForDist.a.y - lineForDist.b.y * lineForDist.a.x) / len
+              return {
+                ok: true,
+                status: "accepted",
+                action: name,
+                stateChanged: false,
+                candidateHash: snap.candidateHash,
+                stepIndex: snap.stepIndex,
+                primitiveCount: snap.primitiveCount,
+                measurement: {
+                  metric: "distance",
+                  value: dist,
+                  sourceEntityIds: [tA, tB]
+                }
+              }
+            }
+          }
           return failRepairable(name, "undeclared_entity_ref", `point(s) not currently materialized: ${targets.join(", ")}`)
         }
         if (metric === "position" || metric === "coordinates") {
@@ -2719,7 +3220,7 @@ export function createDsActionSession(options: {
           if (!target) {
             return failRepairable(name, "missing_required_parameter", "position query requires target entity name")
           }
-          const p3 = readP3(target, branchHint)
+          const p3 = readP3(target, branchHint) ?? resolveSphereCenter3(target, branchHint)
           if (p3) {
             return {
               ok: true,
@@ -2879,8 +3380,36 @@ export function createDsActionSession(options: {
           return failRepairable(name, "undeclared_entity_ref", `point(s) not materialized: ${targets.join(", ")}`)
         }
         if (kind === "collinear" && targets.length === 3) {
+          const pts3 = targets.map((t) => readP3(t, branchHint))
+          if (pts3.every((p): p is Vector3 => p !== undefined)) {
+            const [pA, pB, pC] = pts3
+            const ux = pB.x - pA.x, uy = pB.y - pA.y, uz = pB.z - pA.z
+            const vx = pC.x - pA.x, vy = pC.y - pA.y, vz = pC.z - pA.z
+            const cx = uy * vz - uz * vy
+            const cy = uz * vx - ux * vz
+            const cz = ux * vy - uy * vx
+            const crossLen = Math.hypot(cx, cy, cz)
+            const baseLen = Math.max(
+              Math.hypot(ux, uy, uz),
+              Math.hypot(vx, vy, vz),
+              Math.hypot(pC.x - pB.x, pC.y - pB.y, pC.z - pB.z),
+              1e-9
+            )
+            const residual = crossLen / baseLen
+            return {
+              ok: true,
+              status: "accepted",
+              action: name,
+              stateChanged: false,
+              constraintStatus: residual <= 1e-5 ? "satisfied" : "violated",
+              candidateHash: snap.candidateHash,
+              stepIndex: snap.stepIndex,
+              primitiveCount: snap.primitiveCount,
+              measurement: { kind, residual, sourceEntityIds: targets }
+            }
+          }
           const pts = targets.map((t) => readP2(t, branchHint))
-          if (pts.some((p) => !p)) return failRepairable(name, "undeclared_entity_ref", "collinear check requires materialized 2D points")
+          if (pts.some((p) => !p)) return failRepairable(name, "undeclared_entity_ref", "collinear check requires materialized points")
           const res = solveConstraint2d({ kind: "collinear", points: [pts[0]!, pts[1]!, pts[2]!] })
           return {
             ok: true,
@@ -2892,6 +3421,73 @@ export function createDsActionSession(options: {
             stepIndex: snap.stepIndex,
             primitiveCount: snap.primitiveCount,
             measurement: { kind, residual: res.residual, sourceEntityIds: targets }
+          }
+        }
+        if (kind === "perpendicular" || kind === "parallel") {
+          if (targets.length !== 3 && targets.length !== 4) {
+            return failRepairable(name, "missing_required_parameter", `${kind} check requires 3 targets [A,B,C] (AB vs BC) or 4 targets [A,B,C,D] (AB vs CD)`)
+          }
+          if (kind === "parallel" && targets.length !== 4) {
+            return failRepairable(name, "missing_required_parameter", "parallel check requires 4 targets [A,B,C,D] (AB vs CD)")
+          }
+          const resolvedPairs: [string, string, string, string] = targets.length === 3
+            ? [targets[0]!, targets[1]!, targets[1]!, targets[2]!]
+            : [targets[0]!, targets[1]!, targets[2]!, targets[3]!]
+          const readAnyPt = (k: string): Vector3 | undefined => {
+            const p3 = readP3(k, branchHint)
+            if (p3) return p3
+            const p2 = readP2(k, branchHint)
+            return p2 ? { x: p2.x, y: p2.y, z: 0 } : undefined
+          }
+          const pts = resolvedPairs.map(readAnyPt)
+          if (pts.some((p) => p === undefined)) {
+            return failRepairable(name, "undeclared_entity_ref", `point(s) not materialized: ${targets.join(", ")}`)
+          }
+          const [pA, pB, pC, pD] = pts as [Vector3, Vector3, Vector3, Vector3]
+          const u = { x: pB.x - pA.x, y: pB.y - pA.y, z: pB.z - pA.z }
+          const v = { x: pD.x - pC.x, y: pD.y - pC.y, z: pD.z - pC.z }
+          const uLen = Math.hypot(u.x, u.y, u.z)
+          const vLen = Math.hypot(v.x, v.y, v.z)
+          if (!(uLen > 1e-9 && vLen > 1e-9)) {
+            return failRepairable(name, "degenerate_segment", "segments must have non-zero length")
+          }
+          const dot = u.x * v.x + u.y * v.y + u.z * v.z
+          const residual = kind === "perpendicular"
+            ? Math.abs(dot) / (uLen * vLen)
+            : Math.hypot(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x) / (uLen * vLen)
+          const satisfied = residual <= 1e-6
+          let sharedInfo: Record<string, unknown> = {}
+          if (kind === "perpendicular" && !satisfied) {
+            const [s0, s1, s2, s3] = resolvedPairs
+            const shared = s0 === s2 || s0 === s3 ? s0 : s1 === s2 || s1 === s3 ? s1 : undefined
+            const oA = shared === s0 ? s1 : shared === s1 ? s0 : undefined
+            const oB = shared === s2 ? s3 : shared === s3 ? s2 : undefined
+            const pSh = shared ? readAnyPt(shared) : undefined
+            const pOA = oA ? readAnyPt(oA) : undefined
+            const pOB = oB ? readAnyPt(oB) : undefined
+            if (shared && oA && oB && pSh && pOA && pOB) {
+              const expectedHypotenuse = Math.hypot(distanceVector3(pOA, pSh), distanceVector3(pOB, pSh))
+              const actualThirdEdge = distanceVector3(pOA, pOB)
+              sharedInfo = {
+                thirdEdge: `${oA}${oB}`,
+                expectedHypotenuse,
+                actualThirdEdge,
+                points: { [s0]: pA, [s1]: pB, [s2]: pC, [s3]: pD }
+              }
+            } else {
+              sharedInfo = { points: { [s0]: pA, [s1]: pB, [s2]: pC, [s3]: pD } }
+            }
+          }
+          return {
+            ok: true,
+            status: "accepted",
+            action: name,
+            stateChanged: false,
+            constraintStatus: satisfied ? "satisfied" : "violated",
+            candidateHash: snap.candidateHash,
+            stepIndex: snap.stepIndex,
+            primitiveCount: snap.primitiveCount,
+            measurement: { kind, residual, dot, ...sharedInfo, sourceEntityIds: targets }
           }
         }
         return failBlocked(name, "unsupported_observation", `constraint query kind "${kind}" is not supported`)
@@ -2951,12 +3547,18 @@ export function createDsActionSession(options: {
         for (const [bk, bv] of snapSliceState?.branchBuckets ?? []) {
           branchActionBuckets.set(bk, { ...bv, actions: [...bv.actions] })
         }
+        const remainingPts = [...new Set([...points2.keys(), ...points3.keys()])].slice(0, 12)
         return {
           ok: true,
           status: "accepted",
           action: name,
           stateChanged: rolled.stepIndex < snap.stepIndex,
           revertedAliases,
+          ...(revertedAliases.length > 1
+            ? {
+                repairHint: `Rolled back "${targetRef ?? "last"}" and ${revertedAliases.length - 1} later actions (${revertedAliases.join(", ")}); remaining materialized points: [${remainingPts.join(", ")}]. Reconstruct any needed entities before querying or finish_candidate.`
+              }
+            : {}),
           candidateHash: rolled.candidateHash,
           stepIndex: rolled.stepIndex,
           primitiveCount: rolled.primitiveCount
@@ -2965,7 +3567,7 @@ export function createDsActionSession(options: {
 
       if (name === "construct_point") {
         const id = asString(input.id ?? input.output) ?? `P${stepSeq}`
-        const label = asString(input.label) ?? id
+        const label = canonicalizePointLabel(asString(input.label) ?? id)
         pointLabelByKey.set(id, label)
         pointLabelByKey.set(label, label)
         const scopeId = asString(input.scopeId) ?? "shared"
@@ -2993,6 +3595,10 @@ export function createDsActionSession(options: {
 
         const findActionByAlias = (key: string) =>
           stagedActions.find((act) => {
+            if (act.actionId === "planar.create_point" || act.actionId === "solid.create_point") return false
+            const inp = act.inputs as { alias?: unknown; label?: unknown } | undefined
+            return inp?.alias === key || inp?.label === key
+          }) ?? stagedActions.find((act) => {
             const inp = act.inputs as { alias?: unknown; label?: unknown } | undefined
             return inp?.alias === key || inp?.label === key
           })
@@ -3387,12 +3993,22 @@ export function createDsActionSession(options: {
         const slopeVal = name === "construct_line" ? asFiniteNumber(input.slope ?? input.k) : null
         const throughPtId = name === "construct_line" ? asString(input.throughPointId ?? input.pointId) : null
         const interceptVal = name === "construct_line" ? asFiniteNumber(input.intercept) : null
+        const chordConicId = name === "construct_line" ? asString(input.conicId) : null
+        const chordRatioVal = name === "construct_line" ? asPositiveNumber(input.chordRatio) : null
         const hasAbcEquation = name === "construct_line" && ["a", "b", "c"].some((key) => Object.hasOwn(input, key))
-        if (eqString !== null || hasAbcEquation || slopeVal !== null || throughPtId !== null) {
-          if (Object.hasOwn(input, "from") || Object.hasOwn(input, "to")) {
-            return failRepairable(name, "ambiguous_geometry_input", "use from/to or line equation parameters, never both")
+        if (eqString !== null || hasAbcEquation || slopeVal !== null || throughPtId !== null || chordRatioVal !== null) {
+          const hasExplicitEndpointConflict =
+            Object.hasOwn(input, "to") ||
+            (Object.hasOwn(input, "from") && (throughPtId === null || fromId !== throughPtId))
+          if (hasExplicitEndpointConflict) {
+            return failRepairable(
+              name,
+              "ambiguous_geometry_input",
+              `construct_line "${asString(input.id) ?? ""}" received both endpoint (from/to) and equation/slope fields; use EITHER {from, to} OR {throughPointId, slope/dx,dy} OR {throughPointId, conicId, chordRatio} OR {equation}, never mix them`
+            )
           }
           let endpoints: [Coordinate, Coordinate]
+          let chordReceipt: Record<string, unknown> | undefined
           if (eqString !== null) {
             const parsed = parseLinearEquation(eqString)
             if (!parsed) return failRepairable(name, "invalid_equation", "cannot parse linear equation string")
@@ -3400,6 +4016,77 @@ export function createDsActionSession(options: {
             endpoints = Math.abs(b) >= Math.abs(a)
               ? [{ x: 0, y: -c / b }, { x: 1, y: -(a + c) / b }]
               : [{ x: -c / a, y: 0 }, { x: -(b + c) / a, y: 1 }]
+          } else if (throughPtId !== null && chordConicId !== null && chordRatioVal !== null) {
+            const basePt = readP2(throughPtId, branchId)
+            if (!basePt) return failRepairable(name, "undeclared_entity_ref", `construct point "${throughPtId}" before referencing it`)
+            const targetConic = readC2(chordConicId, branchId)
+            if (!targetConic) return failRepairable(name, "undeclared_entity_ref", `construct conic/circle "${chordConicId}" before referencing it`)
+            const lam = chordRatioVal
+            let auxA: number, auxB: number, auxD: number, ox: number, oy: number
+            if (targetConic.type === "ellipse" || targetConic.type === "circle" || targetConic.type === "hyperbola") {
+              ox = targetConic.center.x
+              oy = targetConic.center.y
+              const a = targetConic.type === "circle" ? targetConic.radius : targetConic.radiusX
+              const b = targetConic.type === "circle" ? targetConic.radius : targetConic.radiusY
+              const sx = targetConic.type === "hyperbola" && targetConic.axis === "y" ? -1 : 1
+              const sy = targetConic.type === "hyperbola" && targetConic.axis === "x" ? -1 : 1
+              const uc = basePt.x - ox
+              const vc = basePt.y - oy
+              auxA = (-2 * lam * (1 + lam) * sx * uc) / (a * a)
+              auxB = (-2 * lam * (1 + lam) * sy * vc) / (b * b)
+              auxD = (1 + lam) * (1 + lam) * ((sx * uc * uc) / (a * a) + (sy * vc * vc) / (b * b)) - (1 - lam * lam)
+            } else {
+              ox = targetConic.vertex.x
+              oy = targetConic.vertex.y
+              const p = targetConic.focalParameter
+              const uc = basePt.x - ox
+              const vc = basePt.y - oy
+              if (targetConic.axis === "x") {
+                auxA = 2 * p * lam
+                auxB = -2 * lam * vc
+                auxD = (1 + lam) * vc * vc - 2 * p * uc
+              } else {
+                auxA = -2 * lam * uc
+                auxB = 2 * p * lam
+                auxD = (1 + lam) * uc * uc - 2 * p * vc
+              }
+            }
+            if (Math.hypot(auxA, auxB) <= 1e-12) {
+              if (Math.abs(lam - 1) <= 1e-9) {
+                endpoints = [basePt, { x: basePt.x + 1, y: basePt.y + 0.5 }]
+              } else {
+                return failBlocked(name, "infeasible", `no chord through "${throughPtId}" on "${chordConicId}" can satisfy ratio ${lam}`)
+              }
+            } else {
+              const auxPts: [Coordinate, Coordinate] = Math.abs(auxB) >= Math.abs(auxA)
+                ? [{ x: ox, y: oy - auxD / auxB }, { x: ox + 1, y: oy - (auxA + auxD) / auxB }]
+                : [{ x: ox - auxD / auxA, y: oy }, { x: ox - (auxB + auxD) / auxA, y: oy + 1 }]
+              const hits = intersectPlanarLineAndConicExact({ type: "line", a: auxPts[0], b: auxPts[1] }, targetConic).points
+              const candidates = hits
+                .filter((ptF) => Math.hypot(ptF.x - basePt.x, ptF.y - basePt.y) > 1e-6)
+                .map((ptF) => {
+                  const ptE = { x: (1 + lam) * basePt.x - lam * ptF.x, y: (1 + lam) * basePt.y - lam * ptF.y }
+                  const dx = ptE.x - ptF.x
+                  const dy = ptE.y - ptF.y
+                  const slope = Math.abs(dx) > 1e-9 ? dy / dx : Number.POSITIVE_INFINITY
+                  return { ptE, ptF, slope }
+                })
+                .sort((c1, c2) => c2.slope - c1.slope)
+              if (candidates.length === 0) {
+                return failBlocked(name, "infeasible", `no real chord through "${throughPtId}" on "${chordConicId}" satisfies vector ratio ${lam}`)
+              }
+              const branchIdx = asFiniteNumber(input.branch)
+              const chosen = candidates[branchIdx !== null && branchIdx >= 0 && branchIdx < candidates.length ? Math.trunc(branchIdx) : 0]!
+              endpoints = [basePt, chosen.ptE]
+              chordReceipt = {
+                chordRatio: lam,
+                slope: Number.isFinite(chosen.slope) ? Number(chosen.slope.toFixed(6)) : "vertical",
+                chordEndpoints: {
+                  E: { x: Number(chosen.ptE.x.toFixed(6)), y: Number(chosen.ptE.y.toFixed(6)) },
+                  F: { x: Number(chosen.ptF.x.toFixed(6)), y: Number(chosen.ptF.y.toFixed(6)) }
+                }
+              }
+            }
           } else if (throughPtId !== null) {
             const basePt = readP2(throughPtId, branchId)
             if (!basePt) return failRepairable(name, "undeclared_entity_ref", `construct point "${throughPtId}" before referencing it`)
@@ -3412,7 +4099,7 @@ export function createDsActionSession(options: {
             } else if (dx !== null && dy !== null && Math.hypot(dx, dy) > 1e-9) {
               endpoints = [basePt, { x: basePt.x + dx, y: basePt.y + dy }]
             } else {
-              return failRepairable(name, "missing_required_parameter", "throughPointId requires finite slope/k or non-zero dx,dy")
+              return failRepairable(name, "missing_required_parameter", "throughPointId requires finite slope/k, non-zero dx/dy (use dx: 0, dy: 1 for vertical), conicId+chordRatio, or equation")
             }
           } else if (slopeVal !== null) {
             const b = asFiniteNumber(input.intercept) ?? 0
@@ -3433,17 +4120,15 @@ export function createDsActionSession(options: {
               Math.hypot(endpoints[0].x - endpoints[1].x, endpoints[0].y - endpoints[1].y) < 1e-9) {
             return failRepairable(name, "degenerate_line", "equation cannot produce two distinct finite points")
           }
-          const staged = stageDraftAction(
+          writeL2(id, { a: endpoints[0], b: endpoints[1] }, branchId)
+          writeL2(label, { a: endpoints[0], b: endpoints[1] }, branchId)
+          const stagedLine = stageDraftAction(
             name,
             { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [],
               inputs: { alias: id, label, points: endpoints } },
             id, undefined, sliceTarget
           )
-          if (staged.ok) {
-            writeL2(id, { a: endpoints[0], b: endpoints[1] }, branchId)
-            writeL2(label, { a: endpoints[0], b: endpoints[1] }, branchId)
-          }
-          return staged
+          return stagedLine.ok && chordReceipt ? { ...stagedLine, measurement: chordReceipt } : stagedLine
         }
         if (name === "construct_line" && (!fromId || !toId)) {
           return failRepairable(name, "missing_required_parameter", "construct_line requires both from/to or finite a,b,c")
@@ -3466,6 +4151,10 @@ export function createDsActionSession(options: {
         }
         writeL2(id, { a: p1, b: p2 }, branchId)
         writeL2(label, { a: p1, b: p2 }, branchId)
+        if (fromId && toId) {
+          if (!readL2(`${fromId}${toId}`, branchId)) writeL2(`${fromId}${toId}`, { a: p1, b: p2 }, branchId)
+          if (!readL2(`${toId}${fromId}`, branchId)) writeL2(`${toId}${fromId}`, { a: p1, b: p2 }, branchId)
+        }
         return stageDraftAction(
           name,
           {
@@ -3490,36 +4179,52 @@ export function createDsActionSession(options: {
         if (input.lineB !== undefined && input.conicId !== undefined) {
           return failRepairable(name, "ambiguous_geometry_input", "choose exactly one of lineB or conicId")
         }
-        if (input.selection !== undefined && input.conicId === undefined) {
-          return failRepairable(name, "invalid_selection", "selection applies only to line-conic intersections")
-        }
         if (!asString(input.lineA) || (!asString(input.lineB) && !asString(input.conicId))) {
           return failRepairable(name, "missing_required_parameter", "lineA and exactly one of lineB or conicId are required")
         }
         const outId = asString(input.output ?? input.id) ?? `X${stepSeq}`
+        const outLabel = canonicalizePointLabel(asString(input.label) ?? outId)
+        pointLabelByKey.set(outId, outLabel)
+        pointLabelByKey.set(outLabel, outLabel)
         const scopeId = asString(input.scopeId) ?? "shared"
         const explicitStateId = asString(input.stateId) ?? undefined
         const branchId = asString(input.branchId) ?? undefined
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
-        const lA = asString(input.lineA) ? readL2(String(input.lineA), branchId) : undefined
-        const lB = asString(input.lineB) ? readL2(String(input.lineB), branchId) : undefined
+        const lineAKey = asString(input.lineA) ?? ""
+        const lineBKey = asString(input.lineB) ?? ""
+        const lA = lineAKey ? readL2(lineAKey, branchId) : undefined
+        const lB = lineBKey ? readL2(lineBKey, branchId) : undefined
         const conicId = asString(input.conicId)
-        const conic = conicId ? readC2(conicId, branchId) : undefined
-        if (lA && conic) {
-          const res = intersectPlanarLineAndConicExact({ type: "line", a: lA.a, b: lA.b }, conic)
-          if (res.points.length === 0) return failRepairable(name, "no_intersection", "line does not intersect conic")
+        const cA = !lA && lineAKey ? readC2(lineAKey, branchId) : undefined
+        const resolvedConicBId = conicId ?? (!lB && lineBKey ? lineBKey : null)
+        const conic = (conicId ? readC2(conicId, branchId) : undefined) ?? (!lB && lineBKey ? readC2(lineBKey, branchId) : undefined)
+        if (input.selection !== undefined && !cA && !conic) {
+          return failRepairable(name, "invalid_selection", "selection applies only to line-conic or circle intersections")
+        }
+        const pairKey = [lineAKey, conicId ?? lineBKey].sort().join("|")
+        const selectAndCommitIntersection = (points: Array<{ x: number; y: number }>) => {
           const selection = input.selection as "min_x" | "max_x" | "min_y" | "max_y" | undefined
           const excludePtId = asString(input.excludePointId)
           const excludePt = excludePtId ? readP2(excludePtId, branchId) : undefined
           if (excludePtId && !excludePt) {
             return failRepairable(name, "undeclared_entity_ref", `construct point "${excludePtId}" before using excludePointId`)
           }
-          let pt = res.points[0]!
-          if (res.points.length > 1) {
+          const candidatePoints = excludePt
+            ? points.filter((p) => Math.hypot(p.x - excludePt.x, p.y - excludePt.y) > 1e-6)
+            : points
+          if (candidatePoints.length === 0) {
+            return failRepairable(
+              name,
+              "no_distinct_intersection",
+              `all intersection(s) coincide with excludePointId "${excludePtId}" (the line may be tangent to the conic or parallel to a hyperbola asymptote, leaving only 1 intersection); adjust the line slope so there are 2 distinct intersections`
+            )
+          }
+          let pt = candidatePoints[0]!
+          if (candidatePoints.length > 1) {
             if (selection) {
               const axis = selection.endsWith("x") ? "x" : "y"
               const otherAxis = axis === "x" ? "y" : "x"
-              const ascending = [...res.points].sort((a, b) =>
+              const ascending = [...candidatePoints].sort((a, b) =>
                 Math.abs(a[axis] - b[axis]) > 1e-9
                   ? a[axis] - b[axis]
                   : a[otherAxis] - b[otherAxis]
@@ -3532,37 +4237,152 @@ export function createDsActionSession(options: {
               }
               pt = chosen
             } else if (excludePt) {
-              pt = [...res.points].sort(
+              pt = [...candidatePoints].sort(
                 (a, b) => Math.hypot(b.x - excludePt.x, b.y - excludePt.y) - Math.hypot(a.x - excludePt.x, a.y - excludePt.y)
               )[0]!
             } else {
-              return failRepairable(name, "ambiguous_intersection", "line intersects conic at multiple points; specify selection (min_x/max_x/min_y/max_y) or excludePointId")
+              return failRepairable(name, "ambiguous_intersection", "entities intersect at multiple points; specify selection (min_x/max_x/min_y/max_y) or excludePointId")
             }
           }
+          const bKey = branchId ?? ""
+          const liveCoincident = intersectionRecords.find((rec) => {
+            if (rec.branch !== bKey || rec.pairKey !== pairKey) return false
+            if (rec.id === outId || rec.label === outLabel) return false
+            const currentPos = readP2(rec.id, branchId) ?? readP2(rec.label, branchId)
+            return currentPos !== undefined && Math.hypot(currentPos.x - pt.x, currentPos.y - pt.y) <= 1e-6
+          })
+          if (liveCoincident) {
+            const otherPt = points.find((p) => Math.hypot(p.x - pt.x, p.y - pt.y) > 1e-6)
+            const hint = otherPt
+              ? `selected intersection coincides with existing point "${liveCoincident.label}" at (${Number(pt.x.toFixed(4))}, ${Number(pt.y.toFixed(4))}); pass excludePointId: "${liveCoincident.label}" or opposite selection to pick the other intersection at (${Number(otherPt.x.toFixed(4))}, ${Number(otherPt.y.toFixed(4))})`
+              : `line is tangent to conic (only 1 intersection at (${Number(pt.x.toFixed(4))}, ${Number(pt.y.toFixed(4))}), already occupied by "${liveCoincident.label}"); adjust the line slope so there are 2 distinct intersections`
+            return failRepairable(name, "duplicate_intersection_point", hint)
+          }
           writeP2(outId, pt, branchId)
-          return stageDraftAction(
+          writeP2(outLabel, pt, branchId)
+          const staged = stageDraftAction(
             name,
-            { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outId, points: [pt] } },
+            { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outLabel, points: [pt] } },
             outId,
             pt,
             sliceTarget
           )
+          if (staged.ok) {
+            intersectionRecords.push({ branch: bKey, pairKey, id: outId, label: outLabel, pt })
+          }
+          return staged
+        }
+        const activeLine = lA ?? (cA ? lB : undefined)
+        const activeConic = conic ?? (lB ? cA : undefined)
+        const activeConicId = (conic ? resolvedConicBId : cA ? lineAKey : null) ?? "conic"
+        if (activeLine && activeConic) {
+          const res = intersectPlanarLineAndConicExact({ type: "line", a: activeLine.a, b: activeLine.b }, activeConic)
+          if (res.points.length === 0) {
+            const conicSummary = activeConic.type === "ellipse" || activeConic.type === "hyperbola"
+              ? `${activeConic.type} "${activeConicId}" (center=(${activeConic.center.x}, ${activeConic.center.y}), rx=${activeConic.radiusX}, ry=${activeConic.radiusY})`
+              : activeConic.type === "circle"
+                ? `circle "${activeConicId}" (center=(${activeConic.center.x}, ${activeConic.center.y}), radius=${activeConic.radius})`
+                : `parabola "${activeConicId}" (vertex=(${activeConic.vertex.x}, ${activeConic.vertex.y}), axis=${activeConic.axis}, p=${activeConic.focalParameter})`
+            return failRepairable(
+              name,
+              "no_intersection",
+              `line does not intersect ${conicSummary}. Stop guessing random slopes: construct an interior point Q strictly inside the conic (e.g. near center/axis) and draw construct_line({ from: P, to: "Q" }) to guarantee 2 intersections, or use a valid intersecting slope.`
+            )
+          }
+          return selectAndCommitIntersection(res.points)
+        }
+        if (cA && conic) {
+          if (cA.type === "circle" && conic.type === "circle") {
+            const dx = conic.center.x - cA.center.x
+            const dy = conic.center.y - cA.center.y
+            const d = Math.hypot(dx, dy)
+            if (d <= 1e-9) {
+              if (Math.abs(cA.radius - conic.radius) <= 1e-9) {
+                return failRepairable(name, "ambiguous_intersection", `circles "${lineAKey}" and "${resolvedConicBId ?? ""}" are coincident`)
+              }
+              return failRepairable(name, "no_intersection", `concentric circles "${lineAKey}" (r=${cA.radius}) and "${resolvedConicBId ?? ""}" (r=${conic.radius}) have no intersection`)
+            }
+            if (d > cA.radius + conic.radius + 1e-9 || d < Math.abs(cA.radius - conic.radius) - 1e-9) {
+              return failRepairable(
+                name,
+                "no_intersection",
+                `circles "${lineAKey}" (r=${cA.radius}) and "${resolvedConicBId ?? ""}" (r=${conic.radius}) at center distance ${Number(d.toFixed(6))} do not intersect`
+              )
+            }
+            const aDist = (cA.radius * cA.radius - conic.radius * conic.radius + d * d) / (2 * d)
+            const mx = cA.center.x + (aDist * dx) / d
+            const my = cA.center.y + (aDist * dy) / d
+            const ux = -dy / d
+            const uy = dx / d
+            const res = intersectPlanarLineAndConicExact(
+              { type: "line", a: { x: mx - ux, y: my - uy }, b: { x: mx + ux, y: my + uy } },
+              cA
+            )
+            if (res.points.length === 0) {
+              return failRepairable(name, "no_intersection", `circles "${lineAKey}" and "${resolvedConicBId ?? ""}" do not intersect`)
+            }
+            return selectAndCommitIntersection(res.points)
+          }
+          const circle = cA.type === "circle" ? cA : conic.type === "circle" ? conic : null
+          const ellipse = cA.type === "ellipse" ? cA : conic.type === "ellipse" ? conic : null
+          if (circle && ellipse && Math.hypot(circle.center.x - ellipse.center.x, circle.center.y - ellipse.center.y) <= 1e-9) {
+            const a = ellipse.radiusX
+            const b = ellipse.radiusY
+            const r = circle.radius
+            const minAxis = Math.min(a, b)
+            const maxAxis = Math.max(a, b)
+            if (Math.abs(a - b) <= 1e-9) {
+              return Math.abs(r - a) <= 1e-9
+                ? failRepairable(name, "ambiguous_intersection", `circle "${lineAKey}" and degenerate circle-ellipse are coincident`)
+                : failRepairable(name, "no_intersection", `circle (r=${r}) and concentric ellipse (rx=ry=${a}) have no intersection`)
+            }
+            if (r < minAxis - 1e-9 || r > maxAxis + 1e-9) {
+              if (r < minAxis - 1e-9) sawInfeasibleConicPerp = true
+              return failRepairable(
+                name,
+                "no_intersection",
+                `circle (center=(${circle.center.x}, ${circle.center.y}), r=${r}) lies ${r < minAxis ? "strictly inside" : "strictly outside"} concentric ellipse (rx=${a}, ry=${b}): ZERO intersections exist (for Thales circle r=c < b, PF1⊥PF2 is geometrically infeasible; keep subquestion 1 entities, omit P, and finish with scopeId: "subquestion:1" + answer)`
+              )
+            }
+            const u2 = Math.max(0, (a * a * (r * r - b * b)) / (a * a - b * b))
+            const v2 = Math.max(0, (b * b * (a * a - r * r)) / (a * a - b * b))
+            const sx = u2 <= 1e-12 ? [0] : [-Math.sqrt(u2), Math.sqrt(u2)]
+            const sy = v2 <= 1e-12 ? [0] : [-Math.sqrt(v2), Math.sqrt(v2)]
+            const pts: Array<{ x: number; y: number }> = []
+            for (const dx of sx) {
+              for (const dy of sy) {
+                pts.push({ x: ellipse.center.x + dx, y: ellipse.center.y + dy })
+              }
+            }
+            return selectAndCommitIntersection(pts)
+          }
+          return failRepairable(
+            name,
+            "unsupported_intersection",
+            `conic-conic intersection for "${lineAKey}" (${cA.type}) and "${resolvedConicBId ?? ""}" (${conic.type}) only supports circle-circle or concentric circle-ellipse; intersect a constructed line with the conic instead`
+          )
         }
         if (!lA || !lB) {
-          return failRepairable(name, "undeclared_entity_ref", `declare/construct lines before construct_intersection`)
+          const missingParts = [
+            !lA && !cA ? `lineA="${lineAKey}"` : null,
+            conicId && !conic ? `conicId="${conicId}"` : null,
+            !conicId && !lB && !conic ? `lineB="${lineBKey}"` : null
+          ].filter(Boolean).join(", ")
+          return failRepairable(name, "undeclared_entity_ref", `declare/construct lines or conic before construct_intersection (missing: ${missingParts || `${lineAKey}, ${conicId ?? lineBKey}`}; see referenceDirectory for materialized aliases)`)
         }
         const dx1 = lA.b.x - lA.a.x, dy1 = lA.b.y - lA.a.y
         const dx2 = lB.b.x - lB.a.x, dy2 = lB.b.y - lB.a.y
         const det = dx1 * dy2 - dy1 * dx2
         if (Math.abs(det) <= 1e-9) {
-          return failRepairable(name, "parallel_lines", "lines are parallel or collinear")
+          return failRepairable(name, "parallel_lines", "lines are parallel or collinear; choose another line slope or point parameter so they intersect")
         }
         const t = ((lB.a.x - lA.a.x) * dy2 - (lB.a.y - lA.a.y) * dx2) / det
         const pt = { x: lA.a.x + t * dx1, y: lA.a.y + t * dy1 }
         writeP2(outId, pt, branchId)
+        writeP2(outLabel, pt, branchId)
         return stageDraftAction(
           name,
-          { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outId, points: [pt] } },
+          { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: outId, label: outLabel, points: [pt] } },
           outId,
           pt,
           sliceTarget
@@ -3613,6 +4433,7 @@ export function createDsActionSession(options: {
         }
         const circ: PlanarConic = { id, type: "circle", center: { x: cx, y: cy }, radius: r }
         writeC2(id, circ, branchId)
+        writeC2(label, circ, branchId)
         return stageDraftAction(
           name,
           { actionId: "planar.create_circle", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, center: { x: cx, y: cy }, radius: r } },
@@ -3637,6 +4458,7 @@ export function createDsActionSession(options: {
         if (parsedEq?.conicType === "circle") {
           const circ: PlanarConic = { id, type: "circle", center: { x: parsedEq.cx, y: parsedEq.cy }, radius: parsedEq.radius }
           writeC2(id, circ, branchId)
+          writeC2(label, circ, branchId)
           return stageDraftAction(
             name,
             { actionId: "planar.create_circle", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, center: { x: parsedEq.cx, y: parsedEq.cy }, radius: parsedEq.radius } },
@@ -3658,11 +4480,30 @@ export function createDsActionSession(options: {
             return failRepairable(name, "invalid_center", `${field} must be a finite number`)
           }
         }
+        const hasFocusOrEcc = input.c !== undefined || input.e !== undefined || input.eccentricity !== undefined
+        const rxInput = asFiniteNumber(input.radiusX)
+        const ryInput = asFiniteNumber(input.radiusY)
+        const axisConflictEllipse =
+          rawType === "ellipse" &&
+          (input.axis === "x" || input.axis === "y") &&
+          parsedEq === null &&
+          input.throughPointIds === undefined &&
+          input.a === undefined &&
+          input.b === undefined &&
+          !hasFocusOrEcc &&
+          (rxInput === null || ryInput === null || (input.axis === "y" ? rxInput > ryInput : ryInput > rxInput))
         const incompatible = rawType === "parabola"
           ? ["radiusX", "radiusY", "throughPointIds"].some((field) => input[field] !== undefined)
-          : ["vx", "vy", "focalParameter"].some((field) => input[field] !== undefined)
-            || (rawType === "ellipse" && input.axis !== undefined && (input.radiusX !== undefined || input.radiusY !== undefined || input.throughPointIds !== undefined || (input.a === undefined && input.b === undefined && input.c === undefined && input.e === undefined && input.eccentricity === undefined)))
-        if (incompatible) return failRepairable(name, "incompatible_conic_fields", "the selected conic kind cannot use these geometry fields")
+          : ["vx", "vy", "focalParameter"].some((field) => input[field] !== undefined) || axisConflictEllipse
+        if (incompatible) {
+          return failRepairable(
+            name,
+            "incompatible_conic_fields",
+            axisConflictEllipse
+              ? `ellipse with axis="${String(input.axis)}" conflicts with radiusX=${rxInput}, radiusY=${ryInput} (major axis must match axis; ensure radiusX/radiusY are semi-axes NOT a²/b², or omit them and pass equation or throughPointIds)`
+              : "the selected conic kind cannot use these geometry fields"
+          )
+        }
         if (rawType === "parabola") {
           const focalParameter = parsedEq?.conicType === "parabola"
             ? parsedEq.focalParameter
@@ -3679,6 +4520,7 @@ export function createDsActionSession(options: {
           }
           const conic: PlanarConic = { id, type: "parabola", vertex: { x: vx, y: vy }, axis, focalParameter }
           writeC2(id, conic, branchId)
+          writeC2(label, conic, branchId)
           return stageDraftAction(
             name,
             { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind: "parabola", vertex: { x: vx, y: vy }, axis, focalParameter } },
@@ -3727,22 +4569,77 @@ export function createDsActionSession(options: {
             return failRepairable(name, "ambiguous_geometry_input", "use throughPointIds or semi-axes, never both")
           }
           const ids = asStringList(input.throughPointIds)
-          if (!ids || ids.length !== 2 || ids[0] === ids[1]) {
-            return failRepairable(name, "conic_fit_unsatisfied", "throughPointIds requires two distinct existing points")
+          const cVal = asPositiveNumber(input.c)
+          const eVal = asPositiveNumber(input.e ?? input.eccentricity)
+          if (ids && ids.length === 1 && (cVal !== null || eVal !== null)) {
+            const single = readP2(ids[0]!, branchId)
+            if (!single) {
+              return failRepairable(name, "undeclared_entity_ref", `construct point "${ids[0]}" before fitting the conic`)
+            }
+            const px = single.x - center.x
+            const py = single.y - center.y
+            const major = axis === "y" ? py : px
+            const minor = axis === "y" ? px : py
+            let aVal: number | null = null
+            let bVal: number | null = null
+            if (eVal !== null) {
+              if (kind === "ellipse" && eVal > 0 && eVal < 1) {
+                const a2 = major * major + (minor * minor) / (1 - eVal * eVal)
+                if (a2 > 1e-12) {
+                  aVal = Math.sqrt(a2)
+                  bVal = aVal * Math.sqrt(1 - eVal * eVal)
+                }
+              } else if (kind === "hyperbola" && eVal > 1) {
+                const a2 = major * major - (minor * minor) / (eVal * eVal - 1)
+                if (a2 > 1e-12) {
+                  aVal = Math.sqrt(a2)
+                  bVal = aVal * Math.sqrt(eVal * eVal - 1)
+                }
+              }
+            } else if (cVal !== null) {
+              const c2 = cVal * cVal
+              const s = c2 + major * major + minor * minor
+              const disc = s * s - 4 * c2 * major * major
+              if (disc >= 0) {
+                const root = Math.sqrt(disc)
+                if (kind === "ellipse") {
+                  const u = 0.5 * (s + root)
+                  if (u > c2 + 1e-12) {
+                    aVal = Math.sqrt(u)
+                    bVal = Math.sqrt(u - c2)
+                  }
+                } else {
+                  const u = 0.5 * (s - root)
+                  if (u > 1e-12 && u < c2 - 1e-12) {
+                    aVal = Math.sqrt(u)
+                    bVal = Math.sqrt(c2 - u)
+                  }
+                }
+              }
+            }
+            if (aVal === null || bVal === null || !(aVal > 0 && bVal > 0)) {
+              return failRepairable(name, "conic_fit_unsatisfied", "focal parameter and throughPoint do not uniquely determine a valid conic")
+            }
+            rx = axis === "y" ? bVal : aVal
+            ry = axis === "y" ? aVal : bVal
+          } else {
+            if (!ids || ids.length !== 2 || ids[0] === ids[1]) {
+              return failRepairable(name, "conic_fit_unsatisfied", "throughPointIds requires two distinct existing points")
+            }
+            const first = readP2(ids[0]!, branchId)
+            const second = readP2(ids[1]!, branchId)
+            if (!first || !second) {
+              return failRepairable(name, "undeclared_entity_ref", "construct both throughPointIds before fitting the conic")
+            }
+            const fit = fitOriginConicThroughPoints(
+              [{ x: first.x - center.x, y: first.y - center.y }, { x: second.x - center.x, y: second.y - center.y }],
+              kind === "hyperbola" && input.axis !== undefined ? axis : undefined, kind
+            )
+            if (!fit) return failRepairable(name, "conic_fit_unsatisfied", "points do not uniquely determine the requested centered conic")
+            rx = fit.radiusX
+            ry = fit.radiusY
+            if (fit.kind === "hyperbola") axis = fit.axis
           }
-          const first = readP2(ids[0]!, branchId)
-          const second = readP2(ids[1]!, branchId)
-          if (!first || !second) {
-            return failRepairable(name, "undeclared_entity_ref", "construct both throughPointIds before fitting the conic")
-          }
-          const fit = fitOriginConicThroughPoints(
-            [{ x: first.x - center.x, y: first.y - center.y }, { x: second.x - center.x, y: second.y - center.y }],
-            kind === "hyperbola" && input.axis !== undefined ? axis : undefined, kind
-          )
-          if (!fit) return failRepairable(name, "conic_fit_unsatisfied", "points do not uniquely determine the requested centered conic")
-          rx = fit.radiusX
-          ry = fit.radiusY
-          if (fit.kind === "hyperbola") axis = fit.axis
         }
         if (rx === null || ry === null || !(rx > 0 && ry > 0)) {
           return failRepairable(name, "missing_required_parameter", "construct_conic requires positive radiusX/radiusY or two materialized throughPointIds")
@@ -3752,6 +4649,7 @@ export function createDsActionSession(options: {
             ? { id, type: "ellipse", center, radiusX: rx, radiusY: ry }
             : { id, type: "hyperbola", center, axis, radiusX: rx, radiusY: ry }
         writeC2(id, conic, branchId)
+        writeC2(label, conic, branchId)
         return stageDraftAction(
           name,
           { actionId: "planar.create_conic", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, kind, center, radiusX: rx, radiusY: ry,
@@ -3770,7 +4668,9 @@ export function createDsActionSession(options: {
         const branchId = asString(input.branchId) ?? undefined
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
         const fnExpr = asString(input.expression)
-        const fnId = asString(input.functionId) ?? (fnExpr ? id : null)
+        const rawLabel = asString(input.label)
+        const rawFnLabel = asString(input.functionLabel) ?? (rawLabel && /^[fgh](?:\(x\)(?:=.*)?)?$/i.test(rawLabel) ? rawLabel.replace(/\(x\).*$/i, "") : null)
+        const fnId = asString(input.functionId) ?? rawFnLabel ?? (fnExpr ? id : null)
         const x0 = asFiniteNumber(input.x0 ?? input.x)
         const tanMode = asString(input.mode)?.toLowerCase()
         const includeDerivative = input.includeDerivative === true
@@ -3791,10 +4691,13 @@ export function createDsActionSession(options: {
         const matchedExistingFnAlias = matchedExistingFn ? asString((matchedExistingFn.inputs as { alias?: unknown }).alias) : null
         const isFunctionCall = fnId !== null && (fnExpr !== null || hasStagedFunction(fnId))
         if (isFunctionCall && fnId !== null) {
+          const isScalarAnalysisOrTan = x0 !== null || tanMode === "derivative" || tanMode === "integral"
           const effectiveFnId = matchedExistingFnAlias
-            ?? (fnExpr !== null && (tanMode === "derivative" || tanMode === "integral") && fnId === id
+            ?? (fnExpr !== null && isScalarAnalysisOrTan && fnId === id && !/^[fgh]$/i.test(id)
               ? `${id}_fn`
               : fnId)
+          const tangentAlias = effectiveFnId === id && x0 !== null ? `${id}_tan` : id
+          const effectiveFnLabel = rawFnLabel ?? effectiveFnId
           const fnAlreadyExists = hasStagedFunction(effectiveFnId)
           if (!fnAlreadyExists) {
             if (!fnExpr) {
@@ -3819,7 +4722,7 @@ export function createDsActionSession(options: {
                 actionId: "function.create_graph",
                 actionKey: `ds-act-${stepSeq}-fn`,
                 factIds: [],
-                inputs: { alias: effectiveFnId, label: effectiveFnId, expression: fnExpr, domain }
+                inputs: { alias: effectiveFnId, label: effectiveFnLabel, expression: fnExpr, domain }
               } as DraftAction,
               effectiveFnId,
               undefined,
@@ -3867,13 +4770,14 @@ export function createDsActionSession(options: {
               const y0Res = evaluateFunctionWithDomain(exprForEval, x0)
               const dRes = evaluateSymbolicDerivative(exprForEval, x0)
               if (!y0Res.ok || !dRes.ok) {
-                return failRepairable(name, "invalid_expression", "cannot evaluate function expression or derivative at x0")
+                return failRepairable(name, "invalid_expression", `cannot evaluate function expression "${exprForEval}" (or derivative) at x0=${x0}; pass a numeric formula of x with no symbolic parameters (like a/k)`)
               }
               const slope = dRes.value
               const intercept = y0Res.value - slope * x0
               const pA: Coordinate = { x: x0 - 1, y: slope * (x0 - 1) + intercept }
               const pB: Coordinate = { x: x0 + 1, y: slope * (x0 + 1) + intercept }
-              writeL2(id, { a: pA, b: pB }, branchId)
+              writeL2(tangentAlias, { a: pA, b: pB }, branchId)
+              writeL2(label, { a: pA, b: pB }, branchId)
             }
             return stageDraftAction(
               name,
@@ -3881,9 +4785,9 @@ export function createDsActionSession(options: {
                 actionId: "function.create_tangent",
                 actionKey: `ds-act-${stepSeq}`,
                 factIds: [],
-                inputs: { alias: id, sourceId: `draft:${effectiveFnId}`, x: x0 }
+                inputs: { alias: tangentAlias, sourceId: `draft:${effectiveFnId}`, x: x0 }
               } as DraftAction,
-              id,
+              tangentAlias,
               undefined,
               sliceTarget
             )
@@ -3902,7 +4806,7 @@ export function createDsActionSession(options: {
           }
         }
         const conicId = asString(input.conicId)
-        const ptId = asString(input.pointId)
+        const ptId = asString(input.pointId ?? input.throughPointId)
         const conic = conicId ? readC2(conicId, branchId) : undefined
         const pt = ptId ? readP2(ptId, branchId) : undefined
         if (!conic || !pt || !ptId || !conicId) return failRepairable(name, "undeclared_entity_ref", "construct_tangent requires valid conicId and pointId, or expression and x0")
@@ -3931,20 +4835,82 @@ export function createDsActionSession(options: {
             sliceTarget
           )
         }
+        // Compute exact polar line Ax + By + C = 0 of exterior point pt w.r.t. conic
+        let polarA = 0, polarB = 0, polarC = 0
         if (conic.type === "circle") {
-          const dx = pt.x - conic.center.x
-          const dy = pt.y - conic.center.y
-          const dist = Math.hypot(dx, dy)
-          if (dist > conic.radius + 1e-6) {
-            const baseAngle = Math.atan2(dy, dx)
-            const delta = Math.acos(conic.radius / dist)
-            const touchAngle = baseAngle + delta
-            const touchPt: Coordinate = {
-              x: conic.center.x + conic.radius * Math.cos(touchAngle),
-              y: conic.center.y + conic.radius * Math.sin(touchAngle)
+          const dx = pt.x - conic.center.x, dy = pt.y - conic.center.y
+          if (Math.hypot(dx, dy) > conic.radius + 1e-6) {
+            polarA = dx; polarB = dy; polarC = -(dx * conic.center.x + dy * conic.center.y + conic.radius * conic.radius)
+          }
+        } else if (conic.type === "ellipse") {
+          const dx = pt.x - conic.center.x, dy = pt.y - conic.center.y
+          const invX = 1 / (conic.radiusX * conic.radiusX), invY = 1 / (conic.radiusY * conic.radiusY)
+          if (dx * dx * invX + dy * dy * invY > 1 + 1e-6) {
+            polarA = dx * invX; polarB = dy * invY; polarC = -(polarA * conic.center.x + polarB * conic.center.y + 1)
+          }
+        } else if (conic.type === "hyperbola") {
+          const dx = pt.x - conic.center.x, dy = pt.y - conic.center.y
+          const invX = (conic.axis === "x" ? 1 : -1) / (conic.radiusX * conic.radiusX)
+          const invY = (conic.axis === "y" ? 1 : -1) / (conic.radiusY * conic.radiusY)
+          if (dx * dx * invX + dy * dy * invY < 1 - 1e-6) {
+            polarA = dx * invX; polarB = dy * invY; polarC = -(polarA * conic.center.x + polarB * conic.center.y + 1)
+          }
+        } else if (conic.type === "parabola") {
+          const dx = pt.x - conic.vertex.x, dy = pt.y - conic.vertex.y, p = conic.focalParameter
+          if (conic.axis === "y" && dx * dx > 2 * p * dy + 1e-6) {
+            polarA = dx; polarB = -p; polarC = -dx * conic.vertex.x + p * conic.vertex.y - p * dy
+          } else if (conic.axis === "x" && dy * dy > 2 * p * dx + 1e-6) {
+            polarA = -p; polarB = dy; polarC = p * conic.vertex.x - dy * conic.vertex.y - p * dx
+          }
+        }
+        const polarNorm2 = polarA * polarA + polarB * polarB
+        if (polarNorm2 > 1e-18) {
+          const anchor = { x: -(polarA * polarC) / polarNorm2, y: -(polarB * polarC) / polarNorm2 }
+          const scale = 1 / Math.sqrt(polarNorm2)
+          const polarLine: { type: "line"; a: Coordinate; b: Coordinate } = {
+            type: "line",
+            a: anchor,
+            b: { x: anchor.x - polarB * scale, y: anchor.y + polarA * scale }
+          }
+          const res = intersectPlanarLineAndConicExact(polarLine, conic)
+          if (res.points.length > 0) {
+            const sortedPts = [...res.points].sort((p1, p2) => Math.abs(p1.x - p2.x) > 1e-9 ? p1.x - p2.x : p1.y - p2.y)
+            const sel = asString(input.selection)
+            const rawBranch = asFiniteNumber(input.branch)
+            let touchPt: Coordinate
+            if (sel && sortedPts.length > 1) {
+              const axis = sel.endsWith("x") ? "x" : "y"
+              const byAxis = [...sortedPts].sort((p1, p2) => p1[axis] - p2[axis])
+              touchPt = sel.startsWith("min") ? byAxis[0]! : byAxis[byAxis.length - 1]!
+            } else if (rawBranch !== null && sortedPts.length > 1) {
+              const idx = Math.max(0, Math.min(sortedPts.length - 1, Math.round(rawBranch)))
+              touchPt = sortedPts[idx]!
+            } else if (sortedPts.length > 1) {
+              const unused = sortedPts.find((cand) => !currentActions.some((act) => {
+                if (act.actionId === "planar.create_line") {
+                  const pts = (act.inputs as { points?: Coordinate[] }).points
+                  if (!Array.isArray(pts) || pts.length !== 2) return false
+                  const nearPt = Math.hypot(pts[0]!.x - pt.x, pts[0]!.y - pt.y) < 1e-4 && Math.hypot(pts[1]!.x - cand.x, pts[1]!.y - cand.y) < 1e-4
+                  const nearRev = Math.hypot(pts[1]!.x - pt.x, pts[1]!.y - pt.y) < 1e-4 && Math.hypot(pts[0]!.x - cand.x, pts[0]!.y - cand.y) < 1e-4
+                  return nearPt || nearRev
+                }
+                if (act.actionId === "function.create_tangent") {
+                  const alias = asString((act.inputs as { alias?: unknown }).alias)
+                  const line = alias ? readL2(alias, branchId) : undefined
+                  if (!line) return false
+                  const nearPt = Math.hypot(line.a.x - pt.x, line.a.y - pt.y) < 1e-4 && Math.hypot(line.b.x - cand.x, line.b.y - cand.y) < 1e-4
+                  const nearRev = Math.hypot(line.b.x - pt.x, line.b.y - pt.y) < 1e-4 && Math.hypot(line.a.x - cand.x, line.a.y - cand.y) < 1e-4
+                  return nearPt || nearRev
+                }
+                return false
+              }))
+              touchPt = unused ?? sortedPts[0]!
+            } else {
+              touchPt = sortedPts[0]!
             }
             const tpId = asString(input.tangentPointId)
             if (tpId) {
+              writeP2(tpId, touchPt, branchId)
               const tpStep = stageDraftAction(
                 name,
                 { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}-tp`, factIds: [], inputs: { alias: tpId, label: tpId, points: [touchPt] } },
@@ -3953,33 +4919,24 @@ export function createDsActionSession(options: {
                 sliceTarget
               )
               if (!tpStep.ok) return tpStep
-              writeP2(tpId, touchPt, branchId)
             }
             writeL2(id, { a: pt, b: touchPt }, branchId)
-            const stagedLine = !branchId
-              ? stageDraftAction(
-                  name,
-                  {
-                    actionId: "function.create_tangent",
-                    actionKey: `ds-act-${stepSeq}`,
-                    factIds: [],
-                    inputs: { alias: id, sourceId: `draft:${conicId}`, anchor: { kind: "through", pointId: `draft:${ptId}`, branch: 0 } }
-                  } as DraftAction,
-                  id,
-                  undefined,
-                  sliceTarget
-                )
-              : stageDraftAction(
-                  name,
-                  { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [pt, touchPt] } },
-                  id,
-                  undefined,
-                  sliceTarget
-                )
-            return stagedLine.ok ? { ...stagedLine, measurement: { tangentPoint: touchPt } } : stagedLine
+            writeL2(label, { a: pt, b: touchPt }, branchId)
+            const stagedLine = stageDraftAction(
+              name,
+              { actionId: "planar.create_line", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [pt, touchPt] } },
+              id,
+              undefined,
+              sliceTarget
+            )
+            return stagedLine.ok ? { ...stagedLine, measurement: { tangentPoint: touchPt, tangentPoints: sortedPts } } : stagedLine
           }
         }
-        return failRepairable(name, "not_on_conic", "pointId must lie ON the conic (or outside a circle for an external tangent)")
+        const notOnDetail =
+          conic.type === "circle"
+            ? `point "${ptId}" (${pt.x}, ${pt.y}) lies strictly inside circle "${conicId}" (center=(${conic.center.x}, ${conic.center.y}), radius=${conic.radius}, dist=${Math.hypot(pt.x - conic.center.x, pt.y - conic.center.y).toFixed(4)}). Pick or construct a point on/outside "${conicId}", or check circle center/radius and point coordinates.`
+            : `point "${ptId}" (${pt.x}, ${pt.y}) must lie ON or outside ${conic.type} "${conicId}" to construct a tangent.`
+        return failRepairable(name, "not_on_conic", notOnDetail)
       }
 
       if (name === "construct_perpendicular" || name === "construct_parallel") {
@@ -4548,6 +5505,40 @@ export function createDsActionSession(options: {
             : options.workspace === "geometry3d"
               ? "conics"
               : options.workspace
+          const promotedPoly = promoteStandalonePolyhedronVertices(primaryActions, ws, options.problemText)
+          if (promotedPoly) {
+            if (!options.problemText) {
+              primaryActions = promotedPoly
+            } else {
+              const testBefore = compilePlan(
+                { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "promote-before", factIds: [], actions: primaryActions },
+                { document: createEmptyDocument(ws), workspace: ws, capabilityRevision: "draft", conversationId: "ds-promote-before" }
+              )
+              const testAfter = compilePlan(
+                { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "promote-after", factIds: [], actions: promotedPoly },
+                { document: createEmptyDocument(ws), workspace: ws, capabilityRevision: "draft", conversationId: "ds-promote-after" }
+              )
+              if (testBefore.ok && testBefore.draftDocument && testAfter.ok && testAfter.draftDocument) {
+                const certBefore = certifyDrawingAgainstContract({
+                  prompt: options.problemText,
+                  document: testBefore.draftDocument,
+                  candidateHash: snap.candidateHash,
+                  sourceHash: snap.candidateHash,
+                  plan: { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "before", factIds: [], actions: primaryActions }
+                })
+                const certAfter = certifyDrawingAgainstContract({
+                  prompt: options.problemText,
+                  document: testAfter.draftDocument,
+                  candidateHash: snap.candidateHash,
+                  sourceHash: snap.candidateHash,
+                  plan: { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "after", factIds: [], actions: promotedPoly }
+                })
+                if ((certAfter.failedObligations?.length ?? 0) <= (certBefore.failedObligations?.length ?? 0)) {
+                  primaryActions = promotedPoly
+                }
+              }
+            }
+          }
           const consolidated = consolidateSolidScaffolding(primaryActions, ws)
           if (consolidated && consolidated.length > 0 && consolidated.length < primaryActions.length) {
             const testBase = compilePlan(
@@ -4584,6 +5575,7 @@ export function createDsActionSession(options: {
           }
         }
         const rawGoal = asString(input.goal)?.trim();
+        const rawAnswer = asString(input.answer)?.trim();
         const safeGoal = rawGoal ? (rawGoal.length > 200 ? `${rawGoal.slice(0, 197)}...` : rawGoal) : "DS 动作级构图候选";
         let plan: PlanEnvelope = {
           schemaVersion: PLAN_SCHEMA_VERSION,
@@ -4591,6 +5583,7 @@ export function createDsActionSession(options: {
           goal: safeGoal,
           factIds: [],
           actions: [...primaryActions],
+          ...(rawAnswer ? { answer: rawAnswer } : {}),
           ...(symbolicDisplays.size === 0 ? {} : {
             assumptions: primaryActions.flatMap((action) => {
               const display = symbolicDisplays.get(action.actionKey)
@@ -4631,6 +5624,109 @@ export function createDsActionSession(options: {
             }
           }
         }
+        const rawScope = asString(input.scopeId)?.trim()
+        const normalizedScope = rawScope
+          ? (/^(?:subquestion:(\d+)|[（(]?(\d+)[)）]?)$/.exec(rawScope)
+              ? `subquestion:${/^(?:subquestion:(\d+)|[（(]?(\d+)[)）]?)$/.exec(rawScope)![1] ?? /^(?:subquestion:(\d+)|[（(]?(\d+)[)）]?)$/.exec(rawScope)![2]}`
+              : rawScope === "shared" ? "shared" : undefined)
+          : undefined
+        const answerDeclaresPart2Infeasible = Boolean(
+          (rawAnswer || rawGoal) &&
+          /(?:第\s*[（(]?2[)）]?\s*问|subquestion[:\s]*2|PF₁⊥PF₂|b\s*[>≥]\s*c)[\s\S]{0,60}?(?:无解|不存在|不成立|矛盾|不可行|infeasible)/i.test(`${rawGoal ?? ""} ${rawAnswer ?? ""}`)
+        )
+        const omittedMovingP = !readP2("P") && !readP3("P")
+        const resolvedScopeId = normalizedScope
+          ?? (answerDeclaresPart2Infeasible || (sawInfeasibleConicPerp && omittedMovingP) ? "subquestion:1" : undefined)
+          ?? (finalSlices?.length === 1 && /^subquestion:\d+$/.test(finalSlices[0]!.scopeId) ? finalSlices[0]!.scopeId : undefined)
+        let effectiveScopeId = resolvedScopeId
+        if (options.problemText && symbolicDisplays.size === 0 && branchActionBuckets.size === 0 && plan.kind === "plan") {
+          const certWs: GeometryDocument["workspace"] =
+            plan.actions.some((a) => a.actionId.startsWith("solid.") || a.actionId.startsWith("derived.") || a.actionId.startsWith("section."))
+              ? "geometry3d"
+              : options.workspace === "geometry3d"
+                ? "conics"
+                : options.workspace
+          const certCompiled = compilePlan(plan, {
+            document: createEmptyDocument(certWs),
+            conversationId: "ds-finish-precert",
+            documentGeneration: 0,
+            workspace: certWs
+          })
+          if (certCompiled.ok && certCompiled.draftDocument) {
+            const finalDoc = certCompiled.draftDocument
+            effectiveScopeId = resolveInfeasibleEllipseFallbackScope({
+              prompt: options.problemText,
+              document: finalDoc,
+              plan,
+              ...(resolvedScopeId === undefined ? {} : { requestedScopeId: resolvedScopeId })
+            }) ?? resolvedScopeId
+            if (inSessionCertRejections < 2 && snap.candidateHash !== lastPreCertRejectedHash) {
+              const cert = certifyDrawingAgainstContract({
+                prompt: options.problemText,
+                document: finalDoc,
+                candidateHash: snap.candidateHash,
+                sourceHash: snap.candidateHash,
+                plan,
+                ...(effectiveScopeId === undefined ? {} : { selectedScopeId: effectiveScopeId })
+              })
+              const failedChecks = (cert.report?.checks ?? []).filter((c) => c.status === "failed")
+              const acceptanceReqs = deriveAcceptance(options.problemText)
+              const needsPolyhedron = acceptanceReqs.some(
+                (c) => c.kind === "has_primitive" && c.type === "polyhedron3"
+              ) && !finalDoc.primitives.some((p) => p.type === "polyhedron3")
+              const needsSphere = acceptanceReqs.some(
+                (c) => c.kind === "has_primitive" && c.type === "sphere"
+              ) && !finalDoc.primitives.some((p) => p.type === "sphere")
+              const needsCircle = /以[^，,。；;\n]{0,18}为圆心的圆/.test(options.problemText)
+                && !finalDoc.primitives.some((p) => p.type === "circle")
+              const missingPts = cert.gate.status === "blocked" && Array.isArray(cert.missingEntities)
+                ? cert.missingEntities.filter((m) => /^[A-Z][₁₂₃0-9'′]?$/.test(m))
+                : []
+              const missingFunctionChecks = cert.gate.status === "blocked"
+                ? (cert.report?.checks ?? []).filter((c) => c.status === "unverified" && c.kind === "functionGraph")
+                : []
+              const extraGateFailures = cert.gate.status === "blocked" && Array.isArray(cert.failedObligations)
+                ? cert.failedObligations
+                    .filter((f) => f.id.startsWith("circle-extreme-chords:") || f.id === "unparsed:tangent")
+                    .map((f) => f.detail)
+                : []
+              const hasConicRatioFailure = failedChecks.some((c) => c.kind === "segmentRatio") &&
+                finalDoc.primitives.some((p) => p.type === "ellipse" || p.type === "hyperbola" || p.type === "parabola" || p.type === "circle")
+              if (failedChecks.length > 0 || missingFunctionChecks.length > 0 || extraGateFailures.length > 0 || needsPolyhedron || needsSphere || needsCircle || missingPts.length > 0) {
+                inSessionCertRejections += 1
+                lastPreCertRejectedHash = snap.candidateHash
+                const reasons = [
+                  ...failedChecks.map((c) => `${c.sourceText}：${c.reason}`),
+                  ...missingFunctionChecks.map((c) => `${c.sourceText}：${c.reason}（请保留已画函数，直接用 construct_tangent({ id, functionId, expression, mode: "graph" }) 补画缺失函数后重新调用 finish_candidate）`),
+                  ...extraGateFailures,
+                  ...(hasConicRatioFailure ? ["内核快捷求解提示：对于过定点与圆锥曲线相交且满足向量比值的弦直线，可直接用 construct_line({ id, throughPointId, conicId, chordRatio }) 由几何内核精确解出直线并再求交点！"] : []),
+                  ...(needsPolyhedron ? ["缺少三维多面体图元（polyhedron3）：请调用 construct_solid（可传已构造顶点名 vertexNames）生成实体，不要仅留零散点/线段。"] : []),
+                  ...(needsSphere ? ["缺少球体图元（sphere）：请调用 construct_circumsphere(solidId=...) 或 construct_solid(kind='sphere', ...) 生成球体。"] : []),
+                  ...(needsCircle ? ["缺少圆图元（circle）：题面提到以某点为圆心的圆，请保留当前已构造的点与曲线，直接调用 construct_circle(centerId=..., radius=...) 补画该圆后再调用 finish_candidate。"] : []),
+                  ...(missingPts.length > 0 ? [`题面点名缺失（导致未核验）：${missingPts.join("、")} —— 请保留当前已通过验证的主体图形，直接用 construct_point 补充缺失点（例如翻折题需补折前点坐标）后再调用 finish_candidate。`] : [])
+                ]
+                const seenPtLabels = new Set<string>()
+                const ptCoordsSummary: string[] = []
+                for (const p of finalDoc.primitives) {
+                  if (ptCoordsSummary.length >= 12) break
+                  if (p.type === "point" && p.label && !seenPtLabels.has(p.label)) {
+                    seenPtLabels.add(p.label)
+                    ptCoordsSummary.push(`${p.label}=(${Number(p.x.toFixed(4))},${Number(p.y.toFixed(4))})`)
+                  } else if (p.type === "point3" && p.label && !seenPtLabels.has(p.label)) {
+                    seenPtLabels.add(p.label)
+                    ptCoordsSummary.push(`${p.label}=(${Number(p.position.x.toFixed(4))},${Number(p.position.y.toFixed(4))},${Number(p.position.z.toFixed(4))})`)
+                  }
+                }
+                const coordNote = ptCoordsSummary.length > 0 ? `\n当前已构造点坐标：${ptCoordsSummary.join(", ")}` : ""
+                return failRepairable(
+                  name,
+                  "diagram_condition_failed",
+                  `候选图尚未通过几何核验（第 ${inSessionCertRejections}/2 次同会话自检），请保留已通过验证的点/曲线，仅用 repair_entity 修正以下偏差后重新调用 finish_candidate（切勿调用 request_clarification 质疑题面）：\n- ${reasons.join("\n- ")}${coordNote}`
+                )
+              }
+            }
+          }
+        }
         return {
           ok: true,
           status: "accepted",
@@ -4641,6 +5737,7 @@ export function createDsActionSession(options: {
           primitiveCount: snap.primitiveCount,
           terminated: {
             plan,
+            ...(effectiveScopeId === undefined ? {} : { selectedScopeId: effectiveScopeId }),
             ...(finalSlices !== undefined && finalSlices.length > 0 ? { slices: finalSlices } : {})
           }
         }
@@ -4648,6 +5745,19 @@ export function createDsActionSession(options: {
 
       if (name === "request_clarification") {
         const reason = asString(input.reason) ?? "需要进一步明确题目条件或补充信息"
+        const rawQsText = Array.isArray(input.questions) ? input.questions.map((q) => String(q ?? "")).join(" ") : ""
+        const combinedClarify = `${reason} ${rawQsText}`
+        if (
+          options.problemText &&
+          !/如图|图上|图中的|附图|未给出图形|如图所示/.test(options.problemText) &&
+          /是否|确认|请问|符合题意|纯文字|凸四边形|凸多边形|自行构造|翻折|验证器|核验|笔误|延长线|义务|无解|无法使|候选图|不在线段内|坐标有误|斜率/.test(combinedClarify)
+        ) {
+          return failRepairable(
+            name,
+            "clarification_unnecessary",
+            "Pure-text self-contained problem: do NOT ask the user to confirm verifier messages, suspected typos, orientation, or segment-vs-line wording. Check your own construction (e.g. swap intersection selection min_y/max_y, adjust line slope, avoid duplicate circles/conics, or fix coordinates) and call finish_candidate directly."
+          )
+        }
         const rawQuestions = Array.isArray(input.questions)
           ? input.questions.map((q) => asString(q)).filter((q): q is string => q !== null)
           : []
@@ -4697,7 +5807,13 @@ export function createDsActionSession(options: {
           }
           normalizedInput = { ...input, sideLength: scale, height: scale }
         }
-        const resolved = resolveConstructSolidRequest(normalizedInput, points3, options.problemText)
+        const solidInput = Array.isArray(normalizedInput.vertexNames)
+          ? {
+              ...normalizedInput,
+              vertexNames: normalizedInput.vertexNames.map((v) => (typeof v === "string" ? canonicalizePointLabel(v) : v))
+            }
+          : normalizedInput
+        const resolved = resolveConstructSolidRequest(solidInput, points3, options.problemText)
         if (!resolved.ok) {
           return resolved.status === "blocked"
             ? failBlocked(name, resolved.blockerCode, resolved.repairHint)
@@ -4739,6 +5855,38 @@ export function createDsActionSession(options: {
           }
           return stagedTemplate
         }
+        const summarizeSolidMetrics = (registry: Record<string, Vector3>): { edgeLengths: Record<string, number>; perpendicularPairs: string[] } | undefined => {
+          const keys = Object.keys(registry)
+          if (keys.length < 3 || keys.length > 5) return undefined
+          const edgeLengths: Record<string, number> = {}
+          for (let i = 0; i < keys.length; i += 1) {
+            for (let j = i + 1; j < keys.length; j += 1) {
+              const a = keys[i]!, b = keys[j]!
+              edgeLengths[`${a}${b}`] = Number(distanceVector3(registry[a]!, registry[b]!).toFixed(6))
+            }
+          }
+          const perpendicularPairs: string[] = []
+          const pairs: Array<[string, string, Vector3]> = []
+          for (let i = 0; i < keys.length; i += 1) {
+            for (let j = i + 1; j < keys.length; j += 1) {
+              const a = keys[i]!, b = keys[j]!
+              const pA = registry[a]!, pB = registry[b]!
+              pairs.push([a, b, { x: pB.x - pA.x, y: pB.y - pA.y, z: pB.z - pA.z }])
+            }
+          }
+          for (let i = 0; i < pairs.length; i += 1) {
+            for (let j = i + 1; j < pairs.length; j += 1) {
+              const [a1, b1, u] = pairs[i]!
+              const [a2, b2, v] = pairs[j]!
+              const uLen = Math.hypot(u.x, u.y, u.z)
+              const vLen = Math.hypot(v.x, v.y, v.z)
+              if (uLen > 1e-9 && vLen > 1e-9 && Math.abs(u.x * v.x + u.y * v.y + u.z * v.z) / (uLen * vLen) <= 1e-4) {
+                perpendicularPairs.push(`${a1}${b1}⊥${a2}${b2}`)
+              }
+            }
+          }
+          return { edgeLengths, perpendicularPairs }
+        }
         if (resolved.mode === "polyhedron") {
           for (const [vn, pt] of Object.entries(resolved.pointRegistry)) {
             points3.set(vn, pt)
@@ -4773,13 +5921,65 @@ export function createDsActionSession(options: {
               actions: [...curSnap.actions]
             })
           }
-          return stagedPoly.ok ? { ...stagedPoly, measurement: { vertices: resolved.pointRegistry } } : stagedPoly
+          const metrics = summarizeSolidMetrics(resolved.pointRegistry)
+          return stagedPoly.ok
+            ? { ...stagedPoly, measurement: { vertices: resolved.pointRegistry, ...(metrics ?? {}) } }
+            : stagedPoly
         }
         const solved = solveConstraint3d(resolved.request)
         if (solved.status !== "solved" || !solved.topologyValid || !solved.vertices || !solved.faceRings) {
+          let detail = solved.reason ?? "solid parameters are infeasible or degenerate"
+          if (resolved.request.kind === "tetrahedron" && resolved.request.names) {
+            const [v0, v1, v2, v3] = resolved.request.names
+            const { ab, ac, bc, pa, pb, pc } = resolved.request
+            const triCheck = (e1: number, n1: string, e2: number, n2: string, e3: number, n3: string, fName: string) => {
+              if (e1 + e2 <= e3 + 1e-9) {
+                return `面 ${fName} (${n1}=${Number(e1.toFixed(4))}, ${n2}=${Number(e2.toFixed(4))}, ${n3}=${Number(e3.toFixed(4))}) 不满足三角形不等式：${n1}+${n2}<= ${n3}，需满足 |${n3}-${n2}|=${Number(Math.abs(e3 - e2).toFixed(4))} < ${n1} < ${Number((e3 + e2).toFixed(4))}`
+              }
+              if (e1 + e3 <= e2 + 1e-9) {
+                return `面 ${fName} (${n1}=${Number(e1.toFixed(4))}, ${n2}=${Number(e2.toFixed(4))}, ${n3}=${Number(e3.toFixed(4))}) 不满足三角形不等式：${n1}+${n3}<= ${n2}，需满足 |${n2}-${n1}|=${Number(Math.abs(e2 - e1).toFixed(4))} < ${n3} < ${Number((e2 + e1).toFixed(4))}`
+              }
+              if (e2 + e3 <= e1 + 1e-9) {
+                return `面 ${fName} (${n1}=${Number(e1.toFixed(4))}, ${n2}=${Number(e2.toFixed(4))}, ${n3}=${Number(e3.toFixed(4))}) 不满足三角形不等式：${n2}+${n3}<= ${n1}，需满足 |${n1}-${n2}|=${Number(Math.abs(e1 - e2).toFixed(4))} < ${n3} < ${Number((e1 + e2).toFixed(4))}`
+              }
+              return null
+            }
+            const faceFail =
+              triCheck(ab, `${v1}${v2}`, ac, `${v1}${v3}`, bc, `${v2}${v3}`, `${v1}${v2}${v3}`) ??
+              triCheck(pa, `${v0}${v1}`, pb, `${v0}${v2}`, ab, `${v1}${v2}`, `${v0}${v1}${v2}`) ??
+              triCheck(pa, `${v0}${v1}`, pc, `${v0}${v3}`, ac, `${v1}${v3}`, `${v0}${v1}${v3}`) ??
+              triCheck(pb, `${v0}${v2}`, pc, `${v0}${v3}`, bc, `${v2}${v3}`, `${v0}${v2}${v3}`)
+            let intervalNote = ""
+            if (faceFail) {
+              intervalNote = `；${faceFail}`
+            } else {
+              // Exact 3D circle feasibility bounds for |v0-v2| (pb) given base (ab,ac,bc) and (pa,pc)
+              const x3 = (ac * ac + ab * ab - bc * bc) / (2 * ab)
+              const y3Sq = ac * ac - x3 * x3
+              if (y3Sq > 1e-12) {
+                const y3 = Math.sqrt(y3Sq)
+                // Axis u along v1->v3, in-plane perpendicular w toward v2
+                const uX = x3 / ac, uY = y3 / ac
+                const wX = uY
+                const projP = (pa * pa + ac * ac - pc * pc) / (2 * ac)
+                const rSq = pa * pa - projP * projP
+                if (rSq > 1e-12) {
+                  const r = Math.sqrt(rSq)
+                  const bProjU = ab * uX
+                  const bProjW = Math.abs(ab * wX)
+                  const du = projP - bProjU
+                  const pbMin = Math.sqrt(du * du + (bProjW - r) * (bProjW - r))
+                  const pbMax = Math.sqrt(du * du + (bProjW + r) * (bProjW + r))
+                  const pbPerp = Math.sqrt(du * du + bProjW * bProjW + r * r)
+                  intervalNote = `；固定其余 5 棱 (${v1}${v2}=${Number(ab.toFixed(4))}, ${v1}${v3}=${Number(ac.toFixed(4))}, ${v2}${v3}=${Number(bc.toFixed(4))}, ${v0}${v1}=${Number(pa.toFixed(4))}, ${v0}${v3}=${Number(pc.toFixed(4))}) 时，pb=|${v0}${v2}| 的可行开区间为 (${Number(pbMin.toFixed(4))}, ${Number(pbMax.toFixed(4))})（面 ${v0}${v1}${v3}⊥面 ${v1}${v2}${v3} 时 pb=${Number(pbPerp.toFixed(4))}），当前传入 pb=${Number(pb.toFixed(4))}`
+                }
+              }
+            }
+            detail += `${intervalNote} (vertexNames=[${v0},${v1},${v2},${v3}] maps to pa=|${v0}${v1}|, pb=|${v0}${v2}|, pc=|${v0}${v3}|, ab=|${v1}${v2}|, ac=|${v1}${v3}|, bc=|${v2}${v3}|; or construct 4 non-coplanar 3D points with construct_point and call construct_solid without edge lengths)`
+          }
           return solved.status === "infeasible" || solved.status === "degenerate"
-            ? failBlocked(name, solved.status, solved.reason ?? "solid parameters are infeasible or degenerate")
-            : failRepairable(name, solved.status, solved.reason ?? "solid parameters need adjustment")
+            ? failBlocked(name, solved.status, detail)
+            : failRepairable(name, solved.status, detail)
         }
         const vertexNames = Object.keys(solved.pointRegistry)
         const vertices = vertexNames.map((vn) => solved.pointRegistry[vn]!)
@@ -4831,7 +6031,8 @@ export function createDsActionSession(options: {
             actions: [...curSnap.actions]
           })
         }
-        return staged.ok ? { ...staged, measurement: { vertices: solved.pointRegistry } } : staged
+        const metrics = summarizeSolidMetrics(solved.pointRegistry)
+        return staged.ok ? { ...staged, measurement: { vertices: solved.pointRegistry, ...(metrics ?? {}) } } : staged
       }
 
       if (name === "construct_circumsphere") {
@@ -4863,56 +6064,40 @@ export function createDsActionSession(options: {
           : null
         if (!resolvedSolidId) {
           if (hostActions.length === 0 && !requestedSolidId && points3.size >= 4) {
-            const pts = [...points3.values()]
-            for (let i = 0; i < pts.length - 3; i += 1) {
-              for (let j = i + 1; j < pts.length - 2; j += 1) {
-                for (let k = j + 1; k < pts.length - 1; k += 1) {
-                  for (let l = k + 1; l < pts.length; l += 1) {
-                    const p0 = pts[i]!
-                    const u = { x: pts[j]!.x - p0.x, y: pts[j]!.y - p0.y, z: pts[j]!.z - p0.z }
-                    const v = { x: pts[k]!.x - p0.x, y: pts[k]!.y - p0.y, z: pts[k]!.z - p0.z }
-                    const w = { x: pts[l]!.x - p0.x, y: pts[l]!.y - p0.y, z: pts[l]!.z - p0.z }
-                    const vxw = { x: v.y * w.z - v.z * w.y, y: v.z * w.x - v.x * w.z, z: v.x * w.y - v.y * w.x }
-                    const denom = 2 * (u.x * vxw.x + u.y * vxw.y + u.z * vxw.z)
-                    if (Math.abs(denom) <= 1e-6) continue
-                    const wxu = { x: w.y * u.z - w.z * u.y, y: w.z * u.x - w.x * u.z, z: w.x * u.y - w.y * u.x }
-                    const uxv = { x: u.y * v.z - u.z * v.y, y: u.z * v.x - u.x * v.z, z: u.x * v.y - u.y * v.x }
-                    const u2 = u.x * u.x + u.y * u.y + u.z * u.z
-                    const v2 = v.x * v.x + v.y * v.y + v.z * v.z
-                    const w2 = w.x * w.x + w.y * w.y + w.z * w.z
-                    const off = {
-                      x: (u2 * vxw.x + v2 * wxu.x + w2 * uxv.x) / denom,
-                      y: (u2 * vxw.y + v2 * wxu.y + w2 * uxv.y) / denom,
-                      z: (u2 * vxw.z + v2 * wxu.z + w2 * uxv.z) / denom
-                    }
-                    const radius = Math.hypot(off.x, off.y, off.z)
-                    const center = { x: p0.x + off.x, y: p0.y + off.y, z: p0.z + off.z }
-                    if (Number.isFinite(radius) && radius > 1e-6) {
-                      return stageDraftAction(name, {
-                        actionId: "solid.create_sphere",
-                        actionKey: `ds-act-${stepSeq}`,
-                        factIds: [],
-                        inputs: { alias: id, label, center, radius }
-                      } as unknown as DraftAction, id, undefined, {
-                        scopeId,
-                        ...(stateId === undefined ? {} : { stateId }),
-                        ...(branchId === undefined ? {} : { branchId })
-                      })
-                    }
-                  }
-                }
+            const circ = computeCircumsphereFromVerts([...points3.values()])
+            if (circ) {
+              const stagedSphere = stageDraftAction(name, {
+                actionId: "solid.create_sphere",
+                actionKey: `ds-act-${stepSeq}`,
+                factIds: [],
+                inputs: { alias: id, label, center: circ.center, radius: circ.radius }
+              } as unknown as DraftAction, id, undefined, {
+                scopeId,
+                ...(stateId === undefined ? {} : { stateId }),
+                ...(branchId === undefined ? {} : { branchId })
+              })
+              if (stagedSphere.ok) {
+                writeP3(id, circ.center, branchId)
+                writeP3(label, circ.center, branchId)
               }
+              return stagedSphere.ok ? { ...stagedSphere, measurement: circ } : stagedSphere
             }
           }
           return hostActions.length === 0 && !requestedSolidId
             ? failRepairable(name, "missing_required_parameter", "construct a polyhedron, prism, or 4 non-coplanar 3D points before construct_circumsphere")
             : failBlocked(name, "missing_host", "circumsphere host must be an existing staged polyhedron")
         }
-        return stageDraftAction(name, {
+        const hostCirc = computeCircumsphereFromVerts(hostVerticesOfAction(hostAction))
+        const stagedCircum = stageDraftAction(name, {
           actionId: "derived.create_circumsphere", actionKey: `ds-act-${stepSeq}`, factIds: [],
           inputs: { alias: id, label, solidId: { scope: "draft", alias: resolvedSolidId } }
         } as unknown as DraftAction, id, undefined, { scopeId,
           ...(stateId === undefined ? {} : { stateId }), ...(branchId === undefined ? {} : { branchId }) })
+        if (stagedCircum.ok && hostCirc) {
+          writeP3(id, hostCirc.center, branchId)
+          writeP3(label, hostCirc.center, branchId)
+        }
+        return stagedCircum.ok && hostCirc ? { ...stagedCircum, measurement: hostCirc } : stagedCircum
       }
 
       if (name === "construct_base") {
@@ -4965,6 +6150,15 @@ export function createDsActionSession(options: {
       }
 
       if (name === "construct_face") {
+        const has3dGeometry = options.workspace === "geometry3d"
+          || [...points3.values()].some((p) => Math.abs(p.z) > 1e-6)
+        if (!has3dGeometry) {
+          return failRepairable(
+            name,
+            "workspace_mismatch",
+            "construct_face is for 3D planes/faces only; in 2D planar/conic diagrams draw polygon edges with construct_segment instead of construct_face (do not mix 3D faces into 2D drawings)"
+          )
+        }
         const vertexNames = asStringList(input.vertexNames ?? input.pointIds)
         if (!vertexNames || vertexNames.length < 3) {
           return failRepairable(name, "missing_required_parameter", "construct_face requires vertexNames with at least 3 distinct names")
@@ -5119,14 +6313,15 @@ export function createDsActionSession(options: {
       return failBlocked(name, "unsupported_action", `${name} kernel execution is not implemented yet`)
   }
 
-  const attachTelemetry = (res: DsActionRawResult): DsActionExecutionResult => {
+  const attachTelemetry = (res: DsActionRawResult, rawInput?: unknown): DsActionExecutionResult => {
     const obsKey = res.measurement
       ? `:${String(res.measurement.metric ?? res.measurement.kind ?? "")}:${JSON.stringify(res.measurement.sourceEntityIds ?? res.measurement.tangentPoint ?? "")}`
       : ""
+    const failInputKey = !res.ok ? `:${canonicalContentHash(rawInput ?? null).slice(0, 12)}` : ""
     return {
       ...res,
       toolName: res.action,
-      progressSignature: `${res.action}:${res.status}:${res.blockerCode ?? "none"}:${res.candidateHash}:${res.stepIndex}:${res.primitiveCount}${obsKey}`
+      progressSignature: `${res.action}:${res.status}:${res.blockerCode ?? "none"}:${res.candidateHash}:${res.stepIndex}:${res.primitiveCount}${obsKey}${failInputKey}`
     }
   }
 
@@ -5189,14 +6384,18 @@ export function createDsActionSession(options: {
       const beforeBranchBuckets = branchId ? [...branchActionBuckets.entries()]
         .filter(([key]) => key.endsWith(`::${branchId}`))
         .map(([key, bucket]): [string, typeof bucket] => [key, { ...bucket, actions: [...bucket.actions] }]) : []
+      const beforeSeq = monotonicActionSeq
       const result = executeRaw(toolName, rawInput)
+      if (!result.ok || !result.stateChanged) {
+        monotonicActionSeq = beforeSeq
+      }
       if (!result.ok) restoreRefs(before)
       else if (branchId && beforeBranchStep !== null && result.stateChanged && toolName !== "repair_entity" && toolName !== "repair_constraint") {
         let history = branchHistory.get(branchId)
         if (!history) { history = []; branchHistory.set(branchId, history) }
         history.push({ stepIndex: beforeBranchStep, refs: before, slices: beforeBranchSlices, buckets: beforeBranchBuckets })
       }
-      return attachTelemetry(result)
+      return attachTelemetry(result, rawInput)
     }
   }
 }

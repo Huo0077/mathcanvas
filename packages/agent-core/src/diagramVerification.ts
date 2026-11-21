@@ -3,7 +3,9 @@ import { compileExpression, conicResidualAt, crossVector3, dihedralAngleDetail3,
 import { foldVertexNames } from "@draw/scene-graph"
 
 import type { PlanEnvelope } from "./contracts"
-import type { DiagramObligation, DiagramObligationKind, DiagramObligationSet } from "./diagramObligations"
+import { parseDiagramObligations, type DiagramObligation, type DiagramObligationKind, type DiagramObligationSet } from "./diagramObligations"
+import { normalizeGeometryPrompt } from "./latexNormalisation"
+import { subquestionScopeId } from "./numberedProblem"
 import { buildObligationIR, type ObligationIR } from "./obligationIR"
 import { relationResidual } from "./relations"
 import { readFoldTransformations } from "./figureIntent"
@@ -528,7 +530,11 @@ function candidateConics(
 
 function normalizeConicLabel(raw: string | undefined): string | undefined {
   if (raw === undefined) return undefined
-  const stripped = raw.trim().replace(/^(?:椭圆|双曲线|抛物线|圆|曲线)\s*/, "")
+  const stripped = raw
+    .trim()
+    .replace(/^(?:circle|ellipse|hyperbola|parabola|conic|locus|traj|trajectory|[⊙○]|\\odot)(?:\s+|[_-]+)(?=[A-ZΓ])/i, "")
+    .replace(/(?<=[A-ZΓ])[_-]+(?:circle|ellipse|hyperbola|parabola|conic|locus|traj|trajectory|curve)$/i, "")
+    .replace(/^(?:椭圆|双曲线|抛物线|圆|曲线|轨迹|[⊙○]|\\odot)\s*/u, "")
   return stripped.length > 0 ? stripped : undefined
 }
 
@@ -620,10 +626,20 @@ function selectConicForObligation(
     return checkScope(eligible[0]!)!
   }
 
-  // Never steal a curve explicitly labeled for a different entity (e.g. "D" when prompt requires "C").
-  const anyLabeled = conics.some((entry) => normalizeConicLabel(entry.label) !== undefined)
-  if (ref !== undefined && anyLabeled) {
-    const unlabeled = inScope.filter((entry) => normalizeConicLabel(entry.label) === undefined)
+  // Never steal a curve explicitly labeled for a different single-letter entity (e.g. "D" when prompt requires "C").
+  const isNamedEntityLabel = (raw: string | undefined) => {
+    const norm = normalizeConicLabel(raw)
+    return norm !== undefined && /^[A-ZΓ]$/.test(norm)
+  }
+  const isImplicitLocusCircle =
+    expectedKind === "circle" &&
+    !hasExplicitBinding &&
+    statedConicLabel(item.sourceText) !== ref &&
+    inScope.length === 1
+  const scopeForLabelCheck = expectedKind !== undefined ? inScope : conics
+  const anyLabeled = scopeForLabelCheck.some((entry) => isNamedEntityLabel(entry.label))
+  if (ref !== undefined && anyLabeled && !isImplicitLocusCircle) {
+    const unlabeled = inScope.filter((entry) => !isNamedEntityLabel(entry.label))
     if (unlabeled.length === 1) return { conic: unlabeled[0]!.conic }
     if (unlabeled.length > 1) {
       return {
@@ -895,6 +911,7 @@ function describeConic(conic: ConicDescription): string {
 /** 没有点名、由"恰好一条"确定的那几类图形。它们各自独立，缺谁就只有谁判不了。 */
 interface FigureContext {
   conic: FigureConic | null
+  primaryEllipse?: FigureConic | null
   tangent: FigureTangent | null
   commonTangents: readonly FigureCommonTangent[]
   curve: FigureFunction | null
@@ -1978,11 +1995,29 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const sharedMiddle = e !== undefined && e === eAgain
     // 裸比例不推断共线：仅当明确标明 splitPoint: true 时才校验共线与线段内；常规位置约束由 pointOnSegment 承担。
     const split = sharedMiddle && item.splitPoint === true
+    const fmtPt = (p: Vector3): string =>
+      Math.abs(p.z) <= 1e-9
+        ? `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))})`
+        : `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))}, ${Number(p.z.toFixed(4))})`
     if (!split) {
       const numerator = length(d, e)
       const denominator = length(eAgain, a)
       if (denominator <= 1e-10) return null
-      return { actual: numerator / denominator, expected: numeric, tolerance: UNITLESS_TOLERANCE }
+      const ratioVal = numerator / denominator
+      const [n0, n1, n2, n3] = item.targets
+      const swappedHint = Math.abs(numeric - 1) > 1e-3 && ratioVal > 1e-9 && Math.abs(1 / ratioVal - numeric) <= 1e-2
+        ? `（实测比值≈1/${numeric}，将 ${n0}/${n1} 与 ${n2}/${n3} 对应点互换即可！）`
+        : `（若方向/端点写反或斜率有误，请重算交点与斜率使比值为 ${numeric}。）`
+      return {
+        actual: ratioVal,
+        expected: numeric,
+        tolerance: UNITLESS_TOLERANCE,
+        ...(Math.abs(ratioVal - numeric) > UNITLESS_TOLERANCE
+          ? {
+              detail: `实测 |${n0}${n1}|=${numerator.toPrecision(5)}, |${n2}${n3}|=${denominator.toPrecision(5)}，比值=${ratioVal.toPrecision(5)}，题设要求 ${numeric}；当前坐标 ${n0}=${fmtPt(d)}, ${n1}=${fmtPt(e)}, ${n2}=${fmtPt(eAgain)}, ${n3}=${fmtPt(a)}。${swappedHint}`
+            }
+          : {})
+      }
     }
     const de = length(d, e)
     const ea = length(e, a)
@@ -1990,8 +2025,30 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (ea <= 1e-10 || da <= 1e-10) return null
     // DE=2EA includes E on the segment DA, not merely a coincidental length ratio.
     const segmentGap = Math.abs(de + ea - da)
-    if (segmentGap > distanceTolerance(da)) return { actual: segmentGap, expected: 0, tolerance: distanceTolerance(da) }
-    return { actual: de / ea, expected: numeric, tolerance: UNITLESS_TOLERANCE }
+    const [n0, n1, n2, n3] = item.targets
+    if (segmentGap > distanceTolerance(da)) {
+      return {
+        actual: segmentGap,
+        expected: 0,
+        tolerance: distanceTolerance(da),
+        detail: `点 ${n1}=${fmtPt(e)} 不在线段 ${n0}${n3} 内（${n0}=${fmtPt(d)}, ${n3}=${fmtPt(a)}，|${n0}${n1}|+|${n1}${n3}|=${(de + ea).toPrecision(5)}, |${n0}${n3}|=${da.toPrecision(5)}），共线/顺序有误。`
+      }
+    }
+    const splitRatio = de / ea
+    const invSplitRatio = splitRatio > 1e-9 ? 1 / splitRatio : 0
+    const splitSwapHint = Math.abs(numeric - 1) > 1e-3 && splitRatio > 1e-9 && Math.abs(invSplitRatio - numeric) <= 1e-2
+      ? `（实测比值≈1/${numeric}，只需互换 ${n0} 与 ${n3} 的命名或 selection 即可满足！）`
+      : `（注意：即使互换 ${n0}/${n3}，反向比值=${invSplitRatio.toPrecision(5)} 仍不等于 ${numeric}，说明当前直线斜率本身有误——请重新联立直线与曲线方程并用韦达定理代数求解精确斜率 k，不要仅互换交点或只改斜率正负号。）`
+    return {
+      actual: splitRatio,
+      expected: numeric,
+      tolerance: UNITLESS_TOLERANCE,
+      ...(Math.abs(splitRatio - numeric) > UNITLESS_TOLERANCE
+        ? {
+            detail: `实测 |${n0}${n1}|=${de.toPrecision(5)}, |${n2}${n3}|=${ea.toPrecision(5)}，比值=${splitRatio.toPrecision(5)}，题设要求 ${numeric}；当前坐标 ${n0}=${fmtPt(d)}, ${n1}=${fmtPt(e)}, ${n3}=${fmtPt(a)}。${splitSwapHint}`
+          }
+        : {})
+    }
   }
   if (item.kind === "midpoint") {
     const middle = at(0)
@@ -2031,10 +2088,18 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     /** 超出 `[0,1]` 的那一段，按长度计（`t<0` 是在起点这一侧的延长线上）。 */
     const outside = along < 0 ? -along * span : along > 1 ? (along - 1) * span : 0
     const tolerance = distanceTolerance(span)
+    const fmtSegPt = (p: Vector3): string =>
+      Math.abs(p.z) <= 1e-9
+        ? `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))})`
+        : `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))}, ${Number(p.z.toFixed(4))})`
+    const minX = Number(Math.min(start.x, end.x).toFixed(4))
+    const maxX = Number(Math.max(start.x, end.x).toFixed(4))
+    const minY = Number(Math.min(start.y, end.y).toFixed(4))
+    const maxY = Number(Math.max(start.y, end.y).toFixed(4))
     const detail = offLine > tolerance
-      ? `实测点 ${name} 到直线 ${from}${to} 的距离 ${formatNumber(offLine)}（0 = 正好在这条线上）—— 它**根本不在** ${from}${to} 这条线上。`
+      ? `实测点 ${name}=${fmtSegPt(point)} 到直线 ${from}${to} 的距离 ${formatNumber(offLine)}（0 = 正好在这条线上）—— 它**根本不在** ${from}${to} 这条线上。`
       : outside > tolerance
-        ? `点 ${name} 确实在直线 ${from}${to} 上，但**不在线段内**：参数 t=${formatNumber(along)} 落在 [0,1] 之外（超出 ${formatNumber(outside)}）—— 题面说的是「${from}${to} 上一点」，而这是**延长线**上的一点，两件事。`
+        ? `点 ${name}=${fmtSegPt(point)} 确实在直线 ${from}${to} 上，但**不在线段内**：参数 t=${formatNumber(along)} 落在 [0,1] 之外（超出 ${formatNumber(outside)}；线段 ${from}${to} 端点 ${from}=${fmtSegPt(start)}, ${to}=${fmtSegPt(end)}，范围 x∈[${minX},${maxX}], y∈[${minY},${maxY}]）—— 题面说的是「${from}${to} 上一点」，而这是**延长线**上的一点，两件事。若 ${name} 由直线与曲线的交点决定，请改选另一交点（如切换 min_y/max_y 或互换两交点命名）或调整直线斜率使其落在线段内。`
         : `点 ${name} 落在线段 ${from}${to} 上（参数 t=${formatNumber(along)}，到直线距离 ${formatNumber(offLine)}）。`
     return { actual: Math.max(offLine, outside), expected: 0, tolerance, detail }
   }
@@ -2440,7 +2505,31 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     const area = lengthVector3(cross) / 2
     if (!Number.isFinite(area)) return null
     // 面积是 L²（不是无量纲），所以容差随量级走 —— 与 `obligationIR.toleranceFor` 同一把尺子。
-    return { actual: area, expected: numeric, tolerance: Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric)) }
+    const tolerance = Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric))
+    if (Math.abs(area - numeric) > tolerance) {
+      const [nA, nB, nC] = item.targets
+      const fmtP = (p: Vector3): string =>
+        Math.abs(p.z) <= 1e-9
+          ? `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))})`
+          : `(${Number(p.x.toFixed(4))}, ${Number(p.y.toFixed(4))}, ${Number(p.z.toFixed(4))})`
+      const dAB = distanceVector3(first!, second!)
+      const dBC = distanceVector3(second!, third!)
+      const dCA = distanceVector3(third!, first!)
+      let cause = ""
+      if (area <= 1e-6) {
+        if (dBC <= 1e-5) cause = `原因：点 ${nB} 与 ${nC} 重合（距离=${dBC.toPrecision(3)}，可能是直线与曲线相切或两次交点选到了同一分支，请调整直线斜率或使用 excludePointId/相反的 selection）。`
+        else if (dAB <= 1e-5) cause = `原因：点 ${nA} 与 ${nB} 重合（距离=${dAB.toPrecision(3)}）。`
+        else if (dCA <= 1e-5) cause = `原因：点 ${nC} 与 ${nA} 重合（距离=${dCA.toPrecision(3)}）。`
+        else cause = `原因：${nA}、${nB}、${nC} 三点共线（例如直线过 ${nA}），请调整直线斜率。`
+      }
+      return {
+        actual: area,
+        expected: numeric,
+        tolerance,
+        detail: `实测面积 ${area.toPrecision(5)}，题设要求 ${numeric}；顶点坐标 ${nA}=${fmtP(first!)}, ${nB}=${fmtP(second!)}, ${nC}=${fmtP(third!)}。${cause}`
+      }
+    }
+    return { actual: area, expected: numeric, tolerance }
   }
   /**
    * **线面角**（Task 13 边界：斜棱柱的明说倾角，2026-10-14）。
@@ -2509,7 +2598,65 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   }
   const checkedTargets = planeCount > 3 ? item.targets.slice(0, 5) : item.targets
   const residual = relationResidual({ kind, targets: checkedTargets.map((vertex) => ({ vertex })) }, (target) => points.get(target.vertex) ?? null)
-  return residual === null ? null : { actual: residual, expected: 0, tolerance: UNITLESS_TOLERANCE }
+  if (residual === null) return null
+  const activeEllipse =
+    figures.conic?.kind === "ellipse"
+      ? figures.conic
+      : figures.primaryEllipse?.kind === "ellipse"
+        ? figures.primaryEllipse
+        : null
+  if (
+    kind === "perpendicular" &&
+    residual > UNITLESS_TOLERANCE &&
+    activeEllipse !== null &&
+    checkedTargets.some((t) => /^F/i.test(t))
+  ) {
+    const major = Math.max(activeEllipse.radiusX, activeEllipse.radiusY)
+    const minor = Math.min(activeEllipse.radiusX, activeEllipse.radiusY)
+    const focal = Math.sqrt(Math.max(0, major * major - minor * minor))
+    if (minor > focal + 1e-6) {
+      return {
+        actual: residual,
+        expected: 0,
+        tolerance: UNITLESS_TOLERANCE,
+        detail: `实测 ${residual.toPrecision(5)}，题设要求 0。（注意：当前椭圆短半轴 b=${minor.toPrecision(5)} > 半焦距 c=${focal.toPrecision(5)}，以焦距为直径的圆严格落在椭圆内部，不存在满足垂直条件 PF₁⊥PF₂ 的椭圆上实点！请省略无解点 P、保留第(1)问曲线与焦点 F₁/F₂ 及已知点，以 scopeId:"subquestion:1" + answer 说明无解原因。）`
+      }
+    }
+  }
+  if (kind === "perpendicular" && residual > UNITLESS_TOLERANCE && checkedTargets.length === 4) {
+    const [a0, a1, b0, b1] = checkedTargets
+    const shared = a0 === b0 || a0 === b1 ? a0 : a1 === b0 || a1 === b1 ? a1 : undefined
+    const otherA = shared === a0 ? a1 : shared === a1 ? a0 : undefined
+    const otherB = shared === b0 ? b1 : shared === b1 ? b0 : undefined
+    if (shared && otherA && otherB && otherA !== otherB) {
+      const pShared = points.get(shared)
+      const pA = points.get(otherA)
+      const pB = points.get(otherB)
+      if (pShared && pA && pB) {
+        const lenA = lengthVector3(subtractVector3(pA, pShared))
+        const lenB = lengthVector3(subtractVector3(pB, pShared))
+        const lenOpp = lengthVector3(subtractVector3(pA, pB))
+        const expectedHyp = Math.hypot(lenA, lenB)
+        if (lenA > 1e-6 && lenB > 1e-6 && Math.abs(lenOpp - expectedHyp) > 1e-3) {
+          return {
+            actual: residual,
+            expected: 0,
+            tolerance: UNITLESS_TOLERANCE,
+            detail: `实测 ${residual.toPrecision(5)}，题设要求 0。（毕达哥拉斯提醒：${otherA}${shared}⊥${shared}${otherB} 等价于 |${otherA}${otherB}| = √(|${otherA}${shared}|²+|${shared}${otherB}|²) = ${expectedHyp.toFixed(6)}，当前实测 |${otherA}${otherB}| = ${lenOpp.toFixed(6)}；若使用 construct_solid(tetrahedron) 请将 ${otherA}${otherB} 边长更正为 ${expectedHyp.toFixed(6)}）`
+          }
+        }
+      }
+    }
+  }
+  if (kind === "perpendicular" && residual > UNITLESS_TOLERANCE && checkedTargets.length === 4) {
+    return {
+      actual: residual,
+      expected: 0,
+      tolerance: UNITLESS_TOLERANCE,
+      detail: `实测 ${residual.toPrecision(5)}，题设要求 0（须使 ${checkedTargets[0]}${checkedTargets[1]}⊥${checkedTargets[2]}${checkedTargets[3]}，即两者方向向量点积 = 0；若涉及动点参数请先解点积方程后再作图）。`
+    }
+  }
+  return { actual: residual, expected: 0, tolerance: UNITLESS_TOLERANCE }
 }
 
 /**
@@ -2724,8 +2871,10 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   const graphNames = [...new Set(set.givens.filter((given) => given.kind === "functionGraph").flatMap((given) => statedCurveNames(given.sourceText)))]
   const uniqueGraphName = graphNames.length === 1 ? graphNames[0] : undefined
   const allConics = candidateConics(plan, candidate, base, options)
+  const ellipses = allConics.filter((entry) => entry.conic.kind === "ellipse")
   const figures: FigureContext = {
     conic: allConics.length === 1 ? allConics[0]!.conic : null,
+    primaryEllipse: ellipses.length === 1 ? ellipses[0]!.conic : null,
     tangent: candidateTangent(plan, candidate, base),
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: curves.length === 1 ? curves[0] : null,
@@ -2805,7 +2954,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
             code: tangents.length > 0 ? "function_binding_mismatch" : "tangent_missing",
             reason: tangents.length > 0
               ? `候选图中的切线未绑定到题面指定的 ${selected.curve.label ?? "目标函数"}，不能错用辅助曲线求导，未核验。`
-              : "候选图里没有画在该函数曲线上的切线，未核验。"
+              : "候选图里没有画在该函数曲线上的切线，未核验（请调用 construct_tangent({ id, functionId, expression, domain, x0 }) 生成函数切线，勿仅画普通直线）。"
           }
         }
         itemFigures = { ...figures, curve: selected.curve, tangent: boundTangents[0] }
@@ -2820,6 +2969,31 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
        * 退化 / 算不出角度仍然落回原句（那时缺的不是名字）。
        */
       const missing = pointBased && points !== null ? [...new Set(item.targets.filter((name) => !statePoints.has(name)))] : []
+      const activeEllipseMissing =
+        itemFigures.conic?.kind === "ellipse"
+          ? itemFigures.conic
+          : itemFigures.primaryEllipse?.kind === "ellipse"
+            ? itemFigures.primaryEllipse
+            : null
+      if (
+        item.kind === "perpendicular" &&
+        missing.length > 0 &&
+        activeEllipseMissing !== null &&
+        item.targets.some((t) => /^F/i.test(t)) &&
+        missing.every((m) => !/^F/i.test(m))
+      ) {
+        const major = Math.max(activeEllipseMissing.radiusX, activeEllipseMissing.radiusY)
+        const minor = Math.min(activeEllipseMissing.radiusX, activeEllipseMissing.radiusY)
+        const focal = Math.sqrt(Math.max(0, major * major - minor * minor))
+        if (minor > focal + 1e-6) {
+          return {
+            kind: item.kind,
+            sourceText: item.sourceText,
+            status: "failed",
+            reason: `${item.sourceText}：点 ${missing.join("、")} 不存在实解 —— 当前椭圆短半轴 b=${minor.toPrecision(5)} > 半焦距 c=${focal.toPrecision(5)}，不存在满足垂直条件 ${item.sourceText} 的椭圆上实点！请省略 ${missing.join("、")}、保留第(1)问曲线与焦点，并在 finish_candidate 中传 scopeId: "subquestion:1" 与 answer 说明无解。`
+          }
+        }
+      }
       return {
         kind: item.kind,
         sourceText: item.sourceText,
@@ -2867,10 +3041,23 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     const stateNote = usePre && preFold !== null
       ? `（按**折前状态**核验：${preFold.apex} 取折片折前坐标，折后它叫 ${preFold.apexAs}。）`
       : ""
+    const reciprocalNote =
+      status !== "passed" &&
+      result.expected > 0 &&
+      result.actual > 0 &&
+      Math.abs(result.expected - 1) > 1e-3 &&
+      Math.abs(result.actual * result.expected - 1) < 1e-3
+        ? "（实测值与题设恰好互为倒数——很可能是两条线段或交点的端点命名互换，请检查方向并调换 selection/端点命名！）"
+        : ""
+    const areaRadicalNote =
+      status !== "passed" && item.kind === "area"
+        ? "（若决定面积的直线斜率含根号，可用 construct_line({ equation: \"y=sqrt(...)*x+...\" }) 直接传精确根号方程并重算交点，避免近似斜率误差或反复试数。）"
+        : ""
+    const diff = Math.abs(result.actual - result.expected)
     const baseReason = result.detail !== undefined
-      ? (status === "passed" ? result.detail : `${result.detail}最大偏差 ${result.actual.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。`)
-      : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。`)
-    const reason = `${baseReason}${originNote}${stateNote}`
+      ? (status === "passed" ? result.detail : `${result.detail}偏差 ${diff.toPrecision(5)}，容差 ${result.tolerance.toPrecision(5)}。${reciprocalNote}`)
+      : (status === "passed" ? "已按候选图坐标核验。" : `实测 ${result.actual.toPrecision(5)}，题设要求 ${result.expected}。${reciprocalNote}`)
+    const reason = `${baseReason}${originNote}${stateNote}${areaRadicalNote}`
     return {
       kind: item.kind,
       sourceText: item.sourceText,
@@ -2923,4 +3110,59 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     ...proofScopeOf(candidate.parameters),
     ...(options.obligationIR === true ? { obligationIR: buildObligationIR(set) } : {})
   }
+}
+
+/**
+ * When a multi-part conic problem's final subquestion demands a focus-perpendicular
+ * moving point (e.g. `PF₁⊥PF₂`) that is mathematically impossible on the candidate's
+ * verified ellipse (`b > c`) and the candidate deliberately omitted that impossible
+ * point while satisfying all obligations of the preceding subquestion (`subquestion:1`),
+ * resolve `selectedScopeId` to that preceding subquestion scope rather than rejecting
+ * the valid subquestion-1 diagram.
+ */
+export function resolveInfeasibleEllipseFallbackScope(input: {
+  prompt: string
+  document: GeometryDocument
+  plan: PlanEnvelope
+  baseDocument?: GeometryDocument
+  requestedScopeId?: string
+}): string | undefined {
+  if (input.requestedScopeId !== undefined && input.requestedScopeId !== "shared") {
+    return input.requestedScopeId
+  }
+  const ellipses = input.document.primitives.filter((p): p is Extract<PrimitiveSpec, { type: "ellipse" }> => p.type === "ellipse")
+  if (ellipses.length !== 1) return input.requestedScopeId
+  const el = ellipses[0]!
+  const major = Math.max(el.radiusX, el.radiusY)
+  const minor = Math.min(el.radiusX, el.radiusY)
+  const focal = Math.sqrt(Math.max(0, major * major - minor * minor))
+  if (!(minor > focal + 1e-6)) return input.requestedScopeId
+
+  const parsed = parseDiagramObligations(normalizeGeometryPrompt(input.prompt))
+  const parts = parsed.parts
+  if (!parts || parts.length < 2) return input.requestedScopeId
+  const lastPart = parts[parts.length - 1]!
+  const prevPart = parts[parts.length - 2]!
+  const infeasibleFocusPerps = lastPart.obligations.givens.filter(
+    (g) => g.kind === "perpendicular" && g.targets.some((t) => /^F/i.test(t))
+  )
+  if (infeasibleFocusPerps.length === 0) return input.requestedScopeId
+
+  const presentLabels = new Set<string>()
+  for (const prim of input.document.primitives) {
+    if (prim.type === "point" || prim.type === "point3") {
+      if (typeof prim.label === "string" && prim.label.trim()) presentLabels.add(prim.label.trim())
+    }
+  }
+  const omittedImpossiblePoint = infeasibleFocusPerps.some((g) =>
+    g.targets.some((t) => !/^F/i.test(t) && !presentLabels.has(t))
+  )
+  if (!omittedImpossiblePoint) return input.requestedScopeId
+
+  const prevScopeId = subquestionScopeId(prevPart.number)
+  const prevReport = verifyDiagramObligations(prevPart.obligations, input.plan, input.document, input.baseDocument, {
+    prompt: input.prompt,
+    activeScopeId: prevScopeId
+  })
+  return prevReport.status === "passed" ? prevScopeId : input.requestedScopeId
 }

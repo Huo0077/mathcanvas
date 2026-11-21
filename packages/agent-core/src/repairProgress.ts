@@ -142,12 +142,17 @@ export function createTargetedRepairTracker(options: { maxRounds?: number } = {}
       seenSignatures.add(signature)
 
       // 4. Require monotonic decrease in failing count or maxResidual.
+      // Exception: when verification emits no numeric residual (`!hasResidual`) and only 1 obligation
+      // remains failing on the very first retry (`round === 2 <= maxRounds`), allow that targeted second attempt
+      // so the model can add a missing entity (e.g., construct_tangent) before terminating.
       const hasResidual = typeof input.maxResidual === "number" && Number.isFinite(input.maxResidual)
       if (bestFailingCount !== undefined) {
         const countImproved = failingChecks.length < bestFailingCount
         const residualImproved =
           hasResidual && bestMaxResidual !== undefined && input.maxResidual! < bestMaxResidual - 1e-9
-        if (!countImproved && !residualImproved) {
+        const singleNoResidualSecondChance =
+          !hasResidual && failingChecks.length === 1 && bestFailingCount === 1 && round === 2
+        if (!countImproved && !residualImproved && !singleNoResidualSecondChance) {
           return {
             allowRepair: false,
             round,

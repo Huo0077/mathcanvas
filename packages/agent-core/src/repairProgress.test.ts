@@ -65,6 +65,28 @@ describe("repairProgress (targeted local repair & monotonic progress tracking)",
     expect(r2.stopReason).toBe("no_progress")
   })
 
+  it("allows one second-chance round when a single non-residual obligation fails on round 2, then stops on round 3", () => {
+    const tracker = createTargetedRepairTracker({ maxRounds: 3 })
+    const r1 = tracker.evaluate({
+      candidateHash: "cand-1",
+      checks: [{ id: "tan-1", kind: "function_tangent", status: "failed", detail: "missing tangent" }]
+    })
+    expect(r1.allowRepair).toBe(true)
+
+    const r2 = tracker.evaluate({
+      candidateHash: "cand-2",
+      checks: [{ id: "tan-1", kind: "function_tangent", status: "failed", detail: "missing tangent" }]
+    })
+    expect(r2.allowRepair).toBe(true)
+
+    const r3 = tracker.evaluate({
+      candidateHash: "cand-3",
+      checks: [{ id: "tan-1", kind: "function_tangent", status: "failed", detail: "missing tangent" }]
+    })
+    expect(r3.allowRepair).toBe(false)
+    expect(r3.stopReason).toBe("no_progress")
+  })
+
   it("stops when repairing one constraint regresses a previously passed obligation", () => {
     const tracker = createTargetedRepairTracker({ maxRounds: 3 })
     const r1 = tracker.evaluate({

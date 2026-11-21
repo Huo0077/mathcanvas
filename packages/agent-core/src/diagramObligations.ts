@@ -2979,7 +2979,7 @@ function resolvePlanarConstructions(
   }
 
   // 6b. 过点 (x0, y0) 的直线 [l] 与? C 交于 A, B 两点 (GK-P01, JT-P03, JT-P07)
-  const anonChordRe = new RegExp(`过\\s*(?:点\\s*)?\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)\\s*的直线(?:\\s*[a-z])?\\s*(?:与\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:[A-Z]\\s*)?相?交|交\\s*(?:椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:[A-Z]\\s*)?)于\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})\\s*两点`, "g")
+  const anonChordRe = new RegExp(`过\\s*(?:点\\s*)?\\(\\s*([^(),\\n]+?)\\s*,\\s*([^()\\n]+?)\\s*\\)\\s*的直线(?:\\s*[a-z])?\\s*(?:与\\s*(椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:([A-Z])\\s*)?相?交|交\\s*(椭圆|双曲线|抛物线|圆|曲线)?\\s*(?:([A-Z])\\s*)?)\\s*于\\s*(${POINT_NAME_SOURCE})\\s*[，,、]\\s*(${POINT_NAME_SOURCE})\\s*两点`, "g")
   for (const m of givenText.matchAll(anonChordRe)) {
     const start = m.index ?? 0
     const end = start + m[0].length
@@ -2987,11 +2987,17 @@ function resolvePlanarConstructions(
     const x0 = signedRadicalOrFraction(m[1]!)
     const y0 = signedRadicalOrFraction(m[2]!)
     if (x0 === null || y0 === null) continue
-    const p1 = canonicalPointName(m[3]!)
-    const p2 = canonicalPointName(m[4]!)
+    const kindWord = m[3] ?? m[5]
+    const entityLabel = m[4] ?? m[6]
+    const explicitKind = kindWord === "椭圆" ? "ellipse" : kindWord === "双曲线" ? "hyperbola" : kindWord === "抛物线" ? "parabola" : kindWord === "圆" ? "circle" : undefined
+    const inferredKind = explicitKind
+      ?? (givens.find((g) => g.kind === "conicAxes" && g.entityLabel === entityLabel)
+        ?? givens.find((g) => g.kind === "conicAxes" && g.conic?.kind !== "circle"))?.conic?.kind
+    const p1 = canonicalPointName(m[7]!)
+    const p2 = canonicalPointName(m[8]!)
     pushUsed(start, end, [
-      { kind: "pointOnConic", targets: [p1] },
-      { kind: "pointOnConic", targets: [p2] },
+      { kind: "pointOnConic", targets: [p1], ...(inferredKind ? { conicKind: inferredKind } : {}), ...(entityLabel ? { entityLabel } : {}) },
+      { kind: "pointOnConic", targets: [p2], ...(inferredKind ? { conicKind: inferredKind } : {}), ...(entityLabel ? { entityLabel } : {}) },
       { kind: "collinear", targets: [p1, p2], coordinate: { x: x0, y: y0, z: 0 } }
     ])
   }
@@ -3275,6 +3281,34 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       }
       if (accepted.length === 0) continue
       for (let at = start; at < end; at++) used.add(at)
+    }
+  }
+
+  for (const item of givens) {
+    if (item.kind !== "pointOnConic" || item.conicKind !== undefined) continue
+    const byLabel = item.entityLabel
+      ? givens.find((g) => g.entityLabel === item.entityLabel && (g.kind === "conicAxes" || g.kind === "symbolicConic"))
+      : undefined
+    const matchedKind = byLabel?.kind === "conicAxes"
+      ? byLabel.conic?.kind
+      : byLabel?.kind === "symbolicConic"
+        ? byLabel.symbolicConic?.kind
+        : undefined
+    if (matchedKind) {
+      item.conicKind = matchedKind
+      continue
+    }
+    if (!item.entityLabel) {
+      const nonCircleKinds = new Set(
+        givens.flatMap((g) => g.kind === "conicAxes" && g.conic && g.conic.kind !== "circle"
+          ? [g.conic.kind]
+          : g.kind === "symbolicConic" && g.symbolicConic
+            ? [g.symbolicConic.kind]
+            : [])
+      )
+      if (nonCircleKinds.size === 1) {
+        item.conicKind = [...nonCircleKinds][0]!
+      }
     }
   }
 

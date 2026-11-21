@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, routeDeterministicProblem, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, resolveInfeasibleEllipseFallbackScope, routeDeterministicProblem, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { commitTransaction, createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -463,6 +463,27 @@ export interface DraftStoreProofOptions {
   backendVersion?: string
 }
 
+function inferUniquePremiseScopeId(prompt: string | undefined): string | undefined {
+  if (!prompt) return undefined
+  const parsed = parseDiagramObligations(prompt)
+  if (!parsed.parts || parsed.parts.length < 2) return undefined
+  const shared = parseDiagramObligations(prompt, { selectedScopeId: "shared" })
+  const partsWithPremise = parsed.parts.filter((part) => {
+    const boundary = /(?:求证|试?证明|^\s*求|(?<=[，,。；;\n])\s*求)/.exec(part.text)
+    const premiseText = (boundary === null ? part.text : part.text.slice(0, boundary.index)).trim()
+    return (
+      premiseText.length > 0 ||
+      part.obligations.givens.length > shared.givens.length ||
+      part.obligations.freeChoices.length > shared.freeChoices.length ||
+      part.obligations.unverified.length > shared.unverified.length
+    )
+  })
+  if (partsWithPremise.length === 1) {
+    return `subquestion:${partsWithPremise[0]!.number}`
+  }
+  return undefined
+}
+
 export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) => IdAllocator = createIdAllocator, compile: CompileStrategy = compileOnCallerThread, proof: DraftStoreProofOptions = {}): DraftStore {
   const drafts = new Map<string, DraftRecord>()
   const invalidated = new Map<string, string>()
@@ -585,8 +606,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         actions
       }
       const matchedRoute = userMessage === undefined ? null : routeDeterministicProblem(userMessage)
-      const effectiveSelectedScopeId = stageOptions?.selectedScopeId ?? matchedRoute?.selectedScopeId
       const effectiveUserMessage = matchedRoute?.diagramPrompt ?? userMessage
+      const effectiveSelectedScopeId = stageOptions?.selectedScopeId ?? matchedRoute?.selectedScopeId ?? inferUniquePremiseScopeId(effectiveUserMessage)
       const compiled = await compile({
         plan,
         document: record.candidate,
@@ -649,7 +670,12 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
        * 草稿层说"没读懂"，两句话打架，门禁反而不放行（与 `stage` 签名上那段注释同源）。
        * 没有改写、或全被拒 ⇒ `effectivePrompt` 就是原文，行为与改动之前逐字相同。
        */
-      const unreadClauses = effectiveUserMessage === undefined ? [] : parseDiagramObligations(effectiveUserMessage).unverified
+      const unreadClauses = effectiveUserMessage === undefined
+        ? []
+        : parseDiagramObligations(
+            effectiveUserMessage,
+            effectiveSelectedScopeId === undefined ? {} : { selectedScopeId: effectiveSelectedScopeId }
+          ).unverified
       const normalisation = effectiveUserMessage === undefined || normalisations === undefined || normalisations.length === 0 || unreadClauses.length === 0
         ? null
         : parseNormalisationReply({ clauses: normalisations }, effectiveUserMessage, unreadClauses)
@@ -678,6 +704,15 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const onlyParameterActions = materialised.actions.length > 0 && materialised.actions.every((action) => action.actionId.startsWith("parameter."))
       const explicitSolidDeclared = parserPrompt !== undefined && (hasExplicitSolidConditions(parserPrompt) || solidDimensionGate(parserPrompt, materialised.actions))
       const hasMathContractSignal = parserPrompt !== undefined && !onlyParameterActions && /(?:\$|(?<![A-Za-z])[xy]\s*(?:\^|²)|f\s*\(|切线|椭圆|双曲线|抛物线|二面角|最长弦|最短弦|[A-Z]{2}\s*=|⊥|∥)/.test(parserPrompt)
+      const resolvedFallbackScopeId = parserPrompt !== undefined
+        ? resolveInfeasibleEllipseFallbackScope({
+            prompt: parserPrompt,
+            document: compiled.draftDocument,
+            plan: materialised,
+            baseDocument: record.candidate,
+            ...(effectiveSelectedScopeId === undefined ? {} : { requestedScopeId: effectiveSelectedScopeId })
+          })
+        : effectiveSelectedScopeId
       const parsed = parserPrompt && !onlyParameterActions && (
         planHasVerifiableFigure(materialised.actions)
         || explicitSolidDeclared
@@ -687,7 +722,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       )
         ? parseObligationWithLegacy(parserPrompt, {
             spatialPointConditions: witnessSearch === true,
-            ...(effectiveSelectedScopeId === undefined ? {} : { selectedScopeId: effectiveSelectedScopeId })
+            ...(resolvedFallbackScopeId === undefined ? {} : { selectedScopeId: resolvedFallbackScopeId })
           })
         : null
       const obligations = parsed?.legacy ?? null
@@ -696,11 +731,50 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
         ? verifyDiagramObligations(obligations, materialised, compiled.draftDocument, record.candidate, {
             obligationIR: obligationIR === true,
             prompt: parserPrompt,
-            ...(effectiveSelectedScopeId === undefined ? {} : { activeScopeId: effectiveSelectedScopeId })
+            ...(resolvedFallbackScopeId === undefined ? {} : { activeScopeId: resolvedFallbackScopeId })
           })
         : undefined
       if (checked?.status === "failed") {
-        return { ok: false, reason: "compile_failed", diagnostics: checked.checks.filter((item) => item.status === "failed").map((item) => ({ code: "diagram_condition_failed", message: `${item.sourceText}：${item.reason}` })) }
+        const failedDiags = checked.checks.filter((item) => item.status === "failed").map((item) => ({
+          code: "diagram_condition_failed",
+          message: `${item.sourceText}：${item.reason}`
+        }))
+        const isTetraPrompt = typeof parserPrompt === "string" && /(三棱锥|四面体)/.test(parserPrompt)
+        const has3dFailure = checked.checks.some((item) => item.status === "failed" && (item.kind === "perpendicular" || item.kind === "fixedLength" || item.kind === "planarAngle"))
+        const fixedLenFailed = checked.checks.filter(
+          (item) => item.status === "failed" && item.kind === "fixedLength" && typeof item.actual === "number" && typeof item.expected === "number"
+        )
+        const hasSwappedSegments = fixedLenFailed.some((a, i) =>
+          fixedLenFailed.some((b, j) => i !== j && Math.abs((a.actual ?? 0) - (b.expected ?? 0)) <= 1e-3 && Math.abs((b.actual ?? 0) - (a.expected ?? 0)) <= 1e-3)
+        )
+        const hintParts = [
+          isTetraPrompt && has3dFailure
+            ? "若是三棱锥/四面体顶点长度或垂直不成立，切勿继续手算四顶点 construct_point 坐标；请按 vertexNames=[V0,V1,V2,V3] 对应 pa=|V0V1|,pb=|V0V2|,pc=|V0V3|,ab=|V1V2|,ac=|V1V3|,bc=|V2V3| 直接传 6 边长调用 construct_solid(kind:\"tetrahedron\") 由几何内核精确解坐标。"
+            : "",
+          hasSwappedSegments
+            ? "两条线段实测长度恰好互换（如分点比例/方向写反）：请在 construct_point({ from, to, ratio }) 中反转 ratio 为 1-ratio 或互换 from/to 顶点，保留其余已成立顶点。"
+            : ""
+        ].filter(Boolean)
+        const hintSuffix = hintParts.length > 0 ? `（${hintParts.join(" ")}）` : ""
+        return {
+          ok: false,
+          reason: "compile_failed",
+          diagnostics: failedDiags,
+          planDiagnostics: failedDiags.map((d) => ({
+            stage: "geometry_validation" as const,
+            code: d.code,
+            path: "envelope.actions",
+            detail: d.message,
+            severity: "error" as const
+          })),
+          repair: {
+            reason: "compile_failed",
+            errors: failedDiags.map((d) => ({ code: d.code, path: "envelope.actions", detail: d.message })),
+            allowedChanges: ["envelope.actions", "envelope.assumptions", "envelope.normalisations"],
+            attempt: 1,
+            ...(hintSuffix ? { hint: `上一版候选图未通过几何条件核验：${failedDiags.map((d) => d.message).join("；")}${hintSuffix}` } : {})
+          }
+        }
       }
       // A second stage changes the candidate document. Until all earlier obligations can
       // be rechecked against their original named solid, evidence from an earlier version
@@ -747,7 +821,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
             sourceHash,
             obligationIR: obligationIR === true,
             witnessSearch: witnessSearch === true,
-            ...(stageOptions?.selectedScopeId === undefined ? {} : { selectedScopeId: stageOptions.selectedScopeId }),
+            ...(resolvedFallbackScopeId === undefined ? {} : { selectedScopeId: resolvedFallbackScopeId }),
             ...(stageOptions?.requiredEntityLabels === undefined ? {} : { requiredEntityLabels: stageOptions.requiredEntityLabels })
           })
         } else {
@@ -773,7 +847,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
           draftVersion: record.draftVersion + 1,
           documentHash: nextDocumentHash,
           ...(record.promptHash === undefined ? {} : { promptHash: record.promptHash }),
-          ...(stageOptions?.selectedScopeId === undefined ? {} : { scopeId: stageOptions.selectedScopeId }),
+          ...(resolvedFallbackScopeId === undefined ? {} : { scopeId: resolvedFallbackScopeId }),
           ...(stageOptions?.conversationId === undefined ? {} : { conversationId: stageOptions.conversationId }),
           baseRevision: source.baseHandle?.generation ?? record.candidate.revision,
           policyVersion: NUMERIC_POLICY_VERSION

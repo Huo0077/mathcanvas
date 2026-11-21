@@ -491,6 +491,9 @@ export function createAgentRuntime(dependencies: AgentRuntimeDependencies): Agen
       if (committedOnce) {
         return { status: "rejected" as const, detail: "already_committed: 该草稿已确认并提交过一次，不重复写入场景。" }
       }
+      if (coordinator.phase() === "failed") {
+        return { status: "rejected" as const, detail: "cannot confirm draft after run failed (coordinator phase: failed)" }
+      }
       const id = committer.draftIdFor()
       /**
        * **拒绝时说出运行时知道的事实**（2026-09-21）。

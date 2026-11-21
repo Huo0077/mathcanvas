@@ -691,7 +691,8 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
         // 用户原话随暂存一起下去：参数审计的三条判据（符号参数 / 从原话读数字 / 采样≠证明）
         // 都在编译这一层，而原话只有协调器手里有（Fix round 1 / C3）。
         const replaceExistingScene = dependencies.autoClearExistingScene === true && shouldAutoClearSceneForPrompt(request.userMessage, planRequest.model.context.selectedRefs.length > 0)
-        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(request.selectedScopeId === undefined ? {} : { selectedScopeId: request.selectedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}), ...(replaceExistingScene ? { replaceExistingScene: true } : {}) })
+        const stagedScopeId = request.selectedScopeId ?? outcome.selectedScopeId
+        const stagedResult = await dependencies.committer.stage({ run: request.run, actionCount, actions: plan.actions, ...(plan.relations === undefined ? {} : { relations: plan.relations }), ...(plan.normalisations === undefined ? {} : { normalisations: plan.normalisations }), userMessage: request.userMessage, signal, ...(runSwitchedWorkspace ? { runSwitchedWorkspace } : {}), ...(request.acceptance === undefined ? {} : { acceptance: request.acceptance }), ...(stagedScopeId === undefined ? {} : { selectedScopeId: stagedScopeId }), ...(replaceDraftNext ? { replaceDraft: true } : {}), ...(replaceExistingScene ? { replaceExistingScene: true } : {}) })
         if (cancelled) return
         if (stagedResult.ok) {
           staged = stagedResult
@@ -735,8 +736,18 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
                 lastDetail = `${gate.code}: ${gate.reason}`
                 const feedbackLines = [
                   ...(stagedVerification?.next_actions ?? []),
-                  ...failingChecks.map((check) => `${check.id} [${check.status}]: ${check.detail}`)
+                  ...failingChecks.map((check) =>
+                    /no polyhedron/i.test(check.detail)
+                      ? `${check.id} [${check.status}]: ${check.detail}（散装点/线段/面片不构成 polyhedron3 实体；请在已有 4+ 非共面顶点后立刻调用 construct_solid({ id: "pyr", kind: "tetrahedron" | "perpendicular_pyramid", vertexNames: [...] }) 组装为正式 polyhedron3，保留已成立的长度与垂直关系）`
+                      : /no sphere exists/i.test(check.detail)
+                        ? `${check.id} [${check.status}]: ${check.detail}（仅有球心 point "O" 不算 sphere；请保留已成立的 4 个顶点坐标并确保用 construct_solid + construct_circumsphere({ id: "O", solidId: "pyr" }) 生成真实 3D 球，切勿重写丢弃正确顶点）`
+                        : `${check.id} [${check.status}]: ${check.detail}`
+                  )
                 ]
+                const hasValidatedCoreNote =
+                  failingChecks.some((check) => check.status === "not_supported" || check.id === "drawingCertificate")
+                    ? "（若已有曲线、圆心半径或顶点坐标已通过核验，补齐缺失对象或 scopeId 时请原样保留已通过参数，勿改坏核心几何参数）"
+                    : ""
                 repair = {
                   reason: gate.code,
                   errors: failingChecks.map((check) => ({
@@ -746,7 +757,7 @@ export function createCoordinator(dependencies: CoordinatorDependencies): AgentC
                   })),
                   allowedChanges: ["envelope.actions", "envelope.assumptions", "envelope.normalisations"],
                   attempt: validationRepairs,
-                  hint: `上一版草稿未通过独立验证（${gate.reason}），请仅修复失败义务并在保留已通过分问的前提下重建完整合法方案（禁止修改题设条件）：${feedbackLines.join("；")}`,
+                  hint: `上一版草稿未通过独立验证（${gate.reason}），请仅修复失败义务并在保留已通过分问的前提下重建完整合法方案（禁止修改题设条件）${hasValidatedCoreNote}：${feedbackLines.join("；")}`,
                   targetedScope: {
                     targetEntities: targeted.targetEntities,
                     targetConstraintIds: targeted.targetConstraintIds,

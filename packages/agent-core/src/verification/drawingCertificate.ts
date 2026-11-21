@@ -3,7 +3,7 @@ import { conicResidualAt, evaluateFunctionWithDomain, evaluateSymbolicDerivative
 export { NUMERIC_POLICY_VERSION }
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
 import { routeDeterministicProblem } from "../deterministicProblemRoute"
-import { verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
+import { resolveInfeasibleEllipseFallbackScope, verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
 import { normalizeGeometryPrompt } from "../latexNormalisation"
 import { splitNumberedProblem, subquestionScopeId } from "../numberedProblem"
 import { parseObligationWithLegacy } from "../obligationIR"
@@ -354,15 +354,11 @@ export function certifyDrawingAgainstContract(input: {
     (label) => !presentLabels.has(label.trim()) && !presentLabels.has(normalizedLabel(label))
   )
 
-  const { parserPrompt, selectedScopeId: effectiveScopeId } = resolveCertificatePromptAndScope(
+  const { parserPrompt, selectedScopeId: initialScopeId } = resolveCertificatePromptAndScope(
     input.prompt,
     input.selectedScopeId,
     input.document
   )
-  const parsedObligations = parseObligationWithLegacy(parserPrompt, {
-    spatialPointConditions: input.witnessSearch === true,
-    ...(effectiveScopeId === undefined ? {} : { selectedScopeId: effectiveScopeId })
-  }).legacy
   const neutralPlan: PlanEnvelope = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     kind: "plan",
@@ -370,10 +366,32 @@ export function certifyDrawingAgainstContract(input: {
     factIds: [],
     actions: []
   }
+  const effectiveScopeId = resolveInfeasibleEllipseFallbackScope({
+    prompt: parserPrompt,
+    document: input.document,
+    plan: input.plan ?? neutralPlan,
+    ...(input.baseDocument === undefined ? {} : { baseDocument: input.baseDocument }),
+    ...(initialScopeId === undefined ? {} : { requestedScopeId: initialScopeId })
+  })
+  const parsedObligations = parseObligationWithLegacy(parserPrompt, {
+    spatialPointConditions: input.witnessSearch === true,
+    ...(effectiveScopeId === undefined ? {} : { selectedScopeId: effectiveScopeId })
+  }).legacy
   const entityBindings: Record<string, string> = { ...(input.entityBindings ?? {}) }
+  const curveLabelCounts = new Map<string, string[]>()
   for (const p of input.document.primitives) {
-    if (typeof p.label === "string" && p.label.trim().length > 0 && !(p.label.trim() in entityBindings)) {
-      entityBindings[p.label.trim()] = p.id
+    if (
+      (p.type === "circle" || p.type === "ellipse" || p.type === "parabola" || p.type === "hyperbola" || p.type === "function") &&
+      typeof p.label === "string" &&
+      p.label.trim().length > 0
+    ) {
+      const lbl = p.label.trim()
+      curveLabelCounts.set(lbl, [...(curveLabelCounts.get(lbl) ?? []), p.id])
+    }
+  }
+  for (const [lbl, ids] of curveLabelCounts) {
+    if (ids.length === 1 && !(lbl in entityBindings)) {
+      entityBindings[lbl] = ids[0]!
     }
   }
   const report = verifyDiagramObligations(parsedObligations, input.plan ?? neutralPlan, input.document, input.baseDocument, {

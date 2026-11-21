@@ -171,6 +171,8 @@ export function classifyPlanDiagnostics(
 export function createRepairStagnationTracker() {
   const seenKeys = new Set<string>()
   let lastCandidateHash: string | undefined
+  let lastErrCodes: string | undefined
+  let sameCodeStreak = 0
   let bestErrorCount: number | undefined
   let bestResidual: number | undefined
 
@@ -212,12 +214,22 @@ export function createRepairStagnationTracker() {
       seenKeys.add(signature)
 
       const errCount = input.diagnostics.length
+      const errCodes = [...new Set(input.diagnostics.map((d) => {
+        const prefix = d.sourceCode === "diagram_condition_failed" ? d.detail.split("：")[0]?.trim().slice(0, 24) ?? "" : ""
+        return prefix ? `${d.code}:${d.sourceCode}:${prefix}` : `${d.code}:${d.sourceCode}`
+      }))].sort().join(",")
+      const sameFailureCodes = lastErrCodes !== undefined && errCodes === lastErrCodes
       const hasResidual = typeof input.residual === "number" && Number.isFinite(input.residual)
       const candidateChanged = lastCandidateHash !== undefined && input.candidateHash !== lastCandidateHash
-      if (bestErrorCount !== undefined && (!input.allowIdenticalWithoutResidual || candidateChanged || hasResidualFailure || hasResidual)) {
+      const nextStreak = sameFailureCodes ? sameCodeStreak + 1 : 1
+      if (bestErrorCount !== undefined && (hasResidual || errCount > 0) && (!input.allowIdenticalWithoutResidual || candidateChanged || hasResidualFailure || hasResidual)) {
         const errorImproved = errCount < bestErrorCount
         const residualImproved = hasResidual && bestResidual !== undefined && input.residual! < bestResidual - 1e-12
-        if (!errorImproved && !residualImproved) {
+        const blockForErrorCount =
+          hasResidual
+            ? !residualImproved
+            : !candidateChanged || (sameFailureCodes && !errorImproved && nextStreak >= 3)
+        if (!errorImproved && !residualImproved && blockForErrorCount) {
           return {
             shouldStop: true,
             stopReason: "no_progress",
@@ -228,7 +240,11 @@ export function createRepairStagnationTracker() {
       }
 
       lastCandidateHash = input.candidateHash
-      bestErrorCount = bestErrorCount === undefined ? errCount : Math.min(bestErrorCount, errCount)
+      lastErrCodes = errCodes
+      sameCodeStreak = nextStreak
+      if (errCount > 0 || bestErrorCount === undefined) {
+        bestErrorCount = bestErrorCount === undefined ? errCount : Math.min(bestErrorCount, errCount)
+      }
       if (hasResidual) {
         bestResidual = bestResidual === undefined ? input.residual! : Math.min(bestResidual, input.residual!)
       }

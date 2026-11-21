@@ -654,7 +654,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
         // 这一轮由谁规划由 `selectPlanner` 决定（「使用中」的那份配置在它里面被消费）。
         planner: selection.planner,
         ...(selection.textProfileId !== "local-planner"
-          ? { budget: createBudget({ generation: 28, network: 28, tool: 80, actions_per_run: 160 }) }
+          ? { budget: createBudget({ generation: 96, network: 96, tool: 300, actions_per_run: 360 }) }
           : {}),
         /**
          * **这条指令要用到的技能**（决定上下文里的可用动作）。

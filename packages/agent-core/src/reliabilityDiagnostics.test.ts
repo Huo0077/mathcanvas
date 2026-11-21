@@ -96,5 +96,25 @@ describe("P4 / T12 reliability diagnostics, bounded repair & solve outcome taxon
     })
     expect(capStop.shouldStop).toBe(true)
     expect(capStop.stopReason).toBe("capability_missing")
+
+    // Different failure code on changed candidate (e.g. compile fixed -> validating missing entity) or single-error second attempt is allowed.
+    const tracker3 = createRepairStagnationTracker()
+    const d1 = classifyPlanDiagnostics([{ stage: "geometry_validation", code: "diagram_condition_failed", path: "envelope.actions", detail: "p=3", severity: "error" }], { candidateHash: "c1" })
+    const d2 = classifyPlanDiagnostics([{ stage: "geometry_validation", code: "missing_entity", path: "envelope.actions", detail: "missing F", severity: "error" }], { candidateHash: "c2" })
+    expect(tracker3.record({ candidateHash: "c1", diagnostics: d1, allowIdenticalWithoutResidual: true }).shouldStop).toBe(false)
+    expect(tracker3.record({ candidateHash: "c2", diagnostics: d2, allowIdenticalWithoutResidual: true }).shouldStop).toBe(false)
+
+    // Changed diagram_condition_failed obligation labels (e.g. fixed AB⊥AC, now PA=√3 fails) must allow repair instead of treating equal error counts as stagnant.
+    const tracker4 = createRepairStagnationTracker()
+    const da = classifyPlanDiagnostics([
+      { stage: "geometry_validation", code: "diagram_condition_failed", path: "envelope.actions", detail: "AB⊥AC：实测 0.500", severity: "error" },
+      { stage: "geometry_validation", code: "diagram_condition_failed", path: "envelope.actions", detail: "PC=1：实测 2.000", severity: "error" }
+    ], { candidateHash: "cand-x" })
+    const db = classifyPlanDiagnostics([
+      { stage: "geometry_validation", code: "diagram_condition_failed", path: "envelope.actions", detail: "PA=√3：实测 1.000", severity: "error" },
+      { stage: "geometry_validation", code: "diagram_condition_failed", path: "envelope.actions", detail: "PC⊥AB：实测 0.500", severity: "error" }
+    ], { candidateHash: "cand-y" })
+    expect(tracker4.record({ candidateHash: "cand-x", diagnostics: da }).shouldStop).toBe(false)
+    expect(tracker4.record({ candidateHash: "cand-y", diagnostics: db }).shouldStop).toBe(false)
   })
 })

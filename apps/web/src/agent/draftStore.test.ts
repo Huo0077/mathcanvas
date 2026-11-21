@@ -620,4 +620,42 @@ describe("DS3 production certificate integrity: block prompt:'' bypass and incom
       expect(staged.preview.diagramVerification?.status).not.toBe("passed")
     }
   })
+
+  it("auto-infers the sole parameterized subquestion scope for 3D multi-part prompts like USER-16", async () => {
+    const store = createDraftStore()
+    const record = store.create(createEmptyDocument("geometry3d"))
+    const prompt = "16．三棱锥 A−BCD 中，E 在 BD 上，AE⊥CE,AE⊥DE,CD⊥AD。（1） 证明：CD⊥AB ；（2） 若 DE=2,BE=1,AE= √2 ,CD=2√3 ，求 AD 与平面 ABC 所成角的正弦值"
+    const D = { x: 0, y: 0, z: 0 }
+    const B = { x: 3, y: 0, z: 0 }
+    const C = { x: 0, y: 2 * Math.sqrt(3), z: 0 }
+    const A = { x: 2, y: 0, z: Math.SQRT2 }
+    const staged = await store.stage(
+      record.draftId,
+      [
+        {
+          actionId: "solid.create_polyhedron",
+          actionKey: "solid-t",
+          factIds: [],
+          inputs: {
+            alias: "T",
+            label: "T",
+            vertices: [A, B, C, D],
+            vertexNames: ["A", "B", "C", "D"],
+            faces: [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
+          }
+        },
+        { actionId: "solid.create_point", actionKey: "pt-e", factIds: [], inputs: { alias: "E", label: "E", position: { x: 2, y: 0, z: 0 } } },
+        { actionId: "solid.create_segment", actionKey: "seg-ae", factIds: [], inputs: { alias: "AE", label: "AE", vertexNames: ["A", "E"] } },
+        { actionId: "solid.create_segment", actionKey: "seg-ce", factIds: [], inputs: { alias: "CE", label: "CE", vertexNames: ["C", "E"] } }
+      ] as never,
+      record.draftVersion,
+      prompt
+    )
+    expect(staged.ok, staged.ok ? "ok" : JSON.stringify(staged)).toBe(true)
+    if (staged.ok) {
+      expect(staged.preview.diagramVerification?.status).toBe("passed")
+      expect(staged.preview.drawingCertificate?.certificateStatus).toBe("passed")
+      expect(staged.preview.certificateBinding?.scopeId).toBe("subquestion:2")
+    }
+  })
 })

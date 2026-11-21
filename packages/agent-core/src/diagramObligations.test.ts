@@ -1084,4 +1084,12 @@ describe("T03 — 角等式链与类型/单位边界", () => {
       expect(parsed.unverified.length, bad).toBeGreaterThan(0)
     }
   })
+
+  it("extracts entityLabel and conicKind on anonymous-point chord clauses like JT-P03", () => {
+    const parsed = parseDiagramObligations("已知抛物线 C：y²=4x 的顶点为 O，过点 (2, 0) 的直线交 C 于 A，B 两点。")
+    const onConic = parsed.givens.filter((g) => g.kind === "pointOnConic")
+    expect(onConic).toHaveLength(2)
+    expect(onConic[0]).toMatchObject({ kind: "pointOnConic", targets: ["A"], entityLabel: "C", conicKind: "parabola" })
+    expect(onConic[1]).toMatchObject({ kind: "pointOnConic", targets: ["B"], entityLabel: "C", conicKind: "parabola" })
+  })
 })

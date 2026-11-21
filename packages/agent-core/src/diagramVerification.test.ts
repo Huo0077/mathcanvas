@@ -6,7 +6,8 @@ import { normalizeGeometryPrompt } from "./latexNormalisation"
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "./contracts"
 import { parseDiagramObligations } from "./diagramObligations"
 import { compilePlan } from "./planCompiler"
-import { verifyDiagramObligations } from "./diagramVerification"
+import { resolveInfeasibleEllipseFallbackScope, verifyDiagramObligations } from "./diagramVerification"
+import { certifyDrawingAgainstContract } from "./verification/drawingCertificate"
 
 const prompt = "在三棱锥 A-BCD 中，BD=2，△OCD为等边三角形，AB=AD，O为BD的中点，DE=2EA，平面ABD⊥平面BCD，二面角E-BC-D=45°。求证 OA⊥CD"
 const names = ["A", "B", "C", "D", "O", "E"]
@@ -949,5 +950,187 @@ describe("Task 15: function-family premises", () => {
     const oneFails = verifyDiagramObligations(parsed, plan, makeDoc({ x: 0, y: -1, z: 0 }))
     expect(oneFails.status).toBe("failed")
     expect(oneFails.checks.filter((c) => c.kind === "planarAngle").map((c) => c.status)).toEqual(["passed", "failed"])
+  })
+
+  it("matches circle_M / ⊙M labels cleanly and ignores helper circles on parabola chord obligations", () => {
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "圆 M 与辅助圆隔离",
+      factIds: [],
+      actions: [
+        { actionId: "planar.create_circle", actionKey: "c1", factIds: [], inputs: { alias: "conic_M", label: "circle_M", center: { x: 2, y: -1 }, radius: 3 } },
+        { actionId: "planar.create_conic", actionKey: "p1", factIds: [], inputs: { alias: "C", label: "C", kind: "parabola", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 } }
+      ]
+    } as unknown as PlanEnvelope
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "c-m", type: "circle", label: "circle_M", center: { x: 2, y: -1 }, radius: 3 },
+      { id: "p-c", type: "parabola", label: "C", vertex: { x: 0, y: 0 }, axis: "x", focalParameter: 2 },
+      { id: "pt-a", type: "point", label: "A", x: 1, y: 2 },
+      { id: "pt-b", type: "point", label: "B", x: 4, y: -4 }
+    )
+    const paraReport = verifyDiagramObligations(
+      parseDiagramObligations("已知抛物线 C：y²=4x 的顶点为 O，过点 (2, 0) 的直线交 C 于 A，B 两点"),
+      plan,
+      doc
+    )
+    expect(paraReport.checks.every((c) => c.status === "passed")).toBe(true)
+
+    const circleReport = verifyDiagramObligations(
+      parseDiagramObligations("在圆 M：x²+y²-4x+2y-4=0 内"),
+      plan,
+      doc
+    )
+    expect(circleReport.checks[0]?.status).toBe("passed")
+
+    // Regression: when point M is materialized before circle M in primitives, entityBindings must bind circle M, not point M.
+    const ptFirstDoc = createEmptyDocument("conics")
+    ptFirstDoc.primitives.push(
+      { id: "pt-m", type: "point", label: "M", x: 2, y: -1 },
+      { id: "c-m", type: "circle", label: "M", center: { x: 2, y: -1 }, radius: 3 },
+      { id: "pt-o", type: "point", label: "O", x: 0, y: 0 },
+      { id: "pt-a", type: "point", label: "A", x: 2 + 6 / Math.sqrt(5), y: -1 - 3 / Math.sqrt(5) },
+      { id: "pt-c", type: "point", label: "C", x: 2 - 6 / Math.sqrt(5), y: -1 + 3 / Math.sqrt(5) },
+      { id: "pt-b", type: "point", label: "B", x: -2 / Math.sqrt(5), y: -4 / Math.sqrt(5) },
+      { id: "pt-d", type: "point", label: "D", x: 2 / Math.sqrt(5), y: 4 / Math.sqrt(5) }
+    )
+    const jtp09Plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "JT-P09",
+      factIds: [],
+      actions: [{ actionId: "planar.create_circle", actionKey: "c1", factIds: [], inputs: { alias: "conic_M", label: "M", center: { x: 2, y: -1 }, radius: 3 } }]
+    } as unknown as PlanEnvelope
+    const cert = certifyDrawingAgainstContract({
+      prompt: "4. 在圆 M：x²+y²-4x+2y-4=0 内，过点 O(0, 0) 的最长弦和最短弦分别是 AC 和 BD，则四边形 ABCD 的面积为（　　）",
+      document: ptFirstDoc,
+      plan: jtp09Plan,
+      candidateHash: "h1",
+      sourceHash: "s1"
+    })
+    expect(cert.certificateStatus).toBe("passed")
+  })
+
+  it("binds singleton implicit locus circle labeled G when prompt describes M's locus without naming circle M", () => {
+    const prompt = "已知椭圆 C 的离心率为 1/2，左、右焦点分别为 F₁(-1,0)，F₂(1,0)。（1）求椭圆 C 的方程；（2）已知点 A(2,0)，证明：线段 AF₁ 的垂直平分线与椭圆 C 恰有一个公共点；（3）设 M 是坐标平面上的动点，且线段 F₁M 的垂直平分线与椭圆 C 恰有一个公共点，证明 M 的轨迹为圆，并求该圆的方程。"
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "e-c", type: "ellipse", label: "C", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3) },
+      { id: "pt-f1", type: "point", label: "F₁", x: -1, y: 0 },
+      { id: "pt-f2", type: "point", label: "F₂", x: 1, y: 0 },
+      { id: "pt-m", type: "point", label: "M", x: 1, y: 4 },
+      { id: "c-g", type: "circle", label: "G", center: { x: 1, y: 0 }, radius: 4 }
+    )
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "JT-P01",
+      factIds: [],
+      actions: [
+        { actionId: "planar.create_conic", actionKey: "a1", factIds: [], inputs: { alias: "C", label: "C", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: 2, radiusY: Math.sqrt(3) } },
+        { actionId: "planar.create_circle", actionKey: "a2", factIds: [], inputs: { alias: "G", label: "G", center: { x: 1, y: 0 }, radius: 4 } }
+      ]
+    } as unknown as PlanEnvelope
+    const parsed = parseDiagramObligations(prompt)
+    const report = verifyDiagramObligations((parsed.parts?.at(-1)?.obligations ?? parsed), plan, doc)
+    expect(report.status).toBe("passed")
+  })
+
+  it("emits b > c infeasible diagnostic on PF1⊥PF2 even when candidate draws an auxiliary circle alongside ellipse C", () => {
+    const prompt = "已知 F₁，F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求椭圆 C 的标准方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。"
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "e-c", type: "ellipse", label: "C", center: { x: 0, y: 0 }, radiusX: Math.sqrt(5), radiusY: 2 },
+      { id: "c-aux", type: "circle", label: "c", center: { x: 0, y: 0 }, radius: 1 },
+      { id: "pt-f1", type: "point", label: "F₁", x: -1, y: 0 },
+      { id: "pt-f2", type: "point", label: "F₂", x: 1, y: 0 },
+      { id: "pt-m", type: "point", label: "M", x: 2, y: (2 * Math.sqrt(5)) / 5 },
+      { id: "pt-p", type: "point", label: "P", x: 0, y: 2 }
+    )
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "JT-P06",
+      factIds: [],
+      actions: [
+        { actionId: "planar.create_conic", actionKey: "a1", factIds: [], inputs: { alias: "C", label: "C", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(5), radiusY: 2 } },
+        { actionId: "planar.create_circle", actionKey: "a2", factIds: [], inputs: { alias: "c", label: "c", center: { x: 0, y: 0 }, radius: 1 } }
+      ]
+    } as unknown as PlanEnvelope
+    const parsed = parseDiagramObligations(prompt)
+    const report = verifyDiagramObligations((parsed.parts?.at(-1)?.obligations ?? parsed), plan, doc, undefined, { prompt })
+    expect(report.status).toBe("failed")
+    const perpCheck = report.checks.find((c) => c.kind === "perpendicular")
+    expect(perpCheck?.reason).toContain("subquestion:1")
+    expect(perpCheck?.reason).toContain("短半轴 b=")
+  })
+
+  it("emits Pythagorean hypotenuse diagnostic when shared-vertex perpendicularity fails", () => {
+    const prompt = "三棱锥 P-ABC 中，AB=1，AC=1，AB⊥AC，PA=√3，PB=2，PC=1。"
+    const doc = createEmptyDocument("geometry3d")
+    doc.primitives.push(
+      { id: "pt-a", type: "point3", label: "A", position: { x: 0, y: 0, z: 0 } },
+      { id: "pt-b", type: "point3", label: "B", position: { x: 1, y: 0, z: 0 } },
+      { id: "pt-c", type: "point3", label: "C", position: { x: 0.5, y: Math.sqrt(3) / 2, z: 0 } },
+      { id: "pt-p", type: "point3", label: "P", position: { x: 0, y: Math.sqrt(3), z: 1 } }
+    )
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "pythagoras-check",
+      factIds: [],
+      actions: []
+    } as unknown as PlanEnvelope
+    const parsed = parseDiagramObligations(prompt)
+    const report = verifyDiagramObligations(parsed, plan, doc, undefined, { prompt })
+    expect(report.status).toBe("failed")
+    const perpCheck = report.checks.find((c) => c.kind === "perpendicular" && c.status === "failed")
+    expect(perpCheck?.reason).toContain("毕达哥拉斯提醒")
+    expect(perpCheck?.reason).toContain("1.414214")
+  })
+
+  it("emits failed b > c theorem diagnostic instead of unverified when P is omitted on infeasible PF1⊥PF2", () => {
+    const prompt = "已知 F₁，F₂ 是椭圆 C：x²/a² + y²/b² = 1 (a>b>0) 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求椭圆 C 的标准方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求 △F₁PF₂ 的面积。"
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "e-c", type: "ellipse", label: "C", center: { x: 0, y: 0 }, radiusX: Math.sqrt(5), radiusY: 2 },
+      { id: "pt-f1", type: "point", label: "F₁", x: -1, y: 0 },
+      { id: "pt-f2", type: "point", label: "F₂", x: 1, y: 0 },
+      { id: "pt-m", type: "point", label: "M", x: 2, y: (2 * Math.sqrt(5)) / 5 }
+    )
+    const plan = {
+      schemaVersion: PLAN_SCHEMA_VERSION,
+      kind: "plan",
+      goal: "JT-P06 omitted P",
+      factIds: [],
+      actions: [
+        { actionId: "planar.create_conic", actionKey: "a1", factIds: [], inputs: { alias: "C", label: "C", kind: "ellipse", center: { x: 0, y: 0 }, radiusX: Math.sqrt(5), radiusY: 2 } }
+      ]
+    } as unknown as PlanEnvelope
+    const parsed = parseDiagramObligations(prompt)
+    const report = verifyDiagramObligations((parsed.parts?.at(-1)?.obligations ?? parsed), plan, doc, undefined, { prompt })
+    const perpCheck = report.checks.find((c) => c.kind === "perpendicular")
+    expect(perpCheck?.status).toBe("failed")
+    expect(perpCheck?.reason).toContain("scopeId: \"subquestion:1\"")
+
+    // When P is omitted on b > c and subquestion:1 passes 100%, resolveInfeasibleEllipseFallbackScope resolves subquestion:1 even without explicit caller scopeId.
+    expect(resolveInfeasibleEllipseFallbackScope({ prompt, document: doc, plan })).toBe("subquestion:1")
+  })
+
+  it("reports vertex coordinates and coincidence cause when triangle area is 0", () => {
+    const prompt = "过点(0,-2)的直线l交椭圆于A、B两点，O为坐标原点。若△OAB的面积为√2，求|AB|。"
+    const doc = createEmptyDocument("conics")
+    doc.primitives.push(
+      { id: "pt-o", type: "point", label: "O", x: 0, y: 0 },
+      { id: "pt-a", type: "point", label: "A", x: Math.SQRT2, y: -1 },
+      { id: "pt-b", type: "point", label: "B", x: Math.SQRT2, y: -1 }
+    )
+    const plan = { schemaVersion: PLAN_SCHEMA_VERSION, kind: "plan", goal: "area-zero", factIds: [], actions: [] } as unknown as PlanEnvelope
+    const parsed = parseDiagramObligations(prompt)
+    const report = verifyDiagramObligations(parsed, plan, doc, undefined, { prompt })
+    const areaCheck = report.checks.find((c) => c.kind === "area")
+    expect(areaCheck?.status).toBe("failed")
+    expect(areaCheck?.reason).toContain("点 A 与 B 重合")
   })
 })

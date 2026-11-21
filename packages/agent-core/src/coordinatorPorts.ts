@@ -144,7 +144,7 @@ export interface CandidatePlanSlice {
 }
 
 export type PlanOutcome =
-  | { plan: PlanEnvelope; requestId: string; attemptId: string; candidateSlices?: readonly CandidatePlanSlice[] }
+  | { plan: PlanEnvelope; requestId: string; attemptId: string; candidateSlices?: readonly CandidatePlanSlice[]; selectedScopeId?: string }
   | { failure: PlanFailure; requestId: string; attemptId: string }
 
 /**

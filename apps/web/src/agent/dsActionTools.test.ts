@@ -560,6 +560,30 @@ describe("DS conic orientation and center fidelity", () => {
     expect(session.currentSnapshot().candidateHash).toBe(initialHash)
     expect(session.referenceDirectory().materializedConics).toEqual([])
   })
+
+  it("allows valid vertical ellipse via fit, equation, or radiusY > radiusX, positions alias, and 5-vertex pyramids", () => {
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: -2 }).status).toBe("accepted")
+    expect(session.execute("construct_point", { id: "B", x: 1.5, y: -1 }).status).toBe("accepted")
+    expect(session.execute("construct_conic", { id: "Ey_fit", conicType: "ellipse", axis: "y", throughPointIds: ["A", "B"] }).status).toBe("accepted")
+    expect(session.execute("construct_conic", { id: "Ey_eq", conicType: "ellipse", axis: "y", equation: "x^2/3+y^2/4=1" }).status).toBe("accepted")
+    expect(session.execute("construct_conic", { id: "Ey_r", conicType: "ellipse", axis: "y", radiusX: Math.sqrt(3), radiusY: 2 }).status).toBe("accepted")
+    expect(session.execute("query_measurement", { metric: "positions", target: "B" }).measurement?.value).toEqual({ x: 1.5, y: -1 })
+
+    const s3 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    for (const [id, x, y, z] of [["P", 0, 0, 4], ["A", 0, 0, 0], ["B", 2, 0, 0], ["C", 1, 2, 0], ["D", 0, 4, 0]] as const) {
+      expect(s3.execute("construct_point", { id, x, y, z }).status).toBe("accepted")
+    }
+    expect(s3.execute("construct_solid", { id: "pyr", vertexNames: ["P", "A", "B", "C", "D"] }).status).toBe("accepted")
+
+    const sLine = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(sLine.execute("construct_conic", { id: "G", conicType: "ellipse", radiusX: 2, radiusY: Math.sqrt(3) }).status).toBe("accepted")
+    expect(sLine.execute("construct_point", { id: "C", x: 0, y: -1 }).status).toBe("accepted")
+    expect(sLine.execute("construct_line", { id: "l", throughPointId: "C", slope: 0.5 }).status).toBe("accepted")
+    expect(sLine.execute("construct_intersection", { id: "E", lineA: "l", conicId: "G", selection: "max_x" }).status).toBe("accepted")
+    expect(sLine.execute("repair_entity", { target: "E" }).status).toBe("accepted")
+    expect(sLine.execute("construct_intersection", { id: "E", lineA: "l", conicId: "G", selection: "max_x" }).status).toBe("accepted")
+  })
 })
 
 describe("real DS planar tool schema fidelity", () => {
@@ -1080,6 +1104,12 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     expect(checkWrongDist.ok).toBe(true)
     expect(checkWrongDist.constraintStatus).toBe("violated")
 
+    // 4b. query_constraint_status supports 3D collinearity checks via readP3
+    const checkCollinear3d = session.execute("query_constraint_status", { kind: "collinear", targets: ["A", "MID_AB", "B"] })
+    expect(checkCollinear3d.ok).toBe(true)
+    expect(checkCollinear3d.constraintStatus).toBe("satisfied")
+    expect(Number(checkCollinear3d.measurement?.residual ?? 999)).toBeLessThan(1e-6)
+
     // 5. construct_fold_state produces distinct pre_fold / post_fold lineage hashes
     const foldSession = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
     expect(foldSession.execute("construct_base", { id: "RECT", shape: "rectangle", width: 4, depth: 2, vertexNames: ["A", "B", "C", "D"] }).ok).toBe(true)
@@ -1108,5 +1138,426 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
     const distReceipt = foldSession.execute("query_measurement", { metric: "distance", targets: ["A", "B"] })
     expect(distReceipt.toolName).toBe("query_measurement")
     expect(distReceipt.progressSignature).toContain("query_measurement:accepted:")
+
+    const scopedFinish = foldSession.execute("finish_candidate", { goal: "subquestion 2 check", scopeId: "subquestion:2" })
+    expect(scopedFinish.ok).toBe(true)
+    expect(scopedFinish.terminated?.selectedScopeId).toBe("subquestion:2")
+  })
+
+  it("supports y=x^2/2 parabolas, external conic tangents, c+throughPointIds fit, materialized 5-vertex pyramids, and circle/point M coexistence", () => {
+    // 1. y = x^2/2 parabola + two external tangents from D(1, -0.5)
+    const pSess = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(pSess.execute("construct_conic", { id: "C", conicType: "parabola", equation: "y = x^2/2" }).ok).toBe(true)
+    expect(pSess.execute("construct_point", { id: "D", x: 1, y: -0.5 }).ok).toBe(true)
+    const tA = pSess.execute("construct_tangent", { id: "DA", conicId: "C", pointId: "D", tangentPointId: "A" })
+    const tB = pSess.execute("construct_tangent", { id: "DB", conicId: "C", pointId: "D", tangentPointId: "B" })
+    expect(tA.ok).toBe(true)
+    expect(tB.ok).toBe(true)
+    const ptA = tA.measurement?.tangentPoint as { x: number; y: number }
+    const ptB = tB.measurement?.tangentPoint as { x: number; y: number }
+    expect(Math.abs(ptA.y - (ptA.x * ptA.x) / 2)).toBeLessThan(1e-6)
+    expect(Math.abs(ptB.y - (ptB.x * ptB.x) / 2)).toBeLessThan(1e-6)
+    expect(Math.hypot(ptA.x - ptB.x, ptA.y - ptB.y)).toBeGreaterThan(1)
+
+    // 2. c + single throughPointIds ellipse fit (JT-P06: c=1, M=(2, 2*sqrt(5)/5))
+    const eSess = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(eSess.execute("construct_point", { id: "M", x: 2, y: (2 * Math.sqrt(5)) / 5 }).ok).toBe(true)
+    const eFit = eSess.execute("construct_conic", { id: "E", conicType: "ellipse", c: 1, axis: "x", throughPointIds: ["M"] })
+    expect(eFit.ok).toBe(true)
+    const finishedEllipse = eSess.execute("finish_candidate", { goal: "ellipse fit" })
+    expect(finishedEllipse.terminated?.plan.kind).toBe("plan")
+    const conicAct = finishedEllipse.terminated?.plan.kind === "plan"
+      ? finishedEllipse.terminated.plan.actions.find((a) => a.actionId === "planar.create_conic")
+      : undefined
+    expect(Number((conicAct?.inputs as { radiusX?: number }).radiusX)).toBeCloseTo(Math.sqrt(5), 5)
+    expect(Number((conicAct?.inputs as { radiusY?: number }).radiusY)).toBeCloseTo(2, 5)
+
+    // 3. Same-name point M & circle M coexistence + point-to-line distance
+    const mSess = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(mSess.execute("construct_point", { id: "M", x: 2, y: 0 }).ok).toBe(true)
+    expect(mSess.execute("construct_circle", { id: "M", centerId: "M", radius: 1 }).ok).toBe(true)
+    expect(mSess.execute("construct_line", { id: "l", a: 1, b: 0, c: -1 }).ok).toBe(true)
+    const dist = mSess.execute("query_measurement", { metric: "distance", targets: ["M", "l"] })
+    expect(dist.ok).toBe(true)
+    expect(Number(dist.measurement?.value)).toBeCloseTo(1, 6)
+
+    // 4. Materialized 5-vertex right-trapezoidal pyramid assembled via construct_solid (JT-S03)
+    const sSess = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    for (const [id, x, y, z] of [["A", 0, 0, 0], ["B", 2, 0, 0], ["C", 2, 1, 0], ["D", 0, 4, 0], ["P", 0, 0, 4]] as const) {
+      expect(sSess.execute("construct_point", { id, x, y, z }).ok).toBe(true)
+    }
+    const trap = sSess.execute("construct_solid", { id: "PYR", kind: "perpendicular_pyramid", vertexNames: ["P", "A", "B", "C", "D"] })
+    expect(trap.ok).toBe(true)
+
+    // 5. Two static exterior tangents to a circle from P(4,2) produce two distinct secant lines (GK-P05)
+    // and point M before circle M passes full math certificate without entityBindings hijacking (GK-P07 / JT-P09)
+    const cTanSess = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(cTanSess.execute("construct_point", { id: "M", x: 2, y: -1 }).ok).toBe(true)
+    expect(cTanSess.execute("construct_circle", { id: "M", centerId: "M", radius: 3 }).ok).toBe(true)
+    expect(cTanSess.execute("construct_point", { id: "O", x: 0, y: 0 }).ok).toBe(true)
+    const ct1 = cTanSess.execute("construct_tangent", { id: "t1", conicId: "M", pointId: "P" }) // undeclared P -> fails
+    expect(ct1.ok).toBe(false)
+    expect(cTanSess.execute("construct_point", { id: "Q", x: 6, y: 2 }).ok).toBe(true)
+    const q1 = cTanSess.execute("construct_tangent", { id: "q1", conicId: "M", pointId: "Q" })
+    const q2 = cTanSess.execute("construct_tangent", { id: "q2", conicId: "M", pointId: "Q" })
+    expect(q1.ok).toBe(true)
+    expect(q2.ok).toBe(true)
+    const tp1 = q1.measurement?.tangentPoint as { x: number; y: number }
+    const tp2 = q2.measurement?.tangentPoint as { x: number; y: number }
+    expect(Math.hypot(tp1.x - tp2.x, tp1.y - tp2.y)).toBeGreaterThan(1)
+  })
+
+  it("supports circle-circle and concentric circle-ellipse construct_intersection with infeasible empty diagnostic", () => {
+    const sess = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(sess.execute("construct_point", { id: "O", x: 0, y: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "D", x: 2, y: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_circle", { id: "c1", centerId: "O", radius: 2 }).ok).toBe(true)
+    expect(sess.execute("construct_circle", { id: "c2", centerId: "D", radius: 2 }).ok).toBe(true)
+    const cc = sess.execute("construct_intersection", { id: "X", lineA: "c1", lineB: "c2", selection: "max_y" })
+    expect(cc.ok).toBe(true)
+    const xPt = cc.position as { x: number; y: number } | undefined
+    expect(xPt?.x).toBeCloseTo(1, 6)
+    expect(xPt?.y).toBeCloseTo(Math.sqrt(3), 6)
+
+    // Thales circle r=1 strictly inside ellipse rx=sqrt(5), ry=2 -> no_intersection + scopeId: subquestion:1 guidance
+    expect(sess.execute("construct_conic", { id: "E", conicType: "ellipse", centerX: 0, centerY: 0, radiusX: Math.sqrt(5), radiusY: 2 }).ok).toBe(true)
+    expect(sess.execute("construct_circle", { id: "cSmall", centerId: "O", radius: 1 }).ok).toBe(true)
+    const emptyCe = sess.execute("construct_intersection", { id: "P", lineA: "cSmall", conicId: "E" })
+    expect(emptyCe.ok).toBe(false)
+    expect(emptyCe.blockerCode).toBe("no_intersection")
+    expect(emptyCe.repairHint).toContain("subquestion:1")
+
+    // Concentric circle r=2 (tangent at co-vertices) with ellipse rx=sqrt(5), ry=2 -> unique max_y at (0, 2)
+    expect(sess.execute("construct_circle", { id: "cCotan", centerId: "O", radius: 2 }).ok).toBe(true)
+    const hitCe = sess.execute("construct_intersection", { id: "Q", lineA: "cCotan", conicId: "E", selection: "max_y" })
+    expect(hitCe.ok).toBe(true)
+    const qPt = hitCe.position as { x: number; y: number } | undefined
+    expect(qPt?.x).toBeCloseTo(0, 6)
+    expect(qPt?.y).toBeCloseTo(2, 6)
+
+    // Concentric circle r=sqrt(4.5) creates 4 symmetric intersections; extreme x ties between +y and -y
+    expect(sess.execute("construct_circle", { id: "cMid", centerId: "O", radius: Math.sqrt(4.5) }).ok).toBe(true)
+    const tiedCe = sess.execute("construct_intersection", { id: "Q2", lineA: "cMid", conicId: "E", selection: "max_x" })
+    expect(tiedCe.ok).toBe(false)
+    expect(tiedCe.blockerCode).toBe("ambiguous_intersection")
+  })
+
+  it("returns circumsphere center/radius and supports query_measurement distance & position on circumsphere id", () => {
+    const sess = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const tet = sess.execute("construct_solid", { id: "PYR", kind: "tetrahedron", vertexNames: ["P", "A", "B", "C"], ab: 1, ac: 1, bc: Math.SQRT2, pa: Math.sqrt(3), pb: 2, pc: 1 })
+    expect(tet.ok).toBe(true)
+    const edges = (tet.measurement?.edgeLengths ?? {}) as Record<string, number>
+    expect(edges.AB).toBeCloseTo(1, 5)
+    expect(edges.PB).toBeCloseTo(2, 5)
+
+    const sphere = sess.execute("construct_circumsphere", { id: "O", solidId: "PYR" })
+    expect(sphere.ok).toBe(true)
+    const radius = Number((sphere.measurement as { radius?: number } | undefined)?.radius)
+    expect(radius).toBeCloseTo(Math.sqrt(5) / 2, 5)
+
+    const op = sess.execute("query_measurement", { metric: "distance", targets: ["O", "P"] })
+    expect(op.ok).toBe(true)
+    expect(Number(op.measurement?.value)).toBeCloseTo(radius, 5)
+
+    const oPos = sess.execute("query_measurement", { metric: "position", targets: ["O"] })
+    expect(oPos.ok).toBe(true)
+  })
+
+  it("promotes standalone 4 non-coplanar tetrahedron construct_point scaffolding to solid.create_polyhedron in finish_candidate", () => {
+    const sess = createDsActionSession({
+      workspace: "geometry3d",
+      baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "三棱锥 A-BCD 中，E 在 BD 上，AE⊥CE，AE⊥DE，CD⊥AD，DE=2，BE=1，AE=√2，CD=2√3。"
+    })
+    expect(sess.execute("construct_point", { id: "B", x: -1, y: 0, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "D", x: 2, y: 0, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "C", x: 2, y: 2 * Math.sqrt(3), z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "A", x: 0, y: 0, z: Math.SQRT2 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "E", from: "B", to: "D", ratio: 1 / 3 }).ok).toBe(true)
+    expect(sess.execute("construct_segment", { id: "AB", from: "A", to: "B" }).ok).toBe(true)
+    expect(sess.execute("construct_segment", { id: "AE", from: "A", to: "E" }).ok).toBe(true)
+    expect(sess.execute("construct_face", { id: "F_ABC", vertexNames: ["A", "B", "C"] }).ok).toBe(true)
+
+    const fin = sess.execute("finish_candidate", { goal: "USER-16 scaffold promotion" })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated?.plan.kind).toBe("plan")
+    if (fin.terminated?.plan.kind === "plan") {
+      expect(fin.terminated.plan.actions.some((a) => a.actionId === "solid.create_polyhedron")).toBe(true)
+    }
+  })
+
+  it("canonicalizes ASCII subscripts like F1/F_1 to stated Unicode F₁, supports perpendicular/parallel constraint queries, and resolves subquestion:1 after infeasible Thales circle", () => {
+    const sess = createDsActionSession({
+      workspace: "conics",
+      baseDocument: createEmptyDocument("conics"),
+      problemText: "已知 F₁，F₂ 是椭圆 C 的两个焦点，|F₁F₂|=2，M(2, 2√5/5) 为 C 上一点。（1）求方程；（2）若 P 为 C 上一点，且 PF₁⊥PF₂，求面积。"
+    })
+    expect(sess.execute("construct_point", { id: "F1", x: -1, y: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "F_2", x: 1, y: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "M", x: 2, y: (2 * Math.sqrt(5)) / 5 }).ok).toBe(true)
+    expect(sess.execute("construct_segment", { id: "F1F2", from: "F1", to: "F₂" }).ok).toBe(true)
+    expect(sess.execute("construct_conic", { id: "C", conicType: "ellipse", centerX: 0, centerY: 0, radiusX: Math.sqrt(5), radiusY: 2 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "O", x: 0, y: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_circle", { id: "cT", centerId: "O", radius: 1 }).ok).toBe(true)
+    expect(sess.execute("construct_intersection", { id: "P", lineA: "cT", conicId: "C" }).ok).toBe(false)
+
+    // P omitted after kernel no_intersection proof -> finish_candidate auto-selects subquestion:1
+    const fin = sess.execute("finish_candidate", { goal: "JT-P06 done" })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated?.selectedScopeId).toBe("subquestion:1")
+    if (fin.terminated?.plan.kind === "plan") {
+      const f1Create = fin.terminated.plan.actions.find((a) => (a.inputs as { alias?: string }).alias === "F1")
+      const f2Create = fin.terminated.plan.actions.find((a) => (a.inputs as { alias?: string }).alias === "F_2")
+      expect((f1Create?.inputs as { label?: string }).label).toBe("F₁")
+      expect((f2Create?.inputs as { label?: string }).label).toBe("F₂")
+    }
+
+    // query_constraint_status perpendicular (violated + hypotenuse hint & satisfied) and parallel
+    const s3 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    expect(s3.execute("construct_point", { id: "A", x: 0, y: 0, z: 0 }).ok).toBe(true)
+    expect(s3.execute("construct_point", { id: "B", x: 1, y: 0, z: 0 }).ok).toBe(true)
+    expect(s3.execute("construct_point", { id: "C", x: 0.5, y: Math.sqrt(3) / 2, z: 0 }).ok).toBe(true)
+    expect(s3.execute("construct_point", { id: "D", x: 0, y: 1, z: 0 }).ok).toBe(true)
+    expect(s3.execute("construct_point", { id: "E", x: 2, y: 0, z: 0 }).ok).toBe(true)
+    const badPerp = s3.execute("query_constraint_status", { kind: "perpendicular", targets: ["B", "A", "C"] })
+    expect(badPerp.ok).toBe(true)
+    expect(badPerp.constraintStatus).toBe("violated")
+    expect(Number((badPerp.measurement as { expectedHypotenuse?: number } | undefined)?.expectedHypotenuse)).toBeCloseTo(Math.SQRT2, 6)
+    const okPerp = s3.execute("query_constraint_status", { kind: "perpendicular", targets: ["B", "A", "D"] })
+    expect(okPerp.ok).toBe(true)
+    expect(okPerp.constraintStatus).toBe("satisfied")
+    const okPar = s3.execute("query_constraint_status", { kind: "parallel", targets: ["A", "B", "A", "E"] })
+    expect(okPar.ok).toBe(true)
+    expect(okPar.constraintStatus).toBe("satisfied")
+  })
+
+  it("promotes 5-vertex right-trapezoid pyramid scaffolding (P-ABCD + M) to solid.create_polyhedron and preserves materialized vertices in perpendicular_pyramid", () => {
+    const prompt = "在四棱锥 P-ABCD 中，底面 ABCD 为直角梯形，AD∥BC，AB⊥AD，PA⊥平面 ABCD，AP=AD=2AB=4BC。（2）若 AM⊥平面 PCD 于点 M，求二面角 M-AD-P 的余弦值。"
+    const sess = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    expect(sess.execute("construct_point", { id: "A", x: 0, y: 0, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "B", x: 2, y: 0, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "C", x: 2, y: 1, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "D", x: 0, y: 4, z: 0 }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "P", x: 0, y: 0, z: 4 }).ok).toBe(true)
+    // Foot of perpendicular from A to plane PCD: plane is 3x + 2y + 2z = 8 -> M = (24/17, 16/17, 16/17)
+    expect(sess.execute("construct_point", { id: "M", x: 24 / 17, y: 16 / 17, z: 16 / 17 }).ok).toBe(true)
+    expect(sess.execute("construct_segment", { id: "AM", from: "A", to: "M" }).ok).toBe(true)
+
+    const fin = sess.execute("finish_candidate", { goal: "JT-S03 5-vertex promotion" })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated?.plan.kind).toBe("plan")
+    if (fin.terminated?.plan.kind === "plan") {
+      const poly = fin.terminated.plan.actions.find((a) => a.actionId === "solid.create_polyhedron")
+      expect(poly).toBeDefined()
+      expect((poly?.inputs as { vertexNames?: string[] }).vertexNames).toEqual(["P", "A", "B", "C", "D"])
+    }
+
+    // Calling construct_solid perpendicular_pyramid with materialized A,B,C,D,P + height preserves exact trapezoid instead of overwriting
+    const s2 = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d"), problemText: prompt })
+    s2.execute("construct_point", { id: "A", x: 0, y: 0, z: 0 })
+    s2.execute("construct_point", { id: "B", x: 2, y: 0, z: 0 })
+    s2.execute("construct_point", { id: "C", x: 2, y: 1, z: 0 })
+    s2.execute("construct_point", { id: "D", x: 0, y: 4, z: 0 })
+    s2.execute("construct_point", { id: "P", x: 0, y: 0, z: 4 })
+    const solid = s2.execute("construct_solid", { kind: "perpendicular_pyramid", vertexNames: ["P", "A", "B", "C", "D"], height: 4 })
+    expect(solid.ok).toBe(true)
+    const bc = s2.execute("query_measurement", { metric: "distance", targets: ["B", "C"] })
+    expect(Number(bc.measurement?.value)).toBeCloseTo(1, 5)
+    const ad = s2.execute("query_measurement", { metric: "distance", targets: ["A", "D"] })
+    expect(Number(ad.measurement?.value)).toBeCloseTo(4, 5)
+  })
+
+  it("aligns tetrahedron vertexNames=[A,B,C,P] to match pa/pb/pc/ab/ac/bc and differentiates failed progressSignatures by input", () => {
+    const sess = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const okSolid = sess.execute("construct_solid", {
+      kind: "tetrahedron",
+      vertexNames: ["A", "B", "C", "P"],
+      pa: Math.sqrt(3),
+      pb: 2,
+      pc: 1,
+      ab: 1,
+      ac: 1,
+      bc: Math.SQRT2
+    })
+    expect(okSolid.ok).toBe(true)
+    expect(Number(sess.execute("query_measurement", { metric: "distance", targets: ["P", "A"] }).measurement?.value)).toBeCloseTo(Math.sqrt(3), 5)
+    expect(Number(sess.execute("query_measurement", { metric: "distance", targets: ["B", "C"] }).measurement?.value)).toBeCloseTo(Math.SQRT2, 5)
+
+    // Positional vertexNames=["A","B","C","D"] (no "P") preserves A as apex so pa=|AB|, pc=|AD| (e.g. 三棱锥 A-BCD)
+    const sessAbcd = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const abcdSolid = sessAbcd.execute("construct_solid", {
+      kind: "tetrahedron",
+      vertexNames: ["A", "B", "C", "D"],
+      pa: Math.sqrt(3),
+      pb: Math.sqrt(18),
+      pc: Math.sqrt(6),
+      ab: Math.sqrt(21),
+      ac: 3,
+      bc: 2 * Math.sqrt(3)
+    })
+    expect(abcdSolid.ok).toBe(true)
+    expect(Number(sessAbcd.execute("query_measurement", { metric: "distance", targets: ["A", "B"] }).measurement?.value)).toBeCloseTo(Math.sqrt(3), 5)
+    expect(Number(sessAbcd.execute("query_measurement", { metric: "distance", targets: ["C", "D"] }).measurement?.value)).toBeCloseTo(2 * Math.sqrt(3), 5)
+
+    // Two distinct failing construct_solid inputs must NOT collide on progressSignature
+    const sFail = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    sFail.execute("construct_point", { id: "A", x: 0, y: 0, z: 0 })
+    sFail.execute("construct_point", { id: "B", x: 1, y: 0, z: 0 })
+    sFail.execute("construct_point", { id: "C", x: 0, y: 1, z: 0 })
+    sFail.execute("construct_point", { id: "P", x: 1, y: 1, z: 0 })
+    const f1 = sFail.execute("construct_solid", { kind: "tetrahedron", pa: 10, pb: 1, pc: 1, ab: 1, ac: 1, bc: 1 })
+    const f2 = sFail.execute("construct_solid", { kind: "tetrahedron", vertexNames: ["P", "A", "B", "C"] })
+    expect(f1.ok).toBe(false)
+    expect(f2.ok).toBe(false)
+    expect(f1.progressSignature).not.toBe(f2.progressSignature)
+  })
+
+  it("rejects duplicate/tangent intersections in construct_intersection and runs in-session pre-cert self-repair in finish_candidate", () => {
+    const sess = createDsActionSession({
+      workspace: "conics",
+      baseDocument: createEmptyDocument("conics"),
+      problemText: "已知两点 A(0, √3)，B(0, -√3)。曲线 G：x²/4+y²/3=1。（Ⅱ）过点 C(0, -1) 的直线与 G 相交于 E、F 两点，且 向量EC=2向量CF，求直线 EF 的方程。"
+    })
+    expect(sess.execute("construct_point", { id: "A", x: 0, y: Math.sqrt(3) }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "B", x: 0, y: -Math.sqrt(3) }).ok).toBe(true)
+    expect(sess.execute("construct_point", { id: "C", x: 0, y: -1 }).ok).toBe(true)
+    expect(sess.execute("construct_conic", { id: "G", conicType: "ellipse", centerX: 0, centerY: 0, radiusX: 2, radiusY: Math.sqrt(3) }).ok).toBe(true)
+    // Wrong slope k = sqrt(3/2) gives ratio 3 instead of 2
+    expect(sess.execute("construct_line", { id: "l", equation: "y=sqrt(6)/2*x-1" }).ok).toBe(true)
+    expect(sess.execute("construct_intersection", { id: "E", lineA: "l", conicId: "G", selection: "max_x" }).ok).toBe(true)
+    // Selecting max_y on positive slope picks the same point as max_x -> must be rejected as duplicate_intersection_point
+    const dup = sess.execute("construct_intersection", { id: "F", lineA: "l", conicId: "G", selection: "max_y" })
+    expect(dup.ok).toBe(false)
+    expect(dup.blockerCode).toBe("duplicate_intersection_point")
+
+    expect(sess.execute("construct_intersection", { id: "F", lineA: "l", conicId: "G", excludePointId: "E" }).ok).toBe(true)
+    // First finish_candidate catches ratio 3.0 != 2 in-session without destroying canvas!
+    const preReject = sess.execute("finish_candidate", { goal: "JT-P08 bad slope" })
+    expect(preReject.ok).toBe(false)
+    expect(preReject.blockerCode).toBe("diagram_condition_failed")
+    expect(preReject.repairHint).toContain("3.0000")
+
+    // Repair ONLY l, E, F in-session to exact k = 0.5 -> finish_candidate passes immediately!
+    expect(sess.execute("repair_entity", { target: "F" }).ok).toBe(true)
+    expect(sess.execute("repair_entity", { target: "E" }).ok).toBe(true)
+    expect(sess.execute("repair_entity", { target: "l" }).ok).toBe(true)
+    expect(sess.execute("construct_line", { id: "l", equation: "y=0.5*x-1" }).ok).toBe(true)
+    expect(sess.execute("construct_intersection", { id: "E", lineA: "l", conicId: "G", selection: "max_x" }).ok).toBe(true)
+    expect(sess.execute("construct_intersection", { id: "F", lineA: "l", conicId: "G", excludePointId: "E" }).ok).toBe(true)
+    const fin = sess.execute("finish_candidate", { goal: "JT-P08 exact slope" })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated).toBeDefined()
+  })
+
+  it("blocks construct_face on 2D planar workspaces, blocks cop-out request_clarification on self-contained pure-text problems, and computes exact 3D tetrahedron feasibility intervals", () => {
+    const s2d = createDsActionSession({
+      workspace: "conics",
+      baseDocument: createEmptyDocument("conics"),
+      problemText: "在圆 M：x²+y²-4x+2y-4=0 内，过点 O(0, 0) 的最长弦和最短弦分别是 AC 和 BD，则四边形 ABCD 的面积为（　　）"
+    })
+    s2d.execute("construct_point", { id: "A", x: 0, y: 0 })
+    s2d.execute("construct_point", { id: "B", x: 1, y: 0 })
+    s2d.execute("construct_point", { id: "C", x: 1, y: 1 })
+    const badFace = s2d.execute("construct_face", { id: "F", vertexNames: ["A", "B", "C"] })
+    expect(badFace.ok).toBe(false)
+    expect(badFace.blockerCode).toBe("workspace_mismatch")
+
+    const badClarify = s2d.execute("request_clarification", { reason: "系统验证器提示候选图没有唯一圆锥曲线，是否按 M(2,-1), r=3 作图？" })
+    expect(badClarify.ok).toBe(false)
+    expect(badClarify.blockerCode).toBe("clarification_unnecessary")
+
+    const badClarify2 = s2d.execute("request_clarification", { reason: "（Ⅰ）G 的方程 x^2/4+y^2/3=1 是否符合题意？" })
+    expect(badClarify2.ok).toBe(false)
+    expect(badClarify2.blockerCode).toBe("clarification_unnecessary")
+
+    const s3d = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const infeas = s3d.execute("construct_solid", {
+      kind: "tetrahedron",
+      vertexNames: ["P", "A", "B", "C"],
+      ab: 1,
+      ac: 1,
+      bc: Math.SQRT2,
+      pa: Math.sqrt(3),
+      pb: 1.2,
+      pc: 1
+    })
+    expect(infeas.ok).toBe(false)
+    expect(infeas.repairHint).toContain("1.506")
+    expect(infeas.repairHint).toContain("2.3942")
+    expect(infeas.repairHint).toContain("pb=2")
+
+    // construct_circumsphere registers its center in readP3 so construct_segment and query_constraint_status can reference "O" directly
+    const sCircum = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    expect(sCircum.execute("construct_point", { id: "A", x: 0, y: 0, z: 0 }).ok).toBe(true)
+    expect(sCircum.execute("construct_point", { id: "B", x: 0, y: 1, z: 0 }).ok).toBe(true)
+    expect(sCircum.execute("construct_point", { id: "C", x: 1, y: 0, z: 0 }).ok).toBe(true)
+    expect(sCircum.execute("construct_point", { id: "P", x: 1.5, y: 0, z: Math.sqrt(3) / 2 }).ok).toBe(true)
+    expect(sCircum.execute("construct_solid", { kind: "tetrahedron", id: "pyr", vertexNames: ["P", "A", "B", "C"] }).ok).toBe(true)
+    expect(sCircum.execute("construct_circumsphere", { id: "O", solidId: "pyr" }).ok).toBe(true)
+    expect(sCircum.execute("query_measurement", { metric: "distance", targets: ["O", "P"] }).ok).toBe(true)
+    expect(sCircum.execute("query_constraint_status", { kind: "perpendicular", targets: ["O", "A", "B"] }).ok).toBe(true)
+  })
+
+  it("supports native A-BCD six-edge tetrahedron (ab,ac,ad,bc,bd,cd) and exact closed-form conic chordRatio solver in construct_line", () => {
+    // 1. A-BCD six-edge direct call (USER-16)
+    const sTet = createDsActionSession({ workspace: "geometry3d", baseDocument: createEmptyDocument("geometry3d") })
+    const resTet = sTet.execute("construct_solid", {
+      kind: "tetrahedron",
+      id: "pyr",
+      vertexNames: ["A", "B", "C", "D"],
+      ab: Math.sqrt(3),
+      ac: Math.sqrt(18),
+      ad: Math.sqrt(6),
+      bc: Math.sqrt(21),
+      bd: 3,
+      cd: 2 * Math.sqrt(3)
+    })
+    expect(resTet.ok).toBe(true)
+    expect(Number(sTet.execute("query_measurement", { metric: "distance", targets: ["A", "D"] }).measurement?.value)).toBeCloseTo(Math.sqrt(6), 5)
+    expect(Number(sTet.execute("query_measurement", { metric: "distance", targets: ["B", "D"] }).measurement?.value)).toBeCloseTo(3, 5)
+    expect(Number(sTet.execute("query_measurement", { metric: "distance", targets: ["C", "D"] }).measurement?.value)).toBeCloseTo(2 * Math.sqrt(3), 5)
+    expect(sTet.execute("query_constraint_status", { kind: "perpendicular", targets: ["C", "D", "A"] }).constraintStatus).toBe("satisfied")
+
+    // 2. Exact closed-form conic chordRatio solver on ellipse x²/4 + y²/3 = 1 through C(0,-1) with ratio=2 (JT-P08)
+    const sEll = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(sEll.execute("construct_conic", { id: "G", conicType: "ellipse", centerX: 0, centerY: 0, radiusX: 2, radiusY: Math.sqrt(3) }).ok).toBe(true)
+    expect(sEll.execute("construct_point", { id: "C", x: 0, y: -1 }).ok).toBe(true)
+    const chordLine = sEll.execute("construct_line", { id: "l", throughPointId: "C", conicId: "G", chordRatio: 2 })
+    expect(chordLine.ok).toBe(true)
+    expect(Number((chordLine.measurement as { slope?: number } | undefined)?.slope)).toBeCloseTo(0.5, 5)
+    expect(sEll.execute("construct_intersection", { id: "E", lineA: "l", conicId: "G", selection: "max_x" }).ok).toBe(true)
+    expect(sEll.execute("construct_intersection", { id: "F", lineA: "l", conicId: "G", excludePointId: "E" }).ok).toBe(true)
+    const ec = Number(sEll.execute("query_measurement", { metric: "distance", targets: ["E", "C"] }).measurement?.value)
+    const cf = Number(sEll.execute("query_measurement", { metric: "distance", targets: ["C", "F"] }).measurement?.value)
+    expect(ec / cf).toBeCloseTo(2, 5)
+
+    // 3. Exact closed-form conic chordRatio solver on parabola y² = 4x through C(2,0) with ratio=2
+    const sPar = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics") })
+    expect(sPar.execute("construct_conic", { id: "P", conicType: "parabola", equation: "y^2=4x" }).ok).toBe(true)
+    expect(sPar.execute("construct_point", { id: "C", x: 2, y: 0 }).ok).toBe(true)
+    const pLine = sPar.execute("construct_line", { id: "lp", throughPointId: "C", conicId: "P", chordRatio: 2 })
+    expect(pLine.ok).toBe(true)
+    expect(sPar.execute("construct_intersection", { id: "E", lineA: "lp", conicId: "P", selection: "max_x" }).ok).toBe(true)
+    expect(sPar.execute("construct_intersection", { id: "F", lineA: "lp", conicId: "P", excludePointId: "E" }).ok).toBe(true)
+    const pec = Number(sPar.execute("query_measurement", { metric: "distance", targets: ["E", "C"] }).measurement?.value)
+    const pcf = Number(sPar.execute("query_measurement", { metric: "distance", targets: ["C", "F"] }).measurement?.value)
+    expect(pec / pcf).toBeCloseTo(2, 5)
+
+    // 4. LaTeX subscript canonicalization ($A_{1}, A_{2}, A_{3}$ -> A₁, A₂, A₃ for GK-P05)
+    const sLatex = createDsActionSession({
+      workspace: "conics",
+      baseDocument: createEmptyDocument("conics"),
+      problemText: "设 $A_{1}, A_{2}, A_{3}$ 是抛物线 $C$ 上的三个点。"
+    })
+    expect(sLatex.execute("construct_point", { id: "A1", x: 1, y: 2 }).ok).toBe(true)
+    expect(sLatex.execute("construct_point", { id: "A_2", x: 4, y: -4 }).ok).toBe(true)
+    const finL = sLatex.execute("finish_candidate", { goal: "latex subscripts" })
+    expect(finL.ok).toBe(true)
+    if (finL.terminated?.plan.kind === "plan") {
+      const a1 = finL.terminated.plan.actions.find((a) => (a.inputs as { alias?: string }).alias === "A1")
+      const a2 = finL.terminated.plan.actions.find((a) => (a.inputs as { alias?: string }).alias === "A_2")
+      expect((a1?.inputs as { label?: string }).label).toBe("A₁")
+      expect((a2?.inputs as { label?: string }).label).toBe("A₂")
+    }
   })
 })
