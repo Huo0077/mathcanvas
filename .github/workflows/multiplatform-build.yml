@@ -98,7 +98,18 @@ jobs:
           npm run build --workspace @draw/web
           npm run android:init --workspace @draw/desktop
       - name: Build Android ARM64 APK
-        run: npm run android:build --workspace @draw/desktop
+        run: |
+          set -o pipefail
+          npm run android:build --workspace @draw/desktop 2>&1 | tee android-build.log
+      - name: Surface Android build failure as an annotation
+        if: failure()
+        run: |
+          if [ -f android-build.log ]; then
+            err=$(grep -E 'error(\[E[0-9]+\])?:|FAILURE:|Exception:|FAILED' android-build.log | head -n 10 | tr '\n' ' ' | cut -c1-900)
+            tail_lines=$(tail -n 20 android-build.log | tr '\n' ' ' | cut -c1-900)
+            echo "::error title=Android build errors::${err:-none}"
+            echo "::error title=Android build tail::${tail_lines:-empty}"
+          fi
       - name: Align and sign release APK for direct installation
         run: |
           mkdir -p artifacts/android
