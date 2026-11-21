@@ -1093,13 +1093,13 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
 
 /** The public geometry vocabulary is shared with the kernel dispatch below. */
 export const SOLID_KIND_FAMILIES = {
-  regular_pyramid: ["regular_pyramid", "square_pyramid", "regular_triangular_pyramid"],
+  regular_pyramid: ["regular_pyramid", "square_pyramid", "regular_square_pyramid", "regular_quadrilateral_pyramid", "regular_triangular_pyramid"],
   tetrahedron: ["tetrahedron", "regular_tetrahedron", "triangular_pyramid"],
-  prism: ["prism", "triangular_prism", "rectangular_prism", "square_prism", "right_prism", "regular_prism", "hexagonal_prism", "cube", "cuboid", "box"],
+  prism: ["prism", "triangular_prism", "right_triangular_prism", "rectangular_prism", "square_prism", "right_prism", "regular_prism", "hexagonal_prism", "cube", "cuboid", "box"],
   perpendicular_pyramid: ["perpendicular_pyramid", "quadrilateral_pyramid", "pyramid"],
   pyramidal_frustum: ["square_frustum", "triangular_frustum", "regular_frustum", "frustum_pyramid"],
-  cylinder: ["cylinder"],
-  cone: ["cone"],
+  cylinder: ["cylinder", "right_circular_cylinder"],
+  cone: ["cone", "right_circular_cone"],
   round_frustum: ["round_frustum", "frustum"],
   sphere: ["sphere", "hemisphere"]
 } as const
@@ -1157,6 +1157,7 @@ const CONSTRUCT_SOLID_PARAMETERS = {
     pc: { type: "number", exclusiveMinimum: 0 },
     width: { type: "number", exclusiveMinimum: 0 }, depth: { type: "number", exclusiveMinimum: 0 },
     upperBase: { type: "number", exclusiveMinimum: 0 }, lowerBase: { type: "number", exclusiveMinimum: 0 },
+    topBase: { type: "number", exclusiveMinimum: 0 }, bottomBase: { type: "number", exclusiveMinimum: 0 },
     baseHeight: { type: "number", exclusiveMinimum: 0 },
     isRightTrapezoid: { type: "boolean" },
     origin: {
@@ -1222,7 +1223,7 @@ const CONSTRUCT_LINE_PARAMETERS = {
 const CONSTRUCT_INTERSECTION_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["lineA"],
   properties: { ...PLANAR_ENTITY_FIELDS, lineA: { type: "string" }, lineB: { type: "string" },
-    conicId: { type: "string" }, excludePointId: { type: "string" },
+    conicId: { type: "string" }, circleId: { type: "string" }, curveId: { type: "string" }, excludePointId: { type: "string" },
     selection: { type: "string", enum: ["min_x", "max_x", "min_y", "max_y"] } }
 } as const
 const CONSTRUCT_CIRCLE_PARAMETERS = {
@@ -2184,17 +2185,23 @@ function resolveConstructSolidRequest(
   }
 
   if ((SOLID_KIND_FAMILIES.cylinder as readonly string[]).includes(kind) || (SOLID_KIND_FAMILIES.cone as readonly string[]).includes(kind)) {
+    const isCylinder = (SOLID_KIND_FAMILIES.cylinder as readonly string[]).includes(kind)
     const radius = asPositiveNumber(input.radius ?? input.r ?? input.sideLength)
-    const height = asPositiveNumber(input.height)
+    const directHeight = asPositiveNumber(input.height)
+    const slant = !isCylinder ? asPositiveNumber(input.slantHeight ?? input.lateralEdge) : null
+    if (!isCylinder && directHeight === null && radius !== null && slant !== null && slant <= radius) {
+      return { ok: false, status: "repairable", blockerCode: "infeasible", repairHint: `${rawKind} slantHeight (${slant}) must be strictly greater than radius (${radius})` }
+    }
+    const height = directHeight ?? (!isCylinder && radius !== null && slant !== null ? Math.sqrt(slant * slant - radius * radius) : null)
     if (radius === null || height === null) {
-      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive radius and height` }
+      return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive radius and height${isCylinder ? "" : " (or slantHeight > radius)"}` }
     }
     return {
       ok: true,
       mode: "template",
       actionId: "solid.create_template",
       inputs: {
-        template: (SOLID_KIND_FAMILIES.cylinder as readonly string[]).includes(kind) ? "cylinder" : "cone",
+        template: isCylinder ? "cylinder" : "cone",
         origin: readOriginVector3(input.origin),
         radius,
         height
@@ -2301,6 +2308,20 @@ function resolveConstructSolidRequest(
     return null
   }
 
+  const isApexFirstVertexNames = (names: readonly string[], apexHint: string | null): boolean => {
+    if (names.length < 4) return false
+    const first = names[0]!
+    const last = names[names.length - 1]!
+    if (apexHint && first === apexHint && last !== apexHint) return true
+    if (apexHint && last === apexHint && first !== apexHint) return false
+    if (typeof problemText === "string") {
+      const rest = names.slice(1).join("")
+      const hyphenRe = new RegExp(`(?<![A-Za-z0-9])${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[-−–]\\s*${rest.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9])`)
+      if (hyphenRe.test(problemText)) return true
+    }
+    return false
+  }
+
   const wantsTrapezoidBase = input.upperBase !== undefined || input.lowerBase !== undefined || input.baseHeight !== undefined
   if ((SOLID_KIND_FAMILIES.regular_pyramid as readonly string[]).includes(kind) && !wantsTrapezoidBase) {
     const baseRefs = asStringList(input.baseVertexNames ?? input.baseLabels)
@@ -2327,12 +2348,15 @@ function resolveConstructSolidRequest(
     if (lateral === null) {
       return { ok: false, status: "repairable", blockerCode: "missing_required_parameter", repairHint: `${rawKind} requires positive height or lateralEdge` }
     }
+    const apexFirst = vNames ? isApexFirstVertexNames(vNames, asString(input.apexName)) : false
     if (isTriangular) {
       if (vNames && vNames.length !== 4) {
         return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `triangular ${rawKind} vertexNames must have length 4` }
       }
       const names: readonly [string, string, string, string] = vNames
-        ? [vNames[3]!, vNames[0]!, vNames[1]!, vNames[2]!]
+        ? (apexFirst
+            ? [vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!]
+            : [vNames[3]!, vNames[0]!, vNames[1]!, vNames[2]!])
         : [asString(input.apexName) ?? "P", baseRefs?.[0] ?? "A", baseRefs?.[1] ?? "B", baseRefs?.[2] ?? "C"]
       return {
         ok: true,
@@ -2345,11 +2369,13 @@ function resolveConstructSolidRequest(
       return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `${rawKind} vertexNames must have length 5` }
     }
     const baseLabels = vNames
-      ? ([vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const)
+      ? (apexFirst
+          ? ([vNames[1]!, vNames[2]!, vNames[3]!, vNames[4]!] as const)
+          : ([vNames[0]!, vNames[1]!, vNames[2]!, vNames[3]!] as const))
       : baseRefs && baseRefs.length === 4
         ? ([baseRefs[0]!, baseRefs[1]!, baseRefs[2]!, baseRefs[3]!] as const)
         : (["A", "B", "C", "D"] as const)
-    const apexName = vNames ? vNames[4]! : (asString(input.apexName) ?? "P")
+    const apexName = vNames ? (apexFirst ? vNames[0]! : vNames[4]!) : (asString(input.apexName) ?? "P")
     return {
       ok: true,
       mode: "constraint3d",
@@ -2527,10 +2553,11 @@ function resolveConstructSolidRequest(
     if (vNames && vNames.length !== n + 1) {
       return { ok: false, status: "repairable", blockerCode: "invalid_schema", repairHint: `perpendicular_pyramid vertexNames must have length ${n + 1} (${n} base vertices followed by 1 apex; currently base has ${n} vertices — pass sides=4 or 4 baseVertexNames for a square/quadrilateral base)` }
     }
+    const perpApexFirst = vNames ? isApexFirstVertexNames(vNames, asString(input.apexName)) : false
     const baseVertices = vNames
-      ? base.baseVertices.map((bv, i) => ({ name: vNames[i]!, point: bv.point }))
+      ? base.baseVertices.map((bv, i) => ({ name: vNames[perpApexFirst ? i + 1 : i]!, point: bv.point }))
       : base.baseVertices
-    const apexName = vNames ? vNames[n]! : (asString(input.apexName) ?? "S")
+    const apexName = vNames ? (perpApexFirst ? vNames[0]! : vNames[n]!) : (asString(input.apexName) ?? "S")
     const footName = asString(input.footName) ?? baseVertices[0]!.name
     return {
       ok: true,
@@ -3936,6 +3963,24 @@ export function createDsActionSession(options: {
           const p3A = readP3(fromId, branchId)
           const p3B = readP3(toId, branchId)
           if (p3A && p3B) {
+            if (ratio < 0 || ratio > 1) {
+              // Exact collinear affine extension point P = A + ratio*(B - A) (e.g. "延长 AB 至 D 使 BD = AB" -> ratio = 2)
+              const pos3: Vector3 = {
+                x: p3A.x + ratio * (p3B.x - p3A.x),
+                y: p3A.y + ratio * (p3B.y - p3A.y),
+                z: p3A.z + ratio * (p3B.z - p3A.z)
+              }
+              writeP3(id, pos3, branchId)
+              writeP3(label, pos3, branchId)
+              entities.set(id, { id, kind: "point", scopeId, stateId })
+              return stageDraftAction(
+                name,
+                { actionId: "solid.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, position: pos3 } } as DraftAction,
+                id,
+                undefined,
+                sliceTarget
+              )
+            }
             const solved = solveConstraint3d({ kind: "interior_ratio", targetKind: "edge", anchors: [p3A, p3B], ratio, resultName: id })
             const pos3 = solved.status === "solved" ? solved.pointRegistry[id] : undefined
             if (!pos3) return failRepairable(name, "invalid_ratio", solved.reason ?? "ratio must fall in [0, 1]")
@@ -3976,6 +4021,22 @@ export function createDsActionSession(options: {
           const p2A = readP2(fromId, branchId)
           const p2B = readP2(toId, branchId)
           if (p2A && p2B) {
+            if (ratio < 0 || ratio > 1) {
+              const pos2 = {
+                x: p2A.x + ratio * (p2B.x - p2A.x),
+                y: p2A.y + ratio * (p2B.y - p2A.y)
+              }
+              writeP2(id, pos2, branchId)
+              writeP2(label, pos2, branchId)
+              entities.set(id, { id, kind: "point", scopeId, stateId })
+              return stageDraftAction(
+                name,
+                { actionId: "planar.create_point", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, points: [pos2] } },
+                id,
+                pos2,
+                sliceTarget
+              )
+            }
             const solved2 = solveConstraint2d({ kind: "segment_ratio", a: p2A, b: p2B, ratio, splitBetween: true })
             const pos2 = solved2.status === "solved" ? solved2.roots[0]?.point : undefined
             if (!pos2) return failRepairable(name, "invalid_ratio", solved2.reason ?? "ratio out of range")
@@ -4257,10 +4318,11 @@ export function createDsActionSession(options: {
         if (input.selection !== undefined && !["min_x", "max_x", "min_y", "max_y"].includes(String(input.selection))) {
           return failRepairable(name, "invalid_selection", "selection must be min_x, max_x, min_y or max_y")
         }
-        if (input.lineB !== undefined && input.conicId !== undefined) {
+        const rawConicInput = input.conicId ?? input.circleId ?? input.curveId
+        if (input.lineB !== undefined && rawConicInput !== undefined) {
           return failRepairable(name, "ambiguous_geometry_input", "choose exactly one of lineB or conicId")
         }
-        if (!asString(input.lineA) || (!asString(input.lineB) && !asString(input.conicId))) {
+        if (!asString(input.lineA) || (!asString(input.lineB) && !asString(rawConicInput))) {
           return failRepairable(name, "missing_required_parameter", "lineA and exactly one of lineB or conicId are required")
         }
         const outId = asString(input.output ?? input.id) ?? `X${stepSeq}`
@@ -4275,7 +4337,7 @@ export function createDsActionSession(options: {
         const lineBKey = asString(input.lineB) ?? ""
         const lA = lineAKey ? readL2(lineAKey, branchId) : undefined
         const lB = lineBKey ? readL2(lineBKey, branchId) : undefined
-        const conicId = asString(input.conicId)
+        const conicId = asString(rawConicInput)
         const cA = !lA && lineAKey ? readC2(lineAKey, branchId) : undefined
         const resolvedConicBId = conicId ?? (!lB && lineBKey ? lineBKey : null)
         const conic = (conicId ? readC2(conicId, branchId) : undefined) ?? (!lB && lineBKey ? readC2(lineBKey, branchId) : undefined)
@@ -6144,7 +6206,9 @@ export function createDsActionSession(options: {
         }
         const canvas = getTargetCanvas(branchId)
         const hostActions = canvas.snapshot().actions.filter((action) =>
-          action.actionId === "solid.create_polyhedron" || action.actionId === "solid.create_prism"
+          action.actionId === "solid.create_polyhedron" ||
+          action.actionId === "solid.create_prism" ||
+          action.actionId === "solid.create_template"
         )
         const requestedSolidId = asString(input.solidId)
         const hostAction = requestedSolidId
@@ -6175,8 +6239,56 @@ export function createDsActionSession(options: {
             }
           }
           return hostActions.length === 0 && !requestedSolidId
-            ? failRepairable(name, "missing_required_parameter", "construct a polyhedron, prism, or 4 non-coplanar 3D points before construct_circumsphere")
-            : failBlocked(name, "missing_host", "circumsphere host must be an existing staged polyhedron")
+            ? failRepairable(name, "missing_required_parameter", "construct a solid (polyhedron, prism, cone, cylinder) or 4 non-coplanar 3D points before construct_circumsphere")
+            : failBlocked(name, "missing_host", "circumsphere host must be an existing staged solid")
+        }
+        if (hostAction?.actionId === "solid.create_template") {
+          const template = asString(hostAction.inputs.template)
+          const origin = readOriginVector3(hostAction.inputs.origin)
+          let circ: { center: Vector3; radius: number } | null = null
+          if (template === "cone" || template === "cylinder") {
+            const r = asPositiveNumber(hostAction.inputs.radius)
+            const h = asPositiveNumber(hostAction.inputs.height)
+            if (r !== null && h !== null) {
+              if (template === "cone") {
+                const R = (h * h + r * r) / (2 * h)
+                circ = { center: { x: origin.x, y: origin.y, z: origin.z + h - R }, radius: R }
+              } else {
+                const R = Math.hypot(r, h * 0.5)
+                circ = { center: { x: origin.x, y: origin.y, z: origin.z + h * 0.5 }, radius: R }
+              }
+            }
+          } else if (template === "cube" && hostAction.inputs.size && typeof hostAction.inputs.size === "object") {
+            const sz = hostAction.inputs.size as { x?: unknown; y?: unknown; z?: unknown }
+            const sx = asPositiveNumber(sz.x)
+            const sy = asPositiveNumber(sz.y)
+            const szz = asPositiveNumber(sz.z)
+            if (sx !== null && sy !== null && szz !== null) {
+              circ = { center: origin, radius: 0.5 * Math.hypot(sx, sy, szz) }
+            }
+          }
+          if (!circ) {
+            return failBlocked(name, "missing_host", `cannot compute circumsphere for solid template "${template ?? "unknown"}"`)
+          }
+          const stagedSphere = stageDraftAction(name, {
+            actionId: "solid.create_sphere",
+            actionKey: `ds-act-${stepSeq}`,
+            factIds: [],
+            inputs: { alias: id, label, center: circ.center, radius: circ.radius }
+          } as unknown as DraftAction, id, undefined, {
+            scopeId,
+            ...(stateId === undefined ? {} : { stateId }),
+            ...(branchId === undefined ? {} : { branchId })
+          })
+          if (stagedSphere.ok) {
+            writeP3(id, circ.center, branchId)
+            writeP3(label, circ.center, branchId)
+            if (!branchId && !stateId) {
+              const curSnap = speculative.snapshot()
+              upsertSlice({ scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+            }
+          }
+          return stagedSphere.ok ? { ...stagedSphere, measurement: circ } : stagedSphere
         }
         const hostCirc = computeCircumsphereFromVerts(hostVerticesOfAction(hostAction))
         const stagedCircum = stageDraftAction(name, {

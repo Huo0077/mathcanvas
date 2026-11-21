@@ -426,7 +426,7 @@ export function normalizeGeometryPromptWithSourceMap(prompt: string): MappedProm
       const origFrom = snapshot.starts[match.index] ?? 0
       const origTo = snapshot.ends[Math.min(snapshot.ends.length - 1, match.index + match[0].length - 1)] ?? origFrom
       const origGap = prompt.slice(Math.max(0, origFrom - 2), Math.min(prompt.length, origTo + 2))
-      if (/\$\s+\$/.test(origGap)) return " "
+      if (/\$\s+\$/.test(origGap)) return /[0-9°]/.test(prevCh) ? "，" : " "
       const beforeWord = snapshot.text.slice(Math.max(0, match.index - 8), match.index)
       if (/(?:^|[^A-Za-z])(?:sin|cos|tan|cot|sec|csc|ln|log|lg)$/i.test(beforeWord)) return " "
     }

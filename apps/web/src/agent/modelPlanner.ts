@@ -713,9 +713,32 @@ function buildMessages(
  *（含那次修复），而两次必须用同一份配置与同一批能力证据 —— 否则第二次尝试其实换了题目。
  * 所以调用方（`agentRunner`）拿到解析结果之后会**钉住**它，把 `resolveProvider` 注入成常量。
  */
+function unknownToolRepairHint(toolId: string): string {
+  const name = toolId.trim()
+  if (/(?:function|graph|curve|plot|deriv|integral)/i.test(name)) {
+    return `Tool "${name}" does not exist. For functions, derivatives, or tangents use construct_tangent({ id, mode: "graph", expression, domain: [min, max] }) or mode: "tangent" with x0.`
+  }
+  if (/(?:circumsphere|insphere|sphere|ball)/i.test(name)) {
+    return `Tool "${name}" does not exist. Use construct_circumsphere({ solidId, mode: "circumsphere" | "insphere" }) for a solid's circumsphere/insphere, or construct_solid({ kind: "sphere", radius, origin }) for a standalone sphere.`
+  }
+  if (/(?:cone|cylinder|cube|cuboid|prism|pyramid|tetra|frustum|polyhedron|solid)/i.test(name)) {
+    return `Tool "${name}" does not exist. Use construct_solid({ kind: "regular_pyramid" | "tetrahedron" | "prism" | "perpendicular_pyramid" | "cube" | "cuboid" | "cylinder" | "cone" | "round_frustum" | "sphere", ... }) instead.`
+  }
+  if (/(?:polygon|triangle|quad|rect|square|rhombus|trapezoid|plane)/i.test(name)) {
+    return `Tool "${name}" does not exist. Build 2D polygons with construct_point + construct_segment, or 3D bases/faces with construct_base / construct_face.`
+  }
+  if (/(?:midpoint|ratio|divide)/i.test(name)) {
+    return `Tool "${name}" does not exist. Use construct_point({ id, from, to, ratio: 0.5 }) to create a midpoint or ratio point.`
+  }
+  if (/(?:measure|distance|length|angle|area|volume|check|verify)/i.test(name)) {
+    return `Tool "${name}" does not exist. Use measure_geometry or query_geometry to inspect staged geometry, then call finish_candidate({ goal }).`
+  }
+  return `Tool "${name}" is not in the published ds_action tool set. Use valid tools (construct_solid, construct_base, construct_point, construct_segment, construct_line, construct_circle, construct_conic, construct_tangent, construct_intersection, construct_face, construct_circumsphere, construct_fold_state) and finish_candidate.`
+}
+
 export function createModelPlanner(dependencies: ModelPlannerDependencies = {}): PlannerPort {
   const resolveProvider = dependencies.resolveProvider ?? resolveActiveProvider
-  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number }, signal: { isCancelled: () => boolean }) =>
+  const runModel = dependencies.runModel ?? ((request: { runId: string; profileId: string; profileRevision: number; messages: ChatMessage[]; tools: unknown[]; outputMode?: "json_text" | "json_mode" | "json_schema"; maxOutputTokens?: number; toolChoice?: "auto" | "required" }, signal: { isCancelled: () => boolean }) =>
     startModelRun(
       {
         runId: request.runId,
@@ -724,7 +747,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
         messages: request.messages,
         tools: request.tools,
         ...(request.outputMode === undefined ? {} : { outputMode: request.outputMode }),
-        ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens })
+        ...(request.maxOutputTokens === undefined ? {} : { maxOutputTokens: request.maxOutputTokens }),
+        ...(request.toolChoice === undefined ? {} : { toolChoice: request.toolChoice })
       },
       {
         invoke: (command, args) => invokeDesktop(command, args),
@@ -876,6 +900,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
       let dsActionIndex = 0
       let dsActionTextRetries = 0
       let dsStreamRetries = 0
+      let dsLengthRetries = 0
       let dsForceNextToolCall = false
       let lastDsPrimitiveCount = 0
       let lastDsCandidateHash: string | null = null
@@ -1130,6 +1155,31 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           ?? endings.find(event => event.stopReason !== undefined)?.stopReason
         const ending = classifyStopReason(stopReason)
         if (ending === "length" || ending === "refusal") {
+          const externalNetworkGuard = request.beforeProviderRequest !== undefined
+          if (
+            ending === "length" &&
+            intentMode === "ds_action" &&
+            channel === "native_tools" &&
+            dsActionSession !== null &&
+            dsActionHistory.length > 0 &&
+            dsLengthRetries < 1 &&
+            request.budget.remaining("generation") >= 1 &&
+            (externalNetworkGuard || request.budget.remaining("network") >= 1)
+          ) {
+            if (!request.budget.consume("generation").ok || (!externalNetworkGuard && !request.budget.consume("network").ok)) {
+              throw new ModelPlannerError("provider_failed", "budget accounting failed during ds_action length recovery")
+            }
+            dsLengthRetries += 1
+            dsForceNextToolCall = true
+            dependencies.onDiagnostic?.(`[ds_action_length_recovery] attempt=${dsLengthRetries} staged=${dsActionHistory.length} stopReason=${stopReason ?? "length"}`)
+            messages.push({ role: "assistant", content: boundedExcerpt(text || "(truncated before tool call)", 400) })
+            messages.push({
+              role: "user",
+              content:
+                `上一轮输出因达到长度上限被截断，已暂存的几何实体全部保留：${boundedExcerpt(JSON.stringify(dsActionSession.referenceDirectory()), 700)}。请跳过冗长文字推理，直接分小批（3~6 个）发出剩余原生 tool_call，或直接调用 finish_candidate({ goal }) 提交。`
+            })
+            continue
+          }
           dependencies.onStructuredDiagnostic?.({
             kind: "boundary",
             boundary: "provider",
@@ -1328,7 +1378,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
                   status: "repairable",
                   blockerCode: isUnknown ? "unknown_tool" : "batch_rolled_back",
                   repairHint: isUnknown
-                    ? `Tool "${call.toolId}" is not a published ds_action tool. Use construct_solid (for polyhedron/pyramid/tetrahedron/prism/sphere), construct_point, construct_segment, construct_face, construct_circumsphere, or finish_candidate instead.`
+                    ? unknownToolRepairHint(call.toolId)
                     : `Entire batch rolled back because "${unknownToolCalls[0]!.toolId}" is not a valid tool; resend valid calls only.`,
                   referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(call.input))
                 })
@@ -1762,7 +1812,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
                   ok: false,
                   status: "repairable",
                   blockerCode: "unknown_tool",
-                  repairHint: `Tool "${toolCall.toolId}" is not in the published tool set. Use valid geometry tools (e.g. construct_solid, construct_point, construct_line, construct_conic, construct_circumsphere) and finish_candidate.`,
+                  repairHint: unknownToolRepairHint(toolCall.toolId),
                   referenceDirectory: dsActionSession.referenceDirectory(referenceBranchId(coercedUnknownInput))
                 })
               })

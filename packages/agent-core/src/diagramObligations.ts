@@ -988,8 +988,9 @@ const SOLID_SHAPE_TERM = /圆锥|圆柱/g
  */
 const NUMERIC_MEASURE_LITERAL = String.raw`(\d+(?:\.\d+)?\s*[π√]\s*\d*(?:\.\d+)?|√\s*\d+(?:\.\d+)?|π|\d+(?:\.\d+)?)`
 const SOLID_SIZE_LITERAL = NUMERIC_MEASURE_LITERAL
-const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["solid"]>["metric"]; pattern: RegExp }[] = [
+const SOLID_METRIC_READERS: readonly { metric: NonNullable<DiagramObligation["solid"]>["metric"]; pattern: RegExp; scale?: number }[] = [
   { metric: "radius", pattern: new RegExp(String.raw`底面(?:圆)?的?半径\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
+  { metric: "radius", pattern: new RegExp(String.raw`底面(?:圆)?的?直径\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g"), scale: 0.5 },
   { metric: "slantHeight", pattern: new RegExp(String.raw`母线(?:长)?\s*(?:为|是|=)?\s*${SOLID_SIZE_LITERAL}`, "g") },
   /**
    * **`底面积` 与 `底面面积` 都收**（2026-10-20 实测）：联考 `joint-07` 的原文是
@@ -1065,7 +1066,7 @@ function resolveSolidDimensions(
 ): void {
   const anchors = solidAnchors(givenText)
   if (anchors.length === 0) return
-  for (const { metric, pattern } of SOLID_METRIC_READERS) {
+  for (const { metric, pattern, scale } of SOLID_METRIC_READERS) {
     for (const match of givenText.matchAll(pattern)) {
       const start = match.index
       if ([...match[0]].some((_, offset) => used.has(start + offset))) continue
@@ -1082,8 +1083,9 @@ function resolveSolidDimensions(
        */
       if (anchor.shape === "pyramid" && (anchor.sides === 3 || anchor.sides === 4) && /底面边长/.test(givenText.slice(anchor.start, anchor.start + 120))) continue
       if (NOT_THIS_SOLID_TERM.test(between)) continue
-      const value = measureValue(match[1]!)
-      if (value === null) continue
+      const rawValue = measureValue(match[1]!)
+      if (rawValue === null) continue
+      const value = scale === undefined ? rawValue : rawValue * scale
       givens.push({ kind: "solidDimension", targets: [], value, solid: { shape: anchor.shape, metric }, sourceText: match[0], start, end: start + match[0].length })
       for (let at = start; at < start + match[0].length; at += 1) used.add(at)
     }
@@ -1385,7 +1387,7 @@ function buildQuadObligations(
 const GENERIC_SHAPE_DRAW_RE =
   /^(?:请)?(?:帮我)?(?:画|作|做|绘|绘制|生成|构造|构建)(?:一个|个|一条)?\s*(?:锐角|直角|钝角|等腰|等边|正)?(?:三角形|矩形|长方形|菱形|正方形)\s*[。.]?$/
 
-function isGenericShapeDrawInstruction(text: string): boolean {
+export function isGenericShapeDrawInstruction(text: string): boolean {
   const trimmed = text.trim()
   return !/[A-Z0-9=⊥∥<>∠:]/.test(trimmed) && GENERIC_SHAPE_DRAW_RE.test(trimmed)
 }
@@ -1501,6 +1503,27 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     pattern: /x\s*(?:\^2|²)\s*\+\s*y\s*(?:\^2|²)\s*([^=]*)=\s*(-?\d+(?:\.\d+)?)(?![\d.])/g,
     allowAfterLabelColon: true,
     read: (m) => circleFromGeneralEquation(m[1] ?? "", Number(m[2]))
+  },
+  {
+    /** 圆心 + 半径文字写法：`圆 C 的圆心为 (1, -2)，半径为 3` / `以 (1, 2) 为圆心，半径为 3 的圆` / `圆心在原点，半径为 2 的圆`。 */
+    pattern: new RegExp(
+      `(?:圆\\s*([A-Z])?\\s*的?\\s*圆心\\s*(?:为|是|在)?\\s*(?:(?:点\\s*[A-Z]?\\s*)?\\(\\s*([^,，()]+?)\\s*[,，]\\s*([^,，()]+?)\\s*\\)|(原点))\\s*[，,且]?\\s*(?:其)?半径\\s*(?:为|是|=)?\\s*${RADICAL_NUMBER_SOURCE}|以\\s*(?:(?:点\\s*[A-Z]?\\s*)?\\(\\s*([^,，()]+?)\\s*[,，]\\s*([^,，()]+?)\\s*\\)|(原点))\\s*为圆心\\s*[，,、]?\\s*半径\\s*(?:为|是|=)?\\s*${RADICAL_NUMBER_SOURCE}\\s*的?\\s*圆\\s*([A-Z])?)`,
+      "g"
+    ),
+    read: (m) => {
+      const label = m[1] ?? m[10]
+      const atOrigin = m[4] !== undefined || m[8] !== undefined
+      const cx = atOrigin ? 0 : signedRadicalOrFraction((m[2] ?? m[6] ?? "").trim())
+      const cy = atOrigin ? 0 : signedRadicalOrFraction((m[3] ?? m[7] ?? "").trim())
+      const r = radicalValue((m[5] ?? m[9] ?? "").trim())
+      if (cx === null || cy === null || r === null) return null
+      return {
+        kind: "conicAxes" as const,
+        targets: [],
+        conic: { kind: "circle" as const, centerX: cx, centerY: cy, radius: r },
+        ...(label ? { entityLabel: label } : {})
+      }
+    }
   },
   {
     /**
@@ -1847,6 +1870,17 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
+    /** 角的余弦值唯一确定 (0°, 180°) 内的内角：`cos∠ABC = 1/2` / `cos∠BAC = -√2/2`。 */
+    pattern: /cos\s*∠\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*([A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*)\s*=\s*([-−–+]?\s*(?:(?:\d+(?:\.\d+)?\s*)?√\s*)?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?=\s*(?:[，,。；;?？]|\.(?!\d)|$))/g,
+    read: (m) => {
+      const cosVal = signedRadicalOrFraction(m[4]!)
+      if (cosVal === null || !(cosVal > -1 && cosVal < 1)) return null
+      const targets = [canonicalPointName(m[1]!), canonicalPointName(m[2]!), canonicalPointName(m[3]!)]
+      if (new Set(targets).size !== 3) return null
+      return { kind: "planarAngle", targets, value: (Math.acos(cosVal) * 180) / Math.PI }
+    }
+  },
+  {
     /**
      * **平面上的数值角**：`∠ABC=60°`（§3-F）。
      *
@@ -2042,6 +2076,62 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
         { kind: "equilateral" as const, targets: [a, b, c] },
         { kind: "equalLength" as const, targets: [p, a, p, b] },
         { kind: "equalLength" as const, targets: [p, b, p, c] }
+      ]
+    }
+  },
+  {
+    /** 正四棱锥：`正四棱锥 P-ABCD`（底面正方形 + 四条侧棱等长）。 */
+    pattern: new RegExp(`正四棱锥\\s*(${POINT_NAME})\\s*[-−–]\\s*((?:${POINT_NAME}){4})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`, "g"),
+    read: (m) => {
+      const p = canonicalPointName(m[1]!)
+      const base = names(m[2]!)
+      const quad = buildQuadObligations(m[2]!, "正方形")
+      if (base.length !== 4 || quad === null) return null
+      const [a, b, c, d] = base as [string, string, string, string]
+      const quadDrafts = Array.isArray(quad) ? quad : [quad]
+      return [
+        ...quadDrafts,
+        { kind: "equalLength" as const, targets: [p, a, p, b] },
+        { kind: "equalLength" as const, targets: [p, b, p, c] },
+        { kind: "equalLength" as const, targets: [p, c, p, d] }
+      ]
+    }
+  },
+  {
+    /** 正四面体：`正四面体 ABCD`（可选 `棱长为 N`）。 */
+    pattern: new RegExp(`(?:棱长为\\s*${RADICAL_NUMBER_SOURCE}\\s*的\\s*)?正四面体\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])(?:\\s*[，,]?\\s*的?\\s*棱长\\s*(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE})?`, "g"),
+    read: (m) => {
+      const pts = [m[2]!, m[3]!, m[4]!, m[5]!].map(canonicalPointName) as [string, string, string, string]
+      if (new Set(pts).size !== 4) return null
+      const [a, b, c, d] = pts
+      const pairs: [string, string][] = [[a, b], [a, c], [a, d], [b, c], [b, d], [c, d]]
+      const edge = m[1] !== undefined ? radicalValue(m[1]) : m[6] !== undefined ? radicalValue(m[6]) : null
+      if (edge !== null) {
+        return pairs.map((pair) => ({ kind: "fixedLength" as const, targets: pair, value: edge }))
+      }
+      return [
+        { kind: "equalLength" as const, targets: [a, b, a, c] },
+        { kind: "equalLength" as const, targets: [a, c, a, d] },
+        { kind: "equalLength" as const, targets: [a, d, b, c] },
+        { kind: "equalLength" as const, targets: [b, c, b, d] },
+        { kind: "equalLength" as const, targets: [b, d, c, d] }
+      ]
+    }
+  },
+  {
+    /** 长方体长宽高：`长方体 ABCD-A₁B₁C₁D₁ 的长、宽、高分别为 4、3、2`。 */
+    pattern: new RegExp(`长方体\\s*((?:${POINT_NAME}){4})\\s*[-−–]\\s*((?:${POINT_NAME}){4})\\s*的?\\s*长\\s*[、,，]?\\s*宽\\s*[、,，和与]?\\s*高\\s*分别为\\s*${RADICAL_NUMBER_SOURCE}\\s*[、,，]\\s*${RADICAL_NUMBER_SOURCE}\\s*[、,，和与]\\s*${RADICAL_NUMBER_SOURCE}`, "g"),
+    read: (m) => {
+      const bottom = names(m[1]!)
+      const top = names(m[2]!)
+      const l = radicalValue(m[3]!)
+      const w = radicalValue(m[4]!)
+      const h = radicalValue(m[5]!)
+      if (bottom.length !== 4 || top.length !== 4 || l === null || w === null || h === null) return null
+      return [
+        { kind: "fixedLength" as const, targets: [bottom[0]!, bottom[1]!], value: l },
+        { kind: "fixedLength" as const, targets: [bottom[0]!, bottom[3]!], value: w },
+        { kind: "fixedLength" as const, targets: [bottom[0]!, top[0]!], value: h }
       ]
     }
   },
@@ -2398,8 +2488,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 句型要求"两个点名 + 三角形三顶点"，所以 `EF 是梯形 ABCD 的中位线` **不归这一族**
      * （那是另一条定理：长度是上下底之和的一半），读不出就如实落未核验。
      */
-    pattern: /([A-Z])([A-Z])\s*(?:是|为)\s*△?\s*([A-Z])([A-Z])([A-Z])\s*的\s*中位线/g,
-    read: (m) => ({ kind: "midline", targets: [m[1]!, m[2]!, m[3]!, m[4]!, m[5]!] })
+    pattern: new RegExp(`(${POINT_NAME})(${POINT_NAME})\\s*(?:是|为)\\s*△?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的\\s*中位线`, "g"),
+    read: (m) => ({ kind: "midline", targets: [m[1]!, m[2]!, m[3]!, m[4]!, m[5]!].map(canonicalPointName) })
   },
   {
     /**
@@ -2409,8 +2499,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 一起把"三角形的心"这一类里最常用的两个接上了；`旁心` / `重心` / `垂心` 仍然没有判据
      * （旁心在三角形外面，是**另一个**判定 —— 见 `UNSUPPORTED_FAMILIES` 里的那句理由）。
      */
-    pattern: /(?:点\s*)?([A-Z])\s*(?:是|为)\s*△?\s*([A-Z])([A-Z])([A-Z])\s*的\s*内心/g,
-    read: (m) => ({ kind: "incenter", targets: [m[1]!, m[2]!, m[3]!, m[4]!] })
+    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:是|为)\\s*△?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的\\s*内心`, "g"),
+    read: (m) => ({ kind: "incenter", targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName) })
   },
   {
     /**
@@ -2419,10 +2509,10 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 三种心共用一个句型，`read` 里按词分流 —— 它们的**判据各不相同**（顶点平均 / 三条高线 /
      * 三个旁心之一），但"这句话长什么样"是同一件事，拆成三条正则只会让某天它们漂开。
      */
-    pattern: /(?:点\s*)?([A-Z])\s*(?:是|为)\s*△?\s*([A-Z])([A-Z])([A-Z])\s*的\s*(重心|垂心|旁心)/g,
+    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:是|为)\\s*△?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的\\s*(重心|垂心|旁心)`, "g"),
     read: (m) => ({
       kind: m[5] === "重心" ? "centroid" : m[5] === "垂心" ? "orthocenter" : "excenter",
-      targets: [m[1]!, m[2]!, m[3]!, m[4]!]
+      targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName)
     })
   },
   {
@@ -2433,8 +2523,8 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
      * 那是外心救援自己的题面，读它会把救援的复核从 `passed` 打成 `unverified`
      *（第十三批记下的同一条教训：触发词 / 读取器都不要伸手到救援路径里）。
      */
-    pattern: /(?:点\s*)?([A-Z])\s*(?:是|为)\s*△?\s*([A-Z])([A-Z])([A-Z])\s*的\s*外心/g,
-    read: (m) => ({ kind: "circumcenter", targets: [m[1]!, m[2]!, m[3]!, m[4]!] })
+    pattern: new RegExp(`(?:点\\s*)?(${POINT_NAME})\\s*(?:是|为)\\s*△?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的\\s*外心`, "g"),
+    read: (m) => ({ kind: "circumcenter", targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName) })
   },
   {
     pattern: new RegExp(`(${SEGMENT_NAME})\\s*(?:与|和)\\s*(${SEGMENT_NAME})\\s*(?:长度相等|线段相等|边相等|等长)`, "g"),
@@ -2482,11 +2572,21 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    pattern: new RegExp(`(?:三棱锥|四面体)\\s*(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的体积\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)`, "g"),
+    pattern: new RegExp(`(?:正)?(?:三棱锥|四面体)\\s*(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的体积\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)`, "g"),
+    allowOverlap: true,
     read: (m) => {
       const value = positiveRadicalOrFraction(m[5]!)
       if (value === null) return null
       return { kind: "solidVolume", targets: [m[1]!, m[2]!, m[3]!, m[4]!].map(canonicalPointName), solid: { shape: "polyhedron", metric: "volume" }, value }
+    }
+  },
+  {
+    pattern: new RegExp(`(?:正)?四棱锥\\s*(${POINT_NAME})\\s*[-−–]\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})\\s*的体积\\s*(?:为|是|=)\\s*((?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?)`, "g"),
+    allowOverlap: true,
+    read: (m) => {
+      const value = positiveRadicalOrFraction(m[6]!)
+      if (value === null) return null
+      return { kind: "solidVolume", targets: [m[1]!, m[2]!, m[3]!, m[4]!, m[5]!].map(canonicalPointName), solid: { shape: "polyhedron", metric: "volume" }, value }
     }
   },
   {

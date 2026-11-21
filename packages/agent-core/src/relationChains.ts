@@ -15,12 +15,33 @@ export type AngleChainResult =
   | { ok: false; sourceText: string; start: number; end: number; reason: string }
 
 const THREE_POINT_ANGLE = new RegExp(`^∠\\s*(${POINT_NAME_SOURCE})\\s*(${POINT_NAME_SOURCE})\\s*(${POINT_NAME_SOURCE})$`)
+const COS_THREE_POINT_ANGLE = new RegExp(`^cos\\s*∠\\s*(${POINT_NAME_SOURCE})\\s*(${POINT_NAME_SOURCE})\\s*(${POINT_NAME_SOURCE})$`, "i")
 const ONE_POINT_ANGLE = /^∠\s*([A-Z])$/
 const DEGREE_VALUE = /^([+-]?\d+(?:\.\d+)?)\s*(?:°|\^\{\\circ\}|\\circ)$/
 const RADIAN_PI_VALUE = /^\(?\s*(\d+(?:\.\d+)?)?\s*(?:π|\\pi)(?:\s*\/\s*(\d+(?:\.\d+)?))?\s*\)?\s*(?:rad|弧度)?$/i
 const RADIAN_SCALAR_VALUE = /^([+-]?\d+(?:\.\d+)?)\s*(?:rad|弧度)$/i
 const UNITLESS_NUMBER = /^[+-]?\d+(?:\.\d+)?$/
 const SEGMENT_TERM = new RegExp(`^(?:\\d+(?:\\.\\d+)?\\s*(?:\\/\\s*\\d+(?:\\.\\d+)?)?\\s*)?${POINT_NAME_SOURCE}${POINT_NAME_SOURCE}$`)
+
+function parseSignedRadicalOrFraction(raw: string): number | null {
+  const s = raw.replace(/\s+/g, "").replace(/[−–—]/g, "-")
+  const sign = s.startsWith("-") ? -1 : 1
+  const body = s.replace(/^[+-]/, "")
+  const parts = body.split("/")
+  if (parts.length > 2) return null
+  const numMatch = /^(?:(\d+(?:\.\d+)?)√(\d+(?:\.\d+)?)|√(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?))$/.exec(parts[0]!)
+  if (!numMatch) return null
+  let value = numMatch[1] !== undefined
+    ? Number(numMatch[1]) * Math.sqrt(Number(numMatch[2]))
+    : numMatch[3] !== undefined ? Math.sqrt(Number(numMatch[3])) : Number(numMatch[4])
+  if (parts.length === 2) {
+    if (!/^\d+(?:\.\d+)?$/.test(parts[1]!)) return null
+    const denom = Number(parts[1]!)
+    if (!Number.isFinite(denom) || denom <= 0) return null
+    value /= denom
+  }
+  return Number.isFinite(value) ? sign * value : null
+}
 
 type ParsedAngleTerm =
   | { kind: "angle"; targets: [string, string, string] | [string, typeof STATED_VERTEX_ANGLE] }
@@ -110,7 +131,7 @@ function parseAngleTerm(raw: string): ParsedAngleTerm {
  * Terms are scanned cleanly up to conjunctions/Chinese prose boundaries while keeping
  * optional `rad` / `弧度` / `^{\circ}` units attached.
  */
-const ANGLE_TERM_TOKEN = "(?:(?:sin|cos|tan|cot|sec|csc)\\s*)?(?:∠\\s*(?:[A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*\\s*){1,3}|\\(?\\s*[+-]?\\d*(?:\\.\\d+)?\\s*(?:π|\\\\pi)(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?\\s*\\)?(?:\\s*(?:rad|弧度))?|[+-]?\\d+(?:\\.\\d+)?\\s*(?:°|\\^\\{\\\\circ\\}|\\\\circ|rad|弧度)?|[+-]?[A-Za-z0-9′'₁₂₃₄₅₆₇₈₉.+*/√^]+)"
+const ANGLE_TERM_TOKEN = "(?:(?:sin|cos|tan|cot|sec|csc)\\s*)?(?:∠\\s*(?:[A-Z][A-Z0-9′'₁₂₃₄₅₆₇₈₉]*\\s*){1,3}|\\(?\\s*[+-]?\\d*(?:\\.\\d+)?\\s*(?:π|\\\\pi)(?:\\s*\\/\\s*\\d+(?:\\.\\d+)?)?\\s*\\)?(?:\\s*(?:rad|弧度))?|[+-−]?\\s*(?:(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*)?\\d+(?:\\.\\d+)?\\s*\\/\\s*\\d+(?:\\.\\d+)?|[+-−]?\\s*(?:\\d+(?:\\.\\d+)?\\s*)?√\\s*\\d+(?:\\.\\d+)?|[+-]?\\d+(?:\\.\\d+)?\\s*(?:°|\\^\\{\\\\circ\\}|\\\\circ|rad|弧度)?|[+-]?[A-Za-z0-9′'₁₂₃₄₅₆₇₈₉.+*/√^]+)"
 const ANGLE_CHAIN_CANDIDATE = new RegExp(
   `${ANGLE_TERM_TOKEN}(?:\\s*=\\s*(?:${ANGLE_TERM_TOKEN})?)+`,
   "g"
@@ -186,6 +207,28 @@ export function parseAngleChains(text: string): AngleChainResult[] {
       }
 
       const rawTerms = span.text.split("=")
+      // `cos∠ABC = v` (with |v| < 1) uniquely determines the interior angle in (0°, 180°).
+      if (rawTerms.length === 2) {
+        const cosMatch = COS_THREE_POINT_ANGLE.exec(rawTerms[0]!.trim())
+        if (cosMatch) {
+          const cosVal = parseSignedRadicalOrFraction(rawTerms[1]!)
+          const targets = [
+            canonicalPointName(cosMatch[1]!),
+            canonicalPointName(cosMatch[2]!),
+            canonicalPointName(cosMatch[3]!)
+          ]
+          if (cosVal !== null && cosVal > -1 && cosVal < 1 && new Set(targets).size === 3) {
+            results.push({
+              ok: true,
+              sourceText: span.text,
+              start: span.start,
+              end: span.end,
+              drafts: [{ kind: "planarAngle", targets, value: (Math.acos(cosVal) * 180) / Math.PI }]
+            })
+            continue
+          }
+        }
+      }
       const parsedTerms = rawTerms.map(parseAngleTerm)
       const invalid = parsedTerms.find((term): term is Extract<ParsedAngleTerm, { kind: "invalid" }> => term.kind === "invalid")
       if (invalid) {

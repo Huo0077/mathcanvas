@@ -521,8 +521,9 @@ function candidateConics(
   if (plan.kind !== "plan") return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   const explicitlyBoundIds = new Set(Object.values(options.entityBindings ?? {}))
-  const hasConicAction = plan.actions.some((action) => action.actionId === "planar.create_conic")
-  const hasCircleAction = plan.actions.some((action) => action.actionId === "planar.create_circle")
+  const isNeutral = plan.actions.length === 0
+  const hasConicAction = isNeutral || plan.actions.some((action) => action.actionId === "planar.create_conic")
+  const hasCircleAction = isNeutral || plan.actions.some((action) => action.actionId === "planar.create_circle")
   const entries: CandidateConicEntry[] = []
 
   for (const primitive of candidate.primitives) {
@@ -738,7 +739,7 @@ interface FigureTangentWithSource extends FigureTangent {
 
 function candidateTangents(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureTangentWithSource[] {
   if (plan.kind !== "plan") return []
-  if (!plan.actions.some((action) => action.actionId === "function.create_tangent")) return []
+  if (plan.actions.length > 0 && !plan.actions.some((action) => action.actionId === "function.create_tangent")) return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   return candidate.primitives.flatMap((tangent): FigureTangentWithSource[] => {
     if (tangent.type !== "tangent" || priorIds.has(tangent.id) || tangent.anchor?.kind === "common") return []
@@ -779,7 +780,7 @@ interface FigureCommonTangent extends FigureTangent {
 
 /** 候选图里所有新建的公切线；每条都保留两条来源曲线，核验器不信图元自报的结论。 */
 function candidateCommonTangents(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureCommonTangent[] {
-  if (plan.kind !== "plan" || !plan.actions.some((action) => action.actionId === "function.create_tangent" && (action.inputs as { anchor?: { kind?: string } }).anchor?.kind === "common")) return []
+  if (plan.kind !== "plan" || (plan.actions.length > 0 && !plan.actions.some((action) => action.actionId === "function.create_tangent" && (action.inputs as { anchor?: { kind?: string } }).anchor?.kind === "common"))) return []
   const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
   return candidate.primitives.flatMap((primitive): FigureCommonTangent[] => {
     const anchor = primitive.type === "tangent" ? primitive.anchor : undefined
@@ -973,6 +974,7 @@ interface FigureContext {
    * "这条实体的这个度量"，而度量全都能从实体自己的 `radius` / `height` 算出来。
    */
   solid: FigureSolid | null
+  solids?: readonly FigureSolid[]
   prism?: FigureSolid | null
   /**
    * **候选图里那条新画的圆**（2026-10-20，弦心距 / 弧长）。
@@ -1027,6 +1029,59 @@ function candidatePrismOrCube(plan: PlanEnvelope, candidate: GeometryDocument, b
     }
   }
   return null
+}
+
+function candidateSolids(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid[] {
+  if (plan.kind !== "plan") return []
+  const isNeutral = plan.actions.length === 0
+  const found: FigureSolid[] = []
+  const priorIds = new Set(base?.primitives.map((primitive) => primitive.id) ?? [])
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_prism")) {
+    const prism = candidatePrism(candidate, base)
+    if (prism !== null) found.push(prism)
+  }
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_regular_pyramid")) {
+    const pyramid = candidatePyramid(candidate, base)
+    if (pyramid !== null) found.push(pyramid)
+  }
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_polyhedron")) {
+    const general = candidatePolyhedron(candidate, base)
+    if (general !== null) found.push(general)
+  }
+  if (
+    isNeutral ||
+    plan.actions.some((action) =>
+      action.actionId === "solid.create_sphere" ||
+      action.actionId === "derived.create_circumsphere" ||
+      action.actionId === "derived.create_insphere"
+    )
+  ) {
+    const spheres = candidate.primitives.filter((primitive) => primitive.type === "sphere" && !priorIds.has(primitive.id))
+    if (spheres.length === 1) {
+      const [sphere] = spheres
+      if (sphere.type === "sphere" && Number.isFinite(sphere.radius) && sphere.radius > 0 && [sphere.center.x, sphere.center.y, sphere.center.z].every(Number.isFinite)) {
+        found.push({ shape: "sphere", radius: sphere.radius, center: sphere.center })
+      }
+    }
+  }
+  if (isNeutral || plan.actions.some((action) => action.actionId === "solid.create_template")) {
+    const cubes = candidate.primitives.filter((primitive) => primitive.type === "cube" && !priorIds.has(primitive.id))
+    if (cubes.length === 1) {
+      const [cube] = cubes
+      if (cube.type === "cube" && [cube.size.x, cube.size.y, cube.size.z].every((value) => Number.isFinite(value) && value > 0)) {
+        found.push({ shape: "cuboid", sizeX: cube.size.x, sizeY: cube.size.y, sizeZ: cube.size.z })
+      }
+    }
+    const cones = candidate.primitives.filter((primitive) => primitive.type === "cone" && !priorIds.has(primitive.id))
+    if (cones.length === 1 && cones[0]!.type === "cone") {
+      found.push({ shape: "cone", radius: cones[0]!.radius, height: cones[0]!.height })
+    }
+    const cylinders = candidate.primitives.filter((primitive) => primitive.type === "cylinder" && !priorIds.has(primitive.id))
+    if (cylinders.length === 1 && cylinders[0]!.type === "cylinder") {
+      found.push({ shape: "cylinder", radius: cylinders[0]!.radius, height: cylinders[0]!.height })
+    }
+  }
+  return found
 }
 
 function candidateSolid(plan: PlanEnvelope, candidate: GeometryDocument, base?: GeometryDocument): FigureSolid | null {
@@ -1329,13 +1384,20 @@ function polygonArea3(points: readonly Vector3[]): number | null {
   return double > 1e-12 ? double : null
 }
 
-/** 点到**高线**的距离（高线 = 过 `vertex` 且垂直于 `sideA→sideB`）。垂足可以在边外，所以量直线。 */
+/** 点到**高线**的距离（高线 = 在三角形平面内过 `vertex` 且垂直于 `sideA→sideB`）。支持 2D 与 3D 倾斜面。 */
 function distanceToAltitudeLine(point: Vector3, vertex: Vector3, sideA: Vector3, sideB: Vector3): number | null {
   const alongX = sideB.x - sideA.x
   const alongY = sideB.y - sideA.y
-  const length = Math.hypot(alongX, alongY)
+  const alongZ = sideB.z - sideA.z
+  const length = Math.hypot(alongX, alongY, alongZ)
   if (!(length > 1e-12)) return null
-  return Math.abs((point.x - vertex.x) * alongX + (point.y - vertex.y) * alongY) / length
+  const rel = { x: point.x - vertex.x, y: point.y - vertex.y, z: point.z - vertex.z }
+  const inPlanePerp = Math.abs(rel.x * alongX + rel.y * alongY + rel.z * alongZ) / length
+  const n = crossVector3(subtractVector3(sideA, vertex), subtractVector3(sideB, vertex))
+  const nLen = Math.hypot(n.x, n.y, n.z)
+  if (!(nLen > 1e-12)) return inPlanePerp
+  const outOfPlane = Math.abs(rel.x * n.x + rel.y * n.y + rel.z * n.z) / nLen
+  return Math.hypot(inPlanePerp, outOfPlane)
 }
 
 /**
@@ -1473,15 +1535,16 @@ function solveLinearSystem(matrix: number[][], right: number[]): number[] | null
   return rows.map((row, index) => row[size]! / row[index]!)
 }
 
-/** 点到**线段**的距离（垂足在段外时取到最近端点的距离）—— 内心那条判据就靠这个区别。 */
+/** 点到**线段**的距离（垂足在段外时取到最近端点的距离，支持 2D 与 3D）—— 内心那条判据就靠这个区别。 */
 function pointToSegment(point: Vector3, from: Vector3, to: Vector3): number {
   const alongX = to.x - from.x
   const alongY = to.y - from.y
-  const squared = alongX * alongX + alongY * alongY
-  if (!(squared > 1e-18)) return Math.hypot(point.x - from.x, point.y - from.y)
-  const t = ((point.x - from.x) * alongX + (point.y - from.y) * alongY) / squared
+  const alongZ = to.z - from.z
+  const squared = alongX * alongX + alongY * alongY + alongZ * alongZ
+  if (!(squared > 1e-18)) return Math.hypot(point.x - from.x, point.y - from.y, point.z - from.z)
+  const t = ((point.x - from.x) * alongX + (point.y - from.y) * alongY + (point.z - from.z) * alongZ) / squared
   const clamped = Math.min(1, Math.max(0, t))
-  return Math.hypot(point.x - (from.x + clamped * alongX), point.y - (from.y + clamped * alongY))
+  return Math.hypot(point.x - (from.x + clamped * alongX), point.y - (from.y + clamped * alongY), point.z - (from.z + clamped * alongZ))
 }
 
 /** 度量的中文名（失败文案要指着它说，用户才知道是哪一条不对）。 */
@@ -1514,7 +1577,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      * 只比半径的话，“半径对、球心在原点”会通过 —— 那是另一只球。
      */
     const stated = item.coordinate
-    const drawn = figures.solid
+    const drawn = figures.solids?.find((s) => s.shape === "sphere") ?? figures.solid
     if (stated === undefined || drawn === null || drawn.shape !== "sphere") return null
     const gap = Math.max(
       Math.abs(drawn.center.x - stated.x),
@@ -1567,7 +1630,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      * 因为那时"量的是哪条实体"本身就不成立。
      */
     const stated = item.solid
-    const drawn = figures.solid
+    const drawn = (stated ? figures.solids?.find((s) => s.shape === stated.shape) : undefined) ?? figures.solid
     /**
      * **一般多面体的外接球要一起判两件事**（2026-10-20）：① 顶点**是不是真的在同一个球面上**
      * （最小二乘的残差）；② 这个球的半径与题面写的数差多少。两个都是长度量，残余取较大者。
@@ -2360,13 +2423,13 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     if (item.targets.length !== 4) return null
     const [o, a, b, c] = [at(0), at(1), at(2), at(3)]
     if (item.kind === "centroid") {
-      const target = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 }
-      const gap = Math.hypot(o.x - target.x, o.y - target.y)
+      const target = { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3, z: (a.z + b.z + c.z) / 3 }
+      const gap = Math.hypot(o.x - target.x, o.y - target.y, o.z - target.z)
       return {
         actual: gap,
         expected: 0,
         tolerance: distanceTolerance(1),
-        detail: `实测 ${item.targets[0]} 与 (A + B + C) / 3 = (${target.x.toPrecision(6)}, ${target.y.toPrecision(6)}) 相差 ${gap.toPrecision(6)}；题设要求它是重心。`
+        detail: `实测 ${item.targets[0]} 与 (A + B + C) / 3 = (${target.x.toPrecision(6)}, ${target.y.toPrecision(6)}${Math.abs(target.z) > 1e-9 ? `, ${target.z.toPrecision(6)}` : ""}) 相差 ${gap.toPrecision(6)}；题设要求它是重心。`
       }
     }
     if (item.kind === "orthocenter") {
@@ -2390,23 +2453,24 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
      * **旁心**：一个三角形有**三个**旁心，而题面只说"是旁心"、没说哪一个 ——
      * 所以判据取"到最近那个旁心"的距离，**不挑一个猜**。
      */
-    const sideA = Math.hypot(b.x - c.x, b.y - c.y)
-    const sideB = Math.hypot(c.x - a.x, c.y - a.y)
-    const sideC = Math.hypot(a.x - b.x, a.y - b.y)
-    const candidates: { x: number; y: number }[] = []
+    const sideA = Math.hypot(b.x - c.x, b.y - c.y, b.z - c.z)
+    const sideB = Math.hypot(c.x - a.x, c.y - a.y, c.z - a.z)
+    const sideC = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+    const candidates: Vector3[] = []
     const weigh = (weightA: number, weightB: number, weightC: number): void => {
       const denominator = weightA + weightB + weightC
       if (Math.abs(denominator) < 1e-12) return
       candidates.push({
         x: (weightA * a.x + weightB * b.x + weightC * c.x) / denominator,
-        y: (weightA * a.y + weightB * b.y + weightC * c.y) / denominator
+        y: (weightA * a.y + weightB * b.y + weightC * c.y) / denominator,
+        z: (weightA * a.z + weightB * b.z + weightC * c.z) / denominator
       })
     }
     weigh(-sideA, sideB, sideC)
     weigh(sideA, -sideB, sideC)
     weigh(sideA, sideB, -sideC)
     if (candidates.length === 0) return null
-    const gapsToExcenters = candidates.map((candidate) => Math.hypot(o.x - candidate.x, o.y - candidate.y))
+    const gapsToExcenters = candidates.map((candidate) => Math.hypot(o.x - candidate.x, o.y - candidate.y, o.z - candidate.z))
     const nearest = Math.min(...gapsToExcenters)
     return {
       actual: nearest,
@@ -2417,23 +2481,22 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
   }
   if (item.kind === "incenter") {
     /**
-     * **内心**（2026-10-20）：到**三条边**（线段）等距。
-     *
-     * 量线段而不是量直线，是这条判据的关键：`A`-旁心到三条**直线**的距离同样相等
-     * （都是旁切圆半径），但它的两条垂足落在边的**延长线**上 —— 量线段时这两条距离会变大，
-     * 于是"旁心冒充内心"自然判成不满足，不需要另加一条"点在三角形内"的布尔。
+     * **内心**（2026-10-20）：在三角形所在平面内且到**三条边**（线段）等距。
      */
     if (item.targets.length !== 4) return null
-    const center = at(0)
-    const distances = [pointToSegment(center, at(1), at(2)), pointToSegment(center, at(2), at(3)), pointToSegment(center, at(3), at(1))]
+    const [center, a, b, c] = [at(0), at(1), at(2), at(3)]
+    const distances = [pointToSegment(center, a, b), pointToSegment(center, b, c), pointToSegment(center, c, a)]
     if (distances.some((value) => !Number.isFinite(value))) return null
     const min = Math.min(...distances)
     const max = Math.max(...distances)
+    const n = crossVector3(subtractVector3(b, a), subtractVector3(c, a))
+    const nLen = Math.hypot(n.x, n.y, n.z)
+    const planeGap = nLen > 1e-12 ? Math.abs(dotVector3(subtractVector3(center, a), n)) / nLen : 0
     return {
-      actual: max - min,
+      actual: Math.max(max - min, planeGap),
       expected: 0,
       tolerance: distanceTolerance(Math.max(max, 1)),
-      detail: `实测 ${item.targets[0]} 到 ${item.targets[1]}${item.targets[2]}、${item.targets[2]}${item.targets[3]}、${item.targets[3]}${item.targets[1]} 三条边的距离分别是 ${distances.map((value) => value.toPrecision(6)).join("、")}；题设要求它是内心（到三条边等距）。`
+      detail: `实测 ${item.targets[0]} 到 ${item.targets[1]}${item.targets[2]}、${item.targets[2]}${item.targets[3]}、${item.targets[3]}${item.targets[1]} 三条边的距离分别是 ${distances.map((value) => value.toPrecision(6)).join("、")}${planeGap > 1e-6 ? `（偏离三角形平面 ${planeGap.toPrecision(4)}）` : ""}；题设要求它是内心（到三条边等距）。`
     }
   }
   if (item.kind === "angleBisector") {
@@ -2540,7 +2603,16 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
     return { actual: maxErr, expected: 0, tolerance: distanceTolerance(scale) }
   }
   if (item.kind === "solidVolume") {
-    if (numeric === undefined || vertices.length !== 4) return null
+    if (numeric === undefined || (vertices.length !== 4 && vertices.length !== 5)) return null
+    if (vertices.length === 5) {
+      const [p, a, b, c, d] = vertices as Vector3[]
+      const c1 = crossVector3(subtractVector3(b!, a!), subtractVector3(c!, a!))
+      const c2 = crossVector3(subtractVector3(c!, a!), subtractVector3(d!, a!))
+      const areaVec = { x: c1.x + c2.x, y: c1.y + c2.y, z: c1.z + c2.z }
+      const volume = Math.abs(dotVector3(subtractVector3(p!, a!), areaVec)) / 6
+      if (!Number.isFinite(volume)) return null
+      return { actual: volume, expected: numeric, tolerance: Math.max(UNITLESS_TOLERANCE, UNITLESS_TOLERANCE * Math.max(1, numeric)) }
+    }
     const [p, a, b, c] = vertices as Vector3[]
     const det = Math.abs(dotVector3(subtractVector3(p!, a!), crossVector3(subtractVector3(b!, a!), subtractVector3(c!, a!))))
     const volume = item.solid?.shape === "prism" ? det / 2 : det / 6
@@ -2908,12 +2980,17 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
   const rawPoints = points === null ? null : new Map(points)
   /**
    * **折后同名点的别名**：题面写 `平面 ABC ⊥ 平面 ACD` 时，折后的 `ABC` 指的就是
-   * `A B′ C`（计划把动点改成了 `B′`）。没有这一层，折后条件会报"点名缺失：B"。
-   * 只在**文档里没有**这个折前名字时补别名（文档里真有 B 时以它为准）。
+   * `A B′ C`（计划把动点改成了 `B′`）。没有这一层，折后条件会报"点名缺失：B"或在保留折前底面时误拿折前 `B` 来量。
+   * 保留 `rawPoints` 供跨态条件（同时点到 `B` 与 `B′`，如 `BB′=...`）使用；
+   * 仅针对折后条件构建 `postFoldPoints`，把 `preFold.apex` 指向 `preFold.apexAs`。
    */
-  if (points !== null && preFold !== null && !points.has(preFold.apex)) {
+  const postFoldPoints = points === null ? null : new Map(points)
+  if (points !== null && preFold !== null) {
     const folded = points.get(preFold.apexAs)
-    if (folded !== undefined) points.set(preFold.apex, folded)
+    if (folded !== undefined) {
+      if (!points.has(preFold.apex)) points.set(preFold.apex, folded)
+      postFoldPoints!.set(preFold.apex, folded)
+    }
   }
   const foldClauseMatch = options.prompt === undefined ? null : /(?:翻折|折叠|折起|翻起)/.exec(options.prompt)
   const curves = candidateCurves(plan, candidate, base)
@@ -2929,6 +3006,7 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     commonTangents: candidateCommonTangents(plan, candidate, base),
     curve: curves.length === 1 ? curves[0] : null,
     solid: candidateSolid(plan, candidate, base),
+    solids: candidateSolids(plan, candidate, base),
     prism: candidatePrismOrCube(plan, candidate, base),
     circle: candidateCircle(plan, candidate, base),
     planarPoints: candidate.primitives.flatMap((primitive) =>
@@ -2951,10 +3029,17 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
      * **这一条该在哪一个状态核**：折前图形条件（角、长度、中点…）且点到了会动的那个点，
      * 就用折前坐标；其余（含两平面垂直这类折后条件，或写在折起动作之后的 `使 BD=3` 等折后条件）用最终文档。
      */
-    const isPostFoldClause = foldClauseMatch !== null && item.start > foldClauseMatch.index
+    const postFoldSlice = foldClauseMatch !== null && options.prompt !== undefined && item.start > foldClauseMatch.index
+      ? options.prompt.slice(foldClauseMatch.index, item.start)
+      : ""
+    const hasPostFoldCue = /(?:折后|翻折后|折叠后|使|使得|此时|至|落到|落在|得到|成为)/.test(postFoldSlice)
+    const targetsFoldedApex = preFold !== null && item.targets.includes(preFold.apexAs)
+    const isPostFoldClause = foldClauseMatch !== null && item.start > foldClauseMatch.index && (hasPostFoldCue || targetsFoldedApex)
     const usePre = !isPostFoldClause && preFold !== null && PRE_FOLD_KINDS.has(item.kind) && item.targets.includes(preFold.apex)
       && item.targets.every((name) => preFold.points.has(name))
-    const statePoints = usePre ? preFold.points : (points ?? new Map())
+    const isCrossFoldPair = preFold !== null && item.targets.includes(preFold.apex) && item.targets.includes(preFold.apexAs)
+    const usePostAlias = !usePre && !isCrossFoldPair && preFold !== null && (isPostFoldClause || !PRE_FOLD_KINDS.has(item.kind)) && postFoldPoints !== null
+    const statePoints = usePre ? preFold.points : usePostAlias ? postFoldPoints : (points ?? new Map())
     let itemFigures = figures
     if (
       item.kind === "conicAxes"

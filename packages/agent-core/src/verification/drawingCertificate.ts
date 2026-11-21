@@ -3,6 +3,7 @@ import { conicResidualAt, evaluateFunctionWithDomain, evaluateSymbolicDerivative
 export { NUMERIC_POLICY_VERSION }
 import { PLAN_SCHEMA_VERSION, type PlanEnvelope } from "../contracts"
 import { routeDeterministicProblem } from "../deterministicProblemRoute"
+import { isGenericShapeDrawInstruction, parseDiagramObligations } from "../diagramObligations"
 import { resolveInfeasibleEllipseFallbackScope, verifyDiagramObligations, type DiagramVerificationReport } from "../diagramVerification"
 import { normalizeGeometryPrompt } from "../latexNormalisation"
 import { splitNumberedProblem, subquestionScopeId } from "../numberedProblem"
@@ -290,6 +291,82 @@ function hasVerifiedFunctionTangentInDocument(document: GeometryDocument): boole
   return false
 }
 
+function verifyGenericBareShape(
+  prompt: string,
+  document: GeometryDocument
+): { ok: boolean; detail: string } {
+  const pts = document.primitives
+    .filter((p): p is Extract<PrimitiveSpec, { type: "point" }> => p.type === "point" && Number.isFinite(p.x) && Number.isFinite(p.y))
+    .map((p) => ({ x: p.x, y: p.y }))
+  // Deduplicate coinciding points
+  const unique: Array<{ x: number; y: number }> = []
+  for (const pt of pts) {
+    if (!unique.some((u) => Math.hypot(u.x - pt.x, u.y - pt.y) < 1e-6)) unique.push(pt)
+  }
+  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
+  const triAnglesDeg = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): number[] | null => {
+    const ab = dist(a, b), bc = dist(b, c), ca = dist(c, a)
+    if (!(ab > 1e-6 && bc > 1e-6 && ca > 1e-6)) return null
+    const area2 = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x))
+    if (!(area2 > 1e-6)) return null
+    const ang = (s1: number, s2: number, opp: number) =>
+      (Math.acos(Math.max(-1, Math.min(1, (s1 * s1 + s2 * s2 - opp * opp) / (2 * s1 * s2)))) * 180) / Math.PI
+    return [ang(ab, ca, bc), ang(ab, bc, ca), ang(bc, ca, ab)]
+  }
+  if (/三角形/.test(prompt)) {
+    if (unique.length < 3) return { ok: false, detail: `画布仅有 ${unique.length} 个独立顶点，不足以构成三角形` }
+    const angles = triAnglesDeg(unique[0]!, unique[1]!, unique[2]!)
+    if (!angles) return { ok: false, detail: "三点共线或退化，未构成有效三角形" }
+    if (/直角/.test(prompt)) {
+      const ok = angles.some((a) => Math.abs(a - 90) <= 1e-2)
+      return { ok, detail: ok ? "已按顶点坐标核验为直角三角形" : `实测内角 ${angles.map((a) => a.toFixed(2)).join("°, ")}°，不含直角` }
+    }
+    if (/钝角/.test(prompt)) {
+      const ok = angles.some((a) => a > 90 + 1e-2)
+      return { ok, detail: ok ? "已按顶点坐标核验为钝角三角形" : `实测内角 ${angles.map((a) => a.toFixed(2)).join("°, ")}°，不含钝角` }
+    }
+    if (/锐角/.test(prompt)) {
+      const ok = angles.every((a) => a < 90 - 1e-2)
+      return { ok, detail: ok ? "已按顶点坐标核验为锐角三角形" : `实测内角 ${angles.map((a) => a.toFixed(2)).join("°, ")}°，并非全为锐角` }
+    }
+    if (/等边|正三角形/.test(prompt)) {
+      const ok = angles.every((a) => Math.abs(a - 60) <= 1e-2)
+      return { ok, detail: ok ? "已按顶点坐标核验为等边三角形" : `实测内角 ${angles.map((a) => a.toFixed(2)).join("°, ")}°，非等边三角形` }
+    }
+    if (/等腰/.test(prompt)) {
+      const [ab, bc, ca] = [dist(unique[0]!, unique[1]!), dist(unique[1]!, unique[2]!), dist(unique[2]!, unique[0]!)]
+      const ok = Math.abs(ab - bc) <= 1e-3 || Math.abs(bc - ca) <= 1e-3 || Math.abs(ca - ab) <= 1e-3
+      return { ok, detail: ok ? "已按顶点坐标核验为等腰三角形" : "三边互不相等，非等腰三角形" }
+    }
+    return { ok: true, detail: "已按顶点坐标核验为非退化三角形" }
+  }
+  if (/正方形|矩形|长方形|菱形/.test(prompt)) {
+    if (unique.length < 4) return { ok: false, detail: `画布仅有 ${unique.length} 个独立顶点，不足以构成四边形` }
+    const quad = unique.slice(0, 4)
+    const cx = quad.reduce((s, p) => s + p.x, 0) / 4
+    const cy = quad.reduce((s, p) => s + p.y, 0) / 4
+    quad.sort((p, q) => Math.atan2(p.y - cy, p.x - cx) - Math.atan2(q.y - cy, q.x - cx))
+    const sides = [0, 1, 2, 3].map((i) => dist(quad[i]!, quad[(i + 1) % 4]!))
+    const diags = [dist(quad[0]!, quad[2]!), dist(quad[1]!, quad[3]!)]
+    const allEqualSides = sides.every((s) => s > 1e-6 && Math.abs(s - sides[0]!) <= 1e-3 * Math.max(1, sides[0]!))
+    const oppEqual = Math.abs(sides[0]! - sides[2]!) <= 1e-3 * Math.max(1, sides[0]!) && Math.abs(sides[1]! - sides[3]!) <= 1e-3 * Math.max(1, sides[1]!)
+    const equalDiags = diags[0]! > 1e-6 && Math.abs(diags[0]! - diags[1]!) <= 1e-3 * Math.max(1, diags[0]!)
+    if (/正方形/.test(prompt)) {
+      const ok = allEqualSides && equalDiags
+      return { ok, detail: ok ? "已按顶点坐标核验为正方形" : "四边或对角线不满足正方形几何条件" }
+    }
+    if (/矩形|长方形/.test(prompt)) {
+      const ok = oppEqual && equalDiags
+      return { ok, detail: ok ? "已按顶点坐标核验为矩形" : "对边或对角线不满足矩形几何条件" }
+    }
+    if (/菱形/.test(prompt)) {
+      const ok = allEqualSides
+      return { ok, detail: ok ? "已按顶点坐标核验为菱形" : "四边不等长，非菱形" }
+    }
+  }
+  return { ok: unique.length >= 2, detail: unique.length >= 2 ? "已核验有效有限几何图元" : "画布缺少有效图元" }
+}
+
 export function certifyDrawingAgainstContract(input: {
   prompt: string
   document: GeometryDocument
@@ -377,13 +454,35 @@ export function certifyDrawingAgainstContract(input: {
     factIds: [],
     actions: []
   }
-  const effectiveScopeId = resolveInfeasibleEllipseFallbackScope({
+  let effectiveScopeId = resolveInfeasibleEllipseFallbackScope({
     prompt: parserPrompt,
     document: input.document,
     plan: input.plan ?? neutralPlan,
     ...(input.baseDocument === undefined ? {} : { baseDocument: input.baseDocument }),
     ...(initialScopeId === undefined ? {} : { requestedScopeId: initialScopeId })
   })
+  if (effectiveScopeId === undefined) {
+    const baseParsed = parseDiagramObligations(parserPrompt, { spatialPointConditions: input.witnessSearch === true })
+    if (baseParsed.parts && baseParsed.parts.length > 0 && baseParsed.unverified.some((u) => u.sourceText === "各小问的条件")) {
+      const sharedOnly = parseDiagramObligations(parserPrompt, { selectedScopeId: "shared", spatialPointConditions: input.witnessSearch === true })
+      const premiseParts = baseParsed.parts.filter(
+        (part) =>
+          part.obligations.givens.length > sharedOnly.givens.length ||
+          part.obligations.unverified.some((u) => u.sourceText !== "各小问的条件" && !sharedOnly.unverified.some((su) => su.sourceText === u.sourceText))
+      )
+      if (premiseParts.length === 1) {
+        const candidateScopeId = subquestionScopeId(premiseParts[0]!.number)
+        const scopedCheck = verifyDiagramObligations(premiseParts[0]!.obligations, input.plan ?? neutralPlan, input.document, input.baseDocument, {
+          obligationIR: input.obligationIR === true,
+          prompt: parserPrompt,
+          activeScopeId: candidateScopeId
+        })
+        if (scopedCheck.status === "passed") {
+          effectiveScopeId = candidateScopeId
+        }
+      }
+    }
+  }
   const parsedObligations = parseObligationWithLegacy(parserPrompt, {
     spatialPointConditions: input.witnessSearch === true,
     ...(effectiveScopeId === undefined ? {} : { selectedScopeId: effectiveScopeId })
@@ -417,33 +516,57 @@ export function certifyDrawingAgainstContract(input: {
   const unresolvedSource: string[] = []
   const failedObligations: FailedObligationDetail[] = []
 
-  report.checks.forEach((check, idx) => {
-    const id = `obl-${idx}`
+  const isGenericBareShapePrompt =
+    isGenericShapeDrawInstruction(parserPrompt) &&
+    parsedObligations.givens.length === 0 &&
+    parsedObligations.unverified.length === 0 &&
+    report.checks.length === 1 &&
+    report.checks[0]?.kind === "unparsed" &&
+    report.checks[0]?.sourceText === "题设"
+
+  if (isGenericBareShapePrompt) {
+    const id = "generic-shape"
+    const shapeRes = verifyGenericBareShape(parserPrompt, input.document)
     requiredIds.push(id)
-    if (check.status === "passed") {
-      checkedIds.push(id)
-      evidence.push({ obligationId: id, status: "passed", candidateHash: input.candidateHash, detail: check.reason })
-    } else if (check.status === "failed") {
-      checkedIds.push(id)
-      evidence.push({ obligationId: id, status: "failed", candidateHash: input.candidateHash, detail: check.reason })
-      failedObligations.push({
-        id,
-        ...(effectiveScopeId === undefined ? {} : { scope: effectiveScopeId }),
-        kind: check.kind,
-        detail: `${check.sourceText}: ${check.reason}`
-      })
-    } else {
-      unresolvedSource.push(check.sourceText)
-      checkedIds.push(id)
-      evidence.push({ obligationId: id, status: "unknown", candidateHash: input.candidateHash, detail: check.reason })
-      failedObligations.push({
-        id,
-        ...(effectiveScopeId === undefined ? {} : { scope: effectiveScopeId }),
-        kind: check.kind,
-        detail: `${check.sourceText}: ${check.reason}`
-      })
+    checkedIds.push(id)
+    evidence.push({
+      obligationId: id,
+      status: shapeRes.ok && !nonFiniteGeometry ? "passed" : "failed",
+      candidateHash: input.candidateHash,
+      detail: shapeRes.detail
+    })
+    if (!shapeRes.ok) {
+      failedObligations.push({ id, kind: "genericShape", detail: shapeRes.detail })
     }
-  })
+  } else {
+    report.checks.forEach((check, idx) => {
+      const id = `obl-${idx}`
+      requiredIds.push(id)
+      if (check.status === "passed") {
+        checkedIds.push(id)
+        evidence.push({ obligationId: id, status: "passed", candidateHash: input.candidateHash, detail: check.reason })
+      } else if (check.status === "failed") {
+        checkedIds.push(id)
+        evidence.push({ obligationId: id, status: "failed", candidateHash: input.candidateHash, detail: check.reason })
+        failedObligations.push({
+          id,
+          ...(effectiveScopeId === undefined ? {} : { scope: effectiveScopeId }),
+          kind: check.kind,
+          detail: `${check.sourceText}: ${check.reason}`
+        })
+      } else {
+        unresolvedSource.push(check.sourceText)
+        checkedIds.push(id)
+        evidence.push({ obligationId: id, status: "unknown", candidateHash: input.candidateHash, detail: check.reason })
+        failedObligations.push({
+          id,
+          ...(effectiveScopeId === undefined ? {} : { scope: effectiveScopeId }),
+          kind: check.kind,
+          detail: `${check.sourceText}: ${check.reason}`
+        })
+      }
+    })
+  }
 
   // Unparsed premise clause coverage guards (never silently treat unparsed function-tangent or circle extreme-chord constraints as passed).
   if (parsedObligations.givens.some((given) => given.kind === "functionGraph") && /(?:公?切线)/.test(parserPrompt) && !report.checks.some((check) => check.kind === "tangentAt")) {
