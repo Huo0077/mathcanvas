@@ -79,6 +79,8 @@ jobs:
         run: |
           JAVA17="${JAVA_HOME_17_X64:-/usr/lib/jvm/temurin-17-jdk-amd64}"
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "Installed SDK platforms / build-tools / NDKs:"
+          ls -1 "$SDK/platforms" "$SDK/build-tools" "$SDK/ndk" || true
           NDK_VER="$(ls -1 "$SDK/ndk" | sort -V | tail -n 1)"
           NDK="$SDK/ndk/$NDK_VER"
           LLVM_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
@@ -105,10 +107,12 @@ jobs:
         if: failure()
         run: |
           if [ -f android-build.log ]; then
-            err=$(grep -E 'error(\[E[0-9]+\])?:|FAILURE:|Exception:|FAILED' android-build.log | head -n 10 | tr '\n' ' ' | cut -c1-900)
-            tail_lines=$(tail -n 20 android-build.log | tr '\n' ' ' | cut -c1-900)
-            echo "::error title=Android build errors::${err:-none}"
-            echo "::error title=Android build tail::${tail_lines:-empty}"
+            rust_err=$(grep -E '^error(\[E[0-9]+\])?:' android-build.log | head -n 10 | tr '\n' ' ' | cut -c1-900)
+            gradle_err=$(grep -A 18 'FAILURE: Build failed with an exception.' android-build.log | tr '\n' ' ' | cut -c1-900)
+            mid_tail=$(tail -n 55 android-build.log | head -n 30 | tr '\n' ' ' | cut -c1-900)
+            echo "::error title=Android rust errors::${rust_err:-none}"
+            echo "::error title=Android Gradle failure::${gradle_err:-none}"
+            echo "::error title=Android log context::${mid_tail:-empty}"
           fi
       - name: Align and sign release APK for direct installation
         run: |
