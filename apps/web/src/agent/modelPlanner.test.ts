@@ -1984,4 +1984,85 @@ describe("DS1 compact ds_intent mode in modelPlanner", () => {
     expect(sent[1]?.messages.filter((message) => message.role === "tool_result").map((message) => message.toolCallId)).toEqual(["c-p", "c-q"])
   })
 
+  it("accepts a constructive ds_action batch when an existing solid face is idempotently reused alongside new segments and faces", async () => {
+    let turn = 0
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async () => {
+        turn += 1
+        if (turn === 1) {
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-a", toolId: "construct_point", input: { id: "A", x: 0, y: 0, z: 2 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-b", toolId: "construct_point", input: { id: "B", x: 0, y: 0, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-c", toolId: "construct_point", input: { id: "C", x: 2, y: 0, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-d", toolId: "construct_point", input: { id: "D", x: 0, y: 2, z: 0 } }
+          ] }
+        }
+        if (turn === 2) {
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "solid-1", toolId: "construct_solid", input: { id: "T", kind: "tetrahedron", vertexNames: ["A", "B", "C", "D"] } }
+          ] }
+        }
+        if (turn === 3) {
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "pt-e", toolId: "construct_point", input: { id: "E", x: 0, y: 1, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "seg-ae", toolId: "construct_segment", input: { id: "AE", from: "A", to: "E" } },
+            { kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "face-abc", toolId: "construct_face", input: { id: "F_ABC", vertexNames: ["A", "B", "C"] } },
+            { kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "face-aec", toolId: "construct_face", input: { id: "F_AEC", vertexNames: ["A", "E", "C"] } }
+          ] }
+        }
+        return { ok: true, events: [
+          { kind: "tool_call" as const, requestId: `r-${turn}`, attemptId: `a-${turn}`, toolCallId: `fin-${turn}`, toolId: "finish_candidate", input: { goal: "tetrahedron with auxiliary segment AE and faces" } }
+        ] }
+      }
+    })
+    const outcome = await planner.plan(request({
+      userMessage: "三棱锥 A-BCD 中，E 在 BD 上，连接 AE、面 AEC 与面 ABC",
+      budget: createBudget({ network: 8, generation: 8, tool: 20 })
+    }))
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    expect(turn).toBe(4)
+  })
+
+  it("allows recovery after single idempotent construct_face reuse while stopping repeated zero-progress face batches", async () => {
+    let turn = 0
+    const sent: Array<{ messages: Array<{ role: string; toolCallId?: string; content: string }> }> = []
+    const planner = createModelPlanner({
+      intentMode: "ds_action",
+      resolveProvider: async () => ({ ok: true, provider: {
+        id: "recorded-ds", modelId: "recorded-ds", dialect: "openai", revision: 1,
+        capabilities: { tools: "verified", json: "verified", vision: "unknown" }
+      } }),
+      runModel: async (input) => {
+        sent.push({ ...input, messages: input.messages.map((m) => ({ ...m })) })
+        turn += 1
+        if (turn === 1) {
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-a", toolId: "construct_point", input: { id: "A", x: 0, y: 0, z: 2 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-b", toolId: "construct_point", input: { id: "B", x: 0, y: 0, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-c", toolId: "construct_point", input: { id: "C", x: 2, y: 0, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "pt-d", toolId: "construct_point", input: { id: "D", x: 0, y: 2, z: 0 } },
+            { kind: "tool_call" as const, requestId: "r-1", attemptId: "a-1", toolCallId: "solid-1", toolId: "construct_solid", input: { id: "T", kind: "tetrahedron", vertexNames: ["A", "B", "C", "D"] } }
+          ] }
+        }
+        if (turn === 2) {
+          return { ok: true, events: [
+            { kind: "tool_call" as const, requestId: "r-2", attemptId: "a-2", toolCallId: "face-dup", toolId: "construct_face", input: { id: "F_ABC", vertexNames: ["A", "B", "C"] } }
+          ] }
+        }
+        return { ok: true, events: [
+          { kind: "tool_call" as const, requestId: "r-3", attemptId: "a-3", toolCallId: "fin-3", toolId: "finish_candidate", input: { goal: "recovered after idempotent face notice" } }
+        ] }
+      }
+    })
+    const outcome = await planner.plan(request({ userMessage: "三棱锥 A-BCD", budget: createBudget({ network: 8, generation: 8, tool: 16 }) }))
+    expect("plan" in outcome && outcome.plan.kind === "plan").toBe(true)
+    const dupResult = sent[2]?.messages.find((m) => m.role === "tool_result" && m.toolCallId === "face-dup")
+    expect(JSON.parse(dupResult?.content ?? "{}").repairHint).toMatch(/already materialized/i)
+  })
+
 })

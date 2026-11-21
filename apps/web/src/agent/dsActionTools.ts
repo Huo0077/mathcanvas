@@ -5005,6 +5005,7 @@ export function createDsActionSession(options: {
             action: name,
             entity: existingSameFace.faceAlias,
             stateChanged: false,
+            repairHint: `Face "${vertexNames.join("")}" is already materialized as "${existingSameFace.faceAlias}" on the canvas; reused existing face without duplicating.`,
             candidateHash: canvasSnap.candidateHash,
             stepIndex: canvasSnap.stepIndex,
             primitiveCount: canvasSnap.primitiveCount

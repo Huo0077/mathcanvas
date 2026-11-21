@@ -1138,7 +1138,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
           if (
             trailingFinish &&
             trial !== null &&
-            results.slice(0, -1).every((res) => res.ok && (NON_CONSTRUCTIVE_DS_ACTIONS.has(res.action) || res.stateChanged)) &&
+            results.slice(0, -1).every((res) => res.ok && res.terminated === undefined) &&
             results.at(-1)?.ok === true &&
             results.at(-1)?.terminated !== undefined
           ) {
@@ -1176,7 +1176,17 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               ...(candidateSlices === undefined ? {} : { candidateSlices })
             }
           }
-          const failure = results.find((res) => !res.ok || res.terminated !== undefined || (!NON_CONSTRUCTIVE_DS_ACTIONS.has(res.action) && !res.stateChanged))
+          const hardFailure = results.find((res) => !res.ok || res.terminated !== undefined)
+          const batchProgressed = trial !== null && (
+            trial.currentSnapshot().candidateHash !== before.candidateHash ||
+            results.some((res) => res?.stateChanged)
+          )
+          // Idempotent face reuse (`ok: true, stateChanged: false`) inside a constructive batch
+          // should not roll back valid segments/faces built in the same batch; only reject when
+          // the entire constructive batch made zero state change at all.
+          const failure = hardFailure ?? (hasConstruct && !batchProgressed
+            ? results.find((res) => !NON_CONSTRUCTIVE_DS_ACTIONS.has(res.action) && !res.stateChanged)
+            : undefined)
           const accepted = !mixed && failure === undefined && trial !== null
           if (!accepted) {
             const signature = `batch:${calls.map((call) => call.toolId).join(",")}:${mixed ? "mix" : failure?.blockerCode ?? "no_progress"}`
@@ -1228,7 +1238,7 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
             })
             messages.push({ role: "tool_result", toolCallId: call.toolCallId, toolName: call.toolId,
               content: accepted ? boundedExcerpt(JSON.stringify({ ...res, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)) }), 4000) : JSON.stringify({ status, blockerCode, referenceDirectory: dsActionSession!.referenceDirectory(referenceBranchId(call.input)),
-                repairHint: mixed ? "Send read, repair, and terminal tools in separate turns" : res && !res.ok ? res.repairHint : "Entire batch rolled back; correct failing call and retry" }) })
+                repairHint: mixed ? "Send read, repair, and terminal tools in separate turns" : res && !res.ok ? res.repairHint : res?.repairHint ?? failure?.repairHint ?? "Entire batch rolled back; correct failing call and retry" }) })
           }
           continue
         }
@@ -1300,7 +1310,8 @@ export function createModelPlanner(dependencies: ModelPlannerDependencies = {}):
               }
             }
             const isConstructive = !NON_CONSTRUCTIVE_DS_ACTIONS.has(execRes.action)
-            if (isConstructive && execRes.ok && !execRes.stateChanged) {
+            const isIdempotentReuse = execRes.ok && !execRes.stateChanged && Boolean(execRes.entity && execRes.repairHint)
+            if (isConstructive && execRes.ok && !execRes.stateChanged && !isIdempotentReuse) {
               reportAction(false)
               return {
                 failure: createPlanFailure({
