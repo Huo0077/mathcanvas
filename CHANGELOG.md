@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版）：原生公共下载/系统分享桥接、横竖屏精修与 GitHub Release 自动发布
+
+- **Android 原生公共 `Downloads/MathCanvas` 导出与系统分享面板**（[android-post-init.mjs](scripts/android-post-init.mjs)、[android-post-init.test.ts](scripts/android-post-init.test.ts)、[fileExports.ts](apps/web/src/persistence/fileExports.ts)、[fileExports.test.ts](apps/web/src/persistence/fileExports.test.ts)）：
+  - 在 `MainActivity.kt` 新增受控 `@JavascriptInterface` 桥接 `MathCanvasAndroid.deliverExport`（白名单扩展名 + `exports/` 规范路径 Containment 校验），Android 10+ 零权限通过 `MediaStore.Downloads` 写入公共 `下载/MathCanvas/` 目录，并通过 `FileProvider`（`res/xml/file_paths.xml` 暴露 `files-path/exports/`）唤起 Android 系统分享面板（`Intent.ACTION_SEND` + `FLAG_GRANT_READ_URI_PERMISSION`）；
+  - 为 `proguard-rules.pro` 写入 R8 保留规则，确保 Release 混淆构建不会裁掉 JS 桥接方法；
+  - 加固 `AndroidManifest.xml`（`android:allowBackup="false"` 防凭据库自动备份、`android:roundIcon="@mipmap/ic_launcher_round"`）并配置浅色 `windowBackground` 消除暗色模式冷启动黑闪；自动同步 `tauri.properties` 版本号与 `versionCode`。
+- **移动端窄屏菜单、工程制图工具条、设置页与横屏交互精修**（[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：
+  - 手机端文件/命令菜单改为单列自适应弹层不拥挤；工程制图工具条与设置页卡片窄屏自动换行；新增粗指针横屏紧凑顶栏（`max-height: 520px`）留出更大作图区域。
+- **v5.1.0 版本发布与 Android Release 流水线**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[android-package.mjs](scripts/android-package.mjs)、[android-release.yml](.github/workflows/android-release.yml)、[workflowPolicy.test.ts](scripts/ci/workflowPolicy.test.ts)、[v5.1.0.md](docs/release/v5.1.0.md)）：
+  - 升级版本至 `5.1.0`（`versionCode = 5001000`）；增强 `android-package.mjs` 支持自定义发布密钥、自动 `apksigner verify --print-certs` 与产出版本化 APK + `SHA256SUMS`；新增仅限 `v*` 标签触发的 `Android Release` 工作流自动签名校验并发布 GitHub Release。
+
 ## 2026-11-22 —— Android 端深度加固、真机/Android 16 模拟器闭环实测与跨平台本地 APK 一键打包
 
 - **Android 原生宿主、Edge-to-Edge 安全区与系统返回键闭环**（[android-post-init.mjs](scripts/android-post-init.mjs)、[android-post-init.test.ts](scripts/android-post-init.test.ts)、[android-package.mjs](scripts/android-package.mjs)、[apps/desktop/package.json](apps/desktop/package.json)）：

@@ -249,4 +249,36 @@ describe("file exports", () => {
       delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
     }
   })
+
+  it("delivers Android exports to public Downloads/MathCanvas and native Share Sheet when MathCanvasAndroid bridge is present", async () => {
+    const savedNotices: string[] = []
+    const bridgeCalls: Array<{ fileName: string; mimeType: string; share: boolean }> = []
+    ;(globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+      invoke: async () => ({ fileName: "几何图.svg", directory: "exports", byteSize: 128 })
+    }
+    ;(globalThis as { MathCanvasAndroid?: unknown }).MathCanvasAndroid = {
+      deliverExport: (fileName: string, mimeType: string, share: boolean) => {
+        bridgeCalls.push({ fileName, mimeType, share })
+        return JSON.stringify({ ok: true, fileName, savedToDownloads: true, shared: true })
+      }
+    }
+    try {
+      const exports = createFileExports({
+        getDocument: () => document3d("几何图"),
+        getExportableDrawings: () => [] as ProjectedDrawing[],
+        setFileError: (message) => { errors.push(message) },
+        platform: "android",
+        onSaved: (message) => { savedNotices.push(message) }
+      })
+      await exports.exportSvgFile("svg")
+      await vi.waitFor(() => expect(bridgeCalls).toHaveLength(1))
+      expect(bridgeCalls[0]).toEqual({ fileName: "几何图.svg", mimeType: "image/svg+xml", share: true })
+      expect(savedNotices[0]).toContain("下载/MathCanvas/几何图.svg")
+      expect(savedNotices[0]).toContain("系统分享")
+      expect(errors.every((entry) => entry === null)).toBe(true)
+    } finally {
+      delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+      delete (globalThis as { MathCanvasAndroid?: unknown }).MathCanvasAndroid
+    }
+  })
 })

@@ -1,5 +1,10 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版发布与原生分享/公共下载闭环）
+
+- **原生导出直达系统公共下载与分享面板**：扩展 [android-post-init.mjs](../scripts/android-post-init.mjs) 为 `MainActivity.kt` 注入受控 `@JavascriptInterface`（`MathCanvasAndroid.deliverExport`，仅允许白名单后缀且强制规范路径落于 `filesDir/exports/`），通过 Android 10+ `MediaStore.Downloads` 零权限写入公共 `Download/MathCanvas/` 并通过 `FileProvider`（`res/xml/file_paths.xml`）调起 `Intent.ACTION_SEND` 系统分享；补充 R8 `proguard-rules.pro` 保留规则、`allowBackup="false"`、`roundIcon`、浅色冷启动主题及 `tauri.properties` 自动同步（`5.1.0` / `versionCode=5001000`）。
+- **移动端窄屏/横屏精修与自动化 Release**：优化手机端文件菜单、工程制图工具条、设置页及横屏紧凑顶栏；升级 [android-package.mjs](../scripts/android-package.mjs) 输出版本化 APK + `apksigner verify` + SHA-256，新增仅限 `v*` 标签触发的 [android-release.yml](../.github/workflows/android-release.yml) 与 [v5.1.0.md](release/v5.1.0.md)，并完成 Android 16 实机模拟器（含文件导出至 `Download/MathCanvas` 与系统分享验证）及全套自动化门禁后推送 GitHub Release `v5.1.0`。
+
 ## 2026-11-22 —— Android 端深度加固、Android 16 模拟器真机闭环实测与跨平台本地 APK 一键打包
 
 - **Android 宿主与原生配置加固**：扩展 [android-post-init.mjs](../scripts/android-post-init.mjs) 自动修补 `MainActivity.kt`（浅色 Edge-to-Edge、`WindowInsetsCompat` 对系统栏/挖孔/软键盘统一避让与 `OnBackPressedCallback` 返回桥接）、`AndroidManifest.xml`（`hardwareAccelerated="true"`、`adjustResize` 与 `network_security_config`）并写出 `res/xml/network_security_config.xml`；新增 [android-package.mjs](../scripts/android-package.mjs)（`android:build:local` / `android:build:emulator`）解决 Windows 无开发者模式符号链接限制，默认启用 `tauri/custom-protocol` 内嵌前端资源并自动 `zipalign` + `apksigner` 签名。

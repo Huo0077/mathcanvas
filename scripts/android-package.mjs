@@ -12,7 +12,8 @@
  *   node scripts/android-package.mjs [--arch arm64|x86_64] [--debug] [--skip-web] [--skip-rust]
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,29 +214,41 @@ if (!rawApkName) {
   console.error(`[android-package] No APK found under ${apkOutDir}`);
   process.exit(1);
 }
+const tauriConf = JSON.parse(readFileSync(join(tauriDir, "tauri.conf.json"), "utf8"));
+const appVersion = String(tauriConf.version ?? "0.0.0");
+
 const rawApk = join(apkOutDir, rawApkName);
 const distDir = join(tauriDir, "target/android-apk");
 mkdirSync(distDir, { recursive: true });
 const finalName = `MathCanvas-android-${arch}${isDebug ? "-debug" : ""}.apk`;
+const versionedName = `MathCanvas-${appVersion}-android-${arch}${isDebug ? "-debug" : ""}.apk`;
 const finalApk = join(distDir, finalName);
+const versionedApk = join(distDir, versionedName);
 
 if (rawApk.endsWith("-unsigned.apk")) {
   if (!buildTools) {
     console.error("[android-package] Cannot sign unsigned APK: Android build-tools not found.");
     process.exit(1);
   }
-  const debugKeystore = join(homedir(), ".android/debug.keystore");
-  if (!existsSync(debugKeystore)) {
-    mkdirSync(dirname(debugKeystore), { recursive: true });
+  const customKeystore = process.env.ANDROID_KEYSTORE_PATH;
+  const keystorePath = customKeystore && existsSync(customKeystore)
+    ? customKeystore
+    : join(homedir(), ".android/debug.keystore");
+  const ksPass = process.env.ANDROID_KEYSTORE_PASSWORD ?? "android";
+  const keyAlias = process.env.ANDROID_KEY_ALIAS ?? "androiddebugkey";
+  const keyPass = process.env.ANDROID_KEY_PASSWORD ?? ksPass;
+
+  if (!existsSync(keystorePath)) {
+    mkdirSync(dirname(keystorePath), { recursive: true });
     runStep(
-      "Generate local debug signing keystore",
+      "Generate local signing keystore",
       join(javaHome, `bin/keytool${exeExt}`),
       [
         "-genkeypair", "-v",
-        "-keystore", debugKeystore,
-        "-storepass", "android",
-        "-alias", "androiddebugkey",
-        "-keypass", "android",
+        "-keystore", keystorePath,
+        "-storepass", ksPass,
+        "-alias", keyAlias,
+        "-keypass", keyPass,
         "-keyalg", "RSA",
         "-keysize", "2048",
         "-validity", "10000",
@@ -246,15 +259,38 @@ if (rawApk.endsWith("-unsigned.apk")) {
   }
   const alignedApk = join(distDir, `${finalName}.aligned.tmp`);
   runStep("Zipalign release APK", join(buildTools, `zipalign${exeExt}`), ["-f", "-p", "4", rawApk, alignedApk], { cwd: repoRoot, env });
+  const signArgs = [
+    "sign",
+    "--ks", keystorePath,
+    "--ks-pass", `pass:${ksPass}`,
+    "--key-pass", `pass:${keyPass}`,
+  ];
+  if (keyAlias) {
+    signArgs.push("--ks-key-alias", keyAlias);
+  }
+  signArgs.push("--out", finalApk, alignedApk);
   runStep(
-    "Sign release APK with local keystore",
+    customKeystore ? "Sign release APK with configured release keystore" : "Sign release APK with local keystore",
     join(buildTools, `apksigner${win ? ".bat" : ""}`),
-    ["sign", "--ks", debugKeystore, "--ks-pass", "pass:android", "--key-pass", "pass:android", "--out", finalApk, alignedApk],
+    signArgs,
     { cwd: repoRoot, env }
   );
   rmSync(alignedApk, { force: true });
+  runStep(
+    "Verify signed APK signature",
+    join(buildTools, `apksigner${win ? ".bat" : ""}`),
+    ["verify", "--print-certs", finalApk],
+    { cwd: repoRoot, env }
+  );
 } else {
   copyFileSync(rawApk, finalApk);
 }
 
+copyFileSync(finalApk, versionedApk);
+const sha256 = createHash("sha256").update(readFileSync(versionedApk)).digest("hex").toUpperCase();
+const checksumPath = join(distDir, `SHA256SUMS-android-${arch}.txt`);
+writeFileSync(checksumPath, `${sha256}  ${versionedName}\n`, "utf8");
+
 console.log(`\n[android-package] Ready APK: ${finalApk}`);
+console.log(`[android-package] Release APK: ${versionedApk}`);
+console.log(`[android-package] SHA-256: ${sha256}`);

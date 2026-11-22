@@ -1,0 +1,162 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (e.g. v5.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: android-release-aarch64
+      - name: Configure Java, Android SDK, and NDK environment
+        run: |
+          JAVA17="${JAVA_HOME_17_X64:-/usr/lib/jvm/temurin-17-jdk-amd64}"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          NDK_VER="$(ls -1 "$SDK/ndk" | grep -E '^(27|28)\.' | sort -V | tail -n 1 || true)"
+          if [ -z "$NDK_VER" ]; then
+            NDK_VER="$(ls -1 "$SDK/ndk" | sort -V | tail -n 1)"
+          fi
+          NDK="$SDK/ndk/$NDK_VER"
+          LLVM_BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+          echo "$JAVA17/bin" >> "$GITHUB_PATH"
+          echo "$LLVM_BIN" >> "$GITHUB_PATH"
+          echo "CC_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+          echo "CXX_aarch64_linux_android=$LLVM_BIN/aarch64-linux-android24-clang++" >> "$GITHUB_ENV"
+          echo "AR_aarch64_linux_android=$LLVM_BIN/llvm-ar" >> "$GITHUB_ENV"
+          echo "RANLIB_aarch64_linux_android=$LLVM_BIN/llvm-ranlib" >> "$GITHUB_ENV"
+      - name: Initialize Tauri Android project and apply MathCanvas patches
+        run: |
+          npm run build --workspace @draw/web
+          npm run android:init --workspace @draw/desktop
+      - name: Build Android ARM64 Release APK
+        run: |
+          set -o pipefail
+          npm run android:build --workspace @draw/desktop 2>&1 | tee android-release-build.log
+      - name: Align, sign, verify, and checksum Release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/android-release
+          VERSION="$(node -p 'JSON.parse(require("fs").readFileSync("apps/desktop/src-tauri/tauri.conf.json","utf8")).version')"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+          BUILD_TOOLS_VER="$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VER"
+          RAW_APK="$(find apps/desktop/src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk" | head -n 1)"
+          if [ -z "$RAW_APK" ]; then
+            echo "::error::No APK produced by tauri android build"
+            exit 1
+          fi
+          OUT_APK="artifacts/android-release/MathCanvas-${VERSION}-android-arm64.apk"
+          if [[ "$RAW_APK" == *-unsigned.apk ]]; then
+            KEYSTORE="/tmp/mathcanvas-release.keystore"
+            if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+              echo "Signing with repository release keystore secret"
+              printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KEYSTORE"
+              KS_PASS="${ANDROID_KEYSTORE_PASSWORD}"
+              KEY_ALIAS="${ANDROID_KEY_ALIAS}"
+              KEY_PASS="${ANDROID_KEY_PASSWORD:-$KS_PASS}"
+            else
+              echo "No ANDROID_KEYSTORE_BASE64 secret configured; signing with CI release-compat keystore"
+              KS_PASS="android"
+              KEY_ALIAS="mathcanvas"
+              KEY_PASS="android"
+              "$JAVA_HOME/bin/keytool" -genkeypair -v -keystore "$KEYSTORE" -storepass "$KS_PASS" \
+                -alias "$KEY_ALIAS" -keypass "$KEY_PASS" -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=MathCanvas Release,O=MathCanvas,C=CN"
+            fi
+            ALIGNED="/tmp/mathcanvas-aligned.apk"
+            "$BUILD_TOOLS/zipalign" -f -p 4 "$RAW_APK" "$ALIGNED"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$KEYSTORE" \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass "pass:${KS_PASS}" \
+              --key-pass "pass:${KEY_PASS}" \
+              --out "$OUT_APK" \
+              "$ALIGNED"
+            rm -f "$ALIGNED" "$KEYSTORE"
+          else
+            cp -v "$RAW_APK" "$OUT_APK"
+          fi
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$OUT_APK"
+          (
+            cd artifacts/android-release
+            sha256sum "MathCanvas-${VERSION}-android-arm64.apk" > SHA256SUMS-android.txt
+          )
+          cat artifacts/android-release/SHA256SUMS-android.txt
+          ls -lh artifacts/android-release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mathcanvas-android-release-apk
+          path: artifacts/android-release/
+          retention-days: 30
+      - name: Publish GitHub Release with Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          else
+            RELEASE_TAG="${DISPATCH_TAG}"
+          fi
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::Could not determine release tag"
+            exit 1
+          fi
+          APK_FILE="artifacts/android-release/MathCanvas-${APP_VERSION}-android-arm64.apk"
+          SUMS_FILE="artifacts/android-release/SHA256SUMS-android.txt"
+          NOTES_FILE="docs/release/${RELEASE_TAG}.md"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Updating existing release ${RELEASE_TAG} with Android APK assets"
+            gh release upload "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" --clobber
+          else
+            echo "Creating GitHub Release ${RELEASE_TAG}"
+            if [ -f "$NOTES_FILE" ]; then
+              gh release create "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" \
+                --title "MathCanvas ${RELEASE_TAG}" \
+                --notes-file "$NOTES_FILE"
+            else
+              gh release create "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" \
+                --title "MathCanvas ${RELEASE_TAG}" \
+                --generate-notes
+            fi
+          fi

@@ -71,4 +71,23 @@ test("Android phone viewport keeps canvas usable, mobile docks dismissible, Agen
   const threeBox = await page.locator(".three-canvas-shell").boundingBox()
   expect(threeBox).not.toBeNull()
   expect(threeBox!.height).toBeGreaterThan(220)
+
+  // 6. File menu opens cleanly inside 390px viewport without horizontal clipping.
+  await page.getByRole("button", { name: "文件" }).click()
+  const fileMenu = page.locator('.clean-command-menu[data-menu="file"]')
+  await expect(fileMenu).toBeVisible()
+  const menuBox = await fileMenu.boundingBox()
+  expect(menuBox).not.toBeNull()
+  expect(menuBox!.x).toBeGreaterThanOrEqual(0)
+  expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(391)
+  await page.getByRole("button", { name: "文件" }).click()
+
+  // 7. Engineering drafting workspace renders cleanly with zero horizontal overflow.
+  await page.getByRole("button", { name: "工程制图" }).click()
+  await expect(page.locator(".engineering-drawing")).toBeVisible()
+  const cadOverflow = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth
+  }))
+  expect(cadOverflow.scrollWidth).toBeLessThanOrEqual(cadOverflow.clientWidth + 1)
 })

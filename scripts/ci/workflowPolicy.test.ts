@@ -110,6 +110,15 @@ describe("GitHub Actions least-privilege policy", () => {
     ).toEqual([])
   })
 
+  it("holds the tag-only Android release workflow to pinned actions, no persisted credentials, and tag-scoped publish", () => {
+    const releaseWorkflow = readFileSync(".github/workflows/android-release.yml", "utf8").replaceAll("\r\n", "\n")
+    expect(releaseWorkflow).toMatch(/^permissions:\n {2}contents: write\n/m)
+    expect(releaseWorkflow).not.toMatch(/^ {0,2}(?:pull_request|pull_request_target|workflow_run|issue_comment):/m)
+    expect(releaseWorkflow).toContain('tags:\n      - "v*"')
+    const normalizedForReadCheck = releaseWorkflow.replace("permissions:\n  contents: write", "permissions:\n  contents: read")
+    expect(policyErrors(normalizedForReadCheck, false)).toEqual([])
+  })
+
   it("accepts a read-only workflow with an immutable checkout and no persisted token", () => {
     expect(policyErrors(validWorkflow)).toEqual([])
   })

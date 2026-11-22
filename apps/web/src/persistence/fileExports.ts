@@ -49,6 +49,23 @@ export interface FileExportDependencies {
   onSaved?: (message: string) => void
 }
 
+interface NativeAndroidExportBridge {
+  deliverExport?(fileName: string, mimeType: string, share: boolean): string
+}
+
+interface NativeAndroidExportResult {
+  ok?: boolean
+  fileName?: string
+  savedToDownloads?: boolean
+  shared?: boolean
+  error?: string
+}
+
+function readNativeAndroidBridge(): NativeAndroidExportBridge | null {
+  const candidate = (globalThis as { MathCanvasAndroid?: NativeAndroidExportBridge }).MathCanvasAndroid
+  return candidate && typeof candidate.deliverExport === "function" ? candidate : null
+}
+
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -81,8 +98,42 @@ export function createFileExports(dependencies: FileExportDependencies): FileExp
 
   const saveOnAndroid = async (blob: Blob, fileName: string) => {
     try {
+      const mimeType = blob.type || "application/octet-stream"
+      if (isDesktopShell()) {
+        const base64Bytes = await blobToBase64(blob)
+        const saved = await invokeDesktop<{ fileName?: string; byteSize?: number }>("export_document_file", {
+          fileName,
+          base64Bytes
+        })
+        const savedName = saved.fileName ?? fileName
+        const nativeBridge = readNativeAndroidBridge()
+        if (nativeBridge?.deliverExport) {
+          try {
+            const raw = nativeBridge.deliverExport(savedName, mimeType, true)
+            const delivered = JSON.parse(raw) as NativeAndroidExportResult
+            if (delivered.ok) {
+              setFileError(null)
+              if (delivered.savedToDownloads && delivered.shared) {
+                onSaved?.(`已保存到 下载/MathCanvas/${savedName} 并唤起系统分享`)
+              } else if (delivered.savedToDownloads) {
+                onSaved?.(`已保存到 下载/MathCanvas/${savedName}`)
+              } else if (delivered.shared) {
+                onSaved?.(`已唤起系统分享：${savedName}`)
+              } else {
+                onSaved?.(`已导出 ${savedName}（应用 exports 目录）`)
+              }
+              return
+            }
+          } catch {
+            // 原生分享/公共下载转发失败时仍保留已落盘的应用内 exports 副本。
+          }
+        }
+        setFileError(null)
+        onSaved?.(`已导出 ${savedName}（应用 exports 目录）`)
+        return
+      }
       if (typeof File !== "undefined" && typeof navigator !== "undefined" && typeof navigator.canShare === "function" && typeof navigator.share === "function") {
-        const shareFile = new File([blob], fileName, { type: blob.type || "application/octet-stream" })
+        const shareFile = new File([blob], fileName, { type: mimeType })
         if (navigator.canShare({ files: [shareFile] })) {
           try {
             await navigator.share({ files: [shareFile], title: fileName })
@@ -93,16 +144,6 @@ export function createFileExports(dependencies: FileExportDependencies): FileExp
             if (shareError instanceof Error && shareError.name === "AbortError") return
           }
         }
-      }
-      if (isDesktopShell()) {
-        const base64Bytes = await blobToBase64(blob)
-        const saved = await invokeDesktop<{ fileName?: string; byteSize?: number }>("export_document_file", {
-          fileName,
-          base64Bytes
-        })
-        setFileError(null)
-        onSaved?.(`已导出 ${saved.fileName ?? fileName}（应用 exports 目录）`)
-        return
       }
       setFileError("当前移动端 WebView 不支持直接下载，请使用 MathCanvas Android 客户端导出。")
     } catch (error) {

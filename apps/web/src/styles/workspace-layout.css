@@ -459,4 +459,57 @@ body {
   .app-shell .three-camera-hint {
     display: none;
   }
+  .app-shell .clean-command-menu {
+    right: 8px;
+    width: min(340px, calc(100% - 16px));
+    padding: 12px;
+    gap: 10px;
+    grid-template-columns: 1fr;
+  }
+  .app-shell .clean-command-menu[data-menu="file"] {
+    right: 8px;
+    width: min(300px, calc(100% - 16px));
+    grid-template-columns: 1fr;
+  }
+  .app-shell .engineering-drawing-toolbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .app-shell .drawing-toolbar-group {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .app-shell .settings-page {
+    padding: 16px 12px max(16px, env(safe-area-inset-bottom, 0px));
+  }
+  .app-shell .settings-preferences {
+    padding: 14px;
+  }
+  .app-shell .settings-preferences label {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (max-height: 520px) and (pointer: coarse) {
+  .app-shell {
+    --topbar-height: 44px;
+  }
+  .app-shell .clean-header {
+    height: 44px;
+    flex-basis: 44px;
+    padding-inline: 10px;
+  }
+  .app-shell .clean-toolbar {
+    min-height: 42px;
+    padding-block: 4px;
+  }
+  .app-shell .app-rail {
+    gap: 10px;
+    padding-block: 6px;
+  }
+  .app-shell .app-rail .app-rail-button {
+    min-height: 44px;
+  }
 }

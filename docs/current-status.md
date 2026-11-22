@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版）：原生公共下载/分享桥接、横竖屏精修与 GitHub Release 发布
+
+> **2026-11-22 Android v5.1.0 正式发布基线**：
+> 1. **原生 Android 导出/分享与系统级安全加固**：[android-post-init.mjs](../scripts/android-post-init.mjs) 自动配置 `MainActivity.kt`（浅色 Edge-to-Edge + `WindowInsetsCompat` 避让 + `OnBackPressedCallback` 逐级返回 + `@JavascriptInterface MathCanvasAndroid.deliverExport` 公共 `下载/MathCanvas/` 与 `FileProvider` 系统分享面板）、`AndroidManifest.xml`（`hardwareAccelerated="true"`、`allowBackup="false"`、`roundIcon`、`adjustResize`、`network_security_config`）、浅色 `windowBackground` 主题（消除暗色冷启动黑闪）、R8 `proguard-rules.pro` 保留规则与 `tauri.properties` 版本号自动同步（`5.1.0` / `versionCode=5001000`）。
+> 2. **Rust 后端与移动端全场景 UX 收口**：`provider_check` 异步非阻塞；白名单受控导出 IPC `export_document_file` 联动 [fileExports.ts](../apps/web/src/persistence/fileExports.ts) 自动落盘公共 `下载/MathCanvas/` 并唤起系统分享；补齐 Agent 移动端会话抽屉、`＋ 新对话`、2D 单指平移 + `r=14` 热区、手机端单列文件菜单、工程制图工具条换行、设置页窄屏适配及粗指针横屏紧凑顶栏。
+> 3. **本地打包与自动化 Release 流水线**：[android-package.mjs](../scripts/android-package.mjs) 自动产出带版本号的对齐签名 APK（`MathCanvas-5.1.0-android-arm64.apk`）并通过 `apksigner verify --print-certs` 与 SHA-256 校验；新增 tag 触发工作流 [android-release.yml](../.github/workflows/android-release.yml) 自动构建签名并发布 GitHub Release（详见 [v5.1.0 发布说明](release/v5.1.0.md)）。
+
 ## 2026-11-22 —— Android 端深度加固、Android 16 模拟器真机实测与本地可安装 ARM64 APK 交付
 
 > **2026-11-22 Android 端实测闭环基线**：
@@ -225,7 +232,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-22；产品版本：v5.0.0（持续更新升级中）；产品代码基线：cb3281f9+android。
+最后更新：2026-11-22；产品版本：v5.1.0（持续更新升级中）；产品代码基线：v5.1.0-android-release。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 
