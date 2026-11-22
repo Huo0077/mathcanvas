@@ -466,7 +466,7 @@ export interface CommitRequest {
 }
 
 const EDIT_OR_PRESERVE_SCENE_RE = /(?:选中|选中的|此点|该点|此线|该线|此面|该面|刚才|之前|已有|当前画布|原图|旧图|现有|修改|调整|删除|删掉|移除|去掉|隐藏|显示|锁定|解锁|在此基础上|在原图|在当前|在已有|保留原图|保留旧图|不要清|别删|不清除|再建|再画|再添|再加|补充一条|添加一条|\bselected\b|\bthis point\b|\bthis line\b|\bmodify\b|\bedit\b|\bdelete\b|\bremove\b|\bkeep existing\b|\bpreserve existing\b)/i
-const FULL_PROBLEM_AUTO_CLEAR_RE = /(?:^\s*\d+[．.\s]|（1）|\(1\)|①|已知|设|如图)[\s\S]*(?:求证|证明|求|则|的(?:值|范围|方程|面积|体积|距离|正弦|余弦|正切|角|最大|最小)|（1）|\(1\)|[=＝⊥∥])/i
+const FULL_PROBLEM_AUTO_CLEAR_RE = /(?:^\s*\d+[．.\s]|（1）|\(1\)|（Ⅰ）|\(Ⅰ\)|①|已知|设|如图|在[^\n，,。；;]{1,28}中|将[^\n，,。；;]{1,28}(?:翻折|折叠|折起))[\s\S]*(?:求证|证明|求|判断|是否存在|则|的(?:值|范围|方程|面积|体积|距离|正弦|余弦|正切|角|最大|最小)|（1）|\(1\)|（Ⅰ）|\(Ⅰ\)|[=＝⊥∥])/i
 
 /** Shared predicate telling whether a prompt modifies/keeps existing canvas items rather than asking for a clean new figure. */
 export function isEditOrPreserveScenePrompt(prompt: string): boolean {

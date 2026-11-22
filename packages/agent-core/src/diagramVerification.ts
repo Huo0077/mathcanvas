@@ -372,7 +372,20 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
    * 3. **不是点名的标签不进表**：点名 = 一个大写字母 + 可选的撇或下标（内核 `pointNames` 的
    *    **同一份**定义，与解析层共用），别的标签（"中点"、"O1"、"A1"）不是题面点名。
    */
-  const labelled = new Map<string, Vector3 | null>()
+  const newLabelled = new Map<string, Vector3 | null>()
+  const priorLabelled = new Map<string, Vector3 | null>()
+  const recordLabelled = (bucket: Map<string, Vector3 | null>, label: string, position: Vector3): void => {
+    if (![position.x, position.y, position.z].every(Number.isFinite)) {
+      bucket.set(label, null)
+      return
+    }
+    const prev = bucket.get(label)
+    if (prev === undefined) {
+      bucket.set(label, position)
+    } else if (prev === null || length(prev, position) > distanceTolerance(1)) {
+      bucket.set(label, null)
+    }
+  }
   for (const primitive of candidate.primitives) {
     /**
      * **2D 与 3D 的点都要收**（V0b）：`point3` 自带 `position`，平面 `point` 用 `x`/`y`。
@@ -397,27 +410,20 @@ function candidatePoints(plan: PlanEnvelope, candidate: GeometryDocument, base?:
     /**
      * **"顶点名优先"只在这一处判**（收集时**不**跳过与顶点同名的标签，只在下面写入时挡）。
      *
-     * 原先两处都判过（收集时 `points.has(label) → continue` + 写入时 `!points.has(label)`），
-     * 后果是**同一个判断写了两遍**、互为冗余：单点变异改不动行为，
-     * 于是那条"顶点名优先"的用例**看着有守卫、实际抓不到任何东西**（试过，变异两次都全绿）。
-     * 这与本仓那句"同一个判断不许写两遍"是同一条账。
+     * 同时把**本轮新建图元**与 **`base` 遗留图元**分桶（2026-11-22 线上真题实测根因）：
+     * 同一份画布连续做两道题时，旧题留下的 `A/B/C` 不许把新题新建的 `A/B/C` 冲成 `null`；
+     * 而若新计划自身建了两个坐标不同的同名点，仍判 `null`（fail-closed 守卫不变）。
      */
     const rawLabel = (primitive as { label?: unknown }).label
     if (typeof rawLabel !== "string" || !isPointName(rawLabel)) continue
     const label = canonicalCandidatePointName(rawLabel)
-    if (![position.x, position.y, position.z].every(Number.isFinite)) {
-      labelled.set(label, null)
-      continue
-    }
-    const prev = labelled.get(label)
-    if (prev === undefined) {
-      labelled.set(label, position)
-    } else if (prev === null || length(prev, position) > distanceTolerance(1)) {
-      labelled.set(label, null)
-    }
+    recordLabelled(priorIds.has(primitive.id) ? priorLabelled : newLabelled, label, position)
   }
-  for (const [label, position] of labelled) {
+  for (const [label, position] of newLabelled) {
     if (position !== null && !points.has(label)) points.set(label, position)
+  }
+  for (const [label, position] of priorLabelled) {
+    if (position !== null && !newLabelled.has(label) && !points.has(label)) points.set(label, position)
   }
   return { ok: true, points }
 }

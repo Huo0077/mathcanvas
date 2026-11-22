@@ -5,6 +5,7 @@ import {
   createTargetedRepairTracker,
   normalizeGeometryPrompt,
   parseDiagramObligations,
+  shouldAutoClearSceneForPrompt,
   verifyDiagramObligations
 } from "@draw/agent-core"
 import { createEmptyDocument, type Workspace } from "@draw/dsl"
@@ -960,5 +961,73 @@ describe("Verification edge cases (bare prompts, fold-first wording, neutral-pla
     })
     expect(round2.allowRepair).toBe(true)
     expect(round2.stopReason).toBeUndefined()
+  })
+
+  it("auto-clears standalone Chinese exam prompts starting with 在...中 / 将...翻折 while preserving incremental edit prompts", () => {
+    expect(shouldAutoClearSceneForPrompt("在 △ABC 中，AB = 4，BC = 6，cos∠ABC = 1/2，求 BD 的长。", false)).toBe(true)
+    expect(shouldAutoClearSceneForPrompt("在长方体 ABCD-A₁B₁C₁D₁ 中，AB = 2，AD = 3，AA₁ = 4，求距离。", false)).toBe(true)
+    expect(shouldAutoClearSceneForPrompt("在棱长为 2 的正方体 ABCD-A₁B₁C₁D₁ 中，E、F 分别为 AB、BC 的中点，求证：EF⊥平面 BB₁D₁D。", false)).toBe(true)
+    expect(shouldAutoClearSceneForPrompt("将矩形 ABCD 沿对角线 AC 翻折，AB=4，BC=2，使平面 ABC⊥平面 ACD。", false)).toBe(true)
+    expect(shouldAutoClearSceneForPrompt("建一个棱长 2 的立方体", false)).toBe(false)
+    expect(shouldAutoClearSceneForPrompt("在现有长方体中增加中点 E", false)).toBe(false)
+    expect(shouldAutoClearSceneForPrompt("在 △ABC 中，AB = 4，求 AC。", true)).toBe(false)
+  })
+
+  it("prioritizes newly created point labels over stale base canvas labels during verification", () => {
+    const baseDoc = createEmptyDocument("conics")
+    baseDoc.primitives.push(
+      { id: "stale-a", type: "point", x: 99, y: 99, label: "A" } as never,
+      { id: "stale-b", type: "point", x: -88, y: 77, label: "B" } as never
+    )
+    const prompt = "在 △ABC 中，AB = 4，BC = 6，cos∠ABC = 1/2，求 AC 的长。"
+    const session = createDsActionSession({ workspace: "conics", baseDocument: createEmptyDocument("conics"), problemText: prompt })
+    expect(session.execute("construct_point", { id: "A", x: 0, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "B", x: 4, y: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "C", x: 1, y: 3 * Math.sqrt(3) }).ok).toBe(true)
+    const finished = session.execute("finish_candidate", { goal: "△ABC" })
+    expect(finished.ok && finished.terminated?.plan.kind === "plan").toBe(true)
+    if (!finished.ok || finished.terminated?.plan.kind !== "plan") return
+    const compiled = compilePlan(finished.terminated.plan, {
+      document: baseDoc,
+      workspace: "conics",
+      conversationId: "stale-label-priority",
+      documentGeneration: 0
+    })
+    expect(compiled.ok && compiled.draftDocument !== undefined).toBe(true)
+    if (!compiled.ok || !compiled.draftDocument) return
+    const obligations = parseDiagramObligations(normalizeGeometryPrompt(prompt))
+    const report = verifyDiagramObligations(obligations, finished.terminated.plan, compiled.draftDocument, baseDoc, {
+      prompt: normalizeGeometryPrompt(prompt)
+    })
+    expect(report.status, JSON.stringify(report.checks)).toBe("passed")
+  })
+
+  it("rejects multi-letter vertex names like Df immediately in construct_face and construct_fold_state while allowing D₀", () => {
+    const baseDoc = createEmptyDocument("geometry3d")
+    const session = createDsActionSession({ workspace: "geometry3d", baseDocument: baseDoc })
+    expect(session.execute("construct_base", { shape: "rectangle", width: 4, depth: 2, vertexNames: ["A", "B", "C", "D"] }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "Df", x: 1, y: 1, z: 2 }).ok).toBe(true)
+    const badFace = session.execute("construct_face", { vertexNames: ["A", "C", "Df"] })
+    expect(badFace.ok).toBe(false)
+    expect(badFace.blockerCode).toBe("invalid_point_name")
+
+    const badFold = session.execute("construct_fold_state", {
+      vertexNames: ["A", "B", "C"],
+      hinge: { from: "A", to: "C" },
+      apex: "B",
+      apexAs: "Bf",
+      angle: 90
+    })
+    expect(badFold.ok).toBe(false)
+    expect(badFold.blockerCode).toBe("invalid_point_name")
+
+    const goodFold = session.execute("construct_fold_state", {
+      vertexNames: ["A", "B", "C"],
+      hinge: { from: "A", to: "C" },
+      apex: "B",
+      apexAs: "B₀",
+      angle: 90
+    })
+    expect(goodFold.ok).toBe(true)
   })
 })

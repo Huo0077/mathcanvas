@@ -661,7 +661,7 @@ function inferDsActionWorkspace(
   const route = routeDeterministicProblem(prompt)
   if (route) return route.family === "spatial-modeling" ? "geometry3d" : "conics"
   const has3dSignals =
-    /正方体|长方体|立方体|三棱锥|四棱锥|棱锥|四面体|棱柱|圆柱|圆锥(?!曲线)|圆台|棱台|多面体|球体|球面|球心|的球|一个球|外接球|内切球|二面角|异面|截面|空间直线|空间向量|空间坐标系|立体|三视图|几何体|展开图|法向量|\([^()]*,[^()]*,[^()]*\)/.test(
+    /正方体|长方体|立方体|三棱锥|四棱锥|棱锥|四面体|棱柱|圆柱|圆锥(?!曲线)|圆台|棱台|多面体|球体|球面|球心|的球|一个球|外接球|内切球|二面角|异面|截面|空间直线|空间向量|空间坐标系|立体|三视图|几何体|展开图|法向量|翻折|折叠|折起|翻起|平面\s*[A-Z]|底面\s*[A-Z]|\([^()]*,[^()]*,[^()]*\)/.test(
       prompt
     )
   const has2dSignals =

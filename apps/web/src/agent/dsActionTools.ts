@@ -19,6 +19,7 @@ import {
 } from "@draw/agent-core"
 import { deriveAcceptance } from "./acceptance"
 import {
+  canonicalPointName,
   distanceVector3,
   evaluateFunctionWithDomain,
   evaluateSymbolicDerivative,
@@ -26,6 +27,7 @@ import {
   fitOriginConicThroughPoints,
   host3FromPrimitive,
   intersectPlanarLineAndConicExact,
+  isPointName,
   planeFromPoints,
   solveInsphere3,
   tangentLineToConicAt,
@@ -2181,6 +2183,18 @@ function resolveConstructSolidRequest(
       status: "repairable",
       blockerCode: "duplicate_vertex_name",
       repairHint: "vertexNames must contain distinct non-empty names"
+    }
+  }
+  if (vNames) {
+    const badVertex = vNames.find((vn) => !isPointName(canonicalPointName(vn)))
+    if (badVertex !== undefined) {
+      const suggested = /^[A-Z]/.test(badVertex) ? `${badVertex[0]}′` : "P"
+      return {
+        ok: false,
+        status: "repairable",
+        blockerCode: "invalid_point_name",
+        repairHint: `Invalid vertex name "${badVertex}" in vertexNames: every vertex name must be a single uppercase letter plus up to 2 primes/subscripts (e.g. "${suggested}", "A₁", "B′"), never multi-letter identifiers.`
+      }
     }
   }
 
@@ -6391,6 +6405,15 @@ export function createDsActionSession(options: {
             return failBlocked(name, "non_coplanar_face", "face vertices must be coplanar")
           }
         }
+        const invalidFaceVertex = vertexNames.find((vn) => !isPointName(canonicalPointName(vn)))
+        if (invalidFaceVertex !== undefined) {
+          const suggested = /^[A-Z]/.test(invalidFaceVertex) ? `${invalidFaceVertex[0]}′` : "P′"
+          return failRepairable(
+            name,
+            "invalid_point_name",
+            `Invalid face vertex name "${invalidFaceVertex}": every vertex name must be a single uppercase letter plus up to 2 primes/subscripts (e.g. "${suggested}", "B′", "A₁"), never multi-letter names like "${invalidFaceVertex}". For folding problems, use construct_fold_state({ vertexNames, hinge: { from, to }, apex, apexAs: "${suggested}", angle }) instead.`
+          )
+        }
         const id = asString(input.id ?? input.output) ?? `FACE_${stepSeq}`
         const label = asString(input.label) ?? `面 ${vertexNames.join("")}`
         const targetCanvas = getTargetCanvas(branchId ?? undefined)
@@ -6436,6 +6459,21 @@ export function createDsActionSession(options: {
         }
         if (Math.abs(angle % 360) <= 1e-6 || apex === apexAs) {
           return failBlocked(name, "degenerate_fold", "fold angle must be non-zero mod 360 and apexAs must differ from apex")
+        }
+        if (!isPointName(canonicalPointName(apexAs))) {
+          return failRepairable(
+            name,
+            "invalid_point_name",
+            `Invalid folded vertex name apexAs="${apexAs}": must be a single uppercase letter plus up to 2 primes/subscripts (e.g. "${apex}′").`
+          )
+        }
+        const invalidFoldVertex = vertexNames.find((vn) => !isPointName(canonicalPointName(vn)))
+        if (invalidFoldVertex !== undefined) {
+          return failRepairable(
+            name,
+            "invalid_point_name",
+            `Invalid vertex name "${invalidFoldVertex}" in construct_fold_state vertexNames: use single uppercase letters with optional primes/subscripts (e.g. A, B, C, B′).`
+          )
         }
         const readFoldPt = (vn: string): Vector3 | undefined => {
           const p3 = points3.get(vn)
