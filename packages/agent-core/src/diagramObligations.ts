@@ -160,6 +160,8 @@ export type DiagramObligationKind =
    * **进不了核验面板**。
    */
   | "functionLineIntersections"
+  /** 独立直线方程义务（如 `绘制…和直线 y=1` / `画直线 y=2x+1` / `直线 x=-2` / `直线 3x+4y-5=0`），按图上实际直线端点到解析直线的垂距独立核验。 */
+  | "lineEquation"
   /**
    * **点在圆锥曲线上**（施工单①，2026-10-15）：`P 是椭圆上任意一点` ⇒ `targets: ["P"]`、
    * `conicKind` 是题面说的那一种曲线。
@@ -1997,6 +1999,48 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
       return line === null ? null : intersectionCountDraft(line, m[7] ?? "")
     }
   },
+  /**
+   * **独立直线方程**：`绘制以原点为圆心、半径为 3 的圆和直线 y=1` / `画直线 y=2x-1` / `直线 x=-2` / `直线 3x+4y-5=0`。
+   *
+   * 排在 `conicChord` 与 `functionLineIntersections` 之后，且用负向前瞻排除带「相交/相切/交点/相离」关系声明的句子
+   * 与科学计数法 `1e-12`，只收独立作图直线，由核验器按候选图直线端点到解析直线的垂距独立核验。
+   */
+  {
+    pattern: /(?:直|准|渐近|对称)线\s*(?:[a-zA-Z]\s*[:：]\s*)?y\s*=\s*([+-−]?\s*\d*(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?![eE][+-]?\d)\s*\*?\s*x(?:\s*([+-−])\s*(\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?![eE][+-]?\d))?(?=\s*(?:[，,。；;？?！!和与及]|$))(?!\s*(?:与|和)[^，,。；;\n]{0,30}(?:相交|交于|相切|切于|有[^，,。；;\n]{0,8}交点|相离))/g,
+    read: (m) => {
+      const rawSlope = (m[1] ?? "").replace(/[−–—]/g, "-").replace(/\s+/g, "")
+      const slope = rawSlope === "" || rawSlope === "+" ? 1 : rawSlope === "-" ? -1 : signedRadicalOrFraction(rawSlope)
+      if (slope === null) return null
+      const interceptMag = m[3] === undefined ? 0 : signedRadicalOrFraction(m[3])
+      if (interceptMag === null) return null
+      const intercept = m[2] !== undefined && isMinus(m[2]) ? -interceptMag : interceptMag
+      return { kind: "lineEquation", targets: [], line: { kind: "slope", slope, intercept } }
+    }
+  },
+  {
+    pattern: /(?:直|准|渐近|对称)线\s*(?:[a-zA-Z]\s*[:：]\s*)?y\s*=\s*([+-−]?\s*\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?![eE][+-]?\d)(?!\s*\*?\s*x)(?=\s*(?:[，,。；;？?！!和与及]|$))(?!\s*(?:与|和)[^，,。；;\n]{0,30}(?:相交|交于|相切|切于|有[^，,。；;\n]{0,8}交点|相离))/g,
+    read: (m) => {
+      const intercept = signedRadicalOrFraction(m[1] ?? "")
+      return intercept === null ? null : { kind: "lineEquation", targets: [], line: { kind: "slope", slope: 0, intercept } }
+    }
+  },
+  {
+    pattern: /(?:直|准|渐近|对称)线\s*(?:[a-zA-Z]\s*[:：]\s*)?x\s*=\s*([+-−]?\s*\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)(?![eE][+-]?\d)(?!\s*\*?\s*y)(?=\s*(?:[，,。；;？?！!和与及]|$))(?!\s*(?:与|和)[^，,。；;\n]{0,30}(?:相交|交于|相切|切于|有[^，,。；;\n]{0,8}交点|相离))/g,
+    read: (m) => {
+      const x = signedRadicalOrFraction(m[1] ?? "")
+      return x === null ? null : { kind: "lineEquation", targets: [], line: { kind: "vertical", x } }
+    }
+  },
+  {
+    pattern: /(?:直|准|渐近|对称)线\s*(?:[a-zA-Z]\s*[:：]\s*)?([-−–+]?)\s*(\d+(?:\.\d+)?)?\s*\*?\s*x\s*([-−–+])\s*(\d+(?:\.\d+)?)?\s*\*?\s*y(?:\s*([-−–+])\s*(\d+(?:\.\d+)?))?\s*=\s*0(?=\s*(?:[，,。；;？?！!和与及]|$))(?!\s*(?:与|和)[^，,。；;\n]{0,30}(?:相交|交于|相切|切于|有[^，,。；;\n]{0,8}交点|相离))/g,
+    read: (m) => {
+      const a = (isMinus(m[1]) ? -1 : 1) * (m[2] === undefined ? 1 : Number(m[2]))
+      const b = (isMinus(m[3]) ? -1 : 1) * (m[4] === undefined ? 1 : Number(m[4]))
+      const c = m[5] === undefined ? 0 : (isMinus(m[5]) ? -1 : 1) * Number(m[6])
+      const line = lineFromGeneralForm(a, b, c)
+      return line === null ? null : { kind: "lineEquation", targets: [], line }
+    }
+  },
   {
     pattern: /将\s*(矩形|长方形|三角形|四边形|梯形|△)?\s*([A-Z]{3,4})\s*翻折至与\s*(?:矩形|长方形|三角形|四边形|梯形|平面)?\s*([A-Z]{3,4})\s*垂直/g,
     read: (m) => {
@@ -3521,7 +3565,7 @@ function parseDiagramScope(prompt: string, options: DiagramParseOptions, partSta
       // 圆锥曲线、切线、函数定义与点坐标都**不带点名**：它们自己就是被核验的对象，不能拿"至少两个名字"去卡。
       // `pointOnConic`（施工单①）是**只有一个点名**的那一类：它问的是"这一个点在不在那条曲线上"，
       // 拿"至少两个名字"去卡会把它整条丢掉 —— 那正是它此前静默消失的机制之一。
-      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || result.kind === "solidPrismShape" || result.kind === "solidVolume" || result.kind === "collinear" || result.kind === "pointLineCoord" || new Set(result.targets).size >= 2)
+      const accepted = drafts.filter((result) => result.kind === "pointCoordinate" || result.kind === "conicAxes" || result.kind === "conicChord" || result.kind === "tangentAt" || result.kind === "functionGraph" || result.kind === "commonTangent" || result.kind === "functionLineIntersections" || result.kind === "lineEquation" || result.kind === "pointOnConic" || result.kind === "solidDimension" || result.kind === "solidCenter" || result.kind === "solidPrismShape" || result.kind === "solidVolume" || result.kind === "collinear" || result.kind === "pointLineCoord" || new Set(result.targets).size >= 2)
       const labelPrefix = allowAfterLabelColon === true
         ? /(?:椭圆|双曲线|抛物线|圆)\s*([A-Z])\s*[：:]$/.exec(givenText.slice(Math.max(0, start - 16), start))
         : null

@@ -1030,4 +1030,44 @@ describe("Verification edge cases (bare prompts, fold-first wording, neutral-pla
     })
     expect(goodFold.ok).toBe(true)
   })
+
+  it("verifies standalone circle + line prompts (绘制以原点为圆心、半径为 3 的圆和直线 y=1) and catches wrong line equations", async () => {
+    const prompt = "绘制以原点为圆心、半径为 3 的圆和直线 y=1"
+    const res = await runRealExamFullPipeline({
+      id: "USER-CIRCLE-LINE",
+      category: "planar",
+      workspace: "conics",
+      prompt,
+      goal: "绘制圆心在原点半径 3 的圆和直线 y=1",
+      steps: [
+        { tool: "construct_circle", input: { id: "C", cx: 0, cy: 0, radius: 3 } },
+        { tool: "construct_line", input: { id: "l", equation: "y = 1" } }
+      ]
+    })
+    expect(res.obligations.unverified).toEqual([])
+    expect(res.verification.status).toBe("passed")
+    expect(res.certificate.certificateStatus).toBe("passed")
+    expect(res.staged.ok).toBe(true)
+
+    // Negative check: drawing y = 2 instead of y = 1 must FAIL lineEquation verification
+    const badBase = createEmptyDocument("conics")
+    const badSession = createDsActionSession({ workspace: "conics", baseDocument: badBase })
+    expect(badSession.execute("construct_circle", { id: "C", cx: 0, cy: 0, radius: 3 }).ok).toBe(true)
+    expect(badSession.execute("construct_line", { id: "l", equation: "y = 2" }).ok).toBe(true)
+    const badFin = badSession.execute("finish_candidate", { goal: "wrong line" })
+    expect(badFin.ok && badFin.terminated?.plan.kind === "plan").toBe(true)
+    if (badFin.ok && badFin.terminated?.plan.kind === "plan") {
+      const badComp = compilePlan(badFin.terminated.plan, {
+        document: badBase,
+        workspace: "conics",
+        conversationId: "bad-line",
+        documentGeneration: 0
+      })
+      expect(badComp.ok && badComp.draftDocument !== undefined).toBe(true)
+      const badVerif = verifyDiagramObligations(res.obligations, badFin.terminated.plan, badComp.draftDocument!, badBase, {
+        prompt: res.normalized
+      })
+      expect(badVerif.status).toBe("failed")
+    }
+  })
 })

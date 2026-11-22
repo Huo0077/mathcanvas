@@ -989,6 +989,8 @@ interface FigureContext {
    *（`planar.create_circle` 物化成 `circle`），所以判据不必要求题面把 `⊙O` 的 `O` 建成点名。
    */
   circle: FigureCircle | null
+  /** 候选图中的二维直线/线段，供独立直线方程 `lineEquation` 核验。 */
+  lines?: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[]
 }
 
 /** 候选图里那条新画的圆（**恰好一条**才谈得上"题面说的是它"）。 */
@@ -2690,6 +2692,43 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
    * **`complete === false` ⇒ 未核验，不是 failed**：数值路径自己说"这个个数不能当个数用"
    * （分辨不出的近重根）时，报"个数不对"就是拿一个算不准的量去指责用户。
    */
+  if (item.kind === "lineEquation") {
+    const stated = item.line
+    if (stated === undefined) return null
+    const drawnLines = figures.lines ?? []
+    const label = stated.kind === "vertical"
+      ? `x = ${formatNumber(stated.x)}`
+      : stated.slope === 0
+        ? `y = ${formatNumber(stated.intercept)}`
+        : `y = ${formatNumber(stated.slope)}x${stated.intercept >= 0 ? ` + ${formatNumber(stated.intercept)}` : ` - ${formatNumber(-stated.intercept)}`}`
+    if (drawnLines.length === 0) {
+      return {
+        actual: 1,
+        expected: 0,
+        tolerance: distanceTolerance(1),
+        detail: `候选图里没有画出题设要求的直线 ${label}（请调用 construct_line({ id, equation: "${label}" }) 构造该直线）。`
+      }
+    }
+    const scale = stated.kind === "vertical" ? Math.max(Math.abs(stated.x), 1) : Math.max(Math.abs(stated.intercept), Math.abs(stated.slope), 1)
+    let bestResidual = Number.POSITIVE_INFINITY
+    for (const seg of drawnLines) {
+      if (Math.hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y) <= 1e-6) continue
+      const res = stated.kind === "vertical"
+        ? Math.max(Math.abs(seg.a.x - stated.x), Math.abs(seg.b.x - stated.x))
+        : Math.max(
+            Math.abs(stated.slope * seg.a.x - seg.a.y + stated.intercept),
+            Math.abs(stated.slope * seg.b.x - seg.b.y + stated.intercept)
+          ) / Math.hypot(stated.slope, 1)
+      if (res < bestResidual) bestResidual = res
+    }
+    if (!Number.isFinite(bestResidual)) return null
+    return {
+      actual: bestResidual,
+      expected: 0,
+      tolerance: distanceTolerance(scale),
+      detail: `候选图直线到题设直线 ${label} 的端点最大垂距为 ${bestResidual.toPrecision(4)}。`
+    }
+  }
   if (item.kind === "functionLineIntersections") {
     if (numeric === undefined || item.line === undefined || figures.curve === null) return null
     // 竖直线与 `y = f(x)` 至多一个交点：这一档按"函数图与直线求交"的判据**不适用**，如实留白。
@@ -2795,7 +2834,7 @@ function calculate(item: DiagramObligation, points: Map<string, Vector3>, figure
  * 查询（`missingNamedPoints`）—— 两处各写一遍就是"同一个判断写了两遍"。
  */
 function isPointBased(kind: DiagramObligationKind): boolean {
-  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "solidDimension" && kind !== "solidCenter" && kind !== "solidPrismShape" && kind !== "parameterDomain" && kind !== "symbolicConic"
+  return kind !== "conicAxes" && kind !== "conicChord" && kind !== "tangentAt" && kind !== "functionGraph" && kind !== "functionLineIntersections" && kind !== "lineEquation" && kind !== "solidDimension" && kind !== "solidCenter" && kind !== "solidPrismShape" && kind !== "parameterDomain" && kind !== "symbolicConic"
 }
 
 /** 题设点到、而候选图上**没有**的那个点名。 */
@@ -3015,6 +3054,20 @@ export function verifyDiagramObligations(set: DiagramObligationSet, plan: PlanEn
     solids: candidateSolids(plan, candidate, base),
     prism: candidatePrismOrCube(plan, candidate, base),
     circle: candidateCircle(plan, candidate, base),
+    lines: (() => {
+      const priorIds = new Set(base?.primitives.map((p) => p.id) ?? [])
+      const extract = (onlyNew: boolean) => candidate.primitives.flatMap((primitive) => {
+        if (onlyNew && priorIds.has(primitive.id)) return []
+        if ((primitive.type === "line" || primitive.type === "segment")
+          && Number.isFinite(primitive.a.x) && Number.isFinite(primitive.a.y)
+          && Number.isFinite(primitive.b.x) && Number.isFinite(primitive.b.y)) {
+          return [{ a: { x: primitive.a.x, y: primitive.a.y }, b: { x: primitive.b.x, y: primitive.b.y } }]
+        }
+        return []
+      })
+      const fresh = extract(true)
+      return fresh.length > 0 ? fresh : extract(false)
+    })(),
     planarPoints: candidate.primitives.flatMap((primitive) =>
       primitive.type === "point" && typeof primitive.label === "string" && Number.isFinite(primitive.x) && Number.isFinite(primitive.y)
         ? [{ name: canonicalCandidatePointName(primitive.label), x: primitive.x, y: primitive.y }]

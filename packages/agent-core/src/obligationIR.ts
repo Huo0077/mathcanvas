@@ -75,6 +75,7 @@ const JUDGED_KINDS: ReadonlySet<DiagramObligationKind> = new Set<DiagramObligati
   "linePlaneAngle",
   /** Task 15 边界（2026-10-14）：交点个数由核验器从**图上那条曲线**自己数（`functionLineIntersections` 支）。 */
   "functionLineIntersections",
+  "lineEquation",
   /** 施工单①（2026-10-15）：点在不在曲线上，由核验器拿内核的残差从**图上那一点**自己算（`pointOnConic` 支）。 */
   "pointOnConic",
   /** 2026-10-15：点在线段上（共线 + 落在线段内），由核验器从最终坐标自己算（`pointOnSegment` 支）。 */
@@ -145,6 +146,7 @@ function toleranceFor(kind: DiagramObligationKind, value: number | undefined): O
   if (kind === "area" || kind === "solidVolume") return { kind: "relative", value: UNITLESS_TOLERANCE }
   // **个数是整数**：容差只能是 0 —— "3 个"与"4 个"之间没有"差不多"可讲。
   if (kind === "functionLineIntersections") return { kind: "absolute", value: 0 }
+  if (kind === "lineEquation") return { kind: "absolute", value: distanceTolerance(1) }
   // 等长/等边/中点/**点在线段上**：核验器按"那条线段的长度"缩放，绝对容差随实例变化 —— 这里如实不给。
   return undefined
 }
