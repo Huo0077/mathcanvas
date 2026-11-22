@@ -1,0 +1,19 @@
+name: ✨ 功能建议 / 新需求
+description: 提出新几何工具、教学交互、导出格式或移动端优化建议
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: 使用场景与痛点
+      placeholder: 你在什么教学 / 解题 / 绘图场景下需要这个能力？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望方案或参考案例
+      placeholder: 描述希望的交互方式、快捷键或界面形态（可附图）。
+    validations:
+      required: true

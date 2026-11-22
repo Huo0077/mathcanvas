@@ -1,4 +1,4 @@
-name: Android Release
+name: Unified Release (Windows & Android)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag (e.g. v5.1.0)"
+        description: "Existing release tag (e.g. v5.2.0)"
         required: true
         type: string
 
@@ -15,11 +15,122 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: unified-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Create or update GitHub Release
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          else
+            RELEASE_TAG="${DISPATCH_TAG}"
+          fi
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::Could not determine release tag"
+            exit 1
+          fi
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          NOTES_FILE="docs/release/${RELEASE_TAG}.md"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Updating existing release metadata for ${RELEASE_TAG}"
+            if [ -f "$NOTES_FILE" ]; then
+              gh release edit "$RELEASE_TAG" --title "MathCanvas ${RELEASE_TAG}" --notes-file "$NOTES_FILE"
+            fi
+          else
+            echo "Creating GitHub Release ${RELEASE_TAG}"
+            if [ -f "$NOTES_FILE" ]; then
+              gh release create "$RELEASE_TAG" --title "MathCanvas ${RELEASE_TAG}" --notes-file "$NOTES_FILE"
+            else
+              gh release create "$RELEASE_TAG" --title "MathCanvas ${RELEASE_TAG}" --generate-notes
+            fi
+          fi
+
+  windows-release-bundle:
+    needs: prepare-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: windows-release-x64
+      - name: Build Windows x64 Desktop Installers (NSIS, MSI, Portable)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm run bundle --workspace @draw/desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Collect Windows Release Artifacts & Checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = (Get-Content -Raw "apps/desktop/src-tauri/tauri.conf.json" | ConvertFrom-Json).version
+          $outDir = "artifacts/windows-release"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+          $nsis = Get-ChildItem -Path "apps/desktop/src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          $msi = Get-ChildItem -Path "apps/desktop/src-tauri/target/release/bundle/msi" -Filter "*.msi" | Select-Object -First 1
+          $portableSrc = "apps/desktop/src-tauri/target/release/mathcanvas-desktop.exe"
+          if (-not $nsis) { throw "NSIS installer not found" }
+          if (-not $msi) { throw "MSI installer not found" }
+          if (-not (Test-Path $portableSrc)) { throw "Portable executable not found" }
+
+          $nsisDest = Join-Path $outDir "MathCanvas_${version}_x64-setup.exe"
+          $msiDest = Join-Path $outDir "MathCanvas_${version}_x64_en-US.msi"
+          $portableDest = Join-Path $outDir "MathCanvas_${version}_x64.exe"
+          Copy-Item -Path $nsis.FullName -Destination $nsisDest -Force
+          Copy-Item -Path $msi.FullName -Destination $msiDest -Force
+          Copy-Item -Path $portableSrc -Destination $portableDest -Force
+
+          $files = @($nsisDest, $portableDest, $msiDest)
+          $lines = foreach ($file in $files) {
+            $hash = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path -Leaf $file)"
+          }
+          $sumsPath = Join-Path $outDir "SHA256SUMS-windows.txt"
+          [System.IO.File]::WriteAllText($sumsPath, ($lines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
+          Get-Content $sumsPath
+          Get-ChildItem $outDir | Select-Object Name, Length | Format-Table -AutoSize
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mathcanvas-windows-release-bundle
+          path: artifacts/windows-release/
+          retention-days: 30
+      - name: Upload Windows Assets to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $assets = Get-ChildItem -Path "artifacts/windows-release" -File | ForEach-Object { $_.FullName }
+          gh release upload $env:RELEASE_TAG @assets --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   android-release-apk:
+    needs: prepare-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -127,36 +238,12 @@ jobs:
           name: mathcanvas-android-release-apk
           path: artifacts/android-release/
           retention-days: 30
-      - name: Publish GitHub Release with Android APK
+      - name: Upload Android Assets to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
-          else
-            RELEASE_TAG="${DISPATCH_TAG}"
-          fi
-          if [ -z "$RELEASE_TAG" ]; then
-            echo "::error::Could not determine release tag"
-            exit 1
-          fi
           APK_FILE="artifacts/android-release/MathCanvas-${APP_VERSION}-android-arm64.apk"
           SUMS_FILE="artifacts/android-release/SHA256SUMS-android.txt"
-          NOTES_FILE="docs/release/${RELEASE_TAG}.md"
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            echo "Updating existing release ${RELEASE_TAG} with Android APK assets"
-            gh release upload "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" --clobber
-          else
-            echo "Creating GitHub Release ${RELEASE_TAG}"
-            if [ -f "$NOTES_FILE" ]; then
-              gh release create "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" \
-                --title "MathCanvas ${RELEASE_TAG}" \
-                --notes-file "$NOTES_FILE"
-            else
-              gh release create "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" \
-                --title "MathCanvas ${RELEASE_TAG}" \
-                --generate-notes
-            fi
-          fi
+          gh release upload "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" --clobber

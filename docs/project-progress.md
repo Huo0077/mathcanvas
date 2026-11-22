@@ -1,5 +1,10 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-22 —— MathCanvas v5.2.0（Windows & Android 整合发布、GitHub 仓库整理装饰与官网门户更新）
+
+- **仓库整理装饰与社区文件补齐**：重绘 [README.md](../README.md)（居中 Logo、徽章栏、Mermaid 系统架构图、v5.2.0 全平台下载矩阵），补齐 `.github/ISSUE_TEMPLATE/`（Bug / 数学题构图 / 功能建议）、`.github/PULL_REQUEST_TEMPLATE.md`、[CONTRIBUTING.md](../CONTRIBUTING.md)、[SECURITY.md](../SECURITY.md) 与 `package.json` 元数据。
+- **官网门户与全平台整合发布**：将 [`portal/`](../portal/index.html) 升级至 `v5.2.0`（Windows 三件套 + Android APK 2×2 下载卡片 + SHA-256 直链 + 新特性展示）；升级 [android-release.yml](../.github/workflows/android-release.yml) 为并行构建 Windows x64 + Android ARM64 的整合发布流水线，并通过 `test:docs`、`workflowPolicy.test.ts` 后推送 `v5.2.0` 整合 Release。
+
 ## 2026-11-22 —— MathCanvas v5.1.2（修复 Agent 作图后图元框关键点线面缺失与发布）
 
 - **根因排查与修复**：针对“Agent 完成作图后关键点线面不能在图元框完整显示”问题，修复 [App.tsx](../apps/web/src/App.tsx) 与 [AlgebraView.tsx](../apps/web/src/components/AlgebraView.tsx)（草稿预览态以 `.object-draft-row` 实时渲染全部预览点/棱/面 + Agent 构造多面体及命名折叠面默认展开）、[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts)（`consolidateSolidScaffolding` 仅精确顶点集匹配时去重，保留实体面内子面）及 [GraphicsView.tsx](../apps/web/src/components/GraphicsView.tsx)（2D 草稿自动取景纳入圆/圆锥曲线/线段/交点）。全仓 `typecheck`、ESLint、`test:docs`、单元测试 181/181（含新增 `AlgebraView` 展开/预览隔离与 `dsActionTools` 子面保留用例）及 Playwright E2E 72/72（含 `agent-solid-four-cases` 预览与提交后关键点/棱/面可见性断言）全部通过，打包发布 Android `v5.1.2`。

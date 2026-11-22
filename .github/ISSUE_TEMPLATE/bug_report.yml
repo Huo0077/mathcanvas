@@ -1,0 +1,55 @@
+name: 🐛 软件缺陷 / Bug 反馈
+description: 反馈界面显示异常、交互卡顿、导出失败或崩溃等问题
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮助改进 **MathCanvas**！如果是某道具体数学题 AI 画不出来或画错了，请改用「📐 数学题无法画出 / 构图不准」模板。
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 运行平台
+      options:
+        - Windows 桌面端（NSIS / MSI / 便携版）
+        - Android 手机 / 平板（APK）
+        - Web 浏览器工作台
+        - Linux 桌面端
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本
+      placeholder: 例如：v5.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: workspace
+    attributes:
+      label: 涉及工作区
+      options:
+        - 立体几何（3D）
+        - 平面几何 / 圆锥曲线 / 函数（2D）
+        - 工程制图（CAD）
+        - Agent AI 助手
+        - 设置中心 / 文件保存导出
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述与复现步骤
+      placeholder: |
+        1. 打开 ...
+        2. 点击 / 输入 ...
+        3. 实际发生了 ...
+        4. 期望结果是 ...
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或报错日志（可选）
+      description: 可直接拖拽截图到此处，或粘贴错误提示 / 原因码。

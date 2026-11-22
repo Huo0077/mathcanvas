@@ -1,0 +1,41 @@
+name: 📐 数学题无法画出 / AI 构图不准
+description: 提交某道高中/竞赛数学题，帮助持续提升 MathCanvas 的读题求解与构图精度
+title: "[题目反馈]: "
+labels: ["geometry", "agent"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提供完整原题文字可以让我们最快复现并纳入回归评测集，非常感谢！
+  - type: textarea
+    id: problem_text
+    attributes:
+      label: 完整原题文字
+      placeholder: 请直接粘贴原题（包含所有点名、长度、角度、垂直/平行/中点等条件）
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: 题目类型
+      options:
+        - 立体几何（棱柱 / 棱锥 / 翻折 / 截面 / 外接球 / 二面角）
+        - 解析几何 / 圆锥曲线（椭圆 / 双曲线 / 抛物线 / 圆）
+        - 函数与导数（切线 / 导函数 / 积分）
+        - 平面几何
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: 使用的模型服务与模型名
+      placeholder: 例如：DeepSeek (deepseek-chat) / 通义千问 / 本地确定性规划器
+    validations:
+      required: true
+  - type: textarea
+    id: actual_vs_expected
+    attributes:
+      label: 实际现象 vs 期望图形
+      placeholder: 描述报错原因码、缺失的点/线/面或几何关系偏差，可直接粘贴截图。
+    validations:
+      required: true

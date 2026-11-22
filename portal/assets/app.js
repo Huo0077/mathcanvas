@@ -170,10 +170,11 @@
   const nextPromptBtn = document.getElementById("nextPromptBtn")
   if (ticker && nextPromptBtn) {
     const samples = [
-      "在四棱锥 P-ABCD 中，PA⊥平面 ABCD，E 为 PB 中点，连接 AE、CE → 自动推导「面 AEC」",
+      "在四棱锥 P-ABCD 中，PA⊥平面 ABCD，E 为 PB 中点，连接 AE、CE → 自动推导「面 AEC」并在图元框展开全部点/棱/面",
       "若双曲线 y² - x²/m² = 1 的渐近线与圆 x² + y² - 4y + 3 = 0 相切 → 自动绘制渐近线与切圆",
       "在正四面体中取面内动点 M 并旋转视角 → 实时计算二面角及 sin / cos 精确值",
-      "由 3D 立体模型一键切换至工程制图 → 自动生成主视 / 俯视 / 左视 / 轴测四视图"
+      "由 3D 立体模型一键切换至工程制图 → 自动生成主视 / 俯视 / 左视 / 轴测四视图",
+      "在 Android 手机端双指缩放 3D 模型 → 一键导出 .mgeo / SVG 至公共「下载/MathCanvas」并系统分享"
     ]
     let sampleIndex = 0
     nextPromptBtn.addEventListener("click", () => {

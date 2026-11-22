@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <title>MathCanvas v5.0.0 — AI 原生交互式数学工作台</title>
-  <meta name="description" content="MathCanvas 将自然语言 AI 读题作图、以线推面、动态几何约束、圆锥曲线解析、3D 立体探索与工程制图四视图融为一体。">
+  <title>MathCanvas v5.2.0 — AI 原生交互式数学工作台（Windows &amp; Android）</title>
+  <meta name="description" content="MathCanvas 将自然语言 AI 读题作图、以线推面、动态几何约束、圆锥曲线解析、3D 立体探索与工程制图四视图融为一体，支持 Windows 桌面端、Android 移动端与 Web 工作台。">
   <link rel="icon" type="image/svg+xml" href="assets/media/favicon.svg">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
@@ -18,7 +18,7 @@
       <a class="brand" href="#top" aria-label="MathCanvas 首页">
         <img src="assets/media/favicon.svg" alt="" width="28" height="28">
         <span class="brand-name">MathCanvas</span>
-        <span class="brand-version">v5.0.0</span>
+        <span class="brand-version">v5.2.0</span>
       </a>
       <nav class="site-nav" aria-label="主导航">
         <a href="#features">核心特性</a>
@@ -41,7 +41,7 @@
         <div class="hero-copy">
           <div class="hero-badge">
             <span class="badge-dot" aria-hidden="true"></span>
-            <span>RELEASE v5.0.0 · 持续更新升级中 · WINDOWS &amp; WEB WORKBENCH</span>
+            <span>RELEASE v5.2.0 · 持续更新升级中 · WINDOWS · ANDROID · WEB</span>
           </div>
 
           <h1 class="hero-title">
@@ -50,13 +50,13 @@
           </h1>
 
           <p class="hero-subtitle">
-            输入常规中学数学题或竞赛题，AI 助手自动识别题设、补全关键线段并<strong>「以线推面」生成动态平面</strong>；在方格纸质感画布上自由拖拽动点、实时测量二面角与导数切线，每一步都经过几何核验证书门禁校验。
+            输入常规中学数学题或竞赛题，AI 助手自动识别题设、补全关键线段并<strong>「以线推面」生成动态平面</strong>；在桌面与 Android 触控画布上自由拖拽动点、预览并展开全部关键点/棱/面、实时测量二面角与导数切线，每一步都经过几何核验证书门禁校验。
           </p>
 
           <div class="hero-actions">
             <a
               class="btn btn-primary"
-              href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.0.0"
+              href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.2.0"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -65,7 +65,7 @@
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              <span>前往 GitHub 下载（v5.0.0）↗</span>
+              <span>下载整合版 v5.2.0（Win / Android）↗</span>
             </a>
             <a class="btn btn-secondary" href="#video-demo">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -101,8 +101,8 @@
 
           <dl class="hero-metrics">
             <div>
-              <dt>四大工作区</dt>
-              <dd>平面 · 立体 · CAD · Agent</dd>
+              <dt>多端原生交付</dt>
+              <dd>Windows x64 · Android ARM64 · Web</dd>
             </div>
             <div>
               <dt>模型生态</dt>
@@ -123,13 +123,13 @@
             <span class="corner br" aria-hidden="true"></span>
             <div class="frame-chrome">
               <div class="frame-dots" aria-hidden="true"><span /><span /><span /></div>
-              <span class="frame-caption">MathCanvas v5.0.0 · 立体几何与 AI 同屏共创</span>
+              <span class="frame-caption">MathCanvas v5.2.0 · 立体几何与 AI 同屏共创</span>
             </div>
             <div class="blueprint-frame-media">
               <img
                 class="hero-shot"
                 src="assets/media/hero-3d-ai-aec.png"
-                alt="MathCanvas v5.0.0 立体几何工作台与 AI 助手同屏共创界面：展示四棱锥 P-ABCD、动点与构造面、属性检查器及数学核验证书面板"
+                alt="MathCanvas v5.2.0 立体几何工作台与 AI 助手同屏共创界面：展示四棱锥 P-ABCD、动点与构造面、属性检查器及数学核验证书面板"
                 fetchpriority="high"
                 width="1440"
                 height="900"
@@ -162,21 +162,21 @@
           <span class="section-kicker">01 · ARCHITECTURE &amp; CAPABILITIES</span>
           <h2>不止能画出来，<br>更是一个遵守数学法则的动态系统</h2>
           <p>
-            v5.0.0 将大语言模型的题干理解与底层解析几何内核彻底打通：模型只负责规划语义，所有坐标、切点、交面、二面角均由确定性求解器算出并经独立证书检验。
+            v5.2.0 将大语言模型的题干理解、确定性解析几何内核与跨端原生外壳全面整合：模型只负责规划语义，所有坐标、切点、交面、二面角均由求解器算出并经独立证书检验，Windows 与 Android 共享同一套几何引擎。
           </p>
         </header>
 
         <div class="bento-grid">
           <article class="bento-card bento-wide reveal-card">
-            <div class="bento-meta">AGENT CO-PILOT · 以线推面</div>
-            <h3>输入正常题目，无需刻意“命令”作面</h3>
+            <div class="bento-meta">AGENT CO-PILOT · 以线推面 &amp; 图元框全量展开</div>
+            <h3>输入正常题目，关键点/棱/面预览与落盘一目了然</h3>
             <p>
-              提问中只要提到动点与连线（如「E 为 PB 中点，连接 AE、CE」），Agent 会自动识别隐含空间面并生成 <code>面 AEC</code>，第一时间同步到左侧「面（构造 / 辅助）」与 3D 场景。
+              提问中只要提到动点与连线（如「E 为 PB 中点，连接 AE、CE」），Agent 会自动识别隐含空间面并生成 <code>面 AEC</code>（完整保留底面/侧面内构造子面）；图元框在草稿预览态即同步展示全部待落盘对象，提交后默认展开全部顶点、棱与面。
             </p>
             <div class="bento-pills">
-              <span>隔离草稿先预览</span>
-              <span>往期对话可追溯</span>
-              <span>新题自动清空旧图元（可关）</span>
+              <span>预览态图元清单同步</span>
+              <span>关键点/棱/面默认展开</span>
+              <span>实体面内子面完整保留</span>
               <span>跨工作区自动路由</span>
             </div>
           </article>
@@ -206,10 +206,10 @@
           </article>
 
           <article class="bento-card bento-wide bento-dark reveal-card">
-            <div class="bento-meta">NATIVE DESKTOP · Tauri 2 + Rust</div>
-            <h3>13 家模型预设 + Windows 原生安全存储</h3>
+            <div class="bento-meta">MULTIPLATFORM · WINDOWS + ANDROID · TAURI 2 &amp; RUST</div>
+            <h3>桌面端与 Android 手机端统一内核 + 原生安全存密</h3>
             <p>
-              内置 DeepSeek、OpenAI、Claude、Gemini、通义千问、智谱 GLM、Kimi、硅基流动、豆包、OpenRouter、Ollama、LM Studio 预设，API 密钥存放在 Windows 系统凭据管理器（绝不落明文文件），支持一键拉取服务下全部可用模型。
+              内置 DeepSeek、OpenAI、Claude、Gemini、通义千问、智谱 GLM、Kimi、硅基流动、豆包、OpenRouter、Ollama、LM Studio 等 13 家预设并支持一键获取模型；Windows 采用系统凭据管理器，Android 采用应用私有 <code>ChaCha20 + HMAC-SHA256</code> 加密凭据库，配备 Material Design 3 底部导航、毛玻璃悬浮胶囊、圆角 Bottom Sheet、2D/3D 双指手势及公共 <code>下载/MathCanvas</code> 导出与系统分享。
             </p>
           </article>
         </div>
@@ -389,7 +389,7 @@
         <header class="section-head reveal-card">
           <span class="section-kicker">03 · LIVE WORKFLOW VIDEO</span>
           <h2>20 秒实机操作录屏：从输入题目到交互探索</h2>
-          <p>真实运行自 MathCanvas v5.0.0：演示 AI 自动构造四棱锥、3D 自由旋转、切换二维圆锥曲线及设置中心。</p>
+          <p>真实运行演示：展示 AI 自动构造四棱锥、3D 自由旋转、切换二维圆锥曲线及设置中心（v5.2.0 已在此基础上新增 Android 移动重排与图元框全量展示）。</p>
         </header>
 
         <div class="video-theater reveal-card">
@@ -517,56 +517,72 @@
     <section class="download-band" id="downloads">
       <div class="container">
         <header class="section-head reveal-card">
-          <span class="section-kicker">05 · GITHUB RELEASES DOWNLOAD</span>
-          <h2>前往 GitHub 获取 MathCanvas v5.0.0</h2>
-          <p>软件仍在持续更新升级中。所有 Windows 安装包均统一托管在 <strong>GitHub Releases</strong>（不经过本网页服务器流量），点击下方按钮将直接跳转 GitHub 获取最新构建产物。</p>
+          <span class="section-kicker">05 · UNIFIED GITHUB RELEASES DOWNLOAD</span>
+          <h2>前往 GitHub 获取 MathCanvas v5.2.0 整合版</h2>
+          <p>软件仍在持续更新升级中。v5.2.0 整合发布 <strong>Windows x64 桌面三件套</strong> 与 <strong>Android ARM64 正式签名 APK</strong>，所有安装包均统一托管于 GitHub Releases 并附带 SHA-256 校验文件。</p>
         </header>
 
         <div class="download-grid">
           <article class="download-card download-card-featured reveal-card">
-            <div class="dl-tag">推荐 · GITHUB RELEASES · WINDOWS 64 位</div>
-            <h3>NSIS 标准安装程序</h3>
-            <p class="dl-filename"><code>MathCanvas_5.0.0_x64-setup.exe</code> · 约 5.4 MB</p>
-            <p class="dl-desc">含开始菜单快捷方式与标准卸载支持，使用系统原生 WebView2 渲染，内置系统级凭据加密存储与离线本地计算内核。</p>
+            <div class="dl-tag">推荐 · WINDOWS 64 位 · NSIS 安装程序</div>
+            <h3>Windows 标准安装版</h3>
+            <p class="dl-filename"><code>MathCanvas_5.2.0_x64-setup.exe</code></p>
+            <p class="dl-desc">含开始菜单快捷方式与标准卸载支持，使用系统原生 WebView2 渲染，内置系统级凭据加密存储、离线几何内核与最新图元框修复。</p>
             <a
               class="btn btn-primary dl-btn"
-              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/MathCanvas_5.2.0_x64-setup.exe"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span>前往 GitHub 下载安装版 (.exe)</span>
+              <span>下载 Windows 安装版 (.exe)</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </article>
+
+          <article class="download-card download-card-featured reveal-card">
+            <div class="dl-tag">推荐 · ANDROID ARM64 · 正式签名 APK</div>
+            <h3>Android 手机 / 平板版</h3>
+            <p class="dl-filename"><code>MathCanvas-5.2.0-android-arm64.apk</code> · Android 7.0+</p>
+            <p class="dl-desc">Material Design 3 画布优先重排（底部导航 + 毛玻璃胶囊 + 圆角 Bottom Sheet），支持 2D/3D 双指手势、公共「下载/MathCanvas」零权限导出与系统分享。</p>
+            <a
+              class="btn btn-primary dl-btn"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/MathCanvas-5.2.0-android-arm64.apk"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>下载 Android 安装包 (.apk)</span>
               <span aria-hidden="true">↗</span>
             </a>
           </article>
 
           <article class="download-card reveal-card">
-            <div class="dl-tag">PORTABLE · GITHUB RELEASES · 免安装</div>
+            <div class="dl-tag">PORTABLE · WINDOWS 64 位 · 绿色免安装</div>
             <h3>Windows 便携版可执行程序</h3>
-            <p class="dl-filename"><code>MathCanvas_5.0.0_x64.exe</code> · 约 17.5 MB</p>
-            <p class="dl-desc">下载后双击即可运行，无需管理员安装权限，适合 U 盘携带与机房临时教学展示。</p>
+            <p class="dl-filename"><code>MathCanvas_5.2.0_x64.exe</code></p>
+            <p class="dl-desc">下载后双击即可运行，无需管理员安装权限，适合 U 盘携带与学校机房临时教学展示。</p>
             <a
               class="btn btn-secondary dl-btn"
-              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/MathCanvas_5.2.0_x64.exe"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span>前往 GitHub 下载免安装版 (.exe)</span>
+              <span>下载 Windows 便携版 (.exe)</span>
               <span aria-hidden="true">↗</span>
             </a>
           </article>
 
           <article class="download-card reveal-card">
-            <div class="dl-tag">ENTERPRISE · GITHUB RELEASES · MSI</div>
+            <div class="dl-tag">ENTERPRISE · WINDOWS 64 位 · MSI</div>
             <h3>Windows MSI 安装包</h3>
-            <p class="dl-filename"><code>MathCanvas_5.0.0_x64_en-US.msi</code> · 约 8.4 MB</p>
+            <p class="dl-filename"><code>MathCanvas_5.2.0_x64_en-US.msi</code></p>
             <p class="dl-desc">适合学校机房域控批量分发或企业终端静默安装部署。</p>
             <a
               class="btn btn-secondary dl-btn"
-              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi"
+              href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/MathCanvas_5.2.0_x64_en-US.msi"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span>前往 GitHub 下载 MSI 安装包</span>
+              <span>下载 Windows MSI 安装包</span>
               <span aria-hidden="true">↗</span>
             </a>
           </article>
@@ -574,16 +590,22 @@
 
         <div class="source-bar reveal-card">
           <div class="source-bar-copy">
-            <strong>GitHub 发布页 / 持续更新动态 &amp; 本地源码运行</strong>
-            <p>所有历史与后续升级版本均第一时间发布在 GitHub Releases；如遇 Bug 或无法画出的题目，请发邮件至 <a class="feedback-email-link" href="mailto:dogf9066@gmail.com?subject=MathCanvas%20%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88">dogf9066@gmail.com</a>。</p>
+            <strong>GitHub 发布页 / SHA-256 校验 &amp; 本地源码运行</strong>
+            <p>
+              校验文件：
+              <a class="feedback-email-link" href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/SHA256SUMS-windows.txt" target="_blank" rel="noopener noreferrer">SHA256SUMS-windows.txt</a>
+              ·
+              <a class="feedback-email-link" href="https://github.com/Huo0077/mathcanvas/releases/download/v5.2.0/SHA256SUMS-android.txt" target="_blank" rel="noopener noreferrer">SHA256SUMS-android.txt</a>
+              ；如遇 Bug 或无法画出的题目，请发邮件至 <a class="feedback-email-link" href="mailto:dogf9066@gmail.com?subject=MathCanvas%20%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88">dogf9066@gmail.com</a>。
+            </p>
             <pre role="region" aria-label="开发者本地源码运行命令" tabindex="0"><code>git clone https://github.com/Huo0077/mathcanvas.git &amp;&amp; cd mathcanvas &amp;&amp; npm install &amp;&amp; npm run dev</code></pre>
           </div>
           <div class="source-bar-actions">
             <button type="button" class="copy-btn" data-copy-text="git clone https://github.com/Huo0077/mathcanvas.git && cd mathcanvas && npm install && npm run dev">
               复制运行命令
             </button>
-            <a class="btn btn-ghost" href="https://github.com/Huo0077/mathcanvas/releases" target="_blank" rel="noopener noreferrer">
-              前往 GitHub Releases 页面 ↗
+            <a class="btn btn-ghost" href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.2.0" target="_blank" rel="noopener noreferrer">
+              前往 v5.2.0 发布页 ↗
             </a>
           </div>
         </div>
@@ -603,7 +625,7 @@
           <article class="support-repo-card reveal-card">
             <div class="support-repo-top">
               <span class="support-repo-badge">GITHUB REPOSITORY · PUBLIC</span>
-              <span class="support-repo-tag">v5.0.0 · Active</span>
+              <span class="support-repo-tag">v5.2.0 · Win &amp; Android</span>
             </div>
             <h3>
               <a href="https://github.com/Huo0077/mathcanvas" target="_blank" rel="noopener noreferrer">
@@ -611,11 +633,11 @@
               </a>
             </h3>
             <p class="support-repo-desc">
-              完整开放全栈源码与工程化测试体系：TypeScript + React + Three.js 前端工作台、确定性 2D/3D 解析几何求解内核、Agent 核验证书门禁以及 Tauri 2 + Rust 原生桌面壳。
+              完整开放全栈源码与工程化测试体系：TypeScript + React + Three.js 前端工作台、确定性 2D/3D 解析几何求解内核、Agent 核验证书门禁以及 Tauri 2 + Rust 跨端（Windows / Android）原生外壳。
             </p>
             <ul class="support-highlights">
-              <li>持续免费迭代 Windows 桌面安装包与浏览器工作台</li>
-              <li>公开全部几何求解、AI 提示词与回归评测基准</li>
+              <li>持续免费迭代 Windows 桌面端、Android 移动端与 Web 工作台</li>
+              <li>公开全部几何求解、AI 提示词与自动化回归评测基准</li>
             </ul>
             <div class="support-cta-row">
               <a
@@ -686,12 +708,12 @@
     <div class="container footer-inner">
       <div class="footer-brand">
         <img src="assets/media/favicon.svg" alt="" width="22" height="22">
-        <span>MathCanvas v5.0.0 · AI 原生多模态数学工作台</span>
+        <span>MathCanvas v5.2.0 · AI 原生多端交互式数学工作台</span>
       </div>
       <div class="footer-links">
         <a href="mailto:dogf9066@gmail.com?subject=MathCanvas%20%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88">反馈邮箱：dogf9066@gmail.com</a>
         <a href="https://github.com/Huo0077/mathcanvas" target="_blank" rel="noopener noreferrer">GitHub 仓库</a>
-        <a href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.0.0" target="_blank" rel="noopener noreferrer">GitHub 发布页</a>
+        <a href="https://github.com/Huo0077/mathcanvas/releases/tag/v5.2.0" target="_blank" rel="noopener noreferrer">v5.2.0 整合发布页</a>
         <a href="https://github.com/Huo0077/mathcanvas/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
       </div>
     </div>

@@ -2,6 +2,29 @@
   "name": "multimodal-math-engine",
   "private": true,
   "version": "0.1.0",
+  "description": "MathCanvas — AI-native interactive 2D/3D geometry, conics, CAD projection & math drawing workbench (Windows, Android & Web)",
+  "homepage": "https://github.com/Huo0077/mathcanvas#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Huo0077/mathcanvas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Huo0077/mathcanvas/issues",
+    "email": "dogf9066@gmail.com"
+  },
+  "keywords": [
+    "mathcanvas",
+    "geometry",
+    "3d-geometry",
+    "dynamic-geometry",
+    "conics",
+    "cad",
+    "ai-agent",
+    "tauri",
+    "android",
+    "threejs",
+    "education"
+  ],
   "packageManager": "npm@11.16.0",
   "workspaces": [
     "apps/*",

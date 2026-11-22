@@ -8,6 +8,16 @@
 
 
 
+## 2026-11-22 —— MathCanvas v5.2.0（Windows & Android 全平台整合正式版、开源仓库整理装饰与官网门户升级）
+
+- **全平台整合发布流水线（Windows x64 + Android ARM64）**（[.github/workflows/android-release.yml](.github/workflows/android-release.yml)、[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[v5.2.0.md](docs/release/v5.2.0.md)）：
+  - 升级发布工作流为 **Unified Release (Windows & Android)**：通过前置 `prepare-release` 统一创建 Release 元数据，随后并行运行 `windows-release-bundle`（NSIS / Portable / MSI + `SHA256SUMS-windows.txt`）与 `android-release-apk`（签名对齐 APK + `SHA256SUMS-android.txt`），一次性整合上传至同一 GitHub Release `v5.2.0`。
+- **GitHub 开源仓库装饰与社区治理体系完善**（[README.md](README.md)、[CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md)、[.github/ISSUE_TEMPLATE/](.github/ISSUE_TEMPLATE/config.yml)、[.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md)、[package.json](package.json)）：
+  - 重绘 `README.md`（居中矢量 Logo、徽章状态栏、全平台下载矩阵、Mermaid 架构图与折叠快捷键速查）；
+  - 新增 Bug 反馈 / 数学题构图反馈 / 功能建议 Issue 表单模板、PR 自检清单、`CONTRIBUTING.md`、`SECURITY.md` 与 `package.json` 仓库元数据。
+- **官网门户同步升级至 `v5.2.0`**（[portal/index.html](portal/index.html)、[portal/assets/styles.css](portal/assets/styles.css)、[portal/assets/app.js](portal/assets/app.js)）：
+  - 全站版本、亮点卡片与示例题干升级至 `v5.2.0`，下载区改造为 Windows 三件套 + Android APK 2×2 对称展示并附带 SHA-256 校验直链。
+
 ## 2026-11-22 —— MathCanvas v5.1.2（修复 Agent 作图后图元框关键点/线/面缺失与构造子面误删）
 
 - **Agent 预览与提交后图元框完整展示关键点、线、面**（[App.tsx](apps/web/src/App.tsx)、[AlgebraView.tsx](apps/web/src/components/AlgebraView.tsx)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：
