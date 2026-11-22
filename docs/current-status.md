@@ -1,5 +1,10 @@
 # MathCanvas 当前状态
 
+## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构：底部导航 + 悬浮胶囊 + 圆角 Bottom Sheet）
+
+> **2026-11-22 Android v5.1.1 移动 UI 全面重构基线**：
+> - 调研 Material Design 3 自适应导航与 GeoGebra / Desmos / Apple Freeform 画布优先规范，将手机端（`<= 680px`）彻底重构为 **底部导航栏（释放 100% 屏宽）+ 精简双行顶栏（三段式工作区切换 + 单行横向工具条）+ 画布悬浮毛玻璃胶囊 + 圆角 Bottom Sheet 抽屉**；工程制图默认收起左右双栏并支持按需 Bottom Sheet 展开；Agent 采用底部贴边输入栏与紧凑卡片并去除重复头栏（详见 [v5.1.1 发布说明](release/v5.1.1.md)）。
+
 ## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版）：原生公共下载/分享桥接、横竖屏精修与 GitHub Release 发布
 
 > **2026-11-22 Android v5.1.0 正式发布基线**：
@@ -232,7 +237,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-22；产品版本：v5.1.0（持续更新升级中）；产品代码基线：v5.1.0-android-release。
+最后更新：2026-11-22；产品版本：v5.1.1（持续更新升级中）；产品代码基线：v5.1.1-android-ui-redesign。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

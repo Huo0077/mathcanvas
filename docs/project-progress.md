@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构与发布）
+
+- **移动端 UI 去冗重构（`<= 680px`）**：参考 Material Design 3 与 GeoGebra/Freeform 移动画布实践，改造 [ModuleRail.tsx](../apps/web/src/components/ModuleRail.tsx)（底部导航栏 + `aria-current="page"`）、[AppChrome.tsx](../apps/web/src/components/AppChrome.tsx)（单行滑动工具条 + 菜单遮罩 Bottom Sheet）、[EngineeringWorkbench.tsx](../apps/web/src/components/EngineeringWorkbench.tsx)（移动端默认收起双栏 + Android 返回键/遮罩关闭）与 [workspace-layout.css](../apps/web/src/styles/workspace-layout.css)（毛玻璃悬浮胶囊、圆角 Bottom Sheet、隐藏移动端冗余状态栏与重复头栏、Agent 底部贴边输入栏）。组件单测 22/22、移动端+桌面 Playwright E2E 18/18、全仓 `typecheck`/`lint`/`test:docs` 及 `390×844` / Android 16 实机截屏目视验收全部通过，发布 `v5.1.1`。
+
 ## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版发布与原生分享/公共下载闭环）
 
 - **原生导出直达系统公共下载与分享面板**：扩展 [android-post-init.mjs](../scripts/android-post-init.mjs) 为 `MainActivity.kt` 注入受控 `@JavascriptInterface`（`MathCanvasAndroid.deliverExport`，仅允许白名单后缀且强制规范路径落于 `filesDir/exports/`），通过 Android 10+ `MediaStore.Downloads` 零权限写入公共 `Download/MathCanvas/` 并通过 `FileProvider`（`res/xml/file_paths.xml`）调起 `Intent.ACTION_SEND` 系统分享；补充 R8 `proguard-rules.pro` 保留规则、`allowBackup="false"`、`roundIcon`、浅色冷启动主题及 `tauri.properties` 自动同步（`5.1.0` / `versionCode=5001000`）。

@@ -8,6 +8,15 @@
 
 
 
+## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构：画布优先 · Material Design 3 排版）
+
+- **底部导航栏与画布优先信息架构**（[ModuleRail.tsx](apps/web/src/components/ModuleRail.tsx)、[AppChrome.tsx](apps/web/src/components/AppChrome.tsx)、[EngineeringWorkbench.tsx](apps/web/src/components/EngineeringWorkbench.tsx)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：
+  - 手机窄屏（`<= 680px`）自动将桌面左侧导航栏切换为 Material Design 3 底部导航栏（画布 / Agent / 设置，含 `aria-current="page"` 语义标记），释放 100% 水平屏幕宽度；
+  - 将原先多层杂乱堆叠的顶部栏收敛为 46px 精简顶栏 + 全宽三段式工作区切换 + 单行横向滑动工具条（主工具、构造、更多工具、撤销/重做同排不折行）；
+  - `对象列表 / 属性检查器 / ✨ AI` 改为画布右上角毛玻璃悬浮胶囊；对象/属性/AI 抽屉与文件/工具菜单统一升级为圆角 Bottom Sheet（顶部把手条 + 点外遮罩关闭）；
+  - 工程制图默认收起手机端左右双栏面板并支持 Bottom Sheet 按需展开，单行工具条无裁切；Agent 与设置页隐藏重复顶部头栏，Agent 输入框底部贴边、例题卡片单列横向紧凑排布。
+- **发布版本升级至 `v5.1.1`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[v5.1.1.md](docs/release/v5.1.1.md)）。
+
 ## 2026-11-22 —— MathCanvas v5.1.0（Android 正式版）：原生公共下载/系统分享桥接、横竖屏精修与 GitHub Release 自动发布
 
 - **Android 原生公共 `Downloads/MathCanvas` 导出与系统分享面板**（[android-post-init.mjs](scripts/android-post-init.mjs)、[android-post-init.test.ts](scripts/android-post-init.test.ts)、[fileExports.ts](apps/web/src/persistence/fileExports.ts)、[fileExports.test.ts](apps/web/src/persistence/fileExports.test.ts)）：

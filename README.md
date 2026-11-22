@@ -4,7 +4,7 @@
 
 MathCanvas 将**自然语言读题作图**、**动态几何约束联动**、**二维解析/函数分析**、**三维立体空间建模**与**工程制图投影**整合在同一个简洁流畅的桌面与浏览器工作台中。你可以像在传统几何软件里那样自由拖拽控制点、调节参数、测量距离与二面角，也可以直接输入一道完整的数学题，由内置 AI 助手为你自动理解题意、构造图形、联动辅助线与空间面，并在预览确认后写入画布继续探索。
 
-- **Android 安装包下载（v5.1.0，ARM64 正式签名 APK）**：[MathCanvas-5.1.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v5.1.0/MathCanvas-5.1.0-android-arm64.apk) · [SHA256 校验文件](https://github.com/Huo0077/mathcanvas/releases/download/v5.1.0/SHA256SUMS-android.txt)
+- **Android 安装包下载（v5.1.1，ARM64 正式签名 APK）**：[MathCanvas-5.1.1-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v5.1.1/MathCanvas-5.1.1-android-arm64.apk) · [SHA256 校验文件](https://github.com/Huo0077/mathcanvas/releases/download/v5.1.1/SHA256SUMS-android.txt)
 - **Windows 桌面端安装包下载（v5.0.0，托管于 GitHub Releases）**：[NSIS 安装程序 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64-setup.exe) · [绿色免安装版 (.exe)](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64.exe) · [MSI 安装包](https://github.com/Huo0077/mathcanvas/releases/download/v5.0.0/MathCanvas_5.0.0_x64_en-US.msi) · [全部 Releases](https://github.com/Huo0077/mathcanvas/releases)
 - **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及 GitHub Releases 直链下载，可直接部署至任意静态 Web 服务器）。
 - **持续更新与问题反馈**：MathCanvas 目前仍在持续更新升级中。使用过程中如遇到 Bug 或有题目无法正确画出，请附上原题文本或截图联系 **[dogf9066@gmail.com](mailto:dogf9066@gmail.com)**。
@@ -143,7 +143,7 @@ npm run test:rust   # 桌面端 Rust 单元测试
 
 ## 文档与版本导航
 
-- **最新发布说明与版本信息**：最新版本标签为 **`v5.1.0`**（[发布说明](docs/release/v5.1.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
+- **最新发布说明与版本信息**：最新版本标签为 **`v5.1.1`**（[发布说明](docs/release/v5.1.1.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
 - **工程进度与技术文档**：
   - [当前状态（唯一实时状态入口）](docs/current-status.md)
   - [功能目录](docs/feature-catalog.md)

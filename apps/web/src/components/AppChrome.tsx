@@ -91,22 +91,25 @@ export function AppChrome({
           aria-pressed={activeWorkspace === workspace.id}
           onClick={() => { onWorkspaceChange(workspace.id); closeMenu() }}>{workspace.label}</button>)}
       </div>
-      <div className="clean-primary-tools">
-        {primary.map((command) => <button key={command.id} type="button" className="clean-icon-button"
-          aria-label={command.label} title={command.prompt ?? command.label}
-          aria-pressed={activeCommandId === command.id}
-          disabled={command.disabled} onClick={() => execute(command.id)}>
-          <RibbonGlyph name={command.icon} />
-        </button>)}
-        {ribbonGroups.some((group) => group.id === "solids") && <button type="button" className="clean-button"
-          data-menu-trigger aria-expanded={menu === "construct"} onClick={() => toggleMenu("construct")}><HeaderIcon name="cube" />构造 <span aria-hidden="true">⌄</span></button>}
-      </div>
-      <div className="clean-toolbar-end">
-        <button type="button" className="clean-button" data-menu-trigger aria-expanded={menu === "tools"} onClick={() => toggleMenu("tools")}>更多工具 <span aria-hidden="true">⌄</span></button>
-        <button type="button" className="clean-icon-button" aria-label="撤销" title="撤销 (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>↶</button>
-        <button type="button" className="clean-icon-button" aria-label="重做" title="重做 (Ctrl+Y)" disabled={!canRedo} onClick={onRedo}>↷</button>
+      <div className="clean-toolbar-tools">
+        <div className="clean-primary-tools">
+          {primary.map((command) => <button key={command.id} type="button" className="clean-icon-button"
+            aria-label={command.label} title={command.prompt ?? command.label}
+            aria-pressed={activeCommandId === command.id}
+            disabled={command.disabled} onClick={() => execute(command.id)}>
+            <RibbonGlyph name={command.icon} />
+          </button>)}
+          {ribbonGroups.some((group) => group.id === "solids") && <button type="button" className="clean-button"
+            data-menu-trigger aria-expanded={menu === "construct"} onClick={() => toggleMenu("construct")}><HeaderIcon name="cube" />构造 <span aria-hidden="true">⌄</span></button>}
+        </div>
+        <div className="clean-toolbar-end">
+          <button type="button" className="clean-button" data-menu-trigger aria-expanded={menu === "tools"} onClick={() => toggleMenu("tools")}>更多工具 <span aria-hidden="true">⌄</span></button>
+          <button type="button" className="clean-icon-button" aria-label="撤销" title="撤销 (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>↶</button>
+          <button type="button" className="clean-icon-button" aria-label="重做" title="重做 (Ctrl+Y)" disabled={!canRedo} onClick={onRedo}>↷</button>
+        </div>
       </div>
     </div>
+    {menu && <button type="button" className="clean-menu-backdrop" aria-label="关闭菜单" onClick={closeMenu} />}
     {menu && <div className="clean-command-menu" data-menu={menu} role="region" aria-label={menu === "file" ? "文件菜单" : "工具菜单"}>
       {menu === "file" && <div className="clean-menu-group">
         <h3>文件</h3>

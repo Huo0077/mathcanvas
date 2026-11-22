@@ -30,6 +30,7 @@ export function ModuleRail({ activeModule, onModuleChange }: ModuleRailProps) {
             type="button"
             className="app-rail-button"
             data-active={current}
+            aria-current={current ? "page" : undefined}
             aria-pressed={current}
             aria-label={module.label}
             aria-describedby={hintId}
