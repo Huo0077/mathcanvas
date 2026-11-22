@@ -25,7 +25,7 @@
   &nbsp;·&nbsp;
   <a href="#-快速开始">🚀 快速开始</a>
   &nbsp;·&nbsp;
-  <a href="portal/index.html">🌐 官网门户</a>
+  <a href="https://huo0077.github.io/mathcanvas/">🌐 在线官网</a>
   &nbsp;·&nbsp;
   <a href="CONTRIBUTING.md">🤝 参与贡献</a>
 </p>
