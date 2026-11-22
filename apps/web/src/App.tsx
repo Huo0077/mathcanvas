@@ -366,7 +366,13 @@ export function App() {
    * 传进去的是**取值函数**而不是当次的文档：命令面板会在 React 之外调用这些入口，
    * 拿快照会让它导出"上一次渲染时"的文档。见那个文件的头注释。
    */
-  const fileExports = createFileExports({ getDocument: () => document, getExportableDrawings: () => exportableEngineeringDrawings, setFileError })
+  const fileExports = createFileExports({
+    getDocument: () => document,
+    getExportableDrawings: () => exportableEngineeringDrawings,
+    setFileError,
+    platform: desktopInfo?.platform,
+    onSaved: (message) => setGuidance(message)
+  })
   const save = () => fileExports.save()
   const exportSvgFile = (format: "svg" | "dxf" | "pdf" = "svg") => fileExports.exportSvgFile(format)
   const exportHtmlFile = () => fileExports.exportHtmlFile()
@@ -1044,6 +1050,24 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [activeGhostDraft, effectiveActiveCommand, creationStep, spatialSession, activeCommand])
 
+  useEffect(() => {
+    const bridge = globalThis as typeof globalThis & { __mathcanvasHandleAndroidBack?: () => boolean }
+    bridge.__mathcanvasHandleAndroidBack = () => {
+      if (contextMenuState) { setContextMenuState(null); return true }
+      if (renamingState) { setRenamingState(null); return true }
+      if (packagePanelOpen) { setPackagePanelOpen(false); return true }
+      if (solidWizardOpen) { setSolidWizardOpen(false); setMobileDock(null); setActiveCommand(null); setGuidance(null); return true }
+      if (mobileDock !== null) { setMobileDock(null); return true }
+      if (copilotOpen) { setCopilotOpen(false); return true }
+      const backEvent = new CustomEvent("mathcanvas:android-back", { cancelable: true })
+      window.dispatchEvent(backEvent)
+      if (backEvent.defaultPrevented) return true
+      if (activeModule !== "traditional") { setOpenImageReader(false); setActiveModule("traditional"); return true }
+      return false
+    }
+    return () => { delete bridge.__mathcanvasHandleAndroidBack }
+  }, [contextMenuState, renamingState, packagePanelOpen, solidWizardOpen, mobileDock, copilotOpen, activeModule])
+
   const cadWorkbench = <EngineeringWorkbench
     document={document}
     mode={cadMode}
@@ -1103,7 +1127,16 @@ export function App() {
         <div className="workbench-mobile-controls" role="toolbar" aria-label="画布面板">
           <button type="button" aria-controls="algebra-dock" aria-expanded={mobileDock === "objects"} onClick={() => setMobileDock((current) => current === "objects" ? null : "objects")}>对象列表</button>
           <button type="button" aria-controls="properties-dock" aria-expanded={mobileDock === "properties"} onClick={() => setMobileDock((current) => current === "properties" ? null : "properties")}>属性检查器</button>
+          <button type="button" aria-expanded={copilotOpen} onClick={() => { setMobileDock(null); setCopilotOpen((open) => !open) }}>✨ AI</button>
         </div>
+        {mobileDock !== null && (
+          <button
+            type="button"
+            className="workbench-mobile-backdrop"
+            aria-label="关闭画布侧栏"
+            onClick={() => setMobileDock(null)}
+          />
+        )}
         {algebraPanel}
         {document.workspace === "geometry3d" ? threeCanvas : planarCanvas}
         {inspectorPanel}

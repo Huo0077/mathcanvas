@@ -2,7 +2,7 @@ import { encodeMgeo, type GeometryDocument } from "@draw/dsl"
 
 import { exportCsv, exportSvg } from "./exporters"
 import { collectHtmlOmissions, exportHtmlSnapshot } from "./htmlExporter"
-import { readDesktopRuntime } from "../services/desktopRuntime"
+import { invokeDesktop, isDesktopShell, readDesktopRuntime } from "../services/desktopRuntime"
 import type { ProjectedDrawing } from "../projectionVisuals"
 
 /** 矢量导出器认的三种格式。**不含 `html`** —— HTML 走自己的函数（见 `exportHtmlFile`），
@@ -43,6 +43,23 @@ export interface FileExportDependencies {
   getExportableDrawings(): ProjectedDrawing[]
   /** `null` = 没有错误（界面据此清掉上一轮的报错）。 */
   setFileError(message: string | null): void
+  /** 运行平台（来自原生自述，`android` 端走 Web Share / 原生安全导出通道而非静默失效的 `<a download>`）。 */
+  platform?: string
+  /** 非错误提示（例如 Android 端导出成功后的落盘确认）。 */
+  onSaved?: (message: string) => void
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error("无法读取导出内容"))
+    reader.onload = () => {
+      const result = String(reader.result ?? "")
+      const comma = result.indexOf(",")
+      resolve(comma >= 0 ? result.slice(comma + 1) : result)
+    }
+    reader.readAsDataURL(blob)
+  })
 }
 
 export interface FileExports {
@@ -58,16 +75,52 @@ const PNG_WIDTH = 1600
 const PNG_HEIGHT = 760
 
 export function createFileExports(dependencies: FileExportDependencies): FileExports {
-  const { getDocument, getExportableDrawings, setFileError } = dependencies
+  const { getDocument, getExportableDrawings, setFileError, platform, onSaved } = dependencies
 
   const reportFileError = (error: unknown, fallback: string) => setFileError(error instanceof Error ? error.message : fallback)
 
+  const saveOnAndroid = async (blob: Blob, fileName: string) => {
+    try {
+      if (typeof File !== "undefined" && typeof navigator !== "undefined" && typeof navigator.canShare === "function" && typeof navigator.share === "function") {
+        const shareFile = new File([blob], fileName, { type: blob.type || "application/octet-stream" })
+        if (navigator.canShare({ files: [shareFile] })) {
+          try {
+            await navigator.share({ files: [shareFile], title: fileName })
+            setFileError(null)
+            onSaved?.(`已唤起系统分享：${fileName}`)
+            return
+          } catch (shareError) {
+            if (shareError instanceof Error && shareError.name === "AbortError") return
+          }
+        }
+      }
+      if (isDesktopShell()) {
+        const base64Bytes = await blobToBase64(blob)
+        const saved = await invokeDesktop<{ fileName?: string; byteSize?: number }>("export_document_file", {
+          fileName,
+          base64Bytes
+        })
+        setFileError(null)
+        onSaved?.(`已导出 ${saved.fileName ?? fileName}（应用 exports 目录）`)
+        return
+      }
+      setFileError("当前移动端 WebView 不支持直接下载，请使用 MathCanvas Android 客户端导出。")
+    } catch (error) {
+      reportFileError(error, `无法保存 ${fileName}`)
+    }
+  }
+
   /** 把一段字节交给浏览器下载。文件名取文档名（空白折成 `-`），扩展名由调用方给。 */
   const downloadBlob = (blob: Blob, extension: string) => {
+    const fileName = `${getDocument().metadata.name.replace(/\s+/g, "-")}.${extension}`
+    if (platform === "android") {
+      void saveOnAndroid(blob, fileName)
+      return
+    }
     const url = URL.createObjectURL(blob)
     const anchor = globalThis.document.createElement("a")
     anchor.href = url
-    anchor.download = `${getDocument().metadata.name.replace(/\s+/g, "-")}.${extension}`
+    anchor.download = fileName
     anchor.click()
     URL.revokeObjectURL(url)
   }

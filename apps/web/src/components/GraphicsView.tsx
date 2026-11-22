@@ -531,7 +531,7 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
   const handlePointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (pinchStateRef.current || touchPointersRef.current.size >= 2) return
     if (creationMode || dragState) return
-    if (event.button === 1 || (event.button === 0 && spacePressed)) {
+    if (event.button === 1 || (event.button === 0 && spacePressed) || event.pointerType === "touch") {
       event.preventDefault()
       event.currentTarget.setPointerCapture?.(event.pointerId)
       setPanState({ start: eventToSvg(event), center: viewport.center, pointerId: event.pointerId })
@@ -576,6 +576,10 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
     }
     if (panState && event.pointerId === panState.pointerId) {
       event.currentTarget.releasePointerCapture?.(event.pointerId)
+      const current = eventToSvg(event)
+      if (Math.hypot(current.x - panState.start.x, current.y - panState.start.y) > 4) {
+        suppressClick.current = true
+      }
       setPanState(null)
       return
     }
@@ -664,7 +668,7 @@ export function GraphicsView({ document, ghostCandidate = null, selectedIds, cre
      * 它现在是画布上最大的圆点，若留在 5，缩小后的图形（点半径 2.5）旁边会挂着一个两倍大的手柄。
      * 4（直径 8px）仍是舒服的抓取目标 —— 手柄本身就**是**命中区，不能再小。
      */
-    return <g className="drag-handles" aria-hidden="true">{handles.map(({ handle, point }) => <circle key={handle} data-drag-handle={handle} cx={toX(point.x)} cy={toY(point.y)} r="4" onPointerDown={(event) => beginDrag(event, primitive.id)} />)}</g>
+    return <g className="drag-handles" aria-hidden="true">{handles.map(({ handle, point }) => <g key={handle}><circle data-drag-handle-hit={handle} cx={toX(point.x)} cy={toY(point.y)} r="14" fill="transparent" stroke="none" pointerEvents="all" onPointerDown={(event) => beginDrag(event, primitive.id)} /><circle data-drag-handle={handle} cx={toX(point.x)} cy={toY(point.y)} r="4" onPointerDown={(event) => beginDrag(event, primitive.id)} /></g>)}</g>
   }
   /**
    * 定点的标记：一个空心小圈 + 十字。它**不可拖动**（定点是参数，靠拖曲线或改数值来动），

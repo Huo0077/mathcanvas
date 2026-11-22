@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-22 —— Android 端深度加固、Android 16 模拟器真机实测与本地可安装 ARM64 APK 交付
+
+> **2026-11-22 Android 端实测闭环基线**：
+> 1. **原生 Android 宿主与安全打包闭环**：[android-post-init.mjs](../scripts/android-post-init.mjs) 自动配置 `MainActivity.kt`（浅色 Edge-to-Edge + `systemBars | displayCutout | ime` 避让 + `OnBackPressedCallback` 逐级返回桥接）、`hardwareAccelerated="true"` 与仅放行回环的 `network_security_config.xml`；新增 [android-package.mjs](../scripts/android-package.mjs)（`npm run android:build:local --workspace @draw/desktop`），在本机 Windows（NDK `27.3.13750724` + Android Studio JBR 21）直接产出已对齐并签名的 ARM64 Release APK（`MathCanvas-android-arm64.apk`）与 `x86_64` Release APK（`MathCanvas-android-x86_64.apk`，约 `20.8 MB`）。
+> 2. **Rust 后端与移动端核心 UX 修复**：`provider_check` 升级为异步非阻塞（网络探测期间释放锁）；新增白名单受控导出命令 `export_document_file` 并接入 [fileExports.ts](../apps/web/src/persistence/fileExports.ts)（Android WebView 优先 Web Share、兜底原生落盘 `exports/`）；修复 `<= 800px` Agent 移动端会话切换/新建抽屉；补齐 2D 画布单指平移、`r=14` 触控手柄热区、手机端 `40px` 紧凑状态栏、全宽 Copilot 抽屉与 Android 返回键逐级关闭逻辑。
+> 3. **真机模拟器与自动化门禁全通过**：已在 Android 16（API 36，`1080×2400 @ 420dpi`，`com.google.android.webview 133.0.6943.137`，RTX 5060 硬件 OpenGL ES 3.0）实机安装运行 Release APK（冷启动 ~1.97–4.4s、0 崩溃/0 报错日志），逐屏截屏目视核验 2D 画布、3D WebGL 立体几何、Agent 移动端会话栏、原生加密设置页（无浏览器退化提示）及 `KEYCODE_BACK` 逐级返回；`npm run test:rust --workspace @draw/desktop`、`npm run typecheck`、`npm run lint`（0 errors）、`npm run test:docs`（22/22）、`licences.test.ts`（`550 === 550`）、核心 Vitest（8 文件 178/178）及 Playwright 移动+桌面回归 E2E（含 [mobile-android-ux.spec.ts](../e2e/mobile-android-ux.spec.ts)）全数通过。
+
 ## 2026-11-21 —— Linux 与 Android 多端适配与多平台 CI 构建基线
 
 > **2026-11-21 多平台扩展现状与本机可验证范围**：
@@ -218,7 +225,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-21；产品版本：v5.0.0（持续更新升级中）；产品代码基线：4195ff87。
+最后更新：2026-11-22；产品版本：v5.0.0（持续更新升级中）；产品代码基线：cb3281f9+android。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

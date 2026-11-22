@@ -166,6 +166,7 @@ pub fn run() {
             commands::repository::read_document_attachments,
             commands::repository::collect_attachments,
             commands::repository::export_package,
+            commands::repository::export_document_file,
             commands::repository::import_package,
             commands::repository::append_run_event,
             commands::repository::read_run_events,

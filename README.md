@@ -84,12 +84,13 @@ npm run dev --workspace @draw/desktop
 npx tauri build
 npm run linux:bundle --workspace @draw/desktop   # 在 Linux 上直接输出 .deb 与 .AppImage
 
-# 构建 Android ARM64 APK（需 JDK 17、Android SDK/NDK 及 aarch64-linux-android Rust target）
+# 构建 Android ARM64 APK（需 JDK 17/21、Android SDK/NDK 27+ 及 aarch64-linux-android Rust target）
 npm run android:init --workspace @draw/desktop
-npm run android:build --workspace @draw/desktop
+npm run android:build --workspace @draw/desktop        # Linux / macOS / 启用开发者模式的 Windows
+npm run android:build:local --workspace @draw/desktop  # 跨平台一键构建并签名 ARM64 APK（Windows 无需开发者模式）
 ```
 
-触控端（Android 手机 / 平板）支持 **2D 平面画布与 3D 立体空间的双指捏合缩放 + 同步平移**、`env(safe-area-inset-*)` 安全区避让、`44×44` 粗指针触控热区及软键盘自适应缩放。更多宿主壳技术细节见 [桌面端说明](apps/desktop/README.md)。
+触控端（Android 手机 / 平板）支持 **2D 平面画布单指平移与双指捏合缩放、3D 立体空间单指旋转与双指捏合缩放/平移**、Edge-to-Edge 状态栏/挖孔/导航条与软键盘安全避让、Android 系统返回键逐级回退、Agent 移动端抽屉式会话切换、`44×44` 粗指针触控热区，以及 Android Web Share / 应用受控目录原生文件导出。更多宿主壳技术细节见 [桌面端说明](apps/desktop/README.md)。
 
 ---
 

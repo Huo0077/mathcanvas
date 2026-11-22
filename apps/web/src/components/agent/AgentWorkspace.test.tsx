@@ -111,6 +111,23 @@ describe("agent workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "返回画布" }))
     expect(back).toBe(1)
   })
+
+  it("toggles mobile conversation drawer and closes it on Android back event", () => {
+    const { container } = render(<AgentWorkspace onBackToWorkspace={() => {}} />)
+    const root = container.querySelector(".agent-workspace")!
+    expect(root.getAttribute("data-mobile-sidebar-open")).toBe("false")
+
+    fireEvent.click(screen.getByRole("button", { name: "对话列表" }))
+    expect(root.getAttribute("data-mobile-sidebar-open")).toBe("true")
+
+    const backEvent = new CustomEvent("mathcanvas:android-back", { cancelable: true })
+    fireEvent(window, backEvent)
+    expect(backEvent.defaultPrevented).toBe(true)
+    expect(root.getAttribute("data-mobile-sidebar-open")).toBe("false")
+
+    fireEvent.click(screen.getByRole("button", { name: "＋ 新对话" }))
+    expect(useAgentStore.getState().conversations.length).toBeGreaterThanOrEqual(2)
+  })
 })
 
 /**

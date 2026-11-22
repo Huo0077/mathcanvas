@@ -8,6 +8,18 @@
 
 
 
+## 2026-11-22 —— Android 端深度加固、真机/Android 16 模拟器闭环实测与跨平台本地 APK 一键打包
+
+- **Android 原生宿主、Edge-to-Edge 安全区与系统返回键闭环**（[android-post-init.mjs](scripts/android-post-init.mjs)、[android-post-init.test.ts](scripts/android-post-init.test.ts)、[android-package.mjs](scripts/android-package.mjs)、[apps/desktop/package.json](apps/desktop/package.json)）：
+  - 升级 `android-post-init.mjs` 自动配置 `MainActivity.kt`（浅色状态栏/导航栏 Edge-to-Edge + `WindowInsetsCompat` 对 `systemBars | displayCutout | ime` 统一安全内边距避让 + `OnBackPressedCallback` 桥接至 `window.__mathcanvasHandleAndroidBack`）、`AndroidManifest.xml`（`hardwareAccelerated="true"`、`windowSoftInputMode="adjustResize"`、`networkSecurityConfig="@xml/network_security_config"`）与 `res/xml/network_security_config.xml`（云端强制 HTTPS，仅放行 `127.0.0.1` 与 `*.localhost` 回环）；
+  - 新增跨平台本地 APK 打包脚本 `scripts/android-package.mjs`（`android:build:local` / `android:build:emulator`），支持自动发现 JDK / Android SDK / NDK 27+、启用 `tauri/custom-protocol` 内嵌前端资源、直接拷贝 `.so`（免 Windows 开发者模式符号链接权限）及 `zipalign` + `apksigner` 签名。
+- **Rust 原生侧移动端非阻塞探测与安全文件导出**（[providers.rs](apps/desktop/src-tauri/src/commands/providers.rs)、[repository.rs](apps/desktop/src-tauri/src/commands/repository.rs)、[lib.rs](apps/desktop/src-tauri/src/lib.rs)、[startup_diagnostics.rs](apps/desktop/src-tauri/src/startup_diagnostics.rs)、[shell_smoke.rs](apps/desktop/src-tauri/tests/shell_smoke.rs)）：
+  - 将 `provider_check` 改为 `async` + `spawn_blocking` 且网络探测期间不持有 `ProfileStoreState` 互斥锁，消除移动慢网阻塞；
+  - 新增具名受控 IPC 命令 `export_document_file`（仅允许 `.mgeo/.svg/.png/.csv/.dxf/.pdf/.html` 白名单后缀与单段文件名，32 MiB 上限，自动防覆盖落盘 `exports/` 目录，不泄露绝对路径）；崩溃诊断同步写入 `log::error!` 便于 `adb logcat` 排障。
+- **移动端触控交互、Agent 会话抽屉与响应式精修**（[App.tsx](apps/web/src/App.tsx)、[AppChrome.tsx](apps/web/src/components/AppChrome.tsx)、[AgentWorkspace.tsx](apps/web/src/components/agent/AgentWorkspace.tsx)、[GraphicsView.tsx](apps/web/src/components/GraphicsView.tsx)、[fileExports.ts](apps/web/src/persistence/fileExports.ts)、[ProjectPackagePanel.tsx](apps/web/src/components/ProjectPackagePanel.tsx)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)、[mobile-android-ux.spec.ts](e2e/mobile-android-ux.spec.ts)）：
+  - 修复 `<= 800px` 移动端 Agent 侧栏隐藏后无法新建/切换对话的问题（新增顶部 `对话 (N)` 抽屉入口、`＋ 新对话` 快捷按钮与点外/返回键关闭）；
+  - 为 2D SVG 画布补齐单指空白区平移与 `r=14` 透明触控手柄热区；在 Android 端自动通过 Web Share API 或 `export_document_file` 原生落盘替代静默失效的 `<a download>`；压缩手机端状态栏（`40px`）、隐藏无意义桌面快捷键控件与 `Ctrl K` 搜索框、修复移动端 Copilot 抽屉全宽弹层并接入 Android 系统返回键逐级回退。
+
 ## 2026-11-21 —— Linux 与 Android 多端适配及自动打包工作流
 
 - **跨平台原生加密凭据库与宿主壳适配**（[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[mod.rs](apps/desktop/src-tauri/src/secrets/mod.rs)、[linux.rs](apps/desktop/src-tauri/src/secrets/linux.rs)、[vault.rs](apps/desktop/src-tauri/src/secrets/vault.rs)、[providers.rs](apps/desktop/src-tauri/src/commands/providers.rs)、[lib.rs](apps/desktop/src-tauri/src/lib.rs)）：

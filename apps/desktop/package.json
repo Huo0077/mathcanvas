@@ -14,6 +14,8 @@
     "android:build": "node ../../scripts/toolchain.mjs tauri android build --apk --target aarch64",
     "android:build:universal": "node ../../scripts/toolchain.mjs tauri android build --apk",
     "android:build:debug": "node ../../scripts/toolchain.mjs tauri android build --apk --debug --target aarch64",
+    "android:build:local": "node ../../scripts/android-package.mjs",
+    "android:build:emulator": "node ../../scripts/android-package.mjs --arch x86_64",
     "typecheck": "tsc -p tsconfig.json",
     "test:rust": "node ../../scripts/toolchain.mjs cargo test --manifest-path src-tauri/Cargo.toml"
   },

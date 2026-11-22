@@ -232,6 +232,82 @@ pub fn export_package(app: tauri::AppHandle, project_id: String, documents: Vec<
     }))
 }
 
+const ALLOWED_DOCUMENT_EXPORT_EXTENSIONS: [&str; 7] = ["mgeo", "svg", "png", "csv", "dxf", "pdf", "html"];
+
+/// 校验并清理导出的文档单段文件名（拒绝路径分隔符、`..`、控制字符与白名单外后缀）。
+pub(crate) fn sanitize_document_export_name(raw_name: &str) -> Result<(String, String), String> {
+    let trimmed = raw_name.trim();
+    if trimmed.is_empty() || trimmed.len() > 160 {
+        return Err("the export file name must be between 1 and 160 characters".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains("..") || trimmed.chars().any(|ch| ch.is_control()) {
+        return Err("the export file name must be a single safe file name without path separators".to_string());
+    }
+    let (stem, extension) = trimmed
+        .rsplit_once('.')
+        .ok_or_else(|| "the export file name must include a supported extension".to_string())?;
+    let stem = stem.trim();
+    let ext = extension.to_ascii_lowercase();
+    if stem.is_empty() || !ALLOWED_DOCUMENT_EXPORT_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(format!("unsupported export file extension `.{ext}`"));
+    }
+    let safe_stem: String = stem
+        .chars()
+        .map(|ch| if matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*') { '_' } else { ch })
+        .collect();
+    let final_stem = safe_stem.trim().trim_matches('.');
+    if final_stem.is_empty() {
+        return Err("the export file stem must not be empty".to_string());
+    }
+    Ok((final_stem.to_string(), ext))
+}
+
+/// 在应用私有 `exports/` 目录下原子保存导出的文档文件，遇到重名自动追加 `-1`/`-2` 后缀，避免覆盖已有导出。
+pub(crate) fn persist_exported_document(export_root: &std::path::Path, raw_name: &str, bytes: &[u8]) -> Result<String, String> {
+    use std::io::Write;
+    let (stem, ext) = sanitize_document_export_name(raw_name)?;
+    std::fs::create_dir_all(export_root).map_err(|error| format!("cannot create exports directory: {error}"))?;
+    for attempt in 0u32..1000 {
+        let candidate = if attempt == 0 {
+            format!("{stem}.{ext}")
+        } else {
+            format!("{stem}-{attempt}.{ext}")
+        };
+        let target = export_root.join(&candidate);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(mut handle) => {
+                handle.write_all(bytes).map_err(|error| format!("cannot write exported document: {error}"))?;
+                handle.sync_all().map_err(|error| format!("cannot flush exported document: {error}"))?;
+                return Ok(candidate);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("cannot save exported document: {error}")),
+        }
+    }
+    Err("too many exported files with the same base name".to_string())
+}
+
+/// **将导出的几何文档保存到应用受控的 `exports/` 目录**（Android WebView 无法使用 `<a download>` 时的安全落盘通道）。
+///
+/// 仅接受白名单扩展名（`.mgeo`/`.svg`/`.png`/`.csv`/`.dxf`/`.pdf`/`.html`）与单段文件名，
+/// 上限 32 MiB，不接受任何任意路径，返回值也不泄露用户绝对路径。
+#[tauri::command]
+pub fn export_document_file(app: tauri::AppHandle, file_name: String, base64_bytes: String) -> Result<serde_json::Value, String> {
+    let bytes = decode_base64(&base64_bytes, repository::blobs::MAX_ATTACHMENT_BYTES)
+        .ok_or("the exported file is not valid base64 or exceeds the 32 MiB limit")?;
+    let export_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("cannot resolve the app data directory: {error}"))?
+        .join("exports");
+    let saved_name = persist_exported_document(&export_root, &file_name, &bytes)?;
+    Ok(serde_json::json!({
+        "fileName": saved_name,
+        "directory": "exports",
+        "byteSize": bytes.len()
+    }))
+}
+
 /**
  * **导入 `.mcanvas`**。
  *
@@ -390,4 +466,36 @@ fn encode_base64(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod document_export_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_path_traversal_and_disallowed_extensions() {
+        assert!(sanitize_document_export_name("../escape.svg").is_err());
+        assert!(sanitize_document_export_name("sub/file.png").is_err());
+        assert!(sanitize_document_export_name("sub\\file.png").is_err());
+        assert!(sanitize_document_export_name("payload.exe").is_err());
+        assert!(sanitize_document_export_name("noextension").is_err());
+        assert!(sanitize_document_export_name(".svg").is_err());
+    }
+
+    #[test]
+    fn persists_exported_documents_without_overwriting_existing_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "mathcanvas-doc-export-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_nanos())
+        ));
+        let first = persist_exported_document(&dir, "圆锥曲线.svg", b"<svg/>").expect("first export");
+        let second = persist_exported_document(&dir, "圆锥曲线.svg", b"<svg id='2'/>").expect("second export");
+        assert_eq!(first, "圆锥曲线.svg");
+        assert_eq!(second, "圆锥曲线-1.svg");
+        assert_eq!(std::fs::read(dir.join(&first)).expect("read first"), b"<svg/>");
+        assert_eq!(std::fs::read(dir.join(&second)).expect("read second"), b"<svg id='2'/>");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

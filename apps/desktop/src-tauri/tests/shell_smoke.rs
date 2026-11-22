@@ -181,6 +181,8 @@ fn exposes_only_named_ipc_commands_and_no_generic_one() {
         "read_document_attachments",
         "collect_attachments",
         "export_package",
+        // Android WebView 无原生 `<a download>`：允许按白名单后缀与单段文件名写进受控 `exports/` 目录（不接受任意路径）。
+        "export_document_file",
         "import_package",
         // 运行账本（Task 2.6）。**有意加的三个**：一条只追加的写入、一条有界读取、
         // 一条计数。它们都是具名命令，而且都不接受"任意 SQL"或"任意路径"。

@@ -217,4 +217,36 @@ describe("file exports", () => {
     expect(html).toContain('data-drawing-view="front"')
     expect(html).toContain("front: 轮廓按采样折线写出")
   }, 30_000)
+
+  it("exports via Tauri export_document_file IPC on Android instead of silent <a download>", async () => {
+    const invoked: Array<{ command: string; args?: Record<string, unknown> }> = []
+    const savedNotices: string[] = []
+    ;(globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        invoked.push({ command, args })
+        return { fileName: "安卓图纸.mgeo", directory: "exports", byteSize: 64 }
+      }
+    }
+    try {
+      const exports = createFileExports({
+        getDocument: () => document3d("安卓 图纸"),
+        getExportableDrawings: () => [] as ProjectedDrawing[],
+        setFileError: (message) => { errors.push(message) },
+        platform: "android",
+        onSaved: (message) => { savedNotices.push(message) }
+      })
+      exports.save()
+      await vi.waitFor(() => expect(invoked).toHaveLength(1))
+      expect(downloads).toEqual([])
+      expect(invoked[0]).toMatchObject({
+        command: "export_document_file",
+        args: { fileName: "安卓-图纸.mgeo" }
+      })
+      expect(typeof invoked[0]!.args?.base64Bytes).toBe("string")
+      expect(savedNotices[0]).toContain("安卓图纸.mgeo")
+      expect(errors.every((entry) => entry === null)).toBe(true)
+    } finally {
+      delete (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__
+    }
+  })
 })

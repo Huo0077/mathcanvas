@@ -1,5 +1,11 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-22 —— Android 端深度加固、Android 16 模拟器真机闭环实测与跨平台本地 APK 一键打包
+
+- **Android 宿主与原生配置加固**：扩展 [android-post-init.mjs](../scripts/android-post-init.mjs) 自动修补 `MainActivity.kt`（浅色 Edge-to-Edge、`WindowInsetsCompat` 对系统栏/挖孔/软键盘统一避让与 `OnBackPressedCallback` 返回桥接）、`AndroidManifest.xml`（`hardwareAccelerated="true"`、`adjustResize` 与 `network_security_config`）并写出 `res/xml/network_security_config.xml`；新增 [android-package.mjs](../scripts/android-package.mjs)（`android:build:local` / `android:build:emulator`）解决 Windows 无开发者模式符号链接限制，默认启用 `tauri/custom-protocol` 内嵌前端资源并自动 `zipalign` + `apksigner` 签名。
+- **Rust 移动端非阻塞与安全导出**：将 `provider_check` 改为 `async` + `spawn_blocking` 且探测期间不持锁；新增白名单受控导出命令 `export_document_file`（限 `.mgeo/.svg/.png/.csv/.dxf/.pdf/.html` 与 32 MiB，防重名覆盖，不泄露绝对路径），接入 [fileExports.ts](../apps/web/src/persistence/fileExports.ts) 替代 Android WebView 静默失效的 `<a download>`。
+- **移动端触控体验修复与 Android 16 实机闭环**：修复 `<= 800px` Agent 移动端会话抽屉与 `＋ 新对话` 入口，补齐 2D 单指平移与 `r=14` 手柄热区，精简手机端状态栏与顶栏并接入 Android 返回键逐级关闭。在 Android 16（API 36，`1080×2400 @ 420dpi`，`com.google.android.webview 133.0.6943.137`，硬件 OpenGL ES 3.0）实机安装运行 Release APK 并截屏核验 2D/3D/Agent/设置页与 `KEYCODE_BACK`，`test:rust`、`typecheck`、`lint`（0 errors）、`test:docs`（22/22）、`licences.test.ts`（550/550）、核心 Vitest（178/178）与移动+桌面 Playwright E2E 全部通过。
+
 ## 2026-11-21 —— Linux 与 Android 多端适配、加密本地凭据库及 GitHub 多平台打包流水线
 
 - **Rust 跨平台加密凭据库与 Tauri 适配**：新增 [vault.rs](../apps/desktop/src-tauri/src/secrets/vault.rs)（基于 `Cargo.lock` 既有 `chacha20` / `hmac` / `sha2` / `subtle` / `zeroize` 实现应用私有加密凭据存储与篡改检验，零新增许可证风险，`licences.test.ts` 保持 `550 === 550`）与 [linux.rs](../apps/desktop/src-tauri/src/secrets/linux.rs)（Linux Secret Service 探测 + 加密本地库回退），接入 Android 默认持久化加密库并由 `SecretStore::is_persistent()` 驱动 `get_runtime_info`。

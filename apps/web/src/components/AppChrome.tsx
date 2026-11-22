@@ -57,13 +57,21 @@ export function AppChrome({
         setMenu(null)
       }
     }
+    const androidBack = (event: Event) => {
+      if (menu !== null) {
+        event.preventDefault()
+        setMenu(null)
+      }
+    }
     document.addEventListener("pointerdown", dismiss)
     document.addEventListener("keydown", escape)
+    window.addEventListener("mathcanvas:android-back", androidBack)
     return () => {
       document.removeEventListener("pointerdown", dismiss)
       document.removeEventListener("keydown", escape)
+      window.removeEventListener("mathcanvas:android-back", androidBack)
     }
-  }, [])
+  }, [menu])
 
   const toggleMenu = (next: typeof menu) => setMenu((current) => current === next ? null : next)
   const execute = (commandId: string) => {

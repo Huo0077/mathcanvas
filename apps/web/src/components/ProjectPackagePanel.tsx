@@ -57,7 +57,7 @@ const DESTINATION_KEY = "mathcanvas:package-destination"
 /** 把客户端的失败翻译成一句用户能照做的话。 */
 function describeFailure(result: { code: string; detail: string }, action: string): ProjectPackageNotice {
   if (result.code === "no_desktop_shell") {
-    return { kind: "error", text: `${action}需要桌面版（Windows 应用）；当前在浏览器里运行，本地项目库不可用。` }
+    return { kind: "error", text: `${action}需要桌面版（Windows / Linux）或 Android 应用；当前在浏览器里运行，本地项目库不可用。` }
   }
   return { kind: "error", text: `${action}失败：${result.detail}` }
 }

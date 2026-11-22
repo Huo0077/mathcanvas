@@ -317,28 +317,69 @@ pub fn active_provider_profile(app: tauri::AppHandle) -> Result<Option<String>, 
  * 跑探测，会写下一份永远匹配不上任何东西的证据。
  */
 #[tauri::command]
-pub fn provider_check(app: tauri::AppHandle, profile_id: String, profile_revision: u32) -> Result<ProviderHealth, String> {
-    let profile = {
-        let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
-        let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
-        store.get(&profile_id).ok_or_else(|| format!("no provider profile with id {profile_id}"))?
-    };
-    let secrets = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
-    // 取消句柄按 `probe-<profile>` 取：用户点了停止之后这一发也能被打断
-    //（探针在真网络下可能等很久，而"停不下来"是最难受的一种）。
-    let cancel = {
-        let proxy = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
-        let session = proxy.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
-        session.as_ref().map(|handle| handle.cancel_handle(&format!("probe-{profile_id}"))).unwrap_or_default()
-    };
+pub async fn provider_check(app: tauri::AppHandle, profile_id: String, profile_revision: u32) -> Result<ProviderHealth, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let profile = {
+            let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+            let store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+            store.get(&profile_id).ok_or_else(|| format!("no provider profile with id {profile_id}"))?
+        };
+        if profile.revision != profile_revision {
+            return Err(
+                providers::adapter::ProviderError::RevisionMismatch {
+                    expected: profile_revision,
+                    actual: profile.revision,
+                }
+                .to_json()
+                .to_string(),
+            );
+        }
+        let secrets = app.try_state::<SecretStoreState>().ok_or("the secret store is not initialised")?;
+        // 取消句柄按 `probe-<profile>` 取：用户点了停止之后这一发也能被打断
+        //（探针在真网络下可能等很久，而"停不下来"是最难受的一种）。
+        let cancel = {
+            let proxy = app.try_state::<ProxyState>().ok_or("the proxy is not initialised")?;
+            let session = proxy.session.lock().map_err(|_| "the proxy state is poisoned".to_string())?;
+            session.as_ref().map(|handle| handle.cancel_handle(&format!("probe-{profile_id}"))).unwrap_or_default()
+        };
 
-    let transport = providers::adapter::HttpTransport::new();
-    let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
-    let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
-    providers::capability::check(&secrets.0, &transport, &mut *store, profile, profile_revision, cancel.as_ref())
-        // 与 `provider_run` 同一套口径：失败**带分类**（`failure` / `retryable`）到前端，
-        // 而不是一句话。前端从文本里重新猜分类是一次必然会漏的判断。
-        .map_err(|error| error.to_json().to_string())
+        // 网络探测期间不持有 ProfileStoreState 锁，避免在移动端慢网下阻塞其它配置查询。
+        let transport = providers::adapter::HttpTransport::new();
+        let started = std::time::Instant::now();
+        let report = providers::capability::Probe::new(&secrets.0, &transport, profile, cancel.as_ref())
+            .run()
+            .map_err(|error| error.to_json().to_string())?;
+        let latency = started.elapsed().as_millis() as u64;
+        let health = report.to_health(Some(latency));
+
+        let state = app.try_state::<ProfileStoreState>().ok_or("the provider store is not initialised")?;
+        let mut store = state.store.lock().map_err(|_| "the provider store is poisoned".to_string())?;
+        // 再次核对修订号，防止探测期间配置已被编辑而写入过期证据。
+        if let Some(current) = store.get(&profile_id) {
+            if current.revision != profile_revision {
+                return Err(
+                    providers::adapter::ProviderError::RevisionMismatch {
+                        expected: profile_revision,
+                        actual: current.revision,
+                    }
+                    .to_json()
+                    .to_string(),
+                );
+            }
+        }
+        store
+            .mark_health(&profile_id, health.clone())
+            .map_err(|detail| {
+                providers::adapter::ProviderError::SecretStore {
+                    detail: format!("the capability evidence could not be saved: {detail}"),
+                }
+                .to_json()
+                .to_string()
+            })?;
+        Ok(health)
+    })
+    .await
+    .map_err(|_| "能力探测线程意外终止".to_string())?
 }
 
 /// **自动获取该接口下的可用模型列表**。

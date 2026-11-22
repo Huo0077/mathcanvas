@@ -166,9 +166,7 @@
   .app-shell { --rail-width: 48px; }
   .app-shell > .app-rail { padding-inline: 3px; }
   .clean-header { padding-inline: 12px; gap: 8px; }
-  .clean-header-actions .command-search { width: 32px; }
-  .clean-header-actions .command-search input { width: 32px; padding: 4px; }
-  .clean-header-actions .command-search-shortcut { display: none; }
+  .clean-header-actions .command-search { display: none; }
   .clean-primary-tools { padding-left: 0; border: 0; }
   .clean-toolbar-end { margin-left: 0; }
   .agent-workspace .agent-empty-samples { grid-template-columns: 1fr; }
@@ -276,6 +274,9 @@ html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, 
 html {
   scroll-padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
+body {
+  overscroll-behavior-y: contain;
+}
 .app-shell {
   min-height: 100dvh;
   padding-top: env(safe-area-inset-top, 0px);
@@ -287,6 +288,85 @@ html {
 .settings-page {
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
+.agent-stage-leading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.agent-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.agent-mobile-menu,
+.agent-mobile-new,
+.agent-mobile-backdrop,
+.workbench-mobile-backdrop {
+  display: none;
+}
+@media (max-width: 800px) {
+  .app-shell .agent-workspace {
+    position: relative;
+  }
+  .agent-mobile-menu,
+  .agent-mobile-new {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 11px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-panel);
+    color: var(--color-ink);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .agent-mobile-new {
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent-strong);
+  }
+  .agent-mobile-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgb(15 23 42 / 34%);
+    cursor: pointer;
+  }
+  .agent-workspace[data-mobile-sidebar-open="true"] .agent-sidebar {
+    display: grid;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 25;
+    width: min(296px, 84vw);
+    height: 100%;
+    grid-template-rows: auto minmax(0, 1fr);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 0;
+    box-shadow: 12px 0 32px rgb(15 23 42 / 20%);
+  }
+  .agent-workspace[data-mobile-sidebar-open="true"] .agent-conversations {
+    display: grid;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .agent-workspace[data-mobile-sidebar-open="true"] .agent-conversation-open {
+    min-width: 0;
+  }
+  .agent-workspace .agent-stage-head {
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
 @media (pointer: coarse) {
   :root { --target-size: 44px; }
   .clean-button,
@@ -296,6 +376,9 @@ html {
   .three-camera-controls button,
   .canvas-viewport-controls button,
   .agent-workspace .agent-send,
+  .agent-mobile-menu,
+  .agent-mobile-new,
+  .agent-workspace .agent-back,
   .app-rail .app-rail-button {
     min-block-size: var(--target-size);
     min-inline-size: var(--target-size);
@@ -309,8 +392,57 @@ html {
   }
 }
 @media (max-width: 680px) {
+  .app-shell .app-module > .workbench {
+    --status-bar-height: 40px;
+  }
+  .app-shell .app-module > .workbench > .status-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 40px;
+    padding: 4px 10px;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .app-shell .status-bar-dock-toggles {
+    display: none;
+  }
+  .workbench-mobile-backdrop {
+    display: block;
+    position: absolute;
+    inset: 44px 0 var(--status-bar-height) 0;
+    z-index: 4;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgb(15 23 42 / 24%);
+  }
+  .app-shell .app-module > .workbench > .panel {
+    bottom: var(--status-bar-height);
+  }
+  .app-shell .app-module > .workbench > .copilot-drawer {
+    display: none;
+  }
+  .app-shell .app-module > .workbench[data-copilot-open="true"] > .copilot-drawer {
+    display: flex;
+    position: absolute;
+    inset: 44px 0 var(--status-bar-height) 0;
+    z-index: 15;
+    width: 100%;
+    border-left: 0;
+    box-shadow: 0 -4px 20px rgb(15 23 42 / 14%);
+  }
+  .app-shell .clean-workspaces {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .app-shell .clean-toolbar {
+    gap: 6px;
+    padding: 6px 10px;
+  }
   .app-shell .agent-workspace .agent-stage-composer {
-    padding: 12px max(12px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    padding: 10px max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
   }
   .app-shell .agent-candidate-preview {
     flex: 0 0 34dvh;

@@ -61,9 +61,27 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
   const deleteConversation = useAgentStore((state) => state.deleteConversation)
   const sendPrompt = useAgentStore((state) => state.sendPrompt)
   const [draft, setDraft] = useState("")
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   /** 已经发起过运行的那条用户消息：StrictMode 的二次挂载不能让同一轮跑两遍。 */
   const startedRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return
+    const handleAndroidBack = (event: Event) => {
+      event.preventDefault()
+      setMobileSidebarOpen(false)
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileSidebarOpen(false)
+    }
+    window.addEventListener("mathcanvas:android-back", handleAndroidBack)
+    window.addEventListener("keydown", handleEscape)
+    return () => {
+      window.removeEventListener("mathcanvas:android-back", handleAndroidBack)
+      window.removeEventListener("keydown", handleEscape)
+    }
+  }, [mobileSidebarOpen])
 
   const pendingMessage = pendingReplyId
     ? conversations.flatMap((conversation) => conversation.messages).find((message) => message.id === pendingReplyId)
@@ -89,21 +107,51 @@ export function AgentWorkspace({ onBackToWorkspace, onRun, onConfirm, onDiscard,
     globalThis.requestAnimationFrame(() => { scrollRef.current?.scrollTo?.({ top: scrollRef.current.scrollHeight }) })
   }, [pendingMessage?.trace?.length, pendingMessage?.draft, pendingMessage?.commit, pendingMessage?.failure])
 
-  return <div className="agent-workspace">
+  const handleSelectConversation = (id: string) => {
+    selectConversation(id)
+    setMobileSidebarOpen(false)
+  }
+
+  const handleCreateConversation = () => {
+    createConversation()
+    setMobileSidebarOpen(false)
+  }
+
+  return <div className="agent-workspace" data-mobile-sidebar-open={mobileSidebarOpen ? "true" : "false"}>
+    {mobileSidebarOpen && (
+      <button
+        type="button"
+        className="agent-mobile-backdrop"
+        aria-label="关闭对话列表"
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+    )}
     <AgentConversationSidebar
       conversations={conversations}
       activeId={activeConversation?.id ?? activeConversationId}
-      onSelect={selectConversation}
-      onCreate={createConversation}
+      onSelect={handleSelectConversation}
+      onCreate={handleCreateConversation}
       onDelete={deleteConversation}
     />
     <div className="agent-stage">
       <header className="agent-stage-head">
-        <div className="agent-stage-title">
-          <h1>{activeConversation?.title ?? "新对话"}</h1>
-          <p>{isGenerating ? "正在运行…" : "Agent 工作区 · 对话式作图"}</p>
+        <div className="agent-stage-leading">
+          <button
+            type="button"
+            className="agent-mobile-menu"
+            aria-label="对话列表"
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => setMobileSidebarOpen((open) => !open)}
+          >
+            对话 ({conversations.length})
+          </button>
+          <div className="agent-stage-title">
+            <h1>{activeConversation?.title ?? "新对话"}</h1>
+            <p>{isGenerating ? "正在运行…" : "Agent 工作区 · 对话式作图"}</p>
+          </div>
         </div>
         <div className="agent-stage-actions">
+          <button type="button" className="agent-mobile-new" onClick={handleCreateConversation}>＋ 新对话</button>
           <button type="button" className="agent-back" onClick={onBackToWorkspace}>返回画布</button>
         </div>
       </header>

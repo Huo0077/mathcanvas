@@ -24,6 +24,7 @@ fn crash_log_path() -> PathBuf {
 }
 
 pub fn append_crash_log(kind: &str, message: &str) {
+    log::error!("[MathCanvas][{kind}] {message}");
     let path = crash_log_path();
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
