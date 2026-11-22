@@ -775,7 +775,12 @@ function consolidateSolidScaffolding(
       }
     }
 
-    // 2. Rebind face points on redundant standalone faces contained inside a polyhedron face
+    // 2. Rebind face points on redundant standalone faces duplicating an exact polyhedron face
+    // Only drop when both polygons share the exact same vertex set so valid sub-faces (e.g. △AEF ⊂ ABCD) are preserved.
+    const isExactFaceMatch = (verts: readonly Vector3[], solidVerts: readonly Vector3[]): boolean =>
+      verts.length === solidVerts.length &&
+      verts.every((v) => solidVerts.some((sv) => distanceVector3(v, sv) <= 1e-2)) &&
+      solidVerts.every((sv) => verts.some((v) => distanceVector3(sv, v) <= 1e-2))
     const faceAliasesToDrop = new Map<string, { targetFace: (typeof solidFaces)[number]; faceActionKey: string; faceIdx: number }>()
     for (let i = 0; i < working.length; i += 1) {
       const act = working[i]!
@@ -784,7 +789,7 @@ function consolidateSolidScaffolding(
       const faceAlias = typeof inp.alias === "string" ? inp.alias : null
       const verts = Array.isArray(inp.vertices) ? inp.vertices : []
       if (!faceAlias || verts.length < 3) continue
-      const hostFaceMatch = solidFaces.find((sf) => verts.every((v) => distanceVector3(sf.fh.evaluate(sf.fh.closestParameter(v)), v) <= 1e-2))
+      const hostFaceMatch = solidFaces.find((sf) => isExactFaceMatch(verts, sf.verts))
       if (hostFaceMatch) {
         faceAliasesToDrop.set(faceAlias, { targetFace: hostFaceMatch, faceActionKey: act.actionKey, faceIdx: i })
       }

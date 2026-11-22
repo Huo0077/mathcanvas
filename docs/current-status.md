@@ -1,5 +1,10 @@
 # MathCanvas 当前状态
 
+## 2026-11-22 —— MathCanvas v5.1.2（修复 Agent 作图后关键点/线/面在图元框缺失与实体面内子面误删）
+
+> **2026-11-22 Android v5.1.2 修复与发布基线**：
+> - 修复 Agent 完成作图后图元框缺失关键点、线、面的 4 处根因：（1）[App.tsx](../apps/web/src/App.tsx) 与 [AlgebraView.tsx](../apps/web/src/components/AlgebraView.tsx) 接入隔离草稿预览分组（`.object-draft-row` + `预览 N` 徽标），提交前即可在图元框查看全部关键图元且不破坏 `.object-row` 隔离契约；（2）Agent 构造的多面体与含命名顶点的独立/折叠面默认展开显示全部顶点/棱/面，手工模板实体与旧夹具保持折叠；（3）[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `consolidateSolidScaffolding` 改为仅在两面顶点集完全一致时去重，避免误删底面/侧面内的合法构造子面；（4）[GraphicsView.tsx](../apps/web/src/components/GraphicsView.tsx) 扩展 2D 草稿预览自动取景覆盖圆/圆锥曲线/线段/交点（详见 [v5.1.2 发布说明](release/v5.1.2.md)）。
+
 ## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构：底部导航 + 悬浮胶囊 + 圆角 Bottom Sheet）
 
 > **2026-11-22 Android v5.1.1 移动 UI 全面重构基线**：
@@ -237,7 +242,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-22；产品版本：v5.1.1（持续更新升级中）；产品代码基线：v5.1.1-android-ui-redesign。
+最后更新：2026-11-22；产品版本：v5.1.2（持续更新升级中）；产品代码基线：v5.1.2-agent-primitives-visibility。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

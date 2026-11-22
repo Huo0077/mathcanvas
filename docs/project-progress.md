@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-22 —— MathCanvas v5.1.2（修复 Agent 作图后图元框关键点线面缺失与发布）
+
+- **根因排查与修复**：针对“Agent 完成作图后关键点线面不能在图元框完整显示”问题，修复 [App.tsx](../apps/web/src/App.tsx) 与 [AlgebraView.tsx](../apps/web/src/components/AlgebraView.tsx)（草稿预览态以 `.object-draft-row` 实时渲染全部预览点/棱/面 + Agent 构造多面体及命名折叠面默认展开）、[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts)（`consolidateSolidScaffolding` 仅精确顶点集匹配时去重，保留实体面内子面）及 [GraphicsView.tsx](../apps/web/src/components/GraphicsView.tsx)（2D 草稿自动取景纳入圆/圆锥曲线/线段/交点）。全仓 `typecheck`、ESLint、`test:docs`、单元测试 181/181（含新增 `AlgebraView` 展开/预览隔离与 `dsActionTools` 子面保留用例）及 Playwright E2E 72/72（含 `agent-solid-four-cases` 预览与提交后关键点/棱/面可见性断言）全部通过，打包发布 Android `v5.1.2`。
+
 ## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构与发布）
 
 - **移动端 UI 去冗重构（`<= 680px`）**：参考 Material Design 3 与 GeoGebra/Freeform 移动画布实践，改造 [ModuleRail.tsx](../apps/web/src/components/ModuleRail.tsx)（底部导航栏 + `aria-current="page"`）、[AppChrome.tsx](../apps/web/src/components/AppChrome.tsx)（单行滑动工具条 + 菜单遮罩 Bottom Sheet）、[EngineeringWorkbench.tsx](../apps/web/src/components/EngineeringWorkbench.tsx)（移动端默认收起双栏 + Android 返回键/遮罩关闭）与 [workspace-layout.css](../apps/web/src/styles/workspace-layout.css)（毛玻璃悬浮胶囊、圆角 Bottom Sheet、隐藏移动端冗余状态栏与重复头栏、Agent 底部贴边输入栏）。组件单测 22/22、移动端+桌面 Playwright E2E 18/18、全仓 `typecheck`/`lint`/`test:docs` 及 `390×844` / Android 16 实机截屏目视验收全部通过，发布 `v5.1.1`。

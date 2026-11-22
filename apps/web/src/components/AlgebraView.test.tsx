@@ -117,4 +117,85 @@ describe("algebra view spatial tree", () => {
     expect(screen.queryByRole("button", { name: /子对象/ })).toBeNull()
     expect(screen.getByText("点 1")).toBeTruthy()
   })
+
+  it("expands Agent-built non-template polyhedrons by default so key vertices, edges and faces stay visible", () => {
+    const pyramid: Polyhedron3Primitive = {
+      id: "solid-pyr",
+      type: "polyhedron3",
+      vertexIds: ["solid-pyr:v0", "solid-pyr:v1", "solid-pyr:v2", "solid-pyr:v3"],
+      edgeIds: ["solid-pyr:e0"],
+      faceIds: ["solid-pyr:f0"],
+      label: "四棱锥 P-ABC",
+      construction: {
+        kind: "fromPoints",
+        sourceIds: ["solid-pyr:v0", "solid-pyr:v1", "solid-pyr:v2", "solid-pyr:v3"]
+      }
+    }
+    const agentScene: PrimitiveSpec[] = [
+      pyramid,
+      { id: "solid-pyr:v0", type: "point3", position: { x: 0, y: 0, z: 2 }, label: "P" },
+      { id: "solid-pyr:v1", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" },
+      { id: "solid-pyr:v2", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" },
+      { id: "solid-pyr:v3", type: "point3", position: { x: 0, y: 2, z: 0 }, label: "C" },
+      { id: "solid-pyr:e0", type: "edge3", pointIds: ["solid-pyr:v0", "solid-pyr:v1"], label: "PA" },
+      { id: "solid-pyr:f0", type: "face3", pointIds: ["solid-pyr:v0", "solid-pyr:v1", "solid-pyr:v2"], label: "面 PAB" },
+      { id: "point3-E", type: "point3", position: { x: 1, y: 0, z: 1 }, label: "E" }
+    ]
+
+    render(<AlgebraView primitives={agentScene} workspace="geometry3d" selectedIds={[]} onSelect={() => {}} onToggle={() => {}} />)
+
+    expect(screen.getByText("P")).toBeTruthy()
+    expect(screen.getByText("A")).toBeTruthy()
+    expect(screen.getByText("PA")).toBeTruthy()
+    expect(screen.getByText("面 PAB")).toBeTruthy()
+    expect(screen.getByText("E")).toBeTruthy()
+  })
+
+  it("displays AI draft preview primitives in .object-draft-row without breaking committed .object-row isolation", () => {
+    const onSelect = vi.fn()
+    const draftScene: PrimitiveSpec[] = [
+      {
+        id: "solid-draft",
+        type: "polyhedron3",
+        vertexIds: ["solid-draft:v0", "solid-draft:v1", "solid-draft:v2", "solid-draft:v3"],
+        edgeIds: ["solid-draft:e0"],
+        faceIds: ["solid-draft:f0"],
+        label: "P-ABC",
+        construction: {
+          kind: "fromPoints",
+          sourceIds: ["solid-draft:v0", "solid-draft:v1", "solid-draft:v2", "solid-draft:v3"]
+        }
+      },
+      { id: "solid-draft:v0", type: "point3", position: { x: 0, y: 0, z: 2 }, label: "P" },
+      { id: "solid-draft:v1", type: "point3", position: { x: 0, y: 0, z: 0 }, label: "A" },
+      { id: "solid-draft:v2", type: "point3", position: { x: 2, y: 0, z: 0 }, label: "B" },
+      { id: "solid-draft:v3", type: "point3", position: { x: 0, y: 2, z: 0 }, label: "C" },
+      { id: "solid-draft:e0", type: "edge3", pointIds: ["solid-draft:v0", "solid-draft:v1"], label: "PA" },
+      { id: "solid-draft:f0", type: "face3", pointIds: ["solid-draft:v0", "solid-draft:v1", "solid-draft:v2"], label: "面 PAB" }
+    ]
+
+    const { container } = render(
+      <AlgebraView
+        primitives={[]}
+        draftPreview={true}
+        draftPrimitives={draftScene}
+        draftWorkspace="geometry3d"
+        workspace="geometry3d"
+        selectedIds={[]}
+        onSelect={onSelect}
+        onToggle={() => {}}
+      />
+    )
+
+    // Committed rows remain 0 before confirmation (isolation contract), while all preview primitives are visible.
+    expect(container.querySelectorAll(".algebra-panel .object-row")).toHaveLength(0)
+    expect(container.querySelectorAll(".algebra-panel .object-draft-row").length).toBeGreaterThanOrEqual(7)
+    expect(screen.getByText("预览 7")).toBeTruthy()
+    expect(screen.getByText("P")).toBeTruthy()
+    expect(screen.getByText("PA")).toBeTruthy()
+    expect(screen.getByText("面 PAB")).toBeTruthy()
+
+    fireEvent.click(screen.getByText("P"))
+    expect(onSelect).toHaveBeenCalledWith("solid-draft:v0", false)
+  })
 })

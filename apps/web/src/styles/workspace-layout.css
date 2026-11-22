@@ -268,6 +268,17 @@
 html[data-font-scale="comfortable"] { font-size: 15.5px; }
 html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, html[data-reduced-motion="true"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 .object-draft-badge { padding: 1px 6px; border-radius: 999px; background: var(--color-accent-soft); color: var(--color-accent); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.object-group-draft { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--color-border); }
+.object-draft-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-block-size: 40px; padding: 5px 8px 5px 10px; border: 1px dashed color-mix(in srgb, var(--color-accent) 28%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--color-accent-soft) 45%, transparent); cursor: pointer; }
+.object-draft-row.object-row-child { min-block-size: 36px; }
+.object-draft-row:hover { background: var(--color-accent-soft); }
+.object-draft-row.selected { border-style: solid; border-color: var(--color-accent); background: var(--color-accent-soft); }
+.object-draft-row .object-name { font-size: var(--text-sm); }
+button.object-draft-row.measurement-row { width: 100%; flex-direction: column; align-items: flex-start; text-align: left; }
+@media (pointer: coarse) {
+  .object-draft-row { min-block-size: 44px; }
+  .object-draft-row.object-row-child { min-block-size: 40px; }
+}
 .object-group-standalone-faces { border-top: 1px solid var(--color-border); padding-top: 8px; margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) {
   .clean-chrome *, .clean-header *, .app-rail * { animation: none; transition: none; }

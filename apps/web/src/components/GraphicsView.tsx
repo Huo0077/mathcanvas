@@ -111,12 +111,74 @@ function pointsAttribute(points: Coordinate[], viewport: Viewport): string {
   return points.map((point) => `${worldToSvg({ x: point.x, y: 0 }, viewport).x},${worldToSvg({ x: 0, y: point.y }, viewport).y}`).join(" ")
 }
 
+function collectPlanarViewportPoints(primitives: readonly PrimitiveSpec[]): Coordinate[] {
+  const points: Coordinate[] = []
+  const push = (x: number, y: number) => {
+    if (Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y })
+  }
+  for (const primitive of primitives) {
+    if (primitive.visible === false) continue
+    switch (primitive.type) {
+      case "point":
+      case "intersection":
+      case "lineCircleIntersection":
+      case "circleIntersection":
+      case "curveIntersection":
+        push(primitive.x, primitive.y)
+        break
+      case "intersectionSet":
+        primitive.points.forEach((pt) => push(pt.x, pt.y))
+        break
+      case "segment":
+      case "line":
+      case "ray":
+      case "tangent":
+      case "normal":
+      case "secant":
+        push(primitive.a.x, primitive.a.y)
+        push(primitive.b.x, primitive.b.y)
+        break
+      case "polyline":
+        primitive.points.forEach((pt) => push(pt.x, pt.y))
+        break
+      case "circle":
+      case "arc":
+        push(primitive.center.x - primitive.radius, primitive.center.y)
+        push(primitive.center.x + primitive.radius, primitive.center.y)
+        push(primitive.center.x, primitive.center.y - primitive.radius)
+        push(primitive.center.x, primitive.center.y + primitive.radius)
+        break
+      case "ellipse": {
+        const span = Math.max(primitive.radiusX, primitive.radiusY)
+        push(primitive.center.x - span, primitive.center.y - span)
+        push(primitive.center.x + span, primitive.center.y + span)
+        break
+      }
+      case "hyperbola": {
+        const span = Math.max(primitive.radiusX, primitive.radiusY) * 2
+        push(primitive.center.x - span, primitive.center.y - span)
+        push(primitive.center.x + span, primitive.center.y + span)
+        break
+      }
+      case "parabola": {
+        const span = Math.max(2, Math.abs(primitive.focalParameter ?? 1) * 2)
+        push(primitive.vertex.x - span, primitive.vertex.y - span)
+        push(primitive.vertex.x + span, primitive.vertex.y + span)
+        break
+      }
+      default:
+        break
+    }
+  }
+  return points
+}
+
 export function GraphicsView({ document, ghostCandidate = null, selectedIds, creationMode, onSelect, onCanvasClick, onCanvasDoubleClick, onCancelCreation, onCanvasContextMenu, onDoubleClickPrimitive, onBoxSelect, onDragEnd, onCreateIntersection, onPointerCoordinate, creationStep = null }: GraphicsViewProps) {
   const workspace = document.workspace
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
   useEffect(() => {
     if (!ghostCandidate) return
-    const points = ghostCandidate.primitives.flatMap((primitive) => primitive.type === "point" && primitive.label ? [{ x: primitive.x, y: primitive.y }] : [])
+    const points = collectPlanarViewportPoints(ghostCandidate.primitives)
     setViewport(fitViewportToPoints(points))
   }, [ghostCandidate])
   const [dragStart, setDragStart] = useState<Coordinate | null>(null)

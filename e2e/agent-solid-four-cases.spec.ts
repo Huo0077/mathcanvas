@@ -98,3 +98,31 @@ test("Case 4 修订版：出草稿 → 一次提交 → 一步撤销", async ({ 
   await page.keyboard.press("Control+z")
   await expect.poll(() => objectRows(page).count()).toBe(0)
 })
+
+test("Case 1 预览与提交后图元框均直接展示全部关键点、棱与面（无需手动展开）", async ({ page }) => {
+  await send(page, CASE_1)
+  await expectDraft(page)
+
+  // 返回画布查看预览：主文档 .object-row 保持 0，但 .object-draft-row 立即显示全部关键点/棱/面
+  await page.getByRole("button", { name: "返回画布" }).click()
+  const algebra = page.locator(".algebra-panel")
+  await expect(objectRows(page)).toHaveCount(0)
+  const draftRows = algebra.locator(".object-draft-row")
+  await expect.poll(() => draftRows.count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(15)
+  for (const label of ["P", "A", "B", "C", "D", "E"]) {
+    await expect(draftRows.filter({ hasText: new RegExp(`^${label}(?:（|$)`) }).first()).toBeVisible()
+  }
+  await expect(algebra.locator("[data-draft-preview-group]").getByText("顶点", { exact: true })).toBeVisible()
+  await expect(algebra.locator("[data-draft-preview-group]").getByText("棱", { exact: true })).toBeVisible()
+  await expect(algebra.locator("[data-draft-preview-group]").getByText("面", { exact: true })).toBeVisible()
+
+  // 确认写入后：多面体默认保持展开，全部关键顶点、棱、面直接可见
+  await page.getByRole("button", { name: /确认写入/ }).click()
+  await expect.poll(() => objectRows(page).count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(15)
+  for (const label of ["P", "A", "B", "C", "D", "E"]) {
+    await expect(objectRows(page).filter({ hasText: new RegExp(`^${label}(?:（|$)`) }).first()).toBeVisible()
+  }
+  await expect(algebra.getByText("顶点", { exact: true })).toBeVisible()
+  await expect(algebra.getByText("棱", { exact: true })).toBeVisible()
+  await expect(algebra.getByText("面", { exact: true })).toBeVisible()
+})

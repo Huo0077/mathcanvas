@@ -8,6 +8,16 @@
 
 
 
+## 2026-11-22 —— MathCanvas v5.1.2（修复 Agent 作图后图元框关键点/线/面缺失与构造子面误删）
+
+- **Agent 预览与提交后图元框完整展示关键点、线、面**（[App.tsx](apps/web/src/App.tsx)、[AlgebraView.tsx](apps/web/src/components/AlgebraView.tsx)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：
+  - 接入 `activeGhostDraft.candidate` 至 `AlgebraView`，在预览态以独立 `.object-draft-row` 分组与 `预览 N` 徽标实时展示全部待确认点、棱与面（点击可直接在属性栏查看，且保持主文档 `.object-row` 提交前隔离契约）；
+  - 恢复 Agent / 题目构造的多面体（含命名顶点或伴随辅助图元）与含命名顶点的独立/折叠面默认展开，直接列出全部**顶点 / 棱 / 面**，避免关键点线面藏在折叠行中；手工模板实体与旧夹具维持原有折叠行为。
+- **保留实体面内合法构造子面与完善 2D 自动取景**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[GraphicsView.tsx](apps/web/src/components/GraphicsView.tsx)）：
+  - 修复 `consolidateSolidScaffolding` 仅检查顶点落在某多面体面上就误删合法子面（如底面 `ABCD` 内的 `△AEF`）的问题，改为仅当两面顶点集完全一致时去重；
+  - 扩展 2D `ghostCandidate` 自动取景采集范围至线段/直线/射线/圆/圆锥曲线/折线与交点。
+- **发布版本升级至 `v5.1.2`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[v5.1.2.md](docs/release/v5.1.2.md)）。
+
 ## 2026-11-22 —— MathCanvas v5.1.1（Android 移动端 UI 全面重构：画布优先 · Material Design 3 排版）
 
 - **底部导航栏与画布优先信息架构**（[ModuleRail.tsx](apps/web/src/components/ModuleRail.tsx)、[AppChrome.tsx](apps/web/src/components/AppChrome.tsx)、[EngineeringWorkbench.tsx](apps/web/src/components/EngineeringWorkbench.tsx)、[workspace-layout.css](apps/web/src/styles/workspace-layout.css)）：

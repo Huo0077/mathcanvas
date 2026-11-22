@@ -1577,4 +1577,32 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
       ])
     }
   })
+
+  it("preserves constructed sub-faces lying inside a solid face while still deduplicating exact full-face copies", () => {
+    const session = createDsActionSession({
+      workspace: "geometry3d",
+      baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "在四棱锥 P-ABCD 中，底面 ABCD 为正方形，E 为 AB 中点，F 为 BC 中点，画出三角形面 AEF。"
+    })
+    for (const [id, x, y, z] of [["P", 0, 0, 2], ["A", 0, 0, 0], ["B", 2, 0, 0], ["C", 2, 2, 0], ["D", 0, 2, 0]] as const) {
+      expect(session.execute("construct_point", { id, x, y, z }).ok).toBe(true)
+    }
+    expect(session.execute("construct_solid", { id: "pyramid", vertexNames: ["P", "A", "B", "C", "D"] }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "E", x: 1, y: 0, z: 0 }).ok).toBe(true)
+    expect(session.execute("construct_point", { id: "F", x: 2, y: 1, z: 0 }).ok).toBe(true)
+    // Valid sub-face lying strictly inside base ABCD
+    expect(session.execute("construct_face", { id: "face_AEF", label: "面 AEF", vertexNames: ["A", "E", "F"] }).ok).toBe(true)
+    // Exact duplicate of the existing base face ABCD
+    expect(session.execute("construct_face", { id: "face_ABCD_dup", label: "面 ABCD", vertexNames: ["A", "B", "C", "D"] }).ok).toBe(true)
+
+    const fin = session.execute("finish_candidate", { goal: "四棱锥 P-ABCD 与底面内子三角形面 AEF" })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated?.plan.kind).toBe("plan")
+    if (fin.terminated?.plan.kind === "plan") {
+      const faceActions = fin.terminated.plan.actions.filter((a) => a.actionId === "solid.create_face")
+      const aliases = faceActions.map((a) => (a.inputs as { alias?: string }).alias)
+      expect(aliases).toContain("face_AEF")
+      expect(aliases).not.toContain("face_ABCD_dup")
+    }
+  })
 })

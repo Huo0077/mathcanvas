@@ -875,7 +875,7 @@ export function App() {
       ? "2D 绘图：在视口中创建对象，新对象写入当前图层。"
       : "工程制图根据当前文档的 3D 点、棱和面显示四个视图。")
 
-  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} parameters={document.parameters} workspace={document.workspace} draftPreview={false} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onSelectMany={setSelectedIds} onClearSelection={() => setSelectedIds([])} onDeleteSelected={deleteSelected} onToggle={(id, visible) => { apply({ op: "toggleVisibility", id, visible }) }} onSetParameter={(id, patch) => {
+  const algebraPanel = <AlgebraView id="algebra-dock" className={`panel${mobileDock === "objects" ? " is-mobile-open" : ""}`} primitives={document.primitives} measurements={document.measurements} parameters={document.parameters} workspace={document.workspace} draftPreview={activeGhostDraft !== null} draftPrimitives={activeGhostDraft?.candidate.primitives} draftMeasurements={activeGhostDraft?.candidate.measurements} draftWorkspace={activeGhostDraft?.candidate.workspace} selectedIds={selectedIds} filter={filterQuery} onSelect={updateSelection} onSelectMany={setSelectedIds} onClearSelection={() => setSelectedIds([])} onDeleteSelected={deleteSelected} onToggle={(id, visible) => { apply({ op: "toggleVisibility", id, visible }) }} onSetParameter={(id, patch) => {
     // 一次提交值 + 元数据。未给出的字段沿用现值（清空输入框暂时等于不改，见文档的已知限制）。
     const current = document.parameters[id]
     if (!current) return
