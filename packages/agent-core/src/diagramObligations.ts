@@ -2142,14 +2142,41 @@ export const DIAGRAM_OBLIGATION_MATCHERS: readonly Matcher[] = [
     }
   },
   {
-    /** 正四面体：`正四面体 ABCD`（可选 `棱长为 N`）。 */
-    pattern: new RegExp(`(?:棱长为\\s*${RADICAL_NUMBER_SOURCE}\\s*的\\s*)?正四面体\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])(?:\\s*[，,]?\\s*的?\\s*棱长\\s*(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE})?`, "g"),
+    /** 正四面体：`正四面体 ABCD` / `正四面体 P-ABC`（可选 `棱长为 N` 或 `各棱长均相等的` 前后修饰）。 */
+    pattern: new RegExp(
+      `(?:(?:各|所有)?棱长(?:均|都)?(?:相等|(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE})\\s*的\\s*)?正四面体\\s*(${POINT_NAME})\\s*[-−–]?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])(?:\\s*[，,]?\\s*(?:其|各|所有)?的?\\s*棱长\\s*(?:均|都)?(?:相等|(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE}))?`,
+      "g"
+    ),
     read: (m) => {
       const pts = [m[2]!, m[3]!, m[4]!, m[5]!].map(canonicalPointName) as [string, string, string, string]
       if (new Set(pts).size !== 4) return null
       const [a, b, c, d] = pts
       const pairs: [string, string][] = [[a, b], [a, c], [a, d], [b, c], [b, d], [c, d]]
       const edge = m[1] !== undefined ? radicalValue(m[1]) : m[6] !== undefined ? radicalValue(m[6]) : null
+      if (edge !== null) {
+        return pairs.map((pair) => ({ kind: "fixedLength" as const, targets: pair, value: edge }))
+      }
+      return [
+        { kind: "equalLength" as const, targets: [a, b, a, c] },
+        { kind: "equalLength" as const, targets: [a, c, a, d] },
+        { kind: "equalLength" as const, targets: [a, d, b, c] },
+        { kind: "equalLength" as const, targets: [b, c, b, d] },
+        { kind: "equalLength" as const, targets: [b, d, c, d] }
+      ]
+    }
+  },
+  {
+    /** 各棱长均相等 / 均等于定值的四面体或三棱锥：`各棱长均相等的四面体 PABC`、`所有棱长都为 2 的三棱锥 P-ABC`。 */
+    pattern: new RegExp(
+      `(?:各|所有)?棱长(?:均|都)?(?:相等|(?:为|是|=)\\s*${RADICAL_NUMBER_SOURCE})\\s*的\\s*(?:四面体|三棱锥)\\s*(${POINT_NAME})\\s*[-−–]?\\s*(${POINT_NAME})(${POINT_NAME})(${POINT_NAME})(?![A-Z0-9′'₁₂₃₄₅₆₇₈₉])`,
+      "g"
+    ),
+    read: (m) => {
+      const pts = [m[2]!, m[3]!, m[4]!, m[5]!].map(canonicalPointName) as [string, string, string, string]
+      if (new Set(pts).size !== 4) return null
+      const [a, b, c, d] = pts
+      const pairs: [string, string][] = [[a, b], [a, c], [a, d], [b, c], [b, d], [c, d]]
+      const edge = m[1] !== undefined ? radicalValue(m[1]) : null
       if (edge !== null) {
         return pairs.map((pair) => ({ kind: "fixedLength" as const, targets: pair, value: edge }))
       }

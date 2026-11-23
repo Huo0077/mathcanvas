@@ -3061,9 +3061,13 @@ export function createDsActionSession(options: {
           actionId: "solid.create_sphere", actionKey, factIds: [],
           inputs: { alias: id, label, center, radius }
         } as unknown as DraftAction, id, undefined, sliceTarget)
-        if (staged.ok && !sliceTarget.branchId && !sliceTarget.stateId) {
-          const curSnap = speculative.snapshot()
-          upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+        if (staged.ok) {
+          writeP3(id, center, sliceTarget.branchId)
+          writeP3(label, center, sliceTarget.branchId)
+          if (!sliceTarget.branchId && !sliceTarget.stateId) {
+            const curSnap = speculative.snapshot()
+            upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+          }
         }
         return staged.ok ? { ...staged, measurement: { center, radius, exactInsphere: false } } : staged
       }
@@ -3082,8 +3086,12 @@ export function createDsActionSession(options: {
     })
     const doc = compiled.ok && compiled.draftDocument ? compiled.draftDocument : null
     const primMap = new Map((doc?.primitives ?? []).map((p) => [p.id, p]))
+    const hostEntityId = compiled.aliases[resolvedAlias]
     const hostLabel = asString(hostAction.inputs.label) ?? resolvedAlias
-    const hostPrim = doc?.primitives.find((p) => p.label === hostLabel || p.id === resolvedAlias || p.type === "polyhedron3")
+    const hostPrim =
+      (hostEntityId ? primMap.get(hostEntityId) : undefined)
+      ?? doc?.primitives.find((p) => p.type === "polyhedron3" && (p.label === hostLabel || p.id === resolvedAlias))
+      ?? doc?.primitives.find((p) => p.label === hostLabel || p.id === resolvedAlias)
     const topo = hostPrim ? solidTopology3(hostPrim, primMap) : null
     if (!topo) {
       return failBlocked(actionName, "missing_host", "cannot extract boundary of staged host solid for insphere")
@@ -3096,9 +3104,13 @@ export function createDsActionSession(options: {
         factIds: [],
         inputs: { alias: id, label, solidId: { scope: "draft", alias: resolvedAlias } }
       } as unknown as DraftAction, id, undefined, sliceTarget)
-      if (staged.ok && !sliceTarget.branchId && !sliceTarget.stateId) {
-        const curSnap = speculative.snapshot()
-        upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+      if (staged.ok) {
+        writeP3(id, exact.value.center, sliceTarget.branchId)
+        writeP3(label, exact.value.center, sliceTarget.branchId)
+        if (!sliceTarget.branchId && !sliceTarget.stateId) {
+          const curSnap = speculative.snapshot()
+          upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+        }
       }
       return staged.ok ? { ...staged, measurement: { center: exact.value.center, radius: exact.value.radius, exactInsphere: true } } : staged
     }
@@ -3112,9 +3124,13 @@ export function createDsActionSession(options: {
       factIds: [],
       inputs: { alias: id, label, center: maxBall.center, radius: maxBall.radius }
     } as unknown as DraftAction, id, undefined, sliceTarget)
-    if (staged.ok && !sliceTarget.branchId && !sliceTarget.stateId) {
-      const curSnap = speculative.snapshot()
-      upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+    if (staged.ok) {
+      writeP3(id, maxBall.center, sliceTarget.branchId)
+      writeP3(label, maxBall.center, sliceTarget.branchId)
+      if (!sliceTarget.branchId && !sliceTarget.stateId) {
+        const curSnap = speculative.snapshot()
+        upsertSlice({ scopeId: sliceTarget.scopeId, candidateHash: curSnap.candidateHash, actions: [...curSnap.actions] })
+      }
     }
     return staged.ok ? { ...staged, measurement: { center: maxBall.center, radius: maxBall.radius, exactInsphere: false } } : staged
   }
@@ -3249,6 +3265,12 @@ export function createDsActionSession(options: {
           return failRepairable(name, "missing_required_parameter", "query_measurement requires metric (distance | position)")
         }
         const resolveSphereCenter3 = (targetId: string, branchOpt?: string): Vector3 | undefined => {
+          const curDoc = getTargetCanvas(branchOpt).currentDocument()
+          for (const prim of curDoc.primitives) {
+            if (prim.type === "sphere" && (prim.label === targetId || prim.id === targetId)) {
+              return prim.center
+            }
+          }
           const actions = getTargetCanvas(branchOpt).snapshot().actions
           for (let i = actions.length - 1; i >= 0; i -= 1) {
             const act = actions[i]!
@@ -4297,6 +4319,21 @@ export function createDsActionSession(options: {
         const p3A = fromId ? readP3(fromId, branchId) : undefined
         const p3B = toId ? readP3(toId, branchId) : undefined
         if (p3A && p3B && fromId && toId) {
+          const ensurePoint3Materialized = (ptName: string, pos: Vector3): void => {
+            const curDoc = getTargetCanvas(branchId).currentDocument()
+            const hasPoint3 = curDoc.primitives.some((p) => p.type === "point3" && p.label === ptName)
+            if (!hasPoint3) {
+              stageDraftAction(
+                name,
+                { actionId: "solid.create_point", actionKey: `ds-act-${stepSeq}-pt-${ptName}`, factIds: [], inputs: { alias: `pt_${ptName}_${stepSeq}`, label: ptName, position: pos } } as DraftAction,
+                undefined,
+                undefined,
+                sliceTarget
+              )
+            }
+          }
+          ensurePoint3Materialized(fromId, p3A)
+          ensurePoint3Materialized(toId, p3B)
           return stageDraftAction(
             name,
             { actionId: "solid.create_segment", actionKey: `ds-act-${stepSeq}`, factIds: [], inputs: { alias: id, label, vertexNames: [fromId, toId] } } as DraftAction,

@@ -1162,4 +1162,20 @@ describe("T03 — 角等式链与类型/单位边界", () => {
       expect(parsed.unverified, bare).toEqual([])
     }
   })
+
+  it("parses '各棱长均相等的正四面体 PABC' and equivalent regular tetrahedron phrasings without unverified residuals", () => {
+    const userPrompt = "14.在各棱长均相等的正四面体 PABC 中,取棱PC一点T,使PT=2TC,连接TA,TB,三棱锥T-PAB 的内切球的球心为M,三棱锥T-ABC的内切球的球心为N,则平面MAB 与平面NAB 的夹角的正弦值是"
+    const parsed = parseDiagramObligations(userPrompt)
+    expect(parsed.unverified).toEqual([])
+    expect(parsed.givens.filter((g) => g.kind === "equalLength").length).toBeGreaterThanOrEqual(5)
+    expect(parsed.givens.some((g) => g.kind === "segmentRatio" && g.targets.includes("T"))).toBe(true)
+
+    const alt1 = parseDiagramObligations("在棱长均相等的正四面体 P-ABC 中，M 是 AB 中点")
+    expect(alt1.unverified).toEqual([])
+    expect(alt1.givens.filter((g) => g.kind === "equalLength").length).toBeGreaterThanOrEqual(5)
+
+    const alt2 = parseDiagramObligations("在各棱长均为 2 的三棱锥 P-ABC 中，取 PC 中点 T")
+    expect(alt2.unverified).toEqual([])
+    expect(alt2.givens.filter((g) => g.kind === "fixedLength" && g.value === 2).length).toBe(6)
+  })
 })

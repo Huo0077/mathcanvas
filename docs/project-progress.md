@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-23 —— MathCanvas v5.2.1（修复非轴对齐四面体内切球求解、多实体宿主定位与正四面体题设解析）
+
+- **用户真题现场根因排查与闭环修复**：从桌面端本地 `projects.db` 定位「正四面体 `PABC` + `PT=2TC` + 子三棱锥 `T-PAB`/`T-ABC` 内切球心 `M`/`N` 与平面 `MAB`/`NAB` 夹角正弦值」作图失败的 3 处连锁缺陷：（1）重构 [solidDerived.ts](../packages/geometry-kernel/src/solidDerived.ts) `solveInsphere3` 为精确 $4\times 4$ 面平面线性求解；（2）修复 [dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `executeHostInsphere` 多实体宿主定位（`compiled.aliases`）、球心点注册 `points3`、`resolveSphereCenter3` 与 `construct_segment` 自动点物化；（3）扩展 [diagramObligations.ts](../packages/agent-core/src/diagramObligations.ts) 解析「各棱长均相等的正四面体 / 四面体 / 三棱锥」。新增回归单测验证全链路 `diagramVerification.status === "passed"` 与 $\sin\angle(MAB, NAB) = \sqrt{3}/3$，核心 6 套件 272/272、全仓 `typecheck`、`test:docs` 及本地 Windows Tauri 打包全部通过，统一升级发布 **`v5.2.1`**。
+
 ## 2026-11-22 —— MathCanvas v5.2.0（Windows & Android 整合发布、GitHub 仓库整理装饰与官网门户更新）
 
 - **仓库整理装饰与社区文件补齐**：重绘 [README.md](../README.md)（居中 Logo、徽章栏、Mermaid 系统架构图、v5.2.0 全平台下载矩阵），补齐 `.github/ISSUE_TEMPLATE/`（Bug / 数学题构图 / 功能建议）、`.github/PULL_REQUEST_TEMPLATE.md`、[CONTRIBUTING.md](../CONTRIBUTING.md)、[SECURITY.md](../SECURITY.md) 与 `package.json` 元数据。

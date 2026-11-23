@@ -152,6 +152,67 @@ describe("insphere", () => {
     expect(result.value.radius).toBeCloseTo(1, 9)
   })
 
+  it("solves the exact insphere of asymmetric sub-tetrahedra T-PAB and T-ABC and rotated cubes", () => {
+    // 正四面体 PABC（棱长 3）中取 PC 上一点 T 使 PT = 2TC，验证两个非轴对齐子四面体均有精确内切球，
+    // 且两内切球心 M、N 构成的二面角 M-AB-N 正弦值为 √3/3。
+    const P = { x: 0, y: 0, z: Math.sqrt(6) }
+    const A = { x: -1.5, y: -Math.sqrt(3) / 2, z: 0 }
+    const B = { x: 1.5, y: -Math.sqrt(3) / 2, z: 0 }
+    const C = { x: 0, y: Math.sqrt(3), z: 0 }
+    const T = {
+      x: (P.x + 2 * C.x) / 3,
+      y: (P.y + 2 * C.y) / 3,
+      z: (P.z + 2 * C.z) / 3
+    }
+    const tetFaces = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
+    const subTPAB = solveInsphere3({ vertices: [T, P, A, B], faces: tetFaces })
+    const subTABC = solveInsphere3({ vertices: [T, A, B, C], faces: tetFaces })
+
+    expect(subTPAB.status).toBe("exact")
+    expect(subTABC.status).toBe("exact")
+    if (subTPAB.status !== "exact" || subTABC.status !== "exact") return
+
+    expect(subTPAB.value.radius).toBeGreaterThan(0.1)
+    expect(subTABC.value.radius).toBeGreaterThan(0.1)
+
+    // 验证平面 MAB 与平面 NAB 的夹角正弦值 = √3 / 3（等于正四面体二面角一半的正弦）。
+    const M = subTPAB.value.center
+    const N = subTABC.value.center
+    const ab = { x: B.x - A.x, y: B.y - A.y, z: B.z - A.z }
+    const am = { x: M.x - A.x, y: M.y - A.y, z: M.z - A.z }
+    const an = { x: N.x - A.x, y: N.y - A.y, z: N.z - A.z }
+    const cross = (u: typeof ab, v: typeof ab) => ({
+      x: u.y * v.z - u.z * v.y,
+      y: u.z * v.x - u.x * v.z,
+      z: u.x * v.y - u.y * v.x
+    })
+    const norm = (v: typeof ab) => Math.hypot(v.x, v.y, v.z)
+    const n1 = cross(ab, am)
+    const n2 = cross(ab, an)
+    const cosAngle = Math.abs(n1.x * n2.x + n1.y * n2.y + n1.z * n2.z) / (norm(n1) * norm(n2))
+    const sinAngle = Math.sqrt(Math.max(0, 1 - cosAngle * cosAngle))
+    expect(sinAngle).toBeCloseTo(Math.sqrt(3) / 3, 9)
+
+    // 任意旋转后的正方体也应精确求出内切球（验证不依赖坐标轴对齐）。
+    const angle = 0.7
+    const cosA = Math.cos(angle)
+    const sinA = Math.sin(angle)
+    const rotatedCube: SolidBoundary = {
+      vertices: cube.vertices.map((v) => ({
+        x: v.x * cosA - v.y * sinA + 2.5,
+        y: v.x * sinA + v.y * cosA - 1.2,
+        z: v.z + 3.1
+      })),
+      faces: cube.faces
+    }
+    const rotRes = solveInsphere3(rotatedCube)
+    expect(rotRes.status).toBe("exact")
+    if (rotRes.status === "exact") {
+      closeTo(rotRes.value.center, { x: 2.5, y: -1.2, z: 3.1 })
+      expect(rotRes.value.radius).toBeCloseTo(1, 9)
+    }
+  })
+
   it("rejects degenerate input", () => {
     const flat: SolidBoundary = { vertices: [{ x: -1, y: -1, z: 0 }, { x: 1, y: -1, z: 0 }, { x: 1, y: 1, z: 0 }, { x: -1, y: 1, z: 0 }], faces: [[0, 1, 2, 3]] }
     expect(solveInsphere3(flat).status).toBe("degenerate")

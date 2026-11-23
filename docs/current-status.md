@@ -1,5 +1,11 @@
 # MathCanvas 当前状态
 
+## 2026-11-23 —— MathCanvas v5.2.1（精确内切球线性求解、多实体球心联动与正四面体题设解析修复）
+
+> **2026-11-23 全平台整合 v5.2.1 基线**：
+> - 修复立体几何多子多面体内切球作图失败的 3 处根因：（1）[solidDerived.ts](../packages/geometry-kernel/src/solidDerived.ts) `solveInsphere3` 升级为共面去重 + $\mathbb{R}^4$ 线性无关面平面 $4\times 4$ 精确线性求解，彻底消除非轴对齐四面体（如 `T-PAB`、`T-ABC`）脊线卡死误报无内切球；（2）[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `executeHostInsphere` 改为按 `compiled.aliases` 精准定位多实体宿主、自动注册球心到 `points3`，并打通 `resolveSphereCenter3` 与 `construct_segment` 球心点自动物化连线；（3）[diagramObligations.ts](../packages/agent-core/src/diagramObligations.ts) 补全「各棱长均相等的正四面体 / 四面体 / 三棱锥」及 `P-ABC` 解析，消除 `source_coverage_incomplete` 误拦截（详见 [v5.2.1 发布说明](release/v5.2.1.md)）。
+> - 已同步升级仓库配置、[README.md](../README.md) 与官网门户 [`portal/`](../portal/index.html) 至 **`v5.2.1`**，并推送 `v5.2.1` 标签触发 Windows x64 + Android ARM64 全平台整合发布。
+
 ## 2026-11-22 —— MathCanvas v5.2.0（Windows & Android 全平台整合正式版、GitHub 仓库装饰与官网升级）
 
 > **2026-11-22 全平台整合 v5.2.0 基线**：
@@ -248,7 +254,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-22；产品版本：v5.2.0（持续更新升级中）；产品代码基线：v5.2.0-unified-win-android-release。
+最后更新：2026-11-23；产品版本：v5.2.1（持续更新升级中）；产品代码基线：v5.2.1-insphere-multisolid-fix。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

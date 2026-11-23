@@ -1605,4 +1605,87 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
       expect(aliases).not.toContain("face_ABCD_dup")
     }
   })
+
+  it("solves distinct exact inspheres M and N for sub-tetrahedra T-PAB and T-ABC, materializes centers for faces/segments, and passes full verification", () => {
+    const prompt = "14.在各棱长均相等的正四面体 PABC 中,取棱PC一点T,使PT=2TC,连接TA,TB,三棱锥T-PAB 的内切球的球心为M,三棱锥T-ABC的内切球的球心为N,则平面MAB 与平面NAB 的夹角的正弦值是"
+    const session = createDsActionSession({
+      workspace: "geometry3d",
+      baseDocument: createEmptyDocument("geometry3d"),
+      problemText: prompt
+    })
+
+    expect(session.execute("construct_solid", {
+      id: "PABC",
+      kind: "tetrahedron",
+      edgeLength: 3,
+      vertexNames: ["P", "A", "B", "C"]
+    }).ok).toBe(true)
+
+    expect(session.execute("construct_point", {
+      id: "T",
+      from: "P",
+      to: "C",
+      ratio: 2 / 3
+    }).ok).toBe(true)
+
+    expect(session.execute("construct_segment", { id: "TA", from: "T", to: "A" }).ok).toBe(true)
+    expect(session.execute("construct_segment", { id: "TB", from: "T", to: "B" }).ok).toBe(true)
+
+    expect(session.execute("construct_solid", {
+      id: "T_PAB",
+      kind: "tetrahedron",
+      vertexNames: ["T", "P", "A", "B"]
+    }).ok).toBe(true)
+
+    expect(session.execute("construct_solid", {
+      id: "T_ABC",
+      kind: "tetrahedron",
+      vertexNames: ["T", "A", "B", "C"]
+    }).ok).toBe(true)
+
+    const insM = session.execute("construct_circumsphere", {
+      id: "M",
+      solidId: "T_PAB",
+      mode: "insphere"
+    })
+    expect(insM.ok).toBe(true)
+    expect(insM.measurement?.exactInsphere).toBe(true)
+
+    const insN = session.execute("construct_circumsphere", {
+      id: "N",
+      solidId: "T_ABC",
+      mode: "insphere"
+    })
+    expect(insN.ok).toBe(true)
+    expect(insN.measurement?.exactInsphere).toBe(true)
+
+    // Must target distinct sub-tetrahedra rather than falling back to the first polyhedron PABC
+    const distMN = session.execute("query_measurement", { metric: "distance", targets: ["M", "N"] })
+    expect(distMN.ok).toBe(true)
+    expect(Number(distMN.measurement?.value)).toBeGreaterThan(0.2)
+
+    // Sphere centers M and N can immediately be used in segments and planes MAB / NAB
+    expect(session.execute("construct_segment", { id: "MN", from: "M", to: "N" }).ok).toBe(true)
+    expect(session.execute("construct_face", { id: "face_MAB", label: "平面 MAB", vertexNames: ["M", "A", "B"] }).ok).toBe(true)
+    expect(session.execute("construct_face", { id: "face_NAB", label: "平面 NAB", vertexNames: ["N", "A", "B"] }).ok).toBe(true)
+
+    const fin = session.execute("finish_candidate", {
+      goal: "正四面体 PABC 中分点 T 及子三棱锥 T-PAB、T-ABC 内切球心 M、N 与平面 MAB、NAB"
+    })
+    expect(fin.ok).toBe(true)
+    expect(fin.terminated?.plan.kind).toBe("plan")
+    if (fin.terminated?.plan.kind === "plan") {
+      const compiled = compilePlan(fin.terminated.plan, {
+        document: createEmptyDocument("geometry3d"),
+        conversationId: "reg-pabc-insphere",
+        documentGeneration: 0,
+        workspace: "geometry3d",
+        prompt
+      })
+      expect(compiled.ok).toBe(true)
+      expect(compiled.diagramVerification?.status).toBe("passed")
+      expect(compiled.diagramVerification?.checks.length).toBeGreaterThanOrEqual(6)
+      expect(compiled.diagramVerification?.checks.every((c) => c.status === "passed")).toBe(true)
+    }
+  })
 })

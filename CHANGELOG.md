@@ -8,6 +8,16 @@
 
 
 
+## 2026-11-23 —— MathCanvas v5.2.1（修复非轴对齐四面体内切球求解、多实体宿主定位与正四面体题设解析）
+
+- **内核内切球精确线性求解**（[solidDerived.ts](packages/geometry-kernel/src/solidDerived.ts)、[solidDerived.test.ts](packages/geometry-kernel/src/solidDerived.test.ts)）：
+  - 将 `solveInsphere3` 从沿 $\pm x/\pm y/\pm z$ 六轴步进搜索重构为共面去重 + $\mathbb{R}^4$ 贪心正交选取 4 个线性无关面平面方程的 $4\times 4$ 高斯消元精确求解，并对全部面校验内距与离散度；彻底修复非轴对齐子四面体（如 `T-PAB`、`T-ABC`）与旋转正方体误报「没有内切球」的缺陷。
+- **多实体内切球宿主定位与球心联动**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[dsActionTools.test.ts](apps/web/src/agent/dsActionTools.test.ts)）：
+  - 修复 `executeHostInsphere` 优先通过 `compiled.aliases[resolvedAlias]` 精确定位宿主，消除多实体场景下误匹配第一只 `polyhedron3` 的问题；内切球创建后同步将球心注册到 `points3`，并在 `resolveSphereCenter3` 与 `construct_segment` 中打通球心距离测量、自动点物化连线与构面。
+- **正四面体常见题设表述解析**（[diagramObligations.ts](packages/agent-core/src/diagramObligations.ts)、[diagramObligations.test.ts](packages/agent-core/src/diagramObligations.test.ts)）：
+  - 扩展正则吸收「各棱长均相等的 / 棱长均相等的 / 各棱长均为 N 的」修饰语、连字符写法 `P-ABC` 以及「各棱长均相等的四面体 / 三棱锥」，消除 `source_coverage_incomplete` 误拦截。
+- **全平台版本与发布同步至 `v5.2.1`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[README.md](README.md)、[portal/index.html](portal/index.html)、[v5.2.1.md](docs/release/v5.2.1.md)）。
+
 ## 2026-11-22 —— MathCanvas v5.2.0（Windows & Android 全平台整合正式版、开源仓库整理装饰与官网门户升级）
 
 - **全平台整合发布流水线（Windows x64 + Android ARM64）**（[.github/workflows/android-release.yml](.github/workflows/android-release.yml)、[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[v5.2.0.md](docs/release/v5.2.0.md)）：

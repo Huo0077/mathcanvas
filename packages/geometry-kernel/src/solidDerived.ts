@@ -250,17 +250,59 @@ function planeValue(point: Vector3, plane: Plane3): number {
 }
 
 /**
+ * 从一组单位外法向面平面里挑 4 个在 R⁴ 中线性无关的方程 `[nx, ny, nz, 1] · (x, y, z, r) = -c`。
+ *
+ * 对任意封闭有界、体积非零的凸多面体，由 Minkowski 定理（Σ S_i n_i = 0 且 S_i > 0）可证
+ * 矩阵 `[n_i, 1]` 恒满秩为 4：每步贪心挑正交残差最大的行，既保持 O(m) 复杂度，又给出条件数最好的 4×4 方程组。
+ */
+function independentPlaneTetrad(planes: readonly Plane3[]): [Plane3, Plane3, Plane3, Plane3] | null {
+  const basis: number[][] = []
+  const chosen: Plane3[] = []
+  const rowOf = (plane: Plane3): [number, number, number, number] => [plane.normal.x, plane.normal.y, plane.normal.z, 1]
+  const residualOf = (row: readonly number[]): number[] => {
+    const rem = [...row]
+    for (const kept of basis) {
+      let projection = 0
+      for (let k = 0; k < 4; k += 1) projection += kept[k]! * rem[k]!
+      for (let k = 0; k < 4; k += 1) rem[k]! -= projection * kept[k]!
+    }
+    return rem
+  }
+  for (let step = 0; step < 4; step += 1) {
+    let bestPlane: Plane3 | null = null
+    let bestRem: number[] | null = null
+    let bestNorm = 0
+    for (const plane of planes) {
+      const rem = residualOf(rowOf(plane))
+      const norm = Math.hypot(rem[0]!, rem[1]!, rem[2]!, rem[3]!)
+      if (norm > bestNorm) {
+        bestNorm = norm
+        bestPlane = plane
+        bestRem = rem
+      }
+    }
+    if (!bestPlane || !bestRem || bestNorm <= 1e-9) return null
+    basis.push(bestRem.map((value) => value / bestNorm))
+    chosen.push(bestPlane)
+  }
+  return chosen as [Plane3, Plane3, Plane3, Plane3]
+}
+
+/**
  * **内切球**。
  *
- * - 四面体：解"到四个面等距"的方程（四面体的内心 = 各项点对面面积的加权平均，规格 §3.4）。
- * - 一般凸多面体：求**最大内接球** —— 也就是让"到所有面的最小距离"最大的那个点。
- *   这里用一条确定性的迭代（形心起步，逐步朝最紧的那个面的反方向移动并收缩步长）。
+ * 与 `solveCircumsphere3` 严格对偶：
+ * 若多面体存在与全部面相切的内切球 `(x, y, z, r)`，则每个单位外法向面平面都满足线性方程
+ * `n_i · x + r = -c_i`。
  *
- * 收敛之后按面距的**离散度**决定状态：所有面的距离一致 → `exact`（贴住了每一个面）；
- * 不一致 → `undefined`（最大内接球贴不上某些面，那只实体**没有**内切球）；
- * 连一个"球都放不下"（半径退化为 0）→ 同样是 `undefined`。
- * 这里不产出 `approximate`：规格 §3.4 对一般凸多面体的口径就是"不满足时返回 `undefined`"
- * （详见函数末尾的注释）。"存在内切球"与"只有最大内接球"因此是两个可区分的答案。
+ * - 四面体与一般凸多面体走同一条精确线性通道：先对共面面片去重，挑 4 个在 R⁴ 中线性无关的面方程
+ *   用高斯消元解出唯一候选 `(center, radius)`，再对**全部**面验证内距与离散度；
+ * - 所有面内距一致且 `radius > tolerance` → `exact`（任意非退化四面体、旋转正方体、正棱锥等均达机器精度）；
+ * - 任一面距离不一致 → `undefined`（如实报告"该实体没有内切球"，不拿最大内接球冒充内切球，符合规格 §3.4）；
+ * - 平面不足或法向退化 → `degenerate`。
+ *
+ * 历史根因：旧版用沿 ±x/±y/±z 六轴步进的坐标搜索优化非光滑函数 `min_i d_i(x)`，
+ * 在非轴对齐的四面体（如 `T-PAB`、`T-ABC`）上会永久卡在等距脊线上，误报"没有内切球"。
  */
 export function solveInsphere3(boundary: SolidBoundary): DerivedSolidResult<Sphere3> {
   const problem = boundaryProblem(boundary)
@@ -286,53 +328,41 @@ export function solveInsphere3(boundary: SolidBoundary): DerivedSolidResult<Sphe
     const faceCentre = points.reduce((sum, point) => ({ x: sum.x + point.x / points.length, y: sum.y + point.y / points.length, z: sum.z + point.z / points.length }), { x: 0, y: 0, z: 0 })
     const outward = subtractVector3(faceCentre, centroid)
     const flipped = dotVector3(plane.normal, outward) < 0
-    planes.push(flipped ? { normal: { x: -plane.normal.x, y: -plane.normal.y, z: -plane.normal.z }, constant: -plane.constant } : plane)
+    const oriented = flipped ? { normal: { x: -plane.normal.x, y: -plane.normal.y, z: -plane.normal.z }, constant: -plane.constant } : plane
+    const duplicate = planes.some(
+      (existing) => dotVector3(existing.normal, oriented.normal) > 1 - 1e-9 && Math.abs(existing.constant - oriented.constant) <= tolerance
+    )
+    if (!duplicate) planes.push(oriented)
   }
   if (planes.length < 4) return { status: "degenerate", reason: "实体的面不足以定义内切球（至少需要四个面）。" }
 
-  /** 面距：内部为正（内部在朝外法向的负半空间里）。 */
-  const distancesAt = (point: Vector3) => planes.map((plane) => -planeValue(point, plane))
-  const minDistance = (point: Vector3) => Math.min(...distancesAt(point))
+  const tetrad = independentPlaneTetrad(planes)
+  if (!tetrad) return { status: "degenerate", reason: "实体的面法向线性相关，无法定义唯一内切球。" }
 
-  // 形心起步：它是凸体的内点，保证迭代点始终在内部附近。
-  let current = centroid
-  let best = minDistance(current)
-  if (!Number.isFinite(best)) return { status: "degenerate", reason: "实体面距无法计算（法向退化）。" }
-  let step = scale
-  while (step > tolerance) {
-    let improved = false
-    for (const direction of [
-      { x: 1, y: 0, z: 0 }, { x: -1, y: 0, z: 0 },
-      { x: 0, y: 1, z: 0 }, { x: 0, y: -1, z: 0 },
-      { x: 0, y: 0, z: 1 }, { x: 0, y: 0, z: -1 }
-    ]) {
-      const candidate = { x: current.x + direction.x * step, y: current.y + direction.y * step, z: current.z + direction.z * step }
-      const value = minDistance(candidate)
-      if (Number.isFinite(value) && value > best) {
-        current = candidate
-        best = value
-        improved = true
-        break
-      }
-    }
-    if (!improved) step /= 2
+  const matrix = tetrad.map((plane) => [plane.normal.x, plane.normal.y, plane.normal.z, 1])
+  const rhs = tetrad.map((plane) => -plane.constant)
+  const solution = solveLinearSystem(matrix, rhs)
+  if (!solution || !solution.every(Number.isFinite)) {
+    return { status: "degenerate", reason: "实体面距方程组奇异，无法定义唯一内切球。" }
   }
 
-  if (!Number.isFinite(best) || best <= tolerance) return { status: "undefined", reason: "该实体放不下任何内切球（最大内接球半径退化为零）。" }
+  const candidate: Vector3 = { x: solution[0]!, y: solution[1]!, z: solution[2]! }
+  const distances = planes.map((plane) => -planeValue(candidate, plane))
+  if (distances.some((value) => !Number.isFinite(value))) {
+    return { status: "degenerate", reason: "实体面距无法计算（法向退化）。" }
+  }
 
-  /**
-   * **规格 §3.4 的口径**："一般凸多面体外接球 / 内切球……**不满足时返回 `undefined`**"。
-   *
-   * 所以"最大内接球只碰到一部分面"（四面体那种"到四个面等距"的条件不成立）必须报 `undefined`，
-   * 不能报 `approximate` —— 后者的含义是"这是一个带残差的数值解"，而这里的事实是
-   * "这只实体根本没有内切球"。把两者合并，调用方就没有办法如实告诉用户这句话，
-   * 而这正是 `DerivedSolidResult` 把四个状态分开的全部理由（规格 §3.1）。
-   *
-   * 判据用**最大面距**：四个面等距时它就是半径；只要有一个面明显更远，这只球就贴不上它。
-   */
-  const distances = distancesAt(current)
-  const spread = Math.max(...distances) - Math.min(...distances)
-  if (spread <= tolerance * Math.max(1, scale)) return { status: "exact", value: { center: current, radius: best } }
+  const minDist = Math.min(...distances)
+  const maxDist = Math.max(...distances)
+  const spread = maxDist - minDist
+  const radius = (minDist + maxDist) / 2
+
+  if (minDist > tolerance && spread <= tolerance * Math.max(1, scale)) {
+    return { status: "exact", value: { center: candidate, radius } }
+  }
+  if (maxDist <= tolerance) {
+    return { status: "undefined", reason: "该实体放不下任何内切球（最大内接球半径退化为零）。" }
+  }
   return { status: "undefined", reason: `该实体没有内切球：最大内接球到各面的距离不一致（最大面距 ${spread.toPrecision(3)}）。` }
 }
 
