@@ -4,9 +4,9 @@
 
 # MathCanvas
 
-**面向中学数学教学、立体几何探究与工程绘图的 AI 原生交互式数学工作台**
+**面向中学与大学全学段数学教学、立体几何探究、高等数学可视化与工程绘图的 AI 原生交互式数学工作台**
 
-[![Release](https://img.shields.io/github/v/release/Huo0077/mathcanvas?style=flat-square&logo=github&color=2563eb&label=Release)](https://github.com/Huo0077/mathcanvas/releases/tag/v5.3.0)
+[![Release](https://img.shields.io/github/v/release/Huo0077/mathcanvas?style=flat-square&logo=github&color=2563eb&label=Release)](https://github.com/Huo0077/mathcanvas/releases/tag/v6.0.0)
 [![CI](https://img.shields.io/github/actions/workflow/status/Huo0077/mathcanvas/ci.yml?branch=main&style=flat-square&logo=githubactions&label=CI)](https://github.com/Huo0077/mathcanvas/actions/workflows/ci.yml)
 [![Unified Release](https://img.shields.io/github/actions/workflow/status/Huo0077/mathcanvas/android-release.yml?style=flat-square&logo=tauri&label=Win%20%26%20Android%20Build)](https://github.com/Huo0077/mathcanvas/actions/workflows/android-release.yml)
 [![Stars](https://img.shields.io/github/stars/Huo0077/mathcanvas?style=flat-square&color=f59e0b)](https://github.com/Huo0077/mathcanvas/stargazers)
@@ -15,7 +15,7 @@
 ![Stack](https://img.shields.io/badge/Stack-React%20%C2%B7%20TypeScript%20%C2%B7%20Three.js%20%C2%B7%20Tauri%202%20%C2%B7%20Rust-1e293b?style=flat-square)
 
 <p>
-  <a href="#-全平台整合下载v530"><b>📥 下载整合版 v5.3.0</b></a>
+  <a href="#-全平台整合下载v600"><b>📥 下载整合版 v6.0.0</b></a>
   &nbsp;·&nbsp;
   <a href="#-界面展示">📸 界面展示</a>
   &nbsp;·&nbsp;
@@ -40,18 +40,18 @@
 
 ---
 
-## 📥 全平台整合下载（v5.3.0）
+## 📥 全平台整合下载（v6.0.0）
 
-**`v5.3.0`** 为 **Windows x64 + Android ARM64 全平台整合正式版**，所有安装包与 SHA-256 校验文件统一托管于 [GitHub Releases](https://github.com/Huo0077/mathcanvas/releases/tag/v5.3.0)：
+**`v6.0.0`** 为 **Windows x64 + Android ARM64 全平台整合正式版**，所有安装包与 SHA-256 校验文件统一托管于 [GitHub Releases](https://github.com/Huo0077/mathcanvas/releases/tag/v6.0.0)：
 
 | 平台 | 安装包类型 | 适用场景 | 直链下载 |
 | --- | --- | --- | --- |
-| **Windows x64** | **NSIS 标准安装程序**（推荐） | 日常使用，含开始菜单快捷方式与标准卸载 | [MathCanvas_5.3.0_x64-setup.exe](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/MathCanvas_5.3.0_x64-setup.exe) |
-| **Windows x64** | **绿色免安装便携版** | U 盘随身携带、机房免管理员权限即点即用 | [MathCanvas_5.3.0_x64.exe](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/MathCanvas_5.3.0_x64.exe) |
-| **Windows x64** | **MSI 安装包** | 学校机房域控批量分发 / 静默部署 | [MathCanvas_5.3.0_x64_en-US.msi](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/MathCanvas_5.3.0_x64_en-US.msi) |
-| **Android ARM64** | **正式签名 APK**（推荐） | Android 7.0+ 手机 / 平板，Material 3 触控重排 | [MathCanvas-5.3.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/MathCanvas-5.3.0-android-arm64.apk) |
+| **Windows x64** | **NSIS 标准安装程序**（推荐） | 日常使用，含开始菜单快捷方式与标准卸载 | [MathCanvas_6.0.0_x64-setup.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64-setup.exe) |
+| **Windows x64** | **绿色免安装便携版** | U 盘随身携带、机房免管理员权限即点即用 | [MathCanvas_6.0.0_x64.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64.exe) |
+| **Windows x64** | **MSI 安装包** | 学校机房域控批量分发 / 静默部署 | [MathCanvas_6.0.0_x64_en-US.msi](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64_en-US.msi) |
+| **Android ARM64** | **正式签名 APK**（推荐） | Android 7.0+ 手机 / 平板，Material 3 触控重排 | [MathCanvas-6.0.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas-6.0.0-android-arm64.apk) |
 
-- **校验文件**：[SHA256SUMS-windows.txt](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/SHA256SUMS-windows.txt) · [SHA256SUMS-android.txt](https://github.com/Huo0077/mathcanvas/releases/download/v5.3.0/SHA256SUMS-android.txt) · [查看全部历史 Releases](https://github.com/Huo0077/mathcanvas/releases)
+- **校验文件**：[SHA256SUMS-windows.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-windows.txt) · [SHA256SUMS-android.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-android.txt) · [查看全部历史 Releases](https://github.com/Huo0077/mathcanvas/releases)
 - **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及 GitHub Releases 直链下载，可直接部署至任意静态 Web 服务器）。
 
 ---
@@ -82,9 +82,10 @@
 - **预览态与提交后图元框全量可见**：Agent 完成作图后，图元框立即以独立「AI 预览图元」分组展示全部待落盘对象并支持点击检视属性；确认写入后多面体与命名折叠面默认展开，直接列出全部**顶点 / 棱 / 面**，且支持 `Ctrl+Z` 一步完整撤销。
 - **跨工作区自动路由与往期回溯**：平面解析几何、圆锥曲线切线、函数导数题与立体几何题自动路由到对应维度画布；「往期」面板随时回溯完整推理与上下文。
 
-### 2. 四大专业工作区
+### 2. 五大专业工作区
 - **平面几何（含函数与圆锥曲线）**：点、线、圆、圆弧、椭圆/双曲线/抛物线方程直出、渐近线与切圆自动推导、函数求导/切线/定积分区域，以及曲线轨道动点实时联动与全图元自动取景。
 - **立体几何（3D 实时交互）**：常用立体向导、点绑棱/面/实体、两线定面、单顶点拖拽与多面体自动三角化、透明面/隐藏边/法向量/旋转环/展开图双向联动，以及**二面角、线面角（含垂线/射影/直角标记）、空间直线夹角（含异面直线平移辅助线）** `sin` / `cos` 精确值一键复制。
+- **高等数学（10 大大学数学交互模块）**：一元极值/拐点/渐近线与 Gauss–Legendre 定积分、拉格朗日乘数法等高线相切与 2D↔3D 抬升联动、ODE 斜率场 RK45 与二维自治相平面稳定性、显式 3D 曲面鞍点与切平面、WebWorker 60fps 二维热传导/波动/泊松 PDE 仿真、Jet 自动微分泰勒与傅里叶轮盘合成、直角/极坐标二重积分与散度旋度探针、二阶矩阵同伦变换/特征值/SVD 及 6 大概率分布与中心极限定理抽样实验，全部直通 AI Agent 机器精度求解。
 - **工程制图（CAD）**：由 3D 文档一键自动投影生成标准四视图（主视/俯视/左视/轴测），支持图层管理、2D 工程标注及 SVG / DXF / PDF / 自包含 HTML 交互快照导出。
 - **Agent 与多模型服务设置**：内置 **13 家主流模型预设**（DeepSeek、OpenAI、Claude、Gemini、通义千问、智谱 GLM、Kimi、硅基流动、豆包、OpenRouter、Ollama、LM Studio 及自定义 OpenAI 兼容接口），支持一键「自动获取」可用模型列表与丰富的偏好设置。
 
@@ -216,7 +217,7 @@ CI / 发布流水线：
 
 ## 📚 文档与版本导航
 
-- **最新发布说明与版本信息**：最新版本标签为 **`v5.3.0`**（[发布说明](docs/release/v5.3.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
+- **最新发布说明与版本信息**：最新版本标签为 **`v6.0.0`**（[发布说明](docs/release/v6.0.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
 - **工程进度与技术文档**：
   - [当前状态（唯一实时状态入口）](docs/current-status.md)
   - [功能目录](docs/feature-catalog.md)

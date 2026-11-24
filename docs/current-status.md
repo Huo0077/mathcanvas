@@ -1,5 +1,12 @@
 # MathCanvas 当前状态
 
+## 2026-11-24 —— MathCanvas v6.0.0（全新「高等数学」十大交互可视化工作台与 AI Agent 大学数学精确求解大版本升级）
+
+> **2026-11-24 全平台整合 v6.0.0 基线**：
+> - 新增独立 **「高等数学」工作区（10 大交互实验模块）** 与 `@draw/geometry-kernel` 高数纯计算内核：（1）零 `eval` CSP 安全 RPN 字节码编译器与一阶/二阶符号偏导；（2）一元极值/尖点/拐点/渐近线与 Gauss–Legendre 定积分、拉格朗日乘数法等高线相切与三维 Newton–KKT 求解、ODE 斜率场 RK45 与二维自治相平面稳定性、显式 3D 曲面 Hessian 驻点/鞍点与切平面、WebWorker 60fps 二维热传导/波动/泊松 PDE 仿真、Jet 自动微分泰勒与傅里叶轮盘合成、直角/极坐标二重积分与散度旋度探针、$2\times 2$ 矩阵特征值/SVD 及 6 大概率分布与 CLT 抽样模拟（详见 [v6.0.0 发布说明](release/v6.0.0.md)）。
+> - 完成 **AI Agent 高数全链路精确解题与跨工作台联动**：在 [dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `query_measurement` 扩展 10 类高数精确内核求解器，新建 [higherMathPlan.ts](../packages/agent-core/src/solver/higherMathPlan.ts) 与 [calculusStore.ts](../apps/web/src/calculusStore.ts)（零拦截初高中几何基准题），修复 [draftStore.ts](../apps/web/src/agent/draftStore.ts) 高数草稿与初高中欧氏题设证书门禁隔离，并通过真实桌面壳 `deepseek-v4-flash` `ds_action` 10 道高数真题端到端实测 **`10 / 10`（100%）** 全过。
+> - 已同步升级仓库配置、[README.md](../README.md) 与官网门户 [`portal/`](../portal/index.html) 至 **`v6.0.0`**，推送 `v6.0.0` 标签触发 Windows x64 + Android ARM64 全平台整合发布。
+
 ## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量、3D 教学可视化与 Agent 查询支持）
 
 > **2026-11-24 全平台整合 v5.3.0 基线**：
@@ -260,7 +267,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-24；产品版本：v5.3.0（持续更新升级中）；产品代码基线：v5.3.0-line-plane-and-skew-angles。
+最后更新：2026-11-24；产品版本：v6.0.0（持续更新升级中）；产品代码基线：v6.0.0-university-higher-math-and-agent。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

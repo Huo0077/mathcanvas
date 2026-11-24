@@ -627,7 +627,18 @@ describe("real DS planar tool schema fidelity", () => {
     expect(tools.get("query_measurement")?.description).toMatch(/metric.*distance.*targets/i)
     expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
     expect(tools.get("query_measurement")?.parameters).toMatchObject({ required: ["metric"],
-      properties: { metric: { enum: ["distance", "position", "coordinates", "area", "line_plane_angle", "line_angle", "dihedral_angle"] }, targets: { type: "array" } } })
+      properties: {
+        metric: {
+          enum: [
+            "distance", "position", "coordinates", "area",
+            "line_plane_angle", "line_angle", "dihedral_angle",
+            "calculus_1d", "taylor_series", "fourier_series",
+            "lagrange_2d", "surface_3d", "ode_solve",
+            "double_integral", "div_curl", "matrix_2x2", "probability"
+          ]
+        },
+        targets: { type: "array" }
+      } })
   })
 })
 

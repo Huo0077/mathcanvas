@@ -24,9 +24,9 @@ import { DS_CONSTRUCTION_STRATEGIES, DS_INTENT_SCHEMA_VERSION, MAX_CONVERSATION_
  */
 
 /** 提示词版本。**改内容就要改它** —— 这是"模型当时看到的是哪一版"的唯一依据。 */
-export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v13"
+export const SYSTEM_PROMPT_VERSION = "mathcanvas.agent.prompt.v14"
 export const DS_INTENT_PROMPT_VERSION = "mathcanvas.ds_intent.prompt.v2"
-export const DS_ACTION_PROMPT_VERSION = "mathcanvas.ds_action.prompt.v2"
+export const DS_ACTION_PROMPT_VERSION = "mathcanvas.ds_action.prompt.v3"
 
 export type PromptIntentMode = "legacy_actions" | "ds_intent" | "ds_action"
 
@@ -271,6 +271,7 @@ function buildDsActionPolicyText(input: SystemPromptPolicyInput): string {
     "探索画布与主画布完全隔离：只有通过 `finish_candidate` 交由独立证书与用户确认后才能落盘。",
     "所有构造均遵循内核三态反馈：`accepted`（继续下一步）、`repairable`（按 `repairHint` 局部修复或回滚）、`blocked`（无解或缺失必要信息时调用 `request_clarification`）。",
     "**函数图像绘制**：纯绘制单变量函数图像（如 `y = 0.1x³ - 0.7x`、`f(x) = e^x - 2x`）直接调用 `construct_tangent({ id: \"f\", mode: \"graph\", expression: \"0.1*x^3 - 0.7*x\", domain: [-4, 4] })`；带切线时传 `x0` 生成曲线与切线。圆锥曲线（椭圆/双曲线/抛物线）传标准 `equation` 字符串或半轴/焦点参数，严禁把 `a²/b²` 当作 `radiusX/radiusY`。",
+    "**大学高等数学 / 线性代数 / 概率统计精确求解纪律**：遇到一元极值/最值/拐点/渐近线/定积分、泰勒/傅里叶级数、拉格朗日乘数条件极值、多元曲面极值/鞍点/切平面、常微分方程初值与相平面稳定性、二重积分（直角/极坐标）、向量场散度旋度、二阶矩阵特征值/SVD、或概率分布区间概率题时，**严禁心算或手猜根、积分、乘子与特征值**——必须先在独立只读轮调用 `query_measurement` 对应精确内核求解器（`calculus_1d` / `taylor_series` / `fourier_series` / `lagrange_2d` / `surface_3d` / `ode_solve` / `double_integral` / `div_curl` / `matrix_2x2` / `probability`）获取机器精度结果，随后构造对应可视化图元（如函数曲线 `construct_tangent(mode:\"graph\")`、驻点/极值点 `construct_point`、切线/渐近线/特征方向 `construct_line`、约束圆/椭圆 `construct_circle`/`construct_conic`、或三维驻点与切平面 `construct_face`），最后调用 `finish_candidate({ goal, answer })` 将完整分步精确解答写入 `answer`。",
     "**禁止手算立体顶点与手猜内切/外接球心**：构建立体优先传参数规格（`tetrahedron` 顶点顺序顶点在前 `[\"P\",\"A\",\"B\",\"C\"]`，`regular_pyramid`/`perpendicular_pyramid` 底面顶点在前、顶点在最后如 `[\"A\",\"B\",\"C\",\"D\",\"P\"]`）；外接球调用 `construct_circumsphere({ solidId })`；**内切球 / 最大球**直接调用 `construct_solid({ kind: \"sphere\", id: \"O\", inscribedIn: \"<solidId>\" })`（或 `construct_circumsphere({ solidId, mode: \"insphere\" })`），由内核精确解算内心与半径。",
     "**翻折与点名规范**：矩形/多边形翻折题先调 `construct_base({ shape: \"rectangle\", width, depth, vertexNames: [\"A\",\"B\",\"C\",\"D\"] })` 建折前底面，再调 `construct_fold_state({ vertexNames: [\"A\",\"B\",\"C\"], hinge: { from: \"A\", to: \"C\" }, apex: \"B\", apexAs: \"B′\", angle: 90 })` 沿折痕精确翻折（勿手算折后坐标）；所有几何顶点与面片点名必须为单个大写字母加至多两个撇或下标（如 `B′`、`D′`、`A₁`），严禁使用 `Df`、`B_new` 等多字母名称。",
     "For all equal-edge right triangular prisms with symbolic edge length a, prefer construct_equal_edge_triangular_prism({ id, displayScale, vertexNames }); displayScale is only a positive rendering scale, not a solved value for a. Follow with construct_circumsphere({solidId:id}) then finish_candidate. Do not guess a numeric edge length.",

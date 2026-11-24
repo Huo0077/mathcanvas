@@ -80,7 +80,7 @@ export function AppChrome({
   }
 
   return <div className="clean-chrome" ref={chromeRef}>
-    <WorkspaceHeader title={{ conics: "平面几何", geometry3d: "立体几何", cad: "工程图纸", calculus: "函数探索" }[activeWorkspace]}>
+    <WorkspaceHeader title={{ conics: "平面几何", geometry3d: "立体几何", cad: "工程图纸", calculus: "高等数学" }[activeWorkspace]}>
       <CommandSearch commands={searchableCommands} onRun={execute} />
       <button type="button" className="clean-button" data-menu-trigger aria-expanded={menu === "file"} onClick={() => toggleMenu("file")}>文件 <span aria-hidden="true">⌄</span></button>
       <button type="button" className="clean-button primary" aria-label="保存 .mgeo" onClick={onSave}>保存</button>
@@ -91,7 +91,7 @@ export function AppChrome({
           aria-pressed={activeWorkspace === workspace.id}
           onClick={() => { onWorkspaceChange(workspace.id); closeMenu() }}>{workspace.label}</button>)}
       </div>
-      <div className="clean-toolbar-tools">
+      {activeWorkspace !== "calculus" && <div className="clean-toolbar-tools">
         <div className="clean-primary-tools">
           {primary.map((command) => <button key={command.id} type="button" className="clean-icon-button"
             aria-label={command.label} title={command.prompt ?? command.label}
@@ -107,7 +107,7 @@ export function AppChrome({
           <button type="button" className="clean-icon-button" aria-label="撤销" title="撤销 (Ctrl+Z)" disabled={!canUndo} onClick={onUndo}>↶</button>
           <button type="button" className="clean-icon-button" aria-label="重做" title="重做 (Ctrl+Y)" disabled={!canRedo} onClick={onRedo}>↷</button>
         </div>
-      </div>
+      </div>}
     </div>
     {menu && <button type="button" className="clean-menu-backdrop" aria-label="关闭菜单" onClick={closeMenu} />}
     {menu && <div className="clean-command-menu" data-menu={menu} role="region" aria-label={menu === "file" ? "文件菜单" : "工具菜单"}>

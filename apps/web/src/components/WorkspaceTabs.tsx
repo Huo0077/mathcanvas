@@ -48,7 +48,8 @@ const tabs: { id: RibbonTabId | Workspace; label: string }[] = [
   // The visible name changed to 平面几何; the `conics` ID and `.mgeo` format stay untouched.
   { id: "conics", label: "平面几何" },
   { id: "geometry3d", label: "立体几何" },
-  { id: "cad", label: "工程制图" }
+  { id: "cad", label: "工程制图" },
+  { id: "calculus", label: "高等数学" }
 ]
 
 export function WorkspaceTabs({ activeWorkspace, activeTab, expanded, pinned, onWorkspaceChange, onTabChange, onExpandedChange, onPinnedChange, onOpen, onSave, onPackage, onUndo, onRedo, canUndo, canRedo, onSettings, searchableCommands, onCommand }: WorkspaceTabsProps) {

@@ -20,6 +20,7 @@ import type { DrawingViewPatch } from "./components/DrawingViewport"
 import { EngineeringDrawingView, type ProjectionSource } from "./components/EngineeringDrawingView"
 import { EngineeringInspector, type InspectorSource } from "./components/EngineeringInspector"
 import { EngineeringWorkbench, type CadMode } from "./components/EngineeringWorkbench"
+import { CalculusWorkbench } from "./components/calculus/CalculusWorkbench"
 import type { InspectorTab } from "./components/InspectorTabs"
 import { GraphicsView } from "./components/GraphicsView"
 import { GuidanceHint } from "./components/GuidanceHint"
@@ -1146,7 +1147,7 @@ export function App() {
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       <AppChrome
       activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} onRibbonCommand={handleRibbonCommand} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
-      {document.workspace === "cad" ? cadWorkbench : (
+      {document.workspace === "cad" ? cadWorkbench : document.workspace === "calculus" ? <CalculusWorkbench document={document} /> : (
         <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"} data-copilot-open={copilotOpen ? "true" : "false"}>
         {activeGhostDraft && (
           <div className="canvas-draft-banner" role="region" aria-label="AI 草稿预览">
@@ -1279,7 +1280,7 @@ export function App() {
           <button type="button" onClick={draftRecovery.discard}>舍弃并解锁自动保存</button>
         </span>}
       </div>}
-      {document.workspace !== "cad" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
+      {document.workspace !== "cad" && document.workspace !== "calculus" && guidance && <GuidanceHint text={guidance} onDismiss={() => setGuidance(null)} />}
       {/* 项目包（`.mcanvas` 导出/导入 + 附件）：文件级动作，与"打开/保存 .mgeo"同一组入口。
           导入走的是 `load` —— 与打开文件**同一条路**（换文档 + 换一世），所以不需要第二套逻辑。 */}
       {packagePanelOpen && <ProjectPackagePanel

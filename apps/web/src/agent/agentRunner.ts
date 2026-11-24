@@ -6,6 +6,7 @@ import type { GeometryDocument } from "@draw/dsl"
 import { contentFingerprint } from "@draw/scene-graph"
 
 import { useAgentStore, setDocumentGenerationReader, type AgentConversation } from "../agentStore"
+import { useCalculusStore } from "../calculusStore"
 import { useSceneStore } from "../store"
 import { conversationRepository } from "../conversationRepository"
 import { summaryOfDocument } from "../conversationSummary"
@@ -588,6 +589,7 @@ export function createAgentRunner(dependencies: AgentRunnerDependencies = {}): A
   async function runPrompt(text: string, promptMessageId: string, options?: RunPromptOptions): Promise<RunPromptResult> {
       const requestedSelectedIds = options?.selectedIds ?? []
       const { prompt, imageNotes, imageEvidence } = splitImagePrompt(text)
+      useCalculusStore.getState().syncFromAgentPrompt(prompt)
       sequence += 1
       const runId = `run-${sequence}-${Date.now().toString(36)}`
       /**

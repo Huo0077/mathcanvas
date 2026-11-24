@@ -25,7 +25,7 @@ export const APP_MODULES: AppModuleDefinition[] = [
   { id: "settings", label: "模型服务", hint: "provider 与密钥", icon: "settings" }
 ]
 
-export type WorkspaceId = Extract<Workspace, "conics" | "geometry3d" | "cad">
+export type WorkspaceId = Extract<Workspace, "conics" | "geometry3d" | "cad" | "calculus">
 
 export interface WorkspaceDefinition {
   id: WorkspaceId
@@ -36,7 +36,8 @@ export interface WorkspaceDefinition {
 export const WORKSPACE_DEFINITIONS: WorkspaceDefinition[] = [
   { id: "conics", label: "平面几何" },
   { id: "geometry3d", label: "立体几何" },
-  { id: "cad", label: "工程制图" }
+  { id: "cad", label: "工程制图" },
+  { id: "calculus", label: "高等数学" }
 ]
 
 export function workspaceLabel(id: Workspace): string {

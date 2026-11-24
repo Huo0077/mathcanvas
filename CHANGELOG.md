@@ -8,6 +8,17 @@
 
 
 
+## 2026-11-24 —— MathCanvas v6.0.0（全新「高等数学」十大交互可视化工作台与 AI Agent 大学数学精确求解大版本升级）
+
+- **纯计算高等数学内核（`@draw/geometry-kernel/src/higher-math/`）**（[bytecode.ts](packages/geometry-kernel/src/higher-math/bytecode.ts)、[extrema1d.ts](packages/geometry-kernel/src/higher-math/extrema1d.ts)、[contour.ts](packages/geometry-kernel/src/higher-math/contour.ts)、[ode.ts](packages/geometry-kernel/src/higher-math/ode.ts)、[surface3d.ts](packages/geometry-kernel/src/higher-math/surface3d.ts)、[pde.ts](packages/geometry-kernel/src/higher-math/pde.ts)、[series.ts](packages/geometry-kernel/src/higher-math/series.ts)、[multivariable.ts](packages/geometry-kernel/src/higher-math/multivariable.ts)、[linalg2d.ts](packages/geometry-kernel/src/higher-math/linalg2d.ts)、[probability.ts](packages/geometry-kernel/src/higher-math/probability.ts)）：
+  - 新增零 `eval` / 零 `new Function` 扁平逆波兰（RPN）字节码编译器与符号一阶/二阶偏导求导器；
+  - 实现一元极值/尖点/拐点/渐近线与复合 Gauss–Legendre 定积分、拓扑 Marching Squares 等高线与阻尼三维 Newton–KKT 拉格朗日乘数求解、Dormand–Prince RK45 常微分方程双向积分与二维自治相平面雅可比稳定性分类、显式 3D 曲面 Hessian 驻点与切平面、CFL 自适应 2D 热传导/波动与 SOR 稳态泊松 PDE 求解、Jet 自动微分高阶泰勒与傅里叶谐波合成、直角/极坐标二重积分与平面散度旋度探针、$2\times 2$ 矩阵特征值/精确 SVD 及 6 大概率分布与中心极限定理抽样模拟。
+- **独立「高等数学」交互工作区与 WebWorker 实时仿真**（[CalculusWorkbench.tsx](apps/web/src/components/calculus/CalculusWorkbench.tsx)、[CalculusCanvas2D.tsx](apps/web/src/components/calculus/CalculusCanvas2D.tsx)、[CalculusSurface3D.tsx](apps/web/src/components/calculus/CalculusSurface3D.tsx)、[CalculusPhase3Canvas.tsx](apps/web/src/components/calculus/CalculusPhase3Canvas.tsx)、[CalculusPhase4Canvas.tsx](apps/web/src/components/calculus/CalculusPhase4Canvas.tsx)、[pde.worker.ts](apps/web/src/components/calculus/pde.worker.ts)）：
+  - 顶栏激活独立「高等数学」标签页，整合 10 大交互模块、40+ 大学经典预设案例、2D↔3D 曲面约束联动与自然语言快捷题目栏。
+- **AI Agent 大学数学机器精度求解与状态联动**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[higherMathPlan.ts](packages/agent-core/src/solver/higherMathPlan.ts)、[systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[draftStore.ts](apps/web/src/agent/draftStore.ts)、[calculusStore.ts](apps/web/src/calculusStore.ts)）：
+  - 在 `query_measurement` 新增 10 类高数精确内核求解指标，接入离线确定性高数规划器与工作台自动同步，并通过真实 `deepseek-v4-flash` 在线端到端 10 题实测（**10/10 全过**）。
+- **全平台版本与发布同步至 `v6.0.0`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[README.md](README.md)、[portal/index.html](portal/index.html)、[v6.0.0.md](docs/release/v6.0.0.md)）。
+
 ## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量、3D 教学可视化与 Agent 查询支持）
 
 - **DSL 与内核空间角求解**（[types.ts](packages/dsl/src/types.ts)、[markers3d.ts](packages/geometry-kernel/src/markers3d.ts)、[measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts)）：

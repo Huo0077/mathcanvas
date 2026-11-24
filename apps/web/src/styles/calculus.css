@@ -1,0 +1,975 @@
+/* Higher-Mathematics Workspace ("高等数学") — cold-slate editorial workbench styling. */
+
+.calculus-workbench {
+  flex: 1 1 0;
+  min-height: 0;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--color-canvas, #f8fafc);
+  color: var(--color-ink, #2c3e50);
+  accent-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-subbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: safe center;
+  gap: 12px 18px;
+  padding: 8px 18px;
+  background: var(--color-panel, #ffffff);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-module-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  background: var(--color-surface-subtle, #f1f5f9);
+  border-radius: 7px;
+  gap: 2px;
+}
+
+.calculus-module-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted, #586a80);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.calculus-module-tabs button[aria-pressed="true"] {
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgb(44 62 80 / 10%);
+}
+
+.calculus-subbar-hint {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, #586a80);
+  min-inline-size: 0;
+}
+
+.calculus-smart-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 260px;
+  max-inline-size: 460px;
+  margin-inline-start: auto;
+}
+
+.calculus-smart-bar input {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  min-block-size: 29px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-ink, #2c3e50);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.calculus-smart-bar input:focus {
+  outline: none;
+  background: var(--color-panel, #ffffff);
+  border-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-smart-notice {
+  font-size: var(--text-2xs, 0.6875rem);
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 5px;
+}
+
+.calculus-matrix-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px 10px;
+  border-inline: 2.5px solid var(--color-ink, #2c3e50);
+  border-radius: 5px;
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+.calculus-matrix-grid input {
+  min-inline-size: 0;
+  min-block-size: 30px;
+  text-align: center;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 5px;
+  background: var(--color-panel, #ffffff);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+}
+
+.calculus-mobile-switcher {
+  display: none;
+  margin-inline-start: auto;
+  gap: 4px;
+}
+
+.calculus-mobile-switcher button {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-panel, #ffffff);
+  color: var(--color-muted, #586a80);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: var(--text-xs, 0.75rem);
+  cursor: pointer;
+}
+
+.calculus-mobile-switcher button[aria-pressed="true"] {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+  color: var(--color-accent-strong, #2c4a6e);
+  font-weight: 600;
+}
+
+.calculus-body {
+  min-height: 0;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(252px, 286px) minmax(0, 1fr) minmax(276px, 316px);
+  grid-template-areas: "controls stage diagnostics";
+}
+
+.calculus-controls {
+  grid-area: controls;
+  border-inline-end: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-diagnostics {
+  grid-area: diagnostics;
+  border-inline-start: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-sidebar {
+  min-height: 0;
+  min-inline-size: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  background: var(--color-panel, #ffffff);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.calculus-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-card:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.calculus-card h2 {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 650;
+  color: var(--color-ink, #2c3e50);
+  letter-spacing: 0.01em;
+}
+
+.calculus-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, #586a80);
+}
+
+.calculus-field input[type="text"],
+.calculus-field input[type="number"] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs, 0.75rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.calculus-field input:focus {
+  outline: none;
+  border-color: var(--color-accent, #3d5a80);
+  box-shadow: 0 0 0 2px rgb(61 90 128 / 14%);
+}
+
+.calculus-domain-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.calculus-error {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--color-danger-soft, #fdf2f1);
+  color: var(--color-danger, #b3261e);
+  font-size: var(--text-xs, 0.75rem);
+  line-height: 1.5;
+}
+
+.calculus-slider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, #586a80);
+}
+
+.calculus-slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.calculus-slider-head output {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-slider-field input[type="range"] {
+  inline-size: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.calculus-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-wrap: balance;
+  gap: 6px;
+}
+
+.calculus-chip-btn {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-ink, #2c3e50);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: var(--text-2xs, 0.6875rem);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.calculus-chip-btn:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-chip-btn.primary {
+  background: var(--color-accent, #3d5a80);
+  border-color: var(--color-accent, #3d5a80);
+  color: #ffffff;
+}
+
+.calculus-chip-btn.primary:hover {
+  background: var(--color-accent-strong, #2c4a6e);
+}
+
+.calculus-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.calculus-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-ink, #2c3e50);
+  cursor: pointer;
+}
+
+.calculus-preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.calculus-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 7px;
+  background: var(--color-panel, #ffffff);
+  cursor: pointer;
+}
+
+.calculus-preset-btn:hover {
+  background: var(--color-surface-subtle, #f1f5f9);
+  border-color: #cbd5e1;
+}
+
+.calculus-preset-btn[data-active="true"] {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-preset-top {
+  inline-size: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.calculus-preset-top strong {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-preset-top small {
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+  white-space: nowrap;
+}
+
+.calculus-preset-btn code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-accent-strong, #2c4a6e);
+  word-break: break-all;
+}
+
+/* Center interactive stage */
+.calculus-stage {
+  grid-area: stage;
+  min-height: 0;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background: #fbfcfd;
+}
+
+.calculus-canvas-wrap {
+  position: relative;
+  min-height: 0;
+  min-inline-size: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.calculus-canvas {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.calculus-canvas:active {
+  cursor: grabbing;
+}
+
+.calculus-canvas-legend {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-start: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 90%);
+  border: 1px solid var(--color-border, #e2e8f0);
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-ink, #2c3e50);
+  pointer-events: none;
+}
+
+.calculus-canvas-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.calculus-canvas-legend .dot {
+  display: inline-block;
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
+}
+
+.calculus-canvas-legend .dot.curve { background: #2563eb; }
+.calculus-canvas-legend .dot.deriv { background: #0d9488; }
+.calculus-canvas-legend .dot.max { background: #dc2626; }
+.calculus-canvas-legend .dot.min { background: #059669; }
+.calculus-canvas-legend .dot.infl { background: #ffffff; border: 2px solid #7c3aed; }
+.calculus-canvas-legend .dot.constraint { background: #1e293b; }
+.calculus-canvas-legend .dot.active-level { background: #d97706; }
+.calculus-canvas-legend .dot.grad-f { background: #dc2626; }
+.calculus-canvas-legend .dot.grad-g { background: #0d9488; }
+.calculus-canvas-legend .dot.slope { background: #64748b; }
+.calculus-canvas-legend .dot.saddle { background: #7c3aed; }
+.calculus-canvas-legend .dot.saddle-x { background: #ea580c; }
+.calculus-canvas-legend .dot.center-ring { background: #ffffff; border: 2px solid #2563eb; }
+
+.calculus-view-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 7px;
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+.calculus-view-toggle.two-col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.calculus-select {
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.calculus-poly-wrap {
+  font-size: var(--text-xs, 0.75rem) !important;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.calculus-spectrum-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12px, 1fr));
+  gap: 4px;
+  block-size: 112px;
+  padding: 8px 6px 4px;
+  border-radius: 7px;
+  background: var(--color-surface-subtle, #f1f5f9);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.spectrum-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.spectrum-bar-track {
+  flex: 1;
+  inline-size: 100%;
+  max-inline-size: 12px;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(203 213 225 / 40%);
+  border-radius: 3px;
+  overflow: clip;
+}
+
+.spectrum-bar-fill {
+  inline-size: 100%;
+  background: var(--color-accent, #3d5a80);
+  border-radius: 3px 3px 0 0;
+}
+
+.spectrum-col small {
+  font-size: 9px;
+  color: var(--color-muted, #586a80);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.calculus-view-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted, #586a80);
+  padding: 5px 6px;
+  border-radius: 5px;
+  font-size: var(--text-2xs, 0.6875rem);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.calculus-view-toggle button[aria-pressed="true"] {
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(44 62 80 / 10%);
+}
+
+.calculus-split-stage {
+  min-height: 0;
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--color-border, #e2e8f0);
+}
+
+.calculus-surface3d-wrap {
+  background: #f8fafc;
+}
+
+.calculus-webgl-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--color-muted, #586a80);
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.calculus-mini-del {
+  border: 0;
+  background: transparent;
+  color: var(--color-danger, #b3261e);
+  font-size: var(--text-2xs, 0.6875rem);
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.calculus-mini-del:hover {
+  background: var(--color-danger-soft, #fdf2f1);
+}
+
+.calculus-zoom-controls {
+  position: absolute;
+  inset-block-end: 12px;
+  inset-inline-end: 12px;
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-zoom-controls button {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink, #2c3e50);
+  min-inline-size: 28px;
+  min-block-size: 26px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-size: var(--text-xs, 0.75rem);
+  cursor: pointer;
+}
+
+.calculus-zoom-controls button:hover {
+  background: var(--color-accent-soft, #eef2f7);
+}
+
+.calculus-stage-footer {
+  padding: 6px 14px;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-panel, #ffffff);
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+  font-variant-numeric: tabular-nums;
+}
+
+.calculus-stage-footer b {
+  color: var(--color-ink, #2c3e50);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* Right diagnostics panel */
+.calculus-metric-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.calculus-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: var(--color-surface-subtle, #f1f5f9);
+  border: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-metric.max {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.calculus-metric.min {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.calculus-metric .metric-label {
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+}
+
+.calculus-metric strong {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-md, 0.875rem);
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-metric small {
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+}
+
+/* Responsive semantic data table */
+.calculus-table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: 260px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 7px;
+  container-type: inline-size;
+  overscroll-behavior: contain;
+}
+
+.calculus-table {
+  inline-size: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--text-2xs, 0.6875rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.calculus-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+}
+
+.calculus-table thead th {
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-muted, #586a80);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  white-space: nowrap;
+}
+
+.calculus-table tbody tr {
+  cursor: pointer;
+}
+
+.calculus-table tbody tr:hover {
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+.calculus-table tbody tr[data-selected="true"] {
+  background: var(--color-accent-soft, #eef2f7);
+}
+
+.calculus-table tbody th,
+.calculus-table tbody td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  text-align: left;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.calculus-table tbody td {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.calculus-table tbody tr:last-child th,
+.calculus-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.calculus-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-badge.max {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.calculus-badge.min {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.calculus-badge.warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.calculus-kv-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.calculus-kv-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+.calculus-kv-list code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: #6b21a8;
+}
+
+.calculus-muted-note {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, #586a80);
+  line-height: 1.5;
+}
+
+/* Lagrange probe box */
+.calculus-probe-box {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+.calculus-probe-box[data-tangent="true"] {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+}
+
+.calculus-probe-status {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 650;
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-probe-box[data-tangent="true"] .calculus-probe-status {
+  color: #047857;
+}
+
+.calculus-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+
+.calculus-dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.calculus-dl dt {
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+}
+
+.calculus-dl dd {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--color-ink, #2c3e50);
+}
+
+.calculus-collinearity-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-2xs, 0.6875rem);
+  color: var(--color-muted, #586a80);
+}
+
+.calculus-collinearity-meter progress {
+  inline-size: 100%;
+  block-size: 7px;
+}
+
+.calculus-tip-card p {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-muted, #586a80);
+  line-height: 1.6;
+}
+
+.calculus-formula-callout {
+  text-align: center;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--color-accent-soft, #eef2f7);
+  font-family: var(--font-math, Cambria, Georgia, serif);
+  font-size: var(--text-md, 0.875rem) !important;
+  font-weight: 600;
+  color: var(--color-accent-strong, #2c4a6e) !important;
+}
+
+.calculus-legacy-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-xs, 0.75rem);
+}
+
+.calculus-legacy-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: var(--color-surface-subtle, #f1f5f9);
+}
+
+/* Fallback for older engines lacking accent-color */
+@supports not (accent-color: #3d5a80) {
+  .calculus-workbench input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+  }
+
+  .calculus-workbench input[type="range"]::-webkit-slider-runnable-track {
+    block-size: 6px;
+    border-radius: 4px;
+    background: var(--color-border, #e2e8f0);
+  }
+
+  .calculus-workbench input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    inline-size: 14px;
+    block-size: 14px;
+    border-radius: 50%;
+    background: var(--color-accent, #3d5a80);
+    margin-block-start: -4px;
+  }
+}
+
+/* Container query for very narrow diagnostic tables */
+@container (inline-size < 220px) {
+  .calculus-table thead {
+    display: none;
+  }
+
+  .calculus-table,
+  .calculus-table tbody,
+  .calculus-table tr,
+  .calculus-table th,
+  .calculus-table td {
+    display: block;
+  }
+
+  .calculus-table tbody tr {
+    padding: 6px;
+    border-bottom: 1px solid var(--color-border, #e2e8f0);
+  }
+
+  .calculus-table tbody th,
+  .calculus-table tbody td {
+    padding: 2px 0;
+    border: 0;
+  }
+}
+
+/* Responsive layout for narrow windows & Android tablets/phones */
+@media (max-width: 960px) {
+  .calculus-subbar-hint {
+    display: none;
+  }
+
+  .calculus-mobile-switcher {
+    display: inline-flex;
+  }
+
+  .calculus-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "stage";
+  }
+
+  .calculus-controls,
+  .calculus-diagnostics {
+    display: none;
+    border: 0;
+  }
+
+  .calculus-workbench[data-mobile-pane="controls"] .calculus-stage,
+  .calculus-workbench[data-mobile-pane="controls"] .calculus-diagnostics {
+    display: none;
+  }
+
+  .calculus-workbench[data-mobile-pane="controls"] .calculus-controls {
+    display: flex;
+    grid-area: stage;
+  }
+
+  .calculus-workbench[data-mobile-pane="diagnostics"] .calculus-stage,
+  .calculus-workbench[data-mobile-pane="diagnostics"] .calculus-controls {
+    display: none;
+  }
+
+  .calculus-workbench[data-mobile-pane="diagnostics"] .calculus-diagnostics {
+    display: flex;
+    grid-area: stage;
+  }
+
+  .calculus-split-stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}

@@ -22,7 +22,7 @@ body:
     id: version
     attributes:
       label: 软件版本
-      placeholder: 例如：v5.3.0
+      placeholder: 例如：v6.0.0
     validations:
       required: true
   - type: dropdown

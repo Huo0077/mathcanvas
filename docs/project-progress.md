@@ -1,5 +1,10 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-24 —— MathCanvas v6.0.0（全新「高等数学」十大交互可视化工作台与 AI Agent 大学数学精确求解大版本升级）
+
+- **高等数学计算内核与交互工作台落地**：在 `packages/geometry-kernel/src/higher-math/` 实现 CSP 安全 RPN 字节码编译器及一元极值/定积分、拉格朗日乘数 Newton–KKT 与 Marching Squares 等高线、ODE RK45 与二维自治相平面稳定性、显式 3D 曲面 Hessian 驻点与切平面、2D 热传导/波动/泊松 PDE（含 WebWorker 60fps 仿真）、Jet 自动微分泰勒与傅里叶级数、直角/极坐标二重积分与散度旋度、$2\times 2$ 矩阵特征值/SVD、概率分布与 CLT 共 10 大模块；前端激活「高等数学」独立工作区（[CalculusWorkbench.tsx](../apps/web/src/components/calculus/CalculusWorkbench.tsx)）与 40+ 教学预设。
+- **Agent 精确求解集成与真实 DeepSeek 10/10 实测收口**：在 [dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `query_measurement` 新增 10 类高数精确内核求解器，新增离线确定性规划 [higherMathPlan.ts](../packages/agent-core/src/solver/higherMathPlan.ts) 与状态同步 [calculusStore.ts](../apps/web/src/calculusStore.ts)；首轮真实 `deepseek-v4-flash` 在线实测捕获并修复 [draftStore.ts](../apps/web/src/agent/draftStore.ts) 高数草稿被初高中欧氏几何题设解析器误拦截问题，第二轮真实 `deepseek-v4-flash` 10 题端到端实测 **10/10 全量通过**（47 次请求，100% 调用内核求解器），全仓 `typecheck`、ESLint、`test:docs` 及全套回归单测全部通过，升级发布 **`v6.0.0`**。
+
 ## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量与 3D 教学可视化）
 
 - **空间角体系补全与发布**：围绕立体几何「线面角」与「空间直线夹角（相交/异面/平行）」需求，打通 `@draw/dsl`（`MEASUREMENT_METRICS` 新增 `linePlaneAngle`、`lineAngle`）、`@draw/geometry-kernel`（[markers3d.ts](../packages/geometry-kernel/src/markers3d.ts) 与 [measurements3d.ts](../packages/geometry-kernel/src/measurements3d.ts) 实现 $[0, \pi/2]$ 精确计算与标记几何）、`@draw/scene-graph`（[solidGeometry.ts](../packages/scene-graph/src/solidGeometry.ts) 标记解析）、Three.js 3D 渲染（[threePrimitives.ts](../apps/web/src/threePrimitives.ts) 虚线垂线/射影/直角方框/异面平移虚线/角弧）、交互 UI（[spatialTools.ts](../apps/web/src/spatialTools.ts)、[PropertiesBar.tsx](../apps/web/src/components/PropertiesBar.tsx)、[App.tsx](../apps/web/src/App.tsx)、[threeScene.tsx](../apps/web/src/threeScene.tsx)）及 AI Agent `query_measurement`（[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts)）。全仓 `typecheck`、11 个核心测试套件（370+ 用例）、`test:docs` 及本地 Windows Tauri 打包全部通过，统一升级发布 **`v5.3.0`**。

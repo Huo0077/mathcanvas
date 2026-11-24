@@ -2,6 +2,7 @@ import type { PlanEnvelope } from "./contracts"
 import { compileConstructionDag, deriveRequiredDrawingIntent, type CompiledDrawingDagResult } from "./drawingIntent"
 import { deterministicPlanForPrompt } from "./parametricSolidPlan"
 import { tryBuildFunctionDrawingPlan } from "./solver/functionDrawingPlan"
+import { tryBuildHigherMathPlan } from "./solver/higherMathPlan"
 import { tryBuildPlanarDrawingPlan } from "./solver/planarDrawing"
 import { tryBuildSolidDrawingPlan } from "./solver/solidDrawingPlan"
 import { tryBuildRightPrismMidpointsPlan } from "./rightPrismPlan"
@@ -58,5 +59,6 @@ export function routeDeterministicProblem(prompt: string): DeterministicProblemR
   const solidPlan = tryBuildSolidDrawingPlan(prompt)
   if (solidPlan) return solidPlan
   const solid = deterministicPlanForPrompt(prompt)
-  return solid ? { plan: solid, family: "spatial-modeling" } : null
+  if (solid) return { plan: solid, family: "spatial-modeling" }
+  return tryBuildHigherMathPlan(prompt)
 }

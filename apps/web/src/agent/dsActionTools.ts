@@ -6,6 +6,7 @@ import {
   certifyDrawingAgainstContract,
   compilePlan,
   foldPointAboutHinge,
+  hasExplicitHigherMathIntent,
   isDsActionName,
   normalizeGeometryPrompt,
   resolveInfeasibleEllipseFallbackScope,
@@ -19,21 +20,40 @@ import {
 } from "@draw/agent-core"
 import { deriveAcceptance } from "./acceptance"
 import {
+  analyzeDoubleIntegral,
+  analyzeExtrema1D,
+  analyzeFourierSeries,
+  analyzeLagrange2D,
+  analyzeLinearTransform2D,
+  analyzePhasePlane2D,
+  analyzeProbabilityDistribution,
+  analyzeSurface3D,
+  analyzeTaylorSeries,
   canonicalPointName,
+  compileScalarField1D,
+  compileScalarField2D,
+  computeTangentPlane3D,
   dihedralAngleDetail3,
   distanceVector3,
+  evaluateDivCurlProbe,
   evaluateFunctionWithDomain,
   evaluateSymbolicDerivative,
   faceHost3,
   fitOriginConicThroughPoints,
   host3FromPrimitive,
+  integrateDefinite1D,
   intersectPlanarLineAndConicExact,
   isPointName,
   lineAngleDetail3,
   linePlaneAngleDetail3,
+  normalizeHigherMathInput,
   planeFromPoints,
   solveInsphere3,
+  solveOde1DIvp,
   tangentLineToConicAt,
+  type DistributionKind,
+  type DoubleIntegralOrder,
+  type FourierWaveformKind,
   type PlanarConic,
   type SolidBoundary
 } from "@draw/geometry-kernel"
@@ -1093,7 +1113,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_circumsphere: "Derive a real 3D circumsphere (default mode='circumsphere') or insphere/max-ball (mode='insphere') from an existing named solid; never provide raw center/radius or 2D construct_circle.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
-  query_measurement: "Use metric=distance with targets of 2 points, metric=area with targets of 3 triangle points, metric=position/coordinates with target naming 1 point, metric=line_plane_angle with targets of 5 points [L1,L2,P1,P2,P3] (line L1L2 to plane P1P2P3), metric=line_angle with targets of 4 points [A,B,C,D] (spatial angle between lines AB and CD, intersecting or skew), or metric=dihedral_angle with targets of 4 points [P,A,B,Q] (dihedral P-AB-Q).",
+  query_measurement: "Geometry & exact higher-math kernel solver: (A) Geometry: metric=distance (targets:[A,B]), area (targets:[A,B,C]), position/coordinates (target:P), line_plane_angle (targets:[L1,L2,P1,P2,P3]), line_angle (targets:[A,B,C,D]), dihedral_angle (targets:[P,A,B,Q]). (B) University Higher-Math exact solvers (NEVER hand-compute): metric=calculus_1d (expression, optional domain:[a,b], x0), taylor_series (expression, optional center, order, evalAt), fourier_series (optional waveform, halfPeriod, harmonics), lagrange_2d (objective, constraint, optional bounds:[xMin,xMax,yMin,yMax]), surface_3d (expression, optional point:[x0,y0], bounds), ode_solve (rhs+x0+y0+xTarget OR autonomous pExpr+qExpr), double_integral (integrand, integralOrder:'xy'|'yx'|'polar', outerMin, outerMax, innerMin, innerMax), div_curl (pExpr, qExpr, x0, y0), matrix_2x2 (matrix:[[a,b],[c,d]]), probability (distKind, param1, optional param2, interval:[a,b]).",
   query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), collinear, perpendicular (3 targets [A,B,C] for AB⊥BC or 4 targets [A,B,C,D] for AB⊥CD), or parallel (4 targets [A,B,C,D]) to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
@@ -1329,8 +1349,49 @@ const REQUEST_CLARIFICATION_PARAMETERS = {
 } as const
 const QUERY_MEASUREMENT_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["metric"],
-  properties: { metric: { type: "string", enum: ["distance", "position", "coordinates", "area", "line_plane_angle", "line_angle", "dihedral_angle"] },
-    targets: { type: "array", items: { type: "string" } }, target: { type: "string" } }
+  properties: {
+    metric: {
+      type: "string",
+      enum: [
+        "distance", "position", "coordinates", "area",
+        "line_plane_angle", "line_angle", "dihedral_angle",
+        "calculus_1d", "taylor_series", "fourier_series",
+        "lagrange_2d", "surface_3d", "ode_solve",
+        "double_integral", "div_curl", "matrix_2x2", "probability"
+      ]
+    },
+    targets: { type: "array", items: { type: "string" } },
+    target: { type: "string" },
+    expression: { type: "string" },
+    objective: { type: "string" },
+    constraint: { type: "string" },
+    rhs: { type: "string" },
+    pExpr: { type: "string" },
+    qExpr: { type: "string" },
+    integrand: { type: "string" },
+    domain: { type: "array", items: { type: "number" } },
+    bounds: { type: "array", items: { type: "number" } },
+    interval: { type: "array", items: { type: "number" } },
+    point: { type: "array", items: { type: "number" } },
+    x0: { type: "number" },
+    y0: { type: "number" },
+    xTarget: { type: "number" },
+    center: { type: "number" },
+    order: { type: "number" },
+    evalAt: { type: "number" },
+    halfPeriod: { type: "number" },
+    harmonics: { type: "number" },
+    waveform: { type: "string", enum: ["square", "sawtooth", "triangle", "full_rectified"] },
+    integralOrder: { type: "string", enum: ["xy", "yx", "polar"] },
+    outerMin: { type: "string" },
+    outerMax: { type: "string" },
+    innerMin: { type: "string" },
+    innerMax: { type: "string" },
+    matrix: { type: "array", items: { type: "array", items: { type: "number" } } },
+    distKind: { type: "string", enum: ["normal", "student_t", "chi_square", "exponential", "binomial", "poisson"] },
+    param1: { type: "number" },
+    param2: { type: "number" }
+  }
 } as const
 const QUERY_CONSTRAINT_STATUS_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["targets"],
@@ -2760,6 +2821,7 @@ export function createDsActionSession(options: {
   }>()
   const relations: Array<{ kind: string; targets: string[] }> = []
   const recordedSlices: DsActionStateSlice[] = []
+  let sawHigherMathQuery = false
   const sliceHistory: Array<{
     slices: DsActionStateSlice[]
     sharedActions: DraftAction[]
@@ -3538,6 +3600,330 @@ export function createDsActionSession(options: {
               sourceEntityIds: targets
             }
           }
+        }
+        const okMeasurement = (payload: Record<string, unknown>): DsActionRawResult => {
+          sawHigherMathQuery = true
+          return {
+            ok: true,
+            status: "accepted",
+            action: name,
+            stateChanged: false,
+            candidateHash: snap.candidateHash,
+            stepIndex: snap.stepIndex,
+            primitiveCount: snap.primitiveCount,
+            measurement: payload
+          }
+        }
+        const readPair = (raw: unknown, defA: number, defB: number): [number, number] => {
+          if (Array.isArray(raw) && raw.length >= 2) {
+            const a = asFiniteNumber(raw[0])
+            const b = asFiniteNumber(raw[1])
+            if (a !== null && b !== null && a !== b) return a < b ? [a, b] : [b, a]
+          }
+          return [defA, defB]
+        }
+        const readBox2D = (raw: unknown, defRange = 4) => {
+          if (Array.isArray(raw) && raw.length >= 4) {
+            const xMin = asFiniteNumber(raw[0])
+            const xMax = asFiniteNumber(raw[1])
+            const yMin = asFiniteNumber(raw[2])
+            const yMax = asFiniteNumber(raw[3])
+            if (xMin !== null && xMax !== null && yMin !== null && yMax !== null && xMin < xMax && yMin < yMax) {
+              return { xMin, xMax, yMin, yMax }
+            }
+          }
+          return { xMin: -defRange, xMax: defRange, yMin: -defRange, yMax: defRange }
+        }
+        if (metric === "calculus_1d") {
+          const expr = asString(input.expression)
+          if (!expr) return failRepairable(name, "missing_required_parameter", "calculus_1d requires expression (e.g. 'x^3 - 3*x')")
+          try {
+            const domain = readPair(input.domain, -4, 4)
+            const analysis = analyzeExtrema1D(expr, domain)
+            const definiteIntegral = integrateDefinite1D(analysis.normalizedExpression, domain[0], domain[1])
+            const x0 = asFiniteNumber(input.x0)
+            let atX0: Record<string, unknown> | undefined
+            if (x0 !== null) {
+              const f = compileScalarField1D(expr)
+              const y0 = f.eval(x0)
+              const dy0 = f.derivative(x0)
+              const d2y0 = f.secondDerivative(x0)
+              atX0 = { x0, y0, derivative: dy0, secondDerivative: d2y0, tangentIntercept: y0 - dy0 * x0 }
+            }
+            return okMeasurement({
+              metric: "calculus_1d",
+              normalizedExpression: analysis.normalizedExpression,
+              domain,
+              definiteIntegral,
+              globalMax: analysis.globalMax,
+              globalMin: analysis.globalMin,
+              extrema: analysis.extrema,
+              inflections: analysis.inflections,
+              asymptotes: analysis.asymptotes,
+              ...(atX0 ? { atX0 } : {})
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid calculus_1d expression")
+          }
+        }
+        if (metric === "taylor_series") {
+          const expr = asString(input.expression)
+          if (!expr) return failRepairable(name, "missing_required_parameter", "taylor_series requires expression")
+          try {
+            const center = asFiniteNumber(input.center) ?? 0
+            const order = Math.max(1, Math.min(20, Math.round(asFiniteNumber(input.order) ?? 5)))
+            const domain = readPair(input.domain, center - 4, center + 4)
+            const taylor = analyzeTaylorSeries(expr, center, order, domain)
+            const evalAt = asFiniteNumber(input.evalAt)
+            let evaluation: Record<string, unknown> | undefined
+            if (evalAt !== null) {
+              const exact = compileScalarField1D(expr).eval(evalAt)
+              let approx = 0
+              let p = 1
+              const dx = evalAt - center
+              for (const c of taylor.coefficients) {
+                approx += c * p
+                p *= dx
+              }
+              evaluation = { evalAt, exact, approx, absError: Math.abs(exact - approx) }
+            }
+            return okMeasurement({
+              metric: "taylor_series",
+              normalizedExpression: taylor.expression,
+              center,
+              order,
+              coefficients: taylor.coefficients,
+              polynomialText: taylor.polynomialText,
+              ...(evaluation ? { evaluation } : {})
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid taylor_series expression")
+          }
+        }
+        if (metric === "fourier_series") {
+          try {
+            const waveform = (asString(input.waveform) as FourierWaveformKind | null) ?? "square"
+            const customExpr = asString(input.expression) ?? undefined
+            const halfPeriod = Math.max(0.1, asFiniteNumber(input.halfPeriod) ?? Math.PI)
+            const harmonics = Math.max(1, Math.min(35, Math.round(asFiniteNumber(input.harmonics ?? input.order) ?? 9)))
+            const fourier = analyzeFourierSeries(
+              customExpr ? "custom" : waveform,
+              harmonics,
+              halfPeriod,
+              customExpr
+            )
+            return okMeasurement({
+              metric: "fourier_series",
+              halfPeriod: fourier.halfPeriod,
+              harmonicsCount: fourier.harmonicsCount,
+              a0: fourier.a0,
+              harmonics: fourier.harmonics,
+              peakOvershoot: fourier.peakOvershoot,
+              rmsError: fourier.rmsError
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid fourier_series parameters")
+          }
+        }
+        if (metric === "lagrange_2d") {
+          const objective = asString(input.objective ?? input.expression)
+          const constraint = asString(input.constraint)
+          if (!objective || !constraint) {
+            return failRepairable(name, "missing_required_parameter", "lagrange_2d requires objective (e.g. 'x + 2*y') and constraint (e.g. 'x^2 + y^2 = 4')")
+          }
+          try {
+            const bounds = readBox2D(input.bounds, 5)
+            const res = analyzeLagrange2D(objective, constraint, bounds)
+            return okMeasurement({
+              metric: "lagrange_2d",
+              objective,
+              constraint,
+              stationaryPoints: res.stationaryPoints,
+              globalMaxPoint: res.stationaryPoints.find((p) => p.isGlobalMax) ?? res.stationaryPoints[0] ?? null,
+              globalMinPoint: res.stationaryPoints.find((p) => p.isGlobalMin) ?? res.stationaryPoints[res.stationaryPoints.length - 1] ?? null
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid lagrange_2d expressions")
+          }
+        }
+        if (metric === "surface_3d") {
+          const expr = asString(input.expression)
+          if (!expr) return failRepairable(name, "missing_required_parameter", "surface_3d requires expression z = f(x, y)")
+          try {
+            const bounds = readBox2D(input.bounds, 3.5)
+            const res = analyzeSurface3D(expr, bounds, { gridSize: 36 })
+            const ptArr = Array.isArray(input.point) && input.point.length >= 2
+              ? [asFiniteNumber(input.point[0]), asFiniteNumber(input.point[1])]
+              : [asFiniteNumber(input.x0), asFiniteNumber(input.y0)]
+            let tangentPlane: Record<string, unknown> | undefined
+            if (ptArr[0] !== null && ptArr[1] !== null) {
+              const tp = computeTangentPlane3D(compileScalarField2D(expr), ptArr[0]!, ptArr[1]!)
+              if (tp) {
+                tangentPlane = {
+                  x0: tp.x, y0: tp.y, z0: tp.z,
+                  fx: tp.fx, fy: tp.fy,
+                  normal: { x: -tp.fx, y: -tp.fy, z: 1 },
+                  equationText: tp.equation
+                }
+              }
+            }
+            return okMeasurement({
+              metric: "surface_3d",
+              normalizedExpression: res.expression,
+              stationaryPoints: res.stationaryPoints,
+              zMin: res.zMin,
+              zMax: res.zMax,
+              ...(tangentPlane ? { tangentPlane } : {})
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid surface_3d expression")
+          }
+        }
+        if (metric === "ode_solve") {
+          const pExpr = asString(input.pExpr)
+          const qExpr = asString(input.qExpr)
+          if (pExpr && qExpr) {
+            try {
+              const bounds = readBox2D(input.bounds, 4.5)
+              const phase = analyzePhasePlane2D(pExpr, qExpr, bounds)
+              return okMeasurement({
+                metric: "ode_solve",
+                mode: "phase_plane_2d",
+                pExpr,
+                qExpr,
+                equilibria: phase.equilibria
+              })
+            } catch (err) {
+              return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid phase plane expressions")
+            }
+          }
+          const rhs = asString(input.rhs ?? input.expression)
+          if (!rhs) return failRepairable(name, "missing_required_parameter", "ode_solve requires rhs (for y' = f(x,y)) or both pExpr and qExpr (for autonomous system)")
+          try {
+            const x0 = asFiniteNumber(input.x0) ?? 0
+            const y0 = asFiniteNumber(input.y0) ?? 1
+            const xTarget = asFiniteNumber(input.xTarget) ?? x0 + 1
+            const field = compileScalarField2D(rhs)
+            const slopeAtInitial = field.eval(x0, y0)
+            const yAtTarget = solveOde1DIvp(field, x0, y0, xTarget)
+            return okMeasurement({
+              metric: "ode_solve",
+              mode: "ivp_1d",
+              rhs,
+              x0,
+              y0,
+              slopeAtInitial,
+              xTarget,
+              yAtTarget
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid ode_solve rhs")
+          }
+        }
+        if (metric === "double_integral") {
+          const integrand = asString(input.integrand ?? input.expression)
+          if (!integrand) return failRepairable(name, "missing_required_parameter", "double_integral requires integrand")
+          try {
+            const order = (asString(input.integralOrder) as DoubleIntegralOrder | null) ?? "xy"
+            const outerMinExpr = asString(input.outerMin) ?? "0"
+            const outerMaxExpr = asString(input.outerMax) ?? (order === "polar" ? "2*pi" : "1")
+            const innerMinExpr = asString(input.innerMin) ?? "0"
+            const innerMaxExpr = asString(input.innerMax) ?? (order === "polar" ? "1" : "1")
+            const di = analyzeDoubleIntegral({
+              integrandExpr: integrand,
+              order,
+              outerMinExpr,
+              outerMaxExpr,
+              innerMinExpr,
+              innerMaxExpr
+            })
+            return okMeasurement({
+              metric: "double_integral",
+              integrand,
+              order,
+              outerBounds: [outerMinExpr, outerMaxExpr],
+              innerBounds: [innerMinExpr, innerMaxExpr],
+              domainArea: di.domainArea,
+              value: di.exactValue
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid double_integral specification")
+          }
+        }
+        if (metric === "div_curl") {
+          const pExpr = asString(input.pExpr)
+          const qExpr = asString(input.qExpr)
+          if (!pExpr || !qExpr) return failRepairable(name, "missing_required_parameter", "div_curl requires pExpr and qExpr")
+          try {
+            const x0 = asFiniteNumber(input.x0) ?? 1
+            const y0 = asFiniteNumber(input.y0) ?? 1
+            const probe = evaluateDivCurlProbe(compileScalarField2D(pExpr), compileScalarField2D(qExpr), x0, y0)
+            return okMeasurement({
+              metric: "div_curl",
+              point: { x: x0, y: y0 },
+              vector: { vx: probe.vx, vy: probe.vy },
+              divergence: probe.divergence,
+              curlZ: probe.curlZ,
+              divKind: probe.divKind,
+              curlKind: probe.curlKind
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid div_curl vector field")
+          }
+        }
+        if (metric === "matrix_2x2") {
+          const rawM = input.matrix
+          if (
+            !Array.isArray(rawM) || rawM.length !== 2 ||
+            !Array.isArray(rawM[0]) || rawM[0].length !== 2 ||
+            !Array.isArray(rawM[1]) || rawM[1].length !== 2
+          ) {
+            return failRepairable(name, "missing_required_parameter", "matrix_2x2 requires matrix: [[a11, a12], [a21, a22]]")
+          }
+          const a11 = asFiniteNumber(rawM[0][0])
+          const a12 = asFiniteNumber(rawM[0][1])
+          const a21 = asFiniteNumber(rawM[1][0])
+          const a22 = asFiniteNumber(rawM[1][1])
+          if (a11 === null || a12 === null || a21 === null || a22 === null) {
+            return failRepairable(name, "missing_required_parameter", "matrix_2x2 entries must be finite numbers")
+          }
+          const la = analyzeLinearTransform2D([[a11, a12], [a21, a22]], 1)
+          return okMeasurement({
+            metric: "matrix_2x2",
+            matrix: [[a11, a12], [a21, a22]],
+            determinant: la.determinant,
+            trace: la.trace,
+            rank: la.rank,
+            eigenvalues: la.eigenvalues,
+            realEigenvectors: la.realEigenvectors,
+            svd: la.svd
+          })
+        }
+        if (metric === "probability") {
+          const distKind = (asString(input.distKind) as DistributionKind | null) ?? "normal"
+          const param1 = asFiniteNumber(input.param1) ?? (distKind === "normal" ? 0 : distKind === "binomial" ? 10 : 4)
+          const param2 = asFiniteNumber(input.param2) ?? (distKind === "normal" ? 1 : 0.5)
+          const interval = Array.isArray(input.interval) && input.interval.length >= 2
+            ? [asFiniteNumber(input.interval[0]) ?? -1.96, asFiniteNumber(input.interval[1]) ?? 1.96]
+            : [-1.96, 1.96]
+          const dist = analyzeProbabilityDistribution({
+            kind: distKind,
+            param1,
+            param2,
+            intervalA: interval[0]!,
+            intervalB: interval[1]!
+          })
+          return okMeasurement({
+            metric: "probability",
+            distKind,
+            param1,
+            param2,
+            mean: dist.mean,
+            variance: dist.variance,
+            stdDev: dist.stdDev,
+            interval: dist.interval,
+            intervalProb: dist.intervalProb
+          })
         }
         return failBlocked(name, "unsupported_observation", `measurement metric "${metric}" is not supported`)
       }
@@ -4971,7 +5357,16 @@ export function createDsActionSession(options: {
         const explicitStateId = asString(input.stateId) ?? undefined
         const branchId = asString(input.branchId) ?? undefined
         const sliceTarget = explicitStateId || branchId ? { scopeId, ...(explicitStateId ? { stateId: explicitStateId } : {}), ...(branchId ? { branchId } : {}) } : undefined
-        const fnExpr = asString(input.expression)
+        const rawFnExpr = asString(input.expression)
+        const fnExpr = rawFnExpr
+          ? (() => {
+              try {
+                return normalizeHigherMathInput(rawFnExpr, "expression")
+              } catch {
+                return rawFnExpr
+              }
+            })()
+          : null
         const rawLabel = asString(input.label)
         const rawFnLabel = asString(input.functionLabel) ?? (rawLabel && /^[fgh](?:\(x\)(?:=.*)?)?$/i.test(rawLabel) ? rawLabel.replace(/\(x\).*$/i, "") : null)
         const fnId = asString(input.functionId) ?? rawFnLabel ?? (fnExpr ? id : null)
@@ -5297,6 +5692,30 @@ export function createDsActionSession(options: {
       if (name === "finish_candidate") {
         let primaryActions = [...(snap.actions.length > 0 ? snap.actions : recordedSlices[0]?.actions ?? [])]
         if (primaryActions.length === 0) {
+          const fallbackAnswer = asString(input.answer)?.trim()
+          if (sawHigherMathQuery && fallbackAnswer) {
+            const safeGoalOnly = (asString(input.goal)?.trim() || "高等数学精确求解").slice(0, 200)
+            const safeAns = fallbackAnswer.length > 2400 ? `${fallbackAnswer.slice(0, 2388)}...` : fallbackAnswer
+            return {
+              ok: true,
+              status: "accepted",
+              action: name,
+              stateChanged: false,
+              candidateHash: snap.candidateHash,
+              stepIndex: snap.stepIndex,
+              primitiveCount: snap.primitiveCount,
+              terminated: {
+                plan: {
+                  schemaVersion: PLAN_SCHEMA_VERSION,
+                  kind: "answer",
+                  goal: safeGoalOnly,
+                  factIds: [],
+                  toolResultRefs: [],
+                  answer: safeAns
+                }
+              }
+            }
+          }
           return failRepairable(name, "empty_candidate", "stage at least one geometric action before finish_candidate")
         }
         if (pendingEdgeBoundPoints.size > 0 && branchActionBuckets.size === 0) {
@@ -5974,7 +6393,12 @@ export function createDsActionSession(options: {
               plan,
               ...(resolvedScopeId === undefined ? {} : { requestedScopeId: resolvedScopeId })
             }) ?? resolvedScopeId
-            if (inSessionCertRejections < 2 && snap.candidateHash !== lastPreCertRejectedHash) {
+            if (
+              !sawHigherMathQuery &&
+              !hasExplicitHigherMathIntent(options.problemText) &&
+              inSessionCertRejections < 2 &&
+              snap.candidateHash !== lastPreCertRejectedHash
+            ) {
               const cert = certifyDrawingAgainstContract({
                 prompt: options.problemText,
                 document: finalDoc,

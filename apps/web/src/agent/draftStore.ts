@@ -1,5 +1,5 @@
 import type { GeometryDocument } from "@draw/dsl"
-import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, resolveInfeasibleEllipseFallbackScope, routeDeterministicProblem, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
+import { canonicalContentHash, certifyDrawingAgainstContract, compilePlan, hasExplicitHigherMathIntent, hasExplicitSolidConditions, normalizeGeometryPrompt, NUMERIC_POLICY_VERSION, planHasVerifiableFigure, parseObligationWithLegacy, proofAttemptStaleness, proofScopeOf, readFoldTransformations, readNamedFold, resolveInfeasibleEllipseFallbackScope, routeDeterministicProblem, solidDimensionGate, verifyDiagramObligations, PLAN_SCHEMA_VERSION, applyNormalisation, parseDiagramObligations, parseNormalisationReply, type CertificateBinding, type DrawingCertificateResult, type PlanCompileResult, type PlanDiagnostic, type PlanEnvelope, type PlanRelations, type PromptNormalisations, type RepairRequest, type StructuredAssumption, type DiagramVerificationReport } from "@draw/agent-core"
 import { commitTransaction, createIdAllocator, type DocumentHandle } from "@draw/scene-graph"
 
 import type { DraftAction, DomainOperation, IdAllocator } from "@draw/scene-graph"
@@ -730,7 +730,8 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
             ...(candidateScopeId === undefined ? {} : { requestedScopeId: candidateScopeId })
           })
         : candidateScopeId
-      const parsed = parserPrompt && !onlyParameterActions && (
+      const isHigherMathPrompt = Boolean(parserPrompt && hasExplicitHigherMathIntent(parserPrompt))
+      const parsed = parserPrompt && !onlyParameterActions && !isHigherMathPrompt && (
         planHasVerifiableFigure(materialised.actions)
         || explicitSolidDeclared
         || readFoldTransformations(parserPrompt).length > 0
@@ -825,7 +826,7 @@ export function createDraftStore(allocatorFactory: (taken?: Iterable<string>) =>
       const nextDocumentHash = canonicalContentHash(compiled.draftDocument)
       if (userMessage !== undefined || stageOptions?.enableCompleteCertificate === false || stageOptions?.requiredEntityLabels !== undefined) {
         const sourceHash = record.rawPromptHash ?? canonicalContentHash({ prompt: userMessage ?? "" })
-        const hasRelationalContract = checked !== undefined || stageOptions?.requiredEntityLabels !== undefined || hasExplicitRelationalContractSignal
+        const hasRelationalContract = !isHigherMathPrompt && (checked !== undefined || stageOptions?.requiredEntityLabels !== undefined || hasExplicitRelationalContractSignal)
         if (stageOptions?.enableCompleteCertificate === false) {
           record.drawingCertificate = certifyDrawingAgainstContract({
             prompt: effectivePrompt ?? "",
