@@ -590,6 +590,60 @@ export function App() {
     }
     return "missing-selection"
   }
+  const measureLinePlaneLinked = (): "created" | "existing" | "missing-selection" => {
+    const selectedPrimitives = selectedIds
+      .map((id) => document.primitives.find((primitive) => primitive.id === id))
+      .filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
+    const lines = selectedPrimitives.filter((primitive) => ["line3", "segment3", "ray3", "edge3"].includes(primitive.type))
+    const surfaces = selectedPrimitives.filter((primitive) => primitive.type === "face3" || primitive.type === "plane3")
+    if (selectedPrimitives.length === 2 && lines.length === 1 && surfaces.length === 1) {
+      setRightDockOpen(true)
+      setMobileDock("properties")
+      const existing = document.measurements.find(
+        (m) => m.metric === "linePlaneAngle" && m.sourceIds.length === 2 && selectedIds.every((id) => m.sourceIds.includes(id))
+      )
+      if (existing) {
+        setGuidance("已联动右侧属性栏展示当前线面角读数（弧度 / 角度 / sin / cos）。")
+        return "existing"
+      }
+      addMeasurement("linePlaneAngle")
+      return "created"
+    }
+    setRightDockOpen(true)
+    if (lines.length === 1 && surfaces.length === 0) {
+      setGuidance("已选中 1 条空间线：请开启左侧「多选」再勾选 1 个空间面或平面，即可计算线面角并在 3D 中展示垂线与射影。")
+    } else if (surfaces.length === 1 && lines.length === 0) {
+      setGuidance("已选中 1 个空间面/平面：请开启左侧「多选」再勾选 1 条空间直线或棱，即可计算线面角。")
+    } else {
+      setGuidance("线面角需要 1 条空间直线/棱 + 1 个空间面或平面：开启左侧「多选」勾选两者，再点「测量线面角」。")
+    }
+    return "missing-selection"
+  }
+  const measureLineAngleLinked = (): "created" | "existing" | "missing-selection" => {
+    const selectedLines = selectedIds
+      .map((id) => document.primitives.find((primitive) => primitive.id === id))
+      .filter((primitive): primitive is PrimitiveSpec => Boolean(primitive && ["line3", "segment3", "ray3", "edge3"].includes(primitive.type)))
+    if (selectedIds.length === 2 && selectedLines.length === 2) {
+      setRightDockOpen(true)
+      setMobileDock("properties")
+      const existing = document.measurements.find(
+        (m) => m.metric === "lineAngle" && m.sourceIds.length === 2 && selectedIds.every((id) => m.sourceIds.includes(id))
+      )
+      if (existing) {
+        setGuidance("已联动右侧属性栏展示当前空间直线夹角读数（弧度 / 角度 / sin / cos）。")
+        return "existing"
+      }
+      addMeasurement("lineAngle")
+      return "created"
+    }
+    setRightDockOpen(true)
+    if (selectedLines.length === 1) {
+      setGuidance("已选中 1 条空间线：请开启左侧「多选」再勾选第 2 条空间直线或棱（相交或异面均可），即可计算空间直线夹角。")
+    } else {
+      setGuidance("空间直线夹角需要 2 条空间直线或棱（相交或异面均可）：开启左侧「多选」勾选两条线，再点「测量直线夹角」。")
+    }
+    return "missing-selection"
+  }
   /**
    * 拖动之后的提交。两件事：
    *
@@ -891,7 +945,7 @@ export function App() {
   const planarCanvas = <GraphicsView document={document} ghostCandidate={activeGhostDraft?.candidate} selectedIds={selectedIds} creationMode={creationMode} creationStep={creationStep} onSelect={updateSelection} onBoxSelect={selectBox} onCanvasClick={handleCanvasCreationClick} onCanvasDoubleClick={handleCanvasDoubleClick} onCancelCreation={() => { setCreationStep(null); setActiveCommand(null); setGuidance(null) }} onCanvasContextMenu={handleCanvasContextMenu} onDoubleClickPrimitive={handleDoubleClickPrimitive} onDragEnd={handleDragEnd} onCreateIntersection={(preview) => { setCreationStep(null); setActiveCommand(null); setGuidance(null); createIntersectionFromPreview(preview) }} onPointerCoordinate={setPointerCoordinate} />
   const threeCanvas = <AppErrorBoundary scope="canvas3d"><ThreeSceneView document={activeGhostDraft ? activeGhostDraft.candidate : wizardPreviewDocument} ghostActive={activeGhostDraft !== null} selectedIds={solidWizardOpen ? [] : selectedIds} onSelect={solidWizardOpen ? () => undefined : updateSelection} onCanvasContextMenu={handleCanvasContextMenu} creationSession={spatialSession} solidWizardOpen={solidWizardOpen} solidPreviewActive={solidWizardOpen && wizardPreviewDocument !== document} onOpenSolidWizard={openSolidWizard} onCreationAnchor={handleSpatialAnchor} onCreationError={setGuidance} onFinishCreation={finishSpatialDrawing} onCancelCreation={() => { updateSpatialSession(null); setActiveCommand(null); setGuidance(null) }} onStepBackCreation={() => { const session = spatialSessionRef.current; if (session) updateSpatialSession(removeLastSpatialAnchor(session)) }} onStatusPromptChange={setSceneControl} previews={solidWizardOpen ? [] : scenePreviews} onPreviewHover={(hovering, preview) => setHoveredPreviewKey(hovering ? preview.key : null)} onPreviewClick={solidWizardOpen ? undefined : createFromPreview} onDragEnd={solidWizardOpen ? undefined : commitDrag3End} onMoveSection={(id, distance) => apply({ op: "moveSectionPlane", id, distance })} onHostDragEnd={(id, parameter) => {
     applyBatch(hostPointDragOperations(document, id, parameter))
-  }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} viewOptions={threeViewOptions} onChangeViewOptions={setThreeViewOptions} onMeasureDihedral={measureDihedralLinked} /></AppErrorBoundary>
+  }} onRotateEnd={(id, axis, degrees) => apply({ op: "rotatePrimitive3", id, axis, degrees })} onTrackRadiusEnd={(id, radius) => apply({ op: "updatePrimitive", id, patch: { radius3: radius } })} onPickSectionFace={applySectionFace} viewOptions={threeViewOptions} onChangeViewOptions={setThreeViewOptions} onMeasureDihedral={measureDihedralLinked} onMeasureLinePlaneAngle={measureLinePlaneLinked} onMeasureLineAngle={measureLineAngleLinked} /></AppErrorBoundary>
 
   /**
    * 可作宿主的图元：空间直线 / 线段 / 射线 / 棱 / 面 / 圆柱与圆锥侧面，以及**实体的内部**
@@ -902,7 +956,7 @@ export function App() {
     [document.primitives]
   )
 
-  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onCreatePointOnHost: createPointOnHost, onConnectPoint3Segment: addSegment3, onConnectPoint3Line: addLine3, onConnectPoint3Plane: addPlane3, onConnectPoint3Face: addFace3, onSelectPrimitive: (id) => setSelectedIds([id]), onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: (metric, dihedralKind) => { setRightDockOpen(true); addMeasurement(metric, dihedralKind) }, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onCreateCircleAtPoint: createCircleAtPoint, onCreateCurveTangent: addCurveTangent, onCreatePointTangent: addPointTangent, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), threeViewOptions, onToggleThreeViewOption: toggleThreeViewOption, onMeasureDihedralQuick: () => { const res = measureDihedralLinked(); if (res === "missing-selection") toggleThreeViewOption("showAngle") }, onOpenSolidWizardQuick: openSolidWizard, value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }), ...(activeGhostDraft ? { documentOverride: activeGhostDraft.candidate, draftPreview: true } : {}) }
+  const propertiesBarProps: PropertiesBarProps = { selectedPrimitive, selectedIds, selectedCount: selectedIds.length, selectedGroupId: selectedGroup?.id ?? null, allSelectedVisible, canCreateIntersection, onCreateGroup: createGroup, onDeleteGroup: deleteGroup, onCreateIntersection: createIntersection, onAlign: alignSelection, onToggleSelectedVisibility: () => selectedId && apply({ op: "toggleVisibility", id: selectedId, visible: selectedPrimitive?.visible === false }), onToggleSelectedLock: () => selectedId && apply({ op: "toggleLock", id: selectedId, locked: !selectedPrimitive?.locked }), onDeleteSelected: deleteSelected, onToggleBatchVisibility: () => apply({ op: "setPrimitivesVisible", ids: selectedIds, visible: !allSelectedVisible }), onUpdatePrimitive: (patch) => selectedId && apply({ op: "updatePrimitive", id: selectedId, patch }), onRotateSection: rotateSelectedSection, onRotate3: rotateSelected3, onMaterializeSection: materializeSelectedSection, pointHostCandidates, onBindPointHost: bindPointToHost, onCreatePointOnHost: createPointOnHost, onConnectPoint3Segment: addSegment3, onConnectPoint3Line: addLine3, onConnectPoint3Plane: addPlane3, onConnectPoint3Face: addFace3, onSelectPrimitive: (id) => setSelectedIds([id]), onChangeHostParameter: setPointHostParameter, onAddAnnotation: addAnnotation, onAddEngineeringAnnotation: addEngineeringAnnotation, onCreateMeasurement: (metric, dihedralKind) => { setRightDockOpen(true); addMeasurement(metric, dihedralKind) }, onDeleteMeasurement: deleteMeasurement, onCreateMovingCircle: createMovingCircle, onCreateCircleAtPoint: createCircleAtPoint, onCreateCurveTangent: addCurveTangent, onCreatePointTangent: addPointTangent, onUpdateSelectionStyle: (style) => apply({ op: "setPrimitivesStyle", ids: selectedIds, style }), onCreateDerivative: (sourceId) => addFunctionAnalysis(sourceId, "derivative"), onCreateTangent: (sourceId) => addFunctionAnalysis(sourceId, "tangent"), onCreateIntegral: (sourceId) => addFunctionAnalysis(sourceId, "integral"), threeViewOptions, onToggleThreeViewOption: toggleThreeViewOption, onMeasureDihedralQuick: () => { const res = measureDihedralLinked(); if (res === "missing-selection") toggleThreeViewOption("showAngle") }, onMeasureLinePlaneQuick: () => { measureLinePlaneLinked() }, onMeasureLineAngleQuick: () => { measureLineAngleLinked() }, onOpenSolidWizardQuick: openSolidWizard, value: slope?.value ?? 0.5, min: slope?.min ?? 0.15, max: slope?.max ?? 0.85, step: slope?.step ?? 0.05, onChange: (value) => apply({ op: "setParameter", id: "slope", value }), ...(activeGhostDraft ? { documentOverride: activeGhostDraft.candidate, draftPreview: true } : {}) }
 
   const propertiesPanel = <PropertiesBar {...propertiesBarProps} />
 

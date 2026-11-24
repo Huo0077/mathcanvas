@@ -627,7 +627,7 @@ describe("real DS planar tool schema fidelity", () => {
     expect(tools.get("query_measurement")?.description).toMatch(/metric.*distance.*targets/i)
     expect(tools.get("query_constraint_status")?.description).toMatch(/targets/i)
     expect(tools.get("query_measurement")?.parameters).toMatchObject({ required: ["metric"],
-      properties: { metric: { enum: ["distance", "position", "coordinates", "area"] }, targets: { type: "array" } } })
+      properties: { metric: { enum: ["distance", "position", "coordinates", "area", "line_plane_angle", "line_angle", "dihedral_angle"] }, targets: { type: "array" } } })
   })
 })
 
@@ -1687,5 +1687,33 @@ describe("dsActionTools (Task F2 closed action-level protocol)", () => {
       expect(compiled.diagramVerification?.checks.length).toBeGreaterThanOrEqual(6)
       expect(compiled.diagramVerification?.checks.every((c) => c.status === "passed")).toBe(true)
     }
+  })
+
+  it("supports query_measurement for line_plane_angle, skew line_angle, and dihedral_angle", () => {
+    const session = createDsActionSession({
+      workspace: "geometry3d",
+      baseDocument: createEmptyDocument("geometry3d"),
+      problemText: "在单位正方体 ABCD-A₁B₁C₁D₁ 中，求体对角线 AC₁ 与底面 ABCD 所成角、异面直线 AB₁ 与 BC₁ 所成角以及二面角 A₁-AB-C。"
+    })
+    for (const [id, x, y, z] of [
+      ["A", 0, 0, 0], ["B", 1, 0, 0], ["C", 1, 1, 0], ["D", 0, 1, 0],
+      ["A1", 0, 0, 1], ["B1", 1, 0, 1], ["C1", 1, 1, 1]
+    ] as const) {
+      expect(session.execute("construct_point", { id, x, y, z }).ok).toBe(true)
+    }
+
+    const lp = session.execute("query_measurement", { metric: "line_plane_angle", targets: ["A", "C1", "A", "B", "C"] })
+    expect(lp.ok).toBe(true)
+    expect(Number(lp.measurement?.sin)).toBeCloseTo(1 / Math.sqrt(3), 6)
+    expect(lp.measurement?.relation).toBe("oblique")
+
+    const la = session.execute("query_measurement", { metric: "line_angle", targets: ["A", "B1", "B", "C1"] })
+    expect(la.ok).toBe(true)
+    expect(Number(la.measurement?.degrees)).toBeCloseTo(60, 6)
+    expect(la.measurement?.relation).toBe("skew")
+
+    const dh = session.execute("query_measurement", { metric: "dihedral_angle", targets: ["A1", "A", "B", "C"] })
+    expect(dh.ok).toBe(true)
+    expect(Number(dh.measurement?.degrees)).toBeCloseTo(90, 6)
   })
 })

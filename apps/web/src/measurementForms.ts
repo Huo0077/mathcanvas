@@ -82,9 +82,14 @@ function formatTrigComponent(raw: number): TrigValueDisplay {
   return { numeric, exact, display }
 }
 
-/** 计算有效角度 / 二面角的度数与正弦、余弦显示（兼容精确分式/根式形式）。 */
+/** 计算有效角度 / 二面角 / 线面角 / 空间直线夹角的度数与正弦、余弦显示（兼容精确分式/根式形式）。 */
 export function angleTrigValues(measurement: Measurement3): AngleTrigValues | null {
-  const isAngle = measurement.metric === "angle" || measurement.metric === "dihedral" || measurement.unit === "rad"
+  const isAngle =
+    measurement.metric === "angle"
+    || measurement.metric === "dihedral"
+    || measurement.metric === "linePlaneAngle"
+    || measurement.metric === "lineAngle"
+    || measurement.unit === "rad"
   if (!isAngle || measurement.status !== "valid" || measurement.value === undefined || !Number.isFinite(measurement.value)) {
     return null
   }

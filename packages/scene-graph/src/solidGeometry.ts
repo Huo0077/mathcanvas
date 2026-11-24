@@ -1,5 +1,5 @@
 import type { GeometryDocument, PrimitiveSpec, Section3Classification, Vector3 } from "@draw/dsl"
-import { dihedralMarker3, sharedRingEdge3, type DihedralMarker3, type FaceRing3 } from "@draw/geometry-kernel"
+import { addVector3, dihedralMarker3, dotVector3, lengthVector3, lineAngleMarker3, linePlaneAngleMarker3, normalizeVector3, planeFromPoints, sharedRingEdge3, type DihedralMarker3, type FaceRing3, type LineAngleMarker3, type LinePlaneAngleMarker3, type Plane3 } from "@draw/geometry-kernel"
 
 /**
  * **立体与截面的几何**（从 `operations.ts` 拆出，逐字照搬）。
@@ -319,6 +319,100 @@ export function resolveDihedralMarker3(document: GeometryDocument, measurementId
   const hingeEnd = primitiveMap.get(hinge[1])
   if (hingeStart?.type !== "point3" || hingeEnd?.type !== "point3") return null
   return dihedralMarker3(firstPoints, secondPoints, { ...hingeStart.position }, { ...hingeEnd.position })
+}
+
+type LineLikePrimitive3 = Extract<PrimitiveSpec, { type: "line3" | "segment3" | "ray3" | "edge3" }>
+
+function resolveLineEndpoints3(primitive: LineLikePrimitive3, primitiveMap: ReadonlyMap<string, PrimitiveSpec>): [Vector3, Vector3] | null {
+  const pointAt = (id: string) => {
+    const p = primitiveMap.get(id)
+    return p?.type === "point3" ? { ...p.position } : null
+  }
+  if (primitive.type === "line3") {
+    if (primitive.definition.kind === "throughPoints") {
+      const a = pointAt(primitive.definition.pointIds[0])
+      const b = pointAt(primitive.definition.pointIds[1])
+      return a && b ? [a, b] : null
+    }
+    const origin = pointAt(primitive.definition.pointId)
+    return origin ? [origin, addVector3(origin, primitive.definition.direction)] : null
+  }
+  const ids = primitive.type === "ray3" ? [primitive.originId, primitive.throughId] : primitive.pointIds
+  const a = pointAt(ids[0])
+  const b = pointAt(ids[1])
+  return a && b ? [a, b] : null
+}
+
+function resolveSurfacePlane3(primitive: PrimitiveSpec, primitiveMap: ReadonlyMap<string, PrimitiveSpec>): { plane: Plane3; reference?: Vector3 } | null {
+  const pointAt = (id: string) => {
+    const p = primitiveMap.get(id)
+    return p?.type === "point3" ? { ...p.position } : null
+  }
+  if (primitive.type === "face3") {
+    const pts = primitive.pointIds.map(pointAt)
+    if (pts.length < 3 || pts.some((p) => !p)) return null
+    const valid = pts as Vector3[]
+    const centroid = valid.reduce((sum, p) => ({ x: sum.x + p.x / valid.length, y: sum.y + p.y / valid.length, z: sum.z + p.z / valid.length }), { x: 0, y: 0, z: 0 })
+    for (let i = 1; i < valid.length - 1; i += 1) {
+      const plane = planeFromPoints(valid[0]!, valid[i]!, valid[i + 1]!)
+      if (plane) return { plane, reference: centroid }
+    }
+    return null
+  }
+  if (primitive.type === "plane3") {
+    if (primitive.definition.kind === "pointNormal") {
+      const origin = pointAt(primitive.definition.pointId)
+      if (!origin) return null
+      const normal = normalizeVector3(primitive.definition.normal)
+      if (lengthVector3(normal) <= 1e-10) return null
+      return { plane: { normal, constant: -dotVector3(normal, origin) }, reference: origin }
+    }
+    const pts = primitive.definition.pointIds.map(pointAt)
+    if (pts.length < 3 || pts.some((p) => !p)) return null
+    const valid = pts as Vector3[]
+    const plane = planeFromPoints(valid[0]!, valid[1]!, valid[2]!)
+    if (!plane) return null
+    const centroid = valid.reduce((sum, p) => ({ x: sum.x + p.x / valid.length, y: sum.y + p.y / valid.length, z: sum.z + p.z / valid.length }), { x: 0, y: 0, z: 0 })
+    return { plane, reference: centroid }
+  }
+  return null
+}
+
+/** Resolve the drawable 3D line-plane angle annotation (perpendicular drop, projection, arc, right-angle corner). */
+export function resolveLinePlaneAngleMarker3(document: GeometryDocument, measurementId: string): LinePlaneAngleMarker3 | null {
+  const measurement = document.measurements.find((candidate) => candidate.id === measurementId)
+  if (!measurement || measurement.metric !== "linePlaneAngle" || measurement.sourceIds.length !== 2) return null
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const sources = measurement.sourceIds.map((id) => primitiveMap.get(id))
+  const lineSource = sources.find((s): s is LineLikePrimitive3 => Boolean(s && ["line3", "segment3", "ray3", "edge3"].includes(s.type)))
+  const surfaceSource = sources.find((s) => s?.type === "face3" || s?.type === "plane3")
+  if (!lineSource || !surfaceSource) return null
+  const endpoints = resolveLineEndpoints3(lineSource, primitiveMap)
+  const surface = resolveSurfacePlane3(surfaceSource, primitiveMap)
+  if (!endpoints || !surface) return null
+  return linePlaneAngleMarker3(endpoints[0], endpoints[1], surface.plane, { planeReference: surface.reference })
+}
+
+/** Resolve the drawable 3D spatial line-line angle annotation (arc at intersection, or translated parallel line for skew lines). */
+export function resolveLineAngleMarker3(document: GeometryDocument, measurementId: string): LineAngleMarker3 | null {
+  const measurement = document.measurements.find((candidate) => candidate.id === measurementId)
+  if (!measurement || measurement.metric !== "lineAngle") return null
+  const primitiveMap = new Map(document.primitives.map((primitive) => [primitive.id, primitive]))
+  const sources = measurement.sourceIds.map((id) => primitiveMap.get(id))
+  const lineSources = sources.filter((s): s is LineLikePrimitive3 => Boolean(s && ["line3", "segment3", "ray3", "edge3"].includes(s.type)))
+  if (lineSources.length === 2 && measurement.sourceIds.length === 2) {
+    const first = resolveLineEndpoints3(lineSources[0]!, primitiveMap)
+    const second = resolveLineEndpoints3(lineSources[1]!, primitiveMap)
+    if (!first || !second) return null
+    return lineAngleMarker3(first[0], first[1], second[0], second[1])
+  }
+  if (measurement.sourceIds.length === 4) {
+    const pts = sources.map((s) => (s?.type === "point3" ? { ...s.position } : null))
+    if (pts.every((p): p is Vector3 => p !== null)) {
+      return lineAngleMarker3(pts[0]!, pts[1]!, pts[2]!, pts[3]!)
+    }
+  }
+  return null
 }
 
 /** Default cutting plane: the **horizontal** plane (normal +Z, world is Z-up) through the source's

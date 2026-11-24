@@ -98,6 +98,16 @@ describe("spatial measurement options", () => {
     expect(metrics([face, face])).toContain("dihedral")
     expect(metrics([face, plane])).not.toContain("dihedral")
   })
+
+  it("offers linePlaneAngle for a line with a face or plane regardless of order, and lineAngle for two spatial lines", () => {
+    expect(metrics([line, face])).toContain("linePlaneAngle")
+    expect(metrics([face, line])).toContain("linePlaneAngle")
+    expect(metrics([line, plane])).toContain("linePlaneAngle")
+    expect(metrics([plane, line])).toContain("linePlaneAngle")
+    expect(metrics([line, line])).toContain("lineAngle")
+    expect(metrics([pointA, pointB, pointC])).toContain("angle")
+    expect(metrics([pointA, pointB, pointC])).not.toContain("lineAngle")
+  })
 })
 
 describe("spatial constraint options", () => {

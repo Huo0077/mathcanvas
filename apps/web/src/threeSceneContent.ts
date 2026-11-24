@@ -2,7 +2,7 @@ import * as THREE from "three"
 
 import type { GeometryDocument, IntersectionFacePrimitive, IntersectionPoint3Primitive, IntersectionSolidPrimitive, Plane3Primitive, Point3Primitive, Polyhedron3Primitive, SectionPrimitive } from "@draw/dsl"
 import { unfoldPolyhedron3 } from "@draw/geometry-kernel"
-import { resolveDihedralMarker3, resolvePolyhedronTopology, sectionSourceVertices } from "@draw/scene-graph"
+import { resolveDihedralMarker3, resolveLineAngleMarker3, resolveLinePlaneAngleMarker3, resolvePolyhedronTopology, sectionSourceVertices } from "@draw/scene-graph"
 import { measurementVisualsForDocument, resolveMeasurementVisual } from "./measurementVisuals"
 import { isUserVisiblePrimitive } from "./primitiveVisibility"
 import { GRID_MAJOR_EVERY, GRID_MIN_RADIUS } from "./sceneGrid"
@@ -14,7 +14,7 @@ import type { ThreeScenePreview } from "./threeScenePreview"
 import type { ThreeSceneEffectDeps } from "./threeSceneEffect"
 import { rotationHandleGeometry, rotationHandleTarget } from "./threeDrag"
 import { templateTopologyOwners } from "./threePicking"
-import { createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, createPlanePatch, createRotationHandles, createTrackRadiusHandle, createSolidGroup, buildPointDrivenObject, disposeObject, createPreviewGroup, hasDrawablePreview, createCurveLoops3, createRimCircles3, visibleSolids } from "./threePrimitives"
+import { createPlane3Mesh, createSectionMesh, createIntersectionSolidGroup, createIntersectionFaceGroup, createIntersectionPointGroup, createUnfoldNetGroup, createDihedralMarkerGroup, createLinePlaneAngleMarkerGroup, createLineAngleMarkerGroup, createPlanePatch, createRotationHandles, createTrackRadiusHandle, createSolidGroup, buildPointDrivenObject, disposeObject, createPreviewGroup, hasDrawablePreview, createCurveLoops3, createRimCircles3, visibleSolids } from "./threePrimitives"
 import { curveToleranceFor, toleranceBucket } from "./conicSampling"
 import { collectRimCircles, rimChordEdgeIds } from "./rimCircles"
 import { defaultStrokeFor } from "./primitiveStyle"
@@ -377,6 +377,8 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
     visiblePointLabels.length = 0
     visiblePointLabels.push(...visibleSpatialPoints.filter((primitive) => !shadowedDuplicatePointIds.has(primitive.id)))
     let dihedralMarkerCount = 0
+    let linePlaneAngleMarkerCount = 0
+    let lineAngleMarkerCount = 0
     let planeCount = 0
     document.measurements
       .filter((measurement) => measurement.metric === "dihedral" && measurement.status === "valid" && measurement.sourceIds.some((id) => selectedIds.includes(id)))
@@ -386,6 +388,24 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
         const allSelected = measurement.sourceIds.every((id) => selectedIds.includes(id))
         keepContent(`dihedral:${measurement.id}`, signer.ofReferences(measurement.sourceIds, `dihedral:${JSON.stringify(measurement)};sel:${allSelected}`), () => createDihedralMarkerGroup(marker, allSelected), alive, order)
         dihedralMarkerCount += 1
+      })
+    document.measurements
+      .filter((measurement) => measurement.metric === "linePlaneAngle" && measurement.status === "valid" && measurement.sourceIds.some((id) => selectedIds.includes(id)))
+      .forEach((measurement) => {
+        const marker = resolveLinePlaneAngleMarker3(document, measurement.id)
+        if (!marker) return
+        const allSelected = measurement.sourceIds.every((id) => selectedIds.includes(id))
+        keepContent(`linePlaneAngle:${measurement.id}`, signer.ofReferences(measurement.sourceIds, `linePlaneAngle:${JSON.stringify(measurement)};sel:${allSelected}`), () => createLinePlaneAngleMarkerGroup(marker, allSelected), alive, order)
+        linePlaneAngleMarkerCount += 1
+      })
+    document.measurements
+      .filter((measurement) => measurement.metric === "lineAngle" && measurement.status === "valid" && measurement.sourceIds.some((id) => selectedIds.includes(id)))
+      .forEach((measurement) => {
+        const marker = resolveLineAngleMarker3(document, measurement.id)
+        if (!marker) return
+        const allSelected = measurement.sourceIds.every((id) => selectedIds.includes(id))
+        keepContent(`lineAngle:${measurement.id}`, signer.ofReferences(measurement.sourceIds, `lineAngle:${JSON.stringify(measurement)};sel:${allSelected}`), () => createLineAngleMarkerGroup(marker, allSelected), alive, order)
+        lineAngleMarkerCount += 1
       })
     /**
      * 测量数字**常驻画布**：不再要求"来源被选中"。
@@ -529,6 +549,8 @@ export function createThreeSceneContent({ documentRef, selectedIdsRef, displayFl
       sceneShell.dataset.unfoldProgress = unfoldProgress.toFixed(2)
       sceneShell.dataset.unfoldObjects = unfoldedPolyhedra.map((polyhedron) => `${polyhedron.id}:${effectiveUnfoldProgress(polyhedron).toFixed(2)}`).join(",")
       sceneShell.dataset.dihedralMarkers = String(dihedralMarkerCount)
+      sceneShell.dataset.linePlaneAngleMarkers = String(linePlaneAngleMarkerCount)
+      sceneShell.dataset.lineAngleMarkers = String(lineAngleMarkerCount)
       sceneShell.dataset.planeCount = String(planeCount)
       sceneShell.dataset.measurementLabelCount = String(measurementVisuals.length)
       // 常驻测量数字的条数（`data-measurement-labels` 是这一条的正式名字，`…LabelCount` 保留给旧断言）。

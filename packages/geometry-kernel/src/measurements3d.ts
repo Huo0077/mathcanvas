@@ -1,7 +1,7 @@
 import type { Face3Primitive, Line3Primitive, Measurement3, Plane3Primitive, Polyhedron3Primitive, PrimitiveSpec, Point3Primitive, Vector3 } from "@draw/dsl"
 
-import { addVector3, crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, subtractVector3 } from "./geometry3d"
-import { dihedralAngleDetail3, sharedRingEdge3 } from "./markers3d"
+import { addVector3, crossVector3, distanceVector3, dotVector3, lengthVector3, normalizeVector3, planeFromPoints, subtractVector3, type Plane3 } from "./geometry3d"
+import { dihedralAngleDetail3, lineAngleDetail3, linePlaneAngleDetail3, sharedRingEdge3 } from "./markers3d"
 
 type LineLike3 = Extract<PrimitiveSpec, { type: "line3" | "segment3" | "ray3" | "edge3" }>
 type MeasurementContext3 = readonly PrimitiveSpec[] | ReadonlyMap<string, PrimitiveSpec>
@@ -77,11 +77,43 @@ function pointFromPrimitive(primitive: PrimitiveSpec | undefined, primitives: Re
   return null
 }
 
-function lineDirection(primitive: LineLike3, primitives: ReadonlyMap<string, PrimitiveSpec>): Vector3 | null {
-  const endpoints = lineEndpoints(primitive, primitives)
-  if (!endpoints) return null
-  const direction = subtractVector3(endpoints[1], endpoints[0])
-  return lengthVector3(direction) > EPSILON ? direction : null
+function planeFromSurfacePrimitive(primitive: PrimitiveSpec | undefined, primitives: ReadonlyMap<string, PrimitiveSpec>): Plane3 | null {
+  if (!primitive) return null
+  if (primitive.type === "face3") {
+    const points = facePoints(primitive, primitives)
+    if (!points || points.length < 3) return null
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const plane = planeFromPoints(points[0]!, points[index]!, points[index + 1]!)
+      if (plane) return plane
+    }
+    return null
+  }
+  if (primitive.type === "plane3") {
+    if (primitive.definition.kind === "pointNormal") {
+      const origin = pointById(primitives, primitive.definition.pointId)
+      if (!origin) return null
+      const normal = normalizeVector3(primitive.definition.normal)
+      if (lengthVector3(normal) <= EPSILON) return null
+      return { normal, constant: -dotVector3(normal, origin) }
+    }
+    const planePoints = primitive.definition.pointIds.map((id) => pointById(primitives, id))
+    return planePoints.length >= 3 && planePoints.every(Boolean)
+      ? planeFromPoints(planePoints[0]!, planePoints[1]!, planePoints[2]!)
+      : null
+  }
+  return null
+}
+
+export function measureLinePlaneAngle3(id: string, sourceIds: string[], lineStart: Vector3, lineEnd: Vector3, plane: Plane3): Measurement3 {
+  const detail = linePlaneAngleDetail3(lineStart, lineEnd, plane)
+  if (!detail) return invalidMeasurement(id, sourceIds, "linePlaneAngle", "degenerate", "线面角来源退化，无法确定直线方向或平面法向量。")
+  return result(id, sourceIds, "linePlaneAngle", detail.radians, "rad", detail.explanation)
+}
+
+export function measureLineAngle3(id: string, sourceIds: string[], firstStart: Vector3, firstEnd: Vector3, secondStart: Vector3, secondEnd: Vector3): Measurement3 {
+  const detail = lineAngleDetail3(firstStart, firstEnd, secondStart, secondEnd)
+  if (!detail) return invalidMeasurement(id, sourceIds, "lineAngle", "degenerate", "空间直线夹角来源中至少有一条直线退化。")
+  return result(id, sourceIds, "lineAngle", detail.radians, "rad", detail.explanation)
 }
 
 function volumeOfPolyhedron(polyhedron: Polyhedron3Primitive, primitives: ReadonlyMap<string, PrimitiveSpec>): number | null {
@@ -187,12 +219,43 @@ export function calculateMeasurement3(measurement: Measurement3, context: Measur
     const secondPoint = pointById(primitives, measurement.sourceIds[1])
     return firstPoint && secondPoint ? measureDistance3(measurement.id, measurement.sourceIds, distanceVector3(firstPoint, secondPoint), `由两个空间点 ${measurement.sourceIds.join("、")} 的坐标计算距离。`) : invalidMeasurement(measurement.id, measurement.sourceIds, "distance", "insufficient-data", "距离需要两个空间点，或点与直线/平面。")
   }
+  if (measurement.metric === "linePlaneAngle") {
+    const lineSource = sources.find((source): source is LineLike3 => Boolean(source && ["line3", "segment3", "ray3", "edge3"].includes(source.type)))
+    const surfaceSource = sources.find((source) => source?.type === "face3" || source?.type === "plane3")
+    if (!lineSource || !surfaceSource || measurement.sourceIds.length !== 2) {
+      return invalidMeasurement(measurement.id, measurement.sourceIds, "linePlaneAngle", "insufficient-data", "线面角需要 1 条空间直线/棱与 1 个空间面或平面。")
+    }
+    const endpoints = lineEndpoints(lineSource, primitives)
+    const plane = planeFromSurfacePrimitive(surfaceSource, primitives)
+    if (!endpoints || !plane) {
+      return invalidMeasurement(measurement.id, measurement.sourceIds, "linePlaneAngle", "degenerate", "无法解析线面角的直线端点或平面法向量。")
+    }
+    return measureLinePlaneAngle3(measurement.id, measurement.sourceIds, endpoints[0], endpoints[1], plane)
+  }
+  if (measurement.metric === "lineAngle") {
+    const lineSources = sources.filter((source): source is LineLike3 => Boolean(source && ["line3", "segment3", "ray3", "edge3"].includes(source.type)))
+    if (lineSources.length === 2 && measurement.sourceIds.length === 2) {
+      const firstEndpoints = lineEndpoints(lineSources[0]!, primitives)
+      const secondEndpoints = lineEndpoints(lineSources[1]!, primitives)
+      if (!firstEndpoints || !secondEndpoints) {
+        return invalidMeasurement(measurement.id, measurement.sourceIds, "lineAngle", "degenerate", "空间直线夹角来源中至少有一条线无法解析端点。")
+      }
+      return measureLineAngle3(measurement.id, measurement.sourceIds, firstEndpoints[0], firstEndpoints[1], secondEndpoints[0], secondEndpoints[1])
+    }
+    const points = measurement.sourceIds.map((id) => pointById(primitives, id))
+    if (points.length === 4 && points.every(Boolean)) {
+      return measureLineAngle3(measurement.id, measurement.sourceIds, points[0]!, points[1]!, points[2]!, points[3]!)
+    }
+    return invalidMeasurement(measurement.id, measurement.sourceIds, "lineAngle", "insufficient-data", "空间直线夹角需要 2 条空间直线/棱（相交或异面），或 4 个空间点。")
+  }
   if (measurement.metric === "angle") {
     const lineSources = sources.filter((source): source is LineLike3 => Boolean(source && ["line3", "segment3", "ray3", "edge3"].includes(source.type)))
     if (lineSources.length === 2) {
-      const firstDirection = lineDirection(lineSources[0], primitives)
-      const secondDirection = lineDirection(lineSources[1], primitives)
-      return firstDirection && secondDirection ? measureAngle3(measurement.id, measurement.sourceIds, firstDirection, secondDirection) : invalidMeasurement(measurement.id, measurement.sourceIds, "angle", "degenerate", "角度来源中至少有一条线退化。")
+      const firstEndpoints = lineEndpoints(lineSources[0]!, primitives)
+      const secondEndpoints = lineEndpoints(lineSources[1]!, primitives)
+      if (!firstEndpoints || !secondEndpoints) return invalidMeasurement(measurement.id, measurement.sourceIds, "angle", "degenerate", "角度来源中至少有一条线退化。")
+      const detail = lineAngleDetail3(firstEndpoints[0], firstEndpoints[1], secondEndpoints[0], secondEndpoints[1])
+      return detail ? result(measurement.id, measurement.sourceIds, "angle", detail.radians, "rad", detail.explanation) : invalidMeasurement(measurement.id, measurement.sourceIds, "angle", "degenerate", "角度来源中至少有一条线退化。")
     }
     const points = measurement.sourceIds.map((id) => pointById(primitives, id))
     return points.length === 3 && points.every(Boolean) ? measureAngle3(measurement.id, measurement.sourceIds, points[0]!, points[2]!, points[1]!) : invalidMeasurement(measurement.id, measurement.sourceIds, "angle", "insufficient-data", "角度需要两条线，或按顶点顺序提供三个空间点。")

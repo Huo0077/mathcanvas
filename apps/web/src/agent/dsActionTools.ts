@@ -20,6 +20,7 @@ import {
 import { deriveAcceptance } from "./acceptance"
 import {
   canonicalPointName,
+  dihedralAngleDetail3,
   distanceVector3,
   evaluateFunctionWithDomain,
   evaluateSymbolicDerivative,
@@ -28,6 +29,8 @@ import {
   host3FromPrimitive,
   intersectPlanarLineAndConicExact,
   isPointName,
+  lineAngleDetail3,
+  linePlaneAngleDetail3,
   planeFromPoints,
   solveInsphere3,
   tangentLineToConicAt,
@@ -1090,7 +1093,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_circumsphere: "Derive a real 3D circumsphere (default mode='circumsphere') or insphere/max-ball (mode='insphere') from an existing named solid; never provide raw center/radius or 2D construct_circle.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
-  query_measurement: "Use metric=distance with targets of 2 points, metric=area with targets of 3 triangle points, or metric=position/coordinates with target naming 1 point.",
+  query_measurement: "Use metric=distance with targets of 2 points, metric=area with targets of 3 triangle points, metric=position/coordinates with target naming 1 point, metric=line_plane_angle with targets of 5 points [L1,L2,P1,P2,P3] (line L1L2 to plane P1P2P3), metric=line_angle with targets of 4 points [A,B,C,D] (spatial angle between lines AB and CD, intersecting or skew), or metric=dihedral_angle with targets of 4 points [P,A,B,Q] (dihedral P-AB-Q).",
   query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), collinear, perpendicular (3 targets [A,B,C] for AB⊥BC or 4 targets [A,B,C,D] for AB⊥CD), or parallel (4 targets [A,B,C,D]) to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
@@ -1326,7 +1329,7 @@ const REQUEST_CLARIFICATION_PARAMETERS = {
 } as const
 const QUERY_MEASUREMENT_PARAMETERS = {
   type: "object", additionalProperties: false, required: ["metric"],
-  properties: { metric: { type: "string", enum: ["distance", "position", "coordinates", "area"] },
+  properties: { metric: { type: "string", enum: ["distance", "position", "coordinates", "area", "line_plane_angle", "line_angle", "dihedral_angle"] },
     targets: { type: "array", items: { type: "string" } }, target: { type: "string" } }
 } as const
 const QUERY_CONSTRAINT_STATUS_PARAMETERS = {
@@ -3433,6 +3436,108 @@ export function createDsActionSession(options: {
             }
           }
           return failRepairable(name, "undeclared_entity_ref", `point(s) not currently materialized: ${targets.join(", ")}`)
+        }
+        if (metric === "line_plane_angle") {
+          const targets = asStringList(input.targets)
+          if (!targets || targets.length !== 5) {
+            return failRepairable(name, "missing_required_parameter", "line_plane_angle query requires exactly 5 point names [L1, L2, P1, P2, P3]")
+          }
+          const pts = targets.map((t) => readP3(t, branchHint) ?? resolveSphereCenter3(t, branchHint))
+          if (!pts.every((p): p is Vector3 => p !== undefined)) {
+            return failRepairable(name, "undeclared_entity_ref", `point(s) not currently materialized: ${targets.join(", ")}`)
+          }
+          const plane = planeFromPoints(pts[2]!, pts[3]!, pts[4]!)
+          const detail = plane ? linePlaneAngleDetail3(pts[0]!, pts[1]!, plane) : null
+          if (!detail) {
+            return failBlocked(name, "degenerate_geometry", "line_plane_angle requires non-degenerate line endpoints and 3 non-collinear plane points")
+          }
+          return {
+            ok: true,
+            status: "accepted",
+            action: name,
+            stateChanged: false,
+            candidateHash: snap.candidateHash,
+            stepIndex: snap.stepIndex,
+            primitiveCount: snap.primitiveCount,
+            measurement: {
+              metric: "line_plane_angle",
+              value: detail.radians,
+              radians: detail.radians,
+              degrees: detail.degrees,
+              sin: detail.sin,
+              cos: detail.cos,
+              relation: detail.relation,
+              sourceEntityIds: targets
+            }
+          }
+        }
+        if (metric === "line_angle") {
+          const targets = asStringList(input.targets)
+          if (!targets || targets.length !== 4) {
+            return failRepairable(name, "missing_required_parameter", "line_angle query requires exactly 4 point names [A, B, C, D] for lines AB and CD")
+          }
+          const pts = targets.map((t) => readP3(t, branchHint) ?? resolveSphereCenter3(t, branchHint))
+          if (!pts.every((p): p is Vector3 => p !== undefined)) {
+            return failRepairable(name, "undeclared_entity_ref", `point(s) not currently materialized: ${targets.join(", ")}`)
+          }
+          const detail = lineAngleDetail3(pts[0]!, pts[1]!, pts[2]!, pts[3]!)
+          if (!detail) {
+            return failBlocked(name, "degenerate_geometry", "line_angle requires two non-degenerate spatial lines")
+          }
+          return {
+            ok: true,
+            status: "accepted",
+            action: name,
+            stateChanged: false,
+            candidateHash: snap.candidateHash,
+            stepIndex: snap.stepIndex,
+            primitiveCount: snap.primitiveCount,
+            measurement: {
+              metric: "line_angle",
+              value: detail.radians,
+              radians: detail.radians,
+              degrees: detail.degrees,
+              sin: detail.sin,
+              cos: detail.cos,
+              relation: detail.relation,
+              skewDistance: detail.skewDistance,
+              sourceEntityIds: targets
+            }
+          }
+        }
+        if (metric === "dihedral_angle") {
+          const targets = asStringList(input.targets)
+          if (!targets || targets.length !== 4) {
+            return failRepairable(name, "missing_required_parameter", "dihedral_angle query requires exactly 4 point names [P, A, B, Q] for dihedral P-AB-Q")
+          }
+          const pts = targets.map((t) => readP3(t, branchHint) ?? resolveSphereCenter3(t, branchHint))
+          if (!pts.every((p): p is Vector3 => p !== undefined)) {
+            return failRepairable(name, "undeclared_entity_ref", `point(s) not currently materialized: ${targets.join(", ")}`)
+          }
+          const detail = dihedralAngleDetail3([pts[1]!, pts[2]!, pts[0]!], [pts[1]!, pts[2]!, pts[3]!], pts[1]!, pts[2]!)
+          if (!detail) {
+            return failBlocked(name, "degenerate_geometry", "dihedral_angle requires a non-degenerate hinge AB and two off-hinge points P, Q")
+          }
+          const radians = (detail.interiorDegrees * Math.PI) / 180
+          return {
+            ok: true,
+            status: "accepted",
+            action: name,
+            stateChanged: false,
+            candidateHash: snap.candidateHash,
+            stepIndex: snap.stepIndex,
+            primitiveCount: snap.primitiveCount,
+            measurement: {
+              metric: "dihedral_angle",
+              value: radians,
+              radians,
+              degrees: detail.interiorDegrees,
+              exteriorDegrees: detail.exteriorDegrees,
+              sin: Math.sin(radians),
+              cos: Math.cos(radians),
+              sourceEntityIds: targets
+            }
+          }
         }
         return failBlocked(name, "unsupported_observation", `measurement metric "${metric}" is not supported`)
       }

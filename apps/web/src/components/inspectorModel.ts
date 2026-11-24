@@ -319,6 +319,14 @@ export function useInspectorModel(props: InspectorModelInput) {
   const selected3dPrimitives = selectedIds.map((id) => sceneDocument.primitives.find((primitive) => primitive.id === id)).filter((primitive): primitive is PrimitiveSpec => Boolean(primitive))
   const measurementOptions = measurementOptionsFor(sceneDocument.workspace, selected3dPrimitives)
   const selectedFacePair = selected3dPrimitives.length === 2 && selected3dPrimitives.every((primitive) => primitive.type === "face3")
+  const isSpatialLine = (primitive: PrimitiveSpec) => ["line3", "segment3", "ray3", "edge3"].includes(primitive.type)
+  const selectedLineSurfacePair = sceneDocument.workspace === "geometry3d"
+    && selected3dPrimitives.length === 2
+    && selected3dPrimitives.some(isSpatialLine)
+    && selected3dPrimitives.some((primitive) => primitive.type === "face3" || primitive.type === "plane3")
+  const selectedLinePair = sceneDocument.workspace === "geometry3d"
+    && selected3dPrimitives.length === 2
+    && selected3dPrimitives.every(isSpatialLine)
   const visibleMeasurementOptions = selectedFacePair
     ? [...measurementOptions.filter((option) => option.metric !== "dihedral"), { metric: "dihedral" as const, label: "二面角内角", dihedralKind: "interior" as const }, { metric: "dihedral" as const, label: "二面角外角", dihedralKind: "exterior" as const }]
     : measurementOptions
@@ -646,6 +654,8 @@ export function useInspectorModel(props: InspectorModelInput) {
     updateTangentLength,
     setTangentAnchorKind,
     selectedFacePair,
+    selectedLineSurfacePair,
+    selectedLinePair,
     visibleMeasurementOptions,
     engineeringAnnotationOptions,
     updatePoint,

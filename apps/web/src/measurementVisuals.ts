@@ -1,12 +1,12 @@
 import type { GeometryDocument, Measurement3, PrimitiveSpec, Vector3 } from "@draw/dsl"
-import { resolveDihedralMarker3 } from "@draw/scene-graph"
+import { resolveDihedralMarker3, resolveLineAngleMarker3, resolveLinePlaneAngleMarker3 } from "@draw/scene-graph"
 
 import { measurementMetricLabel } from "./measurementLabels"
 import { measurementFormSuffix } from "./measurementForms"
 
 export interface MeasurementVisual {
   id: string
-  kind: "label" | "dihedral"
+  kind: "label" | "dihedral" | "linePlaneAngle" | "lineAngle"
   sourceIds: string[]
   label: string
   position: Vector3
@@ -70,6 +70,18 @@ export function resolveMeasurementVisual(document: GeometryDocument, measurement
     if (!marker || marker.arc.length < 2) return null
     const arcMidpoint = marker.arc[Math.floor(marker.arc.length / 2)]
     return { id: measurement.id, kind: "dihedral", sourceIds: [...measurement.sourceIds], label: measurementLabel(measurement), position: arcMidpoint, segments: [{ start: marker.hingeStart, end: marker.hingeEnd }, marker.firstNormal, marker.secondNormal], arc: marker.arc }
+  }
+  if (measurement.metric === "linePlaneAngle") {
+    const marker = resolveLinePlaneAngleMarker3(document, measurement.id)
+    if (!marker) return null
+    const segments = [marker.obliqueSegment, marker.projectionSegment, ...(marker.perpendicularDrop ? [marker.perpendicularDrop] : [])]
+    return { id: measurement.id, kind: "linePlaneAngle", sourceIds: [...measurement.sourceIds], label: measurementLabel(measurement), position: marker.anchor, segments, ...(marker.arc.length >= 2 ? { arc: marker.arc } : {}) }
+  }
+  if (measurement.metric === "lineAngle") {
+    const marker = resolveLineAngleMarker3(document, measurement.id)
+    if (!marker) return null
+    const segments = [marker.firstLeg, marker.secondLeg, ...(marker.translatedLine ? [marker.translatedLine] : [])]
+    return { id: measurement.id, kind: "lineAngle", sourceIds: [...measurement.sourceIds], label: measurementLabel(measurement), position: marker.anchor, segments, ...(marker.arc.length >= 2 ? { arc: marker.arc } : {}) }
   }
   const sourcePositions = measurement.sourceIds.flatMap((sourceId) => {
     const primitive = document.primitives.find((candidate) => candidate.id === sourceId)

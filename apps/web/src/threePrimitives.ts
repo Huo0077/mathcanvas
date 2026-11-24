@@ -6,7 +6,7 @@
  */
 import * as THREE from "three"
 import type { ConePrimitive, Conic3, CubePrimitive, CurvePiece3, CylinderPrimitive, Edge3Primitive, Face3Primitive, GeometryDocument, Line3Primitive, Plane3Primitive, Point3Primitive, PrimitiveSpec, PyramidPrimitive, Ray3Primitive, SectionPrimitive, Segment3Primitive, SpherePrimitive, Vector3 } from "@draw/dsl"
-import { conic3FromCircle3, type DihedralMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
+import { conic3FromCircle3, type DihedralMarker3, type LineAngleMarker3, type LinePlaneAngleMarker3, type UnfoldLayout3 } from "@draw/geometry-kernel"
 import { sampleClosedConic, sampleCurvePieces } from "./conicSampling"
 import { circleRadiusHandlePoint } from "./threeDrag"
 import { opacityFor, strokeFor } from "./primitiveStyle"
@@ -870,6 +870,101 @@ export function createDihedralMarkerGroup(marker: DihedralMarker3, selected: boo
     arrow.userData.visualRole = `dihedral-normal-${index}`
     group.add(arrow)
   }
+  return group
+}
+
+/** 3D 线面角可视化标记：斜线段、平面射影、虚线垂线段、直角方框与角弧。 */
+export function createLinePlaneAngleMarkerGroup(marker: LinePlaneAngleMarker3, selected: boolean): THREE.Group {
+  const accentColor = selected ? "#0d9488" : "#0284c7"
+  const helperColor = selected ? "#ea580c" : "#f59e0b"
+  const toVector = (point: Vector3) => new THREE.Vector3(point.x, point.y, point.z)
+  const group = new THREE.Group()
+  group.userData.visualRole = "line-plane-angle-marker"
+
+  const projection = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([toVector(marker.projectionSegment.start), toVector(marker.projectionSegment.end)]),
+    new THREE.LineBasicMaterial({ color: accentColor })
+  )
+  projection.userData.visualRole = "line-plane-projection"
+  group.add(projection)
+
+  if (marker.perpendicularDrop) {
+    const dropLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([toVector(marker.perpendicularDrop.start), toVector(marker.perpendicularDrop.end)]),
+      new THREE.LineDashedMaterial({ color: helperColor, dashSize: 0.14, gapSize: 0.09, transparent: true, opacity: 0.9 })
+    )
+    dropLine.computeLineDistances()
+    dropLine.userData.visualRole = "line-plane-drop"
+    group.add(dropLine)
+  }
+
+  if (marker.arc.length >= 2) {
+    const arc = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(marker.arc.map(toVector)),
+      new THREE.LineBasicMaterial({ color: helperColor })
+    )
+    arc.userData.visualRole = "line-plane-arc"
+    group.add(arc)
+  }
+
+  if (marker.rightAngleCorner && marker.rightAngleCorner.length === 3) {
+    const corner = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(marker.rightAngleCorner.map(toVector)),
+      new THREE.LineBasicMaterial({ color: helperColor })
+    )
+    corner.userData.visualRole = "line-plane-right-angle"
+    group.add(corner)
+  }
+
+  return group
+}
+
+/** 3D 空间直线夹角可视化标记：相交直线画交点角弧；异面直线额外画出虚线平移辅助线与公垂线。 */
+export function createLineAngleMarkerGroup(marker: LineAngleMarker3, selected: boolean): THREE.Group {
+  const accentColor = selected ? "#7c3aed" : "#db2777"
+  const helperColor = selected ? "#0ea5e9" : "#38bdf8"
+  const toVector = (point: Vector3) => new THREE.Vector3(point.x, point.y, point.z)
+  const group = new THREE.Group()
+  group.userData.visualRole = "line-angle-marker"
+
+  if (marker.translatedLine) {
+    const translated = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([toVector(marker.translatedLine.start), toVector(marker.translatedLine.end)]),
+      new THREE.LineDashedMaterial({ color: helperColor, dashSize: 0.16, gapSize: 0.1, transparent: true, opacity: 0.92 })
+    )
+    translated.computeLineDistances()
+    translated.userData.visualRole = "line-angle-translated"
+    group.add(translated)
+  }
+
+  if (marker.commonPerpendicular) {
+    const perp = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([toVector(marker.commonPerpendicular.start), toVector(marker.commonPerpendicular.end)]),
+      new THREE.LineDashedMaterial({ color: "#94a3b8", dashSize: 0.1, gapSize: 0.1, transparent: true, opacity: 0.65 })
+    )
+    perp.computeLineDistances()
+    perp.userData.visualRole = "line-angle-common-perpendicular"
+    group.add(perp)
+  }
+
+  if (marker.arc.length >= 2) {
+    const arc = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(marker.arc.map(toVector)),
+      new THREE.LineBasicMaterial({ color: accentColor })
+    )
+    arc.userData.visualRole = "line-angle-arc"
+    group.add(arc)
+  }
+
+  if (marker.rightAngleCorner && marker.rightAngleCorner.length === 3) {
+    const corner = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(marker.rightAngleCorner.map(toVector)),
+      new THREE.LineBasicMaterial({ color: accentColor })
+    )
+    corner.userData.visualRole = "line-angle-right-angle"
+    group.add(corner)
+  }
+
   return group
 }
 

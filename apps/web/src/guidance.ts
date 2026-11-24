@@ -86,7 +86,9 @@ const measurementCreatedGuidance: Record<Measurement3Metric, string> = {
   volume: "体积已创建：结果为数值近似，来源变化后自动重算",
   perimeter: "周长已创建：圆的周长随半径自动重算",
   radius: "半径已创建：圆的半径随图形自动重算",
-  dihedral: "二面角已创建"
+  dihedral: "二面角已创建",
+  linePlaneAngle: "线面角已创建：右侧查看弧度 / 角度 / sin / cos，画布同步展示垂线、射影与角弧",
+  lineAngle: "空间直线夹角已创建：右侧查看弧度 / 角度 / sin / cos，异面直线自动平移展示夹角"
 }
 
 const measurementBlockedGuidance: Record<Measurement3Metric, string> = {
@@ -97,7 +99,9 @@ const measurementBlockedGuidance: Record<Measurement3Metric, string> = {
   volume: "体积需要 1 个实体：立方体、棱锥、圆柱、圆锥或多面体",
   perimeter: "周长需要选中 1 个圆（或圆轨道）",
   radius: "半径需要选中 1 个圆（或圆轨道）",
-  dihedral: "二面角需要两个面：按住 Alt 点实体表面单独选面，Shift 加选第二个面"
+  dihedral: "二面角需要两个面：按住 Alt 点实体表面单独选面，Shift 加选第二个面",
+  linePlaneAngle: "线面角需要 1 条空间直线/棱与 1 个空间面或平面：开启多选勾选两者即可测量",
+  lineAngle: "空间直线夹角需要 2 条空间直线/棱（相交或异面均可）：开启多选勾选两条线即可测量"
 }
 
 const constraintGuidance: Record<ConstraintType, string> = {

@@ -105,6 +105,8 @@ export interface PropertiesBarProps {
   threeViewOptions?: ThreeViewOptionsState
   onToggleThreeViewOption?: (key: ThreeViewOptionKey) => void
   onMeasureDihedralQuick?: () => void
+  onMeasureLinePlaneQuick?: () => void
+  onMeasureLineAngleQuick?: () => void
   onOpenSolidWizardQuick?: () => void
   documentOverride?: GeometryDocument
   draftPreview?: boolean
@@ -118,14 +120,14 @@ const alignments: { value: Alignment; label: string }[] = [
 
 export function PropertiesBar(props: PropertiesBarProps) {
   const {
-    value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onRotate3, onMaterializeSection, pointHostCandidates, onBindPointHost, onCreatePointOnHost, onConnectPoint3Segment, onConnectPoint3Line, onConnectPoint3Plane, onConnectPoint3Face, onSelectPrimitive, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onCreateCircleAtPoint, onCreateCurveTangent, onCreatePointTangent, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, threeViewOptions, onToggleThreeViewOption, onMeasureDihedralQuick, onOpenSolidWizardQuick, sections = allInspectorSections
+    value, min, max, step, onChange, selectedPrimitive, selectedIds, selectedCount, selectedGroupId, allSelectedVisible, canCreateIntersection, onUpdatePrimitive, onRotateSection, onRotate3, onMaterializeSection, pointHostCandidates, onBindPointHost, onCreatePointOnHost, onConnectPoint3Segment, onConnectPoint3Line, onConnectPoint3Plane, onConnectPoint3Face, onSelectPrimitive, onChangeHostParameter, onToggleSelectedVisibility, onToggleSelectedLock, onDeleteSelected, onCreateGroup, onDeleteGroup, onCreateIntersection, onAlign, onToggleBatchVisibility, onAddAnnotation, onAddEngineeringAnnotation, onCreateMeasurement, onDeleteMeasurement, onCreateMovingCircle, onCreateCircleAtPoint, onCreateCurveTangent, onCreatePointTangent, onUpdateSelectionStyle, onCreateDerivative, onCreateTangent, onCreateIntegral, threeViewOptions, onToggleThreeViewOption, onMeasureDihedralQuick, onMeasureLinePlaneQuick, onMeasureLineAngleQuick, onOpenSolidWizardQuick, sections = allInspectorSections
   } = props
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({ data: true, appearance: false, constraints: false, engineering: true })
   const usesExternalSections = sections.length < allInspectorSections.length
   const shows = (section: InspectorSection) => sections.includes(section) && (usesExternalSections || openSections[section])
   const toggleSection = (section: InspectorSection) => setOpenSections((current) => ({ ...current, [section]: !current[section] }))
   const {
-    selectedPoint, selectedPoint3, point3Binding, selectedLinear, selectedLinear3, selectedPolyline, selectedParabola, selectedEllipseOrHyperbola, selectedFunction, selectedCircleOrArc, selectedPlacedCurve, selectedSolid, selectedPolyhedron3, polyhedron3Metrics, selectedPlane3, selectedSection, selectedIntersectionLine, selectedIntersectionSolid, selectedIntersectionFace, selectedIntersectionPoint, sourceLabel, selectedDerivedPoint, selectedIntersection, selectedSlope, showSlopeParameter, editable, expressionDraft, selectedFunctionPresetId, expressionError, logBase, setLogBase, formulaRef, annotationText, setAnnotationText, sceneDocument, selectedCircle3, selectedFace3, face3Metrics, objectOrientationNormal, applySceneOperation, derivedReadings, sphereDrawingFor, pointHasMovingCircle, annotationOptions, selectedAnnotations, pathPrimitives, selectedPointBinding, selectedPointWindow, pointTangentSource, selectedCenterDrivenCircle, radiusDriverCandidates, updateRadiusDriver, updateRadiusFactor, selectedCurveTangent, tangentAnchorParameters, tangentAnchorPoints, updateTangentParameter, updateTangentAnchorPoint, updateTangentLength, setTangentAnchorKind, selectedFacePair, visibleMeasurementOptions, engineeringAnnotationOptions, updatePoint, updatePoint3, updatePointBinding, updatePointParameter, createLocus, updateCenter, updateEndpoint, updateSlope, updatePolylinePoint, updateFunctionDomain, updateConicCenter, updateParabolaVertex, updateRotation, updatePlacementAngle, updatePlacementPivot, updateMovingRadius, parabolaFocus, conicFoci, ellipseMetrics, hyperbolaMetrics, arcAngle, updateFunctionExpression, applyFunctionPreset, insertFunctionTemplate, functionMetrics
+    selectedPoint, selectedPoint3, point3Binding, selectedLinear, selectedLinear3, selectedPolyline, selectedParabola, selectedEllipseOrHyperbola, selectedFunction, selectedCircleOrArc, selectedPlacedCurve, selectedSolid, selectedPolyhedron3, polyhedron3Metrics, selectedPlane3, selectedSection, selectedIntersectionLine, selectedIntersectionSolid, selectedIntersectionFace, selectedIntersectionPoint, sourceLabel, selectedDerivedPoint, selectedIntersection, selectedSlope, showSlopeParameter, editable, expressionDraft, selectedFunctionPresetId, expressionError, logBase, setLogBase, formulaRef, annotationText, setAnnotationText, sceneDocument, selectedCircle3, selectedFace3, face3Metrics, objectOrientationNormal, applySceneOperation, derivedReadings, sphereDrawingFor, pointHasMovingCircle, annotationOptions, selectedAnnotations, pathPrimitives, selectedPointBinding, selectedPointWindow, pointTangentSource, selectedCenterDrivenCircle, radiusDriverCandidates, updateRadiusDriver, updateRadiusFactor, selectedCurveTangent, tangentAnchorParameters, tangentAnchorPoints, updateTangentParameter, updateTangentAnchorPoint, updateTangentLength, setTangentAnchorKind, selectedFacePair, selectedLineSurfacePair, selectedLinePair, visibleMeasurementOptions, engineeringAnnotationOptions, updatePoint, updatePoint3, updatePointBinding, updatePointParameter, createLocus, updateCenter, updateEndpoint, updateSlope, updatePolylinePoint, updateFunctionDomain, updateConicCenter, updateParabolaVertex, updateRotation, updatePlacementAngle, updatePlacementPivot, updateMovingRadius, parabolaFocus, conicFoci, ellipseMetrics, hyperbolaMetrics, arcAngle, updateFunctionExpression, applyFunctionPreset, insertFunctionTemplate, functionMetrics
   } = useInspectorModel(props)
   const selectedDisplayLabel = selectedPrimitive
     ? formatPrimitiveDisplayLabel(
@@ -890,6 +892,8 @@ export function PropertiesBar(props: PropertiesBarProps) {
     {visibleMeasurementOptions.length > 0 && <div className="primitive-properties">
       <h3>教学测量</h3>
       {selectedFacePair && <p className="measurement-guidance">已选两个面：二面角内角读实体内部夹角，外角读它的补角。</p>}
+      {selectedLineSurfacePair && <p className="measurement-guidance">已选空间直线与平面：线面角取直线与其在平面内射影所成角（0°~90°），并在 3D 视图展示垂线、射影与角弧。</p>}
+      {selectedLinePair && <p className="measurement-guidance">已选两条空间直线：空间直线夹角取锐角或直角（0°~90°）；若两线异面，3D 视图将自动平移辅助线展示夹角。</p>}
       <div className="property-actions" aria-label={sceneDocument.workspace === "geometry3d" ? "三维测量工具" : "平面测量工具"}>
         {visibleMeasurementOptions.map((option) => <button key={`${option.metric}-${option.dihedralKind ?? "default"}`} type="button" onClick={() => onCreateMeasurement(option.metric, option.dihedralKind)}>{option.label}</button>)}
       </div>
@@ -979,9 +983,11 @@ export function PropertiesBar(props: PropertiesBarProps) {
           <button type="button" aria-pressed={threeViewOptions.showRotationHandles} onClick={() => onToggleThreeViewOption("showRotationHandles")}>旋转环</button>
           <button type="button" aria-pressed={threeViewOptions.autoFit} onClick={() => onToggleThreeViewOption("autoFit")}>自动取景</button>
           <button type="button" aria-pressed={threeViewOptions.showAngle} onClick={() => onMeasureDihedralQuick ? onMeasureDihedralQuick() : onToggleThreeViewOption("showAngle")}>测量二面角</button>
+          {onMeasureLinePlaneQuick && <button type="button" onClick={onMeasureLinePlaneQuick}>测量线面角</button>}
+          {onMeasureLineAngleQuick && <button type="button" onClick={onMeasureLineAngleQuick}>测量直线夹角</button>}
           {onOpenSolidWizardQuick && <button type="button" onClick={onOpenSolidWizardQuick}>常用立体</button>}
         </div>
-        <p className="footer-note">与画布左上角「视图选项」双向同步；多选两个面点「测量二面角」即可在此查看角度与 sin / cos。</p>
+        <p className="footer-note">与画布左上角「视图选项」双向同步；多选两个面可测二面角、选 1 线 + 1 面可测线面角、选 2 条线可测空间直线夹角（含异面直线），并在右侧查看角度与 sin / cos。</p>
       </div>
     </details>
   )

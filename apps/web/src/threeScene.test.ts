@@ -7,7 +7,7 @@ import { buildSolidTemplate, circleConic3, dihedralMarker3, rimCircles3, unfoldP
 import { applyOperation, compileSolidPrism, compileSolidTetrahedron } from "@draw/scene-graph"
 import { POINT_HANDLE_RADIUS_PX, pickPrimitiveAt, pickRaycastHit3, pointHandleWorldRadius, resolveSelectableHit, templateTopologyOwners } from "./threePicking"
 import { applyDragOffsets, dragFamilyIds, dragOffsetDrift, dragWorldPoint, offsetSceneObjects } from "./threeDrag"
-import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal, visibleSolids } from "./threePrimitives"
+import { buildPointDrivenObject, createCircle3Line, createConic3Line, createCubeMesh, createCurveLoops3, createDihedralMarkerGroup, createEdge3Line, createFace3Mesh, createLineAngleMarkerGroup, createLinePlaneAngleMarkerGroup, createPlane3Mesh, createPlanePatch, createPoint3Mesh, createPointDrivenLine, createRimCircles3, createSectionMesh, createSolidGroup, createSolidMesh, createUnfoldNetGroup, cubeUnfoldCenters, disposeObject, nextUnfoldProgress, prefersReducedMotion, sectionUnitNormal, visibleSolids } from "./threePrimitives"
 import { applyCameraState, cameraBasis, clampCameraTarget, createCameraState, fitCameraState, panCameraState, resetCameraState, rotateCameraState, zoomCameraState } from "./threeCamera"
 import { sceneSyncDecision } from "./sceneContentKey"
 
@@ -763,6 +763,48 @@ describe("Three.js geometry scene", () => {
       if (child instanceof THREE.Line) child.geometry.dispose()
       if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
     })
+  })
+
+  it("draws 3D markers for line-plane angle and skew line-line angle", () => {
+    const lpMarker = {
+      relation: "oblique" as const,
+      radians: Math.PI / 4,
+      degrees: 45,
+      anchor: { x: 0.4, y: 0, z: 0.2 },
+      intersection: { x: 0, y: 0, z: 0 },
+      obliqueSegment: { start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 1 } },
+      projectionSegment: { start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } },
+      perpendicularDrop: { start: { x: 1, y: 0, z: 1 }, end: { x: 1, y: 0, z: 0 } },
+      arc: [{ x: 0.4, y: 0, z: 0 }, { x: 0.35, y: 0, z: 0.2 }, { x: 0.28, y: 0, z: 0.28 }],
+      rightAngleCorner: [{ x: 0.85, y: 0, z: 0 }, { x: 0.85, y: 0, z: 0.15 }, { x: 1, y: 0, z: 0.15 }]
+    }
+    const lpGroup = createLinePlaneAngleMarkerGroup(lpMarker, true)
+    const lpRoles = lpGroup.children.map((child) => child.userData.visualRole)
+    expect(lpRoles).toEqual(["line-plane-projection", "line-plane-drop", "line-plane-arc", "line-plane-right-angle"])
+
+    const laMarker = {
+      relation: "skew" as const,
+      radians: Math.PI / 3,
+      degrees: 60,
+      skewDistance: 1,
+      vertex: { x: 0, y: 0, z: 0 },
+      anchor: { x: 0.3, y: 0.2, z: 0.1 },
+      firstLeg: { start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 1 } },
+      secondLeg: { start: { x: 0, y: 0, z: 0 }, end: { x: 0, y: 1, z: 1 } },
+      translatedLine: { start: { x: 0, y: -0.4, z: -0.4 }, end: { x: 0, y: 0.8, z: 0.8 } },
+      commonPerpendicular: { start: { x: 0, y: 0, z: 0 }, end: { x: 1, y: 0, z: 0 } },
+      arc: [{ x: 0.3, y: 0, z: 0.3 }, { x: 0.15, y: 0.15, z: 0.35 }, { x: 0, y: 0.3, z: 0.3 }]
+    }
+    const laGroup = createLineAngleMarkerGroup(laMarker, false)
+    const laRoles = laGroup.children.map((child) => child.userData.visualRole)
+    expect(laRoles).toEqual(["line-angle-translated", "line-angle-common-perpendicular", "line-angle-arc"])
+
+    for (const g of [lpGroup, laGroup]) {
+      g.traverse((child) => {
+        if (child instanceof THREE.Line) child.geometry.dispose()
+        if ("material" in child && child.material instanceof THREE.Material) child.material.dispose()
+      })
+    }
   })
 
   it("reads the platform reduced-motion preference", () => {

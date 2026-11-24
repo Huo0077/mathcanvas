@@ -1,5 +1,11 @@
 # MathCanvas 当前状态
 
+## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量、3D 教学可视化与 Agent 查询支持）
+
+> **2026-11-24 全平台整合 v5.3.0 基线**：
+> - 新增 **线面角（`linePlaneAngle`）** 与 **空间直线夹角（`lineAngle`，含相交 / 异面 / 平行直线）** 全链路能力：（1）[types.ts](../packages/dsl/src/types.ts)、[markers3d.ts](../packages/geometry-kernel/src/markers3d.ts) 与 [measurements3d.ts](../packages/geometry-kernel/src/measurements3d.ts) 实现 $[0, \pi/2]$ 精确计算、位置关系判定与公垂距输出；（2）[solidGeometry.ts](../packages/scene-graph/src/solidGeometry.ts)、[threePrimitives.ts](../apps/web/src/threePrimitives.ts) 与 [threeSceneContent.ts](../apps/web/src/threeSceneContent.ts) 实现 3D 教学标记（线面角虚线垂线/射影/直角方框/角弧，异面直线虚线平移辅助线/公垂线/角弧）；（3）[spatialTools.ts](../apps/web/src/spatialTools.ts)、[measurementForms.ts](../apps/web/src/measurementForms.ts)、[PropertiesBar.tsx](../apps/web/src/components/PropertiesBar.tsx)、[App.tsx](../apps/web/src/App.tsx) 与 [threeScene.tsx](../apps/web/src/threeScene.tsx) 接入教学测量入口、快捷按钮与精确 `sin`/`cos` 一键复制；（4）[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) 扩展 `query_measurement` 支持 `line_plane_angle`、`line_angle` 与 `dihedral_angle`（详见 [v5.3.0 发布说明](release/v5.3.0.md)）。
+> - 已同步升级仓库配置、[README.md](../README.md) 与官网门户 [`portal/`](../portal/index.html) 至 **`v5.3.0`**，完成本地 Windows 打包并推送 `v5.3.0` 标签触发 Windows x64 + Android ARM64 全平台整合发布。
+
 ## 2026-11-23 —— MathCanvas v5.2.1（精确内切球线性求解、多实体球心联动与正四面体题设解析修复）
 
 > **2026-11-23 全平台整合 v5.2.1 基线**：
@@ -254,7 +260,7 @@
 - **`DS4`（同候选真实浏览器渲染、冻结复播工件与隔离工作区受控交付）已完成（0 付费调用）**：新增 [dsCandidateBundle.ts](packages/agent-core/src/dsCandidateBundle.ts)（`mathcanvas.ds_candidate_bundle.v1`）绑定 `{ runId, candidateHash, documentHash, cameraHash, viewportHash }` 与可复播桥接校验；在 [canvasEvidence.ts](apps/web/src/canvasEvidence.ts) 与 [ConfirmationPanel.tsx](apps/web/src/components/agent/ConfirmationPanel.tsx) 暴露 DOM hash 链；扩展 [drawing-reliability-36-render.spec.ts](e2e/drawing-reliability-36-render.spec.ts) 与 [drawing-reliability-lifecycle.spec.ts](e2e/drawing-reliability-lifecycle.spec.ts)。最终编辑后实测：**全量 Vitest `547` 文件 / `5824 passed | 1 todo`**、`typecheck`/`lint`（`0 errors, 34 warnings`）/`test:rust` 全过、`@draw/desktop` `no-bundle` 构建出 `mathcanvas-desktop.exe`（SHA-256 `46EF3F1E0812E1B3CD66B8D7DA72035592598F78FF5DFAC6A0E9CD5042AD7BA5`）、串行 Playwright **`40 passed`**（36 题同候选渲染 + 负例/受控交付，`warnCases=25`，`humanReviewed="pending"`，`dsLiveAuthorizedRun="pending_authorization"`）。证据见 [DS4 渲染与受控交付审计](audit/2026-11-17-g3-ds4-render-delivery/README.md)；**停在 `DS5` 付费实测授权门禁前**。
 - **授权边界不变**：**已有36题调用不构成新一轮付费调用授权**，`DS5` 预检和整批均须用户先明确批准模型/题集、请求/token/费用上限及停止条件；用户/教师人工可读性与非沙盒 Windows 桌面窗口 UIA 仍是独立阻断，禁止宣称 G3-DS 或 G3 整体完成。
 
-最后更新：2026-11-23；产品版本：v5.2.1（持续更新升级中）；产品代码基线：v5.2.1-insphere-multisolid-fix。
+最后更新：2026-11-24；产品版本：v5.3.0（持续更新升级中）；产品代码基线：v5.3.0-line-plane-and-skew-angles。
 
 ## 2026-11-17 —— G3 渲染工程收尾（自动化通过，人工验收未关闭）
 

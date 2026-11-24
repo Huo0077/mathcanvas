@@ -188,4 +188,69 @@ describe("3D measurements", () => {
     expect(measurement.status).toBe("insufficient-data")
     expect(measurement.value).toBeUndefined()
   })
+
+  it("measures line-plane angle regardless of selection order, including oblique, perpendicular, and parallel cases", () => {
+    const primitives: PrimitiveSpec[] = [
+      { id: "o", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "x", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "y", type: "point3", position: { x: 0, y: 1, z: 0 } },
+      { id: "z", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      { id: "diag", type: "point3", position: { x: 1, y: 1, z: 1 } },
+      { id: "parEnd", type: "point3", position: { x: 2, y: 0, z: 1 } },
+      { id: "base-face", type: "face3", pointIds: ["o", "x", "y"] },
+      { id: "base-plane", type: "plane3", definition: { kind: "pointNormal", pointId: "o", normal: { x: 0, y: 0, z: 1 } } },
+      { id: "seg-diag", type: "segment3", pointIds: ["o", "diag"] },
+      { id: "seg-perp", type: "segment3", pointIds: ["o", "z"] },
+      { id: "seg-par", type: "segment3", pointIds: ["z", "parEnd"] }
+    ]
+
+    // 体对角线 (1,1,1) 与底面 z=0 所成角：sin θ = 1/√3 = √3/3。
+    const lineFirst = createMeasurement3("lp-1", "linePlaneAngle", ["seg-diag", "base-face"], primitives)
+    const faceFirst = createMeasurement3("lp-2", "linePlaneAngle", ["base-face", "seg-diag"], primitives)
+    const withPlane = createMeasurement3("lp-3", "linePlaneAngle", ["seg-diag", "base-plane"], primitives)
+    const perp = createMeasurement3("lp-4", "linePlaneAngle", ["seg-perp", "base-face"], primitives)
+    const par = createMeasurement3("lp-5", "linePlaneAngle", ["seg-par", "base-face"], primitives)
+
+    expect(lineFirst.status).toBe("valid")
+    expect(lineFirst.unit).toBe("rad")
+    expect(lineFirst.value).toBeCloseTo(Math.asin(1 / Math.sqrt(3)), 10)
+    expect(faceFirst.value).toBeCloseTo(lineFirst.value!, 10)
+    expect(withPlane.value).toBeCloseTo(lineFirst.value!, 10)
+    expect(perp.value).toBeCloseTo(Math.PI / 2, 10)
+    expect(perp.explanation).toContain("垂直")
+    expect(par.value).toBeCloseTo(0, 10)
+    expect(par.explanation).toContain("平行")
+  })
+
+  it("measures spatial line-line angle in [0, π/2] for intersecting, skew, and parallel lines", () => {
+    // 单位正方体中：面对角线 AB₁ (0,0,0)->(1,0,1) 与 BC₁ (1,0,0)->(1,1,1) 是异面直线，夹角为 60° = π/3。
+    const primitives: PrimitiveSpec[] = [
+      { id: "A", type: "point3", position: { x: 0, y: 0, z: 0 } },
+      { id: "B", type: "point3", position: { x: 1, y: 0, z: 0 } },
+      { id: "C1", type: "point3", position: { x: 1, y: 1, z: 1 } },
+      { id: "B1", type: "point3", position: { x: 1, y: 0, z: 1 } },
+      { id: "D", type: "point3", position: { x: 0, y: 1, z: 0 } },
+      { id: "A1", type: "point3", position: { x: 0, y: 0, z: 1 } },
+      // 反向端点（B1 -> A 与 B -> C1）也必须返回锐角 π/3 而非钝角 2π/3。
+      { id: "seg-AB1-rev", type: "segment3", pointIds: ["B1", "A"] },
+      { id: "seg-BC1", type: "segment3", pointIds: ["B", "C1"] },
+      { id: "seg-AB", type: "segment3", pointIds: ["A", "B"] },
+      { id: "seg-AD", type: "segment3", pointIds: ["A", "D"] },
+      { id: "seg-A1B1", type: "segment3", pointIds: ["A1", "B1"] }
+    ]
+
+    const skew = createMeasurement3("la-skew", "lineAngle", ["seg-AB1-rev", "seg-BC1"], primitives)
+    const inter = createMeasurement3("la-inter", "lineAngle", ["seg-AB", "seg-AD"], primitives)
+    const par = createMeasurement3("la-par", "lineAngle", ["seg-AB", "seg-A1B1"], primitives)
+    const fromFourPoints = createMeasurement3("la-4pts", "lineAngle", ["B1", "A", "B", "C1"], primitives)
+
+    expect(skew.status).toBe("valid")
+    expect(skew.value).toBeCloseTo(Math.PI / 3, 10)
+    expect(skew.explanation).toContain("异面直线")
+    expect(fromFourPoints.value).toBeCloseTo(Math.PI / 3, 10)
+    expect(inter.value).toBeCloseTo(Math.PI / 2, 10)
+    expect(inter.explanation).toContain("相交直线")
+    expect(par.value).toBeCloseTo(0, 10)
+    expect(par.explanation).toContain("平行")
+  })
 })

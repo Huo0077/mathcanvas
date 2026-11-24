@@ -16,7 +16,9 @@ export const MEASUREMENT_METRIC_LABELS: Record<Measurement3["metric"], string> =
   volume: "体积",
   perimeter: "周长",
   radius: "半径",
-  dihedral: "二面角"
+  dihedral: "二面角",
+  linePlaneAngle: "线面角",
+  lineAngle: "空间直线夹角"
 }
 
 /** 二面角有内角 / 外角两种说法，其余直接查表。 */

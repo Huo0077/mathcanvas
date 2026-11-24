@@ -8,6 +8,18 @@
 
 
 
+## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量、3D 教学可视化与 Agent 查询支持）
+
+- **DSL 与内核空间角求解**（[types.ts](packages/dsl/src/types.ts)、[markers3d.ts](packages/geometry-kernel/src/markers3d.ts)、[measurements3d.ts](packages/geometry-kernel/src/measurements3d.ts)）：
+  - 在 `MEASUREMENT_METRICS` 中新增 `linePlaneAngle`（线面角）与 `lineAngle`（空间直线夹角）；
+  - 实现 `linePlaneAngleDetail3` / `linePlaneAngleMarker3` / `measureLinePlaneAngle3`（支持任意点击顺序的线+面/平面，精确计算 $[0, \pi/2]$ 并输出斜交/垂直/平行/在平面内关系、垂线段、射影线、直角方框与角弧）与 `lineAngleDetail3` / `lineAngleMarker3` / `measureLineAngle3`（支持相交、异面与平行直线，统一取锐角/直角 $[0, \pi/2]$ 并输出公垂距与异面平移辅助线）。
+- **3D 可视化、交互入口与精确三角读数**（[solidGeometry.ts](packages/scene-graph/src/solidGeometry.ts)、[threePrimitives.ts](apps/web/src/threePrimitives.ts)、[threeSceneContent.ts](apps/web/src/threeSceneContent.ts)、[measurementVisuals.ts](apps/web/src/measurementVisuals.ts)、[measurementLabels.ts](apps/web/src/measurementLabels.ts)、[measurementForms.ts](apps/web/src/measurementForms.ts)、[spatialTools.ts](apps/web/src/spatialTools.ts)、[PropertiesBar.tsx](apps/web/src/components/PropertiesBar.tsx)、[App.tsx](apps/web/src/App.tsx)、[threeScene.tsx](apps/web/src/threeScene.tsx)）：
+  - 接入 `createLinePlaneAngleMarkerGroup` 与 `createLineAngleMarkerGroup` 渲染虚线垂线、平面射影、直角方框、异面平移虚线与角弧；
+  - 属性栏新增「线面角」与「空间直线夹角」教学测量按钮、精确 `sin`/`cos` 读数与一键复制，在 3D 视图选项与属性栏并列新增「测量线面角」「测量直线夹角」快捷入口。
+- **AI Agent 空间角测量工具**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)）：
+  - 扩展 `query_measurement` 支持 `line_plane_angle`、`line_angle` 与 `dihedral_angle`，直接返回弧度、角度、`sin`、`cos` 及位置关系。
+- **全平台版本与发布同步至 `v5.3.0`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[README.md](README.md)、[portal/index.html](portal/index.html)、[v5.3.0.md](docs/release/v5.3.0.md)）。
+
 ## 2026-11-23 —— MathCanvas v5.2.1（修复非轴对齐四面体内切球求解、多实体宿主定位与正四面体题设解析）
 
 - **内核内切球精确线性求解**（[solidDerived.ts](packages/geometry-kernel/src/solidDerived.ts)、[solidDerived.test.ts](packages/geometry-kernel/src/solidDerived.test.ts)）：

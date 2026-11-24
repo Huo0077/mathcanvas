@@ -1,5 +1,9 @@
 # MathCanvas 项目过程日志
 
+## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量与 3D 教学可视化）
+
+- **空间角体系补全与发布**：围绕立体几何「线面角」与「空间直线夹角（相交/异面/平行）」需求，打通 `@draw/dsl`（`MEASUREMENT_METRICS` 新增 `linePlaneAngle`、`lineAngle`）、`@draw/geometry-kernel`（[markers3d.ts](../packages/geometry-kernel/src/markers3d.ts) 与 [measurements3d.ts](../packages/geometry-kernel/src/measurements3d.ts) 实现 $[0, \pi/2]$ 精确计算与标记几何）、`@draw/scene-graph`（[solidGeometry.ts](../packages/scene-graph/src/solidGeometry.ts) 标记解析）、Three.js 3D 渲染（[threePrimitives.ts](../apps/web/src/threePrimitives.ts) 虚线垂线/射影/直角方框/异面平移虚线/角弧）、交互 UI（[spatialTools.ts](../apps/web/src/spatialTools.ts)、[PropertiesBar.tsx](../apps/web/src/components/PropertiesBar.tsx)、[App.tsx](../apps/web/src/App.tsx)、[threeScene.tsx](../apps/web/src/threeScene.tsx)）及 AI Agent `query_measurement`（[dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts)）。全仓 `typecheck`、11 个核心测试套件（370+ 用例）、`test:docs` 及本地 Windows Tauri 打包全部通过，统一升级发布 **`v5.3.0`**。
+
 ## 2026-11-23 —— MathCanvas v5.2.1（修复非轴对齐四面体内切球求解、多实体宿主定位与正四面体题设解析）
 
 - **用户真题现场根因排查与闭环修复**：从桌面端本地 `projects.db` 定位「正四面体 `PABC` + `PT=2TC` + 子三棱锥 `T-PAB`/`T-ABC` 内切球心 `M`/`N` 与平面 `MAB`/`NAB` 夹角正弦值」作图失败的 3 处连锁缺陷：（1）重构 [solidDerived.ts](../packages/geometry-kernel/src/solidDerived.ts) `solveInsphere3` 为精确 $4\times 4$ 面平面线性求解；（2）修复 [dsActionTools.ts](../apps/web/src/agent/dsActionTools.ts) `executeHostInsphere` 多实体宿主定位（`compiled.aliases`）、球心点注册 `points3`、`resolveSphereCenter3` 与 `construct_segment` 自动点物化；（3）扩展 [diagramObligations.ts](../packages/agent-core/src/diagramObligations.ts) 解析「各棱长均相等的正四面体 / 四面体 / 三棱锥」。新增回归单测验证全链路 `diagramVerification.status === "passed"` 与 $\sin\angle(MAB, NAB) = \sqrt{3}/3$，核心 6 套件 272/272、全仓 `typecheck`、`test:docs` 及本地 Windows Tauri 打包全部通过，统一升级发布 **`v5.2.1`**。

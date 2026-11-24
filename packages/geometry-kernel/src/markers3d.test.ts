@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import type { Vector3 } from "./geometry3d"
 
-import { dihedralAngleDetail3, dihedralMarker3, perpendicularFootOnLine3, perpendicularFootOnPlane3, sharedRingEdge3 } from "./markers3d"
+import { dihedralAngleDetail3, dihedralMarker3, lineAngleDetail3, lineAngleMarker3, linePlaneAngleDetail3, linePlaneAngleMarker3, perpendicularFootOnLine3, perpendicularFootOnPlane3, sharedRingEdge3 } from "./markers3d"
 
 // Regular tetrahedron with edge length 2*sqrt(2); its interior dihedral is arccos(1/3) = 70.5288 degrees.
 const v0: Vector3 = { x: 1, y: 1, z: 1 }
@@ -110,5 +110,44 @@ describe("perpendicular feet", () => {
   it("returns null for a degenerate line or plane", () => {
     expect(perpendicularFootOnLine3({ x: 1, y: 2, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 })).toBeNull()
     expect(perpendicularFootOnPlane3({ x: 1, y: 1, z: 1 }, { normal: { x: 0, y: 0, z: 0 }, constant: 0 })).toBeNull()
+  })
+})
+
+describe("line-plane and spatial line-line angle markers", () => {
+  it("builds perpendicular drop, in-plane projection, right-angle bracket, and angle arc for oblique line-plane angle", () => {
+    const plane = { normal: { x: 0, y: 0, z: 1 }, constant: 0 }
+    const detail = linePlaneAngleDetail3({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, plane)
+    expect(detail?.relation).toBe("oblique")
+    expect(detail?.degrees).toBeCloseTo(45, 6)
+
+    const marker = linePlaneAngleMarker3({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, plane, { arcSteps: 8 })
+    expect(marker).not.toBeNull()
+    expect(marker?.intersection).toEqual({ x: 0, y: 0, z: 0 })
+    expect(marker?.perpendicularDrop?.start).toEqual({ x: 1, y: 0, z: 1 })
+    expect(marker?.perpendicularDrop?.end).toEqual({ x: 1, y: 0, z: 0 })
+    expect(marker?.projectionSegment.end).toEqual({ x: 1, y: 0, z: 0 })
+    expect(marker?.arc.length).toBe(9)
+    expect(marker?.rightAngleCorner?.length).toBe(3)
+  })
+
+  it("builds a translated parallel line and common perpendicular for skew lines, and direct intersection arc for intersecting lines", () => {
+    // 异面直线 AB₁ 与 BC₁（夹角 60°）
+    const skewDetail = lineAngleDetail3({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 1 })
+    expect(skewDetail?.relation).toBe("skew")
+    expect(skewDetail?.degrees).toBeCloseTo(60, 6)
+    expect(skewDetail?.skewDistance).toBeCloseTo(1 / Math.sqrt(3), 6)
+
+    const skewMarker = lineAngleMarker3({ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }, { x: 1, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, { arcSteps: 8 })
+    expect(skewMarker?.relation).toBe("skew")
+    expect(skewMarker?.translatedLine).not.toBeNull()
+    expect(skewMarker?.commonPerpendicular).not.toBeNull()
+    expect(skewMarker?.arc.length).toBe(9)
+
+    // 相交垂直直线
+    const interMarker = lineAngleMarker3({ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }, { arcSteps: 6 })
+    expect(interMarker?.relation).toBe("intersecting")
+    expect(interMarker?.translatedLine).toBeNull()
+    expect(interMarker?.rightAngleCorner?.length).toBe(3)
+    expect(interMarker?.arc.length).toBe(7)
   })
 })
