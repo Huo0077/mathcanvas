@@ -247,3 +247,16 @@ jobs:
           APK_FILE="artifacts/android-release/MathCanvas-${APP_VERSION}-android-arm64.apk"
           SUMS_FILE="artifacts/android-release/SHA256SUMS-android.txt"
           gh release upload "$RELEASE_TAG" "$APK_FILE" "$SUMS_FILE" --clobber
+
+  publish-release:
+    needs: [prepare-release, windows-release-bundle, android-release-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release (a re-tagged release is left as a draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false --latest
