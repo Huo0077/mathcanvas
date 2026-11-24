@@ -1,5 +1,7 @@
 # 下一轮工作导航
 
+> **2026-11-24 v5.3.0 全平台整合基线（线面角 / 空间直线夹角 / 精确内切球 / Win & Android 整合发布）**：已完成 `v5.1.0`–`v5.2.0`（Android Material 3 移动端重构、原生公共下载/分享、Agent 预览与提交图元框全量展开、Windows & Android 并行整合发布与 GitHub Pages 官网自动部署）、`v5.2.1`（精确 $4\times 4$ 面平面内切球求解、多实体球心联动与「各棱长均相等的正四面体」解析）及 `v5.3.0`（线面角 `linePlaneAngle` 与空间直线夹角 `lineAngle` 全链路测量、3D 垂线/射影/异面平移辅助线可视化与 Agent `query_measurement` 空间角查询）。后续演进方向：① 围绕用户反馈持续补齐疑难真题与交互能力（如高等数学可视化等高线/向量场模块）；② 正式开发识图/OCR 能力并重新开启 `IMAGE_READER_UI_ENABLED`。实时状态与验证摘要统一见 [当前状态](current-status.md)。
+
 > **2026-11-21 Linux 与 Android 多端适配及自动打包工作流就绪**：已完成 Linux（Secret Service + 加密凭据库回退、`.deb`/`.AppImage`）与 Android（应用私有加密凭据库、2D/3D 双指捏合缩放平移、`env(safe-area-inset-*)` 安全区、`adjustResize` 软键盘自适应与 ARM64 `.apk`）全套代码、配置及独立 SHA 固定 CI 工作流 [multiplatform-build.yml](../.github/workflows/multiplatform-build.yml)。推送并确认 Linux/Android CI 产物后，可将该批多端包纳入 Release 下载并继续后续识图能力开发。
 
 > **2026-11-21 v5.0.0 持续加固、官网上线打包、识图 UI 暂隐与全量 E2E 闭环（`4195ff87`）**：已完成系统性几何内核与会话内自修根治（24 道纯文本真题 `--reset` 实机 `deepseek-v4-flash` **24/24 通过**）、官网更新（持续升级说明 + `dogf9066@gmail.com` 反馈入口 + GitHub Releases 直链下载）与识图 UI 特性开关暂隐（`IMAGE_READER_UI_ENABLED = false`，保留底层代码待后续开发正式识图后一键开启），并修复 `draftStore` 唯一前置条件小问提升条件使全量 Playwright E2E **331 passed / 1 skipped / 0 failed**。后续演进方向：① 收集 `dogf9066@gmail.com` 反馈的真实疑难题与 Bug 持续迭代内核；② 正式开发识图/OCR 能力并重新开启 `IMAGE_READER_UI_ENABLED`。实时读数与验收边界统一见 [当前状态](current-status.md)。
@@ -139,7 +141,7 @@
 
 > **2026-11-17 G3区块更新**：[G3真实浏览器渲染审阅包](audit/2026-11-17-g3-render-exit/README.md)：36题自动化渲染和全量E2E已验证；25题仍有视觉警告，人工可读性与Windows桌面窗口签收待办。下一步先逐题审阅，不把AI抽检或DS未测结果当成人工通过。
 
-最后更新：2026-11-21（`v5.0.0` 系统性根治修复与 24/24 纯文本真题全过、官网升级、识图 UI 暂隐及全量 E2E 331/332 闭环）。
+最后更新：2026-11-24（`v5.3.0` 线面角与空间直线夹角全链路测量与 3D 教学可视化、`v5.2.1` 精确内切球与多实体修复、`v5.2.0` Windows & Android 整合发布）。
 
 **实时进度只看[当前状态](current-status.md)，执行顺序只看[完整实施主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md)与当前[G3续作计划](superpowers/plans/2026-11-16-g3-completion-plan.md)。** 本页不再保存第二份完成数字、测试读数或发布判断。
 

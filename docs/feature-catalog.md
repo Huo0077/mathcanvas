@@ -12,9 +12,24 @@
 
 **已知限制不得被功能目录掩盖**：早期审查发现的 C1 漏小问条件错误放行、M2 题图复核绕过、原生安全与 E2E 问题已分别按 [主计划](superpowers/plans/2026-11-15-main-restart-master-plan.md) 的 `G0/G1/G2` 及 `G3-Math`（36/36）收口，[审查驱动技术附录](superpowers/plans/2026-11-15-review-driven-next-implementation-plan.md)保留技术参考；DeepSeek 真实模型画图测试（按用户指示保留由其本人后续执行）、非沙盒桌面交互走查、人工可读性签收与 `P8` 发布门禁仍未关闭，真实状态仅以[当前状态](current-status.md)为准。
 
+## v5.1.0–v5.3.0 新增核心能力（2026-11-22 ~ 2026-11-24）
+
+> 实时门禁与完整发布摘要见 [当前状态](current-status.md) 与 [v5.3.0 发布说明](release/v5.3.0.md)。
+
+- **立体几何空间角完整体系（`v5.3.0`）**：
+  - **线面角（`linePlaneAngle`）**：支持任意点击顺序（1 条空间直线/线段/射线/棱 + 1 个空间面 `face3` 或无限平面 `plane3`），按 $\theta = \arcsin\left(\frac{|\vec{d}\cdot\vec{n}|}{\|\vec{d}\|\|\vec{n}\|}\right) \in [0, \frac{\pi}{2}]$ 精确计算，自动区分斜交/垂直/平行/在平面内，并在 3D 视口渲染交点、虚线垂线段、平面射影、垂足直角方框与角弧；
+  - **空间直线夹角（`lineAngle`）**：支持 2 条空间线（或 4 个空间点），按 $\theta = \arccos\left(\frac{|\vec{u}\cdot\vec{v}|}{\|\vec{u}\|\|\vec{v}\|}\right) \in [0, \frac{\pi}{2}]$ 取锐角或直角，自动区分相交直线、异面直线（附公垂距）与平行直线，异面直线自动在 3D 视口以虚线平移辅助线 + 公垂线 + 角弧还原「平移法」；
+  - **统一三角函数读数与 Agent 查询**：属性栏展示弧度、角度换算与精确根式/分数 `sin` / `cos` 一键复制，3D 视图选项新增「测量线面角」「测量直线夹角」快捷入口；Agent `query_measurement` 扩展支持 `line_plane_angle`、`line_angle` 与 `dihedral_angle`。
+- **精确多面体内切球求解与多实体球心联动（`v5.2.1`）**：
+  - `solveInsphere3` 升级为共面去重 + $\mathbb{R}^4$ 线性无关面平面 $4\times 4$ 精确线性求解，彻底修复非轴对齐四面体（如 `T-PAB`、`T-ABC`）与旋转凸多面体误报无内切球的问题；
+  - 多实体内切球按 `compiled.aliases` 精准定位宿主，自动注册球心至 `points3` 并打通球心连线与构面；题设解析支持「各棱长均相等的正四面体 / 四面体 / 三棱锥」及 `P-ABC` 表述。
+- **Android Material 3 移动端重构、原生导出与预览图元框全量可见（`v5.1.0` ~ `v5.2.0`）**：
+  - 手机端（`<= 680px`）采用底部导航栏、毛玻璃悬浮胶囊与圆角 Bottom Sheet，配备 2D/3D 双指手势、`MediaStore.Downloads` 公共目录零权限导出 + `FileProvider` 系统分享及 `ChaCha20 + HMAC-SHA256` 私有加密凭据库；
+  - Agent 草稿预览与提交后在对象栏全量展示并默认展开关键点/棱/面，保留实体面内合法构造子面（仅精确同顶点集时去重），并接入 GitHub Actions Windows x64 + Android ARM64 并行整合发布与 GitHub Pages 官网自动部署。
+
 ## 桌面题图识别（开发版 · UI 已暂时隐藏）
 
-> **2026-11-21 状态说明**：由于正式识图服务尚未配备，当前 `v5.0.0` 已通过 [featureFlags.ts](../apps/web/src/featureFlags.ts) 中的 `IMAGE_READER_UI_ENABLED = false` 暂时隐藏全部前端识图入口（功能区「图片识题」、Agent 输入栏「图片识题」按钮与题图识别面板、工具栏「拍照识题」）。下方描述的底层识别组件、协议与单测（`ProblemImageComposer.test.tsx`）继续保留，待后续识图能力正式开发完成后将开关改为 `true` 即可恢复。
+> **2026-11-24 状态说明**：由于正式识图服务尚未配备，当前 `v5.3.0` 仍通过 [featureFlags.ts](../apps/web/src/featureFlags.ts) 中的 `IMAGE_READER_UI_ENABLED = false` 暂时隐藏全部前端识图入口（功能区「图片识题」、Agent 输入栏「图片识题」按钮与题图识别面板、工具栏「拍照识题」）。下方描述的底层识别组件、协议与单测（`ProblemImageComposer.test.tsx`）继续保留，待后续识图能力正式开发完成后将开关改为 `true` 即可恢复。
 
 1. 在「设置 → 模型服务」添加支持图像的模型，点击「验证」。图像验证要求模型读出测试图的验证码。旧版的图像验证记录需要重新验证。
 2. 先进入适合题型的平面或立体工作区，再打开「更多工具 → 图片识题」，也可直接在 Agent 输入框粘贴。支持拖入、粘贴或选择 PNG、JPEG、WebP 文件，可同时添加同一题的题干和配图，最多两张。
