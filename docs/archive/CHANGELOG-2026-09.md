@@ -1,6 +1,6 @@
 # 变更记录（2026-09 及更早）
 
-> 本文件从 [`CHANGELOG.md`](CHANGELOG.md) 拆出（2026-10-24），保留 2026-09-30 及更早的条目；2026-10 起的记录留在主文件。
+> 本文件从 [`CHANGELOG.md`](../../CHANGELOG.md) 拆出（2026-10-24），保留 2026-09-30 及更早的条目；2026-10 起的记录留在主文件。
 
 ## 2026-09-30 —— 把"还差什么"集中成一份总清单（`current-status` §四），并同步到最新 `main`
 
@@ -251,7 +251,7 @@ Task 8（六类代表题整合验收）**分批落地**，本批先落四类：�
 - 立体工作区增加按步骤在画布放点并创建空间线段/直线/射线/平面/面的流程；新增 XY/XZ/YZ/已选面工作平面、暂态预览、取消与一步撤销，保留原有先选点后建图元的高级入口。
 - 「常用立体」面板新增正方体、长方体、三/四棱柱（含倾斜）、三/四棱锥参数输入与**未保存**预览；确认后整族图元一次写入文档。原「添加立方体」新建默认边长更正为 `4×4×4`，旧 `.mgeo` 对象不改尺寸。
 - 空间直线、线段、射线、棱的「教学线型」可保存实线/虚线/点线；Three.js 线材质使用线距离；教师手动线型独立于仅影响视图的「隐藏边」开关。修正两条仍按旧 `4×4×2` 断言截面与体内点范围的单测。
-- 本批功能在 `feat/high-school-geometry-interaction` 分支，**不等同已发布的 v3.0 安装包**；通过全库单测 265 文件/3055 项（1 todo）、类型检查、lint 0 错/13 条既有警告、Web 构建，以及选定 7 个 3D e2e spec 的 44 项。完整 e2e、Rust 测试和新桌面打包本轮未完成。后续任务见 [实施计划](docs/superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
+- 本批功能在 `feat/high-school-geometry-interaction` 分支，**不等同已发布的 v3.0 安装包**；通过全库单测 265 文件/3055 项（1 todo）、类型检查、lint 0 错/13 条既有警告、Web 构建，以及选定 7 个 3D e2e spec 的 44 项。完整 e2e、Rust 测试和新桌面打包本轮未完成。后续任务见 [实施计划](../superpowers/plans/2026-09-29-high-school-geometry-interaction-implementation-plan.md)。
 
 ## 2026-09-29 —— 发布 v3.0（带 typed tool loop 的桌面版）
 
@@ -259,18 +259,18 @@ Task 8（六类代表题整合验收）**分批落地**，本批先落四类：�
 
 - 改 `apps/desktop/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 version 为 `3.0.0`（`Cargo.lock` 由 cargo 自动跟进）。
 - 重新打包，产出：免安装 `mathcanvas-desktop.exe`（16.38 MB）、NSIS `MathCanvas_3.0.0_x64-setup.exe`（4.79 MB）、MSI `MathCanvas_3.0.0_x64_en-US.msi`（6.52 MB）。**exe 内嵌版本经 Windows 文件属性核实为 `3.0.0`**。
-- 发布说明见 [`docs/release/v3.0.md`](docs/release/v3.0.md)（含三个产物的 SHA-256、实测读数、以及**六条如实缺口**）。
+- 发布说明见 [`docs/release/v3.0.md`](../release/v3.0.md)（含三个产物的 SHA-256、实测读数、以及**六条如实缺口**）。
 - **如实**：两个安装包只验证了**构建成功**，没有在本机实际安装过；免安装 exe 在本机启动、渲染，并跑过真实 provider 链路。
 
 ## 2026-09-29 —— 第四十七批：Agent typed tool loop 六阶段收口（含真实 provider 实跑）
 
-计划的六项未完成项逐项落地或**书面暂缓**，没有一项是静默缺失的。详细过程与逐条证据见 [`docs/research/2026-09-28-agent-tool-loop-progress.md`](docs/research/2026-09-28-agent-tool-loop-progress.md)，放行判据见 [`docs/acceptance/agent-release-gate.md`](docs/acceptance/agent-release-gate.md)。
+计划的六项未完成项逐项落地或**书面暂缓**，没有一项是静默缺失的。详细过程与逐条证据见 [`docs/research/2026-09-28-agent-tool-loop-progress.md`](../research/2026-09-28-agent-tool-loop-progress.md)，放行判据见 [`docs/acceptance/agent-release-gate.md`](../acceptance/agent-release-gate.md)。
 
 - **Phase 1（阶段门槛达成）**：字段形状的真源从 `actionSchemas.ts` 的私有集合搬进 `actionRegistry`（`FIELD_KINDS` + 逐动作**必填**的 `rawFieldTypes`，拿到编译期保证）；`DISPATCHABLE_TOOL_IDS` 不再手抄，改为从 `readToolSchemas.toolInputs` **推导**。"工具目录 = schema = dispatcher" 两个方向都有测试守住。
-- **Phase 2（判据完成，剩余按决策暂缓）**：多轮循环的额度判据抽成纯函数 `toolLoop.ts`；`draft.verify` 契约落地（结论取自 `verificationGate`，模型不能自选验证对象）。**模型面草稿工具按决策暂缓**，见 [`docs/decisions/2026-09-29-agent-phase2-draft-tools.md`](docs/decisions/2026-09-29-agent-phase2-draft-tools.md)：模型看不见草稿，现在启用会变成**盲验**。
+- **Phase 2（判据完成，剩余按决策暂缓）**：多轮循环的额度判据抽成纯函数 `toolLoop.ts`；`draft.verify` 契约落地（结论取自 `verificationGate`，模型不能自选验证对象）。**模型面草稿工具按决策暂缓**，见 [`docs/decisions/2026-09-29-agent-phase2-draft-tools.md`](../decisions/2026-09-29-agent-phase2-draft-tools.md)：模型看不见草稿，现在启用会变成**盲验**。
 - **Phase 3（完成且在生产中生效）**：完整判据链 —— `deriveAcceptance`（用户原话 → 验收条件）→ `taskAcceptance`（条件 → 报告）→ `verificationGate`（报告算不算证据）→ **协调器在 `validating` 之后拦截**。报告不构成证据时进不了确认面板。判题器新增截面/关系判据，**8 条代表任务里 7 条可判定**。
 - **Phase 4（本地判据可判定）**：纯本地布局诊断（`renderEvidence.ts` + `layoutModel.ts`，不需 provider vision），`visual-fit-drawn` 靠它通过；标签叠加这半条接到真实投影。live 截图路径未接线。
-- **Phase 5（已决策）**：Agent Worker 入口**明确禁用**（`AGENT_WORKER_READY` 从 `true` 改为 `false`——它原本与"只会回 `agent.unavailable`"自相矛盾），见 [`docs/decisions/2026-09-28-agent-worker-strategy.md`](docs/decisions/2026-09-28-agent-worker-strategy.md)。
+- **Phase 5（已决策）**：Agent Worker 入口**明确禁用**（`AGENT_WORKER_READY` 从 `true` 改为 `false`——它原本与"只会回 `agent.unavailable`"自相矛盾），见 [`docs/decisions/2026-09-28-agent-worker-strategy.md`](../decisions/2026-09-28-agent-worker-strategy.md)。
 - **Phase 6（除真实读数外完成）**：新增 `npm run eval:agent`；运行账本记录四个版本号与结构化工具痕迹（**痕迹也落库**，两个摘要走同一把脱敏尺子）；发布门禁文档 + 机器判据 + CI 接线。**离线 pass@1 = 4/8**（模式 `deterministic_local`，**不是模型准确率**）。
 - **Review 修复（两处严重缺陷）**：`modelPlanner` 的只读工具批次改为**一趟判完、再原子执行**。修复前：①与只读调用同批到达的合法计划被**静默丢弃**（实测第一轮的计划无声消失、最终采用第二轮重发的）；②批次非原子（9 调的批次在执行 **4 个之后**才抛错，模型付了钱看不到结果）。现在任一调用不是已发布的只读工具即**整批显式拒绝、0 执行**，且所有判据都在第一个 `await` 之前跑完。
 - **真实 provider 实跑（2026-09-29）**：用项目自己的 planner（真实提示词、动作登记表、原生工具通道），只把传输换成直连 DeepSeek（`deepseek-chat`，`tools` 能力已验证），喂一道椭圆题："中心在原点、焦点在 x 轴、过 P(2,1)、离心率 √2/2，求标准方程"。**模型自己推出 `x²/6+y²/3=1` 并给出两个动作**（建椭圆 + 标点 P），2.3 秒一轮完成；传输日志 `tools=5` 正是模型面那 5 个工具。**如实缺口**：单题不构成 pass@1；场景未接，多轮观察循环未被压到；`deriveAcceptance` 对圆锥曲线返回空（形状表里没有椭圆/抛物线/双曲线），所以这次运行的完成门禁仍是惰性的。

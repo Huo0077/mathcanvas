@@ -53,7 +53,7 @@ All official Windows x64 and Android ARM64 installers (with SHA-256 checksums) a
 | **Windows x64** | **NSIS Installer** (Recommended) | Everyday desktop use with Start Menu shortcut & uninstaller | [MathCanvas_6.0.0_x64-setup.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64-setup.exe) |
 | **Windows x64** | **Portable Executable** | Zero-install USB / classroom PCs without admin rights | [MathCanvas_6.0.0_x64.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64.exe) |
 | **Windows x64** | **MSI Package** | School lab / enterprise silent deployment | [MathCanvas_6.0.0_x64_en-US.msi](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64_en-US.msi) |
-| **Android ARM64** | **Signed Release APK** (Recommended) | Android 7.0+ phones & tablets with Material 3 touch UI | [MathCanvas-6.0.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas-6.0.0-android-arm64.apk) |
+| **Android ARM64** | **Signed Release APK** (Recommended) | Android 7.0+ phones & tablets with adaptive icon & Material 3 touch UI | [MathCanvas-6.0.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas-6.0.0-android-arm64.apk) |
 
 - **Checksums**: [SHA256SUMS-windows.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-windows.txt) · [SHA256SUMS-android.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-android.txt) · [All Releases](https://github.com/Huo0077/mathcanvas/releases)
 
@@ -144,3 +144,5 @@ npm run test:rust   # Rust host unit tests
 If MathCanvas helps your learning, teaching, or research, please consider giving the repository a **Star ★** on GitHub! Academic users can click **"Cite this repository"** on the GitHub sidebar (powered by [`CITATION.cff`](CITATION.cff)).
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Huo0077/mathcanvas&type=Date)](https://star-history.com/#Huo0077/mathcanvas&Date)
+
+<p align="center"><sub>Copyright © Huo0077. All rights reserved.</sub></p>

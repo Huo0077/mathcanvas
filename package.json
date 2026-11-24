@@ -1,7 +1,7 @@
 {
-  "name": "multimodal-math-engine",
+  "name": "mathcanvas",
   "private": true,
-  "version": "0.1.0",
+  "version": "6.0.0",
   "description": "MathCanvas — AI-native interactive 2D/3D geometry, university higher-math (calculus, ODE/PDE, linear algebra, probability), conics & CAD workbench (Windows, Android & Web)",
   "homepage": "https://huo0077.github.io/mathcanvas/",
   "repository": {

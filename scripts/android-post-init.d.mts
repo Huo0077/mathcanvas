@@ -6,3 +6,4 @@ export declare const MAIN_ACTIVITY_KT: string;
 export declare function patchAndroidManifest(manifestXml: string): string;
 export declare function patchProguardRules(existingRules: string): string;
 export declare function computeAndroidVersionCode(versionName: string): number;
+export declare function syncAndroidLauncherIcons(iconsAndroidDir: string, resDir: string): number;

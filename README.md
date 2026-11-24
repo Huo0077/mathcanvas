@@ -42,7 +42,7 @@
 
 ---
 
-> **MathCanvas** 将 **自然语言 AI 读题作图**、**动态几何约束联动**、**二维解析 / 函数分析**、**三维立体空间建模** 与 **工程制图四视图投影** 整合在同一个流畅的跨端工作台中。你可以像在传统几何软件里那样自由拖拽动点、调节参数、测量距离与二面角，也可以直接输入一道完整的数学题，由内置 AI 助手自动理解题意、构造图形、联动辅助线与空间面，并经独立数学核验证书检验后写入画布继续探索。
+> **MathCanvas** 将 **自然语言 AI 读题作图**、**动态几何约束联动**、**二维解析 / 函数分析**、**大学高等数学可视化实验**、**三维立体空间建模** 与 **工程制图四视图投影** 整合在同一个流畅的跨端工作台中。你可以像在传统几何软件里那样自由拖拽动点、调节参数、测量距离与二面角，也可以直接输入一道完整的数学题，由内置 AI 助手自动理解题意、构造图形、联动辅助线与空间面，并经独立数学核验证书检验后写入画布继续探索。
 >
 > **持续更新与问题反馈**：MathCanvas 持续高频迭代中。如遇软件 Bug 或有题目无法画出，欢迎直接提交 [GitHub Issue](https://github.com/Huo0077/mathcanvas/issues/new/choose) 或发邮件至 **[dogf9066@gmail.com](mailto:dogf9066@gmail.com)**。
 
@@ -50,14 +50,14 @@
 
 ## 📥 全平台整合下载（v6.0.0）
 
-**`v6.0.0`** 为 **Windows x64 + Android ARM64 全平台整合正式版**，所有安装包与 SHA-256 校验文件统一托管于 [GitHub Releases](https://github.com/Huo0077/mathcanvas/releases/tag/v6.0.0)：
+**`v6.0.0`** 为 **Windows x64 + Android ARM64 全平台整合正式版**（含全新「高等数学」十大模块、AI 精确求解及 Android 桌面自适应启动图标修复），所有安装包与 SHA-256 校验文件统一托管于 [GitHub Releases](https://github.com/Huo0077/mathcanvas/releases/tag/v6.0.0)：
 
 | 平台 | 安装包类型 | 适用场景 | 直链下载 |
 | --- | --- | --- | --- |
 | **Windows x64** | **NSIS 标准安装程序**（推荐） | 日常使用，含开始菜单快捷方式与标准卸载 | [MathCanvas_6.0.0_x64-setup.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64-setup.exe) |
 | **Windows x64** | **绿色免安装便携版** | U 盘随身携带、机房免管理员权限即点即用 | [MathCanvas_6.0.0_x64.exe](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64.exe) |
 | **Windows x64** | **MSI 安装包** | 学校机房域控批量分发 / 静默部署 | [MathCanvas_6.0.0_x64_en-US.msi](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas_6.0.0_x64_en-US.msi) |
-| **Android ARM64** | **正式签名 APK**（推荐） | Android 7.0+ 手机 / 平板，Material 3 触控重排 | [MathCanvas-6.0.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas-6.0.0-android-arm64.apk) |
+| **Android ARM64** | **正式签名 APK**（推荐） | Android 7.0+ 手机 / 平板，内置品牌自适应图标与 Material 3 触控重排 | [MathCanvas-6.0.0-android-arm64.apk](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/MathCanvas-6.0.0-android-arm64.apk) |
 
 - **校验文件**：[SHA256SUMS-windows.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-windows.txt) · [SHA256SUMS-android.txt](https://github.com/Huo0077/mathcanvas/releases/download/v6.0.0/SHA256SUMS-android.txt) · [查看全部历史 Releases](https://github.com/Huo0077/mathcanvas/releases)
 - **软件官网门户**：仓库根目录自带纯静态展示门户 [`portal/`](portal/index.html)（含使用说明、实机操作演示视频 `portal/assets/media/demo-workflow.webm`、多工作区交互画廊及 GitHub Releases 直链下载，可直接部署至任意静态 Web 服务器）。
@@ -95,7 +95,7 @@
 **🔍 高频适用人群与检索场景**：
 - **高中与竞赛师生**：立体几何外接球/内切球、翻折动态轨迹、二面角与线面角根式验证、圆锥曲线渐近线与焦点弦切线探究、课堂交互课件一键导出自包含 HTML。
 - **大学生与考研学子**：高等数学极值拐点、拉格朗日乘数法等高线相切、二元曲面鞍点与切平面、常微分方程斜率场与自治系统相平面、热传导/波动/泊松偏微分方程实时仿真、泰勒与傅里叶级数逼近、二重积分黎曼柱、矩阵特征值/SVD 几何变形、中心极限定理抽样实验。
-- **工程制图与开源开发者**：三维多面体直出 A4 标准工程四视图（DXF/SVG/PDF），以及基于 React + TypeScript + Three.js + Tauri 2 + Rust 的确定性几何内核参考实现。
+- **工程制图与软件研发者**：三维多面体直出 A4 标准工程四视图（DXF/SVG/PDF），以及基于 React + TypeScript + Three.js + Tauri 2 + Rust 的确定性几何与高数内核架构实践。
 
 ---
 
@@ -159,7 +159,8 @@ flowchart LR
 | `packages/dsl` | 版本化几何文档模型、图元 Schema 校验与 `.mgeo` 编解码 |
 | `packages/geometry-kernel` | 2D/3D 数值与解析几何求解器、圆锥曲线/导数求导、三点/多点共面、最大内切球与二面角测量引擎 |
 | `packages/scene-graph` | 响应式依赖图、宿主/面片拓扑复用、文档事务与撤销/重做栈 |
-| `packages/agent-core` | Agent 动作契约、约束/义务验证与数学核验证书门禁 |
+| `packages/agent-core` | Agent 动作契约、约束/义务验证、离线高数规划与数学核验证书门禁 |
+| `docs` | 架构文档、实时状态与版本发布归档（索引见 [`docs/README.md`](docs/README.md)） |
 | `portal` | 纯静态软件官网门户（支持直接部署至任意静态 Web 服务器） |
 | `e2e` & `scripts` | Playwright 全链路 E2E 测试、Android 打包加固脚本与文档一致性门禁 |
 
@@ -243,7 +244,7 @@ CI / 发布流水线：
 ## 📚 文档与版本导航
 
 - **最新发布说明与版本信息**：最新版本标签为 **`v6.0.0`**（[发布说明](docs/release/v6.0.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)，学术与课程引用元数据见 [CITATION.cff](CITATION.cff)。
-- **工程进度与技术文档**：
+- **工程进度与技术文档**（总览见 [`docs/README.md`](docs/README.md)）：
   - [当前状态（唯一实时状态入口）](docs/current-status.md)
   - [功能目录](docs/feature-catalog.md)
   - [项目进度日志](docs/project-progress.md)
@@ -253,8 +254,10 @@ CI / 发布流水线：
 
 ---
 
-## ⭐ Star History
+## ⭐ Star History 与版权声明
 
-如果 **MathCanvas** 对你的数学学习、课堂教学、考研复习或开发研究有所帮助，欢迎点击右上角 **Star ★** 支持开源迭代！
+如果 **MathCanvas** 对你的数学学习、课堂教学、考研复习或技术研究有所帮助，欢迎点击右上角 **Star ★** 支持作者持续迭代！
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Huo0077/mathcanvas&type=Date)](https://star-history.com/#Huo0077/mathcanvas&Date)
+
+<p align="center"><sub>Copyright © Huo0077. All rights reserved. 著作权归作者所有。</sub></p>

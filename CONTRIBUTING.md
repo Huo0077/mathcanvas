@@ -22,12 +22,13 @@ npm run dev --workspace @draw/desktop
 
 | 目录 | 职责 |
 | --- | --- |
-| `apps/web` | React + TypeScript 前端工作台（2D SVG、Three.js 3D、对象树/属性栏、Agent 抽屉、移动端 Material 3 布局） |
-| `apps/desktop` | Tauri 2 + Rust 原生宿主壳（Windows / Android 安全凭据库、SQLite 持久化、原生文件导出与分享） |
+| `apps/web` | React + TypeScript 前端工作台（2D SVG、Three.js 3D、高等数学 10 模块工作台、对象树/属性栏、Agent 抽屉、移动端 Material 3 布局） |
+| `apps/desktop` | Tauri 2 + Rust 原生宿主壳（Windows / Android 安全凭据库、SQLite 持久化、原生文件导出与分享、全平台图标资产） |
 | `packages/dsl` | 版本化几何文档模型与 `.mgeo` 编解码校验 |
-| `packages/geometry-kernel` | 2D/3D 数值与解析几何求解器、圆锥曲线、最大内切球与二面角测量引擎 |
+| `packages/geometry-kernel` | 2D/3D 数值与解析几何求解器、圆锥曲线、大学高数字节码与微积分/ODE/PDE/线代/概率计算引擎 |
 | `packages/scene-graph` | 响应式依赖图、事务系统与单步撤销/重做栈 |
-| `packages/agent-core` | Agent 动作契约、约束义务验证与数学核验证书门禁 |
+| `packages/agent-core` | Agent 动作契约、约束义务验证、离线高数规划与数学核验证书门禁 |
+| `docs` | 架构文档、实时状态（`current-status.md`）、版本发布说明与历史审计归档（导航见 [`docs/README.md`](docs/README.md)） |
 | `portal` | 纯静态软件官网门户 |
 
 ## 提交 PR 前的必备检查

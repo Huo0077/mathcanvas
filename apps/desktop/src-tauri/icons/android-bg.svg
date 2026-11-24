@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" fill="none">
+  <defs>
+    <linearGradient id="mc-android-bg" x1="12" y1="8" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4a6b96" />
+      <stop offset="100%" stop-color="#2c3e50" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="108" height="108" fill="url(#mc-android-bg)" />
+</svg>

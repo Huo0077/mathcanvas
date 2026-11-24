@@ -1,3 +1,7 @@
+import { existsSync } from "node:fs"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -7,7 +11,8 @@ import {
   MAIN_ACTIVITY_KT,
   NETWORK_SECURITY_CONFIG_XML,
   patchAndroidManifest,
-  patchProguardRules
+  patchProguardRules,
+  syncAndroidLauncherIcons
 } from "./android-post-init.mjs"
 
 const SAMPLE_MANIFEST = `<?xml version="1.0" encoding="utf-8"?>
@@ -69,5 +74,30 @@ describe("android-post-init", () => {
     expect(patchProguardRules(once)).toBe(once)
     expect(computeAndroidVersionCode("5.1.0")).toBe(5_001_000)
     expect(computeAndroidVersionCode("5.0.0")).toBe(5_000_000)
+  })
+
+  it("syncs all 22 MathCanvas Android adaptive & mipmap launcher icons and removes stale template drawables", async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), "mathcanvas-android-icons-"))
+    try {
+      const resDir = path.join(tempRoot, "res")
+      await mkdir(path.join(resDir, "drawable"), { recursive: true })
+      await mkdir(path.join(resDir, "drawable-v24"), { recursive: true })
+      await writeFile(path.join(resDir, "drawable/ic_launcher_background.xml"), "<vector />")
+      await writeFile(path.join(resDir, "drawable-v24/ic_launcher_foreground.xml"), "<vector />")
+
+      const iconsAndroidDir = path.resolve(process.cwd(), "apps/desktop/src-tauri/icons/android")
+      const count = syncAndroidLauncherIcons(iconsAndroidDir, resDir)
+      expect(count).toBe(22)
+      expect(existsSync(path.join(resDir, "mipmap-anydpi-v26/ic_launcher.xml"))).toBe(true)
+      expect(existsSync(path.join(resDir, "mipmap-anydpi-v26/ic_launcher_round.xml"))).toBe(true)
+      expect(existsSync(path.join(resDir, "mipmap-xxxhdpi/ic_launcher.png"))).toBe(true)
+      expect(existsSync(path.join(resDir, "mipmap-xxxhdpi/ic_launcher_round.png"))).toBe(true)
+      expect(existsSync(path.join(resDir, "mipmap-xxxhdpi/ic_launcher_background.png"))).toBe(true)
+      expect(existsSync(path.join(resDir, "mipmap-xxxhdpi/ic_launcher_foreground.png"))).toBe(true)
+      expect(existsSync(path.join(resDir, "drawable/ic_launcher_background.xml"))).toBe(false)
+      expect(existsSync(path.join(resDir, "drawable-v24/ic_launcher_foreground.xml"))).toBe(false)
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 })

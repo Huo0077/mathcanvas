@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const NETWORK_SECURITY_CONFIG_XML = `<?xml version="1.0" encoding="utf-8"?>
@@ -306,6 +306,65 @@ export function computeAndroidVersionCode(versionName) {
   return major * 1_000_000 + minor * 1_000 + patch;
 }
 
+const REQUIRED_ANDROID_ICON_FILES = [
+  "mipmap-anydpi-v26/ic_launcher.xml",
+  "mipmap-anydpi-v26/ic_launcher_round.xml",
+  "mipmap-mdpi/ic_launcher.png",
+  "mipmap-mdpi/ic_launcher_round.png",
+  "mipmap-mdpi/ic_launcher_background.png",
+  "mipmap-mdpi/ic_launcher_foreground.png",
+  "mipmap-hdpi/ic_launcher.png",
+  "mipmap-hdpi/ic_launcher_round.png",
+  "mipmap-hdpi/ic_launcher_background.png",
+  "mipmap-hdpi/ic_launcher_foreground.png",
+  "mipmap-xhdpi/ic_launcher.png",
+  "mipmap-xhdpi/ic_launcher_round.png",
+  "mipmap-xhdpi/ic_launcher_background.png",
+  "mipmap-xhdpi/ic_launcher_foreground.png",
+  "mipmap-xxhdpi/ic_launcher.png",
+  "mipmap-xxhdpi/ic_launcher_round.png",
+  "mipmap-xxhdpi/ic_launcher_background.png",
+  "mipmap-xxhdpi/ic_launcher_foreground.png",
+  "mipmap-xxxhdpi/ic_launcher.png",
+  "mipmap-xxxhdpi/ic_launcher_round.png",
+  "mipmap-xxxhdpi/ic_launcher_background.png",
+  "mipmap-xxxhdpi/ic_launcher_foreground.png",
+];
+
+/**
+ * Replaces Tauri's default placeholder Android launcher icons with MathCanvas's
+ * branded adaptive (`mipmap-anydpi-v26`) and multi-density (`mipmap-*`) icons,
+ * and removes stale template robot/grid drawables.
+ */
+export function syncAndroidLauncherIcons(iconsAndroidDir, resDir) {
+  for (const relPath of REQUIRED_ANDROID_ICON_FILES) {
+    const src = join(iconsAndroidDir, relPath);
+    if (!existsSync(src)) {
+      throw new Error(`Missing required MathCanvas Android icon asset: ${src}`);
+    }
+  }
+
+  for (const dirEntry of readdirSync(iconsAndroidDir, { withFileTypes: true })) {
+    if (!dirEntry.isDirectory()) continue;
+    const srcSubdir = join(iconsAndroidDir, dirEntry.name);
+    const destSubdir = join(resDir, dirEntry.name);
+    mkdirSync(destSubdir, { recursive: true });
+    for (const fileEntry of readdirSync(srcSubdir, { withFileTypes: true })) {
+      if (!fileEntry.isFile()) continue;
+      copyFileSync(join(srcSubdir, fileEntry.name), join(destSubdir, fileEntry.name));
+    }
+  }
+
+  for (const staleRel of ["drawable/ic_launcher_background.xml", "drawable-v24/ic_launcher_foreground.xml"]) {
+    const stalePath = join(resDir, staleRel);
+    if (existsSync(stalePath)) {
+      rmSync(stalePath, { force: true });
+    }
+  }
+
+  return REQUIRED_ANDROID_ICON_FILES.length;
+}
+
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = dirname(currentFile);
 const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(currentFile);
@@ -366,4 +425,9 @@ if (isMain) {
     writeFileSync(mainActivityPath, MAIN_ACTIVITY_KT, "utf8");
     console.log(`Updated MainActivity.kt with edge-to-edge insets, back bridge & native export/share bridge at ${mainActivityPath}`);
   }
+
+  const iconsAndroidDir = resolve(currentDir, "../apps/desktop/src-tauri/icons/android");
+  const resDir = resolve(androidMainDir, "res");
+  const syncedCount = syncAndroidLauncherIcons(iconsAndroidDir, resDir);
+  console.log(`Synced ${syncedCount} MathCanvas Android launcher icon assets into ${resDir}`);
 }

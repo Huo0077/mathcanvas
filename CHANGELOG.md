@@ -4,11 +4,11 @@
 > - **当前状态**（门禁读数、做到哪一步、还差什么）看 [`docs/current-status.md`](docs/current-status.md) —— 那是"现在时"的**唯一**一处；
 > - **过程与证据**（每一轮的 RED→GREEN、被推翻的判断、实测读数、误报清单）看 [`docs/project-progress.md`](docs/project-progress.md) —— 那是**归档**；
 > - **架构与能力清单**看 [`docs/feature-catalog.md`](docs/feature-catalog.md)。
-> - **2026-09 及更早**：已拆到 [`CHANGELOG-2026-09.md`](CHANGELOG-2026-09.md)。
+> - **2026-09 及更早**：已拆到 [`docs/archive/CHANGELOG-2026-09.md`](docs/archive/CHANGELOG-2026-09.md)。
 
 
 
-## 2026-11-24 —— MathCanvas v6.0.0（全新「高等数学」十大交互可视化工作台与 AI Agent 大学数学精确求解大版本升级）
+## 2026-11-24 —— MathCanvas v6.0.0（全新「高等数学」十大交互可视化工作台、AI Agent 大学数学精确求解与 Android 图标/仓库升级）
 
 - **纯计算高等数学内核（`@draw/geometry-kernel/src/higher-math/`）**（[bytecode.ts](packages/geometry-kernel/src/higher-math/bytecode.ts)、[extrema1d.ts](packages/geometry-kernel/src/higher-math/extrema1d.ts)、[contour.ts](packages/geometry-kernel/src/higher-math/contour.ts)、[ode.ts](packages/geometry-kernel/src/higher-math/ode.ts)、[surface3d.ts](packages/geometry-kernel/src/higher-math/surface3d.ts)、[pde.ts](packages/geometry-kernel/src/higher-math/pde.ts)、[series.ts](packages/geometry-kernel/src/higher-math/series.ts)、[multivariable.ts](packages/geometry-kernel/src/higher-math/multivariable.ts)、[linalg2d.ts](packages/geometry-kernel/src/higher-math/linalg2d.ts)、[probability.ts](packages/geometry-kernel/src/higher-math/probability.ts)）：
   - 新增零 `eval` / 零 `new Function` 扁平逆波兰（RPN）字节码编译器与符号一阶/二阶偏导求导器；
@@ -17,7 +17,8 @@
   - 顶栏激活独立「高等数学」标签页，整合 10 大交互模块、40+ 大学经典预设案例、2D↔3D 曲面约束联动与自然语言快捷题目栏。
 - **AI Agent 大学数学机器精度求解与状态联动**（[dsActionTools.ts](apps/web/src/agent/dsActionTools.ts)、[higherMathPlan.ts](packages/agent-core/src/solver/higherMathPlan.ts)、[systemPrompt.ts](apps/web/src/agent/systemPrompt.ts)、[draftStore.ts](apps/web/src/agent/draftStore.ts)、[calculusStore.ts](apps/web/src/calculusStore.ts)）：
   - 在 `query_measurement` 新增 10 类高数精确内核求解指标，接入离线确定性高数规划器与工作台自动同步，并通过真实 `deepseek-v4-flash` 在线端到端 10 题实测（**10/10 全过**）。
-- **全平台版本与发布同步至 `v6.0.0`**（[tauri.conf.json](apps/desktop/src-tauri/tauri.conf.json)、[Cargo.toml](apps/desktop/src-tauri/Cargo.toml)、[README.md](README.md)、[portal/index.html](portal/index.html)、[v6.0.0.md](docs/release/v6.0.0.md)）。
+- **Android 启动图标修复、仓库结构归档与 `v6.0.0` 全平台发布**（[android-post-init.mjs](scripts/android-post-init.mjs)、[docs/README.md](docs/README.md)、[README.md](README.md)、[README.en.md](README.en.md)、[portal/index.html](portal/index.html)、[v6.0.0.md](docs/release/v6.0.0.md)）：
+  - 补齐 22 份 `mipmap-anydpi-v26` 与 `mipmap-mdpi..xxxhdpi` 品牌自适应启动图标并自动清理默认机器人占位图；归档根目录历史审计与早期日志至 `docs/audit/` 与 `docs/archive/`。
 
 ## 2026-11-24 —— MathCanvas v5.3.0（新增线面角与空间直线夹角全链路测量、3D 教学可视化与 Agent 查询支持）
 
@@ -6262,4 +6263,4 @@ theorem draw_plane_perpendicular_goal {E : Type*} [NormedAddCommGroup E] [InnerP
 
 ## 归档
 
-- [2026-09 及更早的变更记录](CHANGELOG-2026-09.md)
+- [2026-09 及更早的变更记录](docs/archive/CHANGELOG-2026-09.md)
