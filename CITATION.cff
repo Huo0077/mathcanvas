@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use MathCanvas in your teaching, coursework, or research, please cite it using this metadata."
+type: software
+title: "MathCanvas: AI-Native Interactive 2D/3D Geometry, Higher Mathematics & CAD Workbench"
+version: "6.0.0"
+date-released: "2026-11-24"
+authors:
+  - alias: "Huo0077"
+    website: "https://github.com/Huo0077"
+repository-code: "https://github.com/Huo0077/mathcanvas"
+url: "https://huo0077.github.io/mathcanvas/"
+abstract: >-
+  MathCanvas is an open-source, AI-native interactive mathematics workbench for Windows, Android,
+  and the Web. It unifies natural-language problem-to-diagram AI generation (gated by an independent
+  mathematical verification certificate), reactive 2D analytic geometry & conics, 3D solid geometry
+  with dynamic point bindings and exact spatial angle radicals, a 10-module university higher-mathematics
+  visual laboratory (extrema, Lagrange multipliers, 3D surfaces, ODE/phase planes, 60fps WebWorker PDE
+  simulations, Taylor/Fourier series, double integrals, linear algebra SVD, and probability/CLT),
+  and four-view CAD projection.
+keywords:
+  - mathematics
+  - geometry
+  - 3d-geometry
+  - calculus
+  - multivariable-calculus
+  - differential-equations
+  - pde-simulation
+  - linear-algebra
+  - probability-statistics
+  - math-visualization
+  - dynamic-geometry
+  - geogebra-alternative
+  - cad
+  - ai-agent
+  - educational-software
+  - tauri
+  - threejs

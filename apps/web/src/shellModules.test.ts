@@ -13,10 +13,12 @@ describe("application modules", () => {
     expect(DEFAULT_APP_MODULE).toBe("traditional")
   })
 
-  it("keeps the three existing workspaces reachable from the module A sidebar", () => {
-    expect(WORKSPACE_DEFINITIONS.map((workspace) => workspace.label)).toEqual(["平面几何", "立体几何", "工程制图"])
+  it("keeps the four workspaces reachable from the module A sidebar", () => {
+    expect(WORKSPACE_DEFINITIONS.map((workspace) => workspace.label)).toEqual(["平面几何", "立体几何", "工程制图", "高等数学"])
     expect(isWorkspaceId("conics")).toBe(true)
     expect(isWorkspaceId("cad")).toBe(true)
+    expect(isWorkspaceId("calculus")).toBe(true)
     expect(workspaceLabel("geometry3d")).toBe("立体几何")
+    expect(workspaceLabel("calculus")).toBe("高等数学")
   })
 })

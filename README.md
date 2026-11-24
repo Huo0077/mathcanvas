@@ -15,9 +15,17 @@
 ![Stack](https://img.shields.io/badge/Stack-React%20%C2%B7%20TypeScript%20%C2%B7%20Three.js%20%C2%B7%20Tauri%202%20%C2%B7%20Rust-1e293b?style=flat-square)
 
 <p>
+  <b>简体中文</b>
+  &nbsp;|&nbsp;
+  <a href="README.en.md">English</a>
+</p>
+
+<p>
   <a href="#-全平台整合下载v600"><b>📥 下载整合版 v6.0.0</b></a>
   &nbsp;·&nbsp;
   <a href="#-界面展示">📸 界面展示</a>
+  &nbsp;·&nbsp;
+  <a href="#-为什么选择-mathcanvas">🎯 工具对比</a>
   &nbsp;·&nbsp;
   <a href="#-核心特性">✨ 核心特性</a>
   &nbsp;·&nbsp;
@@ -71,6 +79,23 @@
 | 工程制图（CAD 四视图自动投影） | 13 家模型预设与模型列表一键拉取 |
 | :---: | :---: |
 | ![工程制图四视图投影](docs/media/workbench-cad-views.png) | ![模型服务设置与预设](docs/media/settings-providers.png) |
+
+---
+
+## 🎯 为什么选择 MathCanvas？
+
+| 核心能力对比 | **MathCanvas v6.0** | GeoGebra | Desmos | MATLAB / Python |
+| --- | :---: | :---: | :---: | :---: |
+| **自然语言数学题直接生成可交互图形** | ✅ 内置 AI 读题 + 数学核验证书门禁 | ❌ 需手动逐条输入指令 | ❌ 仅支持手工输入解析式 | ❌ 需手写绘图代码 |
+| **立体几何翻折、以线推面与精确空间角** | ✅ 二面角 / 线面角 / 异面角直出根式 `sin`/`cos` | ⚠️ 偏数值近似，辅助面构造繁琐 | ❌ 3D 几何能力受限 | ❌ 静态脚本绘图 |
+| **零代码大学高数 / 线代 / 概率与 60fps PDE 仿真** | ✅ 十大交互可视化实验模块 + AI 精确验算 | ⚠️ 覆盖零散，无内置 PDE 仿真 | ❌ 聚焦一维/二维函数 | ⚠️ 商业授权昂贵或需编程 |
+| **3D 模型一键投影标准工程制图四视图** | ✅ 主/俯/左/轴测同步 + SVG/DXF/PDF/HTML | ❌ | ❌ | ❌ |
+| **轻量级跨端原生离线安装包** | ✅ Tauri 2（~10 MB）+ Android 签名 APK | ✅ | 🌐 网页 / 移动端为主 | ❌ 桌面体积数 GB |
+
+**🔍 高频适用人群与检索场景**：
+- **高中与竞赛师生**：立体几何外接球/内切球、翻折动态轨迹、二面角与线面角根式验证、圆锥曲线渐近线与焦点弦切线探究、课堂交互课件一键导出自包含 HTML。
+- **大学生与考研学子**：高等数学极值拐点、拉格朗日乘数法等高线相切、二元曲面鞍点与切平面、常微分方程斜率场与自治系统相平面、热传导/波动/泊松偏微分方程实时仿真、泰勒与傅里叶级数逼近、二重积分黎曼柱、矩阵特征值/SVD 几何变形、中心极限定理抽样实验。
+- **工程制图与开源开发者**：三维多面体直出 A4 标准工程四视图（DXF/SVG/PDF），以及基于 React + TypeScript + Three.js + Tauri 2 + Rust 的确定性几何内核参考实现。
 
 ---
 
@@ -217,7 +242,7 @@ CI / 发布流水线：
 
 ## 📚 文档与版本导航
 
-- **最新发布说明与版本信息**：最新版本标签为 **`v6.0.0`**（[发布说明](docs/release/v6.0.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)。
+- **最新发布说明与版本信息**：最新版本标签为 **`v6.0.0`**（[发布说明](docs/release/v6.0.0.md)），完整变更记录见 [CHANGELOG](CHANGELOG.md)，学术与课程引用元数据见 [CITATION.cff](CITATION.cff)。
 - **工程进度与技术文档**：
   - [当前状态（唯一实时状态入口）](docs/current-status.md)
   - [功能目录](docs/feature-catalog.md)
@@ -225,3 +250,11 @@ CI / 发布流水线：
   - [下一轮工作导航](docs/agent-next-round-progress.md)
   - [Agent 发布前门禁](docs/acceptance/agent-release-gate.md)
   - [系统架构说明](docs/architecture.md)
+
+---
+
+## ⭐ Star History
+
+如果 **MathCanvas** 对你的数学学习、课堂教学、考研复习或开发研究有所帮助，欢迎点击右上角 **Star ★** 支持开源迭代！
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Huo0077/mathcanvas&type=Date)](https://star-history.com/#Huo0077/mathcanvas&Date)

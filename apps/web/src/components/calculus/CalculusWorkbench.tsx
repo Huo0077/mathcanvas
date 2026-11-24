@@ -942,6 +942,21 @@ export function CalculusWorkbench({ document }: CalculusWorkbenchProps) {
       <div className="calculus-body">
         {/* Left: Formula, parameters & presets */}
         <aside className="calculus-sidebar calculus-controls" aria-label="公式与参数面板">
+          {/* Backward compatibility for legacy .mgeo documents saved in `calculus` workspace */}
+          {document.primitives.length > 0 && (
+            <section className="calculus-card calculus-legacy-card algebra-panel" aria-label="文档兼容对象">
+              <h2>文档兼容对象（{document.primitives.length}）</h2>
+              <ul className="calculus-legacy-list">
+                {document.primitives.map((primitive) => (
+                  <li key={primitive.id} className="object-row">
+                    <span className="object-name">{primitive.label ?? primitive.id}</span>
+                    <small>{primitive.type}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {activeModule === "extrema1d" && (
             <>
               <section className="calculus-card">
@@ -1521,21 +1536,6 @@ export function CalculusWorkbench({ document }: CalculusWorkbenchProps) {
               onCltSampleSizeChange={(n) => { setCltSampleSize(n); setCustomProbBounds(null) }}
               onResampleClt={() => setCltSeed((s) => s + 137)}
             />
-          )}
-
-          {/* Backward compatibility for legacy .mgeo documents saved in `calculus` workspace */}
-          {document.primitives.length > 0 && (
-            <section className="calculus-card calculus-legacy-card" aria-label="文档兼容对象">
-              <h2>文档兼容对象（{document.primitives.length}）</h2>
-              <ul className="calculus-legacy-list">
-                {document.primitives.map((primitive) => (
-                  <li key={primitive.id}>
-                    <span className="object-name">{primitive.label ?? primitive.id}</span>
-                    <small>{primitive.type}</small>
-                  </li>
-                ))}
-              </ul>
-            </section>
           )}
         </aside>
 

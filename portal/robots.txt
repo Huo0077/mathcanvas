@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://huo0077.github.io/mathcanvas/sitemap.xml
