@@ -1123,6 +1123,16 @@ export function App() {
     return () => { delete bridge.__mathcanvasHandleAndroidBack }
   }, [contextMenuState, renamingState, packagePanelOpen, solidWizardOpen, mobileDock, copilotOpen, activeModule])
 
+  const copilotDrawer = <CopilotDrawer
+    open={copilotOpen}
+    onClose={() => setCopilotOpen(false)}
+    onRun={runAgentPrompt}
+    onConfirm={(runId) => { agentRunner.confirm(runId) }}
+    onDiscard={(runId) => { agentRunner.discard(runId) }}
+    onStop={(runId) => { agentRunner.stop(runId) }}
+    onRetry={retryLastPrompt}
+  />
+
   const cadWorkbench = <EngineeringWorkbench
     document={document}
     mode={cadMode}
@@ -1147,7 +1157,20 @@ export function App() {
     {activeModule === "traditional" ? <div className="app-module" data-module="traditional">
       <AppChrome
       activeWorkspace={document.workspace} onWorkspaceChange={handleWorkspaceChange} ribbonGroups={ribbonGroups} onRibbonCommand={handleRibbonCommand} onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo} onSave={save} onOpen={() => fileInputRef.current?.click()} onPackage={() => setPackagePanelOpen(true)} activeCommandId={effectiveActiveCommand} />
-      {document.workspace === "cad" ? cadWorkbench : document.workspace === "calculus" ? <CalculusWorkbench document={document} /> : (
+      {document.workspace === "cad" ? cadWorkbench : document.workspace === "calculus" ? (
+        <CalculusWorkbench
+          document={document}
+          inspectorWidth={inspectorWidth}
+          onInspectorResize={resizeInspector}
+          leftDockOpen={leftDockOpen}
+          rightDockOpen={rightDockOpen}
+          onToggleLeftDock={() => setLeftDockOpen((open) => !open)}
+          onToggleRightDock={() => setRightDockOpen((open) => !open)}
+          copilotOpen={copilotOpen}
+          onToggleCopilot={() => setCopilotOpen((open) => !open)}
+          copilotDrawer={copilotDrawer}
+        />
+      ) : (
         <div className="workbench" data-left-open={leftDockOpen ? "true" : "false"} data-right-open={rightDockOpen ? "true" : "false"} data-copilot-open={copilotOpen ? "true" : "false"}>
         {activeGhostDraft && (
           <div className="canvas-draft-banner" role="region" aria-label="AI 草稿预览">
@@ -1196,15 +1219,7 @@ export function App() {
         {document.workspace === "geometry3d" ? threeCanvas : planarCanvas}
         {inspectorPanel}
         {rightDockOpen && <InspectorResizeHandle controls="properties-dock" width={inspectorWidth} onResize={resizeInspector} />}
-        <CopilotDrawer
-          open={copilotOpen}
-          onClose={() => setCopilotOpen(false)}
-          onRun={runAgentPrompt}
-          onConfirm={(runId) => { agentRunner.confirm(runId) }}
-          onDiscard={(runId) => { agentRunner.discard(runId) }}
-          onStop={(runId) => { agentRunner.stop(runId) }}
-          onRetry={retryLastPrompt}
-        />
+        {copilotDrawer}
         {contextMenuState && (
           <ContextMenu
             position={contextMenuState.position}

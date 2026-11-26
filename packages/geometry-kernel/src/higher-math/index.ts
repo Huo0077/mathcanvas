@@ -1,5 +1,7 @@
 export * from "./bytecode"
 export * from "./extrema1d"
+export * from "./calculus1dExtras"
+export * from "./parametricPolar"
 export * from "./contour"
 export * from "./ode"
 export * from "./surface3d"

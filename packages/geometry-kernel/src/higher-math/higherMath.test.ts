@@ -12,15 +12,21 @@ import {
   PROBABILITY_PRESETS,
   SURFACE_3D_PRESETS,
   TAYLOR_PRESETS,
+  analyzeDefiniteIntegral1D,
   analyzeDoubleIntegral,
+  analyzeDualCurve1D,
   analyzeExtrema1D,
   analyzeFourierSeries,
   analyzeLagrange2D,
+  analyzeLimit1D,
   analyzeLinearTransform2D,
   analyzeOdeSlopeField,
+  analyzeParametricCurve2D,
   analyzePhasePlane2D,
+  analyzePolarCurve2D,
   analyzeProbabilityDistribution,
   analyzeSurface3D,
+  analyzeTangentAndDerivative1D,
   analyzeTaylorSeries,
   compileScalarField1D,
   compileScalarField2D,
@@ -30,6 +36,7 @@ import {
   evaluateDivCurlProbe,
   evaluateLagrangePoint,
   extractContoursFromGrid,
+  findRoots1D,
   injectPdeGaussianPulse,
   integrateOde1DBidirectional,
   integratePhaseTrajectoryBidirectional,
@@ -551,5 +558,72 @@ describe("Phase 4: Linear Algebra 2x2 SVD/Eigen, Probability & CLT, and Smart Pr
       expect(r5.subMode).toBe("clt")
       expect(r5.sampleSize).toBe(20)
     }
+  })
+})
+
+describe("Phase 5: Natural Math / LaTeX input, 1D Core Calculus Extras & Parametric/Polar Curves", () => {
+  it("parses natural textbook shorthand, Chinese punctuation, extra functions, and LaTeX paste", () => {
+    // Implicit multiplication + trig powers + parenthesis-less call
+    const f1 = compileScalarField1D("2sin^2(x) + 3cos x - x ln(x + 2)")
+    expect(f1.eval(1)).toBeCloseTo(2 * Math.sin(1) ** 2 + 3 * Math.cos(1) - 1 * Math.log(3), 8)
+
+    // Fullwidth Chinese symbols + arcsin/arctan/lg/cbrt/cot/sec
+    const f2 = compileScalarField1D("（arcsin(0.5) ＋ arctan(1)）÷ 1 ＋ lg(100) ＋ ∛(8)")
+    expect(f2.eval(0)).toBeCloseTo(Math.asin(0.5) + Math.atan(1) + 2 + 2, 8)
+
+    // Direct LaTeX paste
+    const f3 = compileScalarField1D("\\frac{x^{2} - 1}{x + 1} + \\sqrt{x^2 + 3} + e^{-x^2}")
+    expect(f3.eval(1)).toBeCloseTo(0 + 2 + Math.exp(-1), 8)
+  })
+
+  it("computes accurate 1D definite integral, arc length, revolution volume, roots, tangent, limits, and dual-curve area", () => {
+    // f(x) = x^2 on [0, 2]: integral = 8/3, revolution volume = pi * 32/5
+    const quad = compileScalarField1D("x^2")
+    const integ = analyzeDefiniteIntegral1D(quad, [0, 2])
+    expect(integ.signedArea).toBeCloseTo(8 / 3, 5)
+    expect(integ.revolutionVolumeX).toBeCloseTo((32 * Math.PI) / 5, 4)
+
+    // Arc length of straight line y = 2x on [0, 3] is 3*sqrt(5)
+    const line = compileScalarField1D("2x")
+    expect(analyzeDefiniteIntegral1D(line, [0, 3]).arcLength).toBeCloseTo(3 * Math.sqrt(5), 5)
+
+    // Roots of x^2 - 1 on [-2, 2]
+    const poly = compileScalarField1D("x^2 - 1")
+    const roots = findRoots1D(poly, [-2, 2])
+    expect(roots.map((r) => r.x)).toHaveLength(2)
+    expect(roots[0]!.x).toBeCloseTo(-1, 5)
+    expect(roots[1]!.x).toBeCloseTo(1, 5)
+
+    // Symbolic derivative & tangent/curvature at x0 = 1 for x^3 - 3x + 1 -> f'(x) = 3x^2 - 3
+    const cubic = compileScalarField1D("x^3 - 3x + 1")
+    const tan = analyzeTangentAndDerivative1D("x^3 - 3x + 1", cubic, 1)
+    expect(tan.symbolicDerivativePretty).toContain("3x²")
+    expect(tan.slope).toBeCloseTo(0, 6)
+    expect(tan.secondDerivative).toBeCloseTo(6, 4)
+    expect(tan.curvature).toBeCloseTo(6, 4)
+
+    // Removable discontinuity limit: sin(x)/x as x -> 0 equals 1
+    const sinc = compileScalarField1D("sin(x)/x")
+    const lim0 = analyzeLimit1D(sinc, { kind: "point", x0: 0 })
+    expect(lim0.continuity).toBe("removable")
+    expect(lim0.overallLimit.kind).toBe("finite")
+    if (lim0.overallLimit.kind === "finite") expect(lim0.overallLimit.value).toBeCloseTo(1, 4)
+
+    // Dual curve f(x) = x^2 vs g(x) = x on [0, 1]: intersections at 0 and 1, area between = 1/6
+    const dual = analyzeDualCurve1D(quad, "x", [0, 1])
+    expect(dual.intersections.length).toBe(2)
+    expect(dual.areaBetween).toBeCloseTo(1 / 6, 4)
+  })
+
+  it("computes accurate parametric cycloid arc length and polar cardioid area", () => {
+    // One arch of cycloid x = t - sin(t), y = 1 - cos(t) on [0, 2pi] has exact arc length = 8
+    const cycloid = analyzeParametricCurve2D("t - sin(t)", "1 - cos(t)", [0, 2 * Math.PI], Math.PI)
+    expect(cycloid.arcLength).toBeCloseTo(8, 2)
+    expect(cycloid.activePoint.y).toBeCloseTo(2, 5)
+
+    // Cardioid r = 1 + cos(theta) on [0, 2pi] has exact area = 3*pi/2 and arc length = 8
+    const cardioid = analyzePolarCurve2D("1 + cos(theta)", [0, 2 * Math.PI], 0)
+    expect(cardioid.sectorArea).toBeCloseTo((3 * Math.PI) / 2, 2)
+    expect(cardioid.arcLength).toBeCloseTo(8, 2)
   })
 })

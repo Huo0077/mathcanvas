@@ -1,51 +1,183 @@
 /* Higher-Mathematics Workspace ("高等数学") — cold-slate editorial workbench styling. */
 
+@property --tab-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --tab-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 20px;
+}
+
+@keyframes calculus-tab-fade {
+  0% {
+    --tab-fade-start: 0px;
+    --tab-fade-end: 24px;
+  }
+  8%, 92% {
+    --tab-fade-start: 24px;
+    --tab-fade-end: 24px;
+  }
+  100% {
+    --tab-fade-start: 24px;
+    --tab-fade-end: 0px;
+  }
+}
+
 .calculus-workbench {
   flex: 1 1 0;
   min-height: 0;
   min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow: hidden;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--color-canvas, #f8fafc);
   color: var(--color-ink, #2c3e50);
   accent-color: var(--color-accent, #3d5a80);
+  --calc-left-w: clamp(232px, 20.5vw, 282px);
+  --calc-right-w: clamp(256px, var(--inspector-width, 310px), min(480px, 36vw));
+  --calc-copilot-w: 0px;
+}
+
+.calculus-workbench[data-left-open="false"] {
+  --calc-left-w: 0px;
+}
+
+.calculus-workbench[data-right-open="false"] {
+  --calc-right-w: 0px;
+}
+
+.calculus-workbench[data-copilot-open="true"] {
+  --calc-copilot-w: clamp(300px, 28vw, var(--copilot-drawer-width, 380px));
 }
 
 .calculus-subbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: safe center;
-  gap: 12px 18px;
-  padding: 8px 18px;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  padding: 6px 14px 7px;
   background: var(--color-panel, #ffffff);
   border-bottom: 1px solid var(--color-border, #e2e8f0);
 }
 
-.calculus-module-tabs {
+/* Row 1: Single-row horizontally scrollable 10-module tab strip (never wraps) */
+.calculus-tabs-row {
+  display: flex;
+  align-items: safe center;
+  gap: 4px;
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+
+.calculus-tab-scroll-btn {
+  flex: 0 0 auto;
+  inline-size: 24px;
+  block-size: 28px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-muted, #586a80);
+  font-size: 14px;
+  line-height: 1;
   display: inline-flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.calculus-tab-scroll-btn:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  color: var(--color-accent-strong, #2c4a6e);
+  border-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-module-tabs {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: safe center;
+  gap: 2px;
   padding: 3px;
   background: var(--color-surface-subtle, #f1f5f9);
   border-radius: 7px;
-  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: inline proximity;
+  overscroll-behavior-x: contain;
+}
+
+.calculus-module-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+@supports (animation-timeline: scroll()) {
+  .calculus-module-tabs {
+    mask-image: linear-gradient(
+      to inline-end,
+      transparent,
+      #000 var(--tab-fade-start),
+      #000 calc(100% - var(--tab-fade-end)),
+      transparent
+    );
+    animation: calculus-tab-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
 }
 
 .calculus-module-tabs button {
+  position: relative;
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--color-muted, #586a80);
   font-size: var(--text-xs, 0.75rem);
   font-weight: 500;
-  padding: 5px 11px;
+  padding: 5px 11px 6px;
   border-radius: 5px;
   cursor: pointer;
 }
 
-.calculus-module-tabs button[aria-pressed="true"] {
-  background: var(--color-panel, #ffffff);
+.calculus-module-tabs button:hover {
   color: var(--color-ink, #2c3e50);
-  font-weight: 600;
+  background: rgb(255 255 255 / 60%);
+}
+
+.calculus-module-tabs button[aria-selected="true"] {
+  background: var(--color-panel, #ffffff);
+  color: var(--color-accent-strong, #2c4a6e);
+  text-shadow: 0 0 0.35px currentColor;
   box-shadow: 0 1px 3px rgb(44 62 80 / 10%);
+}
+
+.calculus-module-tabs button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 10px;
+  inset-block-end: 1px;
+  border-block-end: 2.5px solid var(--color-accent, #3d5a80);
+  border-radius: 2px;
+}
+
+/* Row 2: Dedicated Smart Problem Bar + Quick Example Chips + Mobile Switcher */
+.calculus-tools-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: safe center;
+  gap: 8px 12px;
+  min-inline-size: 0;
 }
 
 .calculus-subbar-hint {
@@ -59,15 +191,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1 1 260px;
-  max-inline-size: 460px;
-  margin-inline-start: auto;
+  flex: 1 1 320px;
+  max-inline-size: 520px;
+  min-inline-size: 0;
 }
 
 .calculus-smart-bar input {
   flex: 1 1 0;
   min-inline-size: 0;
-  min-block-size: 29px;
+  min-block-size: 30px;
   padding: 4px 10px;
   border: 1px solid var(--color-border, #e2e8f0);
   border-radius: 6px;
@@ -80,15 +212,58 @@
   outline: none;
   background: var(--color-panel, #ffffff);
   border-color: var(--color-accent, #3d5a80);
+  box-shadow: 0 0 0 2px rgb(61 90 128 / 12%);
+}
+
+.calculus-quick-prompts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.calculus-quick-prompt-chip {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-panel, #ffffff);
+  color: var(--color-muted, #586a80);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: var(--text-2xs, 0.6875rem);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calculus-quick-prompt-chip:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+  color: var(--color-accent-strong, #2c4a6e);
 }
 
 .calculus-smart-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-2xs, 0.6875rem);
   color: #047857;
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
   padding: 3px 8px;
   border-radius: 5px;
+}
+
+.calculus-notice-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.calculus-notice-close:hover {
+  opacity: 1;
 }
 
 .calculus-matrix-grid {
@@ -137,11 +312,13 @@
 }
 
 .calculus-body {
+  position: relative;
   min-height: 0;
   min-inline-size: 0;
   display: grid;
-  grid-template-columns: minmax(252px, 286px) minmax(0, 1fr) minmax(276px, 316px);
-  grid-template-areas: "controls stage diagnostics";
+  grid-template-columns: var(--calc-left-w) minmax(0, 1fr) var(--calc-right-w) var(--calc-copilot-w);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "controls stage diagnostics copilot";
 }
 
 .calculus-controls {
@@ -154,6 +331,20 @@
   border-inline-start: 1px solid var(--color-border, #e2e8f0);
 }
 
+.calculus-workbench[data-left-open="false"] .calculus-controls,
+.calculus-workbench[data-right-open="false"] .calculus-diagnostics {
+  display: none;
+}
+
+.calculus-body > .inspector-resize-handle {
+  grid-column: 3 / 4;
+  grid-row: 1;
+}
+
+.calculus-body > .copilot-drawer {
+  grid-area: copilot;
+}
+
 .calculus-sidebar {
   min-height: 0;
   min-inline-size: 0;
@@ -161,10 +352,348 @@
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
   background: var(--color-panel, #ffffff);
-  padding: 14px;
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calculus-dock-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline: -14px;
+  padding: 9px 14px;
+  background: var(--color-panel, #ffffff);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-dock-title {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 650;
+  color: var(--color-ink, #2c3e50);
+  white-space: nowrap;
+}
+
+.calculus-dock-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-accent-strong, #2c4a6e);
+  background: var(--color-accent-soft, #eef2f7);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.calculus-dock-actions {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.calculus-dock-header > .calculus-dock-icon-btn {
+  margin-inline-start: auto;
+}
+
+.calculus-dock-action-btn {
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-ink, #2c3e50);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calculus-dock-action-btn:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+  color: var(--color-accent-strong, #2c4a6e);
+}
+
+.calculus-dock-icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted, #586a80);
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 5px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.calculus-dock-icon-btn:hover {
+  background: var(--color-surface-subtle, #f1f5f9);
+  color: var(--color-ink, #2c3e50);
+}
+
+/* Contextual math keyboard inside left controls */
+.calculus-keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--color-surface-subtle, #f8fafc);
+}
+
+.calculus-keypad-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.calculus-keypad-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-muted, #586a80);
+  letter-spacing: 0.01em;
+  min-inline-size: 0;
+}
+
+.calculus-keypad-toggle {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--color-panel, #ffffff);
+  color: var(--color-accent-strong, #2c4a6e);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calculus-keypad-toggle:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+}
+
+.calculus-keypad-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border, #e2e8f0);
+}
+
+.calculus-keypad-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--color-border, #e2e8f0);
+}
+
+.calculus-keypad-tabs button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-muted, #586a80);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 4px;
+  cursor: pointer;
+}
+
+.calculus-keypad-tabs button[aria-pressed="true"] {
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-weight: 600;
+}
+
+.calculus-keypad-keys {
+  display: flex;
+  flex-wrap: wrap;
+  flex-wrap: balance;
+  gap: 4px;
+}
+
+.calculus-keypad-btn {
+  flex: 1 0 38px;
+  min-block-size: 26px;
+  padding: 2px 5px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 5px;
+  background: var(--color-panel, #ffffff);
+  color: var(--color-ink, #2c3e50);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calculus-keypad-btn.is-wide {
+  flex: 1 0 74px;
+  font-size: 10.5px;
+}
+
+.calculus-keypad-btn:hover {
+  background: var(--color-accent-soft, #eef2f7);
+  border-color: var(--color-accent, #3d5a80);
+  color: var(--color-accent-strong, #2c4a6e);
+}
+
+/* Visual MathFormulaInput with inline prefix & live Unicode math preview */
+.calculus-formula-field {
+  gap: 5px;
+}
+
+.calculus-formula-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.calculus-formula-clear {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted, #64748b);
+  font-size: 10.5px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.calculus-formula-clear:hover {
+  color: var(--color-danger, #b3261e);
+}
+
+.calculus-formula-input-box {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-panel, #ffffff);
+  overflow: hidden;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.calculus-formula-input-box:focus-within {
+  border-color: var(--color-accent, #3d5a80);
+  box-shadow: 0 0 0 2px rgb(61 90 128 / 14%);
+}
+
+.calculus-formula-input-box[data-invalid="true"] {
+  border-color: #f87171;
+}
+
+.calculus-formula-prefix {
+  flex: 0 0 auto;
+  padding: 0 7px 0 9px;
+  font-family: "Cambria Math", Cambria, Georgia, serif;
+  font-style: italic;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-accent-strong, #2c4a6e);
+  background: var(--color-surface-subtle, #f8fafc);
+  border-inline-end: 1px solid var(--color-border, #e2e8f0);
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.calculus-formula-input-box input[type="text"] {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+
+.calculus-formula-input-box input[type="text"]:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.calculus-formula-preview {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: #f8fafc;
+  border: 1px solid #eef2f6;
+  color: var(--color-accent-strong, #2c4a6e);
+  font-family: "Cambria Math", Cambria, Georgia, serif;
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.calculus-formula-hint-err {
+  display: block;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: var(--color-danger-soft, #fdf2f1);
+  color: var(--color-danger, #b3261e);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* Non-blank stale syntax diagnostic banner in right dock */
+.calculus-stale-banner {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  border-bottom: 1px solid #fecaca;
+  background: #fef2f2;
+  gap: 5px;
+}
+
+.calculus-stale-banner h2 {
+  color: #991b1b;
+}
+
+.calculus-stale-banner p {
+  margin: 0;
+  font-size: var(--text-2xs, 0.6875rem);
+  color: #b91c1c;
+  line-height: 1.5;
+}
+
+.calculus-stale-banner small {
+  font-size: 11px;
+  color: #7f1d1d;
+  line-height: 1.5;
+}
+
+.calculus-stale-banner code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  background: rgb(255 255 255 / 75%);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.calculus-diagnostics-content {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  transition: opacity 0.16s ease;
+}
+
+.calculus-diagnostics-content[data-stale="true"] {
+  opacity: 0.62;
+}
+
+.calculus-status-bar {
+  border-top: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calculus-status-toast {
+  color: #047857;
+  font-weight: 600;
 }
 
 .calculus-card {
@@ -371,7 +900,7 @@
   min-height: 0;
   min-inline-size: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   background: #fbfcfd;
 }
 
@@ -927,14 +1456,55 @@
   }
 }
 
-/* Responsive layout for narrow windows & Android tablets/phones */
-@media (max-width: 960px) {
-  .calculus-subbar-hint {
+/* Responsive layout for narrow windows & Android tablets/phones (keep 3-column desktop down to 900px) */
+@media (max-width: 1180px) {
+  .calculus-workbench {
+    --calc-left-w: clamp(208px, 21vw, 248px);
+    --calc-right-w: clamp(236px, min(var(--inspector-width, 268px), 28vw), 286px);
+  }
+
+  .calculus-quick-prompts {
+    display: none;
+  }
+}
+
+@media (max-width: 899px) {
+  .calculus-subbar {
+    padding: 6px 10px;
+  }
+
+  .calculus-tools-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .calculus-subbar-hint,
+  .calculus-tab-scroll-btn,
+  .calculus-dock-header > .calculus-dock-icon-btn,
+  .calculus-dock-actions > .calculus-dock-icon-btn,
+  .calculus-body > .inspector-resize-handle {
     display: none;
   }
 
   .calculus-mobile-switcher {
-    display: inline-flex;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    margin-inline-start: 0;
+    inline-size: 100%;
+    gap: 4px;
+  }
+
+  .calculus-mobile-switcher button {
+    padding: 6px 6px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .calculus-smart-bar {
+    flex: 0 0 auto;
+    max-inline-size: none;
+    inline-size: 100%;
   }
 
   .calculus-body {
@@ -966,6 +1536,17 @@
   .calculus-workbench[data-mobile-pane="diagnostics"] .calculus-diagnostics {
     display: flex;
     grid-area: stage;
+  }
+
+  .calculus-workbench[data-copilot-open="true"] .calculus-body > .copilot-drawer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    inline-size: 100%;
+  }
+
+  .calculus-status-bar .status-bar-dock-toggles {
+    display: none;
   }
 
   .calculus-split-stage {

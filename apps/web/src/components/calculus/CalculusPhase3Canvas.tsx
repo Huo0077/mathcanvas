@@ -628,6 +628,9 @@ export function CalculusPhase3Canvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onDoubleClick={() => {
+          if (mode !== "pde") onResetView()
+        }}
         onWheel={handleWheel}
       />
 

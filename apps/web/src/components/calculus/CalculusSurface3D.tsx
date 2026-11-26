@@ -101,7 +101,7 @@ export function CalculusSurface3D({
 
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, preserveDrawingBuffer: true })
     } catch {
       setWebglUnavailable(true)
       return
@@ -452,6 +452,11 @@ export function CalculusSurface3D({
     syncCamera()
   }
 
+  const zoomOrbit = (factor: number) => {
+    orbitRef.current.radius = Math.max(3.2, Math.min(16, orbitRef.current.radius * factor))
+    syncCamera()
+  }
+
   return (
     <div
       className="calculus-canvas-wrap calculus-surface3d-wrap"
@@ -460,6 +465,7 @@ export function CalculusSurface3D({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onDoubleClick={() => setPresetOrbit(DEFAULT_ORBIT.theta, DEFAULT_ORBIT.phi, DEFAULT_ORBIT.radius)}
       onWheel={handleWheel}
     >
       {webglUnavailable && (
@@ -475,7 +481,9 @@ export function CalculusSurface3D({
         {sliceZ !== null && <span><i className="dot active-level" />水平截平面 z = c</span>}
       </div>
       <div className="calculus-zoom-controls" role="group" aria-label="三维视角控制">
-        <button type="button" onClick={() => setPresetOrbit(Math.PI * 0.26, Math.PI * 0.33)}>默认</button>
+        <button type="button" onClick={() => zoomOrbit(0.84)} title="拉近视角" aria-label="拉近三维视角">＋</button>
+        <button type="button" onClick={() => zoomOrbit(1.19)} title="拉远视角" aria-label="拉远三维视角">－</button>
+        <button type="button" onClick={() => setPresetOrbit(DEFAULT_ORBIT.theta, DEFAULT_ORBIT.phi, DEFAULT_ORBIT.radius)}>默认</button>
         <button type="button" onClick={() => setPresetOrbit(0, 0.14)}>俯视</button>
         <button type="button" onClick={() => setPresetOrbit(Math.PI * 0.5, Math.PI * 0.48)}>侧视</button>
       </div>

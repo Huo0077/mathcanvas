@@ -33,23 +33,42 @@ const OP_SINH = 25
 const OP_SQRT = 26
 const OP_TAN = 27
 const OP_TANH = 28
+const OP_CBRT = 29
+const OP_COT = 30
+const OP_SEC = 31
+const OP_CSC = 32
+const OP_ARCCOT = 33
+const OP_LOG2 = 34
+const OP_SIGN = 35
 
 const CALL_OPCODES: Record<string, number> = {
   abs: OP_ABS,
   acos: OP_ACOS,
+  arccos: OP_ACOS,
   acosh: OP_ACOSH,
+  arccot: OP_ARCCOT,
   asin: OP_ASIN,
+  arcsin: OP_ASIN,
   asinh: OP_ASINH,
   atan: OP_ATAN,
+  arctan: OP_ATAN,
   atanh: OP_ATANH,
+  cbrt: OP_CBRT,
   ceil: OP_CEIL,
   cos: OP_COS,
   cosh: OP_COSH,
+  cot: OP_COT,
+  csc: OP_CSC,
   exp: OP_EXP,
   floor: OP_FLOOR,
+  lg: OP_LOG10,
   ln: OP_LN,
   log: OP_LN,
   log10: OP_LOG10,
+  log2: OP_LOG2,
+  sec: OP_SEC,
+  sgn: OP_SIGN,
+  sign: OP_SIGN,
   sin: OP_SIN,
   sinh: OP_SINH,
   sqrt: OP_SQRT,
@@ -346,6 +365,35 @@ export function compileAstToRpn(
           break
         case OP_TANH:
           stack[sp - 1] = Math.tanh(stack[sp - 1]!)
+          break
+        case OP_CBRT:
+          stack[sp - 1] = Math.cbrt(stack[sp - 1]!)
+          break
+        case OP_COT: {
+          const t = Math.tan(stack[sp - 1]!)
+          stack[sp - 1] = Math.abs(t) < 1e-12 ? Number.NaN : 1 / t
+          break
+        }
+        case OP_SEC: {
+          const c = Math.cos(stack[sp - 1]!)
+          stack[sp - 1] = Math.abs(c) < 1e-12 ? Number.NaN : 1 / c
+          break
+        }
+        case OP_CSC: {
+          const s = Math.sin(stack[sp - 1]!)
+          stack[sp - 1] = Math.abs(s) < 1e-12 ? Number.NaN : 1 / s
+          break
+        }
+        case OP_ARCCOT:
+          stack[sp - 1] = Math.PI / 2 - Math.atan(stack[sp - 1]!)
+          break
+        case OP_LOG2: {
+          const a = stack[sp - 1]!
+          stack[sp - 1] = a > 0 ? Math.log2(a) : Number.NaN
+          break
+        }
+        case OP_SIGN:
+          stack[sp - 1] = Math.sign(stack[sp - 1]!)
           break
       }
     }

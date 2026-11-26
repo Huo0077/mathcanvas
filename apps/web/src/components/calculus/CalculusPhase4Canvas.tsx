@@ -494,6 +494,7 @@ export function CalculusPhase4Canvas({
           panRef.current = null
         }}
         onPointerCancel={() => { panRef.current = null }}
+        onDoubleClick={onResetView}
         onWheel={(e) => {
           e.preventDefault()
           const rect = e.currentTarget.getBoundingClientRect()

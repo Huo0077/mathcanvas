@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   extractContoursFromGrid,
+  type DualCurve1DAnalysis,
   type Extrema1DAnalysis,
   type LagrangeAnalysis,
   type LagrangePointProbe,
@@ -10,6 +11,8 @@ import {
   type PhasePlaneAnalysis,
   type PhaseTrajectory,
   type Point2D,
+  type Root1DPoint,
+  type Tangent1DAnalysis,
   type ViewportBounds2D
 } from "@draw/geometry-kernel"
 
@@ -18,12 +21,17 @@ export interface CalculusCanvas2DProps {
   bounds: ViewportBounds2D
   onBoundsChange: (next: ViewportBounds2D) => void
   onResetView: () => void
-  // 1D Extrema props
+  // 1D Extrema & Calculus props
   extrema1d?: Extrema1DAnalysis | null
   showDerivative?: boolean
   showInflections?: boolean
   showAsymptotes?: boolean
   showHorizontalTangents?: boolean
+  showIntegralArea?: boolean
+  showRoots?: boolean
+  roots1d?: Root1DPoint[]
+  tangentProbe?: Tangent1DAnalysis | null
+  dualCurve?: DualCurve1DAnalysis | null
   focusedExtremaIndex?: number | null
   onHover1D?: (info: { x: number; y: number } | null) => void
   // Lagrange props
@@ -225,6 +233,11 @@ export function CalculusCanvas2D({
   showInflections = true,
   showAsymptotes = true,
   showHorizontalTangents = true,
+  showIntegralArea = false,
+  showRoots = false,
+  roots1d,
+  tangentProbe = null,
+  dualCurve = null,
   focusedExtremaIndex = null,
   onHover1D,
   lagrange,
@@ -516,6 +529,30 @@ export function CalculusCanvas2D({
         ctx.restore()
       }
 
+      // Optional definite integral shaded signed area on [a, b]
+      if (showIntegralArea) {
+        const [, zeroY] = worldToScreen(0, 0)
+        for (const seg of extrema1d.segments) {
+          if (seg.length < 2) continue
+          for (let i = 0; i < seg.length - 1; i += 1) {
+            const p0 = seg[i]!
+            const p1 = seg[i + 1]!
+            if (p1.x < domA || p0.x > domB) continue
+            const [x0, y0] = worldToScreen(p0.x, p0.y)
+            const [x1, y1] = worldToScreen(p1.x, p1.y)
+            const avgY = 0.5 * (p0.y + p1.y)
+            ctx.fillStyle = avgY >= 0 ? "rgba(37, 99, 235, 0.14)" : "rgba(220, 38, 38, 0.12)"
+            ctx.beginPath()
+            ctx.moveTo(x0, zeroY)
+            ctx.lineTo(x0, y0)
+            ctx.lineTo(x1, y1)
+            ctx.lineTo(x1, zeroY)
+            ctx.closePath()
+            ctx.fill()
+          }
+        }
+      }
+
       // Optional derivative curve f'(x)
       if (showDerivative) {
         ctx.save()
@@ -523,6 +560,25 @@ export function CalculusCanvas2D({
         ctx.lineWidth = 1.6
         ctx.setLineDash([5, 4])
         for (const seg of extrema1d.derivativeSegments) {
+          if (seg.length < 2) continue
+          ctx.beginPath()
+          seg.forEach((pt, idx) => {
+            const [px, py] = worldToScreen(pt.x, pt.y)
+            if (idx === 0) ctx.moveTo(px, py)
+            else ctx.lineTo(px, py)
+          })
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+
+      // Optional comparison curve g(x) + shaded region between curves
+      if (dualCurve && dualCurve.gSegments.length > 0) {
+        ctx.save()
+        ctx.strokeStyle = "#9333ea"
+        ctx.lineWidth = 2.2
+        ctx.lineJoin = "round"
+        for (const seg of dualCurve.gSegments) {
           if (seg.length < 2) continue
           ctx.beginPath()
           seg.forEach((pt, idx) => {
@@ -552,6 +608,95 @@ export function CalculusCanvas2D({
         ctx.stroke()
       }
       ctx.restore()
+
+      // Optional interactive tangent & normal lines at x0
+      if (tangentProbe && Number.isFinite(tangentProbe.y0) && Number.isFinite(tangentProbe.slope)) {
+        const { x0, y0, slope } = tangentProbe
+        const yL = y0 + slope * (bounds.xMin - x0)
+        const yR = y0 + slope * (bounds.xMax - x0)
+        const [tx0, ty0] = worldToScreen(bounds.xMin, yL)
+        const [tx1, ty1] = worldToScreen(bounds.xMax, yR)
+        ctx.save()
+        ctx.strokeStyle = "#ea580c"
+        ctx.lineWidth = 1.9
+        ctx.setLineDash([7, 4])
+        ctx.beginPath()
+        ctx.moveTo(tx0, ty0)
+        ctx.lineTo(tx1, ty1)
+        ctx.stroke()
+        ctx.restore()
+
+        // Normal line
+        ctx.save()
+        ctx.strokeStyle = "rgba(100, 116, 139, 0.72)"
+        ctx.lineWidth = 1.3
+        ctx.setLineDash([3, 4])
+        ctx.beginPath()
+        if (Math.abs(slope) < 1e-6) {
+          const [nx] = worldToScreen(x0, 0)
+          ctx.moveTo(nx, 0)
+          ctx.lineTo(nx, h)
+        } else {
+          const nSlope = -1 / slope
+          const nyL = y0 + nSlope * (bounds.xMin - x0)
+          const nyR = y0 + nSlope * (bounds.xMax - x0)
+          const [nx0, ny0] = worldToScreen(bounds.xMin, nyL)
+          const [nx1, ny1] = worldToScreen(bounds.xMax, nyR)
+          ctx.moveTo(nx0, ny0)
+          ctx.lineTo(nx1, ny1)
+        }
+        ctx.stroke()
+        ctx.restore()
+
+        const [px, py] = worldToScreen(x0, y0)
+        ctx.save()
+        ctx.fillStyle = "#ea580c"
+        ctx.strokeStyle = "#ffffff"
+        ctx.lineWidth = 2.4
+        ctx.beginPath()
+        ctx.arc(px, py, 5.5, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Optional zero / root markers f(x) = 0
+      if (showRoots && roots1d && roots1d.length > 0) {
+        for (const rt of roots1d) {
+          const [px, py] = worldToScreen(rt.x, 0)
+          if (px < -10 || px > w + 10 || py < -10 || py > h + 10) continue
+          ctx.save()
+          ctx.fillStyle = "#ffffff"
+          ctx.strokeStyle = "#0284c7"
+          ctx.lineWidth = 2.2
+          ctx.beginPath()
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.stroke()
+          ctx.restore()
+        }
+      }
+
+      // Optional dual-curve intersection diamond markers
+      if (dualCurve && dualCurve.intersections.length > 0) {
+        for (const inter of dualCurve.intersections) {
+          const [px, py] = worldToScreen(inter.x, inter.y)
+          if (px < -12 || px > w + 12 || py < -12 || py > h + 12) continue
+          ctx.save()
+          ctx.fillStyle = "#9333ea"
+          ctx.strokeStyle = "#ffffff"
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(px, py - 6.5)
+          ctx.lineTo(px + 6.5, py)
+          ctx.lineTo(px, py + 6.5)
+          ctx.lineTo(px - 6.5, py)
+          ctx.closePath()
+          ctx.fill()
+          ctx.stroke()
+          ctx.restore()
+        }
+      }
 
       // Inflection points
       if (showInflections) {
@@ -1107,6 +1252,11 @@ export function CalculusCanvas2D({
     showInflections,
     showAsymptotes,
     showHorizontalTangents,
+    showIntegralArea,
+    showRoots,
+    roots1d,
+    tangentProbe,
+    dualCurve,
     focusedExtremaIndex,
     hoverWorld,
     lagrange,
@@ -1306,6 +1456,9 @@ export function CalculusCanvas2D({
           setHoverWorld(null)
           onHover1D?.(null)
         }}
+        onDoubleClick={() => {
+          if (mode === "extrema1d" || mode === "lagrange") onResetView()
+        }}
         onWheel={handleWheel}
       />
 
@@ -1314,7 +1467,9 @@ export function CalculusCanvas2D({
         {mode === "extrema1d" ? (
           <>
             <span><i className="dot curve" />y = f(x)</span>
+            {dualCurve && <span><i className="dot saddle" />y = g(x)</span>}
             {showDerivative && <span><i className="dot deriv" />y = f&apos;(x)</span>}
+            {tangentProbe && <span><i className="dot active-level" />切线 / 法线</span>}
             <span><i className="dot max" />全局/局部极大</span>
             <span><i className="dot min" />全局/局部极小</span>
             {showInflections && <span><i className="dot infl" />拐点</span>}

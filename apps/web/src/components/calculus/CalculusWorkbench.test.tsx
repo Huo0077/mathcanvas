@@ -118,4 +118,72 @@ describe("CalculusWorkbench", () => {
     render(<CalculusWorkbench document={legacyDoc} />)
     expect(screen.getByText("旧函数", { selector: ".object-name" })).toBeTruthy()
   })
+
+  it("keeps right properties dock visible with resize handle, dock toggles, and non-blank syntax fallback", () => {
+    render(<CalculusWorkbench document={createEmptyDocument("calculus")} />)
+
+    // Right properties dock + resize handle exist by default
+    expect(screen.getByLabelText("右侧属性与数值诊断面板")).toBeTruthy()
+    expect(screen.getByRole("separator", { name: "调整属性栏宽度" })).toBeTruthy()
+
+    // Mid-edit incomplete formula must NOT blank out the right dock: shows warning + last valid result
+    const exprInput = screen.getByLabelText("函数表达式 f(x)") as HTMLInputElement
+    fireEvent.change(exprInput, { target: { value: "x^3 - " } })
+    expect(screen.getByText("表达式暂未完整 · 已保留上次有效诊断")).toBeTruthy()
+    expect(screen.getAllByText("9.125").length).toBeGreaterThanOrEqual(1)
+
+    // Collapsing & re-expanding right dock via bottom status bar works cleanly
+    const rightToggle = screen.getByRole("button", { name: "右栏 ▶" })
+    fireEvent.click(rightToggle)
+    expect(screen.queryByRole("separator", { name: "调整属性栏宽度" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "右栏 ◀" }))
+    expect(screen.getByRole("separator", { name: "调整属性栏宽度" })).toBeTruthy()
+  })
+
+  it("supports contextual math symbol keypad insertion, keyboard tab navigation, and quick prompt chips", () => {
+    render(<CalculusWorkbench document={createEmptyDocument("calculus")} />)
+
+    // Contextual keypad inserts token into focused formula input
+    const exprInput = screen.getByLabelText("函数表达式 f(x)") as HTMLInputElement
+    exprInput.focus()
+    exprInput.setSelectionRange(exprInput.value.length, exprInput.value.length)
+    fireEvent.click(screen.getByRole("button", { name: "x²" }))
+    expect(exprInput.value.endsWith("^2")).toBe(true)
+
+    // Keyboard ArrowRight switches tab on single-row tablist
+    const tablist = screen.getByRole("tablist", { name: "高数模块切换" })
+    fireEvent.keyDown(tablist, { key: "ArrowRight" })
+    expect(screen.getByRole("tab", { name: "参数与极坐标" }).getAttribute("aria-selected")).toBe("true")
+
+    // Quick-try smart prompt chip routes directly to Linear Algebra SVD
+    fireEvent.click(screen.getByRole("button", { name: "2×2 SVD" }))
+    expect(screen.getByRole("tab", { name: "线性代数变换" }).getAttribute("aria-selected")).toBe("true")
+    expect(screen.getByText("SVD 奇异值分解（A = U Σ Vᵀ）")).toBeTruthy()
+  })
+
+  it("supports natural/LaTeX input preview, expandable full keyboard, 1D integral/limit/dual-curve, and parametric/polar tab", () => {
+    render(<CalculusWorkbench document={createEmptyDocument("calculus")} />)
+
+    // 1D right panel includes definite integral, symbolic derivative, and limit diagnostics
+    expect(screen.getByText("定积分 · 弧长 · 旋转体体积")).toBeTruthy()
+    expect(screen.getByText("极限与连续性诊断")).toBeTruthy()
+    expect(screen.getByText(/f'\(x\) =/)).toBeTruthy()
+
+    // Expand full math keyboard & verify natural LaTeX input works with live preview
+    fireEvent.click(screen.getByRole("button", { name: /完整键盘/ }))
+    expect(screen.getByRole("button", { name: "三角与对数" })).toBeTruthy()
+    const exprInput = screen.getByLabelText("函数表达式 f(x)") as HTMLInputElement
+    fireEvent.change(exprInput, { target: { value: "\\frac{\\sin(x)}{x}" } })
+    expect(screen.getByText(/可去间断点/)).toBeTruthy()
+
+    // Enable dual-curve comparison g(x)
+    fireEvent.click(screen.getByLabelText(/叠加对比函数 g\(x\)/))
+    expect(screen.getByText("双曲线对比：交点与围成面积")).toBeTruthy()
+
+    // Switch to Parametric & Polar tab and verify Cardioid area & Parametric cycloid arc length
+    fireEvent.click(screen.getByRole("tab", { name: "参数与极坐标" }))
+    expect(screen.getByText("极坐标面积与弧长（高数上核心）")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "参数方程 (x(t), y(t))" }))
+    expect(screen.getByText("参数曲线弧长与瞬时几何量")).toBeTruthy()
+  })
 })

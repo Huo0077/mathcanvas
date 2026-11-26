@@ -36,19 +36,151 @@ export type ExpressionNode =
 type Token = { type: "number" | "identifier" | "operator" | "parenthesis"; value: string }
 
 const functions = new Set([
-  "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "ceil", "cos", "cosh", "exp", "floor", "ln", "log", "log10", "sin", "sinh", "sqrt", "tan", "tanh"
+  "abs", "acos", "acosh", "arccos", "arccot", "arcsin", "arctan", "asin", "asinh", "atan", "atanh",
+  "cbrt", "ceil", "cos", "cosh", "cot", "csc", "exp", "floor", "lg", "ln", "log", "log10", "log2",
+  "sec", "sgn", "sign", "sin", "sinh", "sqrt", "tan", "tanh"
 ])
 
+const IMPLICIT_MUL_LEFT_VARS = new Set(["x", "y", "z", "t", "r", "theta", "pi", "e"])
+
+function replaceLatexCommandWithBraces(
+  source: string,
+  command: string,
+  argCount: 1 | 2,
+  build: (args: string[]) => string
+): string {
+  let out = source
+  let searchFrom = 0
+  let guard = 0
+  while (guard < 40) {
+    guard += 1
+    const idx = out.indexOf(command, searchFrom)
+    if (idx === -1) break
+    let cursor = idx + command.length
+    const args: string[] = []
+    let failed = false
+    for (let a = 0; a < argCount; a += 1) {
+      while (cursor < out.length && /\s/.test(out[cursor]!)) cursor += 1
+      if (out[cursor] !== "{") {
+        failed = true
+        break
+      }
+      let depth = 0
+      const start = cursor + 1
+      while (cursor < out.length) {
+        if (out[cursor] === "{") depth += 1
+        else if (out[cursor] === "}") {
+          depth -= 1
+          if (depth === 0) break
+        }
+        cursor += 1
+      }
+      if (depth !== 0) {
+        failed = true
+        break
+      }
+      args.push(out.slice(start, cursor))
+      cursor += 1
+    }
+    if (failed) {
+      searchFrom = idx + command.length
+      continue
+    }
+    const replacement = build(args)
+    out = out.slice(0, idx) + replacement + out.slice(cursor)
+    searchFrom = 0
+  }
+  return out
+}
+
+function preprocessLatexAndUnicode(raw: string): string {
+  let s = raw.trim()
+  // Strip wrapping LaTeX math delimiters `$...$`, `$$...$$`, `\(...\)`, `\[...\]`
+  s = s.replace(/^\$\$?([\s\S]+?)\$\$?$/u, "$1").trim()
+  s = s.replace(/^\\\(([\s\S]+?)\\\)$/u, "$1").replace(/^\\\[([\s\S]+?)\\\]$/u, "$1").trim()
+
+  // LaTeX structural commands
+  s = s
+    .replace(/\\left\s*([(|[])/gu, "$1")
+    .replace(/\\right\s*([)|\]])/gu, "$1")
+    .replace(/\\(?:cdot|times)/gu, "*")
+    .replace(/\\div/gu, "/")
+    .replace(/\\pi\b/gu, "pi")
+    .replace(/\\theta\b/gu, "theta")
+    .replace(/\\sqrt\s*\[\s*3\s*\]\s*\{/gu, "\\cbrt{")
+
+  s = replaceLatexCommandWithBraces(s, "\\frac", 2, ([numPart, denPart]) => `((${numPart})/(${denPart}))`)
+  s = replaceLatexCommandWithBraces(s, "\\dfrac", 2, ([numPart, denPart]) => `((${numPart})/(${denPart}))`)
+  s = replaceLatexCommandWithBraces(s, "\\tfrac", 2, ([numPart, denPart]) => `((${numPart})/(${denPart}))`)
+  s = replaceLatexCommandWithBraces(s, "\\sqrt", 1, ([arg]) => `sqrt(${arg})`)
+  s = replaceLatexCommandWithBraces(s, "\\cbrt", 1, ([arg]) => `cbrt(${arg})`)
+
+  // Strip leading backslash on standard LaTeX math functions (`\sin`, `\ln`, `\arctan`, ...)
+  s = s.replace(/\\(arcsin|arccos|arctan|arccot|asinh|acosh|atanh|sinh|cosh|tanh|sin|cos|tan|cot|sec|csc|ln|lg|log10|log2|log|exp|sqrt|cbrt|abs)\b/giu, "$1")
+
+  // Convert LaTeX grouped exponents `^{...}` to `^(...)`
+  s = replaceLatexCommandWithBraces(s, "^", 1, ([expArg]) => `^(${expArg})`)
+
+  // Fullwidth Chinese & Unicode math punctuation
+  s = s
+    .replace(/[（【]/gu, "(")
+    .replace(/[）】]/gu, ")")
+    .replace(/｜/gu, "|")
+    .replace(/＋/gu, "+")
+    .replace(/[−–—－]/gu, "-")
+    .replace(/[×·⋅＊]/gu, "*")
+    .replace(/[÷／]/gu, "/")
+    .replace(/＾/gu, "^")
+    .replace(/＝/gu, "=")
+    .replace(/π/gu, "pi")
+    .replace(/θ/gu, "theta")
+    .replace(/∛\s*\(/gu, "cbrt(")
+    .replace(/∛\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)/gu, "cbrt($1)")
+    .replace(/√\s*\(/gu, "sqrt(")
+    .replace(/√\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)/gu, "sqrt($1)")
+
+  return s
+}
+
+function rewriteTrigPowers(source: string): string {
+  // Rewrite textbook powers like `sin^2(x)` -> `(sin(x))^2`, `2sin^2(x)` -> `2(sin(x))^2`
+  const pattern = /(?<![A-Za-z_])(sin|cos|tan|cot|sec|csc|sinh|cosh|tanh|ln|lg|log)\s*\^\s*(-?\d+(?:\.\d+)?)\s*\(/giu
+  let out = source
+  let guard = 0
+  while (guard < 24) {
+    guard += 1
+    pattern.lastIndex = 0
+    const match = pattern.exec(out)
+    if (!match) break
+    const fnName = match[1]!
+    const power = match[2]!
+    const openIdx = match.index + match[0].length - 1
+    let depth = 0
+    let closeIdx = -1
+    for (let i = openIdx; i < out.length; i += 1) {
+      if (out[i] === "(") depth += 1
+      else if (out[i] === ")") {
+        depth -= 1
+        if (depth === 0) {
+          closeIdx = i
+          break
+        }
+      }
+    }
+    if (closeIdx === -1) break
+    const inner = out.slice(openIdx + 1, closeIdx)
+    out = `${out.slice(0, match.index)}(${fnName}(${inner}))^${power}${out.slice(closeIdx + 1)}`
+  }
+  return out
+}
+
 export function normalizeFunctionExpression(source: string): string {
-  const normalized = source
-    .trim()
-    .replace(/^y\s*=\s*/i, "")
-    .replace(/[−–—]/g, "-")
-    .replace(/[×·⋅]/g, "*")
-    .replace(/π/g, "pi")
-    .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (digits) => `^${[...digits].map((ch) => SUPER_DIGITS[ch] ?? ch).join("")}`)
-    .replace(/√\s*\(/g, "sqrt(")
-    .replace(/√\s*(\d+(?:\.\d+)?|[A-Za-z_]\w*)/g, "sqrt($1)")
+  const pre = preprocessLatexAndUnicode(source)
+  const normalized = rewriteTrigPowers(
+    pre
+      .replace(/^y\s*=\s*/i, "")
+      .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (digits) => `^${[...digits].map((ch) => SUPER_DIGITS[ch] ?? ch).join("")}`)
+  )
   if (!normalized) throw new Error("Expected expression")
   if (normalized.length > MAX_EXPRESSION_LENGTH) {
     throw new Error(`Expression length ${normalized.length} exceeds budget (${MAX_EXPRESSION_LENGTH})`)
@@ -61,9 +193,15 @@ function insertImplicitMultiplication(tokens: Token[]): Token[] {
   for (const token of tokens) {
     const prev = result[result.length - 1]
     if (prev !== undefined) {
-      const prevEndsFactor = prev.type === "number" || prev.value === ")"
+      const prevLower = prev.value.toLowerCase()
+      const prevIsKnownVar = prev.type === "identifier" && IMPLICIT_MUL_LEFT_VARS.has(prevLower)
+      const prevEndsFactor = prev.type === "number" || prev.value === ")" || prevIsKnownVar
       const nextStartsFactor = token.type === "identifier" || token.value === "(" || token.type === "number"
-      if (prevEndsFactor && nextStartsFactor && !(prev.type === "number" && token.type === "number")) {
+      if (
+        prevEndsFactor &&
+        nextStartsFactor &&
+        !(prev.type === "number" && token.type === "number")
+      ) {
         result.push({ type: "operator", value: "*" })
       }
     }
@@ -208,6 +346,14 @@ class ExpressionParser {
           this.position += 1
           return { type: "call", name: normalizedName, argument }
         }
+        // Support natural textbook calls without parentheses: `sin x`, `cos 2x`, `ln x`, `sqrt x`
+        if (functions.has(normalizedName)) {
+          const next = this.tokens[this.position]
+          if (next && (next.type === "number" || next.type === "identifier" || next.value === "|")) {
+            const argument = this.parsePower()
+            return { type: "call", name: normalizedName, argument }
+          }
+        }
         return { type: "variable", name: token.value }
       }
       if (token.value === "(") {
@@ -276,15 +422,19 @@ export function evaluateExpression(expression: ExpressionNode, variables: Record
   if (expression.type === "call") {
     const value = evaluateExpression(expression.argument, variables)
     if (expression.name === "abs") return Math.abs(value)
-    if (expression.name === "acos") return Math.acos(value)
+    if (expression.name === "acos" || expression.name === "arccos") return Math.acos(value)
     if (expression.name === "acosh") return Math.acosh(value)
-    if (expression.name === "asin") return Math.asin(value)
+    if (expression.name === "asin" || expression.name === "arcsin") return Math.asin(value)
     if (expression.name === "asinh") return Math.asinh(value)
-    if (expression.name === "atan") return Math.atan(value)
+    if (expression.name === "atan" || expression.name === "arctan") return Math.atan(value)
+    if (expression.name === "arccot") return Math.PI / 2 - Math.atan(value)
     if (expression.name === "atanh") return Math.atanh(value)
+    if (expression.name === "cbrt") return Math.cbrt(value)
     if (expression.name === "ceil") return Math.ceil(value)
     if (expression.name === "cos") return Math.cos(value)
     if (expression.name === "cosh") return Math.cosh(value)
+    if (expression.name === "cot") return 1 / Math.tan(value)
+    if (expression.name === "csc") return 1 / Math.sin(value)
     if (expression.name === "exp") return Math.exp(value)
     if (expression.name === "floor") return Math.floor(value)
     if (expression.name === "ln" || expression.name === "log") return Math.log(value)
@@ -292,7 +442,10 @@ export function evaluateExpression(expression: ExpressionNode, variables: Record
       const base = Number(expression.name.slice(4))
       return base > 0 && base !== 1 ? Math.log(value) / Math.log(base) : Number.NaN
     }
-    if (expression.name === "log10") return Math.log10(value)
+    if (expression.name === "log10" || expression.name === "lg") return Math.log10(value)
+    if (expression.name === "log2") return Math.log2(value)
+    if (expression.name === "sec") return 1 / Math.cos(value)
+    if (expression.name === "sgn" || expression.name === "sign") return Math.sign(value)
     if (expression.name === "sin") return Math.sin(value)
     if (expression.name === "sinh") return Math.sinh(value)
     if (expression.name === "sqrt") return Math.sqrt(value)
@@ -608,15 +761,26 @@ export function differentiateExpressionAst(node: ExpressionNode, variable = "x")
         return bin("*", { type: "unary", operator: "-", argument: callNode("sin", u) }, du)
       case "tan":
         return bin("/", du, bin("^", callNode("cos", u), num(2)))
+      case "cot":
+        return bin("/", { type: "unary", operator: "-", argument: du }, bin("^", callNode("sin", u), num(2)))
+      case "sec":
+        return bin("*", bin("*", callNode("sec", u), callNode("tan", u)), du)
+      case "csc":
+        return bin("*", { type: "unary", operator: "-", argument: bin("*", callNode("csc", u), callNode("cot", u)) }, du)
       case "exp":
         return bin("*", callNode("exp", u), du)
       case "ln":
       case "log":
         return bin("/", du, u)
       case "log10":
+      case "lg":
         return bin("/", du, bin("*", u, callNode("ln", num(10))))
+      case "log2":
+        return bin("/", du, bin("*", u, callNode("ln", num(2))))
       case "sqrt":
         return bin("/", du, bin("*", num(2), callNode("sqrt", u)))
+      case "cbrt":
+        return bin("/", du, bin("*", num(3), bin("^", callNode("cbrt", u), num(2))))
       case "sinh":
         return bin("*", callNode("cosh", u), du)
       case "cosh":
@@ -624,10 +788,15 @@ export function differentiateExpressionAst(node: ExpressionNode, variable = "x")
       case "tanh":
         return bin("/", du, bin("^", callNode("cosh", u), num(2)))
       case "atan":
+      case "arctan":
         return bin("/", du, bin("+", num(1), bin("^", u, num(2))))
+      case "arccot":
+        return bin("/", { type: "unary", operator: "-", argument: du }, bin("+", num(1), bin("^", u, num(2))))
       case "asin":
+      case "arcsin":
         return bin("/", du, callNode("sqrt", bin("-", num(1), bin("^", u, num(2)))))
       case "acos":
+      case "arccos":
         return bin("/", { type: "unary", operator: "-", argument: du }, callNode("sqrt", bin("-", num(1), bin("^", u, num(2)))))
       default:
         return null
@@ -711,4 +880,155 @@ export function evaluateSymbolicDerivative(
     derivativeAst: derivAst,
     domains: [...baseEval.domains, ...derivEval.domains]
   }
+}
+
+/** Algebraic AST simplifier so symbolic derivatives like `3*x^2 - 3` read cleanly like a textbook. */
+export function simplifyExpressionAst(node: ExpressionNode): ExpressionNode {
+  if (node.type === "number" || node.type === "variable") return node
+  if (node.type === "unary") {
+    const arg = simplifyExpressionAst(node.argument)
+    if (node.operator === "+") return arg
+    if (arg.type === "number") return num(-arg.value)
+    if (arg.type === "unary" && arg.operator === "-") return arg.argument
+    return { type: "unary", operator: "-", argument: arg }
+  }
+  if (node.type === "call") {
+    const arg = simplifyExpressionAst(node.argument)
+    return { type: "call", name: node.name, argument: arg }
+  }
+  const left = simplifyExpressionAst(node.left)
+  const right = simplifyExpressionAst(node.right)
+  if (left.type === "number" && right.type === "number") {
+    const v = node.operator === "+"
+      ? left.value + right.value
+      : node.operator === "-"
+        ? left.value - right.value
+        : node.operator === "*"
+          ? left.value * right.value
+          : node.operator === "/"
+            ? (right.value !== 0 ? left.value / right.value : Number.NaN)
+            : left.value ** right.value
+    if (Number.isFinite(v) && Math.abs(v - Math.round(v * 1e6) / 1e6) < 1e-10) {
+      return num(Math.round(v * 1e6) / 1e6)
+    }
+  }
+  if (node.operator === "+") {
+    if (left.type === "number" && left.value === 0) return right
+    if (right.type === "number" && right.value === 0) return left
+    if (right.type === "unary" && right.operator === "-") return simplifyExpressionAst(bin("-", left, right.argument))
+    if (right.type === "number" && right.value < 0) return bin("-", left, num(-right.value))
+  }
+  if (node.operator === "-") {
+    if (right.type === "number" && right.value === 0) return left
+    if (left.type === "number" && left.value === 0) return simplifyExpressionAst({ type: "unary", operator: "-", argument: right })
+    if (right.type === "unary" && right.operator === "-") return simplifyExpressionAst(bin("+", left, right.argument))
+  }
+  if (node.operator === "*") {
+    if ((left.type === "number" && left.value === 0) || (right.type === "number" && right.value === 0)) return num(0)
+    if (left.type === "number" && left.value === 1) return right
+    if (right.type === "number" && right.value === 1) return left
+    if (left.type === "number" && left.value === -1) return simplifyExpressionAst({ type: "unary", operator: "-", argument: right })
+    if (right.type === "number" && right.value === -1) return simplifyExpressionAst({ type: "unary", operator: "-", argument: left })
+    if (right.type === "number" && left.type !== "number") return bin("*", right, left)
+  }
+  if (node.operator === "/") {
+    if (left.type === "number" && left.value === 0) return num(0)
+    if (right.type === "number" && right.value === 1) return left
+  }
+  if (node.operator === "^") {
+    if (right.type === "number" && right.value === 0) return num(1)
+    if (right.type === "number" && right.value === 1) return left
+    if (left.type === "number" && left.value === 0) return num(0)
+    if (left.type === "number" && left.value === 1) return num(1)
+  }
+  return bin(node.operator, left, right)
+}
+
+const PRETTY_SUPERSCRIPTS: Record<string, string> = {
+  "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
+  "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "-": "⁻"
+}
+
+function toPrettySuperscript(text: string): string | null {
+  if (!/^-?\d+$/u.test(text)) return null
+  return [...text].map((ch) => PRETTY_SUPERSCRIPTS[ch] ?? ch).join("")
+}
+
+function precedenceOf(node: ExpressionNode): number {
+  if (node.type === "binary") {
+    if (node.operator === "+" || node.operator === "-") return 1
+    if (node.operator === "*" || node.operator === "/") return 2
+    return 3
+  }
+  if (node.type === "unary") return 2
+  return 4
+}
+
+/** Formats an ExpressionNode into clean, textbook-like Unicode mathematics (e.g. `3x² − 3`, `√(x² + 1)`). */
+export function formatPrettyMath(node: ExpressionNode): string {
+  if (node.type === "number") return Number(node.value.toFixed(6)).toString()
+  if (node.type === "variable") {
+    const low = node.name.toLowerCase()
+    if (low === "pi") return "π"
+    if (low === "theta") return "θ"
+    return node.name
+  }
+  if (node.type === "unary") {
+    const inner = formatPrettyMath(node.argument)
+    const wrapped = node.argument.type === "binary" && precedenceOf(node.argument) < 2 ? `(${inner})` : inner
+    return node.operator === "-" ? `−${wrapped}` : wrapped
+  }
+  if (node.type === "call") {
+    const inner = formatPrettyMath(node.argument)
+    if (node.name === "abs") return `|${inner}|`
+    if (node.name === "sqrt") return `√(${inner})`
+    if (node.name === "cbrt") return `∛(${inner})`
+    if (node.name === "exp") return `e^(${inner})`
+    return `${node.name}(${inner})`
+  }
+  const myPrec = precedenceOf(node)
+  const formatChild = (child: ExpressionNode, isRight: boolean): string => {
+    const childPrec = precedenceOf(child)
+    const text = formatPrettyMath(child)
+    const needsParens = childPrec < myPrec || (isRight && childPrec === myPrec && (node.operator === "-" || node.operator === "/"))
+    return needsParens ? `(${text})` : text
+  }
+  if (node.operator === "+") return `${formatChild(node.left, false)} + ${formatChild(node.right, true)}`
+  if (node.operator === "-") return `${formatChild(node.left, false)} − ${formatChild(node.right, true)}`
+  if (node.operator === "*") {
+    const leftText = formatChild(node.left, false)
+    const rightText = formatChild(node.right, true)
+    if (node.left.type === "number" && (node.right.type === "variable" || node.right.type === "call" || node.right.type === "binary" && node.right.operator === "^")) {
+      return `${leftText}${rightText}`
+    }
+    return `${leftText} · ${rightText}`
+  }
+  if (node.operator === "/") return `${formatChild(node.left, false)} / ${formatChild(node.right, true)}`
+  const baseText = formatChild(node.left, false)
+  if (node.right.type === "number") {
+    const sup = toPrettySuperscript(String(node.right.value))
+    if (sup) return `${baseText}${sup}`
+  }
+  if (node.right.type === "unary" && node.right.operator === "-" && node.right.argument.type === "number") {
+    const sup = toPrettySuperscript(`-${node.right.argument.value}`)
+    if (sup) return `${baseText}${sup}`
+  }
+  return `${baseText}^${formatChild(node.right, true)}`
+}
+
+/** Translates low-level AST parser errors into concise Chinese UX hints. */
+export function formatFriendlyMathError(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error)
+  if (msg === "Expected expression") return "表达式不完整：运算符后缺少数字或变量（例如 `x^3 - 3x`）"
+  if (msg === "Expected closing parenthesis") return "括号未闭合：请补全右括号 `)`"
+  if (msg === "Expected closing absolute value") return "绝对值符号未闭合：请补全右侧 `|`"
+  const unexpectedChar = msg.match(/^Unexpected character:\s*(.+)$/u)
+  if (unexpectedChar) return `存在无法识别的字符「${unexpectedChar[1]}」，请检查符号或改用快捷键盘输入`
+  const unexpectedToken = msg.match(/^Unexpected token:\s*(.+)$/u)
+  if (unexpectedToken) return `语法不完整：在「${unexpectedToken[1]}」处缺少运算符或括号`
+  const unknownFn = msg.match(/^Unknown function:\s*(.+)$/u)
+  if (unknownFn) return `暂不支持函数「${unknownFn[1]}」，支持 sin/cos/tan/arcsin/arctan/ln/lg/exp/sqrt/cbrt/abs`
+  const unknownVar = msg.match(/^Unknown variable:\s*(.+)$/u)
+  if (unknownVar) return `未识别的变量「${unknownVar[1]}」`
+  return msg
 }
