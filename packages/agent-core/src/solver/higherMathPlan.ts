@@ -1,18 +1,26 @@
 import { createEmptyDocument } from "@draw/dsl"
 import {
+  analyzeDefiniteIntegral1D,
   analyzeDoubleIntegral,
+  analyzeDualCurve1D,
   analyzeExtrema1D,
   analyzeFourierSeries,
   analyzeLagrange2D,
+  analyzeLimit1D,
   analyzeLinearTransform2D,
+  analyzeParametricCurve2D,
   analyzePhasePlane2D,
+  analyzePolarCurve2D,
   analyzeProbabilityDistribution,
   analyzeSurface3D,
+  analyzeTangentAndDerivative1D,
   analyzeTaylorSeries,
   compileScalarField1D,
   compileScalarField2D,
   computeTangentPlane3D,
   evaluateDivCurlProbe,
+  findRoots1D,
+  formatLimitValue,
   integrateDefinite1D,
   integrateOde1DBidirectional,
   integratePhaseTrajectoryBidirectional,
@@ -54,14 +62,14 @@ export function hasExplicitHigherMathIntent(rawPrompt: string): boolean {
       text
     )
   const isStrongHigherMath =
-    /拉格朗日|条件极值|偏导|鞍点|切平面|法线方程|二元函数|微分方程|初值问题|斜率场|相平面|自治系统|平衡点|极限环|偏微分|热传导|波动方程|泊松方程|拉普拉斯|泰勒|麦克劳林|傅里叶|吉布斯|二重积分|累次积分|交换积分次序|极坐标积分|∬|散度|旋度|\bdiv\b|\bcurl\b|矩阵|特征值|特征向量|奇异值|\bsvd\b|正态分布|标准正态|卡方分布|\bt\s*分布|二项分布|泊松分布|指数分布|中心极限定理|\bclt\b|\bN\s*\(\s*[+-]?\d|\bExp\s*\(|\bPoisson\s*\(/iu.test(
+    /拉格朗日|条件极值|偏导|方向导数|鞍点|切平面|法线方程|二元函数|参数方程|极坐标|心脏线|心形线|玫瑰线|摆线|星形线|利萨茹|阿基米德螺线|蜗线|微分方程|初值问题|斜率场|相平面|自治系统|平衡点|极限环|偏微分|热传导|波动方程|泊松方程|拉普拉斯|泰勒|麦克劳林|傅里叶|吉布斯|二重积分|累次积分|交换积分次序|极坐标积分|∬|散度|旋度|\bdiv\b|\bcurl\b|矩阵|特征值|特征向量|奇异值|\bsvd\b|正态分布|标准正态|卡方分布|\bt\s*分布|二项分布|泊松分布|指数分布|中心极限定理|\bclt\b|\bN\s*\(\s*[+-]?\d|\bExp\s*\(|\bPoisson\s*\(|可去间断点|跳跃间断点|无穷间断点|旋转体体积/iu.test(
       text
     )
   if (isStrongHigherMath) return true
   if (isSchoolGeometry) return false
   if (/椭圆|双曲线|抛物线/u.test(text)) return false
 
-  return /极值|极大值|极小值|最大值|最小值|最值|拐点|渐近线|定积分|曲线下面积|∫/u.test(text)
+  return /极值|极大值|极小值|最大值|最小值|最值|拐点|渐近线|定积分|曲线下面积|围成面积|所围面积|弧长|极限|\blim\b|间断点|∫/iu.test(text)
 }
 
 function finalizeVerifiedPlan(
@@ -250,14 +258,61 @@ export function solveHigherMathRouteToPlan(route: HigherMathRouteAction): Determ
           }
         }
 
+        const fField = compileScalarField1D(route.expression)
         const lines: string[] = [
           `【一元微积分精确求解】函数 $f(x) = ${analysis.normalizedExpression}$，分析区间 $[${fmt(domain[0])}, ${fmt(domain[1])}]$：`
         ]
-        if (route.computeIntegral || route.domain !== undefined) {
+        const tanSummary = analyzeTangentAndDerivative1D(route.expression, fField, route.x0 ?? 0)
+        if (tanSummary.symbolicDerivativePretty) {
+          lines.push(`- 符号导数：$f'(x) = ${tanSummary.symbolicDerivativePretty}$`)
+        }
+        if (route.computeIntegral || route.computeArcLength || route.computeVolume || route.domain !== undefined) {
           const integralVal = integrateDefinite1D(analysis.normalizedExpression, domain[0], domain[1])
+          const intExtras = analyzeDefiniteIntegral1D(fField, domain)
           if (Number.isFinite(integralVal)) {
-            lines.push(`- 定积分 $\\int_{${fmt(domain[0])}}^{${fmt(domain[1])}} f(x)\\,dx = ${fmt(integralVal, 8)}$`)
+            lines.push(`- 定积分 $\\int_{${fmt(domain[0])}}^{${fmt(domain[1])}} f(x)\\,dx = ${fmt(integralVal, 8)}$（绝对面积 $\\int|f|dx = ${fmt(intExtras.absoluteArea, 6)}$）`)
           }
+          if (route.computeArcLength && Number.isFinite(intExtras.arcLength)) {
+            lines.push(`- 曲线弧长：$L = \\int_{${fmt(domain[0])}}^{${fmt(domain[1])}} \\sqrt{1+[f'(x)]^2}\\,dx = ${fmt(intExtras.arcLength, 6)}$`)
+          }
+          if (route.computeVolume && Number.isFinite(intExtras.revolutionVolumeX)) {
+            lines.push(`- 绕 $x$ 轴旋转体体积：$V_x = \\pi\\int_{${fmt(domain[0])}}^{${fmt(domain[1])}} [f(x)]^2\\,dx = ${fmt(intExtras.revolutionVolumeX, 6)}$`)
+          }
+        }
+        if (route.limitTarget) {
+          const lim = analyzeLimit1D(fField, route.limitTarget)
+          lines.push(`- **极限与连续性诊断**：${lim.summary}`)
+          if (lim.leftLimit && lim.rightLimit) {
+            lines.push(`  - 左极限 $= ${formatLimitValue(lim.leftLimit)}$，右极限 $= ${formatLimitValue(lim.rightLimit)}$，双侧极限 $= ${formatLimitValue(lim.overallLimit)}$`)
+          }
+        }
+        if (route.compareExpr) {
+          const normG = normalizeHigherMathInput(route.compareExpr, "expression")
+          actions.push({
+            actionId: "function.create_graph",
+            actionKey: "hm-fn-g",
+            factIds: [],
+            inputs: {
+              alias: "g",
+              label: `g(x)=${normG}`,
+              expression: normG,
+              domain
+            }
+          } as DraftAction)
+          const dual = analyzeDualCurve1D(fField, route.compareExpr, domain)
+          dual.intersections.slice(0, 6).forEach((inter, idx) => {
+            actions.push({
+              actionId: "planar.create_point",
+              actionKey: `hm-inter-${idx + 1}`,
+              factIds: [],
+              inputs: { alias: `Q${idx + 1}`, label: `Q${idx + 1}`, points: [{ x: inter.x, y: inter.y }] }
+            } as DraftAction)
+          })
+          lines.push(`- 对比函数 $g(x) = ${normG}$：区间内围成面积 $\\int |f-g|\\,dx = ${fmt(dual.areaBetween, 6)}$，交点（${dual.intersections.length} 个）：${dual.intersections.map((p) => `(${fmt(p.x, 4)}, ${fmt(p.y, 4)})`).join("；") || "无"}`)
+        }
+        if (route.computeRoots) {
+          const roots = findRoots1D(fField, domain)
+          lines.push(`- 方程零点 $f(x) = 0$：${roots.length > 0 ? roots.map((r) => `x = ${fmt(r.x, 6)}`).join("；") : "当前区间内无实根"}`)
         }
         const interiorExtrema = analysis.extrema.filter((e) => e.kind !== "endpoint")
         if (interiorExtrema.length > 0) {
@@ -289,14 +344,8 @@ export function solveHigherMathRouteToPlan(route: HigherMathRouteAction): Determ
         if (analysis.asymptotes.length > 0) {
           lines.push(`- 渐近线：${analysis.asymptotes.map((a) => a.label).join("；")}`)
         }
-        if (route.x0 !== undefined) {
-          const fField = compileScalarField1D(route.expression)
-          const y0 = fField.eval(route.x0)
-          const dy0 = fField.derivative(route.x0)
-          if (Number.isFinite(y0) && Number.isFinite(dy0)) {
-            const b = y0 - dy0 * route.x0
-            lines.push(`- 在 $x_0 = ${fmt(route.x0)}$ 处：$f(x_0) = ${fmt(y0)}$，$f'(x_0) = ${fmt(dy0)}$，切线方程 $y = ${fmt(dy0)}x ${b >= 0 ? "+" : "-"} ${fmt(Math.abs(b))}$`)
-          }
+        if (route.x0 !== undefined && Number.isFinite(tanSummary.y0) && Number.isFinite(tanSummary.slope)) {
+          lines.push(`- 在 $x_0 = ${fmt(route.x0)}$ 处：$f(x_0) = ${fmt(tanSummary.y0)}$，$f'(x_0) = ${fmt(tanSummary.slope)}$，曲率 $\\kappa = ${fmt(tanSummary.curvature, 5)}$，切线 ${tanSummary.tangentEquation}，法线 ${tanSummary.normalEquation}`)
         }
 
         return finalizeVerifiedPlan(
@@ -306,6 +355,72 @@ export function solveHigherMathRouteToPlan(route: HigherMathRouteAction): Determ
           "functions",
           planarSkills
         )
+      }
+
+      case "parametricPolar": {
+        const actions: DraftAction[] = []
+        if (route.subMode === "polar") {
+          const rExpr = route.rExpr ?? "1 + cos(theta)"
+          const thetaRange: [number, number] = route.thetaRange ?? [0, 2 * Math.PI]
+          const activeTheta = route.activeTheta ?? 0.5 * (thetaRange[0] + thetaRange[1])
+          const res = analyzePolarCurve2D(rExpr, thetaRange, activeTheta)
+          const sampled = downsamplePolyline(res.points, 64)
+          if (sampled.length >= 2) {
+            actions.push({
+              actionId: "planar.create_polyline",
+              actionKey: "hm-polar-curve",
+              factIds: [],
+              inputs: { alias: "polar_c", label: `r=${rExpr}`, points: sampled }
+            } as DraftAction)
+          }
+          if (Number.isFinite(res.activePoint.x) && Number.isFinite(res.activePoint.y)) {
+            actions.push({
+              actionId: "planar.create_point",
+              actionKey: "hm-polar-pt",
+              factIds: [],
+              inputs: { alias: "P", label: "P", points: [res.activePoint] }
+            } as DraftAction)
+          }
+          const answer = [
+            `【极坐标曲线精确求解】$r(\\theta) = ${rExpr}$，$\\theta \\in [${fmt(thetaRange[0], 4)}, ${fmt(thetaRange[1], 4)}]$：`,
+            `- **极坐标扇形面积**：$S = \\frac{1}{2}\\int r(\\theta)^2\\,d\\theta = ${fmt(res.sectorArea, 6)}$`,
+            `- **极坐标曲线弧长**：$L = \\int \\sqrt{r^2 + (r')^2}\\,d\\theta = ${fmt(res.arcLength, 6)}$`,
+            `- 在 $\\theta_0 = ${fmt(res.activeTheta, 4)}$ 处：$r(\\theta_0) = ${fmt(res.activeR, 5)}$，$r'(\\theta_0) = ${fmt(res.activeDR, 5)}$，直角坐标 $(${fmt(res.activePoint.x, 4)}, ${fmt(res.activePoint.y, 4)})$`,
+            `- 已同步至「高等数学 → 参数与极坐标」工作台，支持动态扫描极角观察扇形面积与切向量。`
+          ].join("\n")
+          return finalizeVerifiedPlan(`极坐标曲线分析：r = ${rExpr}`, answer, actions, "functions", planarSkills)
+        }
+
+        const xExpr = route.xExpr ?? "t - sin(t)"
+        const yExpr = route.yExpr ?? "1 - cos(t)"
+        const tRange: [number, number] = route.tRange ?? [0, 2 * Math.PI]
+        const activeT = route.activeT ?? 0.5 * (tRange[0] + tRange[1])
+        const res = analyzeParametricCurve2D(xExpr, yExpr, tRange, activeT)
+        const sampled = downsamplePolyline(res.points, 64)
+        if (sampled.length >= 2) {
+          actions.push({
+            actionId: "planar.create_polyline",
+            actionKey: "hm-param-curve",
+            factIds: [],
+            inputs: { alias: "param_c", label: `(x(t),y(t))`, points: sampled }
+          } as DraftAction)
+        }
+        if (Number.isFinite(res.activePoint.x) && Number.isFinite(res.activePoint.y)) {
+          actions.push({
+            actionId: "planar.create_point",
+            actionKey: "hm-param-pt",
+            factIds: [],
+            inputs: { alias: "P", label: "P", points: [res.activePoint] }
+          } as DraftAction)
+        }
+        const answer = [
+          `【参数方程曲线精确求解】$x(t) = ${xExpr},\\; y(t) = ${yExpr}$，$t \\in [${fmt(tRange[0], 4)}, ${fmt(tRange[1], 4)}]$：`,
+          `- **参数曲线总弧长**：$L = \\int \\sqrt{(x')^2 + (y')^2}\\,dt = ${fmt(res.arcLength, 6)}$`,
+          `- 在 $t_0 = ${fmt(res.activeT, 4)}$ 处：点 $P(${fmt(res.activePoint.x, 4)}, ${fmt(res.activePoint.y, 4)})$，切向量 $(x', y') = (${fmt(res.velocity.x, 4)}, ${fmt(res.velocity.y, 4)})$`,
+          `- 一阶导 $dy/dx = ${fmt(res.dyDx, 5)}$，二阶导 $d^2y/dx^2 = ${fmt(res.d2yDx2, 5)}$，曲率 $\\kappa = ${fmt(res.curvature, 5)}$`,
+          `- 已同步至「高等数学 → 参数与极坐标」工作台，支持动画播放动点轨迹。`
+        ].join("\n")
+        return finalizeVerifiedPlan(`参数曲线分析：x=${xExpr}, y=${yExpr}`, answer, actions, "functions", planarSkills)
       }
 
       case "lagrange": {
@@ -447,8 +562,15 @@ export function solveHigherMathRouteToPlan(route: HigherMathRouteAction): Determ
             } as DraftAction)
           }
           lines.push(
-            `- 在点 $(${fmt(tp.x)}, ${fmt(tp.y)}, ${fmt(tp.z)})$ 处：$f_x = ${fmt(tp.fx)},\\; f_y = ${fmt(tp.fy)}$，切平面方程为 **$${tp.equation}$**，法向量 $\\vec{n} = (${fmt(-tp.fx)}, ${fmt(-tp.fy)}, 1)$`
+            `- 在点 $(${fmt(tp.x)}, ${fmt(tp.y)}, ${fmt(tp.z)})$ 处：$f_x = ${fmt(tp.fx)},\\; f_y = ${fmt(tp.fy)}$，梯度模长 $|\\nabla f| = ${fmt(Math.hypot(tp.fx, tp.fy))}$，切平面方程为 **$${tp.equation}$**，法向量 $\\vec{n} = (${fmt(-tp.fx)}, ${fmt(-tp.fy)}, 1)$`
           )
+          if (route.dirAngleDeg !== undefined) {
+            const rad = (route.dirAngleDeg * Math.PI) / 180
+            const dirDeriv = tp.fx * Math.cos(rad) + tp.fy * Math.sin(rad)
+            lines.push(
+              `- 沿方向角 $\\theta = ${route.dirAngleDeg}^\\circ$ 的**方向导数**：$\\frac{\\partial f}{\\partial l} = f_x\\cos\\theta + f_y\\sin\\theta = ${fmt(dirDeriv, 6)}$`
+            )
+          }
         }
 
         return finalizeVerifiedPlan(

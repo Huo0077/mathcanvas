@@ -976,7 +976,44 @@ export function CalculusWorkbench({
           setDomainAInput(String(action.domain[0]))
           setDomainBInput(String(action.domain[1]))
         }
+        if (action.x0 !== undefined) {
+          setTangentX0(action.x0)
+          setShowTangentProbe(true)
+        }
+        if (action.compareExpr) {
+          setExpr1DG(action.compareExpr)
+          setEnableCompareG(true)
+        }
+        if (action.limitTarget) {
+          setLimitMode(action.limitTarget.kind)
+          if (action.limitTarget.kind === "point") {
+            setLimitX0Input(String(action.limitTarget.x0))
+          }
+        }
+        if (action.computeIntegral) setShowIntegralArea(true)
+        if (action.computeRoots) setShowRoots1D(true)
         setCustomBounds1D(null)
+        break
+      case "parametricPolar":
+        setParamPolarSubMode(action.subMode)
+        if (action.subMode === "parametric") {
+          if (action.xExpr) setParamXExpr(action.xExpr)
+          if (action.yExpr) setParamYExpr(action.yExpr)
+          if (action.tRange) {
+            setParamTMin(String(action.tRange[0]))
+            setParamTMax(String(action.tRange[1]))
+          }
+          if (action.activeT !== undefined) setParamActiveT(action.activeT)
+        } else {
+          if (action.rExpr) setPolarRExpr(action.rExpr)
+          if (action.thetaRange) {
+            setPolarThetaMin(String(action.thetaRange[0]))
+            setPolarThetaMax(String(action.thetaRange[1]))
+          }
+          if (action.activeTheta !== undefined) setPolarActiveTheta(action.activeTheta)
+        }
+        setParamPlaying(false)
+        setCustomParamBounds(null)
         break
       case "lagrange":
         setObjectiveExpr(action.objective)
@@ -994,6 +1031,15 @@ export function CalculusWorkbench({
         break
       case "surface3d":
         setSurfaceExpr(action.expression)
+        if (action.tangentPoint) {
+          setSurfaceProbeX(action.tangentPoint[0])
+          setSurfaceProbeY(action.tangentPoint[1])
+          setUseCustomSurfaceProbe(true)
+          setShowTangentPlane(true)
+        }
+        if (action.dirAngleDeg !== undefined) {
+          setSurfaceDirDeg(action.dirAngleDeg)
+        }
         break
       case "pde":
         setPdeKind(action.kind)

@@ -632,7 +632,7 @@ describe("real DS planar tool schema fidelity", () => {
           enum: [
             "distance", "position", "coordinates", "area",
             "line_plane_angle", "line_angle", "dihedral_angle",
-            "calculus_1d", "taylor_series", "fourier_series",
+            "calculus_1d", "parametric_polar", "taylor_series", "fourier_series",
             "lagrange_2d", "surface_3d", "ode_solve",
             "double_integral", "div_curl", "matrix_2x2", "probability"
           ]

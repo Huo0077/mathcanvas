@@ -29,6 +29,7 @@ describe("Agent University Higher-Math Problem Solving (Deterministic + LLM ds_a
           "distance",
           "line_plane_angle",
           "calculus_1d",
+          "parametric_polar",
           "taylor_series",
           "fourier_series",
           "lagrange_2d",
@@ -307,6 +308,92 @@ describe("Agent University Higher-Math Problem Solving (Deterministic + LLM ds_a
         expect(route.objective).toBe("2x + y")
         expect(route.constraint).toBe("x^2 + y^2 = 9")
       }
+
+      // Parametric & Polar curves also sync directly into Higher-Math workbench
+      const syncedPolar = useCalculusStore.getState().syncFromAgentPrompt("求极坐标心脏线 r(θ) = 1 + cos(theta) 的面积与弧长")
+      expect(syncedPolar).toBe(true)
+      expect(useCalculusStore.getState().pendingRoute?.module).toBe("parametricPolar")
+    })
+
+    it("aligns Agent ds_action and deterministic solver with new 1D extras, parametric/polar curves, and 3D directional derivative", () => {
+      const session = createDsActionSession({
+        workspace: "conics",
+        baseDocument: createEmptyDocument("conics")
+      })
+
+      // 1. calculus_1d limit + dual-curve + arc length + revolution volume via ds_action
+      const calcRes = session.execute("query_measurement", {
+        metric: "calculus_1d",
+        expression: "x^2",
+        domain: [0, 1],
+        x0: 0.5,
+        compareExpression: "x"
+      })
+      expect(calcRes.ok).toBe(true)
+      expect(calcRes.measurement?.symbolicDerivative).toContain("2x")
+      expect(calcRes.measurement?.revolutionVolumeX as number).toBeCloseTo(Math.PI / 5, 4)
+      expect((calcRes.measurement?.dualCurve as { areaBetween: number }).areaBetween).toBeCloseTo(1 / 6, 4)
+
+      const limRes = session.execute("query_measurement", {
+        metric: "calculus_1d",
+        expression: "sin(x)/x",
+        limitAt: "0"
+      })
+      expect(limRes.ok).toBe(true)
+      expect((limRes.measurement?.limit as { continuity: string; overallLimit: string }).continuity).toBe("removable")
+      expect((limRes.measurement?.limit as { overallLimit: string }).overallLimit).toBe("1")
+
+      // 2. parametric_polar via ds_action (polar Cardioid & parametric Cycloid)
+      const polarRes = session.execute("query_measurement", {
+        metric: "parametric_polar",
+        curveMode: "polar",
+        rExpr: "1 + cos(theta)",
+        tRange: [0, 2 * Math.PI]
+      })
+      expect(polarRes.ok).toBe(true)
+      expect(polarRes.measurement?.sectorArea as number).toBeCloseTo((3 * Math.PI) / 2, 2)
+      expect(polarRes.measurement?.arcLength as number).toBeCloseTo(8, 2)
+
+      const paramRes = session.execute("query_measurement", {
+        metric: "parametric_polar",
+        curveMode: "parametric",
+        xExpr: "t - sin(t)",
+        yExpr: "1 - cos(t)",
+        tRange: [0, 2 * Math.PI]
+      })
+      expect(paramRes.ok).toBe(true)
+      expect(paramRes.measurement?.arcLength as number).toBeCloseTo(8, 2)
+
+      // 3. surface_3d directional derivative via ds_action (f = x^2 + y^2 at (1, 0), grad=(2,0), theta=60 deg => 1)
+      const surfRes = session.execute("query_measurement", {
+        metric: "surface_3d",
+        expression: "x^2 + y^2",
+        point: [1, 0],
+        dirAngleDeg: 60
+      })
+      expect(surfRes.ok).toBe(true)
+      expect((surfRes.measurement?.tangentPlane as { directionalDerivative: number }).directionalDerivative).toBeCloseTo(1, 5)
+
+      // 4. Offline deterministic solver handles polar, parametric, limits, dual-curve, and 3D directional derivative
+      const polarPlan = routeDeterministicProblem("求极坐标心脏线 r = 1 + cos(theta) 的面积与弧长")
+      expect(polarPlan).not.toBeNull()
+      expect(polarPlan!.plan.kind).toBe("plan")
+      if (polarPlan!.plan.kind === "plan") expect(polarPlan!.plan.answer).toContain("4.712")
+
+      const paramPlan = routeDeterministicProblem("求参数方程摆线 x = t - sin(t), y = 1 - cos(t) 在 [0, 2*pi] 的弧长")
+      expect(paramPlan).not.toBeNull()
+      expect(paramPlan!.plan.kind).toBe("plan")
+      if (paramPlan!.plan.kind === "plan") expect(paramPlan!.plan.answer).toContain("8")
+
+      const limPlan = routeDeterministicProblem("求函数 f(x) = sin(x)/x 在 x = 0 处的极限与间断点")
+      expect(limPlan).not.toBeNull()
+      expect(limPlan!.plan.kind).toBe("plan")
+      if (limPlan!.plan.kind === "plan") expect(limPlan!.plan.answer).toContain("可去间断点")
+
+      const dirPlan = routeDeterministicProblem("求曲面 z = x^2 + y^2 在点 (1, 0) 处沿方向角 60° 的方向导数")
+      expect(dirPlan).not.toBeNull()
+      expect(dirPlan!.plan.kind).toBe("plan")
+      if (dirPlan!.plan.kind === "plan") expect(dirPlan!.plan.answer).toContain("方向导数")
     })
   })
 })

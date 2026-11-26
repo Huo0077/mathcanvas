@@ -1,3 +1,4 @@
+import type { LimitTarget1D } from "./calculus1dExtras"
 import type { Matrix2x2 } from "./linalg2d"
 import type { DoubleIntegralOrder } from "./multivariable"
 import type { PdeKind } from "./pde"
@@ -10,7 +11,24 @@ export type HigherMathRouteAction =
       expression: string
       domain?: [number, number]
       x0?: number
+      compareExpr?: string
+      limitTarget?: LimitTarget1D
       computeIntegral?: boolean
+      computeArcLength?: boolean
+      computeVolume?: boolean
+      computeRoots?: boolean
+      summary: string
+    }
+  | {
+      module: "parametricPolar"
+      subMode: "parametric" | "polar"
+      xExpr?: string
+      yExpr?: string
+      tRange?: [number, number]
+      activeT?: number
+      rExpr?: string
+      thetaRange?: [number, number]
+      activeTheta?: number
       summary: string
     }
   | {
@@ -39,6 +57,7 @@ export type HigherMathRouteAction =
       module: "surface3d"
       expression: string
       tangentPoint?: [number, number]
+      dirAngleDeg?: number
       summary: string
     }
   | {
@@ -440,6 +459,57 @@ export function routeHigherMathPrompt(rawPrompt: string): HigherMathRouteAction 
     }
   }
 
+  // 5c. Parametric & Polar Curves (must run after Double Integral so polar double integrals stay in #5)
+  const paramPairMatch = text.match(/x(?:\(t\))?\s*[=＝]\s*([^,，;；]+?)\s*[,，;；\s]+y(?:\(t\))?\s*[=＝]\s*([^,，。;；]+)/iu)
+  if (
+    paramPairMatch ||
+    /参数方程|摆线|星形线|利萨茹/u.test(text)
+  ) {
+    const tRange = extractInterval(text) ?? [0, 2 * Math.PI]
+    const t0Match = text.match(/t_?0?\s*[=＝]\s*([^\s,，。；]+)/iu)
+    const activeT = t0Match ? parseScalarExpr(t0Match[1]!) : undefined
+    let xExpr = paramPairMatch ? cleanFormulaToken(paramPairMatch[1]!) : "t - sin(t)"
+    let yExpr = paramPairMatch ? cleanFormulaToken(paramPairMatch[2]!) : "1 - cos(t)"
+    if (!paramPairMatch) {
+      if (/星形线/u.test(text)) { xExpr = "2*cos(t)^3"; yExpr = "2*sin(t)^3" }
+      else if (/利萨茹/u.test(text)) { xExpr = "2.5*sin(3*t)"; yExpr = "2.5*sin(2*t)" }
+    }
+    return {
+      module: "parametricPolar",
+      subMode: "parametric",
+      xExpr,
+      yExpr,
+      tRange,
+      ...(activeT !== undefined ? { activeT } : {}),
+      summary: `已切入「参数与极坐标」参数方程：x(t) = ${xExpr}, y(t) = ${yExpr}`
+    }
+  }
+
+  const polarExprMatch = text.match(/r(?:\(\s*(?:θ|theta)\s*\))?\s*[=＝]\s*([^,，。;；]+)/iu)
+  if (
+    polarExprMatch ||
+    /极坐标|心脏线|心形线|玫瑰线|阿基米德螺线|蜗线/u.test(text)
+  ) {
+    const thetaRange = extractInterval(text) ?? (/三叶玫瑰/u.test(text) ? [0, Math.PI] : [0, 2 * Math.PI])
+    const th0Match = text.match(/(?:θ|theta)_?0?\s*[=＝]\s*([^\s,，。；]+)/iu)
+    const activeTheta = th0Match ? parseScalarExpr(th0Match[1]!) : undefined
+    let rExpr = polarExprMatch ? cleanFormulaToken(polarExprMatch[1]!) : "1 + cos(theta)"
+    if (!polarExprMatch) {
+      if (/三叶玫瑰/u.test(text)) rExpr = "2*cos(3*theta)"
+      else if (/四叶玫瑰|玫瑰线/u.test(text)) rExpr = "2*sin(2*theta)"
+      else if (/阿基米德螺线/u.test(text)) rExpr = "0.35*theta"
+      else if (/蜗线/u.test(text)) rExpr = "1 + 2*cos(theta)"
+    }
+    return {
+      module: "parametricPolar",
+      subMode: "polar",
+      rExpr,
+      thetaRange,
+      ...(activeTheta !== undefined ? { activeTheta } : {}),
+      summary: `已切入「参数与极坐标」极坐标：r(θ) = ${rExpr}`
+    }
+  }
+
   // 6. Lagrange Multipliers (objective + constraint equation)
   if (/拉格朗日|条件极值|(?:在|受限于|满足).*约束|(?:约束|条件).*(?:极值|最大值|最小值|最值)/u.test(text)) {
     const fMatch =
@@ -490,23 +560,38 @@ export function routeHigherMathPrompt(rawPrompt: string): HigherMathRouteAction 
   const zMatch =
     text.match(/(?:曲面\s*)?z\s*[=＝]\s*([^,，。;；]+)/iu) ??
     text.match(/f\(\s*x\s*,\s*y\s*\)\s*[=＝]\s*([^,，。;；]+)/iu)
-  if (zMatch || (/鞍点|三维曲面|二元函数|切平面|偏导/u.test(text) && /y/iu.test(text))) {
+  if (zMatch || (/鞍点|三维曲面|二元函数|切平面|偏导|方向导数/u.test(text) && /y/iu.test(text))) {
     const expr = zMatch ? cleanFormulaToken(zMatch[1]!) : "x^3 - 3*x + y^2"
     const strippedForPt = text.replace(/f\(\s*x\s*,\s*y\s*\)/giu, "")
     const pt3Match = strippedForPt.match(/\(\s*([+-]?\d+(?:\.\d+)?)\s*[,，]\s*([+-]?\d+(?:\.\d+)?)(?:\s*[,，]\s*[+-]?\d+(?:\.\d+)?)?\s*\)/u)
     const tangentPoint: [number, number] | undefined =
-      /切平面|法线|在点/u.test(text) && pt3Match
+      /切平面|法线|在点|方向导数/u.test(text) && pt3Match
         ? [Number(pt3Match[1]), Number(pt3Match[2])]
         : undefined
+    let dirAngleDeg: number | undefined
+    const degMatch = text.match(/(?:方向角|夹角|角度|θ)\s*[=＝为]?\s*([+-]?\d+(?:\.\d+)?)\s*[°度]/iu)
+    const dirVecMatch = text.match(/(?:沿方向|方向向量|方向)\s*(?:[lLvV]\u20d7?)?\s*[=＝]?\s*\(\s*([+-]?\d+(?:\.\d+)?)\s*[,，]\s*([+-]?\d+(?:\.\d+)?)\s*\)/iu)
+    if (degMatch) {
+      dirAngleDeg = Number(degMatch[1])
+    } else if (dirVecMatch) {
+      const vx = Number(dirVecMatch[1])
+      const vy = Number(dirVecMatch[2])
+      if (Math.hypot(vx, vy) > 1e-9) {
+        dirAngleDeg = Math.round(((Math.atan2(vy, vx) * 180) / Math.PI + 360) % 360)
+      }
+    } else if (/方向导数/u.test(text)) {
+      dirAngleDeg = 45
+    }
     return {
       module: "surface3d",
       expression: expr,
       ...(tangentPoint ? { tangentPoint } : {}),
-      summary: `已切入「3D 曲面与鞍点」：z = ${expr}`
+      ...(dirAngleDeg !== undefined ? { dirAngleDeg } : {}),
+      summary: `已切入「3D 曲面与鞍点」：z = ${expr}${dirAngleDeg !== undefined ? `（方向导数 θ=${dirAngleDeg}°）` : ""}`
     }
   }
 
-  // 10. 1D Definite Integral / Extrema / Min-Max / Inflection / Asymptote
+  // 10. 1D Definite Integral / Extrema / Limits / Arc Length / Revolution Volume / Dual Curve
   const int1dMatch = text.match(/∫_?\{?\s*([^}^,\s]+)\s*\}?\s*\^\s*\{?\s*([^}\s]+)\s*\}?\s*\(?\s*([^,，。；]+?)\s*\)?\s*dx/iu)
   if (int1dMatch) {
     const a = parseScalarExpr(int1dMatch[1]!)
@@ -524,11 +609,41 @@ export function routeHigherMathPrompt(rawPrompt: string): HigherMathRouteAction 
   }
 
   const interval = extractInterval(text)
-  const computeIntegral = /定积分|曲线下面积|所围面积/u.test(text)
+  const computeIntegral = /定积分|曲线下面积|所围面积|围成面积|围成的面积/u.test(text)
+  const computeArcLength = /弧长/u.test(text)
+  const computeVolume = /旋转体|绕\s*x\s*轴/iu.test(text)
+  const computeRoots = /零点|实根|方程求根/u.test(text)
   const x0Match = text.match(/x_?0?\s*[=＝]\s*([+-]?\d+(?:\.\d+)?)\s*处/iu)
+
+  // Optional limit target: `lim_{x->0}`, `x -> +∞`, `x 趋于 0`, `在 x=0 处的极限/间断点`
+  let limitTarget: LimitTarget1D | undefined
+  if (/极限|间断点|\blim\b/iu.test(text)) {
+    if (/(?:x\s*(?:->|→|趋于|趋向)\s*\+?\s*(?:∞|inf)|正无穷)/iu.test(text)) {
+      limitTarget = { kind: "pos_inf" }
+    } else if (/(?:x\s*(?:->|→|趋于|趋向)\s*[-−]\s*(?:∞|inf)|负无穷)/iu.test(text)) {
+      limitTarget = { kind: "neg_inf" }
+    } else {
+      const limPtMatch = text.match(/(?:x\s*(?:->|→|趋于|趋向)|x_?0?\s*[=＝])\s*([+-]?\d+(?:\.\d+)?|pi|π)/iu)
+      const val = limPtMatch ? parseScalarExpr(limPtMatch[1]!) : 0
+      limitTarget = { kind: "point", x0: val ?? 0 }
+    }
+  }
+
+  // Optional dual-curve g(x) comparison: `f(x)=... 与 g(x)=...` or `y=... 与 y=...`
+  const gExplicitMatch = text.match(/g\(\s*x\s*\)\s*[=＝]\s*([^,，。；;]+?)(?:\s*在|\s*\[|\s*所围|\s*围成|\s*的交点|$)/iu)
+  const twoYMatches = [...text.matchAll(/(?:f\(\s*x\s*\)|y)\s*[=＝]\s*([^,，。；;与和]+?)(?=\s*(?:与|和|在|\[|,|，|。|；|$))/giu)]
+  let compareExpr: string | undefined
+  if (gExplicitMatch) {
+    compareExpr = cleanFormulaToken(gExplicitMatch[1]!)
+  } else if (twoYMatches.length >= 2) {
+    compareExpr = cleanFormulaToken(twoYMatches[1]![1]!)
+  }
+
+  const limExprMatch = text.match(/lim(?:_\{?[^}\s]+\}?)?\s*(?:\(\s*x\s*(?:->|→)\s*[^)]+\s*\))?\s*([^,，。；]+?)(?:\s*的极限|\s*的间断点|$)/iu)
   const f1Match =
-    text.match(/(?:f\(\s*x\s*\)|y)\s*[=＝]\s*([^,，。；;]+?)(?:\s*在|\s*\[|$)/iu) ??
-    text.match(/(?:求|计算|分析)(?:函数)?\s*([xX0-9_+*/^().\s-]+?)\s*(?:在|的极值|的最值|的最大值|的最小值|的拐点|的渐近线|的定积分)/u)
+    text.match(/(?:f\(\s*x\s*\)|y)\s*[=＝]\s*([^,，。；;与和]+?)(?:\s*在|\s*\[|\s*与|\s*和|$)/iu) ??
+    text.match(/(?:求|计算|分析)(?:函数)?\s*([xX0-9_+*/^().\s-]+?)\s*(?:在|的极值|的最值|的最大值|的最小值|的拐点|的渐近线|的定积分|的极限|的间断点|的弧长|绕)/u) ??
+    limExprMatch
   const expr1D = cleanFormulaToken(f1Match ? f1Match[1]! : text)
   if (expr1D) {
     return {
@@ -536,8 +651,13 @@ export function routeHigherMathPrompt(rawPrompt: string): HigherMathRouteAction 
       expression: expr1D,
       domain: interval,
       ...(x0Match ? { x0: Number(x0Match[1]) } : {}),
+      ...(compareExpr ? { compareExpr } : {}),
+      ...(limitTarget ? { limitTarget } : {}),
       ...(computeIntegral ? { computeIntegral: true } : {}),
-      summary: `已切入「一元极值与最值」：f(x) = ${expr1D}${interval ? `，区间 [${interval[0]}, ${interval[1]}]` : ""}`
+      ...(computeArcLength ? { computeArcLength: true } : {}),
+      ...(computeVolume ? { computeVolume: true } : {}),
+      ...(computeRoots ? { computeRoots: true } : {}),
+      summary: `已切入「一元微积分」：f(x) = ${expr1D}${compareExpr ? ` vs g(x) = ${compareExpr}` : ""}${interval ? `，区间 [${interval[0]}, ${interval[1]}]` : ""}`
     }
   }
 

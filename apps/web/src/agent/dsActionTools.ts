@@ -20,14 +20,20 @@ import {
 } from "@draw/agent-core"
 import { deriveAcceptance } from "./acceptance"
 import {
+  analyzeDefiniteIntegral1D,
   analyzeDoubleIntegral,
+  analyzeDualCurve1D,
   analyzeExtrema1D,
   analyzeFourierSeries,
   analyzeLagrange2D,
+  analyzeLimit1D,
   analyzeLinearTransform2D,
+  analyzeParametricCurve2D,
   analyzePhasePlane2D,
+  analyzePolarCurve2D,
   analyzeProbabilityDistribution,
   analyzeSurface3D,
+  analyzeTangentAndDerivative1D,
   analyzeTaylorSeries,
   canonicalPointName,
   compileScalarField1D,
@@ -39,7 +45,9 @@ import {
   evaluateFunctionWithDomain,
   evaluateSymbolicDerivative,
   faceHost3,
+  findRoots1D,
   fitOriginConicThroughPoints,
+  formatLimitValue,
   host3FromPrimitive,
   integrateDefinite1D,
   intersectPlanarLineAndConicExact,
@@ -54,6 +62,7 @@ import {
   type DistributionKind,
   type DoubleIntegralOrder,
   type FourierWaveformKind,
+  type LimitTarget1D,
   type PlanarConic,
   type SolidBoundary
 } from "@draw/geometry-kernel"
@@ -1113,7 +1122,7 @@ const DS_ACTION_DESCRIPTIONS: Record<DsActionName, string> = {
   construct_circumsphere: "Derive a real 3D circumsphere (default mode='circumsphere') or insphere/max-ball (mode='insphere') from an existing named solid; never provide raw center/radius or 2D construct_circle.",
   construct_face: "Construct a named polygonal face from existing points.",
   construct_fold_state: "Record a pre_fold/post_fold state transition along a hinge.",
-  query_measurement: "Geometry & exact higher-math kernel solver: (A) Geometry: metric=distance (targets:[A,B]), area (targets:[A,B,C]), position/coordinates (target:P), line_plane_angle (targets:[L1,L2,P1,P2,P3]), line_angle (targets:[A,B,C,D]), dihedral_angle (targets:[P,A,B,Q]). (B) University Higher-Math exact solvers (NEVER hand-compute): metric=calculus_1d (expression, optional domain:[a,b], x0), taylor_series (expression, optional center, order, evalAt), fourier_series (optional waveform, halfPeriod, harmonics), lagrange_2d (objective, constraint, optional bounds:[xMin,xMax,yMin,yMax]), surface_3d (expression, optional point:[x0,y0], bounds), ode_solve (rhs+x0+y0+xTarget OR autonomous pExpr+qExpr), double_integral (integrand, integralOrder:'xy'|'yx'|'polar', outerMin, outerMax, innerMin, innerMax), div_curl (pExpr, qExpr, x0, y0), matrix_2x2 (matrix:[[a,b],[c,d]]), probability (distKind, param1, optional param2, interval:[a,b]).",
+  query_measurement: "Geometry & exact higher-math kernel solver: (A) Geometry: metric=distance (targets:[A,B]), area (targets:[A,B,C]), position/coordinates (target:P), line_plane_angle (targets:[L1,L2,P1,P2,P3]), line_angle (targets:[A,B,C,D]), dihedral_angle (targets:[P,A,B,Q]). (B) University Higher-Math exact solvers (NEVER hand-compute): metric=calculus_1d (expression, optional domain:[a,b], x0 for tangent/normal/curvature, limitAt:'0'|'+inf'|'-inf' for limits & discontinuity, compareExpression for dual-curve intersections & area between curves; also returns definiteIntegral, arcLength, revolutionVolumeX, roots, symbolicDerivative), parametric_polar (curveMode:'parametric' with xExpr, yExpr, optional tRange:[t1,t2], t0 OR curveMode:'polar' with rExpr, optional tRange:[th1,th2], t0 for polar area/arcLength), taylor_series (expression, optional center, order, evalAt), fourier_series (optional waveform, halfPeriod, harmonics), lagrange_2d (objective, constraint, optional bounds:[xMin,xMax,yMin,yMax]), surface_3d (expression, optional point:[x0,y0], dirAngleDeg for directional derivative, bounds), ode_solve (rhs+x0+y0+xTarget OR autonomous pExpr+qExpr), double_integral (integrand, integralOrder:'xy'|'yx'|'polar', outerMin, outerMax, innerMin, innerMax), div_curl (pExpr, qExpr, x0, y0), matrix_2x2 (matrix:[[a,b],[c,d]]), probability (distKind, param1, optional param2, interval:[a,b]).",
   query_constraint_status: "Use targets of existing named points and kind=coplanar, fixed_distance (with positive expected), collinear, perpendicular (3 targets [A,B,C] for AB⊥BC or 4 targets [A,B,C,D] for AB⊥CD), or parallel (4 targets [A,B,C,D]) to inspect constraint status.",
   repair_entity: "Rollback or replace a previously staged entity step.",
   repair_constraint: "Update/re-check a constraint status after repair.",
@@ -1355,7 +1364,7 @@ const QUERY_MEASUREMENT_PARAMETERS = {
       enum: [
         "distance", "position", "coordinates", "area",
         "line_plane_angle", "line_angle", "dihedral_angle",
-        "calculus_1d", "taylor_series", "fourier_series",
+        "calculus_1d", "parametric_polar", "taylor_series", "fourier_series",
         "lagrange_2d", "surface_3d", "ode_solve",
         "double_integral", "div_curl", "matrix_2x2", "probability"
       ]
@@ -1363,6 +1372,15 @@ const QUERY_MEASUREMENT_PARAMETERS = {
     targets: { type: "array", items: { type: "string" } },
     target: { type: "string" },
     expression: { type: "string" },
+    compareExpression: { type: "string" },
+    limitAt: { type: "string" },
+    curveMode: { type: "string", enum: ["parametric", "polar"] },
+    xExpr: { type: "string" },
+    yExpr: { type: "string" },
+    rExpr: { type: "string" },
+    tRange: { type: "array", items: { type: "number" } },
+    t0: { type: "number" },
+    dirAngleDeg: { type: "number" },
     objective: { type: "string" },
     constraint: { type: "string" },
     rhs: { type: "string" },
@@ -3640,30 +3658,132 @@ export function createDsActionSession(options: {
           try {
             const domain = readPair(input.domain, -4, 4)
             const analysis = analyzeExtrema1D(expr, domain)
+            const f = compileScalarField1D(expr)
             const definiteIntegral = integrateDefinite1D(analysis.normalizedExpression, domain[0], domain[1])
+            const integralDetail = analyzeDefiniteIntegral1D(f, domain)
+            const roots = findRoots1D(f, domain)
             const x0 = asFiniteNumber(input.x0)
+            const tanAnalysis = analyzeTangentAndDerivative1D(expr, f, x0 ?? 0)
             let atX0: Record<string, unknown> | undefined
             if (x0 !== null) {
-              const f = compileScalarField1D(expr)
-              const y0 = f.eval(x0)
-              const dy0 = f.derivative(x0)
-              const d2y0 = f.secondDerivative(x0)
-              atX0 = { x0, y0, derivative: dy0, secondDerivative: d2y0, tangentIntercept: y0 - dy0 * x0 }
+              atX0 = {
+                x0,
+                y0: tanAnalysis.y0,
+                derivative: tanAnalysis.slope,
+                secondDerivative: tanAnalysis.secondDerivative,
+                curvature: tanAnalysis.curvature,
+                curvatureRadius: tanAnalysis.curvatureRadius,
+                tangentIntercept: tanAnalysis.y0 - tanAnalysis.slope * x0,
+                tangentEquation: tanAnalysis.tangentEquation,
+                normalEquation: tanAnalysis.normalEquation
+              }
+            }
+            const rawLimitAt = asString(input.limitAt)
+            let limitResult: Record<string, unknown> | undefined
+            if (rawLimitAt !== null) {
+              const cleanedLim = rawLimitAt.trim().toLowerCase()
+              const target: LimitTarget1D = cleanedLim === "+inf" || cleanedLim === "inf" || cleanedLim === "+∞" || cleanedLim === "∞"
+                ? { kind: "pos_inf" }
+                : cleanedLim === "-inf" || cleanedLim === "-∞" || cleanedLim === "−∞"
+                  ? { kind: "neg_inf" }
+                  : { kind: "point", x0: Number.isFinite(Number(cleanedLim)) ? Number(cleanedLim) : 0 }
+              const lim = analyzeLimit1D(f, target)
+              limitResult = {
+                target: lim.target,
+                overallLimit: formatLimitValue(lim.overallLimit),
+                ...(lim.leftLimit ? { leftLimit: formatLimitValue(lim.leftLimit) } : {}),
+                ...(lim.rightLimit ? { rightLimit: formatLimitValue(lim.rightLimit) } : {}),
+                ...(lim.valueAtPoint !== undefined ? { valueAtPoint: lim.valueAtPoint } : {}),
+                ...(lim.continuity ? { continuity: lim.continuity } : {}),
+                summary: lim.summary
+              }
+            }
+            const compareExpr = asString(input.compareExpression)
+            let dualCurve: Record<string, unknown> | undefined
+            if (compareExpr) {
+              const dual = analyzeDualCurve1D(f, compareExpr, domain)
+              dualCurve = {
+                gExpression: dual.gExpression,
+                intersections: dual.intersections,
+                areaBetween: dual.areaBetween,
+                signedDiffIntegral: dual.signedDiffIntegral
+              }
             }
             return okMeasurement({
               metric: "calculus_1d",
               normalizedExpression: analysis.normalizedExpression,
+              symbolicDerivative: tanAnalysis.symbolicDerivativePretty,
               domain,
               definiteIntegral,
+              absoluteArea: integralDetail.absoluteArea,
+              averageValue: integralDetail.averageValue,
+              arcLength: integralDetail.arcLength,
+              revolutionVolumeX: integralDetail.revolutionVolumeX,
+              roots,
               globalMax: analysis.globalMax,
               globalMin: analysis.globalMin,
               extrema: analysis.extrema,
               inflections: analysis.inflections,
               asymptotes: analysis.asymptotes,
-              ...(atX0 ? { atX0 } : {})
+              ...(atX0 ? { atX0 } : {}),
+              ...(limitResult ? { limit: limitResult } : {}),
+              ...(dualCurve ? { dualCurve } : {})
             })
           } catch (err) {
             return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid calculus_1d expression")
+          }
+        }
+        if (metric === "parametric_polar") {
+          const rExpr = asString(input.rExpr)
+          const xExpr = asString(input.xExpr)
+          const yExpr = asString(input.yExpr)
+          const mode = asString(input.curveMode) ?? (rExpr ? "polar" : "parametric")
+          try {
+            if (mode === "polar") {
+              const exprR = rExpr ?? asString(input.expression)
+              if (!exprR) {
+                return failRepairable(name, "missing_required_parameter", "parametric_polar(polar) requires rExpr (e.g. '1 + cos(theta)')")
+              }
+              const thetaRange = readPair(input.tRange ?? input.domain, 0, 2 * Math.PI)
+              const t0 = asFiniteNumber(input.t0 ?? input.x0) ?? 0.5 * (thetaRange[0] + thetaRange[1])
+              const res = analyzePolarCurve2D(exprR, thetaRange, t0)
+              return okMeasurement({
+                metric: "parametric_polar",
+                curveMode: "polar",
+                rExpr: res.rExpr,
+                thetaRange: res.thetaRange,
+                sectorArea: res.sectorArea,
+                arcLength: res.arcLength,
+                activeTheta: res.activeTheta,
+                activeR: res.activeR,
+                activeDR: res.activeDR,
+                activePoint: res.activePoint,
+                tangentVec: res.tangentVec
+              })
+            }
+            if (!xExpr || !yExpr) {
+              return failRepairable(name, "missing_required_parameter", "parametric_polar(parametric) requires xExpr and yExpr (e.g. xExpr='t - sin(t)', yExpr='1 - cos(t)')")
+            }
+            const tRange = readPair(input.tRange ?? input.domain, 0, 2 * Math.PI)
+            const t0 = asFiniteNumber(input.t0 ?? input.x0) ?? 0.5 * (tRange[0] + tRange[1])
+            const res = analyzeParametricCurve2D(xExpr, yExpr, tRange, t0)
+            return okMeasurement({
+              metric: "parametric_polar",
+              curveMode: "parametric",
+              xExpr: res.xExpr,
+              yExpr: res.yExpr,
+              tRange: res.tRange,
+              arcLength: res.arcLength,
+              activeT: res.activeT,
+              activePoint: res.activePoint,
+              velocity: res.velocity,
+              speed: res.speed,
+              dyDx: res.dyDx,
+              d2yDx2: res.d2yDx2,
+              curvature: res.curvature
+            })
+          } catch (err) {
+            return failRepairable(name, "invalid_expression", err instanceof Error ? err.message : "invalid parametric_polar expression")
           }
         }
         if (metric === "taylor_series") {
@@ -3759,9 +3879,18 @@ export function createDsActionSession(options: {
             if (ptArr[0] !== null && ptArr[1] !== null) {
               const tp = computeTangentPlane3D(compileScalarField2D(expr), ptArr[0]!, ptArr[1]!)
               if (tp) {
+                const dirDeg = asFiniteNumber(input.dirAngleDeg)
+                const gradNorm = Math.hypot(tp.fx, tp.fy)
+                let directionalDerivative: number | undefined
+                if (dirDeg !== null) {
+                  const rad = (dirDeg * Math.PI) / 180
+                  directionalDerivative = tp.fx * Math.cos(rad) + tp.fy * Math.sin(rad)
+                }
                 tangentPlane = {
                   x0: tp.x, y0: tp.y, z0: tp.z,
                   fx: tp.fx, fy: tp.fy,
+                  gradNorm,
+                  ...(dirDeg !== null ? { dirAngleDeg: dirDeg, directionalDerivative } : {}),
                   normal: { x: -tp.fx, y: -tp.fy, z: 1 },
                   equationText: tp.equation
                 }

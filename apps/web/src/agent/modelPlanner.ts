@@ -715,8 +715,8 @@ function buildMessages(
  */
 function unknownToolRepairHint(toolId: string): string {
   const name = toolId.trim()
-  if (/(?:calculus|extrema|lagrange|taylor|fourier|ode|pde|matrix|svd|eigen|probab|dist|double_integral|div_curl)/i.test(name)) {
-    return `Tool "${name}" does not exist. Use query_measurement({ metric: "calculus_1d" | "taylor_series" | "fourier_series" | "lagrange_2d" | "surface_3d" | "ode_solve" | "double_integral" | "div_curl" | "matrix_2x2" | "probability", ... }) for exact higher-math kernel calculations.`
+  if (/(?:calculus|extrema|parametric|polar|limit|arc_length|directional|lagrange|taylor|fourier|ode|pde|matrix|svd|eigen|probab|dist|double_integral|div_curl)/i.test(name)) {
+    return `Tool "${name}" does not exist. Use query_measurement({ metric: "calculus_1d" | "parametric_polar" | "taylor_series" | "fourier_series" | "lagrange_2d" | "surface_3d" | "ode_solve" | "double_integral" | "div_curl" | "matrix_2x2" | "probability", ... }) for exact higher-math kernel calculations.`
   }
   if (/(?:function|graph|curve|plot|deriv|integral)/i.test(name)) {
     return `Tool "${name}" does not exist. For functions, derivatives, or tangents use construct_tangent({ id, mode: "graph", expression, domain: [min, max] }) or mode: "tangent" with x0.`
